@@ -1,11 +1,21 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useNavigate } from "react-router-dom";
 
 const Index = () => {
+  const navigate = useNavigate();
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
+    <div className="flex min-h-screen items-center justify-center bg-background grain">
+      <div className="relative z-10 text-center space-y-sp-3">
+        <h1 className="text-h1">StroyAgent</h1>
+        <p className="text-body text-muted-foreground max-w-md mx-auto">
+          Construction management platform — UI Component Library
+        </p>
+        <button
+          onClick={() => navigate("/theme")}
+          className="mt-sp-2 px-sp-4 py-sp-1 rounded-pill glass text-body font-medium hover:scale-[1.02] transition-transform duration-150"
+        >
+          View Design System →
+        </button>
       </div>
     </div>
   );
