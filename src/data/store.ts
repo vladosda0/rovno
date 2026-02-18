@@ -157,3 +157,32 @@ export function updateProject(id: string, partial: Partial<Project>) {
   projects = projects.map((p) => (p.id === id ? { ...p, ...partial } : p));
   notify();
 }
+
+export function addProcurementItem(item: ProcurementItem) {
+  procurementItems = [...procurementItems, item];
+  notify();
+}
+
+export function addDocument(doc: Document) {
+  documents = [...documents, doc];
+  notify();
+}
+
+export function updateEstimateItems(versionId: string, updatedItems: import("@/types/entities").EstimateItem[]) {
+  estimates = estimates.map((e) => ({
+    ...e,
+    versions: e.versions.map((v) =>
+      v.id === versionId ? { ...v, items: updatedItems } : v
+    ),
+  }));
+  notify();
+}
+
+export function deductCredit() {
+  if (user.credits_free > 0) {
+    user = { ...user, credits_free: user.credits_free - 1 };
+  } else if (user.credits_paid > 0) {
+    user = { ...user, credits_paid: user.credits_paid - 1 };
+  }
+  notify();
+}

@@ -20,7 +20,9 @@ export type EventType =
   | "document_uploaded"
   | "member_added"
   | "comment_added"
-  | "photo_uploaded";
+  | "photo_uploaded"
+  | "proposal_confirmed"
+  | "proposal_cancelled";
 
 export interface User {
   id: string;
