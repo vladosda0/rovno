@@ -187,6 +187,16 @@ export function deductCredit() {
   notify();
 }
 
+export function addProject(project: Project) {
+  projects = [...projects, project];
+  notify();
+}
+
+export function addMember(member: Member) {
+  members = [...members, member];
+  notify();
+}
+
 // --- Stage mutations ---
 export function addStage(stage: Stage) {
   stages = [...stages, stage];
