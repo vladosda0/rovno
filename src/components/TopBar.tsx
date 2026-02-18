@@ -10,17 +10,19 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { useCurrentUser, useNotifications } from "@/hooks/use-mock-data";
 
 export function TopBar() {
   const location = useLocation();
   const isInProject = location.pathname.startsWith("/project/");
+  const user = useCurrentUser();
+  const { unreadCount } = useNotifications();
+  const initials = user.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
 
   return (
     <header className="fixed top-0 left-0 right-0 z-40 flex h-12 items-center gap-2 px-3 glass">
-      {/* Sidebar toggle */}
       <SidebarTrigger className="h-7 w-7" />
 
-      {/* Logo / Breadcrumb */}
       <div className="flex items-center gap-1.5">
         <Link to="/home" className="text-body font-semibold text-foreground hover:text-foreground/80 transition-colors">
           СтройАгент
@@ -35,19 +37,21 @@ export function TopBar() {
 
       <div className="flex-1" />
 
-      {/* Notifications */}
       <Button variant="ghost" size="icon" className="relative h-8 w-8">
         <Bell className="h-4 w-4" />
-        <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-accent" />
+        {unreadCount > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-accent-foreground">
+            {unreadCount}
+          </span>
+        )}
         <span className="sr-only">Notifications</span>
       </Button>
 
-      {/* Avatar menu */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
             <Avatar className="h-7 w-7">
-              <AvatarFallback className="text-caption bg-accent text-accent-foreground">SA</AvatarFallback>
+              <AvatarFallback className="text-caption bg-accent text-accent-foreground">{initials}</AvatarFallback>
             </Avatar>
           </Button>
         </DropdownMenuTrigger>
