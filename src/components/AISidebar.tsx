@@ -17,6 +17,7 @@ import { toast } from "@/hooks/use-toast";
 import type { AIMessage } from "@/types/ai";
 import type { CommitResult } from "@/lib/commit-proposal";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { isAuthenticated } from "@/lib/auth-state";
 
 const PROJECT_SUGGESTIONS = ["Add tasks", "Update estimate", "Generate contract", "Buy materials"];
 const GLOBAL_SUGGESTIONS = ["Create project", "Compare estimates", "Best tile adhesive?"];
@@ -41,8 +42,9 @@ export function AISidebar() {
   const projectId = isProjectContext ? location.pathname.split("/")[2] : "";
   const title = isProjectContext ? "Project AI" : "Global AI";
 
+  const isGuest = !isAuthenticated();
   const user = useCurrentUser();
-  const perm = isProjectContext ? usePermission(projectId) : null;
+  const perm = isProjectContext && !isGuest ? usePermission(projectId) : null;
 
   const [messages, setMessages] = useState<AIMessage[]>([]);
   const [commitResults, setCommitResults] = useState<Map<string, CommitResultMessage>>(new Map());
@@ -211,74 +213,94 @@ export function AISidebar() {
                   ✕
                 </button>
               </div>
-              <CreditDisplay onLimitReached={() => setLimitModalOpen(true)} />
+              {!isGuest && <CreditDisplay onLimitReached={() => setLimitModalOpen(true)} />}
             </div>
 
-            {/* Chat content — single scroll region */}
-            <div className="flex-1 min-h-0 overflow-hidden px-4 box-border" style={{ width: "100%" }}>
-              <ScrollArea className="h-full">
-                <div ref={scrollRef} className="space-y-3 py-2 pr-1" style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}>
-                  {messages.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center text-center py-8">
-                      <Bot className="mb-3 h-10 w-10 text-muted-foreground/40" />
-                      <p className="text-body-sm text-muted-foreground">
-                        {isProjectContext
-                          ? "Ask about this project — tasks, estimates, documents..."
-                          : "Create a project, get recommendations, or ask anything."}
-                      </p>
-                    </div>
-                  ) : (
-                    messages.map((msg) => (
-                      <div key={msg.id} className="w-full min-w-0">
-                        <ChatMessage
-                          message={msg}
-                          onConfirm={() => handleConfirm(msg.id)}
-                          onCancel={() => handleCancel(msg.id)}
-                        />
-                        {/* Post-commit result log */}
-                        {commitResults.has(msg.id) && (() => {
-                          const cr = commitResults.get(msg.id)!;
-                          const allItems = [...cr.result.created, ...cr.result.updated];
-                          return (
-                            <div className="mt-2 w-full min-w-0">
-                              <ResultCard
-                                summary={`${cr.result.count} change${(cr.result.count ?? 0) !== 1 ? "s" : ""} applied`}
-                                items={allItems}
-                                timestamp={cr.timestamp}
-                                canNavigate={!perm || perm.can("ai.generate")}
-                              />
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    ))
-                  )}
+            {/* Guest overlay or chat content */}
+            {isGuest ? (
+              <div className="flex-1 flex flex-col items-center justify-center text-center px-4">
+                <div className="glass rounded-card p-sp-3 space-y-sp-2">
+                  <Bot className="mx-auto h-10 w-10 text-muted-foreground/40" />
+                  <p className="text-body-sm font-semibold text-foreground">AI Assistant is locked</p>
+                  <p className="text-caption text-muted-foreground">Log in to use AI features.</p>
+                  <Button
+                    className="w-full bg-accent text-accent-foreground hover:bg-accent/90"
+                    onClick={() => navigate("/auth/login")}
+                  >
+                    Log in to use AI
+                  </Button>
                 </div>
-              </ScrollArea>
-            </div>
-
-            {/* Footer */}
-            <div className="p-4 space-y-2 shrink-0 box-border" style={{ width: "100%" }}>
-              {messages.length === 0 && (
-                <SuggestionChips suggestions={suggestions} onSelect={(s) => handleSend(s)} />
-              )}
-              <div className="flex gap-1.5 w-full min-w-0">
-                <Input
-                  placeholder="Ask AI..."
-                  className="h-9 text-body-sm bg-sidebar-accent/50 border-sidebar-border flex-1 min-w-0"
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                />
-                <Button
-                  size="icon"
-                  className="h-9 w-9 shrink-0 bg-accent text-accent-foreground hover:bg-accent/90"
-                  onClick={() => handleSend()}
-                >
-                  <Send className="h-4 w-4" />
-                </Button>
               </div>
-            </div>
+            ) : (
+              <>
+                {/* Chat content — single scroll region */}
+                <div className="flex-1 min-h-0 overflow-hidden px-4 box-border" style={{ width: "100%" }}>
+                  <ScrollArea className="h-full">
+                    <div ref={scrollRef} className="space-y-3 py-2 pr-1" style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}>
+                      {messages.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center text-center py-8">
+                          <Bot className="mb-3 h-10 w-10 text-muted-foreground/40" />
+                          <p className="text-body-sm text-muted-foreground">
+                            {isProjectContext
+                              ? "Ask about this project — tasks, estimates, documents..."
+                              : "Create a project, get recommendations, or ask anything."}
+                          </p>
+                        </div>
+                      ) : (
+                        messages.map((msg) => (
+                          <div key={msg.id} className="w-full min-w-0">
+                            <ChatMessage
+                              message={msg}
+                              onConfirm={() => handleConfirm(msg.id)}
+                              onCancel={() => handleCancel(msg.id)}
+                            />
+                            {commitResults.has(msg.id) && (() => {
+                              const cr = commitResults.get(msg.id)!;
+                              const allItems = [...cr.result.created, ...cr.result.updated];
+                              return (
+                                <div className="mt-2 w-full min-w-0">
+                                  <ResultCard
+                                    summary={`${cr.result.count} change${(cr.result.count ?? 0) !== 1 ? "s" : ""} applied`}
+                                    items={allItems}
+                                    timestamp={cr.timestamp}
+                                    canNavigate={!perm || perm.can("ai.generate")}
+                                  />
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </ScrollArea>
+                </div>
+              </>
+            )}
+
+            {/* Footer — hidden for guests */}
+            {!isGuest && (
+              <div className="p-4 space-y-2 shrink-0 box-border" style={{ width: "100%" }}>
+                {messages.length === 0 && (
+                  <SuggestionChips suggestions={suggestions} onSelect={(s) => handleSend(s)} />
+                )}
+                <div className="flex gap-1.5 w-full min-w-0">
+                  <Input
+                    placeholder="Ask AI..."
+                    className="h-9 text-body-sm bg-sidebar-accent/50 border-sidebar-border flex-1 min-w-0"
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                  />
+                  <Button
+                    size="icon"
+                    className="h-9 w-9 shrink-0 bg-accent text-accent-foreground hover:bg-accent/90"
+                    onClick={() => handleSend()}
+                  >
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </>
         )}
 

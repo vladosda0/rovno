@@ -8,9 +8,7 @@ export default function AuthLayout() {
         <div className="mb-sp-4 text-center">
           <Link to="/" className="text-h2 font-bold text-foreground">СтройАгент</Link>
         </div>
-        <div className="glass-elevated rounded-modal p-sp-4">
-          <Outlet />
-        </div>
+        <Outlet />
       </div>
     </div>
   );
