@@ -186,3 +186,102 @@ export function deductCredit() {
   }
   notify();
 }
+
+// --- Stage mutations ---
+export function addStage(stage: Stage) {
+  stages = [...stages, stage];
+  addEvent({
+    id: `evt-auto-${Date.now()}`,
+    project_id: stage.project_id,
+    actor_id: user.id,
+    type: "stage_created",
+    object_type: "stage",
+    object_id: stage.id,
+    timestamp: new Date().toISOString(),
+    payload: { title: stage.title },
+  });
+  notify();
+}
+
+export function deleteStage(stageId: string) {
+  const stage = stages.find((s) => s.id === stageId);
+  if (!stage) return;
+  stages = stages.filter((s) => s.id !== stageId);
+  addEvent({
+    id: `evt-auto-${Date.now()}`,
+    project_id: stage.project_id,
+    actor_id: user.id,
+    type: "stage_deleted",
+    object_type: "stage",
+    object_id: stageId,
+    timestamp: new Date().toISOString(),
+    payload: { title: stage.title },
+  });
+  notify();
+}
+
+export function completeStage(stageId: string) {
+  const stage = stages.find((s) => s.id === stageId);
+  if (!stage) return;
+  stages = stages.map((s) => (s.id === stageId ? { ...s, status: "completed" as const } : s));
+  addEvent({
+    id: `evt-auto-${Date.now()}`,
+    project_id: stage.project_id,
+    actor_id: user.id,
+    type: "stage_completed",
+    object_type: "stage",
+    object_id: stageId,
+    timestamp: new Date().toISOString(),
+    payload: { title: stage.title },
+  });
+  notify();
+}
+
+export function moveTask(taskId: string, newStageId: string) {
+  const task = tasks.find((t) => t.id === taskId);
+  if (!task || task.stage_id === newStageId) return;
+  const oldStageId = task.stage_id;
+  tasks = tasks.map((t) => (t.id === taskId ? { ...t, stage_id: newStageId } : t));
+  addEvent({
+    id: `evt-auto-${Date.now()}`,
+    project_id: task.project_id,
+    actor_id: user.id,
+    type: "task_moved",
+    object_type: "task",
+    object_id: taskId,
+    timestamp: new Date().toISOString(),
+    payload: { title: task.title, from_stage: oldStageId, to_stage: newStageId },
+  });
+  notify();
+}
+
+export function addComment(taskId: string, text: string) {
+  const task = tasks.find((t) => t.id === taskId);
+  if (!task) return;
+  const comment = { id: `com-${Date.now()}`, author_id: user.id, text, created_at: new Date().toISOString() };
+  tasks = tasks.map((t) => (t.id === taskId ? { ...t, comments: [...t.comments, comment] } : t));
+  addEvent({
+    id: `evt-auto-${Date.now()}`,
+    project_id: task.project_id,
+    actor_id: user.id,
+    type: "comment_added",
+    object_type: "task",
+    object_id: taskId,
+    timestamp: new Date().toISOString(),
+    payload: { title: task.title, text },
+  });
+  notify();
+}
+
+export function updateChecklist(taskId: string, checklist: import("@/types/entities").ChecklistItem[]) {
+  tasks = tasks.map((t) => (t.id === taskId ? { ...t, checklist } : t));
+  notify();
+}
+
+export function getTask(id: string): Task | undefined {
+  return tasks.find((t) => t.id === id);
+}
+
+export function getStage(id: string): Stage | undefined {
+  return stages.find((s) => s.id === id);
+}
