@@ -1,96 +1,155 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
+/* StroyAgent Design System — Liquid Glass Neo-Minimalism
+   All colors are HSL. Tokens follow 8pt grid, construction-industry palette.
 */
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* === Typography === */
+    --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+    /* === Radii === */
+    --radius: 0.5rem;
+    --radius-card: 16px;
+    --radius-panel: 20px;
+    --radius-modal: 24px;
+    --radius-pill: 999px;
+
+    /* === Spacing (8pt grid) === */
+    --space-1: 8px;
+    --space-2: 16px;
+    --space-3: 24px;
+    --space-4: 32px;
+    --space-6: 48px;
+
+    /* === Glass properties === */
+    --glass-blur: 20px;
+    --glass-opacity: 0.08;
+    --glass-border-opacity: 0.12;
+    --glass-highlight-opacity: 0.06;
+
+    /* === Light Theme — "Cloud Dancer" === */
+    --background: 220 20% 97%;
+    --foreground: 220 25% 10%;
 
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 220 25% 10%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 220 25% 10%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    /* Neutral primary — dark slate */
+    --primary: 220 25% 12%;
+    --primary-foreground: 220 20% 97%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    /* Soft secondary */
+    --secondary: 220 15% 93%;
+    --secondary-foreground: 220 25% 12%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    /* Muted for subtle text */
+    --muted: 220 15% 93%;
+    --muted-foreground: 220 10% 46%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    /* Accent — Construction Green */
+    --accent: 152 55% 42%;
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    /* Warning — Amber */
+    --warning: 38 92% 50%;
+    --warning-foreground: 38 92% 14%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    /* Danger — Red */
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
 
-    --radius: 0.5rem;
+    /* Success — Green (alias of accent for semantic use) */
+    --success: 152 55% 42%;
+    --success-foreground: 0 0% 100%;
 
-    --sidebar-background: 0 0% 98%;
+    /* Info — Blue */
+    --info: 210 80% 52%;
+    --info-foreground: 0 0% 100%;
 
-    --sidebar-foreground: 240 5.3% 26.1%;
+    /* Borders & inputs */
+    --border: 220 15% 89%;
+    --input: 220 15% 89%;
+    --ring: 152 55% 42%;
 
-    --sidebar-primary: 240 5.9% 10%;
+    /* Glass surfaces (light) */
+    --glass-bg: 0 0% 100%;
+    --glass-border: 0 0% 100%;
+    --glass-shadow-ambient: 220 25% 10%;
+    --glass-shadow-edge: 220 25% 10%;
 
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    /* Sidebar */
+    --sidebar-background: 220 20% 98%;
+    --sidebar-foreground: 220 15% 30%;
+    --sidebar-primary: 220 25% 12%;
+    --sidebar-primary-foreground: 220 20% 97%;
+    --sidebar-accent: 220 15% 94%;
+    --sidebar-accent-foreground: 220 25% 12%;
+    --sidebar-border: 220 15% 91%;
+    --sidebar-ring: 152 55% 42%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    /* === Dark Theme — "Night Glass" === */
+    --background: 222 30% 8%;
+    --foreground: 220 15% 90%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    --card: 222 25% 11%;
+    --card-foreground: 220 15% 90%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 222 25% 11%;
+    --popover-foreground: 220 15% 90%;
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 220 15% 93%;
+    --primary-foreground: 222 30% 8%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 222 20% 16%;
+    --secondary-foreground: 220 15% 90%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 222 20% 16%;
+    --muted-foreground: 220 10% 55%;
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 152 55% 48%;
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 38 92% 14%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
+    --destructive: 0 62% 45%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 152 55% 48%;
+    --success-foreground: 0 0% 100%;
+
+    --info: 210 80% 58%;
+    --info-foreground: 0 0% 100%;
+
+    --border: 222 15% 18%;
+    --input: 222 15% 18%;
+    --ring: 152 55% 48%;
+
+    /* Glass surfaces (dark) — "Cloud Dancer" light panels on dark */
+    --glass-bg: 220 15% 90%;
+    --glass-border: 220 15% 90%;
+    --glass-shadow-ambient: 0 0% 0%;
+    --glass-shadow-edge: 0 0% 0%;
+
+    --sidebar-background: 222 25% 10%;
+    --sidebar-foreground: 220 10% 75%;
+    --sidebar-primary: 152 55% 48%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-accent: 222 20% 14%;
+    --sidebar-accent-foreground: 220 15% 90%;
+    --sidebar-border: 222 15% 16%;
+    --sidebar-ring: 152 55% 48%;
   }
 }
 
@@ -101,5 +160,72 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+    font-feature-settings: 'cv11', 'ss01';
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* === Glass utility classes === */
+@layer utilities {
+  .glass {
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    background: hsl(var(--glass-bg) / var(--glass-opacity));
+    border: 1px solid hsl(var(--glass-border) / var(--glass-border-opacity));
+    box-shadow:
+      0 8px 32px hsl(var(--glass-shadow-ambient) / 0.06),
+      0 1px 3px hsl(var(--glass-shadow-edge) / 0.08),
+      inset 0 1px 0 hsl(var(--glass-border) / var(--glass-highlight-opacity));
+  }
+
+  .glass-elevated {
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    background: hsl(var(--glass-bg) / 0.12);
+    border: 1px solid hsl(var(--glass-border) / 0.15);
+    box-shadow:
+      0 16px 48px hsl(var(--glass-shadow-ambient) / 0.1),
+      0 2px 6px hsl(var(--glass-shadow-edge) / 0.12),
+      inset 0 1px 0 hsl(var(--glass-border) / 0.08);
+  }
+
+  .glass-modal {
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    background: hsl(var(--glass-bg) / 0.14);
+    border: 1px solid hsl(var(--glass-border) / 0.18);
+    box-shadow:
+      0 24px 64px hsl(var(--glass-shadow-ambient) / 0.14),
+      0 4px 8px hsl(var(--glass-shadow-edge) / 0.1),
+      inset 0 1px 0 hsl(var(--glass-border) / 0.1);
+  }
+
+  .glass-sidebar {
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    background: hsl(var(--glass-bg) / 0.06);
+    border-right: 1px solid hsl(var(--glass-border) / 0.1);
+    box-shadow:
+      4px 0 24px hsl(var(--glass-shadow-ambient) / 0.04),
+      inset 0 1px 0 hsl(var(--glass-border) / 0.05);
+  }
+
+  /* Grain/noise overlay — apply to a pseudo-element or wrapper */
+  .grain {
+    position: relative;
+  }
+  .grain::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0.03;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    background-size: 256px 256px;
+    border-radius: inherit;
+    z-index: 1;
   }
 }
