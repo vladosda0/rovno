@@ -1,6 +1,6 @@
 import type {
   User, Project, Member, Stage, Task, Estimate, ProcurementItem,
-  Document, Media, Event, Notification,
+  Document, Media, Event, Notification, ContractorProposal, EstimateVersion, EstimateItem,
 } from "@/types/entities";
 import {
   seedUser, seedProjects, seedMembers, seedStages, seedTasks,
@@ -20,6 +20,7 @@ let documents: Document[] = [...seedDocuments];
 let media: Media[] = [...seedMedia];
 let events: Event[] = [...seedEvents];
 let notifications: Notification[] = [...seedNotifications];
+let contractorProposals: ContractorProposal[] = [];
 
 // --- Pub/Sub ---
 type Listener = () => void;
@@ -168,13 +169,85 @@ export function addDocument(doc: Document) {
   notify();
 }
 
-export function updateEstimateItems(versionId: string, updatedItems: import("@/types/entities").EstimateItem[]) {
+export function updateEstimateItems(versionId: string, updatedItems: EstimateItem[]) {
   estimates = estimates.map((e) => ({
     ...e,
     versions: e.versions.map((v) =>
       v.id === versionId ? { ...v, items: updatedItems } : v
     ),
   }));
+  notify();
+}
+
+export function addEstimateVersion(projectId: string, version: EstimateVersion) {
+  const existing = estimates.find((e) => e.project_id === projectId);
+  if (existing) {
+    estimates = estimates.map((e) =>
+      e.project_id === projectId ? { ...e, versions: [...e.versions, version] } : e
+    );
+  } else {
+    estimates = [...estimates, { project_id: projectId, versions: [version] }];
+  }
+  notify();
+}
+
+export function updateEstimateVersionStatus(versionId: string, status: import("@/types/entities").EstimateVersionStatus) {
+  estimates = estimates.map((e) => ({
+    ...e,
+    versions: e.versions.map((v) =>
+      v.id === versionId ? { ...v, status } : v
+    ),
+  }));
+  notify();
+}
+
+export function deleteEstimateVersion(versionId: string) {
+  estimates = estimates.map((e) => ({
+    ...e,
+    versions: e.versions.filter((v) => v.id !== versionId),
+  }));
+  notify();
+}
+
+export function updateEstimateItemPaid(versionId: string, itemId: string, paidCost: number) {
+  estimates = estimates.map((e) => ({
+    ...e,
+    versions: e.versions.map((v) =>
+      v.id === versionId
+        ? { ...v, items: v.items.map((i) => (i.id === itemId ? { ...i, paid_cost: paidCost } : i)) }
+        : v
+    ),
+  }));
+  notify();
+}
+
+export function getContractorProposals(projectId: string): ContractorProposal[] {
+  return contractorProposals.filter((p) => p.project_id === projectId);
+}
+
+export function addContractorProposal(proposal: ContractorProposal) {
+  contractorProposals = [...contractorProposals, proposal];
+  notify();
+}
+
+export function updateContractorProposalStatus(proposalId: string, status: "accepted" | "rejected") {
+  contractorProposals = contractorProposals.map((p) =>
+    p.id === proposalId ? { ...p, status } : p
+  );
+  notify();
+}
+
+export function linkEstimateToTasks(versionId: string, links: { itemId: string; taskIds: string[] }[]) {
+  // Update tasks with linked estimate item IDs
+  for (const link of links) {
+    for (const taskId of link.taskIds) {
+      tasks = tasks.map((t) =>
+        t.id === taskId && !t.linked_estimate_item_ids.includes(link.itemId)
+          ? { ...t, linked_estimate_item_ids: [...t.linked_estimate_item_ids, link.itemId] }
+          : t
+      );
+    }
+  }
   notify();
 }
 

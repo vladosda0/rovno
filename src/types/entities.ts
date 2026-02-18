@@ -18,6 +18,12 @@ export type EventType =
   | "task_moved"
   | "estimate_created"
   | "estimate_approved"
+  | "estimate_archived"
+  | "estimate_deleted"
+  | "estimate_paid_updated"
+  | "contractor_proposal_submitted"
+  | "contractor_proposal_accepted"
+  | "contractor_proposal_rejected"
   | "document_uploaded"
   | "member_added"
   | "comment_added"
@@ -130,6 +136,19 @@ export interface Proposal {
   author_id: string;
   payload: Record<string, unknown>;
   status: ProposalStatus;
+}
+
+export interface ContractorProposal {
+  id: string;
+  project_id: string;
+  estimate_item_id: string;
+  version_id: string;
+  author_id: string;
+  suggested_cost?: number;
+  suggested_material?: string;
+  comment: string;
+  status: "pending" | "accepted" | "rejected";
+  created_at: string;
 }
 
 export interface ProcurementItem {

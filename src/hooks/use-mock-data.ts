@@ -40,6 +40,11 @@ export function useEstimate(projectId: string) {
   return useStoreSubscription(getter);
 }
 
+export function useContractorProposals(projectId: string) {
+  const getter = useCallback(() => store.getContractorProposals(projectId), [projectId]);
+  return useStoreSubscription(getter);
+}
+
 export function useProcurement(projectId: string) {
   const getter = useCallback(() => store.getProcurementItems(projectId), [projectId]);
   return useStoreSubscription(getter);
