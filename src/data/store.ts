@@ -164,8 +164,50 @@ export function addProcurementItem(item: ProcurementItem) {
   notify();
 }
 
+export function updateProcurementItem(id: string, partial: Partial<ProcurementItem>) {
+  procurementItems = procurementItems.map((p) => (p.id === id ? { ...p, ...partial } : p));
+  notify();
+}
+
+export function deleteProcurementItem(id: string) {
+  procurementItems = procurementItems.filter((p) => p.id !== id);
+  notify();
+}
+
 export function addDocument(doc: Document) {
   documents = [...documents, doc];
+  notify();
+}
+
+export function updateDocument(id: string, partial: Partial<Document>) {
+  documents = documents.map((d) => (d.id === id ? { ...d, ...partial } : d));
+  notify();
+}
+
+export function addDocumentVersion(docId: string, version: import("@/types/entities").DocumentVersion) {
+  documents = documents.map((d) =>
+    d.id === docId ? { ...d, versions: [...d.versions, version] } : d
+  );
+  notify();
+}
+
+export function deleteDocument(id: string) {
+  documents = documents.filter((d) => d.id !== id);
+  notify();
+}
+
+export function addMedia(item: Media) {
+  media = [...media, item];
+  notify();
+}
+
+export function updateMedia(id: string, partial: Partial<Media>) {
+  media = media.map((m) => (m.id === id ? { ...m, ...partial } : m));
+  notify();
+}
+
+export function deleteMedia(id: string) {
+  media = media.filter((m) => m.id !== id);
   notify();
 }
 
