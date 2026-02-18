@@ -1,48 +1,143 @@
+# PROMPT 0A — Global UI + Navigation Skeleton
+
+## What we are building
+
+The full application shell for StroyAgent: a top bar, a collapsible left AI panel, a right workspace area, all routes (placeholder pages), project tab navigation, and shared UI primitives (status badges, confirmation modal, empty states, toast integration).
+
+## File structure (new and modified)
+
+```text
+src/
+  App.tsx                          (updated — all routes)
+  layouts/
+    AppLayout.tsx                  (top bar + AI panel + workspace)
+    AuthLayout.tsx                 (centered card for login/signup/forgot)
+    ProjectLayout.tsx              (project shell with tab nav)
+  components/
+    TopBar.tsx                     (project switcher, notifications, avatar)
+    AISidebar.tsx                  (collapsible left AI panel)
+    ProjectTabs.tsx                (tab bar for project sub-routes)
+    StatusBadge.tsx                (reusable badge component)
+    ConfirmModal.tsx               (confirm/cancel + optional tertiary)
+    EmptyState.tsx                 (icon + title + description + CTA)
+    OverflowMenu.tsx               ("..." dropdown menu)
+  pages/
+    Landing.tsx                    (/ — marketing landing)
+    Demo.tsx                       (/demo — read-only demo project)
+    auth/
+      Login.tsx
+      Signup.tsx
+      ForgotPassword.tsx
+    Onboarding.tsx
+    Home.tsx                       (/home — project list)
+    Pricing.tsx
+    Profile.tsx
+    Settings.tsx
+    project/
+      ProjectDashboard.tsx
+      ProjectTasks.tsx
+      ProjectEstimate.tsx
+      ProjectProcurement.tsx
+      ProjectGallery.tsx
+      ProjectDocuments.tsx
+      ProjectActivity.tsx
+      ProjectParticipants.tsx
+    NotFound.tsx                   (updated)
+    ErrorPage.tsx                  (generic error)
+  Index.tsx                        (removed — replaced by Landing)
+  ThemeDemo.tsx                    (kept at /theme for dev)
+```
+
+## Routing plan
 
 
-# StroyAgent — UI Component Library & Design System
+| Path                        | Layout                    | Page                 |
+| --------------------------- | ------------------------- | -------------------- |
+| `/`                         | none (standalone)         | Landing              |
+| `/demo`                     | AppLayout                 | Demo                 |
+| `/auth/login`               | AuthLayout                | Login                |
+| `/auth/signup`              | AuthLayout                | Signup               |
+| `/auth/forgot`              | AuthLayout                | ForgotPassword       |
+| `/onboarding`               | none (standalone)         | Onboarding           |
+| `/home`                     | AppLayout                 | Home                 |
+| `/project/:id`              | AppLayout > ProjectLayout | nested tabs          |
+| `/project/:id/dashboard`    | "                         | ProjectDashboard     |
+| `/project/:id/tasks`        | "                         | ProjectTasks         |
+| `/project/:id/estimate`     | "                         | ProjectEstimate      |
+| `/project/:id/procurement`  | "                         | ProjectProcurement   |
+| `/project/:id/gallery`      | "                         | ProjectGallery       |
+| `/project/:id/documents`    | "                         | ProjectDocuments     |
+| `/project/:id/activity`     | "                         | ProjectActivity      |
+| `/project/:id/participants` | "                         | ProjectParticipants  |
+| `/pricing`                  | none                      | Pricing              |
+| `/profile`                  | AppLayout                 | Profile              |
+| `/settings`                 | AppLayout                 | Settings             |
+| `/theme`                    | none                      | ThemeDemo (dev only) |
+| `*`                         | none                      | NotFound             |
 
-## Overview
-Build a complete glassmorphism design system and reusable component library for StroyAgent, a full construction management platform (projects, estimates, procurement, documents, AI assistant). Backend will be added later — this phase is purely frontend UI kit.
 
-## Phase 1: Design Tokens & Theme
-- Define all CSS custom properties: color system (neutral base + construction green accent + amber warning + red danger), radii (16/20/24/999px), spacing (8pt grid), typography scale (H1 48–56, H2 28–32, body 15–16, caption 12–13)
-- Implement light and dark theme with "Cloud Dancer" near-white breathing space
-- Add subtle grain/noise overlay utility (2–4%)
-- Set up modern grotesk font (Inter or similar)
-- Create a **Theme Demo Page** showing all tokens visually
+## Component details
 
-## Phase 2: GlassPanel & Surface Primitives
-- **GlassPanel** component with variants: default, elevated, modal, sidebar
-- Backdrop-blur 16–24px, background opacity 6–14%, inner highlight, 2-layer shadow system
-- 1px hairline border with low-opacity edge highlight
-- Optional header slot
-- Consistent hover states (luminance lift + scale 1.01)
+### TopBar
 
-## Phase 3: Interactive Primitives
-- **PrimaryButton / SecondaryButton / TertiaryButton / DangerButton**: rounded glass fill, hover glow, disabled/loading states
-- **InputField**: glass-styled with icon slot, validation states (error/success/warning), helper text
-- **TextArea** and **Select**: matching glass styling
-- **Chip**: rounded pill (999px radius) with icon + text, for AI suggestions and filters
-- **StatusBadge**: Draft/Approved/Archived, Not started/In progress/Done/Blocked, Not purchased/Purchased — each with semantic color
+- Fixed at top, full width, glass surface
+- Left: StroyAgent logo/wordmark; when inside a project, a breadcrumb-style project switcher
+- Right: notification bell icon (with unread dot), user avatar dropdown (profile, settings, logout)
+- Height: 48px, uses glass utility class
 
-## Phase 4: Data Display Components
-- **KPIWidget**: large number + delta indicator + sparkline placeholder
-- **Table**: sticky header, zebra subtle rows, inline-edit cells, row actions menu, empty state illustration
-- **EventFeedItem**: actor, verb, object, timestamp, icon by event type
-- **PreviewCard**: diff-style proposed changes with counts + risk/warning slots (for AI preview)
+### AISidebar (left collapsible panel, that you can slide to make more wide or more narrow, Like in Loveable)
 
-## Phase 5: Overlay & Interaction Components
-- **ConfirmModal**: glass modal with summary content + primary/secondary actions + optional tertiary action ("Create new version")
-- **Toast system**: success/error/warning/info with glass styling
-- **ActionBar**: Confirm/Cancel/New version row, pinned under AI preview
-- **NotificationBell + Drawer**: unread badge, grouped notification items, deep links
-- **UploadDropzone**: drag-drop area with file chips, progress indicator, warning note
+- Uses the existing shadcn Sidebar component
+- Two modes indicated by context: "Global AI" (on /home) and "Project AI" (inside /project/:id)
+- Collapsed state shows only a small AI icon; expanded shows a placeholder chat area
+- Width: 320px expanded, icon-only when collapsed
+- Glass-sidebar styling
 
-## Phase 6: Component Showcase
-- Build a **Component Gallery** page that displays every component with all variants and states
-- This serves as a living style guide and validation that the system is cohesive
-- Organized by category: surfaces, buttons, inputs, data display, overlays
+### ProjectLayout + ProjectTabs
 
-All components will follow the design principles: neo-minimalism, liquid-glass aesthetic, cinematic but restrained motion (150–220ms micro, 280–420ms panels), CSS-only blur/gradients (no heavy WebGL), and strict accessibility contrast.
+- Wraps all /project/:id/* routes
+- Horizontal tab bar below the TopBar with tabs: Dashboard, Tasks, Estimate, Procurement, Gallery, Documents, Activity, Participants
+- Uses NavLink for active highlighting
+- Each tab renders its page component via nested `<Outlet />`
+- Default redirect: `/project/:id` redirects to `/project/:id/dashboard`
 
+### StatusBadge
+
+- Props: `status` (string), `variant` (task | estimate | procurement)
+- Task statuses: Not started (neutral), In progress (info), Done (success), Blocked (destructive)
+- Estimate statuses: Draft (muted), Approved (success), Archived (neutral outline)
+- Procurement: Not purchased (muted), Purchased (success)
+- Uses rounded-pill, small text, semantic colors from the token system
+
+### ConfirmModal
+
+- Built on top of shadcn AlertDialog
+- Props: title, description, confirmLabel, cancelLabel, onConfirm, onCancel, tertiaryLabel?, onTertiary?
+- Glass-modal styling with rounded-modal radius
+- Primary action uses accent color, cancel is secondary, tertiary is outline
+
+### EmptyState
+
+- Props: icon (Lucide icon component), title, description, actionLabel?, onAction?
+- Centered layout with large icon, heading, body text, optional CTA button
+- Used as placeholder content in all project tabs initially
+
+### OverflowMenu
+
+- Wraps shadcn DropdownMenu
+- Props: items (array of { label, icon?, onClick, variant? })
+- Trigger is a "..." (MoreHorizontal) icon button
+
+### All page components
+
+- Placeholder content only — each page shows its name, a brief description, and an EmptyState or simple layout
+- No real data or API calls yet
+
+## Technical notes
+
+- All layouts and components use the existing design tokens (glass utilities, spacing, radii, colors)
+- Motion: transitions use 150-200ms for micro-interactions, ease-out
+- No new npm dependencies needed — everything uses existing shadcn components, Lucide icons, and react-router-dom
+- The AI sidebar uses the existing `SidebarProvider` / `Sidebar` from shadcn
+- Project tab navigation uses `NavLink` for active state highlighting
+- All pages are code-split-ready (simple default exports)
