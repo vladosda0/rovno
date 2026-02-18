@@ -4,6 +4,7 @@ import {
   getCurrentUser, getMembers, getProject, getStages,
   addTask, addEvent, addProcurementItem, addDocument,
   updateEstimateItems, deductCredit,
+  addProject, addMember, addStage,
 } from "@/data/store";
 import type { MemberRole, AIAccess } from "@/types/entities";
 
@@ -22,9 +23,15 @@ export interface CommitResult {
   eventIds: string[];
   created: CommitResultItem[];
   updated: CommitResultItem[];
+  projectId?: string;
 }
 
 export function commitProposal(proposal: AIProposal): CommitResult {
+  // Handle create_project specially — no existing project context needed
+  if (proposal.type === "create_project") {
+    return commitProjectProposal(proposal);
+  }
+
   const user = getCurrentUser();
   const members = getMembers(proposal.project_id);
   const membership = members.find((m) => m.user_id === user.id);
@@ -175,3 +182,71 @@ export function commitProposal(proposal: AIProposal): CommitResult {
 
   return { success: true, count, eventIds, created, updated };
 }
+
+function commitProjectProposal(proposal: AIProposal): CommitResult {
+  const user = getCurrentUser();
+  const totalCredits = user.credits_free + user.credits_paid;
+  if (totalCredits <= 0) {
+    return { success: false, error: "No credits remaining.", eventIds: [], created: [], updated: [] };
+  }
+
+  const projectChange = proposal.changes.find((c) => c.entity_type === "project");
+  const stageChanges = proposal.changes.filter((c) => c.entity_type === "stage");
+
+  const projectId = `project-ai-${Date.now()}`;
+  const firstStageId = `stage-ai-${Date.now()}-0`;
+
+  addProject({
+    id: projectId,
+    owner_id: user.id,
+    title: projectChange?.label ?? "New Project",
+    type: projectChange?.after ?? "residential",
+    automation_level: "full",
+    current_stage_id: firstStageId,
+    progress_pct: 0,
+  });
+
+  addMember({
+    project_id: projectId,
+    user_id: user.id,
+    role: "owner",
+    ai_access: "project_pool",
+    credit_limit: 500,
+    used_credits: 0,
+  });
+
+  const created: CommitResultItem[] = [
+    { type: "project", id: projectId, label: projectChange?.label ?? "New Project", route: `/project/${projectId}/dashboard` },
+  ];
+
+  stageChanges.forEach((sc, i) => {
+    const stageId = i === 0 ? firstStageId : `stage-ai-${Date.now()}-${i}`;
+    addStage({
+      id: stageId,
+      project_id: projectId,
+      title: sc.label,
+      description: "",
+      order: i + 1,
+      status: "open",
+    });
+    created.push({ type: "stage", id: stageId, label: sc.label, route: `/project/${projectId}/tasks` });
+  });
+
+  const evtId = `evt-proj-${Date.now()}`;
+  addEvent({
+    id: evtId,
+    project_id: projectId,
+    actor_id: user.id,
+    type: "project_created",
+    object_type: "project",
+    object_id: projectId,
+    timestamp: new Date().toISOString(),
+    payload: { title: projectChange?.label, stages: stageChanges.length },
+  });
+
+  deductCredit();
+
+  return { success: true, count: created.length, eventIds: [evtId], created, updated: [], projectId };
+}
+
+

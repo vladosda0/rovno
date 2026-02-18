@@ -26,7 +26,8 @@ export type EventType =
   | "stage_completed"
   | "stage_deleted"
   | "proposal_confirmed"
-  | "proposal_cancelled";
+  | "proposal_cancelled"
+  | "project_created";
 
 export interface User {
   id: string;
