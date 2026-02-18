@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Bell, ChevronRight, LogOut, Settings, User } from "lucide-react";
+import { ChevronRight, LogOut, Settings, User } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,13 +10,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { PanelLeft } from "lucide-react";
-import { useCurrentUser, useNotifications } from "@/hooks/use-mock-data";
+import { useCurrentUser } from "@/hooks/use-mock-data";
 
 export function TopBar() {
   const location = useLocation();
   const isInProject = location.pathname.startsWith("/project/");
   const user = useCurrentUser();
-  const { unreadCount } = useNotifications();
   const initials = user.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
 
   return (
@@ -40,15 +39,8 @@ export function TopBar() {
 
       <div className="flex-1" />
 
-      <Button variant="ghost" size="icon" className="relative h-8 w-8">
-        <Bell className="h-4 w-4" />
-        {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-accent-foreground">
-            {unreadCount}
-          </span>
-        )}
-        <span className="sr-only">Notifications</span>
-      </Button>
+
+
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
