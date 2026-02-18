@@ -9,7 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { PanelLeft } from "lucide-react";
 import { useCurrentUser, useNotifications } from "@/hooks/use-mock-data";
 
 export function TopBar() {
@@ -21,7 +21,10 @@ export function TopBar() {
 
   return (
     <header className="fixed top-0 left-0 right-0 z-40 flex h-12 items-center gap-2 px-3 glass">
-      <SidebarTrigger className="h-7 w-7" />
+      <Button variant="ghost" size="icon" className="h-7 w-7">
+        <PanelLeft className="h-4 w-4" />
+        <span className="sr-only">Toggle Sidebar</span>
+      </Button>
 
       <div className="flex items-center gap-1.5">
         <Link to="/home" className="text-body font-semibold text-foreground hover:text-foreground/80 transition-colors">

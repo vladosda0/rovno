@@ -21,7 +21,7 @@ export function CreditDisplay({ onLimitReached }: { onLimitReached: () => void }
   };
 
   return (
-    <button onClick={handleClick} className="w-full glass rounded-card p-2 text-left hover:bg-accent/5 transition-colors">
+    <button onClick={handleClick} className="w-full glass rounded-card p-2 text-left hover:bg-accent/5 transition-colors box-border min-w-0">
       <div className="flex items-center justify-between mb-1.5">
         <div className="flex items-center gap-1.5">
           <Coins className={`h-3.5 w-3.5 ${isLow ? "text-warning" : "text-accent"}`} />

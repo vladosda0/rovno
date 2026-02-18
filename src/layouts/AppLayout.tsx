@@ -1,20 +1,17 @@
 import { Outlet } from "react-router-dom";
-import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { TopBar } from "@/components/TopBar";
 import { AISidebar } from "@/components/AISidebar";
 
 export default function AppLayout() {
   return (
-    <SidebarProvider defaultOpen={true}>
-      <div className="flex min-h-screen w-full">
+    <div className="flex flex-col min-h-screen w-full">
+      <TopBar />
+      <div className="flex flex-1 pt-12">
         <AISidebar />
-        <SidebarInset>
-          <TopBar />
-          <div className="pt-12">
-            <Outlet />
-          </div>
-        </SidebarInset>
+        <main className="flex-1 min-w-0 overflow-x-hidden">
+          <Outlet />
+        </main>
       </div>
-    </SidebarProvider>
+    </div>
   );
 }

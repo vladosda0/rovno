@@ -16,24 +16,25 @@ export function ChatMessage({ message, onConfirm, onCancel, onNewVersion }: Chat
   const isPending = proposal?.status === "pending";
 
   return (
-    <div className={`flex gap-2 ${isUser ? "justify-end" : "justify-start"}`}>
+    <div className={`flex gap-2 w-full min-w-0 ${isUser ? "justify-end" : "justify-start"}`}>
       {!isUser && (
         <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent/10 mt-0.5">
           <Bot className="h-3.5 w-3.5 text-accent" />
         </div>
       )}
-      <div className={`max-w-[85%] space-y-1.5 ${isUser ? "items-end" : ""}`}>
+      <div className={`min-w-0 space-y-1.5 ${isUser ? "max-w-[85%] items-end ml-auto" : "flex-1"}`}>
         <div
-          className={`rounded-card px-3 py-2 text-body-sm ${
+          className={`rounded-card px-3 py-2 text-body-sm break-words ${
             isUser
-              ? "bg-accent/10 text-foreground ml-auto"
-              : "glass text-foreground"
+              ? "bg-accent/10 text-foreground ml-auto w-fit max-w-full"
+              : "glass text-foreground w-full"
           }`}
+          style={{ overflowWrap: "anywhere" }}
         >
           {message.content}
         </div>
         {proposal && (
-          <div className="space-y-1">
+          <div className="space-y-1 w-full min-w-0">
             <PreviewCard summary={proposal.summary} changes={proposal.changes} />
             {isPending && onConfirm && onCancel && (
               <ActionBar
