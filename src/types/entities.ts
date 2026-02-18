@@ -15,12 +15,16 @@ export type EventType =
   | "task_created"
   | "task_updated"
   | "task_completed"
+  | "task_moved"
   | "estimate_created"
   | "estimate_approved"
   | "document_uploaded"
   | "member_added"
   | "comment_added"
   | "photo_uploaded"
+  | "stage_created"
+  | "stage_completed"
+  | "stage_deleted"
   | "proposal_confirmed"
   | "proposal_cancelled";
 
