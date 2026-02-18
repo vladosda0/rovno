@@ -68,3 +68,5 @@ export function useNotifications() {
   const unreadCount = useStoreSubscription(countGetter);
   return { notifications, unreadCount };
 }
+
+export { usePermission } from "@/lib/permissions";
