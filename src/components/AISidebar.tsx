@@ -63,7 +63,8 @@ export function AISidebar() {
 
   const isGuest = !isAuthenticated();
   const user = useCurrentUser();
-  const perm = isProjectContext && !isGuest ? usePermission(projectId) : null;
+  const permResult = usePermission(projectId || "");
+  const perm = isProjectContext && !isGuest ? permResult : null;
   const { unreadCount } = useNotifications();
 
   const [messages, setMessages] = useState<AIMessage[]>([]);
@@ -86,7 +87,8 @@ export function AISidebar() {
   const dragRef = useRef<{ startX: number; startW: number } | null>(null);
 
   // Activity events
-  const events = isProjectContext ? useEvents(projectId) : [];
+  const allEvents = useEvents(projectId || "");
+  const events = isProjectContext ? allEvents : [];
 
   useEffect(() => {
     setMessages([]);
