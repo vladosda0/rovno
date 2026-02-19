@@ -1,12 +1,12 @@
 import { useState, useCallback } from "react";
 import { useParams } from "react-router-dom";
-import { useProject, useTasks, usePermission } from "@/hooks/use-mock-data";
+import { useProject, useTasks, usePermission, useMedia } from "@/hooks/use-mock-data";
 import {
   getUserById, getCurrentUser, updateTask, addTask, addStage,
   deleteStage as storeDeleteStage, completeStage as storeCompleteStage,
+  addMedia, addEvent, addComment,
 } from "@/data/store";
 import { allUsers } from "@/data/seed";
-import { StatusBadge } from "@/components/StatusBadge";
 import { EmptyState } from "@/components/EmptyState";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import {
   ListTodo, Plus, CheckCircle2, Circle, Clock,
-  AlertTriangle, Trash2, Check, User, Calendar as CalendarIcon, GripVertical,
+  AlertTriangle, Trash2, Check, User, Calendar as CalendarIcon, GripVertical, Camera,
 } from "lucide-react";
 import type { Task, Stage, TaskStatus } from "@/types/entities";
 
@@ -41,12 +41,12 @@ export default function ProjectTasks() {
   const pid = projectId!;
   const { project, stages, members } = useProject(pid);
   const tasks = useTasks(pid);
+  const media = useMedia(pid);
   const { role, can: userCan } = usePermission(pid);
   const { toast } = useToast();
   const authRole = getAuthRole();
   const currentUser = getCurrentUser();
 
-  // Active stage tab: "all" or a stage id
   const [activeTab, setActiveTab] = useState<string>("all");
   const [assignedToMe, setAssignedToMe] = useState(false);
 
@@ -77,6 +77,15 @@ export default function ProjectTasks() {
   const [dragTaskId, setDragTaskId] = useState<string | null>(null);
   const [dropStatus, setDropStatus] = useState<TaskStatus | null>(null);
 
+  // --- Done prompt ---
+  const [donePrompt, setDonePrompt] = useState<{ taskId: string } | null>(null);
+  const [donePhotoCaptions, setDonePhotoCaptions] = useState<string[]>([""]);
+  const [doneComment, setDoneComment] = useState("");
+
+  // --- Blocked prompt ---
+  const [blockedPrompt, setBlockedPrompt] = useState<{ taskId: string } | null>(null);
+  const [blockedReason, setBlockedReason] = useState("");
+
   // Derived
   const deleteStage_ = stages.find((s) => s.id === deleteStageId);
   const deleteTaskCount = deleteStage_ ? tasks.filter((t) => t.stage_id === deleteStage_?.id).length : 0;
@@ -90,6 +99,83 @@ export default function ProjectTasks() {
   if (assignedToMe) filteredTasks = filteredTasks.filter((t) => t.assignee_id === currentUser.id);
 
   const getColumnTasks = (status: TaskStatus) => filteredTasks.filter((t) => t.status === status);
+
+  // --- Central status change handler (intercepts Done / Blocked) ---
+  const handleStatusChange = useCallback((taskId: string, newStatus: TaskStatus) => {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task || task.status === newStatus) return;
+
+    if (newStatus === "done") {
+      setDonePrompt({ taskId });
+      setDonePhotoCaptions([""]);
+      setDoneComment("");
+      return;
+    }
+    if (newStatus === "blocked") {
+      setBlockedPrompt({ taskId });
+      setBlockedReason("");
+      return;
+    }
+    updateTask(taskId, { status: newStatus });
+    toast({ title: "Status updated", description: statusMeta[newStatus].label });
+  }, [tasks, toast]);
+
+  // Confirm Done
+  const handleConfirmDone = useCallback(() => {
+    if (!donePrompt) return;
+    const validCaptions = donePhotoCaptions.filter((c) => c.trim());
+    // Create media items for each photo
+    validCaptions.forEach((caption, i) => {
+      const mediaId = `media-done-${Date.now()}-${i}`;
+      addMedia({
+        id: mediaId,
+        project_id: pid,
+        task_id: donePrompt.taskId,
+        uploader_id: currentUser.id,
+        caption: caption || "Final result",
+        is_final: true,
+        created_at: new Date().toISOString(),
+      });
+      addEvent({
+        id: `evt-${Date.now()}-${i}`,
+        project_id: pid,
+        actor_id: currentUser.id,
+        type: "photo_uploaded",
+        object_type: "media",
+        object_id: mediaId,
+        timestamp: new Date().toISOString(),
+        payload: { caption },
+      });
+    });
+    // If no captions but still photos (at least 1 "slot"), create one generic
+    if (validCaptions.length === 0) {
+      const mediaId = `media-done-${Date.now()}`;
+      addMedia({
+        id: mediaId,
+        project_id: pid,
+        task_id: donePrompt.taskId,
+        uploader_id: currentUser.id,
+        caption: "Final result photo",
+        is_final: true,
+        created_at: new Date().toISOString(),
+      });
+    }
+    if (doneComment.trim()) {
+      addComment(donePrompt.taskId, doneComment.trim());
+    }
+    updateTask(donePrompt.taskId, { status: "done" });
+    setDonePrompt(null);
+    toast({ title: "Task marked as Done" });
+  }, [donePrompt, donePhotoCaptions, doneComment, pid, currentUser, toast]);
+
+  // Confirm Blocked
+  const handleConfirmBlocked = useCallback(() => {
+    if (!blockedPrompt) return;
+    addComment(blockedPrompt.taskId, `🚫 Blocker reason: ${blockedReason.trim()}`);
+    updateTask(blockedPrompt.taskId, { status: "blocked" });
+    setBlockedPrompt(null);
+    toast({ title: "Task marked as Blocked" });
+  }, [blockedPrompt, blockedReason, toast]);
 
   // --- Handlers ---
   const openNewTask = useCallback((prefillStatus?: TaskStatus) => {
@@ -138,7 +224,6 @@ export default function ProjectTasks() {
     };
     addStage(newStage);
 
-    // If AI + description, generate some placeholder tasks
     if (createWithAI && newStageDesc.trim()) {
       const aiTasks = [
         `Prepare ${newStageTitle.trim()} workspace`,
@@ -188,7 +273,7 @@ export default function ProjectTasks() {
     toast({ title: "Stage completed" });
   }, [completeStageId, incompleteTasks, toast]);
 
-  // DnD handlers for status columns
+  // DnD handlers
   const handleDragStart = (e: React.DragEvent, taskId: string) => {
     setDragTaskId(taskId);
     e.dataTransfer.effectAllowed = "move";
@@ -203,8 +288,7 @@ export default function ProjectTasks() {
     e.preventDefault();
     setDropStatus(null);
     if (dragTaskId) {
-      updateTask(dragTaskId, { status });
-      toast({ title: "Task moved", description: statusMeta[status].label });
+      handleStatusChange(dragTaskId, status);
     }
     setDragTaskId(null);
   };
@@ -217,12 +301,12 @@ export default function ProjectTasks() {
     <div className="p-sp-2 flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center justify-between mb-sp-2 flex-wrap gap-2">
-        <h2 className="text-h3 text-foreground">Tasks</h2>
+        <h2 className="text-lg font-semibold text-foreground">Tasks</h2>
         <div className="flex items-center gap-2">
           {(authRole === "contractor" || role === "contractor") && (
             <button
               onClick={() => setAssignedToMe(!assignedToMe)}
-              className={`rounded-pill px-3 py-1 text-caption font-medium transition-colors ${
+              className={`rounded-full px-3 py-1 text-caption font-medium transition-colors ${
                 assignedToMe ? "bg-accent text-accent-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"
               }`}
             >
@@ -243,10 +327,9 @@ export default function ProjectTasks() {
 
       {/* Stage Tabs */}
       <div className="flex gap-1 overflow-x-auto pb-sp-1 mb-sp-2 shrink-0">
-        {/* All tab */}
         <button
           onClick={() => setActiveTab("all")}
-          className={`rounded-pill px-3 py-1.5 text-caption font-medium whitespace-nowrap transition-colors ${
+          className={`rounded-full px-3 py-1.5 text-caption font-medium whitespace-nowrap transition-colors ${
             activeTab === "all" ? "bg-accent text-accent-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"
           }`}
         >
@@ -256,7 +339,7 @@ export default function ProjectTasks() {
           <button
             key={stage.id}
             onClick={() => setActiveTab(stage.id)}
-            className={`rounded-pill px-3 py-1.5 text-caption font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+            className={`rounded-full px-3 py-1.5 text-caption font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 ${
               activeTab === stage.id ? "bg-accent text-accent-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"
             }`}
           >
@@ -267,14 +350,14 @@ export default function ProjectTasks() {
         {userCan("task.create") && (
           <button
             onClick={() => setStageModalOpen(true)}
-            className="rounded-pill px-3 py-1.5 text-caption font-medium whitespace-nowrap text-muted-foreground hover:bg-muted/80 transition-colors border border-dashed border-border"
+            className="rounded-full px-3 py-1.5 text-caption font-medium whitespace-nowrap text-muted-foreground hover:bg-muted/80 transition-colors border border-dashed border-border"
           >
             <Plus className="h-3 w-3 inline mr-0.5" /> New stage
           </button>
         )}
       </div>
 
-      {/* Stage actions (when a specific stage is selected) */}
+      {/* Stage actions */}
       {activeTab !== "all" && userCan("task.create") && (() => {
         const stage = stages.find((s) => s.id === activeTab);
         if (!stage || stage.status === "completed") return null;
@@ -290,7 +373,7 @@ export default function ProjectTasks() {
         );
       })()}
 
-      {/* Kanban columns by status */}
+      {/* Kanban columns */}
       <div className="flex gap-sp-2 overflow-x-auto pb-sp-2 flex-1 min-h-0">
         {allStatuses.map((status) => {
           const meta = statusMeta[status];
@@ -300,8 +383,8 @@ export default function ProjectTasks() {
           return (
             <div
               key={status}
-              className={`bg-card/60 border border-border rounded-card p-sp-2 min-w-[260px] w-[280px] flex-shrink-0 flex flex-col transition-colors ${
-                isDropTarget ? "ring-2 ring-accent/50" : ""
+              className={`bg-muted/30 border border-border rounded-xl p-sp-2 min-w-[260px] w-[280px] flex-shrink-0 flex flex-col transition-colors ${
+                isDropTarget ? "ring-2 ring-accent/50 bg-accent/5" : ""
               }`}
               onDragOver={(e) => handleDragOver(e, status)}
               onDragLeave={handleDragLeave}
@@ -311,7 +394,7 @@ export default function ProjectTasks() {
               <div className="flex items-center justify-between mb-sp-2">
                 <div className="flex items-center gap-1.5">
                   <meta.Icon className={`h-4 w-4 ${meta.colorClass}`} />
-                  <span className="text-body-sm font-semibold text-foreground">{meta.label}</span>
+                  <span className="text-sm font-semibold text-foreground">{meta.label}</span>
                   <span className="text-caption text-muted-foreground">({columnTasks.length})</span>
                 </div>
                 {userCan("task.create") && (
@@ -329,6 +412,7 @@ export default function ProjectTasks() {
                 {columnTasks.map((task) => {
                   const assignee = getUserById(task.assignee_id);
                   const checkDone = task.checklist.filter((c) => c.done).length;
+                  const taskPhotos = media.filter((m) => m.task_id === task.id);
 
                   return (
                     <div
@@ -336,7 +420,7 @@ export default function ProjectTasks() {
                       draggable={userCan("task.edit")}
                       onDragStart={(e) => handleDragStart(e, task.id)}
                       onClick={() => setSelectedTaskId(task.id)}
-                      className={`bg-card border border-border rounded-card p-sp-1 px-sp-2 cursor-pointer hover:shadow-md transition-all ${
+                      className={`bg-card border border-border rounded-lg p-2 px-2.5 cursor-pointer hover:shadow-md transition-all ${
                         dragTaskId === task.id ? "opacity-50" : "shadow-sm"
                       }`}
                     >
@@ -358,17 +442,21 @@ export default function ProjectTasks() {
                         {task.comments.length > 0 && (
                           <span className="text-[10px] text-muted-foreground">💬 {task.comments.length}</span>
                         )}
+                        {taskPhotos.length > 0 && (
+                          <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                            <Camera className="h-2.5 w-2.5" /> {taskPhotos.length}
+                          </span>
+                        )}
                         {task.deadline && (
                           <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
                             <CalendarIcon className="h-2.5 w-2.5" />
                             {format(new Date(task.deadline), "MMM d")}
                           </span>
                         )}
-                        {/* Stage badge in All tab */}
                         {activeTab === "all" && (() => {
                           const stage = stages.find((s) => s.id === task.stage_id);
                           return stage ? (
-                            <span className="text-[10px] text-muted-foreground bg-muted rounded-pill px-1.5">{stage.title}</span>
+                            <span className="text-[10px] text-muted-foreground bg-muted rounded-full px-1.5">{stage.title}</span>
                           ) : null;
                         })()}
                       </div>
@@ -390,13 +478,15 @@ export default function ProjectTasks() {
         open={!!selectedTaskId}
         onOpenChange={(open) => { if (!open) setSelectedTaskId(null); }}
         canEdit={userCan("task.edit")}
+        onStatusChange={handleStatusChange}
+        projectMedia={media}
       />
 
       {/* New Task Modal */}
       {taskModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="bg-card border border-border rounded-modal p-sp-3 w-full max-w-md space-y-sp-2 relative z-[52] shadow-xl">
-            <h3 className="text-h3 text-foreground">New Task</h3>
+          <div className="bg-card border border-border rounded-xl p-sp-3 w-full max-w-md space-y-sp-2 relative z-[52] shadow-xl">
+            <h3 className="text-lg font-semibold text-foreground">New Task</h3>
             <Input placeholder="Title *" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} autoFocus />
             <Textarea placeholder="Description" value={taskDesc} onChange={(e) => setTaskDesc(e.target.value)} rows={2} />
 
@@ -426,7 +516,6 @@ export default function ProjectTasks() {
               </div>
             </div>
 
-            {/* Stage select (only in All tab) */}
             {activeTab === "all" && stages.length > 0 && (
               <div>
                 <label className="text-caption text-muted-foreground mb-1 block">Stage</label>
@@ -439,7 +528,6 @@ export default function ProjectTasks() {
               </div>
             )}
 
-            {/* Deadline */}
             <div>
               <label className="text-caption text-muted-foreground mb-1 block">Deadline</label>
               <Popover>
@@ -482,8 +570,8 @@ export default function ProjectTasks() {
       {/* New Stage Modal */}
       {stageModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="bg-card border border-border rounded-modal p-sp-3 w-full max-w-md space-y-sp-2 relative z-[52] shadow-xl">
-            <h3 className="text-h3 text-foreground">New Stage</h3>
+          <div className="bg-card border border-border rounded-xl p-sp-3 w-full max-w-md space-y-sp-2 relative z-[52] shadow-xl">
+            <h3 className="text-lg font-semibold text-foreground">New Stage</h3>
             <Input
               placeholder="Stage name *"
               value={newStageTitle}
@@ -522,6 +610,105 @@ export default function ProjectTasks() {
             </div>
           </div>
           <div className="fixed inset-0 z-[51] bg-black/40" onClick={() => setStageModalOpen(false)} />
+        </div>
+      )}
+
+      {/* Done prompt — require photos */}
+      {donePrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="bg-card border border-border rounded-xl p-sp-3 w-full max-w-md space-y-sp-2 relative z-[52] shadow-xl">
+            <h3 className="text-lg font-semibold text-foreground">Add final result photos</h3>
+            <p className="text-sm text-muted-foreground">Upload at least one photo to confirm completion.</p>
+
+            <div className="space-y-2">
+              {donePhotoCaptions.map((caption, idx) => (
+                <div key={idx} className="flex gap-2 items-center">
+                  <div className="h-12 w-12 rounded-lg bg-muted flex items-center justify-center shrink-0 border border-border">
+                    <Camera className="h-5 w-5 text-muted-foreground/50" />
+                  </div>
+                  <Input
+                    value={caption}
+                    onChange={(e) => {
+                      const updated = [...donePhotoCaptions];
+                      updated[idx] = e.target.value;
+                      setDonePhotoCaptions(updated);
+                    }}
+                    placeholder={`Photo ${idx + 1} caption…`}
+                    className="text-sm h-8"
+                  />
+                  {donePhotoCaptions.length > 1 && (
+                    <button
+                      onClick={() => setDonePhotoCaptions(donePhotoCaptions.filter((_, i) => i !== idx))}
+                      className="text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-caption"
+                onClick={() => setDonePhotoCaptions([...donePhotoCaptions, ""])}
+              >
+                <Plus className="h-3 w-3 mr-1" /> Add another photo
+              </Button>
+            </div>
+
+            <div>
+              <label className="text-caption text-muted-foreground mb-1 block">Comment (optional)</label>
+              <Input
+                value={doneComment}
+                onChange={(e) => setDoneComment(e.target.value)}
+                placeholder="Any notes about completion…"
+                className="text-sm h-8"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-sp-1">
+              <Button variant="outline" onClick={() => setDonePrompt(null)}>Back</Button>
+              <Button
+                className="bg-success text-success-foreground hover:bg-success/90"
+                onClick={handleConfirmDone}
+                disabled={donePhotoCaptions.every((c) => !c.trim()) && donePhotoCaptions.length <= 1}
+              >
+                <CheckCircle2 className="h-4 w-4 mr-1" /> Mark Done
+              </Button>
+            </div>
+          </div>
+          <div className="fixed inset-0 z-[51] bg-black/40" onClick={() => setDonePrompt(null)} />
+        </div>
+      )}
+
+      {/* Blocked prompt — require comment */}
+      {blockedPrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="bg-card border border-border rounded-xl p-sp-3 w-full max-w-md space-y-sp-2 relative z-[52] shadow-xl">
+            <h3 className="text-lg font-semibold text-foreground">Why is this blocked?</h3>
+            <p className="text-sm text-muted-foreground">Explain the blocker so the team can resolve it.</p>
+
+            <Textarea
+              value={blockedReason}
+              onChange={(e) => setBlockedReason(e.target.value)}
+              placeholder="Describe the reason this task is blocked…"
+              rows={3}
+              autoFocus
+              className="text-sm"
+            />
+
+            <div className="flex justify-end gap-2 pt-sp-1">
+              <Button variant="outline" onClick={() => setBlockedPrompt(null)}>Cancel</Button>
+              <Button
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={handleConfirmBlocked}
+                disabled={blockedReason.trim().length < 5}
+              >
+                <AlertTriangle className="h-4 w-4 mr-1" /> Mark Blocked
+              </Button>
+            </div>
+          </div>
+          <div className="fixed inset-0 z-[51] bg-black/40" onClick={() => setBlockedPrompt(null)} />
         </div>
       )}
 

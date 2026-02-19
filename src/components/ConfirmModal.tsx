@@ -39,10 +39,10 @@ export function ConfirmModal({
 }: ConfirmModalProps) {
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="glass-modal rounded-modal">
+      <AlertDialogContent className="bg-card border border-border shadow-xl rounded-modal">
         <AlertDialogHeader>
-          <AlertDialogTitle>{title}</AlertDialogTitle>
-          <AlertDialogDescription>{description}</AlertDialogDescription>
+          <AlertDialogTitle className="text-foreground">{title}</AlertDialogTitle>
+          <AlertDialogDescription className="text-muted-foreground">{description}</AlertDialogDescription>
         </AlertDialogHeader>
         {children}
         <AlertDialogFooter>

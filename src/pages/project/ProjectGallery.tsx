@@ -241,7 +241,7 @@ export default function ProjectGallery() {
 
       {/* Upload modal */}
       <AlertDialog open={uploadOpen} onOpenChange={setUploadOpen}>
-        <AlertDialogContent className="glass-modal rounded-modal">
+        <AlertDialogContent className="bg-card border border-border shadow-xl rounded-modal">
           <AlertDialogHeader>
             <AlertDialogTitle>Upload photos</AlertDialogTitle>
             <AlertDialogDescription>Add project photos with an optional caption.</AlertDialogDescription>
@@ -280,7 +280,7 @@ export default function ProjectGallery() {
 
       {/* Fullscreen viewer */}
       <AlertDialog open={!!viewPhoto} onOpenChange={(o) => !o && setViewPhoto(null)}>
-        <AlertDialogContent className="glass-modal rounded-modal max-w-2xl">
+        <AlertDialogContent className="bg-card border border-border shadow-xl rounded-modal max-w-2xl">
           {viewPhoto && (() => {
             const task = tasks.find((t) => t.id === viewPhoto.task_id);
             const colorIdx = photos.indexOf(viewPhoto);
