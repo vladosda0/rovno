@@ -1,24 +1,23 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
+  Dialog, DialogContent,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ConfirmModal } from "@/components/ConfirmModal";
-import { StatusBadge } from "@/components/StatusBadge";
 import {
-  getUserById, getCurrentUser, updateTask, addComment,
+  getUserById, getCurrentUser, addComment,
   updateChecklist, deleteTask, updateTaskDescription,
-  updateTaskDeadline, addChecklistItem, updateChecklistItem,
-  deleteChecklistItem,
+  updateTaskDeadline, addChecklistItem, deleteChecklistItem,
+  getMedia,
 } from "@/data/store";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Send, CheckSquare, Trash2, Plus, X, Calendar,
+  Send, CheckSquare, Trash2, Plus, X, Calendar, Camera, Image,
 } from "lucide-react";
-import type { Task, TaskStatus } from "@/types/entities";
+import type { Task, TaskStatus, Media as MediaType } from "@/types/entities";
 import { format } from "date-fns";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarPicker } from "@/components/ui/calendar";
@@ -38,27 +37,63 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   canEdit: boolean;
+  onStatusChange?: (taskId: string, newStatus: TaskStatus) => void;
+  projectMedia?: MediaType[];
 }
 
-export function TaskDetailModal({ task, open, onOpenChange, canEdit }: Props) {
+export function TaskDetailModal({ task, open, onOpenChange, canEdit, onStatusChange, projectMedia }: Props) {
   const { toast } = useToast();
   const [commentText, setCommentText] = useState("");
-  const [editingDesc, setEditingDesc] = useState(false);
   const [descDraft, setDescDraft] = useState("");
   const [newCheckItem, setNewCheckItem] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
   const descTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const titleInputRef = useRef<HTMLInputElement>(null);
 
-  // Sync description draft
+  // Lightbox
+  const [lightboxPhoto, setLightboxPhoto] = useState<MediaType | null>(null);
+
+  // Sync drafts
   useEffect(() => {
-    if (task) setDescDraft(task.description);
-  }, [task?.id, task?.description]);
+    if (task) {
+      setDescDraft(task.description);
+      setTitleDraft(task.title);
+    }
+  }, [task?.id, task?.description, task?.title]);
+
+  // Close title editing when modal closes
+  useEffect(() => {
+    if (!open) setEditingTitle(false);
+  }, [open]);
 
   const handleStatusChange = useCallback((status: TaskStatus) => {
     if (!task) return;
-    updateTask(task.id, { status });
-    toast({ title: "Status updated", description: statusLabel[status] });
-  }, [task, toast]);
+    if (onStatusChange) {
+      onStatusChange(task.id, status);
+    }
+  }, [task, onStatusChange]);
+
+  // Title inline edit
+  const handleTitleSave = useCallback(() => {
+    if (!task || !titleDraft.trim()) {
+      setTitleDraft(task?.title ?? "");
+      setEditingTitle(false);
+      return;
+    }
+    if (titleDraft.trim() !== task.title) {
+      import("@/data/store").then(({ updateTask }) => {
+        updateTask(task.id, { title: titleDraft.trim() });
+      });
+    }
+    setEditingTitle(false);
+  }, [task, titleDraft]);
+
+  const handleTitleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === "Enter") { e.preventDefault(); handleTitleSave(); }
+    if (e.key === "Escape") { setTitleDraft(task?.title ?? ""); setEditingTitle(false); }
+  }, [handleTitleSave, task]);
 
   const handleDescBlur = useCallback(() => {
     if (!task) return;
@@ -66,7 +101,6 @@ export function TaskDetailModal({ task, open, onOpenChange, canEdit }: Props) {
     if (descDraft !== task.description) {
       updateTaskDescription(task.id, descDraft);
     }
-    setEditingDesc(false);
   }, [task, descDraft]);
 
   const handleDescChange = useCallback((val: string) => {
@@ -123,15 +157,60 @@ export function TaskDetailModal({ task, open, onOpenChange, canEdit }: Props) {
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   );
 
+  // Task media from project media
+  const taskMedia = (projectMedia ?? []).filter((m) => m.task_id === task.id);
+
+  const placeholderColors = [
+    "bg-accent/10", "bg-info/10", "bg-warning/10", "bg-muted",
+    "bg-success/10", "bg-destructive/10",
+  ];
+
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="bg-card border border-border rounded-modal max-w-lg max-h-[85vh] overflow-y-auto shadow-xl">
-          <DialogHeader>
-            <DialogTitle className="text-h3 text-foreground pr-8">{task.title}</DialogTitle>
-          </DialogHeader>
+        <DialogContent className="bg-card border border-border rounded-modal max-w-lg max-h-[85vh] overflow-y-auto shadow-xl p-0">
+          {/* Header */}
+          <div className="flex items-start justify-between p-sp-3 pb-0">
+            <div className="flex-1 min-w-0 pr-2">
+              {editingTitle && canEdit ? (
+                <input
+                  ref={titleInputRef}
+                  value={titleDraft}
+                  onChange={(e) => setTitleDraft(e.target.value)}
+                  onBlur={handleTitleSave}
+                  onKeyDown={handleTitleKeyDown}
+                  autoFocus
+                  className="text-lg font-semibold text-foreground bg-transparent border-b-2 border-accent outline-none w-full py-0.5"
+                />
+              ) : (
+                <h2
+                  className={`text-lg font-semibold text-foreground truncate ${canEdit ? "cursor-text hover:text-accent transition-colors" : ""}`}
+                  onClick={() => { if (canEdit) { setEditingTitle(true); setTimeout(() => titleInputRef.current?.focus(), 0); } }}
+                >
+                  {task.title}
+                </h2>
+              )}
+            </div>
+            <div className="flex items-center gap-1 shrink-0 mt-0.5">
+              {canEdit && (
+                <button
+                  onClick={() => setDeleteOpen(true)}
+                  className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                  title="Delete task"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
+              <button
+                onClick={() => onOpenChange(false)}
+                className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
 
-          <div className="space-y-sp-3">
+          <div className="space-y-sp-3 p-sp-3 pt-sp-2">
             {/* Status */}
             <div>
               <p className="text-caption text-muted-foreground mb-1">Status</p>
@@ -141,13 +220,13 @@ export function TaskDetailModal({ task, open, onOpenChange, canEdit }: Props) {
                     key={s}
                     disabled={!canEdit}
                     onClick={() => handleStatusChange(s)}
-                    className={`rounded-pill px-2.5 py-0.5 text-caption font-medium transition-colors ${
+                    className={`rounded-full px-2.5 py-0.5 text-caption font-medium transition-colors ${
                       task.status === s
                         ? s === "not_started" ? "bg-muted text-foreground ring-1 ring-border"
                         : s === "in_progress" ? "bg-info/15 text-info ring-1 ring-info/30"
                         : s === "done" ? "bg-success/15 text-success ring-1 ring-success/30"
                         : "bg-destructive/15 text-destructive ring-1 ring-destructive/30"
-                        : "bg-muted text-muted-foreground hover:bg-muted/80"
+                        : "bg-muted/60 text-muted-foreground hover:bg-muted"
                     } disabled:opacity-50 disabled:cursor-not-allowed`}
                   >
                     {statusLabel[s]}
@@ -159,23 +238,18 @@ export function TaskDetailModal({ task, open, onOpenChange, canEdit }: Props) {
             {/* Description — inline editable */}
             <div>
               <p className="text-caption text-muted-foreground mb-1">Description</p>
-              {editingDesc && canEdit ? (
+              {canEdit ? (
                 <Textarea
                   value={descDraft}
                   onChange={(e) => handleDescChange(e.target.value)}
                   onBlur={handleDescBlur}
-                  autoFocus
                   rows={3}
-                  className="text-body-sm"
+                  placeholder="Click to add description…"
+                  className="text-sm bg-muted/30 border-border"
                 />
               ) : (
-                <p
-                  className={`text-body-sm text-foreground whitespace-pre-wrap rounded-panel p-sp-1 px-sp-2 ${
-                    canEdit ? "cursor-text hover:bg-muted/40 transition-colors" : ""
-                  }`}
-                  onClick={() => canEdit && setEditingDesc(true)}
-                >
-                  {task.description || "Click to add description…"}
+                <p className="text-sm text-foreground whitespace-pre-wrap rounded-lg p-2 bg-muted/30">
+                  {task.description || "No description"}
                 </p>
               )}
             </div>
@@ -188,7 +262,7 @@ export function TaskDetailModal({ task, open, onOpenChange, canEdit }: Props) {
                   <div className="h-6 w-6 rounded-full bg-accent/20 flex items-center justify-center">
                     <span className="text-[10px] font-semibold text-accent">{assignee.name.charAt(0)}</span>
                   </div>
-                  <span className="text-body-sm text-foreground">{assignee.name}</span>
+                  <span className="text-sm text-foreground">{assignee.name}</span>
                 </div>
               </div>
             )}
@@ -245,7 +319,7 @@ export function TaskDetailModal({ task, open, onOpenChange, canEdit }: Props) {
                 {task.checklist.map((item) => (
                   <div
                     key={item.id}
-                    className="flex items-center gap-2 rounded-panel bg-muted/40 p-1.5 px-sp-2 group"
+                    className="flex items-center gap-2 rounded-lg bg-muted/40 p-1.5 px-2 group"
                   >
                     <Checkbox
                       checked={item.done}
@@ -282,6 +356,31 @@ export function TaskDetailModal({ task, open, onOpenChange, canEdit }: Props) {
               )}
             </div>
 
+            {/* Media section */}
+            <div>
+              <p className="text-caption text-muted-foreground mb-1 flex items-center gap-1">
+                <Image className="h-3.5 w-3.5" /> Media ({taskMedia.length})
+              </p>
+              {taskMedia.length > 0 && (
+                <div className="grid grid-cols-4 gap-1.5 mb-2">
+                  {taskMedia.map((photo, idx) => (
+                    <button
+                      key={photo.id}
+                      onClick={() => setLightboxPhoto(photo)}
+                      className="aspect-square rounded-lg overflow-hidden hover:ring-2 hover:ring-accent/40 transition-all relative"
+                    >
+                      <div className={`absolute inset-0 ${placeholderColors[idx % placeholderColors.length]} flex items-center justify-center`}>
+                        <Camera className="h-5 w-5 text-muted-foreground/30" />
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {taskMedia.length === 0 && (
+                <p className="text-[11px] text-muted-foreground mb-2">No photos attached to this task.</p>
+              )}
+            </div>
+
             {/* Comments — newest first */}
             <div>
               <p className="text-caption text-muted-foreground mb-1">Comments ({task.comments.length})</p>
@@ -303,7 +402,7 @@ export function TaskDetailModal({ task, open, onOpenChange, canEdit }: Props) {
                 {sortedComments.map((c) => {
                   const author = getUserById(c.author_id);
                   return (
-                    <div key={c.id} className="glass rounded-panel p-sp-1 px-sp-2">
+                    <div key={c.id} className="rounded-lg bg-muted/40 p-1.5 px-2">
                       <div className="flex items-center gap-1.5 mb-0.5">
                         <span className="text-caption font-medium text-foreground">{author?.name ?? "Unknown"}</span>
                         <span className="text-[10px] text-muted-foreground">
@@ -317,23 +416,15 @@ export function TaskDetailModal({ task, open, onOpenChange, canEdit }: Props) {
               </div>
             </div>
 
-            {/* Delete */}
-            {canEdit && (
-              <div className="pt-sp-2 border-t border-border">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-destructive hover:bg-destructive/10"
-                  onClick={() => setDeleteOpen(true)}
-                >
-                  <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete task
-                </Button>
-              </div>
-            )}
+            {/* Close button */}
+            <div className="flex justify-end pt-sp-1">
+              <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
 
+      {/* Delete confirm */}
       <ConfirmModal
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
@@ -342,6 +433,28 @@ export function TaskDetailModal({ task, open, onOpenChange, canEdit }: Props) {
         confirmLabel="Delete"
         onConfirm={handleDelete}
       />
+
+      {/* Lightbox */}
+      {lightboxPhoto && (
+        <Dialog open={!!lightboxPhoto} onOpenChange={(o) => { if (!o) setLightboxPhoto(null); }}>
+          <DialogContent className="bg-card border border-border rounded-modal max-w-2xl shadow-xl">
+            <div className="relative">
+              <div className={`w-full aspect-video rounded-lg ${placeholderColors[taskMedia.indexOf(lightboxPhoto) % placeholderColors.length]} flex items-center justify-center`}>
+                <Camera className="h-16 w-16 text-muted-foreground/20" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-foreground">{lightboxPhoto.caption}</h3>
+              <p className="text-caption text-muted-foreground">
+                {format(new Date(lightboxPhoto.created_at), "MMM d, yyyy HH:mm")}
+              </p>
+            </div>
+            <div className="flex justify-end">
+              <Button variant="outline" size="sm" onClick={() => setLightboxPhoto(null)}>Close</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </>
   );
 }
