@@ -125,6 +125,7 @@ export default function ProjectGallery() {
       attachments: [],
       photos: [aiConsultPhoto.id],
       linked_estimate_item_ids: [],
+      created_at: new Date().toISOString(),
     });
     addEvent({
       id: `evt-${Date.now()}`,

@@ -74,6 +74,7 @@ export function commitProposal(proposal: AIProposal): CommitResult {
           attachments: [],
           photos: [],
           linked_estimate_item_ids: [],
+          created_at: new Date().toISOString(),
         });
         created.push({
           type: "task",
