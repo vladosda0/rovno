@@ -126,7 +126,7 @@ export function TaskDetailModal({ task, open, onOpenChange, canEdit }: Props) {
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="glass-modal rounded-modal max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogContent className="bg-card border border-border rounded-modal max-w-lg max-h-[85vh] overflow-y-auto shadow-xl">
           <DialogHeader>
             <DialogTitle className="text-h3 text-foreground pr-8">{task.title}</DialogTitle>
           </DialogHeader>
