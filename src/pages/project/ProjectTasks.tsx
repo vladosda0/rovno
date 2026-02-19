@@ -300,7 +300,7 @@ export default function ProjectTasks() {
           return (
             <div
               key={status}
-              className={`glass rounded-card p-sp-2 min-w-[260px] w-[280px] flex-shrink-0 flex flex-col transition-colors ${
+              className={`bg-card/60 border border-border rounded-card p-sp-2 min-w-[260px] w-[280px] flex-shrink-0 flex flex-col transition-colors ${
                 isDropTarget ? "ring-2 ring-accent/50" : ""
               }`}
               onDragOver={(e) => handleDragOver(e, status)}
@@ -325,7 +325,7 @@ export default function ProjectTasks() {
               </div>
 
               {/* Task cards */}
-              <div className="space-y-1.5 flex-1 overflow-y-auto">
+              <div className="space-y-2 flex-1 overflow-y-auto py-1 px-0.5">
                 {columnTasks.map((task) => {
                   const assignee = getUserById(task.assignee_id);
                   const checkDone = task.checklist.filter((c) => c.done).length;
@@ -336,8 +336,8 @@ export default function ProjectTasks() {
                       draggable={userCan("task.edit")}
                       onDragStart={(e) => handleDragStart(e, task.id)}
                       onClick={() => setSelectedTaskId(task.id)}
-                      className={`glass rounded-panel p-sp-1 px-sp-2 cursor-pointer hover:bg-muted/60 transition-colors ${
-                        dragTaskId === task.id ? "opacity-50" : ""
+                      className={`bg-card border border-border rounded-card p-sp-1 px-sp-2 cursor-pointer hover:shadow-md transition-all ${
+                        dragTaskId === task.id ? "opacity-50" : "shadow-sm"
                       }`}
                     >
                       <div className="flex items-center gap-1.5 mb-0.5">
@@ -394,8 +394,8 @@ export default function ProjectTasks() {
 
       {/* New Task Modal */}
       {taskModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center">
-          <div className="glass-modal rounded-modal p-sp-3 w-full max-w-md space-y-sp-2 relative z-10">
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="bg-card border border-border rounded-modal p-sp-3 w-full max-w-md space-y-sp-2 relative z-[52] shadow-xl">
             <h3 className="text-h3 text-foreground">New Task</h3>
             <Input placeholder="Title *" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} autoFocus />
             <Textarea placeholder="Description" value={taskDesc} onChange={(e) => setTaskDesc(e.target.value)} rows={2} />
@@ -475,14 +475,14 @@ export default function ProjectTasks() {
               </Button>
             </div>
           </div>
-          <div className="fixed inset-0 bg-background/60 backdrop-blur-sm" onClick={() => setTaskModalOpen(false)} />
+          <div className="fixed inset-0 z-[51] bg-black/40" onClick={() => setTaskModalOpen(false)} />
         </div>
       )}
 
       {/* New Stage Modal */}
       {stageModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center">
-          <div className="glass-modal rounded-modal p-sp-3 w-full max-w-md space-y-sp-2 relative z-10">
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="bg-card border border-border rounded-modal p-sp-3 w-full max-w-md space-y-sp-2 relative z-[52] shadow-xl">
             <h3 className="text-h3 text-foreground">New Stage</h3>
             <Input
               placeholder="Stage name *"
@@ -521,7 +521,7 @@ export default function ProjectTasks() {
               </Button>
             </div>
           </div>
-          <div className="fixed inset-0 bg-background/60 backdrop-blur-sm" onClick={() => setStageModalOpen(false)} />
+          <div className="fixed inset-0 z-[51] bg-black/40" onClick={() => setStageModalOpen(false)} />
         </div>
       )}
 
