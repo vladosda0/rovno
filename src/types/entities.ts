@@ -110,6 +110,8 @@ export interface Task {
   attachments: string[];
   photos: string[];
   linked_estimate_item_ids: string[];
+  created_at: string;
+  deadline?: string;
 }
 
 export interface EstimateItem {

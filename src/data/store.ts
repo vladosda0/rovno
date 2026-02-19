@@ -410,3 +410,43 @@ export function getTask(id: string): Task | undefined {
 export function getStage(id: string): Stage | undefined {
   return stages.find((s) => s.id === id);
 }
+
+export function deleteTask(id: string) {
+  const task = tasks.find((t) => t.id === id);
+  if (!task) return;
+  tasks = tasks.filter((t) => t.id !== id);
+  notify();
+}
+
+export function updateTaskDescription(id: string, description: string) {
+  tasks = tasks.map((t) => (t.id === id ? { ...t, description } : t));
+  notify();
+}
+
+export function updateTaskDeadline(id: string, deadline: string | undefined) {
+  tasks = tasks.map((t) => (t.id === id ? { ...t, deadline } : t));
+  notify();
+}
+
+export function addChecklistItem(taskId: string, item: import("@/types/entities").ChecklistItem) {
+  tasks = tasks.map((t) =>
+    t.id === taskId ? { ...t, checklist: [...t.checklist, item] } : t
+  );
+  notify();
+}
+
+export function updateChecklistItem(taskId: string, itemId: string, text: string) {
+  tasks = tasks.map((t) =>
+    t.id === taskId
+      ? { ...t, checklist: t.checklist.map((c) => (c.id === itemId ? { ...c, text } : c)) }
+      : t
+  );
+  notify();
+}
+
+export function deleteChecklistItem(taskId: string, itemId: string) {
+  tasks = tasks.map((t) =>
+    t.id === taskId ? { ...t, checklist: t.checklist.filter((c) => c.id !== itemId) } : t
+  );
+  notify();
+}
