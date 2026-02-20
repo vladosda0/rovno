@@ -2,6 +2,7 @@ import type {
   User, Project, Member, Stage, Task, Estimate, ProcurementItem,
   Document, Media, Event, Notification, ContractorProposal, EstimateVersion, EstimateItem,
 } from "@/types/entities";
+import { moveEstimateItemToStage, deleteEstimateItemsForTask, deleteEstimateItemsBySourceId } from "@/data/estimate-store";
 import {
   seedUser, seedProjects, seedMembers, seedStages, seedTasks,
   seedEstimates, seedProcurementItems, seedDocuments, seedMedia,
@@ -367,6 +368,7 @@ export function moveTask(taskId: string, newStageId: string) {
   if (!task || task.stage_id === newStageId) return;
   const oldStageId = task.stage_id;
   tasks = tasks.map((t) => (t.id === taskId ? { ...t, stage_id: newStageId } : t));
+  moveEstimateItemToStage(taskId, newStageId);
   addEvent({
     id: `evt-auto-${Date.now()}`,
     project_id: task.project_id,
@@ -414,6 +416,8 @@ export function getStage(id: string): Stage | undefined {
 export function deleteTask(id: string) {
   const task = tasks.find((t) => t.id === id);
   if (!task) return;
+  // Delete linked estimate items
+  deleteEstimateItemsForTask(id, task.checklist.map((c) => c.id));
   tasks = tasks.filter((t) => t.id !== id);
   notify();
 }
@@ -445,6 +449,7 @@ export function updateChecklistItem(taskId: string, itemId: string, text: string
 }
 
 export function deleteChecklistItem(taskId: string, itemId: string) {
+  deleteEstimateItemsBySourceId(itemId);
   tasks = tasks.map((t) =>
     t.id === taskId ? { ...t, checklist: t.checklist.filter((c) => c.id !== itemId) } : t
   );
