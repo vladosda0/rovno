@@ -15,8 +15,12 @@ import {
 } from "@/data/store";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Send, CheckSquare, Trash2, Plus, X, Calendar, Camera, Image,
+  Send, CheckSquare, Trash2, Plus, X, Calendar, Camera, Image, Upload,
 } from "lucide-react";
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel,
+} from "@/components/ui/alert-dialog";
 import type { Task, TaskStatus, Media as MediaType } from "@/types/entities";
 import { createEstimateItemForChecklist, syncEstimateItemName } from "@/data/estimate-store";
 import { format } from "date-fns";
@@ -48,6 +52,8 @@ export function TaskDetailModal({ task, open, onOpenChange, canEdit, onStatusCha
   const [descDraft, setDescDraft] = useState("");
   const [newCheckItem, setNewCheckItem] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploadCaption, setUploadCaption] = useState("");
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const descTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -384,23 +390,7 @@ export function TaskDetailModal({ task, open, onOpenChange, canEdit, onStatusCha
                   variant="outline"
                   size="sm"
                   className="text-caption h-7 mt-1"
-                  onClick={() => {
-                    // Simulate adding a photo by creating a media entry
-                    import("@/data/store").then(({ addMedia, getCurrentUser }) => {
-                      const user = getCurrentUser();
-                      const mediaId = `media-${Date.now()}`;
-                      addMedia({
-                        id: mediaId,
-                        project_id: task.project_id,
-                        task_id: task.id,
-                        uploader_id: user.id,
-                        caption: "Photo",
-                        is_final: false,
-                        created_at: new Date().toISOString(),
-                      });
-                      toast({ title: "Photo added" });
-                    });
-                  }}
+                  onClick={() => { setUploadCaption(""); setUploadOpen(true); }}
                 >
                   <Plus className="h-3 w-3 mr-1" /> Add photos
                 </Button>
@@ -460,7 +450,50 @@ export function TaskDetailModal({ task, open, onOpenChange, canEdit, onStatusCha
         onConfirm={handleDelete}
       />
 
-      {/* Lightbox */}
+      {/* Upload Media modal */}
+      <AlertDialog open={uploadOpen} onOpenChange={setUploadOpen}>
+        <AlertDialogContent className="bg-card border border-border shadow-xl rounded-modal z-[70]">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Upload Media</AlertDialogTitle>
+            <AlertDialogDescription>Add photos to this task with an optional caption.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:border-accent/40 transition-colors">
+              <Upload className="mx-auto h-10 w-10 text-muted-foreground/30 mb-2" />
+              <p className="text-caption text-muted-foreground">Drag photos here or click to browse</p>
+            </div>
+            <div className="space-y-1">
+              <label className="text-body-sm font-medium text-foreground">Caption (optional)</label>
+              <Input value={uploadCaption} onChange={(e) => setUploadCaption(e.target.value)} placeholder="e.g. Kitchen wiring complete" />
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-accent text-accent-foreground hover:bg-accent/90"
+              onClick={() => {
+                import("@/data/store").then(({ addMedia, getCurrentUser }) => {
+                  const user = getCurrentUser();
+                  const mediaId = `media-${Date.now()}`;
+                  addMedia({
+                    id: mediaId,
+                    project_id: task.project_id,
+                    task_id: task.id,
+                    uploader_id: user.id,
+                    caption: uploadCaption || "Photo",
+                    is_final: false,
+                    created_at: new Date().toISOString(),
+                  });
+                  toast({ title: "Photo uploaded" });
+                });
+              }}
+            >
+              Add
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {lightboxPhoto && (
         <Dialog open={!!lightboxPhoto} onOpenChange={(o) => { if (!o) setLightboxPhoto(null); }}>
           <DialogContent className="bg-card border border-border rounded-modal max-w-2xl shadow-xl [&>button.absolute]:hidden">
