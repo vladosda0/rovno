@@ -106,12 +106,14 @@ export default function ProjectTasks() {
     if (!task || task.status === newStatus) return;
 
     if (newStatus === "done") {
+      setBlockedPrompt(null); // close any existing prompt
       setDonePrompt({ taskId });
       setDonePhotoCaptions([""]);
       setDoneComment("");
       return;
     }
     if (newStatus === "blocked") {
+      setDonePrompt(null); // close any existing prompt
       setBlockedPrompt({ taskId });
       setBlockedReason("");
       return;
@@ -615,8 +617,8 @@ export default function ProjectTasks() {
 
       {/* Done prompt — require photos */}
       {donePrompt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="bg-card border border-border rounded-xl p-sp-3 w-full max-w-md space-y-sp-2 relative z-[52] shadow-xl">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center">
+          <div className="bg-card border border-border rounded-xl p-sp-3 w-full max-w-md space-y-sp-2 relative z-[62] shadow-xl">
             <h3 className="text-lg font-semibold text-foreground">Add final result photos</h3>
             <p className="text-sm text-muted-foreground">Upload at least one photo to confirm completion.</p>
 
@@ -677,14 +679,14 @@ export default function ProjectTasks() {
               </Button>
             </div>
           </div>
-          <div className="fixed inset-0 z-[51] bg-black/40" onClick={() => setDonePrompt(null)} />
+          <div className="fixed inset-0 z-[61] bg-black/40" onClick={() => setDonePrompt(null)} />
         </div>
       )}
 
       {/* Blocked prompt — require comment */}
       {blockedPrompt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="bg-card border border-border rounded-xl p-sp-3 w-full max-w-md space-y-sp-2 relative z-[52] shadow-xl">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center">
+          <div className="bg-card border border-border rounded-xl p-sp-3 w-full max-w-md space-y-sp-2 relative z-[62] shadow-xl">
             <h3 className="text-lg font-semibold text-foreground">Why is this blocked?</h3>
             <p className="text-sm text-muted-foreground">Explain the blocker so the team can resolve it.</p>
 
@@ -708,7 +710,7 @@ export default function ProjectTasks() {
               </Button>
             </div>
           </div>
-          <div className="fixed inset-0 z-[51] bg-black/40" onClick={() => setBlockedPrompt(null)} />
+          <div className="fixed inset-0 z-[61] bg-black/40" onClick={() => setBlockedPrompt(null)} />
         </div>
       )}
 

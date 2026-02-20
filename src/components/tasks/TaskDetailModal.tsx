@@ -168,7 +168,7 @@ export function TaskDetailModal({ task, open, onOpenChange, canEdit, onStatusCha
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="bg-card border border-border rounded-modal max-w-lg max-h-[85vh] overflow-y-auto shadow-xl p-0">
+        <DialogContent className="bg-card border border-border rounded-modal max-w-lg max-h-[85vh] overflow-y-auto shadow-xl p-0 [&>button.absolute]:hidden">
           {/* Header */}
           <div className="flex items-start justify-between p-sp-3 pb-0">
             <div className="flex-1 min-w-0 pr-2">
@@ -377,7 +377,33 @@ export function TaskDetailModal({ task, open, onOpenChange, canEdit, onStatusCha
                 </div>
               )}
               {taskMedia.length === 0 && (
-                <p className="text-[11px] text-muted-foreground mb-2">No photos attached to this task.</p>
+                <p className="text-[11px] text-muted-foreground mb-1">No photos attached to this task.</p>
+              )}
+              {canEdit && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-caption h-7 mt-1"
+                  onClick={() => {
+                    // Simulate adding a photo by creating a media entry
+                    import("@/data/store").then(({ addMedia, getCurrentUser }) => {
+                      const user = getCurrentUser();
+                      const mediaId = `media-${Date.now()}`;
+                      addMedia({
+                        id: mediaId,
+                        project_id: task.project_id,
+                        task_id: task.id,
+                        uploader_id: user.id,
+                        caption: "Photo",
+                        is_final: false,
+                        created_at: new Date().toISOString(),
+                      });
+                      toast({ title: "Photo added" });
+                    });
+                  }}
+                >
+                  <Plus className="h-3 w-3 mr-1" /> Add photos
+                </Button>
               )}
             </div>
 
@@ -437,7 +463,7 @@ export function TaskDetailModal({ task, open, onOpenChange, canEdit, onStatusCha
       {/* Lightbox */}
       {lightboxPhoto && (
         <Dialog open={!!lightboxPhoto} onOpenChange={(o) => { if (!o) setLightboxPhoto(null); }}>
-          <DialogContent className="bg-card border border-border rounded-modal max-w-2xl shadow-xl">
+          <DialogContent className="bg-card border border-border rounded-modal max-w-2xl shadow-xl [&>button.absolute]:hidden">
             <div className="relative">
               <div className={`w-full aspect-video rounded-lg ${placeholderColors[taskMedia.indexOf(lightboxPhoto) % placeholderColors.length]} flex items-center justify-center`}>
                 <Camera className="h-16 w-16 text-muted-foreground/20" />
