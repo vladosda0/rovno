@@ -26,6 +26,7 @@ import {
   AlertTriangle, Trash2, Check, User, Calendar as CalendarIcon, GripVertical, Camera,
 } from "lucide-react";
 import type { Task, Stage, TaskStatus } from "@/types/entities";
+import { createEstimateItemForTask } from "@/data/estimate-store";
 
 const statusMeta: Record<TaskStatus, { label: string; Icon: typeof Circle; colorClass: string; bgClass: string }> = {
   not_started: { label: "Not started", Icon: Circle, colorClass: "text-muted-foreground", bgClass: "bg-muted" },
@@ -209,6 +210,7 @@ export default function ProjectTasks() {
       deadline: taskDeadline?.toISOString(),
     };
     addTask(task);
+    createEstimateItemForTask(task);
     setTaskModalOpen(false);
     toast({ title: "Task created", description: task.title });
   }, [pid, taskTitle, taskDesc, taskStatus, taskAssignee, taskStageId, taskDeadline, stages, currentUser, toast]);
@@ -233,13 +235,13 @@ export default function ProjectTasks() {
         `QA check for ${newStageTitle.trim()}`,
       ];
       aiTasks.forEach((title, i) => {
-        addTask({
+        const aiTask = {
           id: `task-ai-${Date.now()}-${i}`,
           project_id: pid,
           stage_id: stageId,
           title,
           description: `Auto-generated from: ${newStageDesc.trim()}`,
-          status: "not_started",
+          status: "not_started" as const,
           assignee_id: currentUser.id,
           checklist: [],
           comments: [],
@@ -247,7 +249,9 @@ export default function ProjectTasks() {
           photos: [],
           linked_estimate_item_ids: [],
           created_at: new Date().toISOString(),
-        });
+        };
+        addTask(aiTask);
+        createEstimateItemForTask(aiTask);
       });
     }
 

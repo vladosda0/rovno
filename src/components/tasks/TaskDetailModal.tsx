@@ -18,6 +18,7 @@ import {
   Send, CheckSquare, Trash2, Plus, X, Calendar, Camera, Image,
 } from "lucide-react";
 import type { Task, TaskStatus, Media as MediaType } from "@/types/entities";
+import { createEstimateItemForChecklist, syncEstimateItemName } from "@/data/estimate-store";
 import { format } from "date-fns";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarPicker } from "@/components/ui/calendar";
@@ -86,6 +87,7 @@ export function TaskDetailModal({ task, open, onOpenChange, canEdit, onStatusCha
       import("@/data/store").then(({ updateTask }) => {
         updateTask(task.id, { title: titleDraft.trim() });
       });
+      syncEstimateItemName(task.id, titleDraft.trim());
     }
     setEditingTitle(false);
   }, [task, titleDraft]);
@@ -121,11 +123,9 @@ export function TaskDetailModal({ task, open, onOpenChange, canEdit, onStatusCha
 
   const handleAddCheckItem = useCallback(() => {
     if (!task || !newCheckItem.trim()) return;
-    addChecklistItem(task.id, {
-      id: `cl-${Date.now()}`,
-      text: newCheckItem.trim(),
-      done: false,
-    });
+    const clItem = { id: `cl-${Date.now()}`, text: newCheckItem.trim(), done: false };
+    addChecklistItem(task.id, clItem);
+    createEstimateItemForChecklist(clItem, task);
     setNewCheckItem("");
   }, [task, newCheckItem]);
 
