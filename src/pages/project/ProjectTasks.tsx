@@ -1,5 +1,5 @@
-import { useState, useCallback } from "react";
-import { useParams } from "react-router-dom";
+import { useState, useCallback, useEffect } from "react";
+import { useParams, useLocation } from "react-router-dom";
 import { useProject, useTasks, usePermission, useMedia } from "@/hooks/use-mock-data";
 import {
   getUserById, getCurrentUser, updateTask, addTask, addStage,
@@ -48,12 +48,24 @@ export default function ProjectTasks() {
   const authRole = getAuthRole();
   const currentUser = getCurrentUser();
 
+  const location = useLocation();
+
   const [activeTab, setActiveTab] = useState<string>("all");
   const [assignedToMe, setAssignedToMe] = useState(false);
 
   // Task detail modal
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const selectedTask = tasks.find((t) => t.id === selectedTaskId) ?? null;
+
+  // Deep-link: open task from navigation state (e.g. from PhotoViewer)
+  useEffect(() => {
+    const state = location.state as { openTaskId?: string } | null;
+    if (state?.openTaskId) {
+      setSelectedTaskId(state.openTaskId);
+      // Clear the state so it doesn't re-open on re-render
+      window.history.replaceState({}, "");
+    }
+  }, [location.state]);
 
   // New stage modal
   const [stageModalOpen, setStageModalOpen] = useState(false);
