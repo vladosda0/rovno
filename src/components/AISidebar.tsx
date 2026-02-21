@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Bot, Send, GripVertical, Bell, Shield } from "lucide-react";
+import { Bot, Send, GripVertical, Bell, Shield, Camera, X as XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -14,15 +14,23 @@ import { CreditDisplay } from "@/components/ai/CreditDisplay";
 import { EventFeedItem } from "@/components/ai/EventFeedItem";
 import { NotificationDrawer } from "@/components/ai/NotificationDrawer";
 import { ContextInspector } from "@/components/ai/ContextInspector";
+import { PreviewCard } from "@/components/ai/PreviewCard";
+import { ActionBar } from "@/components/ai/ActionBar";
 import { useCurrentUser, useEvents, useNotifications } from "@/hooks/use-mock-data";
 import { usePermission } from "@/lib/permissions";
 import { generateProposal, getTextResponse } from "@/lib/ai-engine";
 import { commitProposal } from "@/lib/commit-proposal";
 import { toast } from "@/hooks/use-toast";
-import type { AIMessage } from "@/types/ai";
+import type { AIMessage, ProposalChange } from "@/types/ai";
 import type { CommitResult } from "@/lib/commit-proposal";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { isAuthenticated } from "@/lib/auth-state";
+import {
+  subscribePhotoConsult, closePhotoConsult, buildConsultPrompt,
+  type PhotoConsultContext,
+} from "@/lib/photo-consult-store";
+import { addTask, addComment as addTaskComment, addEvent, getCurrentUser, getStages } from "@/data/store";
+import { format } from "date-fns";
 
 const PROJECT_SUGGESTIONS = ["Add tasks", "Update estimate", "Generate contract", "Buy materials"];
 const GLOBAL_SUGGESTIONS = ["Create project", "Compare estimates", "Best tile adhesive?"];
@@ -52,6 +60,83 @@ interface WorkLogEntry {
 }
 
 const DEV_MODE = localStorage.getItem("dev-context-inspector") === "true";
+
+// Photo consult AI analysis mock result
+interface PhotoAnalysisResult {
+  stepAlignment: string;
+  observations: string;
+  issues: { text: string; severity: "Low" | "Med" | "High" }[];
+  nextStep: string;
+  confidence: string;
+}
+
+function mockPhotoAnalysis(ctx: PhotoConsultContext): PhotoAnalysisResult {
+  const taskTitle = ctx.task?.title ?? "standalone photo";
+  const checklist = ctx.task?.checklist ?? [];
+  const doneItems = checklist.filter((c) => c.done);
+  const nextItem = checklist.find((c) => !c.done);
+
+  return {
+    stepAlignment: nextItem
+      ? `Corresponds to checklist item: "${nextItem.text}"`
+      : doneItems.length > 0
+        ? `All ${doneItems.length} checklist items completed`
+        : "No checklist items to align with",
+    observations: `Photo "${ctx.photo.caption}" shows progress on ${taskTitle}. ${
+      ctx.siblingPhotos?.length ? `${ctx.siblingPhotos.length} other photo(s) in this task for comparison.` : ""
+    }`,
+    issues: [
+      { text: "Minor alignment issue visible in left section", severity: "Low" as const },
+      ...(Math.random() > 0.5
+        ? [{ text: "Potential moisture concern near joint area", severity: "Med" as const }]
+        : []),
+    ],
+    nextStep: nextItem
+      ? `Proceed with: "${nextItem.text}"`
+      : "Task checklist complete — consider marking as Done",
+    confidence: "High — recommend additional close-up angle of joint area for verification",
+  };
+}
+
+function buildSuggestedActions(ctx: PhotoConsultContext, analysis: PhotoAnalysisResult): ProposalChange[] {
+  const actions: ProposalChange[] = [];
+
+  // If there are medium/high severity issues, suggest a fix task
+  const hasIssues = analysis.issues.some((i) => i.severity !== "Low");
+  if (hasIssues) {
+    actions.push({
+      entity_type: "task",
+      action: "create",
+      label: `Fix issue: ${ctx.photo.caption}`,
+      after: "not_started",
+    });
+  }
+
+  // Always suggest an observation comment
+  if (ctx.task) {
+    actions.push({
+      entity_type: "comment",
+      action: "create",
+      label: "Add AI observation comment to task",
+    });
+  }
+
+  // If all checklist items are done and task is in_progress, suggest marking done
+  if (ctx.task && ctx.task.status === "in_progress") {
+    const allDone = ctx.task.checklist.length > 0 && ctx.task.checklist.every((c) => c.done);
+    if (allDone) {
+      actions.push({
+        entity_type: "task",
+        action: "update",
+        label: "Mark task Done",
+        before: "in_progress",
+        after: "done",
+      });
+    }
+  }
+
+  return actions;
+}
 
 export function AISidebar() {
   const location = useLocation();
@@ -86,6 +171,49 @@ export function AISidebar() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ startX: number; startW: number } | null>(null);
 
+  // Photo consult state
+  const [photoConsult, setPhotoConsult] = useState<PhotoConsultContext | null>(null);
+  const [photoAnalysis, setPhotoAnalysis] = useState<PhotoAnalysisResult | null>(null);
+  const [photoAnalysisLoading, setPhotoAnalysisLoading] = useState(false);
+  const [suggestedActions, setSuggestedActions] = useState<ProposalChange[]>([]);
+  const [selectedActions, setSelectedActions] = useState<Set<number>>(new Set());
+
+  // Subscribe to photo consult events
+  useEffect(() => {
+    return subscribePhotoConsult((ctx) => {
+      if (ctx) {
+        setPhotoConsult(ctx);
+        setPhotoAnalysis(null);
+        setSuggestedActions([]);
+        setSelectedActions(new Set());
+        setCollapsed(false);
+        setActiveTab("ai");
+
+        // Prefill the prompt
+        const prompt = buildConsultPrompt(ctx);
+        setInputValue(prompt);
+
+        // Auto-run analysis
+        setPhotoAnalysisLoading(true);
+        setTimeout(() => {
+          const analysis = mockPhotoAnalysis(ctx);
+          setPhotoAnalysis(analysis);
+          setPhotoAnalysisLoading(false);
+
+          const actions = buildSuggestedActions(ctx, analysis);
+          setSuggestedActions(actions);
+          // Select all by default
+          setSelectedActions(new Set(actions.map((_, i) => i)));
+        }, 2000);
+      } else {
+        setPhotoConsult(null);
+        setPhotoAnalysis(null);
+        setSuggestedActions([]);
+        setSelectedActions(new Set());
+      }
+    });
+  }, []);
+
   // Activity events
   const allEvents = useEvents(projectId || "");
   const events = isProjectContext ? allEvents : [];
@@ -94,13 +222,14 @@ export function AISidebar() {
     setMessages([]);
     setCommitResults(new Map());
     setWorkLogs(new Map());
+    // Don't clear photo consult on navigation - it should persist
   }, [location.pathname]);
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, commitResults, workLogs]);
+  }, [messages, commitResults, workLogs, photoAnalysis]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, String(width));
@@ -135,6 +264,11 @@ export function AISidebar() {
     if (!content) return;
     setInputValue("");
 
+    // Clear photo consult when sending (prompt was used)
+    if (photoConsult) {
+      setPhotoConsult(null);
+    }
+
     if (totalCredits <= 0) {
       setLimitModalOpen(true);
       return;
@@ -145,7 +279,6 @@ export function AISidebar() {
       return;
     }
 
-    // Switch to AI tab
     setActiveTab("ai");
 
     const userMsg: AIMessage = {
@@ -155,7 +288,6 @@ export function AISidebar() {
       timestamp: new Date().toISOString(),
     };
 
-    // Show work log for generation
     const workLogId = `wl-${Date.now()}`;
     setWorkLogs((prev) => {
       const next = new Map(prev);
@@ -165,7 +297,6 @@ export function AISidebar() {
 
     setMessages((prev) => [...prev, userMsg]);
 
-    // Simulate delay for proposal generation
     setTimeout(() => {
       let proposal = isProjectContext ? generateProposal(content, projectId) : null;
       const assistantContent = proposal ? "Here's what I'd do:" : getTextResponse();
@@ -178,7 +309,6 @@ export function AISidebar() {
         proposal: proposal ?? undefined,
       };
 
-      // Remove work log, add assistant message
       setWorkLogs((prev) => {
         const next = new Map(prev);
         next.delete(workLogId);
@@ -189,7 +319,6 @@ export function AISidebar() {
   }
 
   function handleConfirm(msgId: string) {
-    // Show commit work log
     const commitWlId = `wl-commit-${Date.now()}`;
     setWorkLogs((prev) => {
       const next = new Map(prev);
@@ -238,6 +367,72 @@ export function AISidebar() {
     );
   }
 
+  // Photo consult: confirm suggested actions
+  function handleConsultConfirm() {
+    if (!photoConsult) return;
+    const currentUser = getCurrentUser();
+    const stages = getStages(photoConsult.photo.project_id);
+    const stage = stages[0];
+    let appliedCount = 0;
+
+    selectedActions.forEach((idx) => {
+      const action = suggestedActions[idx];
+      if (!action) return;
+
+      if (action.entity_type === "task" && action.action === "create") {
+        const taskId = `task-ai-${Date.now()}-${idx}`;
+        addTask({
+          id: taskId,
+          project_id: photoConsult.photo.project_id,
+          stage_id: photoConsult.task?.stage_id ?? stage?.id ?? "",
+          title: action.label,
+          description: `AI-identified issue from photo: ${photoConsult.photo.caption}`,
+          status: "not_started",
+          assignee_id: currentUser.id,
+          checklist: [],
+          comments: [],
+          attachments: [],
+          photos: [photoConsult.photo.id],
+          linked_estimate_item_ids: [],
+          created_at: new Date().toISOString(),
+        });
+        appliedCount++;
+      }
+
+      if (action.entity_type === "comment" && action.action === "create" && photoConsult.task) {
+        addTaskComment(
+          photoConsult.task.id,
+          `AI Photo Analysis: ${photoAnalysis?.observations ?? "Analysis complete"}`
+        );
+        appliedCount++;
+      }
+
+      if (action.entity_type === "task" && action.action === "update" && photoConsult.task) {
+        import("@/data/store").then(({ updateTask }) => {
+          updateTask(photoConsult.task!.id, { status: "done" as const });
+        });
+        appliedCount++;
+      }
+    });
+
+    toast({ title: "Changes applied", description: `${appliedCount} action${appliedCount !== 1 ? "s" : ""} committed.` });
+    closePhotoConsult();
+  }
+
+  function handleConsultCancel() {
+    setSuggestedActions([]);
+    setSelectedActions(new Set());
+  }
+
+  function toggleActionSelection(idx: number) {
+    setSelectedActions((prev) => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx);
+      else next.add(idx);
+      return next;
+    });
+  }
+
   const suggestions = isProjectContext ? PROJECT_SUGGESTIONS : GLOBAL_SUGGESTIONS;
   const panelWidth = collapsed ? COLLAPSED_WIDTH : (isMobile ? "100%" : width);
 
@@ -248,6 +443,11 @@ export function AISidebar() {
     : events;
 
   const roleLabel = perm?.role === "owner" ? "Owner" : perm?.role === "contractor" ? "Contractor" : perm?.role === "participant" ? "Viewer" : null;
+
+  const placeholderColors = [
+    "bg-accent/10", "bg-info/10", "bg-warning/10", "bg-muted",
+    "bg-success/10", "bg-destructive/10",
+  ];
 
   return (
     <>
@@ -281,22 +481,21 @@ export function AISidebar() {
                   <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent/10">
                     <Bot className="h-3.5 w-3.5 text-accent" />
                   </div>
-                  <span className="text-body-sm font-semibold text-sidebar-foreground truncate">{title}</span>
+                  <span className="text-body-sm font-semibold text-sidebar-foreground truncate">
+                    {photoConsult ? "Photo Consult" : title}
+                  </span>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  {/* Credits badge */}
                   {!isGuest && (
                     <span className={`text-caption font-bold px-1.5 py-0.5 rounded-pill ${totalCredits < 10 ? "bg-warning/15 text-warning" : "bg-accent/10 text-accent"}`}>
                       {totalCredits}
                     </span>
                   )}
-                  {/* Role badge */}
                   {roleLabel && (
                     <span className="text-[10px] font-medium text-muted-foreground bg-muted rounded-pill px-1.5 py-0.5">
                       {roleLabel}
                     </span>
                   )}
-                  {/* Notification bell */}
                   {!isGuest && (
                     <button
                       onClick={() => setNotifOpen(true)}
@@ -310,7 +509,6 @@ export function AISidebar() {
                       )}
                     </button>
                   )}
-                  {/* Collapse */}
                   <button
                     onClick={() => setCollapsed(true)}
                     className="text-muted-foreground hover:text-foreground transition-colors text-caption shrink-0 h-7 w-7 flex items-center justify-center"
@@ -342,7 +540,7 @@ export function AISidebar() {
                 {/* === MAIN BODY with tabs === */}
                 <div className="flex-1 min-h-0 flex flex-col" style={{ width: "100%" }}>
                   {/* Tab switcher */}
-                  {isProjectContext && (
+                  {isProjectContext && !photoConsult && (
                     <div className="px-3 pt-2 shrink-0">
                       <div className="glass rounded-lg p-0.5 flex gap-0.5">
                         <button
@@ -375,7 +573,130 @@ export function AISidebar() {
                   {/* Scrollable content */}
                   <div className="flex-1 min-h-0 overflow-hidden px-3 box-border" style={{ width: "100%" }}>
                     <ScrollArea className="h-full">
-                      {activeTab === "ai" ? (
+                      {photoConsult ? (
+                        /* === Photo Consult Mode === */
+                        <div ref={scrollRef} className="space-y-3 py-2 pr-1" style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}>
+                          {/* Pinned photo card */}
+                          <div className="glass rounded-card p-2.5 space-y-2">
+                            <div className="flex items-start gap-2">
+                              <div className={`h-12 w-12 rounded-lg shrink-0 ${placeholderColors[0]} flex items-center justify-center`}>
+                                <Camera className="h-5 w-5 text-muted-foreground/30" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-body-sm font-semibold text-foreground truncate">{photoConsult.photo.caption}</p>
+                                <p className="text-[10px] text-muted-foreground">
+                                  {format(new Date(photoConsult.photo.created_at), "MMM d, yyyy · HH:mm")}
+                                </p>
+                                {photoConsult.task && (
+                                  <p className="text-[10px] text-accent truncate mt-0.5">
+                                    Task: {photoConsult.task.title}
+                                  </p>
+                                )}
+                              </div>
+                              <button
+                                onClick={() => closePhotoConsult()}
+                                className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                              >
+                                <XIcon className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Loading skeleton */}
+                          {photoAnalysisLoading && (
+                            <div className="glass rounded-card p-3 space-y-2.5 animate-pulse">
+                              <div className="h-3 bg-muted rounded w-3/4" />
+                              <div className="h-3 bg-muted rounded w-full" />
+                              <div className="h-3 bg-muted rounded w-5/6" />
+                              <div className="h-3 bg-muted rounded w-2/3" />
+                              <div className="h-3 bg-muted rounded w-4/5" />
+                            </div>
+                          )}
+
+                          {/* Analysis result */}
+                          {photoAnalysis && !photoAnalysisLoading && (
+                            <div className="glass rounded-card p-3 space-y-3">
+                              <p className="text-body-sm font-semibold text-foreground">AI Photo Analysis</p>
+
+                              {/* Step alignment */}
+                              <div>
+                                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-0.5">Step Alignment</p>
+                                <p className="text-caption text-foreground">{photoAnalysis.stepAlignment}</p>
+                              </div>
+
+                              {/* Observations */}
+                              <div>
+                                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-0.5">Observations</p>
+                                <p className="text-caption text-foreground">{photoAnalysis.observations}</p>
+                              </div>
+
+                              {/* Issues */}
+                              {photoAnalysis.issues.length > 0 && (
+                                <div>
+                                  <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1">Potential Issues</p>
+                                  <div className="space-y-1">
+                                    {photoAnalysis.issues.map((issue, i) => (
+                                      <div key={i} className="flex items-start gap-2 text-caption">
+                                        <span className={`shrink-0 rounded-full px-1.5 py-0 text-[10px] font-bold ${
+                                          issue.severity === "High" ? "bg-destructive/15 text-destructive" :
+                                          issue.severity === "Med" ? "bg-warning/15 text-warning" :
+                                          "bg-muted text-muted-foreground"
+                                        }`}>
+                                          {issue.severity}
+                                        </span>
+                                        <span className="text-foreground">{issue.text}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Next step */}
+                              <div>
+                                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-0.5">Suggested Next Step</p>
+                                <p className="text-caption text-foreground">{photoAnalysis.nextStep}</p>
+                              </div>
+
+                              {/* Confidence */}
+                              <div>
+                                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-0.5">Confidence</p>
+                                <p className="text-caption text-foreground">{photoAnalysis.confidence}</p>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Suggested actions */}
+                          {suggestedActions.length > 0 && !photoAnalysisLoading && (
+                            <div className="space-y-2">
+                              <PreviewCard summary="Suggested actions" changes={suggestedActions} />
+
+                              {/* Selectable checkboxes */}
+                              <div className="space-y-1 px-1">
+                                {suggestedActions.map((action, idx) => (
+                                  <label
+                                    key={idx}
+                                    className="flex items-center gap-2 text-caption cursor-pointer hover:bg-muted/30 rounded-md px-1.5 py-1 transition-colors"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedActions.has(idx)}
+                                      onChange={() => toggleActionSelection(idx)}
+                                      className="rounded border-border"
+                                    />
+                                    <span className="text-foreground">{action.label}</span>
+                                  </label>
+                                ))}
+                              </div>
+
+                              <ActionBar
+                                onConfirm={handleConsultConfirm}
+                                onCancel={handleConsultCancel}
+                                disabled={selectedActions.size === 0}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      ) : activeTab === "ai" ? (
                         /* === AI Chat Tab === */
                         <div ref={scrollRef} className="space-y-3 py-2 pr-1" style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}>
                           {messages.length === 0 && workLogs.size === 0 ? (
@@ -476,12 +797,12 @@ export function AISidebar() {
 
                 {/* === COMPOSER (sticky bottom) === */}
                 <div className="p-3 space-y-2 shrink-0 box-border border-t border-border" style={{ width: "100%" }}>
-                  {activeTab === "ai" && messages.length === 0 && (
+                  {activeTab === "ai" && messages.length === 0 && !photoConsult && (
                     <SuggestionChips suggestions={suggestions} onSelect={(s) => handleSend(s)} />
                   )}
                   <div className="flex gap-1.5 w-full min-w-0">
                     <Input
-                      placeholder="Ask AI..."
+                      placeholder={photoConsult ? "Edit prompt or send as-is..." : "Ask AI..."}
                       className="h-9 text-body-sm bg-sidebar-accent/50 border-sidebar-border flex-1 min-w-0"
                       value={inputValue}
                       onChange={(e) => setInputValue(e.target.value)}

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ConfirmModal } from "@/components/ConfirmModal";
+import { PhotoViewer } from "@/components/PhotoViewer";
 import {
   getUserById, getCurrentUser, addComment,
   updateChecklist, deleteTask, updateTaskDescription,
@@ -59,8 +60,8 @@ export function TaskDetailModal({ task, open, onOpenChange, canEdit, onStatusCha
   const descTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
-  // Lightbox
-  const [lightboxPhoto, setLightboxPhoto] = useState<MediaType | null>(null);
+  // PhotoViewer
+  const [viewerPhoto, setViewerPhoto] = useState<MediaType | null>(null);
 
   // Sync drafts
   useEffect(() => {
@@ -241,7 +242,7 @@ export function TaskDetailModal({ task, open, onOpenChange, canEdit, onStatusCha
               </div>
             </div>
 
-            {/* Description — inline editable */}
+            {/* Description */}
             <div>
               <p className="text-caption text-muted-foreground mb-1">Description</p>
               {canEdit ? (
@@ -372,7 +373,7 @@ export function TaskDetailModal({ task, open, onOpenChange, canEdit, onStatusCha
                   {taskMedia.map((photo, idx) => (
                     <button
                       key={photo.id}
-                      onClick={() => setLightboxPhoto(photo)}
+                      onClick={() => setViewerPhoto(photo)}
                       className="aspect-square rounded-lg overflow-hidden hover:ring-2 hover:ring-accent/40 transition-all relative"
                     >
                       <div className={`absolute inset-0 ${placeholderColors[idx % placeholderColors.length]} flex items-center justify-center`}>
@@ -397,7 +398,7 @@ export function TaskDetailModal({ task, open, onOpenChange, canEdit, onStatusCha
               )}
             </div>
 
-            {/* Comments — newest first */}
+            {/* Comments */}
             <div>
               <p className="text-caption text-muted-foreground mb-1">Comments ({task.comments.length})</p>
               {canEdit && (
@@ -494,26 +495,14 @@ export function TaskDetailModal({ task, open, onOpenChange, canEdit, onStatusCha
         </AlertDialogContent>
       </AlertDialog>
 
-      {lightboxPhoto && (
-        <Dialog open={!!lightboxPhoto} onOpenChange={(o) => { if (!o) setLightboxPhoto(null); }}>
-          <DialogContent className="bg-card border border-border rounded-modal max-w-2xl shadow-xl [&>button.absolute]:hidden">
-            <div className="relative">
-              <div className={`w-full aspect-video rounded-lg ${placeholderColors[taskMedia.indexOf(lightboxPhoto) % placeholderColors.length]} flex items-center justify-center`}>
-                <Camera className="h-16 w-16 text-muted-foreground/20" />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <h3 className="text-sm font-semibold text-foreground">{lightboxPhoto.caption}</h3>
-              <p className="text-caption text-muted-foreground">
-                {format(new Date(lightboxPhoto.created_at), "MMM d, yyyy HH:mm")}
-              </p>
-            </div>
-            <div className="flex justify-end">
-              <Button variant="outline" size="sm" onClick={() => setLightboxPhoto(null)}>Close</Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
+      {/* Unified Photo Viewer */}
+      <PhotoViewer
+        photo={viewerPhoto}
+        open={!!viewerPhoto}
+        onOpenChange={(o) => { if (!o) setViewerPhoto(null); }}
+        source="task"
+        allPhotos={taskMedia}
+      />
     </>
   );
 }
