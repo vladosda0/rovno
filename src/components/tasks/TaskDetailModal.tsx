@@ -65,14 +65,17 @@ export function TaskDetailModal({ task, open, onOpenChange, canEdit, onStatusCha
 
   // PhotoViewer
   const [viewerPhoto, setViewerPhoto] = useState<MediaType | null>(null);
+  const taskId = task?.id;
+  const taskDescription = task?.description;
+  const taskTitle = task?.title;
 
   // Sync drafts
   useEffect(() => {
-    if (task) {
-      setDescDraft(task.description);
-      setTitleDraft(task.title);
+    if (taskId && taskDescription != null && taskTitle != null) {
+      setDescDraft(taskDescription);
+      setTitleDraft(taskTitle);
     }
-  }, [task?.id, task?.description, task?.title]);
+  }, [taskId, taskDescription, taskTitle]);
 
   // Close title editing when modal closes
   useEffect(() => {

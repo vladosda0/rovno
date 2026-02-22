@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { useParams, useLocation } from "react-router-dom";
 import { useProject, useTasks, usePermission, useMedia } from "@/hooks/use-mock-data";
 import {
@@ -103,9 +103,12 @@ export default function ProjectTasks() {
   const deleteStage_ = stages.find((s) => s.id === deleteStageId);
   const deleteTaskCount = deleteStage_ ? tasks.filter((t) => t.stage_id === deleteStage_?.id).length : 0;
   const completeStage_ = stages.find((s) => s.id === completeStageId);
-  const incompleteTasks = completeStage_
-    ? tasks.filter((t) => t.stage_id === completeStage_.id && t.status !== "done")
-    : [];
+  const incompleteTasks = useMemo(
+    () => (completeStage_
+      ? tasks.filter((t) => t.stage_id === completeStage_.id && t.status !== "done")
+      : []),
+    [completeStage_, tasks],
+  );
 
   // Filter tasks
   let filteredTasks = activeTab === "all" ? tasks : tasks.filter((t) => t.stage_id === activeTab);
