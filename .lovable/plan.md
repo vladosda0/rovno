@@ -1,185 +1,130 @@
-# AI Panel Behavior + Preview/Confirm Pipeline + RBAC/Credits Scaffolding
+
+
+# Procurement Tab v1 Rework
 
 ## Overview
+Replace the current boolean-toggle procurement UI with a quantity-based system that supports partial purchases, syncs with the stage-based estimate, and provides a cleaner item-row layout with quick Receive/Order actions.
 
-Transform the AI sidebar from a static placeholder into a functional resizeable panel, scaffolding with chat messages, keyword-based fake proposals, a full "Preview -> Confirm/Cancel -> Commit -> Event" pipeline, role-based access control, and credit gating.
+## What Changes for You
+- The Procurement tab will show items grouped by stage with clear status pills: **To buy**, **Ordered**, or **In stock**
+- Each item shows required/received/remaining quantities instead of simple on/off toggles
+- Quick **Receive** and **Order** buttons let you track partial deliveries
+- Items from your Estimate automatically appear as procurement items (no duplicates)
+- Task checklist items marked as "Material" link to procurement
+- An overflow menu replaces the per-row trash icon, with "Archive" instead of hard delete
 
-## New Files
+---
 
-### 1. `src/types/ai.ts` -- AI-specific types
+## Technical Plan
 
-```text
-AIMessage         { id, role: "user"|"assistant", content, timestamp, proposal? }
-AIProposal        { id, project_id, type: "add_task"|"update_estimate"|"add_procurement"|"generate_document",
-                    summary, changes: ProposalChange[], status: "pending"|"confirmed"|"cancelled" }
-ProposalChange    { entity_type, action: "create"|"update"|"delete", label, before?, after? }
-```
+### 1. Data Model Changes
 
-### 2. `src/lib/permissions.ts` -- RBAC scaffolding
+**New `ProcurementItemV2` type** (in `src/types/entities.ts`):
+- Replace old `ProcurementItem` (boolean in_stock/purchased) with quantity-based fields: `requiredQty`, `orderedQty`, `receivedQty`, `plannedUnitPrice`, `actualUnitPrice`, `supplier`, `linkUrl`, `notes`, `spec`, `categoryId`, `attachments[]`, `linkedTaskIds[]`, `createdFrom` enum, `archived` flag
+- Computed status derived from quantities (no stored status field)
+- Add `ProcurementUnit` type for the unit enum with custom fallback
 
-- Define action strings: `"ai.generate"`, `"task.create"`, `"task.edit"`, `"estimate.approve"`, `"member.invite"`, `"document.create"`, `"procurement.edit"`
-- `can(role: MemberRole, action: string): boolean` pure function
-  - **owner**: all actions allowed
-  - **contractor**: `ai.generate` (if ai_access != "none"), `task.edit`, `task.create`, `procurement.edit`
-  - **participant**: read-only (no actions allowed)
-- Export `usePermission(projectId)` hook that returns `{ role, can(action) }` based on current user's membership
+**Extend `ChecklistItem`** (in `src/types/entities.ts`):
+- Add `type?: "subtask" | "material" | "tool"` (default "subtask")
+- Add `procurementItemId?: string | null`
 
-### 3. `src/lib/ai-engine.ts` -- Deterministic fake proposal generator
+**New normalization utility** (`src/lib/procurement-utils.ts`):
+- `normalizeName(name)` -- lowercase, trim, collapse spaces, strip punctuation
+- `matchingKey(name, spec, unit, stageId)` -- deterministic key for dedup
+- `computeStatus(item)` -- returns "to_buy" | "ordered" | "in_stock" based on qty fields
 
-- `generateProposal(input: string, projectId: string): AIProposal | null`
-- Keyword matching:
-  - "task" / "add task" -> returns proposal with 2-3 new tasks for the current stage
-  - "estimate" / "cost" -> returns proposal updating estimate items
-  - "procurement" / "buy" / "purchase" -> returns proposal adding procurement items
-  - "document" / "contract" -> returns proposal creating a document draft
-  - No match -> returns null (AI responds with a text-only message)
-- Each proposal includes realistic `ProposalChange[]` with before/after diffs
-- Costs 1 credit per generation
+### 2. Procurement Store (`src/data/procurement-store.ts`)
 
-### 4. `src/lib/commit-proposal.ts` -- Pipeline commit logic
+New file replacing procurement logic currently in `store.ts`:
+- In-memory array of `ProcurementItemV2` with pub/sub
+- Seed data migrated from old format: `requiredQty = qty`, `receivedQty` based on old `in_stock`/`status`, `plannedUnitPrice = cost/qty`
+- CRUD operations: `add`, `update`, `archive`, `receive`, `order`
+- **Sync from Estimate**: `syncFromEstimate(stageId, estimateItems[])` -- for each material-type estimate item, find or create procurement item using matching key; update `requiredQty` without touching `receivedQty`/`orderedQty`
+- **Sync from Checklist**: `linkChecklistMaterial(checklistItem, task)` -- find or create procurement item using matching key; link via `procurementItemId`
+- Duplicate prevention via matching key lookup before creation
 
-- `commitProposal(proposal: AIProposal): { success: boolean, error?: string }`
-- Checks `can("ai.generate")` -- rejects with error if unauthorized
-- Checks credits -- rejects if insufficient
-- Applies changes to the store based on `proposal.changes`:
-  - `create` task -> `store.addTask()`
-  - `update` estimate -> update estimate items in store
-  - `create` procurement -> add items to store
-  - `create` document -> add document to store
-- Writes Event for each change
-- Deducts 1 credit from user
-- Returns success
+### 3. Procurement Screen UI (`src/pages/project/ProjectProcurement.tsx`)
 
-### 5. `src/components/ai/PreviewCard.tsx` -- Proposal preview component
+Complete rewrite of the page:
 
-- Glass-styled card showing proposed changes
-- Each `ProposalChange` rendered as a row: icon + label + before/after diff
-- Create actions show green "+" indicator
-- Update actions show amber "~" with old -> new values
-- Summary header with change count and risk/warning slots
+**Header section**:
+- Title "Procurement"
+- Summary chips: Total planned cost, To buy count/cost, Ordered count, In stock count
+- Search input (filters by name/spec)
+- Filter chips: All / To buy / Ordered / In stock
+- Grouping: By Stage (default)
 
-### 6. `src/components/ai/ActionBar.tsx` -- Confirm/Cancel controls
+**Item rows** (list layout, not dense table):
+- Left: Name (bold) + spec (secondary text)
+- Subline: "Required X unit -- Received Y -- Remaining Z"
+- Right: Status pill + planned cost + quick action buttons
+- Quick actions: [Receive] [Order] [Edit] + overflow menu with [Archive]
+- No per-row trash icon
 
-- Sticky bar below PreviewCard
-- Three buttons: "Confirm" (accent), "Cancel" (secondary), optional "Create new version" (outline)
-- Confirm calls `commitProposal()`, shows toast success, clears proposal
-- Cancel discards proposal, shows toast info
-- "Create new version" only shown for estimate-type proposals
+**Receive modal** (small AlertDialog):
+- Qty input (default: remainingQty)
+- Optional actual unit price
+- Submit updates `receivedQty += qty`
 
-### 7. `src/components/ai/ChatMessage.tsx` -- Individual chat message
+**Order modal** (small AlertDialog):
+- Qty input (default: remainingQty)
+- Optional supplier field
+- Submit updates `orderedQty += qty`
 
-- Glass mini-card for each message
-- User messages: right-aligned, subtle background
-- Assistant messages: left-aligned
-- If message has a proposal/action attached, renders PreviewCard + ActionBar inline
+**Item detail drawer** (Dialog/Sheet):
+- All fields editable: name, spec, unit, quantities, prices, supplier, link, notes
+- Attachments list + upload placeholder
+- Linked tasks list (clickable, navigates to task)
+- Unit change warning if `receivedQty > 0`
 
-### 8. `src/components/ai/SuggestionChips.tsx` -- Quick suggestion chips
+### 4. StatusBadge Updates (`src/components/StatusBadge.tsx`)
 
-- Row of rounded-pill chips above the input
-- Context-aware: in project context shows "Add tasks", "Update estimate", "Generate contract", "Buy materials"
-- In global context shows "Create project", "Which adhesive works best with 6mm ceramic tiles", etc
-- Clicking a chip fills the input and auto-submits
+Add new procurement status styles:
+- "To buy" -- orange/warning tint
+- "Ordered" -- blue/info tint  
+- "In stock" -- green/success tint
 
-### 9. `src/components/ai/CreditDisplay.tsx` -- Credits in AI panel header
+Remove old "Purchased" / "Not purchased" styles.
 
-- Shows "N credits" with a small icon
-- If credits < 10, shows amber warning color
-- If credits == 0, clicking shows ConfirmModal "Limit reached" with CTA to /pricing
+### 5. Task Integration (Minimal)
 
-## Modified Files
+**ChecklistItem type selector** (in `TaskDetailModal.tsx`):
+- Each checklist item gets a small type indicator (Subtask/Material/Tool)
+- When type changes to "Material": run matching key logic to find/create procurement item and link it
+- Show status pill next to material-type checklist items
 
-### 10. `src/components/AISidebar.tsx` -- Major rewrite
+**No auto-creation** from every checklist item -- only from Material type.
 
-- Header: Bot icon + title + CreditDisplay
-- Content: ScrollArea with ChatMessage list
-- Above input: SuggestionChips
-- Footer: Input + Send button
-- State: manages `messages: AIMessage[]` and `activeProposal: AIProposal | null`
-- On send:
-  1. Check credits (show modal if 0)
-  2. Check permissions (toast error if unauthorized)
-  3. Add user message to chat
-  4. Call `generateProposal()`
-  5. Add assistant message (with or without proposal)
-  6. If proposal exists, it renders inline with PreviewCard + ActionBar
+### 6. Estimate Sync Hook
 
-### 11. `src/data/store.ts` -- Add new write functions
+In `estimate-store.ts`, add a hook that on estimate item changes (material type), calls `syncFromEstimate` in the procurement store. This ensures estimate material items always have a corresponding procurement item without duplicates.
 
-- `addProcurementItem(item)` -- for procurement proposals
-- `addDocument(doc)` -- for document proposals
-- `updateEstimateItems(versionId, items)` -- for estimate proposals
-- `deductCredit()` -- decrements `user.credits_free` (then `credits_paid`)
+### 7. Store Cleanup (`src/data/store.ts`)
 
-### 12. `src/types/entities.ts` -- Minor update
+- Remove old `addProcurementItem`, `updateProcurementItem`, `deleteProcurementItem` 
+- Replace with imports from new procurement store
+- Update `useProcurement` hook to use new store
+- Old seed data migrated in new store's seed initialization
 
-- Add `"proposal_confirmed" | "proposal_cancelled"` to EventType union
+### 8. Edge Cases Handled
 
-### 13. `src/hooks/use-mock-data.ts` -- Add permission hook re-export
+- Stage deleted: archive its procurement items (`archived = true`)
+- Estimate `plannedQty` changes: only `requiredQty` updates, `receivedQty`/`orderedQty` untouched
+- `receivedQty > requiredQty`: allowed, show "Overbought" label in detail view only
+- Checklist item deleted: unlink from procurement item, do not delete procurement item
+- Task deleted: unlink from `linkedTaskIds`, do not delete procurement items
 
-- Export `usePermission` from permissions module for convenience
+### Files to Create
+1. `src/data/procurement-store.ts` -- new canonical store
+2. `src/lib/procurement-utils.ts` -- normalization + matching key + status computation
 
-## Pipeline Flow
+### Files to Modify
+1. `src/types/entities.ts` -- new `ProcurementItemV2`, extend `ChecklistItem`
+2. `src/pages/project/ProjectProcurement.tsx` -- full rewrite
+3. `src/components/StatusBadge.tsx` -- add new procurement statuses
+4. `src/data/store.ts` -- remove old procurement CRUD, wire new store
+5. `src/data/seed.ts` -- remove old `seedProcurementItems` (migrated in new store)
+6. `src/hooks/use-mock-data.ts` -- update `useProcurement` hook
+7. `src/components/tasks/TaskDetailModal.tsx` -- checklist type selector + material linking
+8. `src/data/estimate-store.ts` -- add sync trigger for procurement
 
-```text
-User types "add tasks for electrical"
-  |
-  v
-AISidebar.handleSend()
-  |-- check credits > 0  (if not -> ConfirmModal "Limit reached")
-  |-- check can("ai.generate")  (if not -> toast error)
-  |
-  v
-generateProposal("add tasks for electrical", projectId)
-  |-- keyword match: "task" detected
-  |-- builds AIProposal with 2-3 ProposalChange items
-  |-- returns proposal (no mutations yet)
-  |
-  v
-Render: ChatMessage with PreviewCard + ActionBar
-  |
-  +-- [Confirm] -> commitProposal(proposal)
-  |     |-- can() check (guard)
-  |     |-- apply changes to store (addTask x3)
-  |     |-- write Events
-  |     |-- deductCredit()
-  |     |-- toast.success("3 tasks created")
-  |     |-- mark proposal as "confirmed"
-  |
-  +-- [Cancel] -> discard proposal
-  |     |-- toast.info("Proposal cancelled")
-  |     |-- mark proposal as "cancelled"
-  |
-  +-- [New Version] (estimate only)
-        |-- creates new EstimateVersion with proposed items
-```
-
-## RBAC Matrix
-
-
-| Action           | Owner | Contractor             | Participant |
-| ---------------- | ----- | ---------------------- | ----------- |
-| ai.generate      | Yes   | If ai_access != "none" | No          |
-| task.create      | Yes   | Yes                    | No          |
-| task.edit        | Yes   | Yes                    | No          |
-| estimate.approve | Yes   | No                     | No          |
-| member.invite    | Yes   | No                     | No          |
-| document.create  | Yes   | Yes                    | No          |
-| procurement.edit | Yes   | Yes                    | No          |
-
-
-## Credits Logic
-
-- Each `generateProposal()` call costs 1 credit
-- Credits deducted from `credits_free` first, then `credits_paid`
-- Display format:  a card that says "Credits   250" (sum of free + paid), progress bar, paid credits one color, daily credits another color but similar (for example dark blue/light blue, use colors from design system)  below progress bar: Using daily credits/Using paid credits (sum of free + paid), little arrow next to credits number, clickable takes to upgrade plan page (will be designed later)
-- Warning state at < 10 credits (amber)
-- Block state at 0 credits -> ConfirmModal with "Upgrade" CTA linking to /pricing
-
-## Technical Notes
-
-- No new npm dependencies
-- All proposal generation is synchronous and deterministic (keyword matching)
-- The chat state lives in AISidebar component state (not in the global store) -- it resets on navigation, which is acceptable for scaffolding
-- PreviewCard and ActionBar are standalone components reusable outside the AI panel
-- The `can()` function is pure and testable -- no side effects
-- Store mutations in `commitProposal` reuse existing patterns (addTask, addEvent, notify)
