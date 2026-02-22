@@ -140,8 +140,11 @@ export default function ProjectProcurement() {
   };
   const handleEditSave = () => {
     if (!editItem) return;
-    const { id, createdAt, updatedAt, ...rest } = editForm as any;
-    updateProcurementItem(editItem.id, rest);
+    const payload: Partial<ProcurementItemV2> = { ...editForm };
+    delete payload.id;
+    delete payload.createdAt;
+    delete payload.updatedAt;
+    updateProcurementItem(editItem.id, payload);
     toast({ title: "Item updated" });
     setEditItem(null);
   };

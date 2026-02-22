@@ -8,7 +8,7 @@ export function normalizeName(name: string): string {
     .toLowerCase()
     .trim()
     .replace(/\s+/g, " ")
-    .replace(/[^a-zа-яё0-9\s.x×\-]/gi, "");
+    .replace(/[^a-zа-яё0-9\s.x×-]/gi, "");
 }
 
 /** Deterministic dedup key */

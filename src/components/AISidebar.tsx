@@ -298,7 +298,7 @@ export function AISidebar() {
     setMessages((prev) => [...prev, userMsg]);
 
     setTimeout(() => {
-      let proposal = isProjectContext ? generateProposal(content, projectId) : null;
+      const proposal = isProjectContext ? generateProposal(content, projectId) : null;
       const assistantContent = proposal ? "Here's what I'd do:" : getTextResponse();
 
       const assistantMsg: AIMessage = {
