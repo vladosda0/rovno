@@ -8,7 +8,9 @@ export type TaskStatus = "not_started" | "in_progress" | "done" | "blocked";
 export type EstimateVersionStatus = "draft" | "approved" | "archived";
 export type EstimateItemType = "work" | "material";
 export type ProposalStatus = "submitted" | "accepted" | "rejected";
-export type ProcurementStatus = "not_purchased" | "purchased";
+export type ProcurementStatus = "to_buy" | "ordered" | "in_stock";
+export type ProcurementCreatedFrom = "estimate" | "task_material" | "manual" | "ai";
+export type ChecklistItemType = "subtask" | "material" | "tool";
 export type DocumentVersionStatus = "draft" | "active" | "archived" | "awaiting_approval";
 
 export type EventType =
@@ -88,6 +90,8 @@ export interface ChecklistItem {
   id: string;
   text: string;
   done: boolean;
+  type?: ChecklistItemType;
+  procurementItemId?: string | null;
 }
 
 export interface Comment {
@@ -172,7 +176,38 @@ export interface ProcurementItem {
   qty: number;
   in_stock: number;
   cost: number;
-  status: ProcurementStatus;
+  status: "not_purchased" | "purchased";
+}
+
+export interface ProcurementAttachment {
+  id: string;
+  url: string;
+  type: string;
+  createdAt: string;
+}
+
+export interface ProcurementItemV2 {
+  id: string;
+  projectId: string;
+  stageId: string | null;
+  categoryId: string | null;
+  name: string;
+  spec: string | null;
+  unit: string;
+  requiredQty: number;
+  orderedQty: number;
+  receivedQty: number;
+  plannedUnitPrice: number | null;
+  actualUnitPrice: number | null;
+  supplier: string | null;
+  linkUrl: string | null;
+  notes: string | null;
+  attachments: ProcurementAttachment[];
+  createdFrom: ProcurementCreatedFrom;
+  linkedTaskIds: string[];
+  archived: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface DocumentVersion {

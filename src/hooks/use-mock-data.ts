@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import * as store from "@/data/store";
+import { getProcurementItems, subscribeProcurement } from "@/data/procurement-store";
 
 function useStoreSubscription<T>(getter: () => T): T {
   const [value, setValue] = useState(getter);
@@ -48,6 +49,17 @@ export function useContractorProposals(projectId: string) {
 export function useProcurement(projectId: string) {
   const getter = useCallback(() => store.getProcurementItems(projectId), [projectId]);
   return useStoreSubscription(getter);
+}
+
+export function useProcurementV2(projectId: string) {
+  const getter = useCallback(() => getProcurementItems(projectId), [projectId]);
+  const [value, setValue] = useState(getter);
+  useEffect(() => {
+    const update = () => setValue(getter());
+    const unsub1 = subscribeProcurement(update);
+    return unsub1;
+  }, [getter]);
+  return value;
 }
 
 export function useDocuments(projectId: string) {

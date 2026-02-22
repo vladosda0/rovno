@@ -16,14 +16,17 @@ import {
 } from "@/data/store";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Send, CheckSquare, Trash2, Plus, X, Calendar, Camera, Image, Upload,
+  Send, CheckSquare, Trash2, Plus, X, Calendar, Camera, Image, Upload, Package,
 } from "lucide-react";
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
   AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel,
 } from "@/components/ui/alert-dialog";
-import type { Task, TaskStatus, Media as MediaType } from "@/types/entities";
+import type { Task, TaskStatus, Media as MediaType, ChecklistItemType } from "@/types/entities";
 import { createEstimateItemForChecklist, syncEstimateItemName } from "@/data/estimate-store";
+import { linkChecklistMaterial, getProcurementItemById } from "@/data/procurement-store";
+import { computeStatus, statusLabel as procStatusLabel } from "@/lib/procurement-utils";
+import { StatusBadge } from "@/components/StatusBadge";
 import { format } from "date-fns";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarPicker } from "@/components/ui/calendar";
@@ -130,11 +133,28 @@ export function TaskDetailModal({ task, open, onOpenChange, canEdit, onStatusCha
 
   const handleAddCheckItem = useCallback(() => {
     if (!task || !newCheckItem.trim()) return;
-    const clItem = { id: `cl-${Date.now()}`, text: newCheckItem.trim(), done: false };
+    const clItem = { id: `cl-${Date.now()}`, text: newCheckItem.trim(), done: false, type: "subtask" as ChecklistItemType };
     addChecklistItem(task.id, clItem);
     createEstimateItemForChecklist(clItem, task);
     setNewCheckItem("");
   }, [task, newCheckItem]);
+
+  const handleChecklistTypeChange = useCallback((itemId: string, newType: ChecklistItemType) => {
+    if (!task) return;
+    const updated = task.checklist.map((c) => {
+      if (c.id !== itemId) return c;
+      const item = { ...c, type: newType };
+      if (newType === "material" && !item.procurementItemId) {
+        const procId = linkChecklistMaterial({ id: c.id, text: c.text }, task);
+        item.procurementItemId = procId;
+      }
+      if (newType !== "material") {
+        item.procurementItemId = null;
+      }
+      return item;
+    });
+    updateChecklist(task.id, updated);
+  }, [task]);
 
   const handleAddComment = useCallback(() => {
     if (!task || !commentText.trim()) return;
@@ -322,30 +342,56 @@ export function TaskDetailModal({ task, open, onOpenChange, canEdit, onStatusCha
                 <CheckSquare className="h-3.5 w-3.5" /> Checklist
                 {task.checklist.length > 0 && ` (${checkDone}/${task.checklist.length})`}
               </p>
-              <div className="space-y-1">
-                {task.checklist.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center gap-2 rounded-lg bg-muted/40 p-1.5 px-2 group"
-                  >
-                    <Checkbox
-                      checked={item.done}
-                      disabled={!canEdit}
-                      onCheckedChange={() => handleChecklistToggle(item.id)}
-                    />
-                    <span className={`text-caption flex-1 ${item.done ? "line-through text-muted-foreground" : "text-foreground"}`}>
-                      {item.text}
-                    </span>
-                    {canEdit && (
-                      <button
-                        onClick={() => deleteChecklistItem(task.id, item.id)}
-                        className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    )}
-                  </div>
-                ))}
+               <div className="space-y-1">
+                {task.checklist.map((item) => {
+                  const itemType = item.type ?? "subtask";
+                  const procItem = item.procurementItemId ? getProcurementItemById(item.procurementItemId) : null;
+                  const procStatus = procItem ? computeStatus(procItem) : null;
+                  return (
+                    <div
+                      key={item.id}
+                      className="flex items-center gap-2 rounded-lg bg-muted/40 p-1.5 px-2 group"
+                    >
+                      <Checkbox
+                        checked={item.done}
+                        disabled={!canEdit}
+                        onCheckedChange={() => handleChecklistToggle(item.id)}
+                      />
+                      <span className={`text-caption flex-1 ${item.done ? "line-through text-muted-foreground" : "text-foreground"}`}>
+                        {item.text}
+                      </span>
+                      {/* Type selector */}
+                      {canEdit && (
+                        <select
+                          value={itemType}
+                          onChange={(e) => handleChecklistTypeChange(item.id, e.target.value as ChecklistItemType)}
+                          className="text-[10px] bg-transparent border border-border rounded px-1 py-0.5 text-muted-foreground h-5"
+                        >
+                          <option value="subtask">Subtask</option>
+                          <option value="material">Material</option>
+                          <option value="tool">Tool</option>
+                        </select>
+                      )}
+                      {!canEdit && itemType !== "subtask" && (
+                        <span className="text-[10px] text-muted-foreground px-1 py-0.5 bg-muted rounded">
+                          {itemType === "material" ? "Material" : "Tool"}
+                        </span>
+                      )}
+                      {/* Procurement status pill for materials */}
+                      {itemType === "material" && procStatus && (
+                        <StatusBadge status={procStatusLabel(procStatus)} variant="procurement" className="text-[10px] px-1.5 py-0" />
+                      )}
+                      {canEdit && (
+                        <button
+                          onClick={() => deleteChecklistItem(task.id, item.id)}
+                          className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
               {canEdit && (
                 <div className="flex gap-1.5 mt-1.5">

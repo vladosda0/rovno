@@ -1,5 +1,6 @@
 import type { Task, ChecklistItem } from "@/types/entities";
 import { subscribe } from "@/data/store";
+import { syncFromEstimate } from "@/data/procurement-store";
 
 // --- Types ---
 export type EstimateItemSourceType = "TASK" | "CHECKLIST" | "MANUAL";
@@ -110,6 +111,11 @@ export function updateStageEstimateItem(id: string, partial: Partial<StageEstima
     i.id === id ? { ...i, ...partial, updatedAt: new Date().toISOString() } : i
   );
   notify();
+  // Sync material items to procurement
+  const updated = estimateItems.find((i) => i.id === id);
+  if (updated && updated.type === "material") {
+    syncFromEstimate(updated.projectId, updated.stageId, [updated]);
+  }
 }
 
 export function deleteStageEstimateItem(id: string) {
