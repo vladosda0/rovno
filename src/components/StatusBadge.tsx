@@ -21,6 +21,9 @@ const statusStyles: Record<StatusVariant, Record<string, string>> = {
     "Archived": "border border-border text-muted-foreground bg-transparent",
   },
   procurement: {
+    "To buy": "bg-warning/15 text-warning-foreground",
+    "Ordered": "bg-info/15 text-info",
+    "In stock": "bg-success/15 text-success",
     "Not purchased": "bg-muted text-muted-foreground",
     "Purchased": "bg-success/15 text-success",
   },
