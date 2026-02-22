@@ -1,10 +1,26 @@
-import { useNavigate } from "react-router-dom";
-import { Lock, Bot } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { useCurrentUser, useProjects } from "@/hooks/use-mock-data";
 import { isAuthenticated } from "@/lib/auth-state";
 
+function getStatusText(progress: number): string {
+  if (progress >= 100) return "Done";
+  if (progress > 0) return "In progress";
+  return "Draft";
+}
+
+function getStatusColor(progress: number): string {
+  if (progress >= 100) return "bg-success/15 text-success";
+  if (progress > 0) return "bg-info/15 text-info";
+  return "bg-muted text-muted-foreground";
+}
+
 export default function Demo() {
-  const navigate = useNavigate();
+  const projects = useProjects();
+  const currentUser = useCurrentUser();
+  const demoProjects = projects.filter((p) => p.owner_id === currentUser.id);
   const isGuest = !isAuthenticated();
 
   return (
@@ -12,50 +28,35 @@ export default function Demo() {
       {/* Read-only project shell info */}
       <div className="p-sp-3 space-y-sp-3">
         <div>
-          <h1 className="text-h2 text-foreground">Demo Project — Apartment Renovation</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-h2 text-foreground">Demo Projects</h1>
+            <span className="rounded-pill bg-accent/15 px-2 py-0.5 text-caption font-medium text-accent">Demo</span>
+          </div>
           <p className="text-body-sm text-muted-foreground mt-1">
-            Explore a read-only sample project to see how StroyAgent manages construction workflows.
+            Open real mock projects from this demo account and continue in the normal project flow.
           </p>
         </div>
 
-        {/* Mini cards showing project structure */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-sp-2">
-          {[
-            { label: "Tasks", value: "6 tasks", sub: "2 done, 1 in progress" },
-            { label: "Estimate", value: "165,500 ₽", sub: "Version 1 — Approved" },
-            { label: "Procurement", value: "4 items", sub: "1 purchased" },
-            { label: "Documents", value: "2 docs", sub: "1 active, 1 draft" },
-          ].map((card) => (
-            <div key={card.label} className="glass rounded-card p-sp-2">
-              <span className="text-caption text-muted-foreground">{card.label}</span>
-              <p className="text-body font-semibold text-foreground">{card.value}</p>
-              <p className="text-caption text-muted-foreground">{card.sub}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* Stages preview */}
-        <div className="glass rounded-card p-sp-3 space-y-sp-2">
-          <h3 className="text-body font-semibold text-foreground">Project Stages</h3>
-          <div className="flex gap-sp-2 flex-wrap">
-            {["Demolition ✓", "Electrical & Plumbing ●", "Finishing"].map((s) => (
-              <span key={s} className="rounded-pill px-3 py-1 text-body-sm bg-muted text-muted-foreground">{s}</span>
-            ))}
-          </div>
-        </div>
-
-        {/* Sample tasks list */}
-        <div className="glass rounded-card p-sp-3 space-y-sp-1">
-          <h3 className="text-body font-semibold text-foreground">Recent Tasks</h3>
-          {[
-            { title: "Electrical rough-in", status: "In progress", color: "text-info" },
-            { title: "Plumbing rough-in", status: "Not started", color: "text-muted-foreground" },
-            { title: "Remove old flooring", status: "Done", color: "text-success" },
-          ].map((t) => (
-            <div key={t.title} className="flex items-center justify-between py-1.5 px-2 rounded-md bg-muted/30">
-              <span className="text-body-sm text-foreground">{t.title}</span>
-              <span className={`text-caption font-medium ${t.color}`}>{t.status}</span>
-            </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-sp-2">
+          {demoProjects.map((p) => (
+            <Link
+              key={p.id}
+              to={`/project/${p.id}/dashboard`}
+              className="glass rounded-card p-sp-3 hover:scale-[1.01] transition-transform duration-150 space-y-2"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <h3 className="text-body font-semibold text-foreground truncate">{p.title}</h3>
+                <span className="rounded-pill bg-accent/15 px-2 py-0.5 text-caption font-medium text-accent shrink-0">Demo</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-caption text-muted-foreground">Type: {p.type}</span>
+                <span className={`text-caption font-medium px-2 py-0.5 rounded-pill ${getStatusColor(p.progress_pct)}`}>
+                  {getStatusText(p.progress_pct)}
+                </span>
+              </div>
+              <Progress value={p.progress_pct} className="h-1.5" />
+              <p className="text-caption text-muted-foreground">{p.progress_pct}% complete</p>
+            </Link>
           ))}
         </div>
       </div>
@@ -74,7 +75,7 @@ export default function Demo() {
             <Button
               size="sm"
               className="bg-accent text-accent-foreground hover:bg-accent/90 shrink-0"
-              onClick={() => navigate("/auth/login")}
+              onClick={() => window.location.assign("/auth/login")}
             >
               Log in
             </Button>
