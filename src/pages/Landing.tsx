@@ -70,6 +70,20 @@ type EstimateItem = {
   note?: string;
   aiInsight?: string;
 };
+type ProcurementStatusLabel = "To buy" | "Ordered" | "Partial" | "In stock" | "Delayed";
+type ProcurementItem = {
+  id: string;
+  material: string;
+  neededQty: number;
+  receivedQty: number;
+  orderedQty: number;
+  supplier: string;
+  eta: string;
+  committedCost: string;
+  linkedTaskName: string;
+  linkedEstimate: string;
+  delayed?: boolean;
+};
 
 const KANBAN_COLUMN_LABELS: Record<KanbanColumn, string> = {
   todo: "To do",
@@ -175,6 +189,57 @@ const ESTIMATE_ITEMS: EstimateItem[] = [
     varianceType: "pending",
     linkedTasks: [{ title: "Approve cabinet finish sample", status: "To do" }],
     receipts: "No receipts uploaded",
+  },
+];
+
+const PROCUREMENT_ITEMS: ProcurementItem[] = [
+  {
+    id: "proc-drywall-sheets",
+    material: "Drywall sheets",
+    neededQty: 120,
+    orderedQty: 120,
+    receivedQty: 80,
+    supplier: "BuildMart LLC",
+    eta: "Mar 4",
+    committedCost: "₽165,000",
+    linkedTaskName: "Install drywall in corridor",
+    linkedEstimate: "Drywall + finishing",
+  },
+  {
+    id: "proc-tile-adhesive",
+    material: "Tile adhesive",
+    neededQty: 20,
+    orderedQty: 0,
+    receivedQty: 0,
+    supplier: "KeramPro",
+    eta: "—",
+    committedCost: "₽42,000",
+    linkedTaskName: "Tile installation",
+    linkedEstimate: "Bathroom tiles + labor",
+  },
+  {
+    id: "proc-electrical-cable-roll",
+    material: "Electrical cable roll",
+    neededQty: 6,
+    orderedQty: 6,
+    receivedQty: 6,
+    supplier: "ElectroHub",
+    eta: "Mar 1",
+    committedCost: "₽55,000",
+    linkedTaskName: "Run conduit to panel",
+    linkedEstimate: "Electrical materials",
+  },
+  {
+    id: "proc-interior-doors",
+    material: "Interior doors",
+    neededQty: 6,
+    orderedQty: 6,
+    receivedQty: 0,
+    supplier: "DoorLine",
+    eta: "Mar 6",
+    committedCost: "₽58,000",
+    linkedTaskName: "Doors installation",
+    linkedEstimate: "Doors installation",
   },
 ];
 
@@ -328,6 +393,46 @@ function getExpandedDetails(row: EstimateItem): Required<EstimateExpandedOverrid
   };
 }
 
+function getProcStatus({
+  needed,
+  ordered,
+  received,
+  delayed,
+}: {
+  needed: number;
+  ordered: number;
+  received: number;
+  delayed?: boolean;
+}): { label: ProcurementStatusLabel; className: string } {
+  if (delayed) {
+    return { label: "Delayed", className: "border-warning/50 bg-warning/20 text-foreground transition-colors duration-300" };
+  }
+  if (ordered === 0 && received === 0) {
+    return { label: "To buy", className: "border-border bg-muted/70 text-muted-foreground transition-colors duration-300" };
+  }
+  if (ordered > 0 && received === 0) {
+    return { label: "Ordered", className: "border-info/45 bg-info/20 text-foreground transition-colors duration-300" };
+  }
+  if (received >= needed) {
+    return { label: "In stock", className: "border-success/45 bg-success/20 text-foreground transition-colors duration-300" };
+  }
+  return { label: "Partial", className: "border-warning/45 bg-warning/20 text-foreground transition-colors duration-300" };
+}
+
+function getInitialProcurementReceived(): Record<string, number> {
+  return PROCUREMENT_ITEMS.reduce<Record<string, number>>((acc, item) => {
+    acc[item.id] = item.receivedQty;
+    return acc;
+  }, {});
+}
+
+function getInitialProcurementReady(): Record<string, boolean> {
+  return PROCUREMENT_ITEMS.reduce<Record<string, boolean>>((acc, item) => {
+    acc[item.id] = item.receivedQty >= item.neededQty;
+    return acc;
+  }, {});
+}
+
 export default function Landing() {
   const projects = useProjects();
   const currentUser = useCurrentUser();
@@ -351,11 +456,56 @@ export default function Landing() {
   const [movedTaskId, setMovedTaskId] = useState<string | null>(null);
   const [sparkleTaskId, setSparkleTaskId] = useState<string | null>(null);
   const [expandedEstimateItemId, setExpandedEstimateItemId] = useState<string | null>(null);
+  const [procurementReceived, setProcurementReceived] = useState<Record<string, number>>(() =>
+    getInitialProcurementReceived(),
+  );
+  const [expandedProcurementId, setExpandedProcurementId] = useState<string>(PROCUREMENT_ITEMS[0]?.id ?? "");
+  const [procurementWasReady, setProcurementWasReady] = useState<Record<string, boolean>>(() =>
+    getInitialProcurementReady(),
+  );
+  const [wowFlash, setWowFlash] = useState<{ materialId: string | null; on: boolean }>({
+    materialId: null,
+    on: false,
+  });
+  const [wowToast, setWowToast] = useState<string | null>(null);
   const kanbanTimersRef = useRef<number[]>([]);
+  const wowFlashTimerRef = useRef<number | null>(null);
+  const wowToastTimerRef = useRef<number | null>(null);
 
   const demoProjects = useMemo(
     () => projects.filter((project) => project.owner_id === currentUser.id).slice(0, 3),
     [projects, currentUser.id],
+  );
+
+  const procurementView = useMemo(
+    () =>
+      PROCUREMENT_ITEMS.map((item) => {
+        const received = procurementReceived[item.id] ?? item.receivedQty;
+        const remaining = Math.max(item.neededQty - received, 0);
+        const isReady = received >= item.neededQty;
+        return {
+          ...item,
+          received,
+          remaining,
+          isReady,
+          status: getProcStatus({
+            needed: item.neededQty,
+            ordered: item.orderedQty,
+            received,
+            delayed: item.delayed,
+          }),
+        };
+      }),
+    [procurementReceived],
+  );
+
+  const procurementSummary = useMemo(
+    () => ({
+      totalItems: procurementView.length,
+      partialCount: procurementView.filter((item) => item.status.label === "Partial").length,
+      waitingCount: procurementView.filter((item) => !item.isReady).length,
+    }),
+    [procurementView],
   );
 
   useEffect(() => {
@@ -384,6 +534,8 @@ export default function Landing() {
     () => () => {
       kanbanTimersRef.current.forEach((timer) => window.clearTimeout(timer));
       kanbanTimersRef.current = [];
+      if (wowFlashTimerRef.current) window.clearTimeout(wowFlashTimerRef.current);
+      if (wowToastTimerRef.current) window.clearTimeout(wowToastTimerRef.current);
     },
     [],
   );
@@ -491,6 +643,31 @@ export default function Landing() {
     const sparkleTimer = window.setTimeout(() => setSparkleTaskId(null), 450);
     const messageTimer = window.setTimeout(() => setDropMessage(null), 1400);
     kanbanTimersRef.current.push(pulseTimer, sparkleTimer, messageTimer);
+  };
+
+  const handleProcurementReceivedChange = (item: ProcurementItem, nextValue: number) => {
+    const clampedValue = Math.min(item.neededQty, Math.max(0, nextValue));
+    const wasReady = procurementWasReady[item.id] ?? item.receivedQty >= item.neededQty;
+    const isReady = clampedValue >= item.neededQty;
+
+    setProcurementReceived((prev) => ({ ...prev, [item.id]: clampedValue }));
+    setProcurementWasReady((prev) => ({ ...prev, [item.id]: isReady }));
+
+    if (!wasReady && isReady) {
+      if (wowFlashTimerRef.current) window.clearTimeout(wowFlashTimerRef.current);
+      if (wowToastTimerRef.current) window.clearTimeout(wowToastTimerRef.current);
+
+      setWowFlash({ materialId: item.id, on: true });
+      setWowToast("Materials complete. Task ready.");
+
+      wowFlashTimerRef.current = window.setTimeout(() => {
+        setWowFlash((prev) => (prev.materialId === item.id ? { materialId: item.id, on: false } : prev));
+      }, 900);
+
+      wowToastTimerRef.current = window.setTimeout(() => {
+        setWowToast(null);
+      }, 1200);
+    }
   };
 
   const handleTaskDragEnd = () => {
@@ -1013,6 +1190,135 @@ export default function Landing() {
                                 );
                               })}
                             </div>
+                          </div>
+                        </>
+                      ) : tab === "procurement" ? (
+                        <>
+                          <p className="text-caption text-muted-foreground">{content.title}</p>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            <span className="rounded-pill border border-border bg-muted/70 px-2 py-0.5 text-caption text-foreground">
+                              {procurementSummary.totalItems} items
+                            </span>
+                            <span className="rounded-pill border border-warning/45 bg-warning/20 px-2 py-0.5 text-caption text-foreground">
+                              {procurementSummary.partialCount} partial
+                            </span>
+                            <span className="rounded-pill border border-border bg-muted/70 px-2 py-0.5 text-caption text-muted-foreground">
+                              {procurementSummary.waitingCount} waiting
+                            </span>
+                            <span className="rounded-pill border border-info/45 bg-info/20 px-2 py-0.5 text-caption text-foreground">
+                              ₽320k committed
+                            </span>
+                          </div>
+
+                          {wowToast && (
+                            <div className="mt-2 rounded-md border border-success/40 bg-success/10 px-2 py-1 text-caption text-success">
+                              {wowToast}
+                            </div>
+                          )}
+
+                          <div className="mt-2 space-y-1.5">
+                            {procurementView.map((item) => {
+                              const isExpanded = expandedProcurementId === item.id;
+                              return (
+                                <div key={item.id} className="min-w-0 rounded-md border border-border bg-background/45">
+                                  <button
+                                    type="button"
+                                    onClick={() => setExpandedProcurementId(item.id)}
+                                    className="w-full min-w-0 px-2.5 py-2 text-left transition-colors hover:bg-background/60"
+                                  >
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div className="min-w-0">
+                                        <p className="truncate text-body-sm font-medium text-foreground">{item.material}</p>
+                                        <p className="truncate text-caption text-muted-foreground">
+                                          Received {item.received} / Needed {item.neededQty}
+                                        </p>
+                                      </div>
+                                      <div className="flex items-center gap-1.5">
+                                        <span
+                                          className={`inline-flex rounded-pill border px-2 py-0.5 text-caption font-medium ${item.status.className}`}
+                                        >
+                                          {item.status.label}
+                                        </span>
+                                        <ChevronDown
+                                          className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 ${
+                                            isExpanded ? "rotate-180" : "rotate-0"
+                                          }`}
+                                        />
+                                      </div>
+                                    </div>
+                                    <p className="mt-1 truncate text-caption text-muted-foreground">
+                                      Linked task: {item.linkedTaskName}
+                                    </p>
+                                  </button>
+
+                                  {isExpanded && (
+                                    <div className="space-y-2 border-t border-border/60 bg-background/60 px-2.5 py-2">
+                                      <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                                        <p className="text-caption text-muted-foreground">
+                                          Supplier: <span className="text-foreground">{item.supplier}</span>
+                                        </p>
+                                        <p className="text-caption text-muted-foreground">
+                                          ETA: <span className="text-foreground">{item.eta}</span>
+                                        </p>
+                                        <p className="truncate text-caption text-muted-foreground">
+                                          Linked task: <span className="text-foreground">{item.linkedTaskName}</span>
+                                        </p>
+                                        <p className="truncate text-caption text-muted-foreground">
+                                          Linked estimate: <span className="text-foreground">{item.linkedEstimate}</span>
+                                        </p>
+                                        <p className="text-caption text-muted-foreground">
+                                          Committed cost: <span className="text-foreground">{item.committedCost}</span>
+                                        </p>
+                                      </div>
+
+                                      <div className="space-y-1.5">
+                                        <div className="flex items-center justify-between gap-2 text-caption">
+                                          <span className="text-muted-foreground">
+                                            Received: {item.received} / {item.neededQty}
+                                          </span>
+                                          <span
+                                            className={`transition-colors duration-300 ${
+                                              item.remaining === 0 ? "text-success" : "text-muted-foreground"
+                                            }`}
+                                          >
+                                            Remaining: {item.remaining}
+                                          </span>
+                                        </div>
+                                        <input
+                                          type="range"
+                                          min={0}
+                                          max={item.neededQty}
+                                          value={item.received}
+                                          onChange={(event) =>
+                                            handleProcurementReceivedChange(item, Number(event.target.value))
+                                          }
+                                          className={`h-1.5 w-full cursor-pointer ${
+                                            item.remaining === 0 ? "accent-success" : "accent-accent"
+                                          }`}
+                                        />
+                                      </div>
+
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span className="truncate text-caption text-muted-foreground">Task readiness</span>
+                                        <span
+                                          className={`inline-flex rounded-pill border px-2 py-0.5 text-caption font-medium transition-colors duration-300 ${
+                                            item.isReady
+                                              ? "border-success/45 bg-success/20 text-foreground"
+                                              : "border-border bg-muted/70 text-muted-foreground"
+                                          } ${
+                                            wowFlash.on && wowFlash.materialId === item.id && item.isReady
+                                              ? "animate-pulse ring-2 ring-success/25"
+                                              : ""
+                                          }`}
+                                        >
+                                          {item.isReady ? "Ready" : "Waiting"}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
                         </>
                       ) : (
