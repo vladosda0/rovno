@@ -179,10 +179,35 @@ const ESTIMATE_ITEMS: EstimateItem[] = [
 ];
 
 const ESTIMATE_VARIANCE_BADGE_CLASSES: Record<EstimateVariance, string> = {
-  over: "bg-warning/15 text-warning-foreground border-warning/30",
-  under: "bg-info/15 text-info border-info/30",
-  "on-track": "bg-success/15 text-success border-success/30",
-  pending: "bg-muted text-muted-foreground border-border",
+  over: "bg-warning/25 text-foreground border-warning/50",
+  under: "bg-info/20 text-foreground border-info/45",
+  "on-track": "bg-success/20 text-foreground border-success/45",
+  pending: "bg-muted/80 text-muted-foreground border-border",
+};
+
+type EstimateExpandedOverride = {
+  statusInsight?: string;
+  riskLabel?: string;
+  riskClass?: string;
+};
+
+const ESTIMATE_EXPANDED_OVERRIDES: Partial<Record<EstimateItem["id"], EstimateExpandedOverride>> = {
+  "estimate-drywall-finishing": {
+    statusInsight: "Additional finishing prep increased labor and material scope.",
+  },
+  "estimate-electrical-materials": {
+    statusInsight: "Bulk purchase discount applied.",
+  },
+  "estimate-bathroom-tiles-labor": {
+    statusInsight: "Client layout confirmation pending before grouting.",
+    riskLabel: "Blocked by client",
+    riskClass: "bg-warning/20 text-foreground border-warning/45",
+  },
+  "estimate-doors-installation": {
+    statusInsight: "Awaiting supplier invoice.",
+    riskLabel: "Payment required",
+    riskClass: "bg-warning/15 text-foreground border-warning/40",
+  },
 };
 
 const CONTROL_CONTENT: Record<ControlTab, ControlPanelContent> = {
@@ -270,6 +295,37 @@ function getProgressLabel(progress: number): string {
   if (progress >= 100) return "Done";
   if (progress > 0) return "In progress";
   return "Draft";
+}
+
+function getEstimateVarianceLabel(row: EstimateItem): string {
+  const absoluteVariance = row.variance.replace(/^[-+]/, "");
+  if (row.varianceType === "over") return `Over +₽${absoluteVariance}`;
+  if (row.varianceType === "under") return `Saved -₽${absoluteVariance}`;
+  if (row.varianceType === "on-track") return "On track";
+  return "To be paid";
+}
+
+function getDefaultRiskFromVariance(varianceType: EstimateVariance): string {
+  if (varianceType === "over") return "Over budget";
+  if (varianceType === "under") return "Within budget";
+  if (varianceType === "on-track") return "On track";
+  return "Payment required";
+}
+
+function getDefaultRiskClassFromVariance(varianceType: EstimateVariance): string {
+  if (varianceType === "over") return "bg-warning/20 text-foreground border-warning/45";
+  if (varianceType === "under") return "bg-success/20 text-foreground border-success/45";
+  if (varianceType === "on-track") return "bg-info/20 text-foreground border-info/45";
+  return "bg-warning/15 text-foreground border-warning/40";
+}
+
+function getExpandedDetails(row: EstimateItem): Required<EstimateExpandedOverride> {
+  const override = ESTIMATE_EXPANDED_OVERRIDES[row.id] ?? {};
+  return {
+    statusInsight: override.statusInsight ?? "Awaiting next update.",
+    riskLabel: override.riskLabel ?? getDefaultRiskFromVariance(row.varianceType),
+    riskClass: override.riskClass ?? getDefaultRiskClassFromVariance(row.varianceType),
+  };
 }
 
 export default function Landing() {
@@ -757,25 +813,28 @@ export default function Landing() {
           </div>
 
           <Tabs value={activeControlTab} onValueChange={(value) => setActiveControlTab(value as ControlTab)}>
-            <TabsList className="h-auto flex-wrap gap-1 bg-muted/70 p-1">
-              <TabsTrigger value="tasks">Tasks</TabsTrigger>
-              <TabsTrigger value="estimate">Estimate</TabsTrigger>
-              <TabsTrigger value="procurement">Procurement</TabsTrigger>
-              <TabsTrigger value="photos">Photos</TabsTrigger>
-              <TabsTrigger value="documents">Documents</TabsTrigger>
-              <TabsTrigger value="activity">Activity</TabsTrigger>
-            </TabsList>
+            <div className="rounded-panel border border-border bg-card/50">
+              <div className="border-b border-border px-sp-3 py-1.5">
+                <TabsList className="h-auto w-full flex-wrap justify-start gap-1 bg-transparent p-0">
+                  <TabsTrigger value="tasks">Tasks</TabsTrigger>
+                  <TabsTrigger value="estimate">Estimate</TabsTrigger>
+                  <TabsTrigger value="procurement">Procurement</TabsTrigger>
+                  <TabsTrigger value="photos">Photos</TabsTrigger>
+                  <TabsTrigger value="documents">Documents</TabsTrigger>
+                  <TabsTrigger value="activity">Activity</TabsTrigger>
+                </TabsList>
+              </div>
 
-            {(Object.keys(CONTROL_CONTENT) as ControlTab[]).map((tab) => {
-              const content = CONTROL_CONTENT[tab];
-              return (
-                <TabsContent
-                  key={tab}
-                  value={tab}
-                  className="data-[state=active]:animate-in data-[state=active]:fade-in-0 data-[state=active]:slide-in-from-bottom-1 duration-200"
-                >
-                  <div className="grid gap-sp-2 rounded-panel border border-border bg-card/50 p-sp-3 lg:grid-cols-2">
-                    <div className="glass rounded-card p-sp-3">
+              {(Object.keys(CONTROL_CONTENT) as ControlTab[]).map((tab) => {
+                const content = CONTROL_CONTENT[tab];
+                return (
+                  <TabsContent
+                    key={tab}
+                    value={tab}
+                    className="mt-0 p-sp-3 data-[state=active]:animate-in data-[state=active]:fade-in-0 data-[state=active]:slide-in-from-bottom-1 duration-200"
+                  >
+                    <div className="grid grid-cols-1 gap-sp-2 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+                    <div className="glass min-w-0 w-full rounded-card p-sp-3">
                       {tab === "tasks" ? (
                         <>
                           <p className="text-caption text-muted-foreground">{content.title}</p>
@@ -858,15 +917,12 @@ export default function Landing() {
                           </div>
 
                           <div className="mt-3">
-                            <div className="mb-1 flex items-center justify-between text-caption text-muted-foreground">
-                              <span>Paid</span>
-                              <span>38%</span>
-                            </div>
+                            <p className="mb-1 text-caption text-muted-foreground">Paid ₽468,000 (38%)</p>
                             <Progress value={38} className="h-1.5" />
                           </div>
 
-                          <div className="mt-3 overflow-x-auto">
-                            <div className="min-w-[560px] rounded-md border border-border bg-background/35">
+                          <div className="mt-3 w-full min-w-0">
+                            <div className="w-full min-w-0 rounded-md border border-border bg-background/35">
                               <div className="grid grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.1fr)_28px] border-b border-border px-3 py-2 text-caption font-medium text-muted-foreground">
                                 <span>Item</span>
                                 <span>Planned</span>
@@ -876,6 +932,7 @@ export default function Landing() {
                               </div>
                               {ESTIMATE_ITEMS.map((row) => {
                                 const isExpanded = expandedEstimateItemId === row.id;
+                                const expandedDetails = getExpandedDetails(row);
                                 return (
                                   <div key={row.id}>
                                     <button
@@ -883,7 +940,9 @@ export default function Landing() {
                                       onClick={() =>
                                         setExpandedEstimateItemId((prev) => (prev === row.id ? null : row.id))
                                       }
-                                      className="grid w-full grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.1fr)_28px] items-center border-b border-border px-3 py-2.5 text-left transition-colors hover:bg-background/60"
+                                      className={`grid w-full grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.1fr)_28px] items-center px-3 py-2.5 text-left transition-colors hover:bg-background/60 ${
+                                        isExpanded ? "border-b-0" : "border-b border-border"
+                                      }`}
                                     >
                                       <span className="truncate text-body-sm text-foreground">{row.item}</span>
                                       <span className="text-body-sm text-muted-foreground">{row.planned}</span>
@@ -892,7 +951,7 @@ export default function Landing() {
                                         <span
                                           className={`inline-flex rounded-pill border px-2 py-0.5 text-caption font-medium ${ESTIMATE_VARIANCE_BADGE_CLASSES[row.varianceType]}`}
                                         >
-                                          {row.variance}
+                                          {getEstimateVarianceLabel(row)}
                                         </span>
                                       </span>
                                       <ChevronDown
@@ -902,9 +961,11 @@ export default function Landing() {
                                       />
                                     </button>
                                     {isExpanded && (
-                                      <div className="space-y-2 border-b border-border bg-background/55 px-3 py-2.5">
-                                        <div>
-                                          <p className="text-caption font-medium text-foreground">Linked tasks</p>
+                                      <div className="space-y-2 border-b border-t border-border/60 bg-background/60 px-3 py-2.5">
+                                        <div className="space-y-1">
+                                          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/80">
+                                            Linked tasks
+                                          </p>
                                           <div className="mt-1 flex flex-wrap gap-1.5">
                                             {row.linkedTasks?.map((task) => (
                                               <span
@@ -917,9 +978,31 @@ export default function Landing() {
                                             ))}
                                           </div>
                                         </div>
-                                        {row.receipts && <p className="text-caption text-muted-foreground">Receipts: {row.receipts}</p>}
-                                        {row.note && <p className="text-caption text-muted-foreground">Note: {row.note}</p>}
-                                        {row.aiInsight && (
+                                        <div className="space-y-1">
+                                          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/80">
+                                            Receipts
+                                          </p>
+                                          <p className="text-caption text-muted-foreground">
+                                            {row.receipts ?? "No receipts uploaded"}
+                                          </p>
+                                        </div>
+                                        <div className="space-y-1">
+                                          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/80">
+                                            Status insight
+                                          </p>
+                                          <p className="text-caption text-muted-foreground">{expandedDetails.statusInsight}</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/80">
+                                            Risk / next action
+                                          </p>
+                                          <span
+                                            className={`inline-flex rounded-pill border px-2 py-0.5 text-caption font-medium ${expandedDetails.riskClass}`}
+                                          >
+                                            {expandedDetails.riskLabel}
+                                          </span>
+                                        </div>
+                                        {row.varianceType === "over" && row.aiInsight && (
                                           <div className="rounded-md border border-info/30 bg-info/10 px-2 py-1.5">
                                             <p className="text-caption text-foreground">{row.aiInsight}</p>
                                           </div>
@@ -951,7 +1034,7 @@ export default function Landing() {
                         </>
                       )}
                     </div>
-                    <div className="rounded-card border border-border bg-background/40 p-sp-3">
+                    <div className="min-w-0 rounded-card border border-border bg-background/40 p-sp-2">
                       <h3 className="text-body font-semibold text-foreground">Operational outcomes</h3>
                       <ul className="mt-2 space-y-2">
                         {content.bullets.map((bullet) => (
@@ -963,9 +1046,10 @@ export default function Landing() {
                       </ul>
                     </div>
                   </div>
-                </TabsContent>
-              );
-            })}
+                  </TabsContent>
+                );
+              })}
+            </div>
           </Tabs>
         </section>
 
