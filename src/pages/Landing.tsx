@@ -62,6 +62,24 @@ type KanbanTask = {
   linked?: string;
 };
 type KanbanState = Record<KanbanColumn, KanbanTask[]>;
+type EstimateVariance = "over" | "under" | "on-track" | "pending";
+type EstimateLinkedTask = {
+  title: string;
+  status: string;
+};
+type EstimateItem = {
+  id: string;
+  item: string;
+  planned: string;
+  actual: string;
+  variance: string;
+  varianceType: EstimateVariance;
+  linkedTasks?: EstimateLinkedTask[];
+  receipts?: string;
+  note?: string;
+  aiInsight?: string;
+};
+
 const KANBAN_COLUMN_LABELS: Record<KanbanColumn, string> = {
   todo: "To do",
   doing: "In progress",
@@ -120,7 +138,61 @@ const INITIAL_KANBAN_STATE: KanbanState = {
   ],
 };
 
+const ESTIMATE_ITEMS: EstimateItem[] = [
+  {
+    id: "estimate-drywall-finishing",
+    item: "Drywall + finishing",
+    planned: "220k",
+    actual: "245k",
+    variance: "+25k",
+    varianceType: "over",
+    linkedTasks: [
+      { title: "Install drywall in corridor", status: "In progress" },
+      { title: "Paint ceiling coat #1", status: "To do" },
+    ],
+    receipts: "3 receipts uploaded",
+    note: "Additional corner beads and extra sanding after wall irregularities.",
+    aiInsight:
+      "AI: Variance is consistent with extra prep on uneven substrates. Next time: add a 10% contingency on finishing for old-panel walls.",
+  },
+  {
+    id: "estimate-electrical-materials",
+    item: "Electrical materials",
+    planned: "180k",
+    actual: "165k",
+    variance: "-15k",
+    varianceType: "under",
+    linkedTasks: [{ title: "Run conduit to panel", status: "In progress" }],
+    receipts: "2 receipts uploaded",
+  },
+  {
+    id: "estimate-bathroom-tiles-labor",
+    item: "Bathroom tiles + labor",
+    planned: "310k",
+    actual: "310k",
+    variance: "0",
+    varianceType: "on-track",
+    linkedTasks: [{ title: "Confirm tile layout with client", status: "To do" }],
+    receipts: "4 receipts uploaded",
+  },
+  {
+    id: "estimate-doors-installation",
+    item: "Doors installation",
+    planned: "90k",
+    actual: "0",
+    variance: "not started",
+    varianceType: "pending",
+    linkedTasks: [{ title: "Approve cabinet finish sample", status: "To do" }],
+    receipts: "No receipts uploaded",
+  },
+];
 
+const ESTIMATE_VARIANCE_BADGE_CLASSES: Record<EstimateVariance, string> = {
+  over: "bg-warning/15 text-warning-foreground border-warning/30",
+  under: "bg-info/15 text-info border-info/30",
+  "on-track": "bg-success/15 text-success border-success/30",
+  pending: "bg-muted text-muted-foreground border-border",
+};
 
 const CONTROL_CONTENT: Record<ControlTab, ControlPanelContent> = {
   tasks: {
@@ -242,6 +314,7 @@ export default function Landing() {
   const [dropMessage, setDropMessage] = useState<string | null>(null);
   const [movedTaskId, setMovedTaskId] = useState<string | null>(null);
   const [sparkleTaskId, setSparkleTaskId] = useState<string | null>(null);
+  const [expandedEstimateItemId, setExpandedEstimateItemId] = useState<string | null>(null);
   const kanbanTimersRef = useRef<number[]>([]);
 
   const demoProjects = useMemo(
@@ -853,6 +926,106 @@ export default function Landing() {
                                 </div>
                               </div>
                             ))}
+                          </div>
+                        </>
+                      ) : tab === "estimate" ? (
+                        <>
+                          <div className="flex items-center justify-between gap-2">
+                            <h3 className="text-body font-semibold text-foreground">Estimate</h3>
+                            <span className="rounded-pill border border-success/30 bg-success/10 px-2 py-0.5 text-caption text-success">
+                              Version 2 (Approved)
+                            </span>
+                          </div>
+                          <p className="mt-1 text-caption text-muted-foreground">Last updated: 3h ago by MK</p>
+
+                          <div className="mt-3 grid grid-cols-3 gap-2">
+                            <div className="rounded-md border border-border bg-background/55 px-2.5 py-2">
+                              <p className="text-caption text-muted-foreground">Planned</p>
+                              <p className="mt-0.5 text-body-sm font-semibold text-foreground">₽ 1,240,000</p>
+                            </div>
+                            <div className="rounded-md border border-border bg-background/55 px-2.5 py-2">
+                              <p className="text-caption text-muted-foreground">Paid</p>
+                              <p className="mt-0.5 text-body-sm font-semibold text-foreground">₽ 468,000</p>
+                            </div>
+                            <div className="rounded-md border border-border bg-background/55 px-2.5 py-2">
+                              <p className="text-caption text-muted-foreground">Remaining</p>
+                              <p className="mt-0.5 text-body-sm font-semibold text-foreground">₽ 772,000</p>
+                            </div>
+                          </div>
+
+                          <div className="mt-3">
+                            <div className="mb-1 flex items-center justify-between text-caption text-muted-foreground">
+                              <span>Paid</span>
+                              <span>38%</span>
+                            </div>
+                            <Progress value={38} className="h-1.5" />
+                          </div>
+
+                          <div className="mt-3 overflow-x-auto">
+                            <div className="min-w-[560px] rounded-md border border-border bg-background/35">
+                              <div className="grid grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.1fr)_28px] border-b border-border px-3 py-2 text-caption font-medium text-muted-foreground">
+                                <span>Item</span>
+                                <span>Planned</span>
+                                <span>Actual</span>
+                                <span>Variance</span>
+                                <span />
+                              </div>
+                              {ESTIMATE_ITEMS.map((row) => {
+                                const isExpanded = expandedEstimateItemId === row.id;
+                                return (
+                                  <div key={row.id}>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setExpandedEstimateItemId((prev) => (prev === row.id ? null : row.id))
+                                      }
+                                      className="grid w-full grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.1fr)_28px] items-center border-b border-border px-3 py-2.5 text-left transition-colors hover:bg-background/60"
+                                    >
+                                      <span className="truncate text-body-sm text-foreground">{row.item}</span>
+                                      <span className="text-body-sm text-muted-foreground">{row.planned}</span>
+                                      <span className="text-body-sm text-muted-foreground">{row.actual}</span>
+                                      <span className="justify-self-start">
+                                        <span
+                                          className={`inline-flex rounded-pill border px-2 py-0.5 text-caption font-medium ${ESTIMATE_VARIANCE_BADGE_CLASSES[row.varianceType]}`}
+                                        >
+                                          {row.variance}
+                                        </span>
+                                      </span>
+                                      <ChevronDown
+                                        className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${
+                                          isExpanded ? "rotate-180" : "rotate-0"
+                                        }`}
+                                      />
+                                    </button>
+                                    {isExpanded && (
+                                      <div className="space-y-2 border-b border-border bg-background/55 px-3 py-2.5">
+                                        <div>
+                                          <p className="text-caption font-medium text-foreground">Linked tasks</p>
+                                          <div className="mt-1 flex flex-wrap gap-1.5">
+                                            {row.linkedTasks?.map((task) => (
+                                              <span
+                                                key={`${row.id}-${task.title}`}
+                                                className="inline-flex items-center gap-1 rounded-pill border border-border bg-muted/60 px-2 py-0.5 text-caption text-foreground"
+                                              >
+                                                {task.title}
+                                                <span className="text-muted-foreground">({task.status})</span>
+                                              </span>
+                                            ))}
+                                          </div>
+                                        </div>
+                                        {row.receipts && <p className="text-caption text-muted-foreground">Receipts: {row.receipts}</p>}
+                                        {row.note && <p className="text-caption text-muted-foreground">Note: {row.note}</p>}
+                                        {row.aiInsight && (
+                                          <div className="rounded-md border border-info/30 bg-info/10 px-2 py-1.5">
+                                            <p className="text-caption text-foreground">{row.aiInsight}</p>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
                           </div>
                         </>
                       ) : (
