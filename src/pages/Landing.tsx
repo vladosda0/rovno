@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import {
   ArrowUpRight,
   Bot,
-  Check,
+  ChevronLeft,
   ChevronDown,
   CloudUpload,
   Files,
@@ -83,6 +83,34 @@ type ProcurementItem = {
   linkedTaskName: string;
   linkedEstimate: string;
   delayed?: boolean;
+};
+type PhotosDemoId = "photo-tile" | "photo-crack" | "photo-insulation" | "photo-landscape";
+type PhotoAction = {
+  label: string;
+  kind: "primary" | "secondary";
+  action:
+    | "create_task"
+    | "order"
+    | "reminder"
+    | "create_project_landscape"
+    | "materials"
+    | "plan_30d"
+    | "request_photo";
+};
+type PhotosDemoItem = {
+  id: PhotosDemoId;
+  title: string;
+  src: string;
+  submittedBy: string;
+  submittedAt: string;
+  aiQuestion: string;
+  aiVerdict: string;
+  aiReason: string;
+  aiFindings: string[];
+  aiEvidenceRequested: string[];
+  aiReferences: string[];
+  aiActionDetails: Partial<Record<PhotoAction["action"], string[]>>;
+  aiActions: PhotoAction[];
 };
 
 const KANBAN_COLUMN_LABELS: Record<KanbanColumn, string> = {
@@ -243,6 +271,197 @@ const PROCUREMENT_ITEMS: ProcurementItem[] = [
   },
 ];
 
+const PHOTOS_ANALYSIS_STEPS = ["Analyzing image...", "Checking standards...", "Drafting action plan..."];
+
+const PHOTOS_DEMO: PhotosDemoItem[] = [
+  {
+    id: "photo-tile",
+    title: "Tile lippage check",
+    src: "/demo/photos/tile-defect-lippage.png",
+    submittedBy: "AV",
+    submittedAt: "8m ago",
+    aiQuestion: "Check this tile installation. Is the lippage acceptable and what’s the correct fix?",
+    aiVerdict: "Needs rework",
+    aiReason: "Lippage and grout alignment appear outside acceptable finishing tolerance in the visible zone.",
+    aiFindings: [
+      "Edge offset appears above target plane on multiple adjacent tiles.",
+      "Grout line width variation indicates inconsistent bedding depth.",
+      "Defect location increases slip and moisture-retention risk.",
+    ],
+    aiEvidenceRequested: [
+      "2 m straightedge photo with feeler gauge reading.",
+      "Close-up of three worst joints before removal.",
+      "Adhesive coverage photo after first tile lift.",
+    ],
+    aiReferences: [
+      "EN 14411",
+      "Adhesive datasheet (Mapei Keraflex / equivalent)",
+      "Wet-area tile installation best practice",
+    ],
+    aiActionDetails: {
+      create_task: [
+        "Create task: Re-bed raised corridor tiles.",
+        "Attach straightedge measurements and photos.",
+        "Set acceptance gate: max 1 mm lippage before signoff.",
+      ],
+      order: [
+        "Order leveling clips and wedges for one correction cycle.",
+        "Add fresh C2-class adhesive and replacement spacers.",
+        "Confirm delivery before rework slot starts.",
+      ],
+      reminder: [
+        "Request contractor quote for affected square meterage.",
+        "Include removal, reset, and cleanup in one line item.",
+        "Set reminder to review quote same day.",
+      ],
+    },
+    aiActions: [
+      { label: "Create fix task", kind: "primary", action: "create_task" },
+      { label: "Order leveling clips", kind: "secondary", action: "order" },
+      { label: "Ask contractor for rework quote", kind: "secondary", action: "reminder" },
+    ],
+  },
+  {
+    id: "photo-crack",
+    title: "Window corner crack",
+    src: "/demo/photos/plaster-corner-crack.png",
+    submittedBy: "MK",
+    submittedAt: "2h ago",
+    aiQuestion: "Hairline crack near window corner. Cause and best repair approach?",
+    aiVerdict: "Acceptable with notes",
+    aiReason: "Pattern matches movement stress near opening corner with likely weak local reinforcement.",
+    aiFindings: [
+      "Crack trajectory follows a high-stress corner path from the window edge.",
+      "No visible branching suggests localized finish-layer issue.",
+      "Repair should include mesh reinforcement to prevent recurrence.",
+    ],
+    aiEvidenceRequested: [
+      "Corner photo after V-groove opening and cleaning.",
+      "Photo confirming mesh overlap beyond crack line.",
+      "Follow-up photo after primer coat.",
+    ],
+    aiReferences: [
+      "Knauf reinforcement guidance",
+      "Corner stress reinforcement practice",
+    ],
+    aiActionDetails: {
+      create_task: [
+        "Create task: Repair window corner crack.",
+        "Sequence: groove, mesh, flexible filler, repaint.",
+        "Set check: no re-opening after first week.",
+      ],
+      order: [
+        "Order fiberglass mesh tape and elastic filler.",
+        "Include fine-grit sanding sheets and primer.",
+        "Reserve enough material for two passes.",
+      ],
+      reminder: [
+        "Add 14-day inspection reminder.",
+        "Check if crack width changes after repaint.",
+        "Escalate to frame anchoring check if reopened.",
+      ],
+    },
+    aiActions: [
+      { label: "Create repair task", kind: "primary", action: "create_task" },
+      { label: "Order mesh tape + elastic filler", kind: "secondary", action: "order" },
+      { label: "Add inspection reminder", kind: "secondary", action: "reminder" },
+    ],
+  },
+  {
+    id: "photo-insulation",
+    title: "Insulation assembly ID",
+    src: "/demo/photos/insulation-vapor-barrier.png",
+    submittedBy: "Client",
+    submittedAt: "Yesterday",
+    aiQuestion: "What materials are shown and is the vapor barrier installed correctly?",
+    aiVerdict: "Proceed with QA checks",
+    aiReason: "Assembly appears correct in principle, but seam continuity is not fully verifiable from this angle.",
+    aiFindings: [
+      "Mineral wool infill between studs appears consistent (~100 mm class).",
+      "Polyethylene barrier is present but seam taping is incomplete.",
+      "Untaped joints may reduce thermal performance and raise condensation risk.",
+    ],
+    aiEvidenceRequested: [
+      "Close-up photos of all membrane seams.",
+      "Corner and outlet penetration sealing photos.",
+      "One full-bay continuity photo before cladding.",
+    ],
+    aiReferences: [
+      "Rockwool / Knauf installation guides",
+      "DIN 4108 vapor-control principles",
+    ],
+    aiActionDetails: {
+      create_task: [
+        "Create QA checklist task for barrier continuity.",
+        "Add checkpoints for seams, corners, and penetrations.",
+        "Require signoff photos before wall closure.",
+      ],
+      order: [
+        "Order additional sealing tape for all exposed joints.",
+        "Include membrane patch material for puncture repair.",
+        "Confirm compatibility with installed film.",
+      ],
+      request_photo: [
+        "Request close-up seam photos every 2-3 meters.",
+        "Request outlet and corner photos with tape visible.",
+        "Mark each photo by room and wall segment.",
+      ],
+    },
+    aiActions: [
+      { label: "Create QA checklist task", kind: "primary", action: "create_task" },
+      { label: "Order sealing tape", kind: "secondary", action: "order" },
+      { label: "Request photo of seams", kind: "secondary", action: "request_photo" },
+    ],
+  },
+  {
+    id: "photo-landscape",
+    title: "Vacation house landscape plan",
+    src: "/demo/photos/landscape-house.png",
+    submittedBy: "Client",
+    submittedAt: "Today",
+    aiQuestion: "Plan a practical landscape design around this vacation house. Prioritize drainage, low maintenance, and a clean modern look.",
+    aiVerdict: "Concept approved",
+    aiReason: "Site is suitable for phased low-maintenance landscape delivery with drainage-first sequencing.",
+    aiFindings: [
+      "Drainage correction should precede planting and paving to avoid rework.",
+      "Simple modern hardscape geometry suits current house lines.",
+      "Native layered planting can reduce upkeep while keeping year-round structure.",
+    ],
+    aiEvidenceRequested: [
+      "Quick slope map with low-point markers.",
+      "Foundation distance check for planned planting zones.",
+      "Night photo to place low-voltage lighting routes.",
+    ],
+    aiReferences: [
+      "Residential drainage best practices",
+      "Low-maintenance planting guides",
+      "Landscape lighting standards",
+    ],
+    aiActionDetails: {
+      create_project_landscape: [
+        "Create landscape project with 5 phases: survey, drainage, hardscape, planting, lighting.",
+        "Set phase gates and acceptance criteria per stage.",
+        "Prefill kickoff prompt for immediate planning.",
+      ],
+      materials: [
+        "Generate materials list by phase and supplier category.",
+        "Separate drainage, hardscape, and planting packages.",
+        "Include contingency line for soil amendments.",
+      ],
+      plan_30d: [
+        "Create 30-day schedule with week-by-week milestones.",
+        "Reserve first week for survey and drainage setup.",
+        "Set handoff checkpoints to avoid scope drift.",
+      ],
+    },
+    aiActions: [
+      { label: "Create project: Landscape design", kind: "primary", action: "create_project_landscape" },
+      { label: "Generate materials list", kind: "secondary", action: "materials" },
+      { label: "Create 30-day plan", kind: "secondary", action: "plan_30d" },
+    ],
+  },
+];
+
 const ESTIMATE_VARIANCE_BADGE_CLASSES: Record<EstimateVariance, string> = {
   over: "bg-warning/25 text-foreground border-warning/50",
   under: "bg-info/20 text-foreground border-info/45",
@@ -323,9 +542,9 @@ const CONTROL_CONTENT: Record<ControlTab, ControlPanelContent> = {
       { label: "Linked tasks", value: "19", tone: "text-info" },
     ],
     bullets: [
-      "Capture before/after progress without leaving the workspace.",
-      "Photo review feeds add context for blockers and approvals.",
-      "Task-linked media prevents orphaned evidence.",
+      "Evidence stays attached to the exact task or stage.",
+      "AI turns issues into step-by-step corrective actions.",
+      "Identify materials/tools and verify correct installation fast.",
     ],
   },
   documents: {
@@ -433,12 +652,26 @@ function getInitialProcurementReady(): Record<string, boolean> {
   }, {});
 }
 
+function getPhotoActionClasses(kind: PhotoAction["kind"], isActive: boolean): string {
+  const shared = "inline-flex items-center rounded-pill border px-2.5 py-1 text-caption font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-success";
+  const emphasis =
+    kind === "primary"
+      ? "border-success/50 bg-success/20 text-foreground shadow-[0_0_0_1px_rgba(34,197,94,0.22)] hover:bg-success/30"
+      : "border-success/35 bg-success/10 text-foreground hover:bg-success/20";
+  const active = isActive
+    ? "ring-1 ring-success/65 shadow-[0_0_0_1px_rgba(34,197,94,0.35)]"
+    : "";
+
+  return `${shared} ${emphasis} ${active}`;
+}
+
 export default function Landing() {
   const projects = useProjects();
   const currentUser = useCurrentUser();
   const isGuest = !isAuthenticated();
   const createProjectTo = isGuest ? "/auth/signup" : "/home";
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const promptTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const [isDark, setIsDark] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
@@ -468,9 +701,20 @@ export default function Landing() {
     on: false,
   });
   const [wowToast, setWowToast] = useState<string | null>(null);
+  const [activePhotoId, setActivePhotoId] = useState<PhotosDemoId | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisStepIndex, setAnalysisStepIndex] = useState(0);
+  const [showPhotoAnswer, setShowPhotoAnswer] = useState(false);
+  const [activePhotoAction, setActivePhotoAction] = useState<PhotoAction["action"] | null>(null);
+  const [showPhotoActionDetails, setShowPhotoActionDetails] = useState(false);
+  const [photoInlineToast, setPhotoInlineToast] = useState<string | null>(null);
   const kanbanTimersRef = useRef<number[]>([]);
   const wowFlashTimerRef = useRef<number | null>(null);
   const wowToastTimerRef = useRef<number | null>(null);
+  const analysisRunIdRef = useRef(0);
+  const analysisFinishTimerRef = useRef<number | null>(null);
+  const analysisStepTimerRef = useRef<number | null>(null);
+  const photoActionToastTimerRef = useRef<number | null>(null);
 
   const demoProjects = useMemo(
     () => projects.filter((project) => project.owner_id === currentUser.id).slice(0, 3),
@@ -508,6 +752,21 @@ export default function Landing() {
     [procurementView],
   );
 
+  const activePhoto = useMemo(() => PHOTOS_DEMO.find((photo) => photo.id === activePhotoId) ?? null, [activePhotoId]);
+  const activePhotoActionDetails = useMemo(() => {
+    if (!activePhoto || !activePhotoAction) return [];
+    return activePhoto.aiActionDetails[activePhotoAction] ?? [];
+  }, [activePhoto, activePhotoAction]);
+
+  const clearPhotoAnalysisTimers = () => {
+    if (analysisFinishTimerRef.current) window.clearTimeout(analysisFinishTimerRef.current);
+    if (analysisStepTimerRef.current) window.clearInterval(analysisStepTimerRef.current);
+    if (photoActionToastTimerRef.current) window.clearTimeout(photoActionToastTimerRef.current);
+    analysisFinishTimerRef.current = null;
+    analysisStepTimerRef.current = null;
+    photoActionToastTimerRef.current = null;
+  };
+
   useEffect(() => {
     const storedTheme = localStorage.getItem(THEME_KEY);
     const theme = storedTheme === "light" || storedTheme === "dark" ? storedTheme : "dark";
@@ -536,6 +795,9 @@ export default function Landing() {
       kanbanTimersRef.current = [];
       if (wowFlashTimerRef.current) window.clearTimeout(wowFlashTimerRef.current);
       if (wowToastTimerRef.current) window.clearTimeout(wowToastTimerRef.current);
+      if (analysisFinishTimerRef.current) window.clearTimeout(analysisFinishTimerRef.current);
+      if (analysisStepTimerRef.current) window.clearInterval(analysisStepTimerRef.current);
+      if (photoActionToastTimerRef.current) window.clearTimeout(photoActionToastTimerRef.current);
     },
     [],
   );
@@ -668,6 +930,79 @@ export default function Landing() {
         setWowToast(null);
       }, 1200);
     }
+  };
+
+  const startPhotoAnalysis = (photoId: PhotosDemoId) => {
+    analysisRunIdRef.current += 1;
+    const runId = analysisRunIdRef.current;
+
+    clearPhotoAnalysisTimers();
+    setActivePhotoId(photoId);
+    setIsAnalyzing(true);
+    setAnalysisStepIndex(0);
+    setShowPhotoAnswer(false);
+    setActivePhotoAction(null);
+    setShowPhotoActionDetails(false);
+    setPhotoInlineToast(null);
+
+    analysisStepTimerRef.current = window.setInterval(() => {
+      if (analysisRunIdRef.current !== runId) return;
+      setAnalysisStepIndex((prev) => (prev + 1) % PHOTOS_ANALYSIS_STEPS.length);
+    }, 800);
+
+    analysisFinishTimerRef.current = window.setTimeout(() => {
+      if (analysisRunIdRef.current !== runId) return;
+      if (analysisStepTimerRef.current) {
+        window.clearInterval(analysisStepTimerRef.current);
+        analysisStepTimerRef.current = null;
+      }
+
+      setIsAnalyzing(false);
+      setShowPhotoAnswer(true);
+    }, 3400);
+  };
+
+  const handleBackFromPhotoAnalysis = () => {
+    analysisRunIdRef.current += 1;
+    clearPhotoAnalysisTimers();
+    setActivePhotoId(null);
+    setIsAnalyzing(false);
+    setShowPhotoAnswer(false);
+    setAnalysisStepIndex(0);
+    setActivePhotoAction(null);
+    setShowPhotoActionDetails(false);
+    setPhotoInlineToast(null);
+  };
+
+  const handlePhotoAction = (action: PhotoAction, photo: PhotosDemoItem) => {
+    if (photoActionToastTimerRef.current) window.clearTimeout(photoActionToastTimerRef.current);
+
+    setActivePhotoAction(action.action);
+    setShowPhotoActionDetails(true);
+
+    let toastMessage = "Action saved in draft.";
+    if (action.action === "create_task") toastMessage = `Task created: ${photo.title} review (Draft)`;
+    if (action.action === "order") toastMessage = "Draft order list prepared.";
+    if (action.action === "reminder") toastMessage = "Reminder added to project timeline.";
+    if (action.action === "request_photo") toastMessage = "Request sent: upload close-up seam photos.";
+    if (action.action === "materials") toastMessage = "Materials list generated (Draft).";
+    if (action.action === "plan_30d") toastMessage = "30-day implementation plan drafted.";
+
+    if (action.action === "create_project_landscape") {
+      setPromptText("Create a landscape design project for my vacation house");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      if (promptTextareaRef.current) {
+        window.setTimeout(() => promptTextareaRef.current?.focus(), 350);
+        toastMessage = "Project draft prepared in the prompt above.";
+      } else {
+        toastMessage = "Prompt prefilled above";
+      }
+    }
+
+    setPhotoInlineToast(toastMessage);
+    photoActionToastTimerRef.current = window.setTimeout(() => {
+      setPhotoInlineToast(null);
+    }, 1400);
   };
 
   const handleTaskDragEnd = () => {
@@ -812,6 +1147,7 @@ export default function Landing() {
             <div className="mt-4 space-y-3">
               <div className="rounded-card border border-border bg-background/60 p-sp-2">
                 <Textarea
+                  ref={promptTextareaRef}
                   value={promptText}
                   onChange={(event) => setPromptText(event.target.value)}
                   className="min-h-[140px] resize-none border-0 bg-transparent p-0 text-body focus-visible:ring-0"
@@ -1010,8 +1346,8 @@ export default function Landing() {
                     value={tab}
                     className="mt-0 p-sp-3 data-[state=active]:animate-in data-[state=active]:fade-in-0 data-[state=active]:slide-in-from-bottom-1 duration-200"
                   >
-                    <div className="grid grid-cols-1 gap-sp-2 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-                    <div className="glass min-w-0 w-full rounded-card p-sp-3">
+                    <div className="grid grid-cols-1 gap-sp-2 min-w-0">
+                    <div className={`glass min-w-0 w-full rounded-card p-sp-3 ${tab === "photos" ? "overflow-hidden" : ""}`}>
                       {tab === "tasks" ? (
                         <>
                           <p className="text-caption text-muted-foreground">{content.title}</p>
@@ -1321,6 +1657,256 @@ export default function Landing() {
                             })}
                           </div>
                         </>
+                      ) : tab === "photos" ? (
+                        <>
+                          <style>{`
+                            .ph-grid {
+                              background-image:
+                                linear-gradient(to right, rgba(148, 163, 184, 0.25) 1px, transparent 1px),
+                                linear-gradient(to bottom, rgba(148, 163, 184, 0.25) 1px, transparent 1px);
+                              background-size: 14px 14px;
+                            }
+                            @keyframes phScanLine {
+                              0% { transform: translateY(-120%); }
+                              100% { transform: translateY(240%); }
+                            }
+                            .ph-scanline {
+                              animation: phScanLine 3.4s linear infinite;
+                            }
+                            @keyframes phSkeletonShimmer {
+                              0% { background-position: 100% 0; }
+                              100% { background-position: -100% 0; }
+                            }
+                            .ph-skeleton {
+                              background: linear-gradient(90deg, rgba(148, 163, 184, 0.15) 25%, rgba(148, 163, 184, 0.35) 50%, rgba(148, 163, 184, 0.15) 75%);
+                              background-size: 200% 100%;
+                              animation: phSkeletonShimmer 1.2s ease-in-out infinite;
+                            }
+                            @keyframes phInspectorReveal {
+                              0% { opacity: 0; transform: translateY(6px); }
+                              100% { opacity: 1; transform: translateY(0); }
+                            }
+                            .ph-inspector-reveal {
+                              animation: phInspectorReveal 180ms ease-out;
+                            }
+                            @keyframes phDetailSwap {
+                              0% { opacity: 0; transform: translateY(4px); }
+                              100% { opacity: 1; transform: translateY(0); }
+                            }
+                            .ph-detail-swap {
+                              animation: phDetailSwap 180ms ease-out;
+                            }
+                          `}</style>
+                          {activePhoto === null ? (
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                              {PHOTOS_DEMO.map((photo) => (
+                                <div key={photo.id} className="min-w-0 rounded-md border border-border bg-background/45 p-2">
+                                  <div className="overflow-hidden rounded-md">
+                                    <img
+                                      src={photo.src}
+                                      alt={photo.title}
+                                      className="h-36 w-full transform-gpu object-cover object-center transition-transform duration-300 will-change-transform hover:scale-[1.03] sm:h-40"
+                                    />
+                                  </div>
+                                  <div className="mt-2 rounded-md bg-gradient-to-r from-warning/50 via-accent/45 to-info/45 p-[1px] transition-all duration-200 hover:shadow-[0_0_0_1px_rgba(251,191,36,0.25),0_8px_18px_-12px_rgba(251,191,36,0.5)]">
+                                    <button
+                                      type="button"
+                                      onClick={() => startPhotoAnalysis(photo.id)}
+                                      aria-label={`Consult AI for ${photo.title}`}
+                                      className="flex w-full items-center justify-center gap-1.5 rounded-[7px] bg-background/90 px-3 py-2 text-caption font-semibold tracking-tight text-foreground drop-shadow-[0_1px_0_rgba(0,0,0,0.45)] shadow-[0_0_0_1px_rgba(255,255,255,0.06)] backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-background/95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                                    >
+                                      <Sparkles className="h-3.5 w-3.5" />
+                                      Consult AI
+                                    </button>
+                                  </div>
+                                  <p className="mt-1 text-center text-caption text-muted-foreground">
+                                    {photo.submittedBy} · {photo.submittedAt}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="relative flex min-h-[620px] min-w-0 flex-col overflow-hidden">
+                              <div className="mx-auto flex min-h-[620px] w-full max-w-[900px] min-w-0 flex-col">
+                                <div>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={handleBackFromPhotoAnalysis}
+                                    aria-label="Back to photos grid"
+                                    className="h-7 w-7 p-0"
+                                  >
+                                    <ChevronLeft className="h-4 w-4" />
+                                  </Button>
+                                </div>
+
+                                <div className="mt-3 flex justify-end">
+                                  <div className="mx-auto w-full max-w-[640px] min-w-0">
+                                    <div className="relative w-full rounded-[14px] border border-border bg-background/20 overflow-hidden">
+                                      <img
+                                        src={activePhoto.src}
+                                        alt={activePhoto.title}
+                                        className="h-[260px] w-full object-contain"
+                                      />
+                                      {isAnalyzing && (
+                                        <>
+                                          <div className="ph-grid pointer-events-none absolute inset-0" />
+                                          <div className="ph-scanline pointer-events-none absolute left-0 right-0 h-10 bg-gradient-to-b from-accent/10 via-accent/45 to-accent/10" />
+                                        </>
+                                      )}
+                                    </div>
+
+                                    <div className="mt-2 w-full rounded-[14px] border border-border bg-background/40 px-2 py-1 text-right">
+                                      <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/85">You</p>
+                                      <p className="text-[14px] leading-snug text-foreground break-words">
+                                        {activePhoto.aiQuestion}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="mt-3 mx-auto w-full max-w-[900px] min-w-0 flex-1 min-h-0">
+                                  <div className="flex h-full min-h-0 flex-col rounded-md border border-border bg-background/60 p-3">
+                                    <div className="mb-2 flex items-center justify-between gap-2">
+                                      <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                                        <Sparkles className="h-3.5 w-3.5 text-accent" />
+                                        AI Inspector
+                                      </div>
+                                      <div className="inline-flex items-center gap-1.5">
+                                        {isAnalyzing && (
+                                          <span className="inline-flex items-center gap-1">
+                                            <span className="h-1 w-1 rounded-full bg-accent/80 animate-pulse" />
+                                            <span className="h-1 w-1 rounded-full bg-accent/70 animate-pulse [animation-delay:120ms]" />
+                                            <span className="h-1 w-1 rounded-full bg-accent/60 animate-pulse [animation-delay:220ms]" />
+                                          </span>
+                                        )}
+                                        <span className="rounded-pill border border-border bg-muted/70 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                                          AI generated
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <div className="flex-1 min-h-0 min-w-0 overflow-y-auto pr-1 text-[14px] leading-snug">
+                                      {isAnalyzing ? (
+                                        <div className="space-y-2">
+                                          <p className="text-sm text-muted-foreground">{PHOTOS_ANALYSIS_STEPS[analysisStepIndex]}</p>
+                                          <div className="space-y-1.5">
+                                            <div className="ph-skeleton h-2 rounded-md" />
+                                            <div className="ph-skeleton h-2 w-4/5 rounded-md" />
+                                          </div>
+                                        </div>
+                                      ) : showPhotoAnswer ? (
+                                        <div className="ph-inspector-reveal min-w-0 break-words space-y-2.5">
+                                          <div className="flex flex-wrap items-start justify-between gap-2">
+                                            <div className="min-w-0">
+                                              <p className="text-xs font-semibold text-foreground">Verdict</p>
+                                              <p className="mt-0.5 text-[14px] leading-snug text-muted-foreground">{activePhoto.aiReason}</p>
+                                            </div>
+                                            <span className="rounded-pill border border-warning/50 bg-warning/20 px-2 py-0.5 text-caption font-medium text-foreground">
+                                              {activePhoto.aiVerdict}
+                                            </span>
+                                          </div>
+
+                                          <div className="border-t border-border/50 pt-2">
+                                            <p className="text-xs font-semibold text-foreground">Findings</p>
+                                            <ul className="mt-1 space-y-1">
+                                              {activePhoto.aiFindings.slice(0, 3).map((finding) => (
+                                                <li key={finding} className="flex items-start gap-1.5 text-[14px] leading-snug text-foreground">
+                                                  <span className="mt-1 h-1 w-1 rounded-full bg-warning/80" />
+                                                  <span className="break-words">{finding}</span>
+                                                </li>
+                                              ))}
+                                            </ul>
+                                          </div>
+
+                                          <div className="border-t border-border/50 pt-2">
+                                            <p className="mb-1 text-xs font-semibold text-foreground">Actions</p>
+                                            <div className="flex flex-wrap gap-2">
+                                              {activePhoto.aiActions.map((action) => (
+                                                <button
+                                                  key={`${activePhoto.id}-${action.label}`}
+                                                  type="button"
+                                                  onClick={() => handlePhotoAction(action, activePhoto)}
+                                                  className={getPhotoActionClasses(action.kind, activePhotoAction === action.action)}
+                                                >
+                                                  {action.label}
+                                                </button>
+                                              ))}
+                                            </div>
+                                          </div>
+
+                                          <div className="border-t border-border/50 pt-2">
+                                            {showPhotoActionDetails && activePhotoAction ? (
+                                              <div className="ph-detail-swap space-y-1.5">
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                  <span className="h-4 w-1 rounded-full bg-success/70" />
+                                                  <span className="text-xs font-semibold text-success">Selected action:</span>
+                                                  <span className="text-[14px] leading-snug text-foreground">
+                                                    {activePhoto.aiActions.find((action) => action.action === activePhotoAction)?.label}
+                                                  </span>
+                                                </div>
+                                                <ul className="space-y-1">
+                                                  {activePhotoActionDetails.map((detail) => (
+                                                    <li key={detail} className="text-[14px] leading-snug text-muted-foreground break-words">
+                                                      • {detail}
+                                                    </li>
+                                                  ))}
+                                                </ul>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    setShowPhotoActionDetails(false);
+                                                    setActivePhotoAction(null);
+                                                  }}
+                                                  className="text-caption text-muted-foreground transition-colors hover:text-foreground"
+                                                >
+                                                  Show summary
+                                                </button>
+                                              </div>
+                                            ) : (
+                                              <div className="ph-detail-swap space-y-2">
+                                                <div>
+                                                  <p className="text-xs font-semibold text-foreground">Evidence requested</p>
+                                                  <ul className="mt-1 space-y-1">
+                                                    {activePhoto.aiEvidenceRequested.map((item) => (
+                                                      <li key={item} className="flex items-start gap-1.5 text-[14px] leading-snug text-muted-foreground">
+                                                        <span className="mt-0.5 h-3.5 w-3.5 rounded border border-success/45 bg-success/10" />
+                                                        <span className="break-words">{item}</span>
+                                                      </li>
+                                                    ))}
+                                                  </ul>
+                                                </div>
+                                                <div className="border-t border-border/50 pt-2">
+                                                  <p className="text-xs font-semibold text-foreground">References</p>
+                                                  <div className="mt-1 flex min-w-0 flex-wrap gap-1">
+                                                    {activePhoto.aiReferences.map((reference) => (
+                                                      <span
+                                                        key={reference}
+                                                        className="rounded-pill border border-border bg-muted/70 px-2 py-0.5 text-caption text-muted-foreground"
+                                                      >
+                                                        {reference}
+                                                      </span>
+                                                    ))}
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            )}
+                                          </div>
+
+                                          {photoInlineToast && (
+                                            <div className="rounded-md border border-success/45 bg-success/12 px-2.5 py-1 text-caption text-foreground">
+                                              {photoInlineToast}
+                                            </div>
+                                          )}
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </>
                       ) : (
                         <>
                           <p className="text-caption text-muted-foreground">{content.title}</p>
@@ -1339,17 +1925,6 @@ export default function Landing() {
                           </div>
                         </>
                       )}
-                    </div>
-                    <div className="min-w-0 rounded-card border border-border bg-background/40 p-sp-2">
-                      <h3 className="text-body font-semibold text-foreground">Operational outcomes</h3>
-                      <ul className="mt-2 space-y-2">
-                        {content.bullets.map((bullet) => (
-                          <li key={bullet} className="flex items-start gap-2 text-body-sm text-muted-foreground">
-                            <Check className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
-                            <span>{bullet}</span>
-                          </li>
-                        ))}
-                      </ul>
                     </div>
                   </div>
                   </TabsContent>
