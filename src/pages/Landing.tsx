@@ -4,16 +4,12 @@ import {
   ArrowUpRight,
   Bot,
   Check,
-  ChevronRight,
-  ClipboardList,
+  ChevronDown,
   CloudUpload,
-  FileSpreadsheet,
   Files,
   Hammer,
-  Image as ImageIcon,
   Menu,
   Moon,
-  Package,
   ReceiptText,
   ShieldCheck,
   Sparkles,
@@ -36,9 +32,9 @@ const ACCEPTED_FILE_TYPES = ".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx";
 const PROMPT_CHIPS = ["Apartment renovation", "Fence + gate", "Bathroom remodel", "Landscape works"];
 
 const DEMO_COVER_IMAGE_MAP: Record<string, string> = {
-  "project-1": "/placeholder.svg",
-  "project-2": "/placeholder.svg",
-  "project-3": "/placeholder.svg",
+  "project-1": "/demo/apt-demo.png",
+  "project-2": "/demo/office-demo.png",
+  "project-3": "/demo/kitchen-demo.png",
 };
 
 const COVER_GRADIENTS = [
@@ -562,21 +558,21 @@ export default function Landing() {
                   to={`/project/${project.id}/dashboard`}
                   className="group overflow-hidden rounded-card border border-border bg-card/50 transition-all duration-150 hover:-translate-y-0.5 hover:scale-[1.01] hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 >
-                  <div
-                    className={`relative h-40 overflow-hidden bg-gradient-to-br ${COVER_GRADIENTS[hashToIndex(project.id, COVER_GRADIENTS.length)]}`}
-                  >
-                    <img
-                      src={DEMO_COVER_IMAGE_MAP[project.id] ?? "/placeholder.svg"}
-                      onError={(event) => {
-                        event.currentTarget.src = "/placeholder.svg";
-                      }}
-                      alt={`${project.title} cover`}
-                      className="h-full w-full object-cover opacity-80 mix-blend-overlay transition-transform duration-300 group-hover:scale-105"
-                    />
-                    <span className="absolute left-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-md bg-background/80 text-foreground backdrop-blur">
+                  <div className="relative h-40 overflow-hidden rounded-t-card isolate bg-muted">
+                    <div className="absolute inset-0 transform-gpu will-change-transform [transform:translateZ(0)] [backface-visibility:hidden] transition-transform duration-300 ease-out group-hover:scale-105">
+                      <img
+                        src={DEMO_COVER_IMAGE_MAP[project.id] ?? "/placeholder.svg"}
+                        onError={(event) => {
+                          event.currentTarget.src = "/placeholder.svg";
+                        }}
+                        alt={`${project.title} cover`}
+                        className="h-full w-full object-cover object-center"
+                      />
+                    </div>
+                    <span className="absolute left-3 top-3 z-20 inline-flex h-8 w-8 items-center justify-center rounded-md bg-background/80 text-foreground backdrop-blur">
                       <Sparkles className="h-4 w-4" />
                     </span>
-                    <span className="absolute right-3 top-3 rounded-pill bg-background/85 px-2 py-0.5 text-caption font-medium text-foreground">
+                    <span className="absolute right-3 top-3 z-20 rounded-pill bg-background/85 px-2 py-0.5 text-caption font-medium text-foreground">
                       Demo
                     </span>
                   </div>
