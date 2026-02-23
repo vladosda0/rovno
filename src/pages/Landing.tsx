@@ -46,6 +46,7 @@ const COVER_GRADIENTS = [
 ];
 
 type ControlTab = "tasks" | "estimate" | "procurement" | "photos" | "documents" | "activity";
+type KanbanColumn = "todo" | "doing" | "done";
 
 type ControlRow = { label: string; value: string; tone?: string };
 type ControlPanelContent = {
@@ -53,6 +54,73 @@ type ControlPanelContent = {
   rows: ControlRow[];
   bullets: string[];
 };
+type KanbanTask = {
+  id: string;
+  title: string;
+  assignee: string;
+  meta: string;
+  linked?: string;
+};
+type KanbanState = Record<KanbanColumn, KanbanTask[]>;
+const KANBAN_COLUMN_LABELS: Record<KanbanColumn, string> = {
+  todo: "To do",
+  doing: "In progress",
+  done: "Done",
+};
+
+const INITIAL_KANBAN_STATE: KanbanState = {
+  todo: [
+    {
+      id: "task-order-junction-boxes",
+      title: "Order junction boxes",
+      assignee: "MK",
+      meta: "Due Mar 3",
+      linked: "Electrical rough-in",
+    },
+    {
+      id: "task-confirm-tile-layout",
+      title: "Confirm tile layout with client",
+      assignee: "AV",
+      meta: "Due Today",
+    },
+    {
+      id: "task-approve-cabinet-finish",
+      title: "Approve cabinet finish sample",
+      assignee: "CL",
+      meta: "Awaiting decision",
+    },
+  ],
+  doing: [
+    {
+      id: "task-run-conduit",
+      title: "Run conduit to panel",
+      assignee: "AV",
+      meta: "Evidence: 2 photos",
+    },
+    {
+      id: "task-install-drywall",
+      title: "Install drywall in corridor",
+      assignee: "VV",
+      meta: "Checklist 4/7",
+    },
+  ],
+  done: [
+    {
+      id: "task-mark-outlets",
+      title: "Mark outlet locations",
+      assignee: "AV",
+      meta: "Completed 2h ago",
+    },
+    {
+      id: "task-demolish-backsplash",
+      title: "Demolish old backsplash",
+      assignee: "MK",
+      meta: "Completed",
+    },
+  ],
+};
+
+
 
 const CONTROL_CONTENT: Record<ControlTab, ControlPanelContent> = {
   tasks: {
@@ -167,6 +235,14 @@ export default function Landing() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [activeControlTab, setActiveControlTab] = useState<ControlTab>("tasks");
   const [communityEmail, setCommunityEmail] = useState("");
+  const [kanban, setKanban] = useState<KanbanState>(INITIAL_KANBAN_STATE);
+  const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
+  const [dragSourceColumn, setDragSourceColumn] = useState<KanbanColumn | null>(null);
+  const [dragOverColumn, setDragOverColumn] = useState<KanbanColumn | null>(null);
+  const [dropMessage, setDropMessage] = useState<string | null>(null);
+  const [movedTaskId, setMovedTaskId] = useState<string | null>(null);
+  const [sparkleTaskId, setSparkleTaskId] = useState<string | null>(null);
+  const kanbanTimersRef = useRef<number[]>([]);
 
   const demoProjects = useMemo(
     () => projects.filter((project) => project.owner_id === currentUser.id).slice(0, 3),
@@ -254,6 +330,69 @@ export default function Landing() {
     if (!communityEmail.trim()) return;
     toast({ title: "Saved (mock)" });
     setCommunityEmail("");
+  };
+
+  const handleTaskDragStart = (
+    event: React.DragEvent<HTMLDivElement>,
+    taskId: string,
+    sourceColumn: KanbanColumn,
+  ) => {
+    setDraggingTaskId(taskId);
+    setDragSourceColumn(sourceColumn);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", taskId);
+  };
+
+  const handleColumnDragOver = (event: React.DragEvent<HTMLDivElement>, targetColumn: KanbanColumn) => {
+    event.preventDefault();
+    if (dragOverColumn !== targetColumn) {
+      setDragOverColumn(targetColumn);
+    }
+  };
+
+  const handleColumnDrop = (targetColumn: KanbanColumn) => {
+    if (!draggingTaskId || !dragSourceColumn) return;
+
+    setKanban((prev) => {
+      const sourceTasks = prev[dragSourceColumn];
+      const draggedTask = sourceTasks.find((task) => task.id === draggingTaskId);
+      if (!draggedTask) return prev;
+
+      const nextSourceTasks = sourceTasks.filter((task) => task.id !== draggingTaskId);
+      if (dragSourceColumn === targetColumn) {
+        return {
+          ...prev,
+          [targetColumn]: [...nextSourceTasks, draggedTask],
+        };
+      }
+
+      return {
+        ...prev,
+        [dragSourceColumn]: nextSourceTasks,
+        [targetColumn]: [...prev[targetColumn], draggedTask],
+      };
+    });
+
+    kanbanTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    kanbanTimersRef.current = [];
+
+    setDropMessage(`Moved to ${KANBAN_COLUMN_LABELS[targetColumn]}`);
+    setMovedTaskId(draggingTaskId);
+    setSparkleTaskId(draggingTaskId);
+    setDraggingTaskId(null);
+    setDragSourceColumn(null);
+    setDragOverColumn(null);
+
+    const pulseTimer = window.setTimeout(() => setMovedTaskId(null), 320);
+    const sparkleTimer = window.setTimeout(() => setSparkleTaskId(null), 450);
+    const messageTimer = window.setTimeout(() => setDropMessage(null), 1400);
+    kanbanTimersRef.current.push(pulseTimer, sparkleTimer, messageTimer);
+  };
+
+  const handleTaskDragEnd = () => {
+    setDraggingTaskId(null);
+    setDragSourceColumn(null);
+    setDragOverColumn(null);
   };
 
   return (
@@ -660,15 +799,80 @@ export default function Landing() {
                 >
                   <div className="grid gap-sp-2 rounded-panel border border-border bg-card/50 p-sp-3 lg:grid-cols-2">
                     <div className="glass rounded-card p-sp-3">
-                      <p className="text-caption text-muted-foreground">{content.title}</p>
-                      <div className="mt-2 space-y-2">
-                        {content.rows.map((row) => (
-                          <div key={row.label} className="flex items-center justify-between rounded-md bg-background/60 px-2 py-1.5">
-                            <span className="text-body-sm text-foreground">{row.label}</span>
-                            <span className={`text-caption font-medium ${row.tone ?? "text-foreground"}`}>{row.value}</span>
+                      {tab === "tasks" ? (
+                        <>
+                          <p className="text-caption text-muted-foreground">{content.title}</p>
+                          {dropMessage && <p className="mt-2 text-caption text-accent">{dropMessage}</p>}
+                          <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
+                            {(Object.keys(KANBAN_COLUMN_LABELS) as KanbanColumn[]).map((column) => (
+                              <div
+                                key={column}
+                                onDragOver={(event) => handleColumnDragOver(event, column)}
+                                onDrop={() => handleColumnDrop(column)}
+                                className={`rounded-md border p-2 transition-colors ${
+                                  dragOverColumn === column
+                                    ? "border-accent bg-accent/10"
+                                    : "border-border bg-background/45"
+                                }`}
+                              >
+                                <div className="mb-2 flex items-center justify-between gap-2">
+                                  <span className="text-body-sm font-semibold text-foreground">
+                                    {KANBAN_COLUMN_LABELS[column]}
+                                  </span>
+                                  <span className="rounded-pill bg-muted px-2 py-0.5 text-caption text-muted-foreground">
+                                    {kanban[column].length}
+                                  </span>
+                                </div>
+                                <div className="space-y-2">
+                                  {kanban[column].map((task) => (
+                                    <div
+                                      key={task.id}
+                                      draggable
+                                      tabIndex={0}
+                                      onDragStart={(event) => handleTaskDragStart(event, task.id, column)}
+                                      onDragEnd={handleTaskDragEnd}
+                                      className={`relative rounded-md border border-border bg-card/80 p-2.5 transition-transform duration-300 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent cursor-grab active:cursor-grabbing ${
+                                        movedTaskId === task.id ? "scale-[1.02]" : "scale-100"
+                                      }`}
+                                    >
+                                      {sparkleTaskId === task.id && (
+                                        <Sparkles className="pointer-events-none absolute right-1.5 top-1.5 h-3 w-3 text-accent animate-ping" />
+                                      )}
+                                      <p className="pr-5 text-body-sm font-medium text-foreground">{task.title}</p>
+                                      <div className="mt-2 flex items-center gap-2">
+                                        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-muted px-1.5 text-[10px] font-semibold text-foreground">
+                                          {task.assignee}
+                                        </span>
+                                        <span className="truncate text-caption text-muted-foreground">{task.meta}</span>
+                                      </div>
+                                      {task.linked && (
+                                        <p className="mt-1 truncate text-caption text-info">Linked: {task.linked}</p>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-caption text-muted-foreground">{content.title}</p>
+                          <div className="mt-2 space-y-2">
+                            {content.rows.map((row) => (
+                              <div
+                                key={row.label}
+                                className="flex items-center justify-between rounded-md bg-background/60 px-2 py-1.5"
+                              >
+                                <span className="text-body-sm text-foreground">{row.label}</span>
+                                <span className={`text-caption font-medium ${row.tone ?? "text-foreground"}`}>
+                                  {row.value}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      )}
                     </div>
                     <div className="rounded-card border border-border bg-background/40 p-sp-3">
                       <h3 className="text-body font-semibold text-foreground">Operational outcomes</h3>
