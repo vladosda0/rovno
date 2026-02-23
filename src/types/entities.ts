@@ -183,6 +183,8 @@ export interface ProcurementAttachment {
   id: string;
   url: string;
   type: string;
+  name?: string;
+  isLocal?: boolean;
   createdAt: string;
 }
 
