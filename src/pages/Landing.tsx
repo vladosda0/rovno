@@ -29,21 +29,12 @@ import { toast } from "@/hooks/use-toast";
 
 const THEME_KEY = "landing-theme";
 const ACCEPTED_FILE_TYPES = ".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx";
-const PROMPT_CHIPS = ["Apartment renovation", "Fence + gate", "Bathroom remodel", "Landscape works"];
 
 const DEMO_COVER_IMAGE_MAP: Record<string, string> = {
   "project-1": "/demo/apt-demo.png",
   "project-2": "/demo/office-demo.png",
   "project-3": "/demo/kitchen-demo.png",
 };
-
-const COVER_GRADIENTS = [
-  "from-accent/70 via-info/45 to-warning/40",
-  "from-info/70 via-accent/40 to-primary/30",
-  "from-warning/65 via-accent/35 to-info/35",
-  "from-primary/60 via-info/35 to-accent/45",
-  "from-accent/55 via-primary/35 to-info/55",
-];
 
 type ControlTab = "tasks" | "estimate" | "procurement" | "photos" | "documents" | "activity";
 type KanbanColumn = "todo" | "doing" | "done";
@@ -203,9 +194,9 @@ const CONTROL_CONTENT: Record<ControlTab, ControlPanelContent> = {
       { label: "Tile installation", value: "Blocked", tone: "text-warning-foreground" },
     ],
     bullets: [
-      "Stages -> tasks -> punchlists in one flow.",
-      "Done/Blocked prompts capture photo + comment context.",
-      "Deep links jump from media to exact task details.",
+      "Work moves visually, not in chat threads.",
+      "Blockers show what’s needed next and who owns it.",
+      "Evidence and comments stay attached to execution.",
     ],
   },
   estimate: {
@@ -216,9 +207,9 @@ const CONTROL_CONTENT: Record<ControlTab, ControlPanelContent> = {
       { label: "Paid", value: "468 000 RUB", tone: "text-info" },
     ],
     bullets: [
-      "Versioned estimates keep history without confusion.",
-      "Planned vs paid values stay visible in every stage.",
-      "Estimate items can be linked directly to execution tasks.",
+      "Keep approved versions and see exactly what changed.",
+      "Track planned vs paid vs remaining in one glance.",
+      "Explain variance with receipts and AI notes, not arguments.",
     ],
   },
   procurement: {
@@ -275,15 +266,6 @@ const CONTROL_CONTENT: Record<ControlTab, ControlPanelContent> = {
   },
 };
 
-function hashToIndex(value: string, size: number): number {
-  let hash = 0;
-  for (let i = 0; i < value.length; i++) {
-    hash = (hash << 5) - hash + value.charCodeAt(i);
-    hash |= 0;
-  }
-  return Math.abs(hash) % size;
-}
-
 function getProgressLabel(progress: number): string {
   if (progress >= 100) return "Done";
   if (progress > 0) return "In progress";
@@ -300,9 +282,7 @@ export default function Landing() {
   const [isDark, setIsDark] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [workspaceVisible, setWorkspaceVisible] = useState(false);
   const [promptText, setPromptText] = useState("");
-  const [chipPulse, setChipPulse] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [activeControlTab, setActiveControlTab] = useState<ControlTab>("tasks");
@@ -321,8 +301,6 @@ export default function Landing() {
     () => projects.filter((project) => project.owner_id === currentUser.id).slice(0, 3),
     [projects, currentUser.id],
   );
-
-  const activeControlContent = CONTROL_CONTENT[activeControlTab];
 
   useEffect(() => {
     const storedTheme = localStorage.getItem(THEME_KEY);
@@ -346,10 +324,13 @@ export default function Landing() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  useEffect(() => {
-    const timerId = window.setTimeout(() => setWorkspaceVisible(true), 70);
-    return () => window.clearTimeout(timerId);
-  }, []);
+  useEffect(
+    () => () => {
+      kanbanTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+      kanbanTimersRef.current = [];
+    },
+    [],
+  );
 
   const addFiles = (incoming: File[]) => {
     setSelectedFiles((prev) => {
@@ -380,12 +361,6 @@ export default function Landing() {
 
   const removeFile = (index: number) => {
     setSelectedFiles((prev) => prev.filter((_, idx) => idx !== index));
-  };
-
-  const insertPromptChip = (chip: string) => {
-    setPromptText((prev) => (prev.trim() ? `${prev.trim()}\n${chip}` : chip));
-    setChipPulse(chip);
-    window.setTimeout(() => setChipPulse(null), 120);
   };
 
   const scrollToSection = (id: string) => {
@@ -593,15 +568,15 @@ export default function Landing() {
           <div className="absolute right-[8%] top-24 h-56 w-56 rounded-full bg-info/20 blur-3xl" />
         </div>
 
-        <section className="relative mx-auto grid w-full max-w-6xl gap-sp-3 px-sp-3 pb-sp-6 pt-sp-4 lg:grid-cols-2">
-          <div className="glass-elevated rounded-panel p-sp-3 sm:p-sp-4">
+        <section className="relative mx-auto flex min-h-[calc(100svh-4rem)] w-full max-w-3xl items-center px-sp-3 pb-sp-6 pt-sp-4">
+          <div className="glass-elevated w-full rounded-panel p-sp-4 sm:p-sp-5">
             <p className="text-caption font-medium text-accent">AI-first construction management</p>
             <h1 className="mt-2 text-h1 text-foreground">Start your project in 60 seconds</h1>
             <p className="mt-2 max-w-2xl text-body text-muted-foreground">
               Describe the work, attach plans and estimates. We generate a structured workspace. Mock-only for now.
             </p>
 
-            <div className="mt-3 space-y-2">
+            <div className="mt-4 space-y-3">
               <div className="rounded-card border border-border bg-background/60 p-sp-2">
                 <Textarea
                   value={promptText}
@@ -609,26 +584,6 @@ export default function Landing() {
                   className="min-h-[140px] resize-none border-0 bg-transparent p-0 text-body focus-visible:ring-0"
                   placeholder={`Example: Renovate 54m² apartment. Budget 1.2M ₽. Timeline 8 weeks.\nNeed: demolition, plumbing/electric, finishing, materials list.`}
                 />
-                <div className="mt-2 flex items-center justify-between border-t border-border pt-2 text-caption text-muted-foreground">
-                  <span>Describe scope, constraints, and desired outcome.</span>
-                  <span>{promptText.length} chars</span>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                {PROMPT_CHIPS.map((chip) => (
-                  <button
-                    key={chip}
-                    onClick={() => insertPromptChip(chip)}
-                    className={`rounded-pill border px-3 py-1 text-caption transition-colors duration-150 ${
-                      chipPulse === chip
-                        ? "border-accent bg-accent/15 text-accent"
-                        : "border-border bg-muted/60 text-muted-foreground hover:bg-muted"
-                    }`}
-                  >
-                    {chip}
-                  </button>
-                ))}
               </div>
 
               <div
@@ -638,18 +593,20 @@ export default function Landing() {
                   setDragActive(true);
                 }}
                 onDragLeave={() => setDragActive(false)}
-                className={`rounded-card border-2 border-dashed p-sp-3 transition-colors ${
+                className={`rounded-card border-2 border-dashed p-sp-4 transition-colors ${
                   dragActive ? "border-accent bg-accent/10" : "border-border bg-background/40"
                 }`}
               >
-                <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex items-start gap-2">
+                <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-start gap-3">
                     <span className="mt-0.5 rounded-md bg-accent/10 p-2">
                       <CloudUpload className="h-4 w-4 text-accent" />
                     </span>
                     <div>
-                      <p className="text-body-sm font-medium text-foreground">Drop plans, photos, estimates (PDF/JPG/PNG/DOCX)</p>
-                      <p className="text-caption text-muted-foreground">Attachments stay local in this mock flow.</p>
+                      <p className="text-body-sm font-medium leading-relaxed text-foreground">
+                        Drop plans, photos, estimates (PDF/JPG/PNG/DOCX)
+                      </p>
+                      <p className="text-caption leading-relaxed text-muted-foreground">Attachments stay local in this mock flow.</p>
                     </div>
                   </div>
                   <Button type="button" variant="outline" size="sm" onClick={handleBrowseFiles}>
@@ -692,59 +649,6 @@ export default function Landing() {
                     <ArrowUpRight className="ml-1.5 h-4 w-4" />
                   </Link>
                 </Button>
-                <Button type="button" variant="outline" onClick={() => scrollToSection("demos")}>
-                  Open demo projects
-                  <ChevronRight className="ml-1 h-4 w-4" />
-                </Button>
-              </div>
-              <p className="text-caption text-muted-foreground">No backend connected yet. Demo runs on mock data.</p>
-            </div>
-          </div>
-
-          <div
-            className={`glass-elevated rounded-panel border border-border/60 p-sp-3 transition-all duration-300 ${
-              workspaceVisible ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"
-            } hover:scale-[1.01] hover:border-accent/30`}
-          >
-            <div className="mb-3 flex items-center justify-between">
-              <div>
-                <p className="text-caption text-muted-foreground">Workspace Preview</p>
-                <h3 className="text-body font-semibold text-foreground">Project control panel</h3>
-              </div>
-              <span className="rounded-pill bg-accent/15 px-2 py-0.5 text-caption font-medium text-accent">Live mock</span>
-            </div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <div className="rounded-card border border-border bg-background/60 p-2">
-                <div className="mb-1 flex items-center gap-1 text-caption font-medium text-foreground">
-                  <ClipboardList className="h-3.5 w-3.5 text-accent" />
-                  Tasks
-                </div>
-                <p className="text-caption text-muted-foreground">8 active · 2 blocked</p>
-                <p className="mt-1 text-caption text-foreground">Electrical rough-in to In progress</p>
-              </div>
-              <div className="rounded-card border border-border bg-background/60 p-2">
-                <div className="mb-1 flex items-center gap-1 text-caption font-medium text-foreground">
-                  <FileSpreadsheet className="h-3.5 w-3.5 text-info" />
-                  Estimate
-                </div>
-                <p className="text-caption text-muted-foreground">Version 2 approved</p>
-                <p className="mt-1 text-caption text-foreground">1 240 000 RUB planned</p>
-              </div>
-              <div className="rounded-card border border-border bg-background/60 p-2">
-                <div className="mb-1 flex items-center gap-1 text-caption font-medium text-foreground">
-                  <Package className="h-3.5 w-3.5 text-warning" />
-                  Procurement
-                </div>
-                <p className="text-caption text-muted-foreground">7 to buy · 4 ordered</p>
-                <p className="mt-1 text-caption text-foreground">Tile adhesive, PPR pipes...</p>
-              </div>
-              <div className="rounded-card border border-border bg-background/60 p-2">
-                <div className="mb-1 flex items-center gap-1 text-caption font-medium text-foreground">
-                  <ImageIcon className="h-3.5 w-3.5 text-success" />
-                  Photos
-                </div>
-                <p className="text-caption text-muted-foreground">12 final evidence uploads</p>
-                <p className="mt-1 text-caption text-foreground">Task-linked media timeline</p>
               </div>
             </div>
           </div>
