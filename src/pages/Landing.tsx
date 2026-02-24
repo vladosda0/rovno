@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowUpRight,
@@ -6,11 +6,14 @@ import {
   ChevronLeft,
   ChevronDown,
   CloudUpload,
+  Download,
   Files,
   Hammer,
   Menu,
   Moon,
+  Printer,
   ReceiptText,
+  Share2,
   ShieldCheck,
   Sparkles,
   Sun,
@@ -923,8 +926,10 @@ export default function Landing() {
   const [docScanStepIndex, setDocScanStepIndex] = useState(0);
   const [hasDocScanned, setHasDocScanned] = useState(false);
   const [appliedFixes, setAppliedFixes] = useState<Record<string, boolean>>({});
+  const [skippedFindings, setSkippedFindings] = useState<Record<string, boolean>>({});
   const [displaySafeScore, setDisplaySafeScore] = useState(BASE_SAFE_SCORE);
   const [showCleanVersionPanel, setShowCleanVersionPanel] = useState(false);
+  const [isPreparingCleanDocument, setIsPreparingCleanDocument] = useState(false);
   const [pulsingClauseId, setPulsingClauseId] = useState<string | null>(null);
   const kanbanTimersRef = useRef<number[]>([]);
   const wowFlashTimerRef = useRef<number | null>(null);
@@ -937,6 +942,7 @@ export default function Landing() {
   const docScanStepTimerRef = useRef<number | null>(null);
   const safeScoreAnimTimerRef = useRef<number | null>(null);
   const docClausePulseTimerRef = useRef<number | null>(null);
+  const prepareCleanDocTimerRef = useRef<number | null>(null);
 
   const demoProjects = useMemo(
     () => projects.filter((project) => project.owner_id === currentUser.id).slice(0, 3),
@@ -1015,6 +1021,10 @@ export default function Landing() {
     [targetSafeScoreRaw],
   );
   const isSafeToSign = targetSafeScore >= MAX_SAFE_SCORE;
+  const allFindingsApproved = useMemo(
+    () => FINDINGS.every((finding) => Boolean(appliedFixes[finding.id])),
+    [appliedFixes],
+  );
 
   const clearPhotoAnalysisTimers = () => {
     if (analysisFinishTimerRef.current) window.clearTimeout(analysisFinishTimerRef.current);
@@ -1053,21 +1063,33 @@ export default function Landing() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (activeControlTab !== "documents") return;
     const node = docViewerRef.current;
-    if (!node || typeof ResizeObserver === "undefined") return;
+    if (!node) return;
 
     const updateHeight = () => {
-      const nextHeight = Math.round(node.getBoundingClientRect().height);
+      const rect = node.getBoundingClientRect();
+      const measuredHeight = rect.height > 0 ? rect.height : rect.width * 1.414;
+      const nextHeight = Math.round(measuredHeight);
       if (nextHeight > 0) setDocViewerHeightPx(nextHeight);
     };
 
     updateHeight();
-    const observer = new ResizeObserver(() => updateHeight());
-    observer.observe(node);
+    const rafId = window.requestAnimationFrame(updateHeight);
+    window.addEventListener("resize", updateHeight);
 
-    return () => observer.disconnect();
+    let observer: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined") {
+      observer = new ResizeObserver(() => updateHeight());
+      observer.observe(node);
+    }
+
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      window.removeEventListener("resize", updateHeight);
+      observer?.disconnect();
+    };
   }, [activeControlTab]);
 
   useEffect(() => {
@@ -1120,6 +1142,7 @@ export default function Landing() {
       if (docScanStepTimerRef.current) window.clearInterval(docScanStepTimerRef.current);
       if (safeScoreAnimTimerRef.current) window.clearInterval(safeScoreAnimTimerRef.current);
       if (docClausePulseTimerRef.current) window.clearTimeout(docClausePulseTimerRef.current);
+      if (prepareCleanDocTimerRef.current) window.clearTimeout(prepareCleanDocTimerRef.current);
     },
     [],
   );
@@ -1335,6 +1358,7 @@ export default function Landing() {
     setHasDocScanned(false);
     setDocScanStepIndex(0);
     setShowCleanVersionPanel(false);
+    setIsPreparingCleanDocument(false);
 
     docScanStepTimerRef.current = window.setInterval(() => {
       setDocScanStepIndex((prev) => (prev + 1) % DOC_SCAN_STEPS.length);
@@ -1358,8 +1382,10 @@ export default function Landing() {
     }
 
     setAppliedFixes((prev) => ({ ...prev, [findingId]: !prev[findingId] }));
+    setSkippedFindings((prev) => ({ ...prev, [findingId]: false }));
     setPulsingClauseId(finding.clauseId);
     setShowCleanVersionPanel(false);
+    setIsPreparingCleanDocument(false);
 
     if (docClausePulseTimerRef.current) window.clearTimeout(docClausePulseTimerRef.current);
     docClausePulseTimerRef.current = window.setTimeout(() => {
@@ -1368,13 +1394,84 @@ export default function Landing() {
     }, 480);
   };
 
-  const handlePrepareCleanVersion = () => {
-    if (!isSafeToSign) return;
-    setShowCleanVersionPanel(true);
+  const skipFinding = (findingId: string) => {
+    if (!hasDocScanned || isDocScanning) return;
+    setSkippedFindings((prev) => ({ ...prev, [findingId]: !prev[findingId] }));
+    setAppliedFixes((prev) => ({ ...prev, [findingId]: false }));
+    setShowCleanVersionPanel(false);
+    setIsPreparingCleanDocument(false);
   };
 
-  const handlePrepareEmail = () => {
-    toast({ title: "Draft prepared (demo)" });
+  const handleCleanDocumentAction = () => {
+    if (!hasDocScanned || isDocScanning || isPreparingCleanDocument) return;
+
+    if (!allFindingsApproved) {
+      const nextApplied = FINDINGS.reduce<Record<string, boolean>>((acc, finding) => {
+        acc[finding.id] = true;
+        return acc;
+      }, {});
+      setAppliedFixes(nextApplied);
+      setSkippedFindings({});
+      setShowCleanVersionPanel(false);
+      return;
+    }
+
+    setIsPreparingCleanDocument(true);
+    setShowCleanVersionPanel(false);
+    if (prepareCleanDocTimerRef.current) window.clearTimeout(prepareCleanDocTimerRef.current);
+    prepareCleanDocTimerRef.current = window.setTimeout(() => {
+      setIsPreparingCleanDocument(false);
+      setShowCleanVersionPanel(true);
+      prepareCleanDocTimerRef.current = null;
+    }, 1400);
+  };
+
+  const handleShareCleanDocument = async () => {
+    const sharePayload = {
+      title: "Renovation Agreement v2",
+      text: "Clean contract draft prepared in demo.",
+      url: window.location.href,
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(sharePayload);
+      } catch {
+        // user cancelled share
+      }
+      return;
+    }
+
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(window.location.href);
+        toast({ title: "Link copied (demo)" });
+        return;
+      } catch {
+        toast({ title: "Share action (demo)" });
+        return;
+      }
+    }
+
+    toast({ title: "Share action (demo)" });
+  };
+
+  const handlePrintCleanDocument = () => {
+    window.print();
+  };
+
+  const handleDownloadCleanDocument = () => {
+    const blob = new Blob(["Renovation-Agreement_v2 (demo clean document)."], {
+      type: "application/pdf",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "Renovation-Agreement_v2.pdf";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const handleTaskDragEnd = () => {
@@ -2318,14 +2415,17 @@ export default function Landing() {
                             }
                           `}</style>
                           <div
-                            className="grid min-w-0 grid-cols-1 gap-3 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] xl:items-stretch xl:h-[var(--doc-viewer-h)] xl:overflow-hidden"
+                            className="grid min-w-0 grid-cols-1 gap-3 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] xl:items-stretch xl:h-[var(--doc-viewer-h)] xl:min-h-[var(--doc-viewer-h)] xl:max-h-[var(--doc-viewer-h)] xl:overflow-hidden"
                             style={
                               {
                                 "--doc-viewer-h": docViewerHeightPx ? `${docViewerHeightPx}px` : undefined,
+                                height: docViewerHeightPx ? `${docViewerHeightPx}px` : undefined,
+                                minHeight: docViewerHeightPx ? `${docViewerHeightPx}px` : undefined,
+                                maxHeight: docViewerHeightPx ? `${docViewerHeightPx}px` : undefined,
                               } as CSSProperties
                             }
                           >
-                            <div className="min-w-0">
+                            <div className="min-w-0 xl:h-full xl:min-h-0">
                               <div
                                 ref={docViewerRef}
                                 className="relative aspect-[1/1.414] w-full overflow-hidden rounded-md border border-border/40 bg-[#f8f7f4] shadow-[0_24px_40px_-30px_rgba(0,0,0,0.55),inset_0_0_0_1px_rgba(255,255,255,0.45),inset_0_0_38px_rgba(120,113,108,0.12)]"
@@ -2392,7 +2492,7 @@ export default function Landing() {
                               </div>
                             </div>
 
-                            <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-md border border-border bg-background/40 p-3">
+                            <div className="flex h-full max-h-full min-h-0 min-w-0 flex-col gap-2 overflow-hidden rounded-md border border-border bg-background/40 p-3 xl:h-full xl:max-h-full xl:min-h-0">
                               <div className="shrink-0 space-y-2 border-b border-border/60 pb-2">
                                 <div className="flex flex-wrap items-center justify-between gap-2">
                                   <h3 className="text-body font-semibold text-foreground">Contract Risk Scan</h3>
@@ -2420,11 +2520,8 @@ export default function Landing() {
                                       className="h-9 gap-2 rounded-md bg-gradient-to-r from-accent via-info to-accent text-accent-foreground shadow-[0_8px_18px_-12px_rgba(56,189,248,0.85)] transition-all duration-200 hover:-translate-y-[1px] hover:brightness-105 disabled:translate-y-0 disabled:opacity-65"
                                     >
                                       <Sparkles className="h-3.5 w-3.5 shrink-0" />
-                                      <span className="flex flex-col items-start leading-none whitespace-nowrap">
-                                        <span className="text-[9px] font-semibold uppercase tracking-[0.12em]">
-                                          {hasDocScanned ? "Scan complete" : isDocScanning ? "Scanning..." : "AI"}
-                                        </span>
-                                        <span className="mt-0.5 text-[12px] font-semibold">Scan document</span>
+                                      <span className="inline-flex min-w-[116px] items-center justify-center text-[12px] font-semibold leading-none whitespace-nowrap">
+                                        {hasDocScanned ? "Scan completed" : isDocScanning ? "Scanning..." : "Scan document"}
                                       </span>
                                     </Button>
                                   </div>
@@ -2449,7 +2546,7 @@ export default function Landing() {
                                 </p>
                               </div>
 
-                              <div className="mt-2 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+                              <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overflow-x-hidden pr-1">
                                 {isDocScanning && (
                                   <div className="rounded-md border border-info/35 bg-info/10 px-2.5 py-2">
                                     <p className="text-caption font-medium text-foreground">{DOC_SCAN_STEPS[docScanStepIndex]}</p>
@@ -2472,11 +2569,16 @@ export default function Landing() {
                                         <div className="space-y-1.5">
                                           {findingsByPage[pageId].map((finding) => {
                                             const isApplied = Boolean(appliedFixes[finding.id]);
+                                            const isSkipped = Boolean(skippedFindings[finding.id]);
                                             return (
                                               <div
                                                 key={finding.id}
                                                 className={`rounded-md border px-2.5 py-2 transition-colors duration-200 ${
-                                                  isApplied ? "border-success/45 bg-success/10" : "border-border/75 bg-background/45"
+                                                  isApplied
+                                                    ? "border-success/45 bg-success/10"
+                                                    : isSkipped
+                                                      ? "border-muted bg-muted/25"
+                                                      : "border-border/75 bg-background/45"
                                                 }`}
                                               >
                                                 <div className="flex items-start justify-between gap-2">
@@ -2493,6 +2595,11 @@ export default function Landing() {
                                                           Applied
                                                         </span>
                                                       )}
+                                                      {isSkipped && (
+                                                        <span className="inline-flex rounded-pill border border-muted-foreground/35 bg-muted/35 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                                                          Ignored
+                                                        </span>
+                                                      )}
                                                     </div>
                                                     <p className="mt-1 text-body-sm font-medium text-foreground">{finding.title}</p>
                                                     <p className="mt-0.5 text-caption text-muted-foreground">{finding.description}</p>
@@ -2507,6 +2614,14 @@ export default function Landing() {
                                                       />
                                                       <span className="mt-1 text-xs text-muted-foreground">Apply fix</span>
                                                       <span className="text-[10px] font-medium text-success">+{finding.scoreImpact}</span>
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => skipFinding(finding.id)}
+                                                        className="mt-1 text-[11px] text-muted-foreground underline underline-offset-2 transition-colors hover:text-foreground"
+                                                        disabled={!hasDocScanned || isDocScanning}
+                                                      >
+                                                        Skip
+                                                      </button>
                                                     </div>
                                                   </div>
                                                 </div>
@@ -2520,28 +2635,52 @@ export default function Landing() {
                                 )}
                               </div>
 
-                              <div className="mt-3 shrink-0 border-t border-border/60 pt-2">
+                              <div className="shrink-0 border-t border-border/60 pt-2">
                                 <Button
                                   type="button"
                                   size="sm"
-                                  onClick={handlePrepareCleanVersion}
-                                  disabled={!isSafeToSign}
+                                  onClick={handleCleanDocumentAction}
+                                  disabled={!hasDocScanned || isDocScanning || isPreparingCleanDocument}
                                   className="w-full"
                                 >
-                                  Prepare clean version
+                                  {allFindingsApproved ? "Prepare clean document" : "Apply all fixes"}
                                 </Button>
-                                {showCleanVersionPanel && isSafeToSign && (
+                                {isPreparingCleanDocument && (
+                                  <div className="mt-2 rounded-md border border-info/35 bg-info/10 px-2.5 py-2">
+                                    <p className="text-caption font-medium text-foreground">Applying changes...</p>
+                                  </div>
+                                )}
+                                {showCleanVersionPanel && allFindingsApproved && (
                                   <div className="mt-2 rounded-md border border-success/45 bg-success/10 px-2.5 py-2">
                                     <p className="text-caption text-foreground">Renovation-Agreement_v2.pdf ready</p>
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={handlePrepareEmail}
-                                      className="mt-2 w-full"
-                                    >
-                                      Prepare email
-                                    </Button>
+                                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          void handleShareCleanDocument();
+                                        }}
+                                        className="inline-flex items-center gap-1 rounded-md border border-border bg-background/65 px-2 py-1 text-[11px] text-foreground transition-colors hover:bg-background/85"
+                                      >
+                                        <Share2 className="h-3.5 w-3.5" />
+                                        Share
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={handlePrintCleanDocument}
+                                        className="inline-flex items-center gap-1 rounded-md border border-border bg-background/65 px-2 py-1 text-[11px] text-foreground transition-colors hover:bg-background/85"
+                                      >
+                                        <Printer className="h-3.5 w-3.5" />
+                                        Print
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={handleDownloadCleanDocument}
+                                        className="inline-flex items-center gap-1 rounded-md border border-border bg-background/65 px-2 py-1 text-[11px] text-foreground transition-colors hover:bg-background/85"
+                                      >
+                                        <Download className="h-3.5 w-3.5" />
+                                        Download
+                                      </button>
+                                    </div>
                                   </div>
                                 )}
                               </div>
