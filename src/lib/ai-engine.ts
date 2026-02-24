@@ -86,7 +86,7 @@ interface ProjectTemplate {
 const TEMPLATES: Record<string, ProjectTemplate> = {
   apartment: { name: "Apartment Renovation", type: "residential", stages: ["Demolition", "Rough-in", "Finishing", "Final inspection"], difficulty: "medium", taskCount: 12 },
   office: { name: "Office Build-out", type: "commercial", stages: ["Space Planning", "MEP Rough-in", "Partitions & Finishes", "Furniture & IT", "Punch list"], difficulty: "high", taskCount: 18 },
-  kitchen: { name: "Kitchen Remodel", type: "residential", stages: ["Demolition", "Plumbing & Electrical", "Installation"], difficulty: "low", taskCount: 8 },
+  landscape: { name: "Landscape Work", type: "residential", stages: ["Site Preparation", "Drainage & Grading", "Paving", "Planting & Finishing"], difficulty: "medium", taskCount: 9 },
   bathroom: { name: "Bathroom Renovation", type: "residential", stages: ["Demolition", "Waterproofing & Plumbing", "Tiling & Fixtures"], difficulty: "medium", taskCount: 9 },
   house: { name: "House Construction", type: "residential", stages: ["Foundation", "Framing", "Roofing", "MEP Rough-in", "Interior Finishing", "Landscaping"], difficulty: "high", taskCount: 24 },
 };
@@ -94,7 +94,7 @@ const TEMPLATES: Record<string, ProjectTemplate> = {
 function pickTemplate(input: string): ProjectTemplate {
   const lower = input.toLowerCase();
   if (/office|commercial|workspace/.test(lower)) return TEMPLATES.office;
-  if (/kitchen/.test(lower)) return TEMPLATES.kitchen;
+  if (/landscape|garden|yard|paving/.test(lower)) return TEMPLATES.landscape;
   if (/bath/.test(lower)) return TEMPLATES.bathroom;
   if (/house|home build|construction/.test(lower)) return TEMPLATES.house;
   return TEMPLATES.apartment;
