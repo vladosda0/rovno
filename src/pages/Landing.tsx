@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowUpRight,
@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useCurrentUser, useProjects } from "@/hooks/use-mock-data";
@@ -111,6 +112,24 @@ type PhotosDemoItem = {
   aiReferences: string[];
   aiActionDetails: Partial<Record<PhotoAction["action"], string[]>>;
   aiActions: PhotoAction[];
+};
+type DocPageId = "page-1" | "page-2" | "page-3";
+type Severity = "critical" | "medium" | "low";
+type Finding = {
+  id: string;
+  page: DocPageId;
+  clauseId: string;
+  severity: Severity;
+  title: string;
+  description: string;
+  originalText: string;
+  suggestedText: string;
+  scoreImpact: number;
+};
+type ContractClause = {
+  id: string;
+  page: DocPageId;
+  text: string;
 };
 
 const KANBAN_COLUMN_LABELS: Record<KanbanColumn, string> = {
@@ -462,6 +481,195 @@ const PHOTOS_DEMO: PhotosDemoItem[] = [
   },
 ];
 
+const DOC_SCAN_STEPS = ["Reading clauses...", "Checking risk patterns...", "Drafting corrective edits..."];
+const BASE_SAFE_SCORE = 63;
+const MAX_SAFE_SCORE = 100;
+const DOC_PAGE_ORDER: DocPageId[] = ["page-1", "page-2", "page-3"];
+const DOC_PAGE_LABELS: Record<DocPageId, string> = {
+  "page-1": "Page 1",
+  "page-2": "Page 2",
+  "page-3": "Page 3",
+};
+const DOC_SEVERITY_LABELS: Record<Severity, string> = {
+  critical: "Critical",
+  medium: "Medium",
+  low: "Low",
+};
+const DOC_SEVERITY_CLAUSE_CLASSES: Record<Severity, string> = {
+  critical: "border-l-4 border-l-rose-500/80 bg-rose-500/10",
+  medium: "border-l-4 border-l-amber-500/80 bg-amber-500/10",
+  low: "border-l-4 border-l-sky-500/80 bg-sky-500/10",
+};
+const DOC_APPLIED_CLAUSE_CLASS = "border-l-4 border-l-emerald-500/80 bg-emerald-500/12";
+const DOC_SEVERITY_DOT_CLASSES: Record<Severity, string> = {
+  critical: "bg-rose-500",
+  medium: "bg-amber-500",
+  low: "bg-sky-500",
+};
+const DOC_SEVERITY_CHIP_CLASSES: Record<Severity, string> = {
+  critical: "border-rose-500/35 bg-rose-500/10 text-rose-700 dark:text-rose-300",
+  medium: "border-amber-500/35 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+  low: "border-sky-500/35 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+};
+
+const CONTRACT_CLAUSES: ContractClause[] = [
+  {
+    id: "scope_vague",
+    page: "page-1",
+    text:
+      "The Contractor shall perform renovation works to modernize the apartment interiors as reasonably required to deliver a complete result acceptable to the Client.",
+  },
+  {
+    id: "milestones_vague",
+    page: "page-1",
+    text:
+      "The Works shall be completed in phases according to a mutually agreed schedule, with milestone dates to be coordinated during project execution.",
+  },
+  {
+    id: "payment_terms_unbalanced",
+    page: "page-1",
+    text:
+      "The Client shall pay a 70% advance within three business days of signing, with the remaining amount payable upon final completion; delayed payments permit immediate suspension of all works.",
+  },
+  {
+    id: "penalty_one_sided",
+    page: "page-2",
+    text:
+      "Any delay by the Client in approvals, access, or payments shall incur a penalty of 0.5% of the contract value per day, and no equivalent penalty shall apply to the Contractor.",
+  },
+  {
+    id: "variation_missing",
+    page: "page-2",
+    text:
+      "Additional works requested by the Client may be executed upon instruction and charged at the Contractor's standard rates without requiring a signed variation order.",
+  },
+  {
+    id: "warranty_ambiguous",
+    page: "page-2",
+    text:
+      "The Contractor provides a workmanship warranty for a reasonable period after completion, subject to normal use and maintenance conditions.",
+  },
+  {
+    id: "termination_unilateral",
+    page: "page-3",
+    text:
+      "The Contractor may terminate this Agreement at any time with two days' written notice, with payment due for all completed and planned works up to the termination date.",
+  },
+  {
+    id: "dispute_jurisdiction_unfair",
+    page: "page-3",
+    text:
+      "All disputes shall be resolved exclusively by the courts located at the Contractor's registered office, and the Client waives objection to venue.",
+  },
+];
+
+const FINDINGS: Finding[] = [
+  {
+    id: "finding-scope-vague",
+    page: "page-1",
+    clauseId: "scope_vague",
+    severity: "critical",
+    title: "Scope is open-ended",
+    description: "Undefined deliverables can create billing disputes and quality disagreements.",
+    originalText:
+      "The Contractor shall perform renovation works to modernize the apartment interiors as reasonably required to deliver a complete result acceptable to the Client.",
+    suggestedText:
+      "The Contractor shall perform only the works listed in Appendix A (Scope Matrix), including stated quantities, materials, and exclusions; any additional deliverable requires a signed variation order before execution.",
+    scoreImpact: 8,
+  },
+  {
+    id: "finding-milestones-vague",
+    page: "page-1",
+    clauseId: "milestones_vague",
+    severity: "medium",
+    title: "Milestones are not fixed",
+    description: "Missing dates and acceptance gates weaken schedule accountability.",
+    originalText:
+      "The Works shall be completed in phases according to a mutually agreed schedule, with milestone dates to be coordinated during project execution.",
+    suggestedText:
+      "The Works shall follow the milestone schedule in Appendix B with fixed target dates, acceptance criteria for each stage, and a written change log for any approved timeline adjustments.",
+    scoreImpact: 4,
+  },
+  {
+    id: "finding-penalty-one-sided",
+    page: "page-2",
+    clauseId: "penalty_one_sided",
+    severity: "critical",
+    title: "Penalty is one-sided",
+    description: "Only the client is exposed to delay penalties.",
+    originalText:
+      "Any delay by the Client in approvals, access, or payments shall incur a penalty of 0.5% of the contract value per day, and no equivalent penalty shall apply to the Contractor.",
+    suggestedText:
+      "Delay penalties shall be reciprocal: each party pays 0.2% of affected stage value per day for delays within its control, capped at 10% of the relevant stage value.",
+    scoreImpact: 4,
+  },
+  {
+    id: "finding-payment-unbalanced",
+    page: "page-1",
+    clauseId: "payment_terms_unbalanced",
+    severity: "medium",
+    title: "Payment terms are unbalanced",
+    description: "Large upfront payment and broad suspension rights increase client risk.",
+    originalText:
+      "The Client shall pay a 70% advance within three business days of signing, with the remaining amount payable upon final completion; delayed payments permit immediate suspension of all works.",
+    suggestedText:
+      "Payments shall be stage-based: 20% mobilization, 30% after rough-in acceptance, 30% after finishing acceptance, and 20% at final handover; suspension may occur only after a 7-day cure notice for undisputed amounts.",
+    scoreImpact: 8,
+  },
+  {
+    id: "finding-variation-missing",
+    page: "page-2",
+    clauseId: "variation_missing",
+    severity: "medium",
+    title: "Variation control is missing",
+    description: "Extra work can be billed without prior commercial approval.",
+    originalText:
+      "Additional works requested by the Client may be executed upon instruction and charged at the Contractor's standard rates without requiring a signed variation order.",
+    suggestedText:
+      "No variation shall be executed unless both parties sign a written variation order specifying scope, price, and schedule impact, except emergency safety works documented within 24 hours.",
+    scoreImpact: 4,
+  },
+  {
+    id: "finding-warranty-ambiguous",
+    page: "page-2",
+    clauseId: "warranty_ambiguous",
+    severity: "low",
+    title: "Warranty period is ambiguous",
+    description: "Undefined duration and remedy process create ambiguity after handover.",
+    originalText:
+      "The Contractor provides a workmanship warranty for a reasonable period after completion, subject to normal use and maintenance conditions.",
+    suggestedText:
+      "The Contractor provides a 12-month workmanship warranty from handover; defects reported in writing shall be inspected within 5 business days and remedied within a mutually agreed corrective timeline.",
+    scoreImpact: 2,
+  },
+  {
+    id: "finding-termination-unilateral",
+    page: "page-3",
+    clauseId: "termination_unilateral",
+    severity: "critical",
+    title: "Termination right is unilateral",
+    description: "Contractor can exit quickly without mirrored protection for the client.",
+    originalText:
+      "The Contractor may terminate this Agreement at any time with two days' written notice, with payment due for all completed and planned works up to the termination date.",
+    suggestedText:
+      "Either party may terminate for material breach after a 10-day cure period; payment on termination is limited to accepted completed works and documented demobilization costs.",
+    scoreImpact: 5,
+  },
+  {
+    id: "finding-dispute-jurisdiction",
+    page: "page-3",
+    clauseId: "dispute_jurisdiction_unfair",
+    severity: "medium",
+    title: "Dispute venue is unfair",
+    description: "Single-party venue control raises enforcement burden.",
+    originalText:
+      "All disputes shall be resolved exclusively by the courts located at the Contractor's registered office, and the Client waives objection to venue.",
+    suggestedText:
+      "Disputes shall first be escalated to executive negotiation for 15 days, then submitted to arbitration in a mutually agreed neutral venue under agreed procedural rules.",
+    scoreImpact: 2,
+  },
+];
+
 const ESTIMATE_VARIANCE_BADGE_CLASSES: Record<EstimateVariance, string> = {
   over: "bg-warning/25 text-foreground border-warning/50",
   under: "bg-info/20 text-foreground border-info/45",
@@ -708,6 +916,16 @@ export default function Landing() {
   const [activePhotoAction, setActivePhotoAction] = useState<PhotoAction["action"] | null>(null);
   const [showPhotoActionDetails, setShowPhotoActionDetails] = useState(false);
   const [photoInlineToast, setPhotoInlineToast] = useState<string | null>(null);
+  const docViewerRef = useRef<HTMLDivElement | null>(null);
+  const [docViewerHeightPx, setDocViewerHeightPx] = useState<number | null>(null);
+  const [activeDocPage, setActiveDocPage] = useState<DocPageId>("page-1");
+  const [isDocScanning, setIsDocScanning] = useState(false);
+  const [docScanStepIndex, setDocScanStepIndex] = useState(0);
+  const [hasDocScanned, setHasDocScanned] = useState(false);
+  const [appliedFixes, setAppliedFixes] = useState<Record<string, boolean>>({});
+  const [displaySafeScore, setDisplaySafeScore] = useState(BASE_SAFE_SCORE);
+  const [showCleanVersionPanel, setShowCleanVersionPanel] = useState(false);
+  const [pulsingClauseId, setPulsingClauseId] = useState<string | null>(null);
   const kanbanTimersRef = useRef<number[]>([]);
   const wowFlashTimerRef = useRef<number | null>(null);
   const wowToastTimerRef = useRef<number | null>(null);
@@ -715,6 +933,10 @@ export default function Landing() {
   const analysisFinishTimerRef = useRef<number | null>(null);
   const analysisStepTimerRef = useRef<number | null>(null);
   const photoActionToastTimerRef = useRef<number | null>(null);
+  const docScanFinishTimerRef = useRef<number | null>(null);
+  const docScanStepTimerRef = useRef<number | null>(null);
+  const safeScoreAnimTimerRef = useRef<number | null>(null);
+  const docClausePulseTimerRef = useRef<number | null>(null);
 
   const demoProjects = useMemo(
     () => projects.filter((project) => project.owner_id === currentUser.id).slice(0, 3),
@@ -757,6 +979,42 @@ export default function Landing() {
     if (!activePhoto || !activePhotoAction) return [];
     return activePhoto.aiActionDetails[activePhotoAction] ?? [];
   }, [activePhoto, activePhotoAction]);
+  const findingsByPage = useMemo(
+    () =>
+      FINDINGS.reduce<Record<DocPageId, Finding[]>>(
+        (acc, finding) => {
+          acc[finding.page].push(finding);
+          return acc;
+        },
+        { "page-1": [], "page-2": [], "page-3": [] },
+      ),
+    [],
+  );
+  const findingByClauseId = useMemo(
+    () =>
+      FINDINGS.reduce<Record<string, Finding>>((acc, finding) => {
+        acc[finding.clauseId] = finding;
+        return acc;
+      }, {}),
+    [],
+  );
+  const docClausesForActivePage = useMemo(
+    () => CONTRACT_CLAUSES.filter((clause) => clause.page === activeDocPage),
+    [activeDocPage],
+  );
+  const targetSafeScoreRaw = useMemo(
+    () =>
+      FINDINGS.reduce((score, finding) => {
+        if (!appliedFixes[finding.id]) return score;
+        return score + finding.scoreImpact;
+      }, BASE_SAFE_SCORE),
+    [appliedFixes],
+  );
+  const targetSafeScore = useMemo(
+    () => Math.min(MAX_SAFE_SCORE, targetSafeScoreRaw),
+    [targetSafeScoreRaw],
+  );
+  const isSafeToSign = targetSafeScore >= MAX_SAFE_SCORE;
 
   const clearPhotoAnalysisTimers = () => {
     if (analysisFinishTimerRef.current) window.clearTimeout(analysisFinishTimerRef.current);
@@ -765,6 +1023,12 @@ export default function Landing() {
     analysisFinishTimerRef.current = null;
     analysisStepTimerRef.current = null;
     photoActionToastTimerRef.current = null;
+  };
+  const clearDocScanTimers = () => {
+    if (docScanFinishTimerRef.current) window.clearTimeout(docScanFinishTimerRef.current);
+    if (docScanStepTimerRef.current) window.clearInterval(docScanStepTimerRef.current);
+    docScanFinishTimerRef.current = null;
+    docScanStepTimerRef.current = null;
   };
 
   useEffect(() => {
@@ -789,6 +1053,60 @@ export default function Landing() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  useEffect(() => {
+    if (activeControlTab !== "documents") return;
+    const node = docViewerRef.current;
+    if (!node || typeof ResizeObserver === "undefined") return;
+
+    const updateHeight = () => {
+      const nextHeight = Math.round(node.getBoundingClientRect().height);
+      if (nextHeight > 0) setDocViewerHeightPx(nextHeight);
+    };
+
+    updateHeight();
+    const observer = new ResizeObserver(() => updateHeight());
+    observer.observe(node);
+
+    return () => observer.disconnect();
+  }, [activeControlTab]);
+
+  useEffect(() => {
+    if (safeScoreAnimTimerRef.current) {
+      window.clearInterval(safeScoreAnimTimerRef.current);
+      safeScoreAnimTimerRef.current = null;
+    }
+
+    safeScoreAnimTimerRef.current = window.setInterval(() => {
+      setDisplaySafeScore((prev) => {
+        if (prev === targetSafeScore) {
+          if (safeScoreAnimTimerRef.current) window.clearInterval(safeScoreAnimTimerRef.current);
+          safeScoreAnimTimerRef.current = null;
+          return prev;
+        }
+
+        const direction = targetSafeScore > prev ? 1 : -1;
+        const totalDistance = Math.abs(targetSafeScore - prev);
+        const steps = Math.max(8, Math.ceil(320 / 20));
+        const stepSize = Math.max(1, Math.ceil(totalDistance / steps));
+        const next = prev + direction * stepSize;
+        const reached = direction > 0 ? next >= targetSafeScore : next <= targetSafeScore;
+        if (reached) {
+          if (safeScoreAnimTimerRef.current) window.clearInterval(safeScoreAnimTimerRef.current);
+          safeScoreAnimTimerRef.current = null;
+          return targetSafeScore;
+        }
+        return next;
+      });
+    }, 20);
+
+    return () => {
+      if (safeScoreAnimTimerRef.current) {
+        window.clearInterval(safeScoreAnimTimerRef.current);
+        safeScoreAnimTimerRef.current = null;
+      }
+    };
+  }, [targetSafeScore]);
+
   useEffect(
     () => () => {
       kanbanTimersRef.current.forEach((timer) => window.clearTimeout(timer));
@@ -798,6 +1116,10 @@ export default function Landing() {
       if (analysisFinishTimerRef.current) window.clearTimeout(analysisFinishTimerRef.current);
       if (analysisStepTimerRef.current) window.clearInterval(analysisStepTimerRef.current);
       if (photoActionToastTimerRef.current) window.clearTimeout(photoActionToastTimerRef.current);
+      if (docScanFinishTimerRef.current) window.clearTimeout(docScanFinishTimerRef.current);
+      if (docScanStepTimerRef.current) window.clearInterval(docScanStepTimerRef.current);
+      if (safeScoreAnimTimerRef.current) window.clearInterval(safeScoreAnimTimerRef.current);
+      if (docClausePulseTimerRef.current) window.clearTimeout(docClausePulseTimerRef.current);
     },
     [],
   );
@@ -1003,6 +1325,56 @@ export default function Landing() {
     photoActionToastTimerRef.current = window.setTimeout(() => {
       setPhotoInlineToast(null);
     }, 1400);
+  };
+
+  const startDocScan = () => {
+    if (isDocScanning || hasDocScanned) return;
+
+    clearDocScanTimers();
+    setIsDocScanning(true);
+    setHasDocScanned(false);
+    setDocScanStepIndex(0);
+    setShowCleanVersionPanel(false);
+
+    docScanStepTimerRef.current = window.setInterval(() => {
+      setDocScanStepIndex((prev) => (prev + 1) % DOC_SCAN_STEPS.length);
+    }, 850);
+
+    docScanFinishTimerRef.current = window.setTimeout(() => {
+      clearDocScanTimers();
+      setIsDocScanning(false);
+      setHasDocScanned(true);
+    }, 3200);
+  };
+
+  const toggleFix = (findingId: string) => {
+    if (!hasDocScanned || isDocScanning) return;
+
+    const finding = FINDINGS.find((item) => item.id === findingId);
+    if (!finding) return;
+
+    if (finding.page !== activeDocPage) {
+      setActiveDocPage(finding.page);
+    }
+
+    setAppliedFixes((prev) => ({ ...prev, [findingId]: !prev[findingId] }));
+    setPulsingClauseId(finding.clauseId);
+    setShowCleanVersionPanel(false);
+
+    if (docClausePulseTimerRef.current) window.clearTimeout(docClausePulseTimerRef.current);
+    docClausePulseTimerRef.current = window.setTimeout(() => {
+      setPulsingClauseId((prev) => (prev === finding.clauseId ? null : prev));
+      docClausePulseTimerRef.current = null;
+    }, 480);
+  };
+
+  const handlePrepareCleanVersion = () => {
+    if (!isSafeToSign) return;
+    setShowCleanVersionPanel(true);
+  };
+
+  const handlePrepareEmail = () => {
+    toast({ title: "Draft prepared (demo)" });
   };
 
   const handleTaskDragEnd = () => {
@@ -1906,6 +2278,275 @@ export default function Landing() {
                               </div>
                             </div>
                           )}
+                        </>
+                      ) : tab === "documents" ? (
+                        <>
+                          <style>{`
+                            .doc-paper-noise {
+                              background-image:
+                                radial-gradient(circle at 15% 20%, rgba(120, 113, 108, 0.08) 0, rgba(120, 113, 108, 0.02) 28%, transparent 56%),
+                                radial-gradient(circle at 85% 10%, rgba(120, 113, 108, 0.06) 0, transparent 45%),
+                                linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(244, 240, 233, 0.2));
+                            }
+                            .doc-scan-grid {
+                              background-image:
+                                linear-gradient(to right, rgba(100, 116, 139, 0.15) 1px, transparent 1px),
+                                linear-gradient(to bottom, rgba(100, 116, 139, 0.15) 1px, transparent 1px);
+                              background-size: 18px 18px;
+                            }
+                            @keyframes docScanLine {
+                              0% { transform: translateY(-130%); }
+                              100% { transform: translateY(430%); }
+                            }
+                            .doc-scanline {
+                              animation: docScanLine 3.2s linear 1;
+                            }
+                            @keyframes docClausePulse {
+                              0% { transform: scale(1); }
+                              50% { transform: scale(1.01); }
+                              100% { transform: scale(1); }
+                            }
+                            .doc-clause-pulse {
+                              animation: docClausePulse 260ms ease-out;
+                            }
+                            @keyframes docClauseSwap {
+                              0% { opacity: 0; transform: translateY(4px); }
+                              100% { opacity: 1; transform: translateY(0); }
+                            }
+                            .doc-clause-copy {
+                              animation: docClauseSwap 180ms ease-out;
+                            }
+                          `}</style>
+                          <div
+                            className="grid min-w-0 grid-cols-1 gap-3 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] xl:items-stretch xl:h-[var(--doc-viewer-h)] xl:overflow-hidden"
+                            style={
+                              {
+                                "--doc-viewer-h": docViewerHeightPx ? `${docViewerHeightPx}px` : undefined,
+                              } as CSSProperties
+                            }
+                          >
+                            <div className="min-w-0">
+                              <div
+                                ref={docViewerRef}
+                                className="relative aspect-[1/1.414] w-full overflow-hidden rounded-md border border-border/40 bg-[#f8f7f4] shadow-[0_24px_40px_-30px_rgba(0,0,0,0.55),inset_0_0_0_1px_rgba(255,255,255,0.45),inset_0_0_38px_rgba(120,113,108,0.12)]"
+                              >
+                                <div className="doc-paper-noise pointer-events-none absolute inset-0 opacity-90" />
+                                <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/30 via-transparent to-stone-300/10" />
+
+                                {isDocScanning && (
+                                  <div className="pointer-events-none absolute inset-0 z-20">
+                                    <div className="absolute inset-0 bg-slate-800/10" />
+                                    <div className="doc-scan-grid absolute inset-0 opacity-70" />
+                                    <div className="doc-scanline absolute left-0 right-0 h-14 bg-gradient-to-b from-sky-500/8 via-sky-500/35 to-sky-500/8" />
+                                  </div>
+                                )}
+
+                                <div className="relative z-10 flex h-full min-h-0 flex-col px-4 pb-4 pt-5 sm:px-5 sm:pt-6">
+                                  <div className="mb-3 flex items-start justify-between gap-2 border-b border-stone-300/60 pb-2">
+                                    <div>
+                                      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-600">
+                                        Renovation Agreement
+                                      </p>
+                                      <p className="mt-1 text-[11px] text-stone-500">Internal legal draft</p>
+                                    </div>
+                                    <p className="text-[11px] font-medium text-stone-600">{DOC_PAGE_LABELS[activeDocPage]}</p>
+                                  </div>
+
+                                  <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto pr-1">
+                                    {docClausesForActivePage.map((clause) => {
+                                      const finding = findingByClauseId[clause.id];
+                                      const isFlagged = hasDocScanned && Boolean(finding);
+                                      const isApplied = finding ? Boolean(appliedFixes[finding.id]) : false;
+                                      const severityClass = finding ? DOC_SEVERITY_CLAUSE_CLASSES[finding.severity] : "";
+                                      const toneClass = isFlagged
+                                        ? isApplied
+                                          ? DOC_APPLIED_CLAUSE_CLASS
+                                          : severityClass
+                                        : "bg-white/25";
+                                      const clauseText =
+                                        hasDocScanned && finding
+                                          ? isApplied
+                                            ? finding.suggestedText
+                                            : finding.originalText
+                                          : clause.text;
+
+                                      return (
+                                        <div
+                                          key={clause.id}
+                                          data-clause-id={clause.id}
+                                          className={`rounded-sm border border-stone-300/40 px-3 py-2.5 transition-all transition-colors duration-200 ${
+                                            toneClass
+                                          } ${pulsingClauseId === clause.id ? "doc-clause-pulse" : ""}`}
+                                        >
+                                          <p
+                                            key={`${clause.id}-${isApplied ? "suggested" : "original"}`}
+                                            className="doc-clause-copy font-serif text-[13px] leading-[1.55] text-stone-800"
+                                          >
+                                            {clauseText}
+                                          </p>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-md border border-border bg-background/40 p-3">
+                              <div className="shrink-0 space-y-2 border-b border-border/60 pb-2">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <h3 className="text-body font-semibold text-foreground">Contract Risk Scan</h3>
+                                  <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-1">
+                                      {DOC_PAGE_ORDER.map((pageId, index) => (
+                                        <button
+                                          key={pageId}
+                                          type="button"
+                                          onClick={() => setActiveDocPage(pageId)}
+                                          className={`inline-flex h-7 w-7 items-center justify-center rounded-md border text-[11px] font-semibold transition-colors ${
+                                            activeDocPage === pageId
+                                              ? "border-accent bg-accent/15 text-foreground"
+                                              : "border-border bg-background/45 text-muted-foreground hover:text-foreground"
+                                          }`}
+                                        >
+                                          {index + 1}
+                                        </button>
+                                      ))}
+                                    </div>
+                                    <Button
+                                      type="button"
+                                      onClick={startDocScan}
+                                      disabled={isDocScanning || hasDocScanned}
+                                      className="h-9 gap-2 rounded-md bg-gradient-to-r from-accent via-info to-accent text-accent-foreground shadow-[0_8px_18px_-12px_rgba(56,189,248,0.85)] transition-all duration-200 hover:-translate-y-[1px] hover:brightness-105 disabled:translate-y-0 disabled:opacity-65"
+                                    >
+                                      <Sparkles className="h-3.5 w-3.5 shrink-0" />
+                                      <span className="flex flex-col items-start leading-none whitespace-nowrap">
+                                        <span className="text-[9px] font-semibold uppercase tracking-[0.12em]">
+                                          {hasDocScanned ? "Scan complete" : isDocScanning ? "Scanning..." : "AI"}
+                                        </span>
+                                        <span className="mt-0.5 text-[12px] font-semibold">Scan document</span>
+                                      </span>
+                                    </Button>
+                                  </div>
+                                </div>
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <span className="inline-flex rounded-pill border border-border bg-muted/65 px-2 py-0.5 text-caption font-medium text-foreground">
+                                    Safe Score: {displaySafeScore}/100
+                                  </span>
+                                  {isSafeToSign ? (
+                                    <span className="inline-flex items-center gap-1 rounded-pill border border-success/45 bg-success/15 px-2 py-0.5 text-caption font-medium text-success">
+                                      <ShieldCheck className="h-3.5 w-3.5" />
+                                      Safe to sign
+                                    </span>
+                                  ) : (
+                                    <span className="rounded-pill border border-warning/45 bg-warning/15 px-2 py-0.5 text-caption text-foreground">
+                                      Risk remains
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-caption text-muted-foreground">
+                                  {isSafeToSign ? "All high-risk clauses are mitigated." : "Review and apply corrective edits."}
+                                </p>
+                              </div>
+
+                              <div className="mt-2 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+                                {isDocScanning && (
+                                  <div className="rounded-md border border-info/35 bg-info/10 px-2.5 py-2">
+                                    <p className="text-caption font-medium text-foreground">{DOC_SCAN_STEPS[docScanStepIndex]}</p>
+                                  </div>
+                                )}
+
+                                {!hasDocScanned && !isDocScanning ? (
+                                  <div className="rounded-md border border-border bg-background/35 px-2.5 py-2 text-caption text-muted-foreground">
+                                    Run scan to detect risks and generate corrective edits.
+                                  </div>
+                                ) : null}
+
+                                {hasDocScanned && (
+                                  <div className="space-y-2">
+                                    {DOC_PAGE_ORDER.map((pageId) => (
+                                      <div key={pageId} className="space-y-1.5">
+                                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                          {DOC_PAGE_LABELS[pageId]}
+                                        </p>
+                                        <div className="space-y-1.5">
+                                          {findingsByPage[pageId].map((finding) => {
+                                            const isApplied = Boolean(appliedFixes[finding.id]);
+                                            return (
+                                              <div
+                                                key={finding.id}
+                                                className={`rounded-md border px-2.5 py-2 transition-colors duration-200 ${
+                                                  isApplied ? "border-success/45 bg-success/10" : "border-border/75 bg-background/45"
+                                                }`}
+                                              >
+                                                <div className="flex items-start justify-between gap-2">
+                                                  <div className="min-w-0">
+                                                    <div className="flex items-center gap-1.5">
+                                                      <span className={`h-2 w-2 rounded-full ${DOC_SEVERITY_DOT_CLASSES[finding.severity]}`} />
+                                                      <span
+                                                        className={`inline-flex rounded-pill border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${DOC_SEVERITY_CHIP_CLASSES[finding.severity]}`}
+                                                      >
+                                                        {DOC_SEVERITY_LABELS[finding.severity]}
+                                                      </span>
+                                                      {isApplied && (
+                                                        <span className="inline-flex rounded-pill border border-success/45 bg-success/15 px-2 py-0.5 text-[10px] font-semibold text-success">
+                                                          Applied
+                                                        </span>
+                                                      )}
+                                                    </div>
+                                                    <p className="mt-1 text-body-sm font-medium text-foreground">{finding.title}</p>
+                                                    <p className="mt-0.5 text-caption text-muted-foreground">{finding.description}</p>
+                                                  </div>
+                                                  <div className="shrink-0">
+                                                    <div className="flex min-w-[62px] flex-col items-end">
+                                                      <Switch
+                                                        checked={isApplied}
+                                                        onCheckedChange={() => toggleFix(finding.id)}
+                                                        aria-label={`Apply fix for ${finding.title}`}
+                                                        disabled={!hasDocScanned || isDocScanning}
+                                                      />
+                                                      <span className="mt-1 text-xs text-muted-foreground">Apply fix</span>
+                                                      <span className="text-[10px] font-medium text-success">+{finding.scoreImpact}</span>
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="mt-3 shrink-0 border-t border-border/60 pt-2">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  onClick={handlePrepareCleanVersion}
+                                  disabled={!isSafeToSign}
+                                  className="w-full"
+                                >
+                                  Prepare clean version
+                                </Button>
+                                {showCleanVersionPanel && isSafeToSign && (
+                                  <div className="mt-2 rounded-md border border-success/45 bg-success/10 px-2.5 py-2">
+                                    <p className="text-caption text-foreground">Renovation-Agreement_v2.pdf ready</p>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={handlePrepareEmail}
+                                      className="mt-2 w-full"
+                                    >
+                                      Prepare email
+                                    </Button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
                         </>
                       ) : (
                         <>
