@@ -37,7 +37,7 @@ const ACCEPTED_FILE_TYPES = ".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx";
 const DEMO_COVER_IMAGE_MAP: Record<string, string> = {
   "project-1": "/demo/apt-demo.png",
   "project-2": "/demo/office-demo.png",
-  "project-3": "/demo/kitchen-demo.png",
+  "project-3": "/demo/landscape-work-cover.png",
 };
 
 type ControlTab = "tasks" | "estimate" | "procurement" | "photos" | "documents" | "activity";
