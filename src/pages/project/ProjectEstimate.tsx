@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
 import { useProject, useTasks, usePermission } from "@/hooks/use-mock-data";
+import { isOwnerOrCoOwner } from "@/lib/permissions";
 import { useStageEstimateItems } from "@/hooks/use-estimate-data";
 import { getCurrentUser, addTask } from "@/data/store";
 import {
@@ -46,7 +47,7 @@ export default function ProjectEstimate() {
   const tasks = useTasks(pid);
   const perm = usePermission(pid);
   const user = getCurrentUser();
-  const isOwner = perm.role === "owner";
+  const isOwner = isOwnerOrCoOwner(perm.role);
   const estimateItems = useStageEstimateItems(pid);
 
   // Collapsed state per stage

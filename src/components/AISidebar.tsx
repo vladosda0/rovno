@@ -445,7 +445,15 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     ? events.filter((e) => e.type.startsWith(activityFilter!))
     : events;
 
-  const roleLabel = perm?.role === "owner" ? "Owner" : perm?.role === "contractor" ? "Contractor" : perm?.role === "participant" ? "Viewer" : null;
+  const roleLabel = perm?.role === "owner"
+    ? "Owner"
+    : perm?.role === "co-owner"
+      ? "Co-owner"
+      : perm?.role === "contractor"
+        ? "Contractor"
+        : perm?.role === "participant"
+          ? "Viewer"
+          : null;
 
   const placeholderColors = [
     "bg-accent/10", "bg-info/10", "bg-warning/10", "bg-muted",

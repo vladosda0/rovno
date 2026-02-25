@@ -6,7 +6,13 @@ export type AuthRole = MemberRole | "guest";
 
 export function getAuthRole(): AuthRole {
   const stored = localStorage.getItem(STORAGE_KEY);
-  if (stored === "guest" || stored === "owner" || stored === "contractor" || stored === "participant") {
+  if (
+    stored === "guest"
+    || stored === "owner"
+    || stored === "co-owner"
+    || stored === "contractor"
+    || stored === "participant"
+  ) {
     return stored;
   }
   return "owner"; // default: logged-in owner

@@ -10,17 +10,16 @@ export type Action =
   | "document.create"
   | "procurement.edit";
 
-const OWNER_ACTIONS: Action[] = [
-  "ai.generate", "task.create", "task.edit", "estimate.approve",
-  "member.invite", "document.create", "procurement.edit",
-];
-
 const CONTRACTOR_ACTIONS: Action[] = [
   "ai.generate", "task.create", "task.edit", "document.create", "procurement.edit",
 ];
 
+export function isOwnerOrCoOwner(role: MemberRole): role is "owner" | "co-owner" {
+  return role === "owner" || role === "co-owner";
+}
+
 export function can(role: MemberRole, action: Action, aiAccess?: AIAccess): boolean {
-  if (role === "owner") return true;
+  if (isOwnerOrCoOwner(role)) return true;
   if (role === "participant") return false;
   // contractor
   if (action === "ai.generate") return aiAccess !== "none";

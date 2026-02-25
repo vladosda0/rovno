@@ -21,7 +21,7 @@ import { ActionBar } from "@/components/ai/ActionBar";
 import { EmptyState } from "@/components/EmptyState";
 import { toast } from "@/hooks/use-toast";
 import { useDocuments, useProject } from "@/hooks/use-mock-data";
-import { usePermission } from "@/lib/permissions";
+import { usePermission, isOwnerOrCoOwner } from "@/lib/permissions";
 import {
   addDocument, updateDocument, addDocumentVersion, deleteDocument,
   addEvent, getCurrentUser,
@@ -44,7 +44,7 @@ export default function ProjectDocuments() {
   const { project } = useProject(pid);
   const perm = usePermission(pid);
   const user = getCurrentUser();
-  const isOwner = perm.role === "owner";
+  const isOwner = isOwnerOrCoOwner(perm.role);
   const isContractor = perm.role === "contractor";
 
   const [uploadOpen, setUploadOpen] = useState(false);

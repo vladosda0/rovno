@@ -1,15 +1,28 @@
 import { Link } from "react-router-dom";
-import { FileText, ArrowRight } from "lucide-react";
+import { FileText, ArrowRight, Pin } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { Document } from "@/types/entities";
 
 interface Props {
   documents: Document[];
   projectId: string;
+  className?: string;
 }
 
-export function DocsWidget({ documents, projectId }: Props) {
+function getPreviewDocuments(documents: Document[]): { items: Document[]; hasPinned: boolean } {
+  const projectCreationDocs = documents.filter((d) => d.origin === "project_creation");
+  if (projectCreationDocs.length > 0) {
+    return { items: projectCreationDocs, hasPinned: true };
+  }
+  // Store insertion order is oldest -> newest; reverse for dashboard preview recency.
+  return { items: [...documents].reverse(), hasPinned: false };
+}
+
+export function DocsWidget({ documents, projectId, className }: Props) {
+  const { items, hasPinned } = getPreviewDocuments(documents);
+
   return (
-    <div className="glass rounded-card p-sp-2">
+    <div className={cn("glass rounded-card p-sp-2 h-full flex flex-col", className)}>
       <div className="flex items-center justify-between mb-sp-2">
         <h3 className="text-body font-semibold text-foreground flex items-center gap-2">
           <FileText className="h-4 w-4 text-accent" /> Documents
@@ -18,22 +31,29 @@ export function DocsWidget({ documents, projectId }: Props) {
           View all <ArrowRight className="h-3 w-3" />
         </Link>
       </div>
-      {documents.length > 0 ? (
-        <div className="space-y-1.5">
-          {documents.map((d) => {
-            const v = d.versions[d.versions.length - 1];
-            return (
-              <div key={d.id} className="flex items-center gap-2 rounded-panel bg-muted/40 p-1.5 px-sp-2">
-                <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                <span className="text-caption text-foreground flex-1 truncate">{d.title}</span>
-                <span className="text-[10px] text-muted-foreground capitalize">{d.type} · v{v?.number}</span>
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <p className="text-caption text-muted-foreground text-center py-sp-2">No documents yet</p>
-      )}
+      <div className="flex-1">
+        {items.length > 0 ? (
+          <div className="space-y-1.5">
+            {items.slice(0, 4).map((d) => {
+              const latestVersion = d.versions[d.versions.length - 1];
+              return (
+                <div key={d.id} className="flex items-center gap-2 rounded-panel bg-muted/40 p-1.5 px-sp-2">
+                  <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  <span className="text-caption text-foreground flex-1 truncate">{d.title}</span>
+                  {hasPinned && (
+                    <span className="inline-flex items-center gap-1 rounded-pill bg-accent/10 px-1.5 py-0.5 text-[10px] text-accent">
+                      <Pin className="h-2.5 w-2.5" /> Pinned
+                    </span>
+                  )}
+                  <span className="text-[10px] text-muted-foreground capitalize">{d.type} · v{latestVersion?.number}</span>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="text-caption text-muted-foreground text-center py-sp-2">No documents yet</p>
+        )}
+      </div>
     </div>
   );
 }

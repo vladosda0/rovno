@@ -20,9 +20,38 @@ const otherUsers: User[] = [
 ];
 
 export const seedProjects: Project[] = [
-  { id: "project-1", owner_id: "user-1", title: "Apartment Renovation", type: "residential", automation_level: "full", current_stage_id: "stage-1-2", progress_pct: 45 },
-  { id: "project-2", owner_id: "user-1", title: "Office Build-out", type: "commercial", automation_level: "assisted", current_stage_id: "stage-2-1", progress_pct: 10 },
-  { id: "project-3", owner_id: "user-1", title: "Landscape Work", type: "residential", automation_level: "full", current_stage_id: "stage-3-3", progress_pct: 65 },
+  {
+    id: "project-1",
+    owner_id: "user-1",
+    title: "Apartment Renovation",
+    type: "residential",
+    automation_level: "full",
+    current_stage_id: "stage-1-2",
+    progress_pct: 45,
+    address: "12 Nevsky Avenue, Apt 8, Saint Petersburg",
+    ai_description: "Demolition is complete. Rough-ins are active, and finishing tasks are queued behind plumbing completion.",
+  },
+  {
+    id: "project-2",
+    owner_id: "user-1",
+    title: "Office Build-out",
+    type: "commercial",
+    automation_level: "assisted",
+    current_stage_id: "stage-2-1",
+    progress_pct: 10,
+    address: "5 Business Center Dr, Unit 210",
+    ai_description: "Space planning is underway. Construction-line tasks are staged and ready for assignment.",
+  },
+  {
+    id: "project-3",
+    owner_id: "user-1",
+    title: "Landscape Work",
+    type: "residential",
+    automation_level: "full",
+    current_stage_id: "stage-3-3",
+    progress_pct: 65,
+    ai_description: "Drainage and grading are complete. Paver installation is active while decorative gravel delivery is blocked.",
+  },
 ];
 
 export const seedMembers: Member[] = [
@@ -143,12 +172,59 @@ export const seedProcurementItems: ProcurementItem[] = [
 ];
 
 export const seedDocuments: Document[] = [
-  { id: "doc-1-1", project_id: "project-1", type: "contract", title: "Renovation Contract", versions: [{ id: "dv-1-1", document_id: "doc-1-1", number: 1, status: "active", content: "General renovation contract for apartment..." }] },
-  { id: "doc-1-2", project_id: "project-1", type: "specification", title: "Electrical Specification", versions: [{ id: "dv-1-2", document_id: "doc-1-2", number: 1, status: "draft", content: "Detailed electrical specification..." }] },
-  { id: "doc-2-1", project_id: "project-2", type: "contract", title: "Build-out Agreement", versions: [{ id: "dv-2-1", document_id: "doc-2-1", number: 1, status: "awaiting_approval", content: "Office build-out agreement..." }] },
-  { id: "doc-3-1", project_id: "project-3", type: "specification", title: "Landscape design plan", versions: [{ id: "dv-3-1", document_id: "doc-3-1", number: 2, status: "active", content: "Landscape layout with paving zones, planting beds, and irrigation..." }, { id: "dv-3-1b", document_id: "doc-3-1", number: 1, status: "active", content: "Initial landscape concept..." }] },
-  { id: "doc-3-2", project_id: "project-3", type: "specification", title: "Irrigation layout scheme", versions: [{ id: "dv-3-2", document_id: "doc-3-2", number: 1, status: "active", content: "Drip irrigation layout for zones A and B..." }] },
-  { id: "doc-3-3", project_id: "project-3", type: "specification", title: "Material specification sheet", versions: [{ id: "dv-3-3", document_id: "doc-3-3", number: 1, status: "draft", content: "Paver type, gravel grade, edging spec..." }] },
+  {
+    id: "doc-1-1",
+    project_id: "project-1",
+    type: "contract",
+    title: "Renovation Contract",
+    origin: "project_creation",
+    created_at: "2025-01-09T09:00:00Z",
+    versions: [{ id: "dv-1-1", document_id: "doc-1-1", number: 1, status: "active", content: "General renovation contract for apartment..." }],
+  },
+  {
+    id: "doc-1-2",
+    project_id: "project-1",
+    type: "specification",
+    title: "Electrical Specification",
+    created_at: "2025-01-16T09:00:00Z",
+    versions: [{ id: "dv-1-2", document_id: "doc-1-2", number: 1, status: "draft", content: "Detailed electrical specification..." }],
+  },
+  {
+    id: "doc-2-1",
+    project_id: "project-2",
+    type: "contract",
+    title: "Build-out Agreement",
+    origin: "project_creation",
+    created_at: "2025-02-03T14:00:00Z",
+    versions: [{ id: "dv-2-1", document_id: "doc-2-1", number: 1, status: "awaiting_approval", content: "Office build-out agreement..." }],
+  },
+  {
+    id: "doc-3-1",
+    project_id: "project-3",
+    type: "specification",
+    title: "Landscape design plan",
+    created_at: "2025-01-10T10:00:00Z",
+    versions: [
+      { id: "dv-3-1", document_id: "doc-3-1", number: 2, status: "active", content: "Landscape layout with paving zones, planting beds, and irrigation..." },
+      { id: "dv-3-1b", document_id: "doc-3-1", number: 1, status: "active", content: "Initial landscape concept..." },
+    ],
+  },
+  {
+    id: "doc-3-2",
+    project_id: "project-3",
+    type: "specification",
+    title: "Irrigation layout scheme",
+    created_at: "2025-01-18T10:00:00Z",
+    versions: [{ id: "dv-3-2", document_id: "doc-3-2", number: 1, status: "active", content: "Drip irrigation layout for zones A and B..." }],
+  },
+  {
+    id: "doc-3-3",
+    project_id: "project-3",
+    type: "specification",
+    title: "Material specification sheet",
+    created_at: "2025-01-24T10:00:00Z",
+    versions: [{ id: "dv-3-3", document_id: "doc-3-3", number: 1, status: "draft", content: "Paver type, gravel grade, edging spec..." }],
+  },
 ];
 
 export const seedMedia: Media[] = [

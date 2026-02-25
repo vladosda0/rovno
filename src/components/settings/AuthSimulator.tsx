@@ -29,6 +29,7 @@ export function AuthSimulator() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="owner">Owner — full access</SelectItem>
+            <SelectItem value="co-owner">Co-owner — owner-level project access</SelectItem>
             <SelectItem value="contractor">Contractor — limited AI</SelectItem>
             <SelectItem value="participant">Participant — read-only</SelectItem>
             <SelectItem value="guest">Guest — no auth</SelectItem>

@@ -1,7 +1,7 @@
 // StroyAgent Domain Entities
 
 export type UserPlan = "free" | "pro" | "business";
-export type MemberRole = "owner" | "contractor" | "participant";
+export type MemberRole = "owner" | "co-owner" | "contractor" | "participant";
 export type AIAccess = "none" | "consult_only" | "project_pool";
 export type StageStatus = "open" | "completed" | "archived";
 export type TaskStatus = "not_started" | "in_progress" | "done" | "blocked";
@@ -66,6 +66,8 @@ export interface Project {
   automation_level: string;
   current_stage_id: string;
   progress_pct: number;
+  address?: string;
+  ai_description?: string;
 }
 
 export interface Member {
@@ -226,6 +228,18 @@ export interface Document {
   type: string;
   title: string;
   versions: DocumentVersion[];
+  origin?: "project_creation" | "uploaded" | "manual" | "ai_generated";
+  description?: string;
+  created_at?: string;
+  file_meta?: {
+    filename: string;
+    mime: string;
+    size: number;
+  };
+  ai_flags?: {
+    aiScan?: boolean;
+    aiCreate?: boolean;
+  };
 }
 
 export interface Media {
@@ -234,8 +248,14 @@ export interface Media {
   task_id?: string;
   uploader_id: string;
   caption: string;
+  description?: string;
   is_final: boolean;
   created_at: string;
+  file_meta?: {
+    filename: string;
+    mime: string;
+    size: number;
+  };
 }
 
 export interface Event {
