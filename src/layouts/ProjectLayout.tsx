@@ -1,5 +1,4 @@
 import { Outlet, Navigate, useParams, useLocation } from "react-router-dom";
-import { ProjectTabs } from "@/components/ProjectTabs";
 
 export default function ProjectLayout() {
   const { id } = useParams();
@@ -12,7 +11,6 @@ export default function ProjectLayout() {
 
   return (
     <div className="flex flex-col">
-      <ProjectTabs />
       <div className="flex-1 p-sp-3">
         <Outlet />
       </div>

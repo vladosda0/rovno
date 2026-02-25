@@ -16,16 +16,24 @@ const tabs = [
   { label: "Participants", path: "participants", icon: Users },
 ];
 
-export function ProjectTabs() {
+interface ProjectTabsProps {
+  className?: string;
+  projectId?: string;
+}
+
+export function ProjectTabs({ className, projectId }: ProjectTabsProps) {
   const { id } = useParams();
+  const resolvedProjectId = projectId ?? id;
+
+  if (!resolvedProjectId) return null;
 
   return (
-    <nav className="flex items-center gap-0.5 overflow-x-auto border-b border-border px-sp-2 py-1">
+    <nav className={cn("flex items-center gap-0.5 overflow-x-auto whitespace-nowrap border-b border-border px-sp-2 py-1", className)}>
       {tabs.map((tab) => (
         <NavLink
           key={tab.path}
-          to={`/project/${id}/${tab.path}`}
-          className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-body-sm text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground"
+          to={`/project/${resolvedProjectId}/${tab.path}`}
+          className="flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-body-sm text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground"
           activeClassName="bg-accent/10 text-accent font-medium"
         >
           <tab.icon className="h-4 w-4" />

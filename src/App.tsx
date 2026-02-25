@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
 
 import AppLayout from "@/layouts/AppLayout";
 import AuthLayout from "@/layouts/AuthLayout";
@@ -56,6 +56,7 @@ const App = () => (
             <Route path="/home" element={<Home />} />
             <Route path="/demo" element={<Demo />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/profile/upgrade" element={<Navigate to="/settings?tab=billing" replace />} />
             <Route path="/settings" element={<Settings />} />
 
             {/* Project with nested tabs */}

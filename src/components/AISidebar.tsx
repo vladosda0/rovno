@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Bot, Send, GripVertical, Bell, Shield, Camera, X as XIcon } from "lucide-react";
+import { Bot, Send, GripVertical, Bell, Camera, X as XIcon, PanelLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -10,7 +10,6 @@ import { ChatMessage } from "@/components/ai/ChatMessage";
 import { ResultCard } from "@/components/ai/ResultCard";
 import { WorkLog } from "@/components/ai/WorkLog";
 import { SuggestionChips } from "@/components/ai/SuggestionChips";
-import { CreditDisplay } from "@/components/ai/CreditDisplay";
 import { EventFeedItem } from "@/components/ai/EventFeedItem";
 import { NotificationDrawer } from "@/components/ai/NotificationDrawer";
 import { ContextInspector } from "@/components/ai/ContextInspector";
@@ -57,6 +56,11 @@ interface WorkLogEntry {
   id: string;
   steps: string[];
   phase: "generate" | "commit";
+}
+
+interface AISidebarProps {
+  collapsed: boolean;
+  onCollapsedChange: (next: boolean) => void;
 }
 
 const DEV_MODE = localStorage.getItem("dev-context-inspector") === "true";
@@ -138,7 +142,7 @@ function buildSuggestedActions(ctx: PhotoConsultContext, analysis: PhotoAnalysis
   return actions;
 }
 
-export function AISidebar() {
+export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
@@ -158,7 +162,6 @@ export function AISidebar() {
   const [inputValue, setInputValue] = useState("");
   const [limitModalOpen, setLimitModalOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState<SidebarTab>(() => {
     const stored = localStorage.getItem(TAB_STORAGE_KEY);
     return (stored === "activity" ? "activity" : "ai") as SidebarTab;
@@ -186,7 +189,7 @@ export function AISidebar() {
         setPhotoAnalysis(null);
         setSuggestedActions([]);
         setSelectedActions(new Set());
-        setCollapsed(false);
+        onCollapsedChange(false);
         setActiveTab("ai");
 
         // Prefill the prompt
@@ -212,7 +215,7 @@ export function AISidebar() {
         setSelectedActions(new Set());
       }
     });
-  }, []);
+  }, [onCollapsedChange]);
 
   // Activity events
   const allEvents = useEvents(projectId || "");
@@ -465,12 +468,14 @@ export function AISidebar() {
       >
         {collapsed ? (
           <div className="flex flex-col items-center py-3 gap-2">
-            <button
-              onClick={() => setCollapsed(false)}
-              className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/10 hover:bg-accent/20 transition-colors"
-            >
-              <Bot className="h-4 w-4 text-accent" />
-            </button>
+            {isProjectContext && (
+              <button
+                onClick={() => onCollapsedChange(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/10 hover:bg-accent/20 transition-colors"
+              >
+                <PanelLeft className="h-4 w-4 text-accent" />
+              </button>
+            )}
           </div>
         ) : (
           <>
@@ -509,13 +514,6 @@ export function AISidebar() {
                       )}
                     </button>
                   )}
-                  <button
-                    onClick={() => setCollapsed(true)}
-                    className="text-muted-foreground hover:text-foreground transition-colors text-caption shrink-0 h-7 w-7 flex items-center justify-center"
-                    title="Collapse"
-                  >
-                    ✕
-                  </button>
                 </div>
               </div>
             </div>
