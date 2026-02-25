@@ -1,7 +1,7 @@
 // StroyAgent Domain Entities
 
 export type UserPlan = "free" | "pro" | "business";
-export type MemberRole = "owner" | "co-owner" | "contractor" | "participant";
+export type MemberRole = "owner" | "co_owner" | "contractor" | "viewer";
 export type AIAccess = "none" | "consult_only" | "project_pool";
 export type StageStatus = "open" | "completed" | "archived";
 export type TaskStatus = "not_started" | "in_progress" | "done" | "blocked";

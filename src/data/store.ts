@@ -135,17 +135,25 @@ export function updateTask(id: string, partial: Partial<Task>) {
   notify();
 }
 
-export function addTask(task: Task) {
+interface AddTaskOptions {
+  actorId?: string;
+  source?: string;
+}
+
+export function addTask(task: Task, options: AddTaskOptions = {}) {
   tasks = [...tasks, task];
   addEvent({
     id: `evt-auto-${Date.now()}`,
     project_id: task.project_id,
-    actor_id: user.id,
+    actor_id: options.actorId ?? user.id,
     type: "task_created",
     object_type: "task",
     object_id: task.id,
     timestamp: new Date().toISOString(),
-    payload: { title: task.title },
+    payload: {
+      title: task.title,
+      ...(options.source ? { source: options.source } : {}),
+    },
   });
   notify();
 }

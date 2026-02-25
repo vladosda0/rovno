@@ -22,16 +22,16 @@ import type { MemberRole, AIAccess } from "@/types/entities";
 
 const roleIcons: Record<MemberRole, typeof Crown> = {
   owner: Crown,
-  "co-owner": Shield,
+  co_owner: Shield,
   contractor: Wrench,
-  participant: Eye,
+  viewer: Eye,
 };
 
 const roleLabels: Record<MemberRole, string> = {
   owner: "Owner",
-  "co-owner": "Co-owner",
+  co_owner: "Co-owner",
   contractor: "Contractor",
-  participant: "Viewer",
+  viewer: "Viewer",
 };
 
 const aiLabels: Record<AIAccess, string> = {
@@ -148,7 +148,7 @@ export default function ProjectParticipants() {
             {members.map((member) => {
               const memberUser = getUserById(member.user_id);
               const RoleIcon = roleIcons[member.role];
-              const isPrivileged = member.role === "owner" || member.role === "co-owner";
+              const isPrivileged = member.role === "owner" || member.role === "co_owner";
               const isSelf = member.user_id === currentUser.id;
 
               return (
@@ -249,9 +249,9 @@ export default function ProjectParticipants() {
             <Select value={inviteRole} onValueChange={(v) => setInviteRole(v as MemberRole)}>
               <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="co-owner">Co-owner</SelectItem>
+                <SelectItem value="co_owner">Co-owner</SelectItem>
                 <SelectItem value="contractor">Contractor</SelectItem>
-                <SelectItem value="participant">Viewer</SelectItem>
+                <SelectItem value="viewer">Viewer</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -292,9 +292,9 @@ export default function ProjectParticipants() {
           <Select value={newRole} onValueChange={(v) => setNewRole(v as MemberRole)}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="co-owner">Co-owner</SelectItem>
+              <SelectItem value="co_owner">Co-owner</SelectItem>
               <SelectItem value="contractor">Contractor</SelectItem>
-              <SelectItem value="participant">Viewer</SelectItem>
+              <SelectItem value="viewer">Viewer</SelectItem>
             </SelectContent>
           </Select>
         </div>

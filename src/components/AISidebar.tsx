@@ -1,41 +1,53 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Bot, Send, GripVertical, Bell, Camera, X as XIcon, PanelLeft } from "lucide-react";
+import {
+  Bot,
+  Send,
+  GripVertical,
+  Camera,
+  X as XIcon,
+  PanelLeft,
+  Plus,
+  Paperclip,
+  GraduationCap,
+  AtSign,
+  Link2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ConfirmModal } from "@/components/ConfirmModal";
-import { StatusBadge } from "@/components/StatusBadge";
-import { ChatMessage } from "@/components/ai/ChatMessage";
-import { ResultCard } from "@/components/ai/ResultCard";
 import { WorkLog } from "@/components/ai/WorkLog";
 import { SuggestionChips } from "@/components/ai/SuggestionChips";
 import { EventFeedItem } from "@/components/ai/EventFeedItem";
-import { NotificationDrawer } from "@/components/ai/NotificationDrawer";
-import { ContextInspector } from "@/components/ai/ContextInspector";
 import { PreviewCard } from "@/components/ai/PreviewCard";
 import { ActionBar } from "@/components/ai/ActionBar";
-import { useCurrentUser, useEvents, useNotifications } from "@/hooks/use-mock-data";
+import { ProposalQueueCard, type ProposalQueueItemState, type ProposalDecision } from "@/components/ai/ProposalQueueCard";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useCurrentUser, useEvents, useProject, useTasks } from "@/hooks/use-mock-data";
 import { usePermission } from "@/lib/permissions";
-import { generateProposal, getTextResponse } from "@/lib/ai-engine";
+import { generateProposalQueue, getTextResponse, reviseProposalWithEdits } from "@/lib/ai-engine";
 import { commitProposal } from "@/lib/commit-proposal";
 import { toast } from "@/hooks/use-toast";
-import type { AIMessage, ProposalChange } from "@/types/ai";
-import type { CommitResult } from "@/lib/commit-proposal";
+import type { AIMessage, AIProposal, ProposalChange } from "@/types/ai";
+import type { Event } from "@/types/entities";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { isAuthenticated } from "@/lib/auth-state";
+import { getProfileAutomationLevelMode, isAuthenticated, setProfileAutomationLevelMode } from "@/lib/auth-state";
 import {
   subscribePhotoConsult, closePhotoConsult, buildConsultPrompt,
   type PhotoConsultContext,
 } from "@/lib/photo-consult-store";
-import { addTask, addComment as addTaskComment, addEvent, getCurrentUser, getStages } from "@/data/store";
+import {
+  addTask, addComment as addTaskComment, addEvent, getCurrentUser, getStages, getUserById, updateProject,
+} from "@/data/store";
 import { format } from "date-fns";
 
 const PROJECT_SUGGESTIONS = ["Add tasks", "Update estimate", "Generate contract", "Buy materials"];
 const GLOBAL_SUGGESTIONS = ["Create project", "Compare estimates", "Best tile adhesive?"];
 
 const STORAGE_KEY = "ai-sidebar-width";
-const TAB_STORAGE_KEY = "ai-sidebar-tab";
 const DEFAULT_WIDTH = 420;
 const MIN_WIDTH = 360;
 const MAX_WIDTH = 520;
@@ -43,14 +55,23 @@ const COLLAPSED_WIDTH = 48;
 
 const WORK_STEPS_GENERATE = ["Reading project state", "Checking permissions", "Drafting proposal", "Estimating credits", "Ready for review"];
 const WORK_STEPS_COMMIT = ["Applying changes", "Writing event log", "Updating context pack", "Done"];
+const AUTOMATION_LEVEL_TO_MODE: Record<1 | 2 | 3 | 4, AutomationMode> = {
+  1: "full",
+  2: "assisted",
+  3: "manual",
+  4: "observer",
+};
+const AUTOMATION_MODE_TO_LEVEL: Record<AutomationMode, 1 | 2 | 3 | 4> = {
+  full: 1,
+  assisted: 2,
+  manual: 3,
+  observer: 4,
+};
+const VALID_AUTOMATION_MODES: Set<AutomationMode> = new Set(["full", "assisted", "manual", "observer"]);
 
-type SidebarTab = "ai" | "activity";
-
-interface CommitResultMessage {
-  id: string;
-  result: CommitResult;
-  timestamp: string;
-}
+type FeedFilter = "all" | "task" | "estimate" | "document" | "photo" | "member" | "ai_actions";
+type ActiveWindow = "none" | "worklog" | "proposal_queue" | "photo_consult";
+type AutomationMode = "full" | "assisted" | "manual" | "observer";
 
 interface WorkLogEntry {
   id: string;
@@ -58,12 +79,20 @@ interface WorkLogEntry {
   phase: "generate" | "commit";
 }
 
+interface ProposalQueueState {
+  messageId: string;
+  items: ProposalQueueItemState[];
+  activeIndex: number;
+  phase: "review" | "revising" | "executing";
+  executionCursor: number;
+  retryByItemId: Record<string, number>;
+  executionErrorByItemId: Record<string, string>;
+}
+
 interface AISidebarProps {
   collapsed: boolean;
   onCollapsedChange: (next: boolean) => void;
 }
-
-const DEV_MODE = localStorage.getItem("dev-context-inspector") === "true";
 
 // Photo consult AI analysis mock result
 interface PhotoAnalysisResult {
@@ -142,37 +171,55 @@ function buildSuggestedActions(ctx: PhotoConsultContext, analysis: PhotoAnalysis
   return actions;
 }
 
+function normalizeAutomationMode(value: string | null | undefined): AutomationMode | null {
+  if (!value) return null;
+  return VALID_AUTOMATION_MODES.has(value as AutomationMode) ? (value as AutomationMode) : null;
+}
+
+function wait(ms: number) {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
 export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const isProjectContext = location.pathname.startsWith("/project/");
   const projectId = isProjectContext ? location.pathname.split("/")[2] : "";
-  const title = "Project AI";
 
   const isGuest = !isAuthenticated();
   const user = useCurrentUser();
   const permResult = usePermission(projectId || "");
   const perm = isProjectContext && !isGuest ? permResult : null;
-  const { unreadCount } = useNotifications();
+  const { project, members } = useProject(projectId || "");
+  const tasks = useTasks(projectId || "");
 
   const [messages, setMessages] = useState<AIMessage[]>([]);
-  const [commitResults, setCommitResults] = useState<Map<string, CommitResultMessage>>(new Map());
   const [workLogs, setWorkLogs] = useState<Map<string, WorkLogEntry>>(new Map());
+  const [proposalQueue, setProposalQueue] = useState<ProposalQueueState | null>(null);
   const [inputValue, setInputValue] = useState("");
   const [limitModalOpen, setLimitModalOpen] = useState(false);
-  const [notifOpen, setNotifOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<SidebarTab>(() => {
-    const stored = localStorage.getItem(TAB_STORAGE_KEY);
-    return (stored === "activity" ? "activity" : "ai") as SidebarTab;
-  });
-  const [activityFilter, setActivityFilter] = useState<string | null>(null);
+  const [activityFilter, setActivityFilter] = useState<FeedFilter>("all");
+  const [learnMode, setLearnMode] = useState(false);
+  const [automationMode, setAutomationMode] = useState<AutomationMode>("assisted");
+  const [plusMenuOpen, setPlusMenuOpen] = useState(false);
+  const [tagPersonCursor, setTagPersonCursor] = useState(0);
+  const [referenceTaskCursor, setReferenceTaskCursor] = useState(0);
   const [width, setWidth] = useState(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
     return stored ? Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, parseInt(stored))) : DEFAULT_WIDTH;
   });
   const scrollRef = useRef<HTMLDivElement>(null);
+  const isNearBottomRef = useRef(true);
+  const latestEventIdRef = useRef<string | null>(null);
+  const initializedEventsRef = useRef(false);
+  const knownEventIdsRef = useRef<Set<string>>(new Set());
+  const highlightTimersRef = useRef<Map<string, number>>(new Map());
   const dragRef = useRef<{ startX: number; startW: number } | null>(null);
+  const executingQueueRef = useRef(false);
+  const [highlightedEventIds, setHighlightedEventIds] = useState<Set<string>>(new Set());
 
   // Photo consult state
   const [photoConsult, setPhotoConsult] = useState<PhotoConsultContext | null>(null);
@@ -190,7 +237,6 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
         setSuggestedActions([]);
         setSelectedActions(new Set());
         onCollapsedChange(false);
-        setActiveTab("ai");
 
         // Prefill the prompt
         const prompt = buildConsultPrompt(ctx);
@@ -219,28 +265,34 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
 
   // Activity events
   const allEvents = useEvents(projectId || "");
-  const events = isProjectContext ? allEvents : [];
+  const events = useMemo(() => (isProjectContext ? allEvents : []), [isProjectContext, allEvents]);
+  const effectiveAutomationMode = useMemo<AutomationMode>(() => {
+    const projectMode = isProjectContext ? normalizeAutomationMode(project?.automation_level) : null;
+    if (projectMode) return projectMode;
+    const profileMode = normalizeAutomationMode(getProfileAutomationLevelMode());
+    return profileMode ?? "assisted";
+  }, [isProjectContext, project?.automation_level]);
 
   useEffect(() => {
     setMessages([]);
-    setCommitResults(new Map());
     setWorkLogs(new Map());
+    setProposalQueue(null);
     // Don't clear photo consult on navigation - it should persist
   }, [location.pathname]);
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages, commitResults, workLogs, photoAnalysis]);
+    setAutomationMode(effectiveAutomationMode);
+  }, [effectiveAutomationMode]);
+
+  useEffect(() => {
+    initializedEventsRef.current = false;
+    knownEventIdsRef.current = new Set();
+    setHighlightedEventIds(new Set());
+  }, [projectId, isProjectContext]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, String(width));
   }, [width]);
-
-  useEffect(() => {
-    localStorage.setItem(TAB_STORAGE_KEY, activeTab);
-  }, [activeTab]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -261,8 +313,171 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   }, [width]);
 
   const totalCredits = user.credits_free + user.credits_paid;
+  const activeWorkLogs = useMemo(() => Array.from(workLogs.values()), [workLogs]);
+  const latestWorkLog = activeWorkLogs[activeWorkLogs.length - 1];
+  const activeQueueItem = proposalQueue ? proposalQueue.items[proposalQueue.activeIndex] : null;
+  const hasPhotoConsultActionWindow = Boolean(photoConsult) && suggestedActions.length > 0 && !photoAnalysisLoading;
+  const activeWindow: ActiveWindow = latestWorkLog
+    ? "worklog"
+    : proposalQueue?.phase === "review"
+      ? "proposal_queue"
+      : proposalQueue?.phase === "executing"
+        ? "worklog"
+        : proposalQueue?.phase === "revising"
+          ? "worklog"
+        : hasPhotoConsultActionWindow
+          ? "photo_consult"
+          : "none";
+  const isInputLocked = activeWindow !== "none";
+  const showNearLimitIndicator = events.length >= 100;
+  const automationLevel = AUTOMATION_MODE_TO_LEVEL[automationMode];
+  const allowDirectEdit = automationLevel >= 3;
+  const defaultDirectEditForNewProposal = automationLevel === 4;
+
+  function persistAutomationMode(nextMode: AutomationMode) {
+    setAutomationMode(nextMode);
+    if (isProjectContext && projectId) {
+      updateProject(projectId, { automation_level: nextMode });
+      return;
+    }
+    setProfileAutomationLevelMode(nextMode);
+  }
+
+  function emitProposalDeclinedEvent(proposal: AIProposal, payload: Record<string, unknown> = {}) {
+    if (!isProjectContext) return;
+    addEvent({
+      id: `evt-proposal-cancelled-${Date.now()}`,
+      project_id: projectId,
+      actor_id: user.id,
+      type: "proposal_cancelled",
+      object_type: "proposal",
+      object_id: proposal.id,
+      timestamp: new Date().toISOString(),
+      payload: {
+        summary: proposal.summary,
+        status: "cancelled",
+        ...payload,
+      },
+    });
+  }
+
+  const runQueueExecution = useCallback(async (queueSnapshot: ProposalQueueState) => {
+    const confirmedItems = queueSnapshot.items.filter((item) => item.decision === "confirmed");
+    if (confirmedItems.length === 0) {
+      setProposalQueue(null);
+      executingQueueRef.current = false;
+      return;
+    }
+
+    setProposalQueue((prev) => (prev
+      ? {
+          ...prev,
+          phase: "executing",
+          executionCursor: 0,
+          retryByItemId: {},
+          executionErrorByItemId: {},
+        }
+      : prev));
+
+    for (let cursor = 0; cursor < confirmedItems.length; cursor++) {
+      const queueItem = confirmedItems[cursor];
+
+      setProposalQueue((prev) => (prev
+        ? {
+            ...prev,
+            phase: "executing",
+            executionCursor: cursor,
+          }
+        : prev));
+
+      let attempt = 0;
+      let success = false;
+      let lastError = "Execution failed";
+
+      while (attempt < 5 && !success) {
+        attempt += 1;
+        const workLogId = `wl-execute-${queueItem.id}-${attempt}-${Date.now()}`;
+        setWorkLogs(new Map([
+          [workLogId, { id: workLogId, steps: WORK_STEPS_COMMIT, phase: "commit" }],
+        ]));
+
+        await wait(WORK_STEPS_COMMIT.length * 600 + 200);
+
+        const shouldSimulateFailure = Math.random() < 0.15;
+        const result = shouldSimulateFailure
+          ? { success: false as const, error: "Temporary execution error. Retrying..." }
+          : commitProposal(queueItem.proposal, {
+              eventSource: "ai",
+              eventActorId: "ai",
+              emitProposalEvent: true,
+            });
+
+        if (result.success) {
+          success = true;
+          toast({
+            title: "Changes applied",
+            description: `${queueItem.proposal.summary} completed.`,
+          });
+          break;
+        }
+
+        lastError = result.error ?? "Execution failed";
+        setProposalQueue((prev) => (prev
+          ? {
+              ...prev,
+              retryByItemId: { ...prev.retryByItemId, [queueItem.id]: attempt },
+              executionErrorByItemId: {
+                ...prev.executionErrorByItemId,
+                [queueItem.id]: `Attempt ${attempt}/5: ${lastError}`,
+              },
+            }
+          : prev));
+
+        if (attempt < 5) {
+          await wait(500);
+        }
+      }
+
+      setWorkLogs(new Map());
+
+      if (!success) {
+        addEvent({
+          id: `evt-proposal-failed-${Date.now()}-${cursor}`,
+          project_id: projectId,
+          actor_id: "ai",
+          type: "proposal_cancelled",
+          object_type: "proposal",
+          object_id: queueItem.proposal.id,
+          timestamp: new Date().toISOString(),
+          payload: {
+            summary: queueItem.proposal.summary,
+            status: "failed",
+            reason: "execution_failed",
+            attempts: 5,
+            source: "ai",
+          },
+        });
+        toast({
+          title: "Execution failed",
+          description: `${queueItem.proposal.summary} failed after 5 retries.`,
+          variant: "destructive",
+        });
+      }
+    }
+
+    setWorkLogs(new Map());
+    setProposalQueue(null);
+    executingQueueRef.current = false;
+  }, [projectId]);
+
+  const beginQueueExecution = useCallback((queueSnapshot: ProposalQueueState) => {
+    if (executingQueueRef.current) return;
+    executingQueueRef.current = true;
+    void runQueueExecution(queueSnapshot);
+  }, [runQueueExecution]);
 
   function handleSend(text?: string) {
+    if (activeWindow !== "none" || proposalQueue) return;
     const content = (text ?? inputValue).trim();
     if (!content) return;
     setInputValue("");
@@ -282,13 +497,12 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
       return;
     }
 
-    setActiveTab("ai");
-
     const userMsg: AIMessage = {
       id: `msg-${Date.now()}`,
       role: "user",
       content,
       timestamp: new Date().toISOString(),
+      mode: learnMode ? "learn" : "default",
     };
 
     const workLogId = `wl-${Date.now()}`;
@@ -301,15 +515,18 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     setMessages((prev) => [...prev, userMsg]);
 
     setTimeout(() => {
-      const proposal = isProjectContext ? generateProposal(content, projectId) : null;
-      const assistantContent = proposal ? "Here's what I'd do:" : getTextResponse();
+      const proposals = isProjectContext
+        ? generateProposalQueue(content, projectId, automationMode)
+        : [];
+      const assistantContent = proposals.length > 0
+        ? `I've prepared ${proposals.length} proposal${proposals.length === 1 ? "" : "s"}. Review them below.`
+        : getTextResponse();
 
       const assistantMsg: AIMessage = {
         id: `msg-${Date.now() + 1}`,
         role: "assistant",
         content: assistantContent,
         timestamp: new Date().toISOString(),
-        proposal: proposal ?? undefined,
       };
 
       setWorkLogs((prev) => {
@@ -318,56 +535,219 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
         return next;
       });
       setMessages((prev) => [...prev, assistantMsg]);
+
+      if (proposals.length > 0) {
+        const queueItems: ProposalQueueItemState[] = proposals.map((proposal, idx) => ({
+          id: `queue-item-${userMsg.id}-${idx}`,
+          proposal,
+          decision: "unresolved",
+          suggestEditMode: false,
+          suggestEditText: "",
+          directEditMode: defaultDirectEditForNewProposal,
+          draftSummary: proposal.summary,
+          draftChangeLabels: proposal.changes.map((change) => change.label),
+        }));
+        setProposalQueue({
+          messageId: userMsg.id,
+          items: queueItems,
+          activeIndex: 0,
+          phase: "review",
+          executionCursor: 0,
+          retryByItemId: {},
+          executionErrorByItemId: {},
+        });
+      }
     }, WORK_STEPS_GENERATE.length * 600 + 200);
   }
 
-  function handleConfirm(msgId: string) {
-    const commitWlId = `wl-commit-${Date.now()}`;
-    setWorkLogs((prev) => {
-      const next = new Map(prev);
-      next.set(commitWlId, { id: commitWlId, steps: WORK_STEPS_COMMIT, phase: "commit" });
-      return next;
-    });
+  function updateQueueDecision(decision: ProposalDecision) {
+    let nextQueueSnapshot: ProposalQueueState | null = null;
+    setProposalQueue((prev) => {
+      if (!prev || prev.phase !== "review") return prev;
+      const current = prev.items[prev.activeIndex];
+      if (!current) return prev;
 
-    setTimeout(() => {
-      setMessages((prev) =>
-        prev.map((m) => {
-          if (m.id !== msgId || !m.proposal) return m;
-          const result = commitProposal(m.proposal);
-          if (result.success) {
-            toast({ title: "Changes applied", description: `${result.count} change${(result.count ?? 0) !== 1 ? "s" : ""} committed.` });
-            setCommitResults((prev) => {
-              const next = new Map(prev);
-              next.set(msgId, {
-                id: `result-${Date.now()}`,
-                result,
-                timestamp: new Date().toISOString(),
-              });
-              return next;
-            });
-            return { ...m, proposal: { ...m.proposal, status: "confirmed" as const } };
-          } else {
-            toast({ title: "Failed", description: result.error, variant: "destructive" });
-            return m;
-          }
-        })
-      );
-      setWorkLogs((prev) => {
-        const next = new Map(prev);
-        next.delete(commitWlId);
-        return next;
-      });
-    }, WORK_STEPS_COMMIT.length * 600 + 200);
+      const nextItems = prev.items.map((item, idx) => (
+        idx === prev.activeIndex
+          ? { ...item, decision, suggestEditMode: false, suggestEditText: "" }
+          : item
+      ));
+      const nextIndex = prev.activeIndex < nextItems.length - 1 ? prev.activeIndex + 1 : prev.activeIndex;
+      const nextQueue = { ...prev, items: nextItems, activeIndex: nextIndex };
+      if (nextQueue.items.every((item) => item.decision !== "unresolved")) {
+        nextQueueSnapshot = nextQueue;
+      }
+      return nextQueue;
+    });
+    if (nextQueueSnapshot) {
+      beginQueueExecution(nextQueueSnapshot);
+    }
   }
 
-  function handleCancel(msgId: string) {
-    setMessages((prev) =>
-      prev.map((m) => {
-        if (m.id !== msgId || !m.proposal) return m;
-        toast({ title: "Proposal cancelled", description: "No changes were made." });
-        return { ...m, proposal: { ...m.proposal, status: "cancelled" as const } };
-      })
-    );
+  function handleQueueConfirm() {
+    updateQueueDecision("confirmed");
+  }
+
+  function handleQueueDecline() {
+    if (activeQueueItem) {
+      emitProposalDeclinedEvent(activeQueueItem.proposal);
+    }
+    updateQueueDecision("declined");
+  }
+
+  function handleQueueBack() {
+    setProposalQueue((prev) => {
+      if (!prev || prev.phase !== "review") return prev;
+      return { ...prev, activeIndex: Math.max(0, prev.activeIndex - 1) };
+    });
+  }
+
+  function handleQueueNext() {
+    let nextQueueSnapshot: ProposalQueueState | null = null;
+    setProposalQueue((prev) => {
+      if (!prev || prev.phase !== "review") return prev;
+      const current = prev.items[prev.activeIndex];
+      if (!current || current.decision === "unresolved") return prev;
+      if (prev.activeIndex < prev.items.length - 1) {
+        return { ...prev, activeIndex: prev.activeIndex + 1 };
+      }
+      if (prev.items.every((item) => item.decision !== "unresolved")) {
+        nextQueueSnapshot = prev;
+      }
+      return prev;
+    });
+    if (nextQueueSnapshot) {
+      beginQueueExecution(nextQueueSnapshot);
+    }
+  }
+
+  function handleQueueOpenSuggestEdits() {
+    setProposalQueue((prev) => {
+      if (!prev || prev.phase !== "review") return prev;
+      const nextItems = prev.items.map((item, idx) => (
+        idx === prev.activeIndex
+          ? { ...item, suggestEditMode: true, directEditMode: false }
+          : item
+      ));
+      return { ...prev, items: nextItems };
+    });
+  }
+
+  function handleQueueSuggestEditTextChange(value: string) {
+    setProposalQueue((prev) => {
+      if (!prev || prev.phase !== "review") return prev;
+      const nextItems = prev.items.map((item, idx) => (
+        idx === prev.activeIndex ? { ...item, suggestEditText: value } : item
+      ));
+      return { ...prev, items: nextItems };
+    });
+  }
+
+  function handleQueueCancelSuggestEdits() {
+    setProposalQueue((prev) => {
+      if (!prev || prev.phase !== "review") return prev;
+      const nextItems = prev.items.map((item, idx) => (
+        idx === prev.activeIndex ? { ...item, suggestEditMode: false } : item
+      ));
+      return { ...prev, items: nextItems };
+    });
+  }
+
+  function handleQueueSubmitEdits() {
+    if (!proposalQueue || proposalQueue.phase !== "review") return;
+    const queueItem = proposalQueue.items[proposalQueue.activeIndex];
+    if (!queueItem || !queueItem.suggestEditText.trim()) return;
+
+    const editPrompt = queueItem.suggestEditText.trim();
+    const workLogId = `wl-revise-${Date.now()}`;
+
+    setProposalQueue((prev) => (prev ? { ...prev, phase: "revising" } : prev));
+    setWorkLogs(new Map([
+      [workLogId, { id: workLogId, steps: WORK_STEPS_GENERATE, phase: "generate" }],
+    ]));
+
+    setTimeout(() => {
+      setProposalQueue((prev) => {
+        if (!prev) return prev;
+        const current = prev.items[prev.activeIndex];
+        if (!current) return { ...prev, phase: "review" };
+        const revised = reviseProposalWithEdits(current.proposal, editPrompt);
+        const nextItems = prev.items.map((item, idx) => (
+          idx === prev.activeIndex
+            ? {
+                ...item,
+                proposal: revised,
+                decision: "unresolved",
+                suggestEditMode: false,
+                suggestEditText: "",
+                directEditMode: defaultDirectEditForNewProposal,
+                draftSummary: revised.summary,
+                draftChangeLabels: revised.changes.map((change) => change.label),
+              }
+            : item
+        ));
+        return { ...prev, phase: "review", items: nextItems };
+      });
+      setWorkLogs(new Map());
+    }, WORK_STEPS_GENERATE.length * 600 + 200);
+  }
+
+  function handleToggleDirectEdit() {
+    if (!allowDirectEdit) return;
+    setProposalQueue((prev) => {
+      if (!prev || prev.phase !== "review") return prev;
+      const nextItems = prev.items.map((item, idx) => (
+        idx === prev.activeIndex ? { ...item, directEditMode: !item.directEditMode, suggestEditMode: false } : item
+      ));
+      return { ...prev, items: nextItems };
+    });
+  }
+
+  function handleDraftSummaryChange(value: string) {
+    setProposalQueue((prev) => {
+      if (!prev || prev.phase !== "review") return prev;
+      const nextItems = prev.items.map((item, idx) => (
+        idx === prev.activeIndex ? { ...item, draftSummary: value } : item
+      ));
+      return { ...prev, items: nextItems };
+    });
+  }
+
+  function handleDraftChangeLabelChange(changeIdx: number, value: string) {
+    setProposalQueue((prev) => {
+      if (!prev || prev.phase !== "review") return prev;
+      const nextItems = prev.items.map((item, idx) => {
+        if (idx !== prev.activeIndex) return item;
+        const nextLabels = [...item.draftChangeLabels];
+        nextLabels[changeIdx] = value;
+        return { ...item, draftChangeLabels: nextLabels };
+      });
+      return { ...prev, items: nextItems };
+    });
+  }
+
+  function handleSaveDirectEdits() {
+    setProposalQueue((prev) => {
+      if (!prev || prev.phase !== "review") return prev;
+      const nextItems = prev.items.map((item, idx) => {
+        if (idx !== prev.activeIndex) return item;
+        const nextChanges = item.proposal.changes.map((change, changeIdx) => ({
+          ...change,
+          label: item.draftChangeLabels[changeIdx] ?? change.label,
+        }));
+        return {
+          ...item,
+          proposal: {
+            ...item.proposal,
+            summary: item.draftSummary,
+            changes: nextChanges,
+            status: "pending",
+          },
+          directEditMode: false,
+        };
+      });
+      return { ...prev, items: nextItems };
+    });
   }
 
   // Photo consult: confirm suggested actions
@@ -439,21 +819,183 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const suggestions = isProjectContext ? PROJECT_SUGGESTIONS : GLOBAL_SUGGESTIONS;
   const panelWidth = collapsed ? COLLAPSED_WIDTH : (isMobile ? "100%" : width);
 
-  // Filter events
-  const FILTER_TYPES = ["task", "estimate", "document", "photo", "member"];
-  const filteredEvents = activityFilter
-    ? events.filter((e) => e.type.startsWith(activityFilter!))
-    : events;
+  const appendToInput = (value: string) => {
+    setInputValue((prev) => (prev.trim() ? `${prev} ${value}` : value));
+  };
+
+  const participantNames = useMemo(() => (
+    members
+      .map((member) => getUserById(member.user_id)?.name)
+      .filter((name): name is string => Boolean(name))
+  ), [members]);
+
+  const isAiActionEvent = (event: Event) => {
+    const payload = event.payload as Record<string, unknown>;
+    return (
+      event.actor_id === "ai"
+      || payload.source === "ai"
+      || payload.createdFrom === "ai"
+      || event.type.startsWith("ai.")
+    );
+  };
+
+  const filteredEvents = useMemo(() => {
+    if (activityFilter === "all") return events;
+    if (activityFilter === "ai_actions") return events.filter(isAiActionEvent);
+    return events.filter((event) => event.type.startsWith(activityFilter));
+  }, [activityFilter, events]);
+
+  const timelineEvents = useMemo(() => [...filteredEvents].reverse(), [filteredEvents]);
+  const newestEventId = events[0]?.id ?? null;
 
   const roleLabel = perm?.role === "owner"
     ? "Owner"
-    : perm?.role === "co-owner"
+    : perm?.role === "co_owner"
       ? "Co-owner"
       : perm?.role === "contractor"
         ? "Contractor"
-        : perm?.role === "participant"
+        : perm?.role === "viewer"
           ? "Viewer"
           : null;
+  const activeExecutionItem = useMemo(() => {
+    if (!proposalQueue || proposalQueue.phase !== "executing") return null;
+    const confirmed = proposalQueue.items.filter((item) => item.decision === "confirmed");
+    return confirmed[proposalQueue.executionCursor] ?? null;
+  }, [proposalQueue]);
+
+  const getFeedViewport = useCallback(() => {
+    return scrollRef.current?.querySelector("[data-radix-scroll-area-viewport]") as HTMLDivElement | null;
+  }, []);
+
+  useEffect(() => {
+    const viewport = getFeedViewport();
+    if (!viewport) return;
+
+    const handleScroll = () => {
+      const distanceToBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+      isNearBottomRef.current = distanceToBottom < 56;
+    };
+
+    handleScroll();
+    viewport.addEventListener("scroll", handleScroll);
+    return () => viewport.removeEventListener("scroll", handleScroll);
+  }, [getFeedViewport]);
+
+  useEffect(() => {
+    const viewport = getFeedViewport();
+    if (!viewport) return;
+    if (!newestEventId) return;
+
+    const hasNewEvent = latestEventIdRef.current !== newestEventId;
+    if (hasNewEvent && isNearBottomRef.current) {
+      viewport.scrollTop = viewport.scrollHeight;
+    }
+    latestEventIdRef.current = newestEventId;
+  }, [getFeedViewport, newestEventId]);
+
+  useEffect(() => {
+    if (!isProjectContext) {
+      initializedEventsRef.current = false;
+      knownEventIdsRef.current = new Set();
+      return;
+    }
+
+    const currentIds = new Set(events.map((event) => event.id));
+    if (!initializedEventsRef.current) {
+      knownEventIdsRef.current = currentIds;
+      initializedEventsRef.current = true;
+      return;
+    }
+
+    const newIds = events
+      .map((event) => event.id)
+      .filter((eventId) => !knownEventIdsRef.current.has(eventId));
+
+    if (newIds.length > 0) {
+      setHighlightedEventIds((prev) => {
+        const next = new Set(prev);
+        newIds.forEach((id) => next.add(id));
+        return next;
+      });
+
+      newIds.forEach((id) => {
+        const timer = window.setTimeout(() => {
+          setHighlightedEventIds((prev) => {
+            const next = new Set(prev);
+            next.delete(id);
+            return next;
+          });
+          highlightTimersRef.current.delete(id);
+        }, 2500);
+        highlightTimersRef.current.set(id, timer);
+      });
+    }
+
+    knownEventIdsRef.current = currentIds;
+  }, [events, isProjectContext]);
+
+  useEffect(() => {
+    const timers = highlightTimersRef.current;
+    return () => {
+      timers.forEach((timerId) => {
+        window.clearTimeout(timerId);
+      });
+      timers.clear();
+    };
+  }, []);
+
+  const filterOptions: { key: FeedFilter; label: string }[] = [
+    { key: "all", label: "All" },
+    { key: "task", label: "Task" },
+    { key: "estimate", label: "Estimate" },
+    { key: "document", label: "Document" },
+    { key: "photo", label: "Photo" },
+    { key: "member", label: "Member" },
+    { key: "ai_actions", label: "AI actions" },
+  ];
+
+  const userInitials = (user.name ?? "User")
+    .split(" ")
+    .map((part) => part[0] ?? "")
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+  const creditsChipText = `${totalCredits} +${user.credits_free}/d`;
+
+  const handleToggleLearnMode = () => {
+    setLearnMode((prev) => !prev);
+  };
+
+  const handleAttachFilePhoto = () => {
+    toast({ title: "Attach file/photo", description: "UI stub for attachment flow." });
+    setPlusMenuOpen(false);
+  };
+
+  const handleTagPerson = () => {
+    if (participantNames.length === 0) {
+      appendToInput("@participant");
+      toast({ title: "No participants found", description: "TODO: connect participants selector." });
+      setPlusMenuOpen(false);
+      return;
+    }
+    const picked = participantNames[tagPersonCursor % participantNames.length];
+    setTagPersonCursor((prev) => prev + 1);
+    appendToInput(`@${picked}`);
+    setPlusMenuOpen(false);
+  };
+
+  const handleReferenceTask = () => {
+    if (tasks.length === 0) {
+      appendToInput("#item");
+      toast({ title: "No tasks available", description: "TODO: connect task/item selector." });
+      setPlusMenuOpen(false);
+      return;
+    }
+    const picked = tasks[referenceTaskCursor % tasks.length];
+    setReferenceTaskCursor((prev) => prev + 1);
+    appendToInput(`#${picked.title}`);
+    setPlusMenuOpen(false);
+  };
 
   const placeholderColors = [
     "bg-accent/10", "bg-info/10", "bg-warning/10", "bg-muted",
@@ -489,40 +1031,26 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
           <>
             {/* === HEADER (sticky) === */}
             <div className="p-3 space-y-2 shrink-0 box-border border-b border-border" style={{ width: "100%" }}>
-              <div className="flex items-center gap-2 justify-between">
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent/10">
-                    <Bot className="h-3.5 w-3.5 text-accent" />
-                  </div>
-                  <span className="text-body-sm font-semibold text-sidebar-foreground truncate">
-                    {photoConsult ? "Photo Consult" : title}
+              <div className="flex items-center gap-2 min-w-0">
+                <Avatar className="h-7 w-7 shrink-0">
+                  <AvatarImage src={user.avatar} alt={user.name} />
+                  <AvatarFallback className="text-[10px] bg-accent/15 text-accent">
+                    {userInitials}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="text-body-sm font-semibold text-sidebar-foreground truncate">
+                  {user.name}
+                </span>
+                {roleLabel && (
+                  <span className="text-[10px] font-medium text-muted-foreground bg-muted rounded-pill px-1.5 py-0.5 shrink-0">
+                    {roleLabel}
                   </span>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  {!isGuest && (
-                    <span className={`text-caption font-bold px-1.5 py-0.5 rounded-pill ${totalCredits < 10 ? "bg-warning/15 text-warning" : "bg-accent/10 text-accent"}`}>
-                      {totalCredits}
-                    </span>
-                  )}
-                  {roleLabel && (
-                    <span className="text-[10px] font-medium text-muted-foreground bg-muted rounded-pill px-1.5 py-0.5">
-                      {roleLabel}
-                    </span>
-                  )}
-                  {!isGuest && (
-                    <button
-                      onClick={() => setNotifOpen(true)}
-                      className="relative h-7 w-7 flex items-center justify-center rounded-lg hover:bg-accent/10 transition-colors"
-                    >
-                      <Bell className="h-3.5 w-3.5 text-muted-foreground" />
-                      {unreadCount > 0 && (
-                        <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-accent text-[9px] font-bold text-accent-foreground">
-                          {unreadCount}
-                        </span>
-                      )}
-                    </button>
-                  )}
-                </div>
+                )}
+                {!isGuest && (
+                  <span className="text-caption font-bold px-1.5 py-0.5 rounded-pill bg-accent/10 text-accent shrink-0">
+                    {creditsChipText}
+                  </span>
+                )}
               </div>
             </div>
 
@@ -543,291 +1071,267 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
               </div>
             ) : (
               <>
-                {/* === MAIN BODY with tabs === */}
+                {/* === MAIN BODY === */}
                 <div className="flex-1 min-h-0 flex flex-col" style={{ width: "100%" }}>
-                  {/* Tab switcher */}
-                  {isProjectContext && !photoConsult && (
+                  {/* Inline filters */}
+                  {isProjectContext && (
                     <div className="px-3 pt-2 shrink-0">
-                      <div className="glass rounded-lg p-0.5 flex gap-0.5">
-                        <button
-                          onClick={() => setActiveTab("ai")}
-                          className={`flex-1 rounded-md px-3 py-1.5 text-caption font-medium transition-colors ${
-                            activeTab === "ai"
-                              ? "bg-accent/15 text-accent"
-                              : "text-muted-foreground hover:text-foreground"
-                          }`}
-                        >
-                          AI
-                        </button>
-                        <button
-                          onClick={() => setActiveTab("activity")}
-                          className={`flex-1 rounded-md px-3 py-1.5 text-caption font-medium transition-colors ${
-                            activeTab === "activity"
-                              ? "bg-accent/15 text-accent"
-                              : "text-muted-foreground hover:text-foreground"
-                          }`}
-                        >
-                          Activity
-                          {events.length > 0 && (
-                            <span className="ml-1 text-[10px] text-muted-foreground">{events.length}</span>
-                          )}
-                        </button>
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {filterOptions.map((filter) => (
+                          <button
+                            key={filter.key}
+                            onClick={() => setActivityFilter(filter.key)}
+                            className={`rounded-pill px-2.5 py-0.5 text-caption font-medium transition-colors border ${
+                              activityFilter === filter.key
+                                ? "bg-accent/15 text-accent border-accent/20"
+                                : "bg-transparent text-muted-foreground border-border hover:border-accent/20"
+                            }`}
+                          >
+                            {filter.label}
+                          </button>
+                        ))}
+                        {showNearLimitIndicator && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span
+                                className="ml-auto inline-block h-2.5 w-2.5 rounded-full border border-destructive/40 shrink-0"
+                                style={{ background: "conic-gradient(#ef4444 0deg 288deg, rgba(239,68,68,0.2) 288deg 360deg)" }}
+                              />
+                            </TooltipTrigger>
+                            <TooltipContent className="text-caption">
+                              Rovno will archive activity soon to clear the space
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
                       </div>
                     </div>
                   )}
 
-                  {/* Scrollable content */}
+                  {/* Scrollable event feed */}
                   <div className="flex-1 min-h-0 overflow-hidden px-3 box-border" style={{ width: "100%" }}>
-                    <ScrollArea className="h-full">
-                      {photoConsult ? (
-                        /* === Photo Consult Mode === */
-                        <div ref={scrollRef} className="space-y-3 py-2 pr-1" style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}>
-                          {/* Pinned photo card */}
-                          <div className="glass rounded-card p-2.5 space-y-2">
-                            <div className="flex items-start gap-2">
-                              <div className={`h-12 w-12 rounded-lg shrink-0 ${placeholderColors[0]} flex items-center justify-center`}>
-                                <Camera className="h-5 w-5 text-muted-foreground/30" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-body-sm font-semibold text-foreground truncate">{photoConsult.photo.caption}</p>
-                                <p className="text-[10px] text-muted-foreground">
-                                  {format(new Date(photoConsult.photo.created_at), "MMM d, yyyy · HH:mm")}
-                                </p>
-                                {photoConsult.task && (
-                                  <p className="text-[10px] text-accent truncate mt-0.5">
-                                    Task: {photoConsult.task.title}
-                                  </p>
-                                )}
-                              </div>
-                              <button
-                                onClick={() => closePhotoConsult()}
-                                className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors shrink-0"
-                              >
-                                <XIcon className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Loading skeleton */}
-                          {photoAnalysisLoading && (
-                            <div className="glass rounded-card p-3 space-y-2.5 animate-pulse">
-                              <div className="h-3 bg-muted rounded w-3/4" />
-                              <div className="h-3 bg-muted rounded w-full" />
-                              <div className="h-3 bg-muted rounded w-5/6" />
-                              <div className="h-3 bg-muted rounded w-2/3" />
-                              <div className="h-3 bg-muted rounded w-4/5" />
-                            </div>
-                          )}
-
-                          {/* Analysis result */}
-                          {photoAnalysis && !photoAnalysisLoading && (
-                            <div className="glass rounded-card p-3 space-y-3">
-                              <p className="text-body-sm font-semibold text-foreground">AI Photo Analysis</p>
-
-                              {/* Step alignment */}
-                              <div>
-                                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-0.5">Step Alignment</p>
-                                <p className="text-caption text-foreground">{photoAnalysis.stepAlignment}</p>
-                              </div>
-
-                              {/* Observations */}
-                              <div>
-                                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-0.5">Observations</p>
-                                <p className="text-caption text-foreground">{photoAnalysis.observations}</p>
-                              </div>
-
-                              {/* Issues */}
-                              {photoAnalysis.issues.length > 0 && (
-                                <div>
-                                  <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1">Potential Issues</p>
-                                  <div className="space-y-1">
-                                    {photoAnalysis.issues.map((issue, i) => (
-                                      <div key={i} className="flex items-start gap-2 text-caption">
-                                        <span className={`shrink-0 rounded-full px-1.5 py-0 text-[10px] font-bold ${
-                                          issue.severity === "High" ? "bg-destructive/15 text-destructive" :
-                                          issue.severity === "Med" ? "bg-warning/15 text-warning" :
-                                          "bg-muted text-muted-foreground"
-                                        }`}>
-                                          {issue.severity}
-                                        </span>
-                                        <span className="text-foreground">{issue.text}</span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-
-                              {/* Next step */}
-                              <div>
-                                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-0.5">Suggested Next Step</p>
-                                <p className="text-caption text-foreground">{photoAnalysis.nextStep}</p>
-                              </div>
-
-                              {/* Confidence */}
-                              <div>
-                                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-0.5">Confidence</p>
-                                <p className="text-caption text-foreground">{photoAnalysis.confidence}</p>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Suggested actions */}
-                          {suggestedActions.length > 0 && !photoAnalysisLoading && (
-                            <div className="space-y-2">
-                              <PreviewCard summary="Suggested actions" changes={suggestedActions} />
-
-                              {/* Selectable checkboxes */}
-                              <div className="space-y-1 px-1">
-                                {suggestedActions.map((action, idx) => (
-                                  <label
-                                    key={idx}
-                                    className="flex items-center gap-2 text-caption cursor-pointer hover:bg-muted/30 rounded-md px-1.5 py-1 transition-colors"
-                                  >
-                                    <input
-                                      type="checkbox"
-                                      checked={selectedActions.has(idx)}
-                                      onChange={() => toggleActionSelection(idx)}
-                                      className="rounded border-border"
-                                    />
-                                    <span className="text-foreground">{action.label}</span>
-                                  </label>
-                                ))}
-                              </div>
-
-                              <ActionBar
-                                onConfirm={handleConsultConfirm}
-                                onCancel={handleConsultCancel}
-                                disabled={selectedActions.size === 0}
+                    <ScrollArea ref={scrollRef} className="h-full">
+                      <div className="space-y-2 py-2 pr-1">
+                        {timelineEvents.length === 0 ? (
+                          <p className="text-caption text-muted-foreground text-center py-8">
+                            No activity yet
+                          </p>
+                        ) : (
+                          <div className="glass rounded-card divide-y divide-border">
+                            {timelineEvents.map((evt) => (
+                              <EventFeedItem
+                                key={evt.id}
+                                event={evt}
+                                highlighted={highlightedEventIds.has(evt.id)}
                               />
-                            </div>
-                          )}
-                        </div>
-                      ) : activeTab === "ai" ? (
-                        /* === AI Chat Tab === */
-                        <div ref={scrollRef} className="space-y-3 py-2 pr-1" style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}>
-                          {messages.length === 0 && workLogs.size === 0 ? (
-                            <div className="flex flex-col items-center justify-center text-center py-8">
-                              <Bot className="mb-3 h-10 w-10 text-muted-foreground/40" />
-                              <p className="text-body-sm text-muted-foreground">
-                                {isProjectContext
-                                  ? "Ask about this project — tasks, estimates, documents..."
-                                  : "Create a project, get recommendations, or ask anything."}
-                              </p>
-                            </div>
-                          ) : (
-                            <>
-                              {messages.map((msg) => (
-                                <div key={msg.id} className="w-full min-w-0">
-                                  <ChatMessage
-                                    message={msg}
-                                    onConfirm={() => handleConfirm(msg.id)}
-                                    onCancel={() => handleCancel(msg.id)}
-                                  />
-                                  {commitResults.has(msg.id) && (() => {
-                                    const cr = commitResults.get(msg.id)!;
-                                    const allItems = [...cr.result.created, ...cr.result.updated];
-                                    return (
-                                      <div className="mt-2 w-full min-w-0">
-                                        <ResultCard
-                                          summary={`${cr.result.count} change${(cr.result.count ?? 0) !== 1 ? "s" : ""} applied`}
-                                          items={allItems}
-                                          timestamp={cr.timestamp}
-                                          canNavigate={!perm || perm.can("ai.generate")}
-                                        />
-                                      </div>
-                                    );
-                                  })()}
-                                </div>
-                              ))}
-                              {/* Active work logs */}
-                              {Array.from(workLogs.values()).map((wl) => (
-                                <div key={wl.id} className="w-full min-w-0">
-                                  <WorkLog steps={wl.steps} />
-                                </div>
-                              ))}
-                            </>
-                          )}
-
-                          {/* Dev-only context inspector */}
-                          {DEV_MODE && isProjectContext && (
-                            <ContextInspector projectId={projectId} />
-                          )}
-                        </div>
-                      ) : (
-                        /* === Activity Tab === */
-                        <div className="space-y-2 py-2 pr-1">
-                          {/* Filters */}
-                          <div className="flex flex-wrap gap-1">
-                            <button
-                              onClick={() => setActivityFilter(null)}
-                              className={`rounded-pill px-2.5 py-0.5 text-caption font-medium transition-colors border ${
-                                !activityFilter
-                                  ? "bg-accent/15 text-accent border-accent/20"
-                                  : "bg-transparent text-muted-foreground border-border hover:border-accent/20"
-                              }`}
-                            >
-                              All
-                            </button>
-                            {FILTER_TYPES.map((ft) => (
-                              <button
-                                key={ft}
-                                onClick={() => setActivityFilter(activityFilter === ft ? null : ft)}
-                                className={`rounded-pill px-2.5 py-0.5 text-caption font-medium transition-colors border capitalize ${
-                                  activityFilter === ft
-                                    ? "bg-accent/15 text-accent border-accent/20"
-                                    : "bg-transparent text-muted-foreground border-border hover:border-accent/20"
-                                }`}
-                              >
-                                {ft}
-                              </button>
                             ))}
                           </div>
-
-                          {/* Event list */}
-                          {filteredEvents.length === 0 ? (
-                            <p className="text-caption text-muted-foreground text-center py-8">
-                              No activity yet
-                            </p>
-                          ) : (
-                            <div className="glass rounded-card divide-y divide-border">
-                              {filteredEvents.map((evt) => (
-                                <EventFeedItem key={evt.id} event={evt} />
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </ScrollArea>
                   </div>
                 </div>
 
-                {/* === COMPOSER (sticky bottom) === */}
+                {/* === STICKY COMMAND ZONE === */}
                 <div className="p-3 space-y-2 shrink-0 box-border border-t border-border" style={{ width: "100%" }}>
-                  {activeTab === "ai" && messages.length === 0 && !photoConsult && (
-                    <SuggestionChips suggestions={suggestions} onSelect={(s) => handleSend(s)} />
+                  {/* Keep current interactive blocks and animations */}
+                  {activeWindow === "worklog" && latestWorkLog && (
+                    <div className="w-full min-w-0 space-y-1.5">
+                      <WorkLog steps={latestWorkLog.steps} />
+                      {proposalQueue?.phase === "executing" && activeExecutionItem && (
+                        <div className="glass rounded-card p-2 space-y-1">
+                          <p className="text-caption text-foreground font-medium">
+                            Executing {proposalQueue.executionCursor + 1}/
+                            {proposalQueue.items.filter((item) => item.decision === "confirmed").length}
+                          </p>
+                          <p className="text-caption text-muted-foreground truncate">
+                            {activeExecutionItem.proposal.summary}
+                          </p>
+                          {proposalQueue.executionErrorByItemId[activeExecutionItem.id] && (
+                            <p className="text-caption text-destructive">
+                              {proposalQueue.executionErrorByItemId[activeExecutionItem.id]}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   )}
-                  <div className="flex gap-1.5 w-full min-w-0">
-                    <Input
-                      placeholder={photoConsult ? "Edit prompt or send as-is..." : "Ask AI..."}
-                      className="h-9 text-body-sm bg-sidebar-accent/50 border-sidebar-border flex-1 min-w-0"
-                      value={inputValue}
-                      onChange={(e) => setInputValue(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                    />
-                    <Button
-                      size="icon"
-                      className="h-9 w-9 shrink-0 bg-accent text-accent-foreground hover:bg-accent/90"
-                      onClick={() => handleSend()}
-                    >
-                      <Send className="h-4 w-4" />
-                    </Button>
-                  </div>
+
+                  {activeWindow === "proposal_queue" && proposalQueue && activeQueueItem && (
+                    <div className="w-full min-w-0">
+                      <ProposalQueueCard
+                        item={activeQueueItem}
+                        index={proposalQueue.activeIndex}
+                        total={proposalQueue.items.length}
+                        canGoBack={proposalQueue.activeIndex > 0}
+                        canGoNext={activeQueueItem.decision !== "unresolved"}
+                        allowDirectEdit={allowDirectEdit}
+                        isBusy={proposalQueue.phase === "revising"}
+                        onConfirm={handleQueueConfirm}
+                        onDecline={handleQueueDecline}
+                        onOpenSuggestEdits={handleQueueOpenSuggestEdits}
+                        onSuggestEditTextChange={handleQueueSuggestEditTextChange}
+                        onSubmitEdits={handleQueueSubmitEdits}
+                        onCancelSuggestEdits={handleQueueCancelSuggestEdits}
+                        onToggleDirectEdit={handleToggleDirectEdit}
+                        onDraftSummaryChange={handleDraftSummaryChange}
+                        onDraftChangeLabelChange={handleDraftChangeLabelChange}
+                        onSaveDirectEdits={handleSaveDirectEdits}
+                        onBack={handleQueueBack}
+                        onNext={handleQueueNext}
+                      />
+                    </div>
+                  )}
+
+                  {activeWindow === "photo_consult" && photoConsult && (
+                    <div className="glass rounded-card p-2.5 space-y-2">
+                      <div className="flex items-start gap-2">
+                        <div className={`h-10 w-10 rounded-lg shrink-0 ${placeholderColors[0]} flex items-center justify-center`}>
+                          <Camera className="h-4 w-4 text-muted-foreground/30" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-body-sm font-semibold text-foreground truncate">{photoConsult.photo.caption}</p>
+                          <p className="text-[10px] text-muted-foreground">
+                            {format(new Date(photoConsult.photo.created_at), "MMM d, yyyy · HH:mm")}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => closePhotoConsult()}
+                          className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                        >
+                          <XIcon className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+
+                      {photoAnalysisLoading && (
+                        <div className="space-y-2 animate-pulse">
+                          <div className="h-3 bg-muted rounded w-3/4" />
+                          <div className="h-3 bg-muted rounded w-full" />
+                        </div>
+                      )}
+
+                      {photoAnalysis && !photoAnalysisLoading && (
+                        <p className="text-caption text-foreground">{photoAnalysis.observations}</p>
+                      )}
+
+                      {suggestedActions.length > 0 && !photoAnalysisLoading && (
+                        <div className="space-y-2">
+                          <PreviewCard summary="Suggested actions" changes={suggestedActions} />
+                          <div className="space-y-1 px-1">
+                            {suggestedActions.map((action, idx) => (
+                              <label
+                                key={idx}
+                                className="flex items-center gap-2 text-caption cursor-pointer hover:bg-muted/30 rounded-md px-1.5 py-1 transition-colors"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={selectedActions.has(idx)}
+                                  onChange={() => toggleActionSelection(idx)}
+                                  className="rounded border-border"
+                                />
+                                <span className="text-foreground">{action.label}</span>
+                              </label>
+                            ))}
+                          </div>
+                          <ActionBar
+                            onConfirm={handleConsultConfirm}
+                            onCancel={handleConsultCancel}
+                            disabled={selectedActions.size === 0}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {!isInputLocked && (
+                    <>
+                      <SuggestionChips suggestions={suggestions} onSelect={(text) => setInputValue(text)} />
+
+                      <div className="flex items-center gap-1.5">
+                        {learnMode && (
+                          <span className="text-[10px] font-medium text-accent bg-accent/10 rounded-pill px-2 py-0.5">
+                            Learn mode
+                          </span>
+                        )}
+                        <div className="ml-auto inline-flex items-center rounded-pill border border-sidebar-border bg-sidebar-accent/40 p-0.5">
+                          {[1, 2, 3, 4].map((level) => {
+                            const mode = AUTOMATION_LEVEL_TO_MODE[level as 1 | 2 | 3 | 4];
+                            const isActive = automationMode === mode;
+                            return (
+                              <button
+                                key={`automation-level-${level}`}
+                                onClick={() => persistAutomationMode(mode)}
+                                className={`h-6 min-w-6 rounded-pill px-1.5 text-[10px] font-semibold transition-colors ${
+                                  isActive
+                                    ? "bg-accent text-accent-foreground"
+                                    : "text-muted-foreground hover:text-foreground"
+                                }`}
+                                title={`Automation level ${level}`}
+                              >
+                                {level}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="flex gap-1.5 w-full min-w-0">
+                        <Popover open={plusMenuOpen} onOpenChange={setPlusMenuOpen}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              size="icon"
+                              variant="outline"
+                              className="h-9 w-9 shrink-0 bg-sidebar-accent/50 border-sidebar-border"
+                            >
+                              <Plus className="h-4 w-4" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent align="start" className="w-auto p-2">
+                            <div className="flex items-center gap-1.5">
+                              <Button size="sm" variant="outline" className="h-8 px-2" onClick={handleAttachFilePhoto}>
+                                <Paperclip className="h-3.5 w-3.5 mr-1" />
+                                Attach
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant={learnMode ? "default" : "outline"}
+                                className="h-8 px-2"
+                                onClick={handleToggleLearnMode}
+                              >
+                                <GraduationCap className="h-3.5 w-3.5 mr-1" />
+                                Learn
+                              </Button>
+                              <Button size="sm" variant="outline" className="h-8 px-2" onClick={handleTagPerson}>
+                                <AtSign className="h-3.5 w-3.5 mr-1" />
+                                Tag
+                              </Button>
+                              <Button size="sm" variant="outline" className="h-8 px-2" onClick={handleReferenceTask}>
+                                <Link2 className="h-3.5 w-3.5 mr-1" />
+                                Reference
+                              </Button>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+
+                        <Input
+                          placeholder={learnMode ? "Ask AI to explain decisions and tradeoffs..." : (photoConsult ? "Edit prompt or send as-is..." : "Ask AI...")}
+                          className="h-9 text-body-sm bg-sidebar-accent/50 border-sidebar-border flex-1 min-w-0"
+                          value={inputValue}
+                          onChange={(e) => setInputValue(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                        />
+                        <Button
+                          size="icon"
+                          className="h-9 w-9 shrink-0 bg-accent text-accent-foreground hover:bg-accent/90"
+                          onClick={() => handleSend()}
+                        >
+                          <Send className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </>
+                  )}
                 </div>
               </>
             )}
-
-            {/* Notification Drawer overlay */}
-            <NotificationDrawer open={notifOpen} onClose={() => setNotifOpen(false)} />
           </>
         )}
 

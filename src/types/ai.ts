@@ -25,5 +25,6 @@ export interface AIMessage {
   role: AIMessageRole;
   content: string;
   timestamp: string;
+  mode?: "default" | "learn";
   proposal?: AIProposal;
 }

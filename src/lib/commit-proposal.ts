@@ -26,16 +26,26 @@ export interface CommitResult {
   projectId?: string;
 }
 
-export function commitProposal(proposal: AIProposal): CommitResult {
+export interface CommitProposalOptions {
+  eventSource?: "ai" | "user";
+  eventActorId?: string;
+  emitProposalEvent?: boolean;
+}
+
+function buildPayloadWithSource(payload: Record<string, unknown>, source?: "ai" | "user") {
+  return source ? { ...payload, source } : payload;
+}
+
+export function commitProposal(proposal: AIProposal, options: CommitProposalOptions = {}): CommitResult {
   // Handle create_project specially — no existing project context needed
   if (proposal.type === "create_project") {
-    return commitProjectProposal(proposal);
+    return commitProjectProposal(proposal, options);
   }
 
   const user = getCurrentUser();
   const members = getMembers(proposal.project_id);
   const membership = members.find((m) => m.user_id === user.id);
-  const role: MemberRole = membership?.role ?? "participant";
+  const role: MemberRole = membership?.role ?? "viewer";
   const aiAccess: AIAccess = membership?.ai_access ?? "none";
 
   if (!can(role, "ai.generate", aiAccess)) {
@@ -50,6 +60,7 @@ export function commitProposal(proposal: AIProposal): CommitResult {
   const project = getProject(proposal.project_id);
   const stages = getStages(proposal.project_id);
   const currentStage = stages.find((s) => s.id === project?.current_stage_id) ?? stages[0];
+  const eventActorId = options.eventActorId ?? (options.eventSource === "ai" ? "ai" : user.id);
 
   let count = 0;
   const eventIds: string[] = [];
@@ -75,6 +86,9 @@ export function commitProposal(proposal: AIProposal): CommitResult {
           photos: [],
           linked_estimate_item_ids: [],
           created_at: new Date().toISOString(),
+        }, {
+          actorId: eventActorId,
+          source: options.eventSource,
         });
         created.push({
           type: "task",
@@ -102,6 +116,18 @@ export function commitProposal(proposal: AIProposal): CommitResult {
           cost: parseInt(change.after?.replace(/[^\d]/g, "") ?? "0"),
           status: "not_purchased",
         });
+        const procurementEvtId = `evt-proc-ai-${Date.now()}-${count}`;
+        addEvent({
+          id: procurementEvtId,
+          project_id: pid,
+          actor_id: eventActorId,
+          type: "procurement_created",
+          object_type: "procurement_item",
+          object_id: itemId,
+          timestamp: new Date().toISOString(),
+          payload: buildPayloadWithSource({ title: change.label }, options.eventSource),
+        });
+        eventIds.push(procurementEvtId);
         created.push({
           type: "procurement_item",
           id: itemId,
@@ -130,6 +156,18 @@ export function commitProposal(proposal: AIProposal): CommitResult {
             content: `AI-generated draft for ${change.label}`,
           }],
         });
+        const documentEvtId = `evt-doc-ai-${Date.now()}-${count}`;
+        addEvent({
+          id: documentEvtId,
+          project_id: pid,
+          actor_id: eventActorId,
+          type: "document_created",
+          object_type: "document",
+          object_id: docId,
+          timestamp: new Date().toISOString(),
+          payload: buildPayloadWithSource({ title: change.label }, options.eventSource),
+        });
+        eventIds.push(documentEvtId);
         created.push({
           type: "document",
           id: docId,
@@ -146,12 +184,12 @@ export function commitProposal(proposal: AIProposal): CommitResult {
     addEvent({
       id: evtId,
       project_id: pid,
-      actor_id: user.id,
+      actor_id: eventActorId,
       type: "estimate_created",
       object_type: "estimate_version",
       object_id: proposal.id,
       timestamp: new Date().toISOString(),
-      payload: { summary: proposal.summary },
+      payload: buildPayloadWithSource({ summary: proposal.summary }, options.eventSource),
     });
     eventIds.push(evtId);
     for (const change of proposal.changes) {
@@ -166,25 +204,27 @@ export function commitProposal(proposal: AIProposal): CommitResult {
     count = proposal.changes.length;
   }
 
-  const proposalEvtId = `evt-proposal-${Date.now()}`;
-  addEvent({
-    id: proposalEvtId,
-    project_id: pid,
-    actor_id: user.id,
-    type: "proposal_confirmed",
-    object_type: "proposal",
-    object_id: proposal.id,
-    timestamp: new Date().toISOString(),
-    payload: { summary: proposal.summary, change_count: count },
-  });
-  eventIds.push(proposalEvtId);
+  if (options.emitProposalEvent !== false) {
+    const proposalEvtId = `evt-proposal-${Date.now()}`;
+    addEvent({
+      id: proposalEvtId,
+      project_id: pid,
+      actor_id: eventActorId,
+      type: "proposal_confirmed",
+      object_type: "proposal",
+      object_id: proposal.id,
+      timestamp: new Date().toISOString(),
+      payload: buildPayloadWithSource({ summary: proposal.summary, change_count: count }, options.eventSource),
+    });
+    eventIds.push(proposalEvtId);
+  }
 
   deductCredit();
 
   return { success: true, count, eventIds, created, updated };
 }
 
-function commitProjectProposal(proposal: AIProposal): CommitResult {
+function commitProjectProposal(proposal: AIProposal, options: CommitProposalOptions): CommitResult {
   const user = getCurrentUser();
   const totalCredits = user.credits_free + user.credits_paid;
   if (totalCredits <= 0) {
@@ -193,6 +233,7 @@ function commitProjectProposal(proposal: AIProposal): CommitResult {
 
   const projectChange = proposal.changes.find((c) => c.entity_type === "project");
   const stageChanges = proposal.changes.filter((c) => c.entity_type === "stage");
+  const eventActorId = options.eventActorId ?? (options.eventSource === "ai" ? "ai" : user.id);
 
   const projectId = `project-ai-${Date.now()}`;
   const firstStageId = `stage-ai-${Date.now()}-0`;
@@ -237,17 +278,15 @@ function commitProjectProposal(proposal: AIProposal): CommitResult {
   addEvent({
     id: evtId,
     project_id: projectId,
-    actor_id: user.id,
+    actor_id: eventActorId,
     type: "project_created",
     object_type: "project",
     object_id: projectId,
     timestamp: new Date().toISOString(),
-    payload: { title: projectChange?.label, stages: stageChanges.length },
+    payload: buildPayloadWithSource({ title: projectChange?.label, stages: stageChanges.length }, options.eventSource),
   });
 
   deductCredit();
 
   return { success: true, count: created.length, eventIds: [evtId], created, updated: [], projectId };
 }
-
-

@@ -405,7 +405,7 @@ export function QuickActions({
       project_id: projectId,
       user_id: candidateUserId,
       role: participantRole,
-      ai_access: participantRole === "participant" ? "none" : "consult_only",
+      ai_access: participantRole === "viewer" ? "none" : "consult_only",
       credit_limit: parseInt(participantCredits, 10) || 0,
       used_credits: 0,
     });
@@ -888,9 +888,9 @@ export function QuickActions({
               <Select value={participantRole} onValueChange={(value) => setParticipantRole(value as MemberRole)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="co-owner">Co-owner</SelectItem>
+                  <SelectItem value="co_owner">Co-owner</SelectItem>
                   <SelectItem value="contractor">Contractor</SelectItem>
-                  <SelectItem value="participant">Viewer</SelectItem>
+                  <SelectItem value="viewer">Viewer</SelectItem>
                 </SelectContent>
               </Select>
             </div>

@@ -57,12 +57,12 @@ export const seedProjects: Project[] = [
 export const seedMembers: Member[] = [
   { project_id: "project-1", user_id: "user-1", role: "owner", ai_access: "project_pool", credit_limit: 500, used_credits: 45 },
   { project_id: "project-1", user_id: "user-2", role: "contractor", ai_access: "consult_only", credit_limit: 100, used_credits: 12 },
-  { project_id: "project-1", user_id: "user-3", role: "participant", ai_access: "none", credit_limit: 0, used_credits: 0 },
+  { project_id: "project-1", user_id: "user-3", role: "viewer", ai_access: "none", credit_limit: 0, used_credits: 0 },
   { project_id: "project-2", user_id: "user-1", role: "owner", ai_access: "project_pool", credit_limit: 500, used_credits: 8 },
   { project_id: "project-2", user_id: "user-2", role: "contractor", ai_access: "consult_only", credit_limit: 50, used_credits: 3 },
   { project_id: "project-3", user_id: "user-1", role: "owner", ai_access: "project_pool", credit_limit: 500, used_credits: 120 },
   { project_id: "project-3", user_id: "user-2", role: "contractor", ai_access: "consult_only", credit_limit: 100, used_credits: 25 },
-  { project_id: "project-3", user_id: "user-3", role: "participant", ai_access: "consult_only", credit_limit: 30, used_credits: 10 },
+  { project_id: "project-3", user_id: "user-3", role: "viewer", ai_access: "consult_only", credit_limit: 30, used_credits: 10 },
 ];
 
 export const seedStages: Stage[] = [
@@ -245,7 +245,7 @@ export const seedEvents: Event[] = [
   { id: "evt-4", project_id: "project-1", actor_id: "user-1", type: "estimate_approved", object_type: "estimate_version", object_id: "ev-1-1", timestamp: "2025-01-12T11:00:00Z", payload: { version: 1 } },
   { id: "evt-5", project_id: "project-1", actor_id: "user-2", type: "photo_uploaded", object_type: "media", object_id: "media-1-1", timestamp: "2025-01-14T16:00:00Z", payload: { caption: "Old flooring removed — living room" } },
   { id: "evt-6", project_id: "project-1", actor_id: "user-2", type: "comment_added", object_type: "task", object_id: "task-1-6", timestamp: "2025-02-10T14:30:00Z", payload: { text: "Waiting for plumbing rough-in to complete" } },
-  { id: "evt-7", project_id: "project-1", actor_id: "user-1", type: "member_added", object_type: "member", object_id: "user-3", timestamp: "2025-01-08T09:00:00Z", payload: { name: "Dmitry Sokolov", role: "participant" } },
+  { id: "evt-7", project_id: "project-1", actor_id: "user-1", type: "member_added", object_type: "member", object_id: "user-3", timestamp: "2025-01-08T09:00:00Z", payload: { name: "Dmitry Sokolov", role: "viewer" } },
   { id: "evt-8", project_id: "project-2", actor_id: "user-1", type: "task_created", object_type: "task", object_id: "task-2-1", timestamp: "2025-02-01T10:00:00Z", payload: { title: "Create floor plan" } },
   { id: "evt-9", project_id: "project-2", actor_id: "user-1", type: "estimate_created", object_type: "estimate_version", object_id: "ev-2-1", timestamp: "2025-02-02T11:00:00Z", payload: { version: 1 } },
   { id: "evt-10", project_id: "project-2", actor_id: "user-1", type: "document_uploaded", object_type: "document", object_id: "doc-2-1", timestamp: "2025-02-03T14:00:00Z", payload: { title: "Build-out Agreement" } },

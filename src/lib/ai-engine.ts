@@ -1,14 +1,21 @@
 import type { AIProposal, ProposalChange } from "@/types/ai";
 import { getProject, getStages } from "@/data/store";
 
-export function generateProposal(input: string, projectId: string): AIProposal | null {
-  const lower = input.toLowerCase();
+type AutomationMode = "full" | "assisted" | "manual" | "observer";
+
+function getStageTitle(projectId: string): string | null {
   const project = getProject(projectId);
   if (!project) return null;
-
   const stages = getStages(projectId);
   const currentStage = stages.find((s) => s.id === project.current_stage_id) ?? stages[0];
-  const stageTitle = currentStage?.title ?? "Current stage";
+  return currentStage?.title ?? "Current stage";
+}
+
+function createProjectProposals(input: string, projectId: string): AIProposal[] {
+  const lower = input.toLowerCase();
+  const stageTitle = getStageTitle(projectId);
+  if (!stageTitle) return [];
+  const proposals: AIProposal[] = [];
 
   if (/task|add task|create task/i.test(lower)) {
     const changes: ProposalChange[] = [
@@ -16,14 +23,14 @@ export function generateProposal(input: string, projectId: string): AIProposal |
       { entity_type: "task", action: "create", label: `Run conduit for ${stageTitle}`, after: "not_started" },
       { entity_type: "task", action: "create", label: `Inspection sign-off — ${stageTitle}`, after: "not_started" },
     ];
-    return {
+    proposals.push({
       id: `proposal-${Date.now()}`,
       project_id: projectId,
       type: "add_task",
       summary: `Add 3 tasks for "${stageTitle}"`,
       changes,
       status: "pending",
-    };
+    });
   }
 
   if (/estimate|cost|budget/i.test(lower)) {
@@ -31,14 +38,14 @@ export function generateProposal(input: string, projectId: string): AIProposal |
       { entity_type: "estimate_item", action: "update", label: "Electrical rough-in", before: "48,000 ₽", after: "52,000 ₽" },
       { entity_type: "estimate_item", action: "create", label: "Additional outlet points ×6", after: "12,000 ₽" },
     ];
-    return {
-      id: `proposal-${Date.now()}`,
+    proposals.push({
+      id: `proposal-${Date.now()}-estimate`,
       project_id: projectId,
       type: "update_estimate",
       summary: "Update estimate — adjust electrical costs",
       changes,
       status: "pending",
-    };
+    });
   }
 
   if (/procurement|buy|purchase|material/i.test(lower)) {
@@ -46,31 +53,74 @@ export function generateProposal(input: string, projectId: string): AIProposal |
       { entity_type: "procurement_item", action: "create", label: "LED panel lights 60×60 ×12", after: "18,000 ₽" },
       { entity_type: "procurement_item", action: "create", label: "Cable tray 2m sections ×8", after: "6,400 ₽" },
     ];
-    return {
-      id: `proposal-${Date.now()}`,
+    proposals.push({
+      id: `proposal-${Date.now()}-proc`,
       project_id: projectId,
       type: "add_procurement",
       summary: "Add 2 procurement items",
       changes,
       status: "pending",
-    };
+    });
   }
 
   if (/document|contract|generate|report/i.test(lower)) {
     const changes: ProposalChange[] = [
       { entity_type: "document", action: "create", label: `Subcontractor Agreement — ${stageTitle}`, after: "Draft v1" },
     ];
-    return {
-      id: `proposal-${Date.now()}`,
+    proposals.push({
+      id: `proposal-${Date.now()}-doc`,
       project_id: projectId,
       type: "generate_document",
       summary: "Generate subcontractor agreement draft",
       changes,
       status: "pending",
+    });
+  }
+
+  return proposals;
+}
+
+export function generateProposal(input: string, projectId: string): AIProposal | null {
+  const proposals = createProjectProposals(input, projectId);
+  return proposals[0] ?? null;
+}
+
+export function generateProposalQueue(input: string, projectId: string, automationMode: string): AIProposal[] {
+  const normalizedMode: AutomationMode =
+    automationMode === "full" || automationMode === "manual" || automationMode === "observer"
+      ? automationMode
+      : "assisted";
+  const proposals = createProjectProposals(input, projectId);
+
+  if (proposals.length <= 1) return proposals;
+
+  // Keep queue path active for all levels; L1/L2 autonomy tuning can be expanded later.
+  if (normalizedMode === "full") return proposals;
+  if (normalizedMode === "assisted") return proposals;
+  if (normalizedMode === "manual") return proposals;
+  return proposals;
+}
+
+export function reviseProposalWithEdits(proposal: AIProposal, edits: string): AIProposal {
+  const trimmedEdits = edits.trim();
+  if (!trimmedEdits) {
+    return {
+      ...proposal,
+      id: `proposal-${Date.now()}-rev`,
+      status: "pending",
     };
   }
 
-  return null;
+  return {
+    ...proposal,
+    id: `proposal-${Date.now()}-rev`,
+    status: "pending",
+    summary: `${proposal.summary} (revised)`,
+    changes: proposal.changes.map((change, idx) => ({
+      ...change,
+      label: idx === 0 ? `${change.label} — ${trimmedEdits}` : change.label,
+    })),
+  };
 }
 
 /* --- Global (non-project) proposals --- */

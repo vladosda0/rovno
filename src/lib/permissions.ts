@@ -14,13 +14,13 @@ const CONTRACTOR_ACTIONS: Action[] = [
   "ai.generate", "task.create", "task.edit", "document.create", "procurement.edit",
 ];
 
-export function isOwnerOrCoOwner(role: MemberRole): role is "owner" | "co-owner" {
-  return role === "owner" || role === "co-owner";
+export function isOwnerOrCoOwner(role: MemberRole): role is "owner" | "co_owner" {
+  return role === "owner" || role === "co_owner";
 }
 
 export function can(role: MemberRole, action: Action, aiAccess?: AIAccess): boolean {
   if (isOwnerOrCoOwner(role)) return true;
-  if (role === "participant") return false;
+  if (role === "viewer") return false;
   // contractor
   if (action === "ai.generate") return aiAccess !== "none";
   return CONTRACTOR_ACTIONS.includes(action);
@@ -30,7 +30,7 @@ export function usePermission(projectId: string) {
   const user = getCurrentUser();
   const members = getMembers(projectId);
   const membership = members.find((m) => m.user_id === user.id);
-  const role: MemberRole = membership?.role ?? "participant";
+  const role: MemberRole = membership?.role ?? "viewer";
   const aiAccess: AIAccess = membership?.ai_access ?? "none";
 
   return {

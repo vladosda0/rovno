@@ -12,8 +12,8 @@ interface Props {
 
 export function ParticipantsWidget({ members, projectId, className }: Props) {
   const roleLabel = (role: Member["role"]) => {
-    if (role === "co-owner") return "Co-owner";
-    if (role === "participant") return "Viewer";
+    if (role === "co_owner") return "Co-owner";
+    if (role === "viewer") return "Viewer";
     return role.charAt(0).toUpperCase() + role.slice(1);
   };
 
