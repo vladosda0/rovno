@@ -677,7 +677,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
             ? {
                 ...item,
                 proposal: revised,
-                decision: "unresolved",
+                decision: "unresolved" as ProposalDecision,
                 suggestEditMode: false,
                 suggestEditText: "",
                 directEditMode: defaultDirectEditForNewProposal,
@@ -741,7 +741,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
             ...item.proposal,
             summary: item.draftSummary,
             changes: nextChanges,
-            status: "pending",
+            status: "pending" as const,
           },
           directEditMode: false,
         };
