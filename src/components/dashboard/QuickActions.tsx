@@ -335,6 +335,14 @@ export function QuickActions({
   const handleCreatePhoto = () => {
     if (!photoFile && !photoDescription.trim()) return;
 
+    // RBAC guard: prevent task creation via photo flow for read-only roles.
+    if (photoCreateTask && !canCreateTask) {
+      toast({ title: "Not allowed", description: "You don't have permission to create tasks." });
+      setPhotoCreateTask(false);
+      return;
+    }
+
+
     let linkedTaskId = photoTaskId || undefined;
     if (photoCreateTask) {
       const taskId = `task-${Date.now()}`;
