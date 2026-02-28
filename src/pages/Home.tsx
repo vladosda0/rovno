@@ -1,260 +1,89 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Progress } from "@/components/ui/progress";
-import { Plus, Sparkles, Paperclip, FolderPlus } from "lucide-react";
-import { useProjects, useCurrentUser } from "@/hooks/use-mock-data";
-import { PreviewCard } from "@/components/ai/PreviewCard";
-import { ActionBar } from "@/components/ai/ActionBar";
-import { SuggestionChips } from "@/components/ai/SuggestionChips";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
-  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel,
-} from "@/components/ui/alert-dialog";
-import { generateProjectProposal } from "@/lib/ai-engine";
-import { commitProposal } from "@/lib/commit-proposal";
-import { toast } from "@/hooks/use-toast";
-import type { AIProposal } from "@/types/ai";
-import { addProject, addStage, addMember, addEvent, getCurrentUser } from "@/data/store";
+  LayoutDashboard, FolderOpen, CheckSquare, FileText,
+  Package, Warehouse, TrendingUp, Users,
+} from "lucide-react";
+import { OverviewTab } from "@/components/home/OverviewTab";
+import { ProjectsTab } from "@/components/home/ProjectsTab";
+import { TasksTab } from "@/components/home/TasksTab";
+import { DocumentsTab } from "@/components/home/DocumentsTab";
+import { ProcurementTab } from "@/components/home/ProcurementTab";
+import { InventoryTab } from "@/components/home/InventoryTab";
+import { FinanceTab } from "@/components/home/FinanceTab";
+import { ResourcesTab } from "@/components/home/ResourcesTab";
 
-/* ---------- status helpers ---------- */
-function getStatusText(progress: number): string {
-  if (progress >= 100) return "Done";
-  if (progress > 0) return "In progress";
-  return "Draft";
-}
-function getStatusColor(progress: number): string {
-  if (progress >= 100) return "bg-success/15 text-success";
-  if (progress > 0) return "bg-info/15 text-info";
-  return "bg-muted text-muted-foreground";
-}
+const TABS = [
+  { value: "overview", label: "Overview", icon: LayoutDashboard },
+  { value: "projects", label: "Projects", icon: FolderOpen },
+  { value: "tasks", label: "Tasks", icon: CheckSquare },
+  { value: "documents", label: "Documents", icon: FileText },
+  { value: "procurement", label: "Procurement", icon: Package },
+  { value: "inventory", label: "Inventory", icon: Warehouse },
+  { value: "finance", label: "Finance", icon: TrendingUp },
+  { value: "resources", label: "Resources", icon: Users },
+] as const;
 
-/* ---------- suggestion chips ---------- */
-const SUGGESTIONS = [
-  "Renovate a 2-bedroom apartment",
-  "Build out an office space",
-  "Kitchen remodel",
-  "Bathroom renovation",
-];
+type TabValue = (typeof TABS)[number]["value"];
+
+const VALID_TABS = new Set<string>(TABS.map((t) => t.value));
 
 export default function Home() {
-  const projects = useProjects();
-  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<TabValue>(() => {
+    const param = searchParams.get("tab");
+    return param && VALID_TABS.has(param) ? (param as TabValue) : "overview";
+  });
 
-  /* AI project creation state */
-  const [description, setDescription] = useState("");
-  const [proposal, setProposal] = useState<AIProposal | null>(null);
+  useEffect(() => {
+    const param = searchParams.get("tab");
+    if (param && VALID_TABS.has(param) && param !== activeTab) {
+      setActiveTab(param as TabValue);
+    }
+  }, [searchParams]);
 
-  /* Manual creation modal */
-  const [manualOpen, setManualOpen] = useState(false);
-  const [manualTitle, setManualTitle] = useState("");
-  const [manualType, setManualType] = useState("residential");
-
-  /* --- AI flow --- */
-  function handleAiSubmit(text?: string) {
-    const input = (text ?? description).trim();
-    if (!input) return;
-    setDescription(input);
-    const p = generateProjectProposal(input);
-    setProposal(p);
-  }
-
-  function handleConfirm() {
-    if (!proposal) return;
-    const result = commitProposal(proposal);
-    if (result.success) {
-      toast({ title: "Project created", description: `${result.count} items set up.` });
-      setProposal(null);
-      setDescription("");
-      if (result.projectId) {
-        navigate(`/project/${result.projectId}/dashboard`);
-      }
+  function handleTabChange(value: string) {
+    setActiveTab(value as TabValue);
+    if (value === "overview") {
+      setSearchParams({}, { replace: true });
     } else {
-      toast({ title: "Error", description: result.error, variant: "destructive" });
+      setSearchParams({ tab: value }, { replace: true });
     }
   }
 
-  function handleCancel() {
-    setProposal(null);
-  }
-
-  /* --- Manual flow --- */
-  function handleManualCreate() {
-    const title = manualTitle.trim() || "Untitled Project";
-    const id = `project-manual-${Date.now()}`;
-    const stageId = `stage-manual-${Date.now()}-0`;
-    const user = getCurrentUser();
-
-    addProject({
-      id,
-      owner_id: user.id,
-      title,
-      type: manualType,
-      automation_level: "manual",
-      current_stage_id: stageId,
-      progress_pct: 0,
-    });
-    addMember({
-      project_id: id,
-      user_id: user.id,
-      role: "owner",
-      ai_access: "project_pool",
-      credit_limit: 500,
-      used_credits: 0,
-    });
-    addStage({
-      id: stageId,
-      project_id: id,
-      title: "Stage 1",
-      description: "",
-      order: 1,
-      status: "open",
-    });
-    addEvent({
-      id: `evt-manual-${Date.now()}`,
-      project_id: id,
-      actor_id: user.id,
-      type: "project_created",
-      object_type: "project",
-      object_id: id,
-      timestamp: new Date().toISOString(),
-      payload: { title },
-    });
-    toast({ title: "Project created", description: title });
-    setManualOpen(false);
-    setManualTitle("");
-    navigate(`/project/${id}/dashboard`);
-  }
-
   return (
-    <div className="p-sp-3 max-w-5xl mx-auto space-y-sp-3">
-      {/* --- HomeHeader --- */}
-      <div className="glass-elevated rounded-panel p-sp-3">
-        <h1 className="text-h2 text-foreground">Your Projects</h1>
+    <div className="p-sp-3 max-w-6xl mx-auto">
+      <div className="mb-sp-3">
+        <h1 className="text-h2 text-foreground">Home</h1>
         <p className="text-body-sm text-muted-foreground mt-1">
-          Describe a project and let AI set it up, or create one manually.
+          Your workspace — projects, tasks, documents, and more.
         </p>
       </div>
 
-      {/* --- AiProjectInput --- */}
-      <div className="glass rounded-card p-sp-2 space-y-sp-1">
-        <div className="flex gap-2 items-start">
-          <Textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Describe your project… e.g. 'Renovate a 60m² apartment with 2 bedrooms'"
-            className="flex-1 min-h-[72px] resize-none bg-background/50"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleAiSubmit();
-              }
-            }}
-          />
-          <div className="flex flex-col gap-1.5 shrink-0">
-            <Button
-              onClick={() => handleAiSubmit()}
-              disabled={!description.trim()}
-              className="bg-accent text-accent-foreground hover:bg-accent/90"
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
+        <TabsList className="w-full justify-start h-auto flex-wrap gap-0.5 bg-transparent p-0 mb-sp-3">
+          {TABS.map((tab) => (
+            <TabsTrigger
+              key={tab.value}
+              value={tab.value}
+              className="flex items-center gap-1.5 px-3 py-2 text-caption data-[state=active]:bg-accent/10 data-[state=active]:text-accent data-[state=active]:shadow-none rounded-lg"
             >
-              <Sparkles className="h-4 w-4 mr-1.5" />
-              Generate
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-9 w-9"
-              title="Attach files"
-            >
-              <Paperclip className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
+              <tab.icon className="h-3.5 w-3.5" />
+              {tab.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
 
-        {!proposal && (
-          <SuggestionChips suggestions={SUGGESTIONS} onSelect={(s) => handleAiSubmit(s)} />
-        )}
-
-        {/* Proposal preview */}
-        {proposal && (
-          <div className="space-y-2 pt-1">
-            <PreviewCard summary={proposal.summary} changes={proposal.changes} />
-            <ActionBar
-              onConfirm={handleConfirm}
-              onCancel={handleCancel}
-            />
-          </div>
-        )}
-      </div>
-
-      {/* --- ProjectCardGrid --- */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-body font-semibold text-foreground">All projects</h2>
-        <Button variant="outline" size="sm" onClick={() => setManualOpen(true)}>
-          <FolderPlus className="h-4 w-4 mr-1.5" />
-          Create manually
-        </Button>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-sp-2">
-        {projects.map((p) => (
-          <Link
-            key={p.id}
-            to={`/project/${p.id}/dashboard`}
-            className="glass rounded-card p-sp-3 hover:scale-[1.01] transition-transform duration-150 space-y-2"
-          >
-            <div className="flex items-start justify-between gap-2">
-              <h3 className="text-body font-semibold text-foreground truncate">{p.title}</h3>
-              <span className={`text-caption font-medium px-2 py-0.5 rounded-pill shrink-0 ${getStatusColor(p.progress_pct)}`}>
-                {getStatusText(p.progress_pct)}
-              </span>
-            </div>
-            <Progress value={p.progress_pct} className="h-1.5" />
-            <p className="text-caption text-muted-foreground">{p.progress_pct}% complete</p>
-          </Link>
-        ))}
-      </div>
-
-      {/* --- ManualCreateModal --- */}
-      <AlertDialog open={manualOpen} onOpenChange={setManualOpen}>
-        <AlertDialogContent className="glass-modal rounded-modal">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Create project manually</AlertDialogTitle>
-            <AlertDialogDescription>Enter a name and type for your new project.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="space-y-3 py-2">
-            <div className="space-y-1">
-              <label className="text-body-sm font-medium text-foreground">Project name</label>
-              <Input
-                value={manualTitle}
-                onChange={(e) => setManualTitle(e.target.value)}
-                placeholder="e.g. Bathroom renovation"
-                autoFocus
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-body-sm font-medium text-foreground">Type</label>
-              <select
-                value={manualType}
-                onChange={(e) => setManualType(e.target.value)}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-              >
-                <option value="residential">Residential</option>
-                <option value="commercial">Commercial</option>
-                <option value="industrial">Industrial</option>
-              </select>
-            </div>
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleManualCreate} className="bg-accent text-accent-foreground hover:bg-accent/90">
-              Create
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        <TabsContent value="overview"><OverviewTab /></TabsContent>
+        <TabsContent value="projects"><ProjectsTab /></TabsContent>
+        <TabsContent value="tasks"><TasksTab /></TabsContent>
+        <TabsContent value="documents"><DocumentsTab /></TabsContent>
+        <TabsContent value="procurement"><ProcurementTab /></TabsContent>
+        <TabsContent value="inventory"><InventoryTab /></TabsContent>
+        <TabsContent value="finance"><FinanceTab /></TabsContent>
+        <TabsContent value="resources"><ResourcesTab /></TabsContent>
+      </Tabs>
     </div>
   );
 }

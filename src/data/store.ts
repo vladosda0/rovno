@@ -68,6 +68,18 @@ export function getTasks(projectId: string, filters?: { stage_id?: string; statu
   return result;
 }
 
+export function getAllTasks(): Task[] {
+  return tasks;
+}
+
+export function getAllDocuments(): Document[] {
+  return documents;
+}
+
+export function getAllProcurementItems(): ProcurementItem[] {
+  return procurementItems;
+}
+
 export function getEstimate(projectId: string): Estimate | undefined {
   return estimates.find((e) => e.project_id === projectId);
 }

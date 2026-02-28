@@ -106,10 +106,10 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
                     <p className="text-body-sm font-medium text-foreground truncate">{user.name || "User"}</p>
                   </div>
                 </div>
-                <DropdownMenuItem asChild>
-                  <Link to="/profile">
+              <DropdownMenuItem asChild>
+                  <Link to="/home">
                     <User className="mr-2 h-4 w-4" />
-                    Profile
+                    Home
                   </Link>
                 </DropdownMenuItem>
               </div>
@@ -194,7 +194,7 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48 glass-elevated rounded-card">
           <DropdownMenuItem asChild>
-            <Link to="/profile"><User className="mr-2 h-4 w-4" />Profile</Link>
+            <Link to="/home"><User className="mr-2 h-4 w-4" />Home</Link>
           </DropdownMenuItem>
           <DropdownMenuItem asChild>
             <Link to="/settings"><Settings className="mr-2 h-4 w-4" />Settings</Link>
