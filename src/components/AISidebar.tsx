@@ -12,9 +12,13 @@ import {
   GraduationCap,
   AtSign,
   Link2,
+  Mic,
+  Loader2,
+  ChevronDown,
+  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { WorkLog } from "@/components/ai/WorkLog";
@@ -26,7 +30,11 @@ import { ProposalQueueCard, type ProposalQueueItemState, type ProposalDecision }
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useCurrentUser, useEvents, useProject, useTasks } from "@/hooks/use-mock-data";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useCurrentUser, useEvents, useProject, useProjects, useTasks } from "@/hooks/use-mock-data";
 import { usePermission } from "@/lib/permissions";
 import { generateProposalQueue, getTextResponse, reviseProposalWithEdits } from "@/lib/ai-engine";
 import { commitProposal } from "@/lib/commit-proposal";
@@ -55,12 +63,6 @@ const COLLAPSED_WIDTH = 48;
 
 const WORK_STEPS_GENERATE = ["Reading project state", "Checking permissions", "Drafting proposal", "Estimating credits", "Ready for review"];
 const WORK_STEPS_COMMIT = ["Applying changes", "Writing event log", "Updating context pack", "Done"];
-const AUTOMATION_LEVEL_TO_MODE: Record<1 | 2 | 3 | 4, AutomationMode> = {
-  1: "full",
-  2: "assisted",
-  3: "manual",
-  4: "observer",
-};
 const AUTOMATION_MODE_TO_LEVEL: Record<AutomationMode, 1 | 2 | 3 | 4> = {
   full: 1,
   assisted: 2,
@@ -68,10 +70,37 @@ const AUTOMATION_MODE_TO_LEVEL: Record<AutomationMode, 1 | 2 | 3 | 4> = {
   observer: 4,
 };
 const VALID_AUTOMATION_MODES: Set<AutomationMode> = new Set(["full", "assisted", "manual", "observer"]);
+const COMPOSER_MAX_HEIGHT = 220;
+const GENERAL_MODE_VALUE = "general";
+const ACTIONABLE_PROPOSAL_PATTERN = /\b(task|add task|create task|estimate|cost|budget|procurement|buy|purchase|material|document|contract|report|generate)\b/i;
 
 type FeedFilter = "all" | "task" | "estimate" | "document" | "photo" | "member" | "ai_actions";
 type ActiveWindow = "none" | "worklog" | "proposal_queue" | "photo_consult";
 type AutomationMode = "full" | "assisted" | "manual" | "observer";
+type VoiceState = "idle" | "listening" | "processing";
+
+const AUTOMATION_OPTIONS: { mode: AutomationMode; label: string; description: string }[] = [
+  {
+    mode: "manual",
+    label: "Manual Control",
+    description: "Maximum user oversight.",
+  },
+  {
+    mode: "assisted",
+    label: "Assisted",
+    description: "AI groups actions, user confirms once.",
+  },
+  {
+    mode: "observer",
+    label: "Proactive",
+    description: "AI executes predefined low-risk actions automatically.",
+  },
+  {
+    mode: "full",
+    label: "Autopilot",
+    description: "AI runs operational layer autonomously.",
+  },
+];
 
 interface WorkLogEntry {
   id: string;
@@ -187,10 +216,12 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const isProjectContext = location.pathname.startsWith("/project/");
+  const isHomeContext = location.pathname === "/home";
   const projectId = isProjectContext ? location.pathname.split("/")[2] : "";
 
   const isGuest = !isAuthenticated();
   const user = useCurrentUser();
+  const projects = useProjects();
   const permResult = usePermission(projectId || "");
   const perm = isProjectContext && !isGuest ? permResult : null;
   const { project, members } = useProject(projectId || "");
@@ -204,6 +235,9 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const [activityFilter, setActivityFilter] = useState<FeedFilter>("all");
   const [learnMode, setLearnMode] = useState(false);
   const [automationMode, setAutomationMode] = useState<AutomationMode>("assisted");
+  const [homeProjectMode, setHomeProjectMode] = useState<string>(GENERAL_MODE_VALUE);
+  const [pendingGeneralProposalInput, setPendingGeneralProposalInput] = useState<string | null>(null);
+  const [voiceState, setVoiceState] = useState<VoiceState>("idle");
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const [tagPersonCursor, setTagPersonCursor] = useState(0);
   const [referenceTaskCursor, setReferenceTaskCursor] = useState(0);
@@ -219,6 +253,8 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const highlightTimersRef = useRef<Map<string, number>>(new Map());
   const dragRef = useRef<{ startX: number; startW: number } | null>(null);
   const executingQueueRef = useRef(false);
+  const composerTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const voiceTimersRef = useRef<number[]>([]);
   const [highlightedEventIds, setHighlightedEventIds] = useState<Set<string>>(new Set());
 
   // Photo consult state
@@ -277,6 +313,15 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     setMessages([]);
     setWorkLogs(new Map());
     setProposalQueue(null);
+    setPendingGeneralProposalInput(null);
+    setVoiceState("idle");
+    voiceTimersRef.current.forEach((timerId) => {
+      window.clearTimeout(timerId);
+    });
+    voiceTimersRef.current = [];
+    if (location.pathname === "/home") {
+      setHomeProjectMode(GENERAL_MODE_VALUE);
+    }
     // Don't clear photo consult on navigation - it should persist
   }, [location.pathname]);
 
@@ -293,6 +338,19 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, String(width));
   }, [width]);
+
+  const clearVoiceTimers = useCallback(() => {
+    voiceTimersRef.current.forEach((timerId) => {
+      window.clearTimeout(timerId);
+    });
+    voiceTimersRef.current = [];
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      clearVoiceTimers();
+    };
+  }, [clearVoiceTimers]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -333,6 +391,21 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const automationLevel = AUTOMATION_MODE_TO_LEVEL[automationMode];
   const allowDirectEdit = automationLevel >= 3;
   const defaultDirectEditForNewProposal = automationLevel === 4;
+  const selectedAutomationOption = AUTOMATION_OPTIONS.find((option) => option.mode === automationMode) ?? AUTOMATION_OPTIONS[1];
+
+  const resizeComposer = useCallback(() => {
+    const textarea = composerTextareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = "auto";
+    const nextHeight = Math.min(textarea.scrollHeight, COMPOSER_MAX_HEIGHT);
+    textarea.style.height = `${nextHeight}px`;
+    textarea.style.overflowY = textarea.scrollHeight > COMPOSER_MAX_HEIGHT ? "auto" : "hidden";
+  }, []);
+
+  useEffect(() => {
+    if (isInputLocked) return;
+    resizeComposer();
+  }, [inputValue, isInputLocked, resizeComposer]);
 
   function persistAutomationMode(nextMode: AutomationMode) {
     setAutomationMode(nextMode);
@@ -476,35 +549,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     void runQueueExecution(queueSnapshot);
   }, [runQueueExecution]);
 
-  function handleSend(text?: string) {
-    if (activeWindow !== "none" || proposalQueue) return;
-    const content = (text ?? inputValue).trim();
-    if (!content) return;
-    setInputValue("");
-
-    // Clear photo consult when sending (prompt was used)
-    if (photoConsult) {
-      setPhotoConsult(null);
-    }
-
-    if (totalCredits <= 0) {
-      setLimitModalOpen(true);
-      return;
-    }
-
-    if (isProjectContext && perm && !perm.can("ai.generate")) {
-      toast({ title: "Access denied", description: "You don't have permission to use AI generation.", variant: "destructive" });
-      return;
-    }
-
-    const userMsg: AIMessage = {
-      id: `msg-${Date.now()}`,
-      role: "user",
-      content,
-      timestamp: new Date().toISOString(),
-      mode: learnMode ? "learn" : "default",
-    };
-
+  const runAssistantForContent = useCallback((content: string, userMessageId: string, targetProjectId?: string) => {
     const workLogId = `wl-${Date.now()}`;
     setWorkLogs((prev) => {
       const next = new Map(prev);
@@ -512,11 +557,9 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
       return next;
     });
 
-    setMessages((prev) => [...prev, userMsg]);
-
-    setTimeout(() => {
-      const proposals = isProjectContext
-        ? generateProposalQueue(content, projectId, automationMode)
+    window.setTimeout(() => {
+      const proposals = targetProjectId
+        ? generateProposalQueue(content, targetProjectId, automationMode)
         : [];
       const assistantContent = proposals.length > 0
         ? `I've prepared ${proposals.length} proposal${proposals.length === 1 ? "" : "s"}. Review them below.`
@@ -538,7 +581,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
 
       if (proposals.length > 0) {
         const queueItems: ProposalQueueItemState[] = proposals.map((proposal, idx) => ({
-          id: `queue-item-${userMsg.id}-${idx}`,
+          id: `queue-item-${userMessageId}-${idx}`,
           proposal,
           decision: "unresolved",
           suggestEditMode: false,
@@ -548,7 +591,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
           draftChangeLabels: proposal.changes.map((change) => change.label),
         }));
         setProposalQueue({
-          messageId: userMsg.id,
+          messageId: userMessageId,
           items: queueItems,
           activeIndex: 0,
           phase: "review",
@@ -558,6 +601,103 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
         });
       }
     }, WORK_STEPS_GENERATE.length * 600 + 200);
+  }, [automationMode, defaultDirectEditForNewProposal]);
+
+  function shouldAskProjectBeforeProposal(content: string) {
+    return ACTIONABLE_PROPOSAL_PATTERN.test(content);
+  }
+
+  function handleHomeProjectModeChange(nextProjectMode: string) {
+    setHomeProjectMode(nextProjectMode);
+
+    if (!pendingGeneralProposalInput || nextProjectMode === GENERAL_MODE_VALUE) return;
+    if (activeWindow !== "none" || proposalQueue) return;
+
+    const selectedProject = projects.find((projectItem) => projectItem.id === nextProjectMode);
+    if (selectedProject) {
+      setMessages((prev) => [...prev, {
+        id: `msg-${Date.now()}-project-selected`,
+        role: "assistant",
+        content: `Using "${selectedProject.title}". Preparing proposals now.`,
+        timestamp: new Date().toISOString(),
+      }]);
+    }
+
+    const pendingContent = pendingGeneralProposalInput;
+    setPendingGeneralProposalInput(null);
+    runAssistantForContent(pendingContent, `pending-${Date.now()}`, nextProjectMode);
+  }
+
+  function handleVoiceInput() {
+    // TODO: wire this UI stub to real audio capture/transcription when backend wrapper is available.
+    clearVoiceTimers();
+
+    if (voiceState !== "idle") {
+      setVoiceState("idle");
+      return;
+    }
+
+    setVoiceState("listening");
+    const toProcessing = window.setTimeout(() => {
+      setVoiceState("processing");
+    }, 1200);
+    const toIdle = window.setTimeout(() => {
+      setVoiceState("idle");
+    }, 2500);
+    voiceTimersRef.current = [toProcessing, toIdle];
+  }
+
+  function handleSend(text?: string) {
+    if (activeWindow !== "none" || proposalQueue) return;
+    const content = (text ?? inputValue).trim();
+    if (!content) return;
+    setInputValue("");
+
+    // Clear photo consult when sending (prompt was used)
+    if (photoConsult) {
+      setPhotoConsult(null);
+    }
+
+    if (totalCredits <= 0) {
+      setLimitModalOpen(true);
+      return;
+    }
+
+    if (isProjectContext && perm && !perm.can("ai.generate")) {
+      toast({ title: "Access denied", description: "You don't have permission to use AI generation.", variant: "destructive" });
+      return;
+    }
+
+    if (!isProjectContext && isHomeContext && homeProjectMode === GENERAL_MODE_VALUE && shouldAskProjectBeforeProposal(content)) {
+      const userMsg: AIMessage = {
+        id: `msg-${Date.now()}`,
+        role: "user",
+        content,
+        timestamp: new Date().toISOString(),
+        mode: learnMode ? "learn" : "default",
+      };
+      setMessages((prev) => [...prev, userMsg, {
+        id: `msg-${Date.now() + 1}`,
+        role: "assistant",
+        content: "This request needs project context. Select a project below, and I will prepare proposals.",
+        timestamp: new Date().toISOString(),
+      }]);
+      setPendingGeneralProposalInput(content);
+      return;
+    }
+
+    const userMsg: AIMessage = {
+      id: `msg-${Date.now()}`,
+      role: "user",
+      content,
+      timestamp: new Date().toISOString(),
+      mode: learnMode ? "learn" : "default",
+    };
+    setMessages((prev) => [...prev, userMsg]);
+    const targetProjectId = isProjectContext
+      ? projectId
+      : (isHomeContext && homeProjectMode !== GENERAL_MODE_VALUE ? homeProjectMode : "");
+    runAssistantForContent(content, userMsg.id, targetProjectId || undefined);
   }
 
   function updateQueueDecision(decision: ProposalDecision) {
@@ -816,7 +956,9 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     });
   }
 
-  const suggestions = isProjectContext ? PROJECT_SUGGESTIONS : GLOBAL_SUGGESTIONS;
+  const suggestions = (isProjectContext || (isHomeContext && homeProjectMode !== GENERAL_MODE_VALUE))
+    ? PROJECT_SUGGESTIONS
+    : GLOBAL_SUGGESTIONS;
   const panelWidth = collapsed ? COLLAPSED_WIDTH : (isMobile ? "100%" : width);
 
   const appendToInput = (value: string) => {
@@ -1246,86 +1388,168 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                     <>
                       <SuggestionChips suggestions={suggestions} onSelect={(text) => setInputValue(text)} />
 
-                      <div className="flex items-center gap-1.5">
-                        {learnMode && (
-                          <span className="text-[10px] font-medium text-accent bg-accent/10 rounded-pill px-2 py-0.5">
-                            Learn mode
-                          </span>
-                        )}
-                        <div className="ml-auto inline-flex items-center rounded-pill border border-sidebar-border bg-sidebar-accent/40 p-0.5">
-                          {[1, 2, 3, 4].map((level) => {
-                            const mode = AUTOMATION_LEVEL_TO_MODE[level as 1 | 2 | 3 | 4];
-                            const isActive = automationMode === mode;
-                            return (
-                              <button
-                                key={`automation-level-${level}`}
-                                onClick={() => persistAutomationMode(mode)}
-                                className={`h-6 min-w-6 rounded-pill px-1.5 text-[10px] font-semibold transition-colors ${
-                                  isActive
-                                    ? "bg-accent text-accent-foreground"
-                                    : "text-muted-foreground hover:text-foreground"
-                                }`}
-                                title={`Automation level ${level}`}
+                      <Textarea
+                        ref={composerTextareaRef}
+                        placeholder={learnMode ? "Ask AI to explain decisions and tradeoffs..." : (photoConsult ? "Edit prompt or send as-is..." : "Ask AI...")}
+                        className="min-h-[42px] max-h-[220px] w-full resize-none text-body-sm bg-sidebar-accent/50 border-sidebar-border"
+                        value={inputValue}
+                        rows={1}
+                        onChange={(e) => {
+                          setInputValue(e.target.value);
+                          resizeComposer();
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSend();
+                          }
+                        }}
+                      />
+
+                      <div className="flex items-center justify-between gap-1.5 w-full min-w-0">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <Popover open={plusMenuOpen} onOpenChange={setPlusMenuOpen}>
+                            <PopoverTrigger asChild>
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                className="h-9 w-9 shrink-0 bg-sidebar-accent/50 border-sidebar-border"
                               >
-                                {level}
-                              </button>
-                            );
-                          })}
+                                <Plus className="h-4 w-4" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent align="start" className="w-auto p-2">
+                              <div className="flex items-center gap-1.5">
+                                <Button size="sm" variant="outline" className="h-8 px-2" onClick={handleAttachFilePhoto}>
+                                  <Paperclip className="h-3.5 w-3.5 mr-1" />
+                                  Attach
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant={learnMode ? "default" : "outline"}
+                                  className="h-8 px-2"
+                                  onClick={handleToggleLearnMode}
+                                >
+                                  <GraduationCap className="h-3.5 w-3.5 mr-1" />
+                                  Learn
+                                </Button>
+                                <Button size="sm" variant="outline" className="h-8 px-2" onClick={handleTagPerson}>
+                                  <AtSign className="h-3.5 w-3.5 mr-1" />
+                                  Tag
+                                </Button>
+                                <Button size="sm" variant="outline" className="h-8 px-2" onClick={handleReferenceTask}>
+                                  <Link2 className="h-3.5 w-3.5 mr-1" />
+                                  Reference
+                                </Button>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="outline"
+                                className="h-9 px-2.5 bg-sidebar-accent/50 border-sidebar-border text-caption font-medium"
+                              >
+                                <span className="truncate">{selectedAutomationOption.label}</span>
+                                <ChevronDown className="h-3.5 w-3.5 ml-1.5 shrink-0" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start" className="w-64 p-1">
+                              {AUTOMATION_OPTIONS.map((option) => {
+                                const isCurrent = option.mode === automationMode;
+                                return (
+                                  <Tooltip key={`automation-option-${option.mode}`}>
+                                    <TooltipTrigger asChild>
+                                      <DropdownMenuItem
+                                        onSelect={() => persistAutomationMode(option.mode)}
+                                        className="flex items-center justify-between gap-2"
+                                      >
+                                        <span className="text-caption text-foreground">{option.label}</span>
+                                        {isCurrent && <Check className="h-3.5 w-3.5 text-accent" />}
+                                      </DropdownMenuItem>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="right" className="text-caption whitespace-nowrap">
+                                      {option.description}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                );
+                              })}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+
+                          {learnMode && (
+                            <span className="group inline-flex h-9 items-center rounded-md border border-sidebar-border bg-sidebar-accent/50 px-2.5 text-caption font-medium text-foreground shrink-0">
+                              <span className="relative mr-1 inline-flex h-3.5 w-3.5 items-center justify-center">
+                                <GraduationCap className="h-3.5 w-3.5 text-accent group-hover:hidden" />
+                                <button
+                                  type="button"
+                                  aria-label="Disable Learn mode"
+                                  onClick={handleToggleLearnMode}
+                                  className="absolute inset-0 hidden items-center justify-center text-muted-foreground hover:text-foreground group-hover:inline-flex"
+                                >
+                                  <XIcon className="h-3.5 w-3.5" />
+                                </button>
+                              </span>
+                              Learn
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className={`h-9 w-9 shrink-0 border-sidebar-border ${
+                              voiceState === "listening"
+                                ? "bg-accent/10 text-accent animate-pulse"
+                                : voiceState === "processing"
+                                  ? "bg-muted text-foreground"
+                                  : "bg-sidebar-accent/50"
+                            }`}
+                            onClick={handleVoiceInput}
+                            title={voiceState === "idle" ? "Voice input (stub)" : voiceState === "listening" ? "Listening..." : "Processing..."}
+                          >
+                            {voiceState === "processing" ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Mic className="h-4 w-4" />
+                            )}
+                          </Button>
+                          <Button
+                            size="icon"
+                            className="h-9 w-9 shrink-0 bg-accent text-accent-foreground hover:bg-accent/90"
+                            onClick={() => handleSend()}
+                          >
+                            <Send className="h-4 w-4" />
+                          </Button>
                         </div>
                       </div>
 
-                      <div className="flex gap-1.5 w-full min-w-0">
-                        <Popover open={plusMenuOpen} onOpenChange={setPlusMenuOpen}>
-                          <PopoverTrigger asChild>
-                            <Button
-                              size="icon"
-                              variant="outline"
-                              className="h-9 w-9 shrink-0 bg-sidebar-accent/50 border-sidebar-border"
-                            >
-                              <Plus className="h-4 w-4" />
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent align="start" className="w-auto p-2">
-                            <div className="flex items-center gap-1.5">
-                              <Button size="sm" variant="outline" className="h-8 px-2" onClick={handleAttachFilePhoto}>
-                                <Paperclip className="h-3.5 w-3.5 mr-1" />
-                                Attach
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant={learnMode ? "default" : "outline"}
-                                className="h-8 px-2"
-                                onClick={handleToggleLearnMode}
-                              >
-                                <GraduationCap className="h-3.5 w-3.5 mr-1" />
-                                Learn
-                              </Button>
-                              <Button size="sm" variant="outline" className="h-8 px-2" onClick={handleTagPerson}>
-                                <AtSign className="h-3.5 w-3.5 mr-1" />
-                                Tag
-                              </Button>
-                              <Button size="sm" variant="outline" className="h-8 px-2" onClick={handleReferenceTask}>
-                                <Link2 className="h-3.5 w-3.5 mr-1" />
-                                Reference
-                              </Button>
-                            </div>
-                          </PopoverContent>
-                        </Popover>
+                      {isHomeContext && (
+                        <div className="w-full min-w-0">
+                          <Select value={homeProjectMode} onValueChange={handleHomeProjectModeChange}>
+                            <SelectTrigger className="h-8 text-caption bg-sidebar-accent/50 border-sidebar-border">
+                              <SelectValue placeholder="General mode" />
+                            </SelectTrigger>
+                            <SelectContent align="start">
+                              <SelectItem value={GENERAL_MODE_VALUE}>General mode</SelectItem>
+                              {projects.map((projectItem) => (
+                                <SelectItem key={`home-project-mode-${projectItem.id}`} value={projectItem.id}>
+                                  {projectItem.title}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
 
-                        <Input
-                          placeholder={learnMode ? "Ask AI to explain decisions and tradeoffs..." : (photoConsult ? "Edit prompt or send as-is..." : "Ask AI...")}
-                          className="h-9 text-body-sm bg-sidebar-accent/50 border-sidebar-border flex-1 min-w-0"
-                          value={inputValue}
-                          onChange={(e) => setInputValue(e.target.value)}
-                          onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                        />
-                        <Button
-                          size="icon"
-                          className="h-9 w-9 shrink-0 bg-accent text-accent-foreground hover:bg-accent/90"
-                          onClick={() => handleSend()}
-                        >
-                          <Send className="h-4 w-4" />
-                        </Button>
+                      <div className="flex items-center justify-end w-full">
+                        {isHomeContext && homeProjectMode === GENERAL_MODE_VALUE && pendingGeneralProposalInput && (
+                          <span className="text-[10px] text-muted-foreground">
+                            Select a project to continue proposal generation.
+                          </span>
+                        )}
                       </div>
                     </>
                   )}
