@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useLayoutEffect, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import {
   useProject,
@@ -26,6 +26,10 @@ export default function ProjectDashboard() {
   const { id } = useParams<{ id: string }>();
   const projectId = id!;
   const { toast } = useToast();
+
+  useLayoutEffect(() => {
+    window.scrollTo(0, 0);
+  }, [projectId]);
 
   const { project, stages, members } = useProject(projectId);
   const tasks = useTasks(projectId);
