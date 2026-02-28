@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { getUserById } from "@/data/store";
 import type { Event } from "@/types/entities";
+import { isAIEvent } from "@/components/ai/event-utils";
 import {
   ClipboardList, Calculator, ShoppingCart, FileText, Image,
   Users, MessageSquare, GitBranch, CheckCircle2, Plus, Activity, XCircle, Bot,
@@ -60,12 +61,7 @@ export function EventFeedItem({ event, compact, highlighted }: EventFeedItemProp
   const payload = event.payload as Record<string, unknown>;
   const detail = (payload.title ?? payload.caption ?? payload.text ?? payload.name ?? "") as string;
   const route = getEventRoute(event);
-  const isAiOrigin = (
-    event.actor_id === "ai"
-    || payload.source === "ai"
-    || payload.createdFrom === "ai"
-    || event.type.startsWith("ai.")
-  );
+  const isAiOrigin = isAIEvent(event);
   const Icon = isAiOrigin ? Bot : (typeIcons[event.type] ?? Activity);
   const actorLabel = isAiOrigin ? "AI" : (actor?.name ?? "System");
 

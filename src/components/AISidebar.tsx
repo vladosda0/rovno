@@ -15,7 +15,9 @@ import {
   Mic,
   Loader2,
   ChevronDown,
+  ChevronRight,
   Check,
+  User,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,10 +26,10 @@ import { ConfirmModal } from "@/components/ConfirmModal";
 import { WorkLog } from "@/components/ai/WorkLog";
 import { SuggestionChips } from "@/components/ai/SuggestionChips";
 import { EventFeedItem } from "@/components/ai/EventFeedItem";
+import { isAIEvent } from "@/components/ai/event-utils";
 import { PreviewCard } from "@/components/ai/PreviewCard";
 import { ActionBar } from "@/components/ai/ActionBar";
 import { ProposalQueueCard, type ProposalQueueItemState, type ProposalDecision } from "@/components/ai/ProposalQueueCard";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -43,6 +45,7 @@ import type { AIMessage, AIProposal, ProposalChange } from "@/types/ai";
 import type { Event } from "@/types/entities";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { getProfileAutomationLevelMode, isAuthenticated, setProfileAutomationLevelMode } from "@/lib/auth-state";
+import { getSidebarDemoScenarioData, type DemoScenarioId, type ProposalExecutionLink } from "@/components/ai/sidebar-demo-scenarios";
 import {
   subscribePhotoConsult, closePhotoConsult, buildConsultPrompt,
   type PhotoConsultContext,
@@ -50,7 +53,7 @@ import {
 import {
   addTask, addComment as addTaskComment, addEvent, getCurrentUser, getStages, getUserById, updateProject,
 } from "@/data/store";
-import { format } from "date-fns";
+import { format, isToday, isYesterday } from "date-fns";
 
 const PROJECT_SUGGESTIONS = ["Add tasks", "Update estimate", "Generate contract", "Buy materials"];
 const GLOBAL_SUGGESTIONS = ["Create project", "Compare estimates", "Best tile adhesive?"];
@@ -78,6 +81,61 @@ type FeedFilter = "all" | "task" | "estimate" | "document" | "photo" | "member" 
 type ActiveWindow = "none" | "worklog" | "proposal_queue" | "photo_consult";
 type AutomationMode = "full" | "assisted" | "manual" | "observer";
 type VoiceState = "idle" | "listening" | "processing";
+type StreamRowTier = 1 | 2 | 3;
+
+interface ProposalExecutionGroupMeta {
+  summary?: string;
+  proposalId?: string;
+  childEventIds: string[];
+}
+
+interface StreamProposalGroupRow {
+  id: string;
+  kind: "proposal_group";
+  tier: StreamRowTier;
+  timestampMs: number;
+  timestamp: string;
+  proposalEvent: Event;
+  summary: string;
+  childEvents: Event[];
+}
+
+interface StreamEventRow {
+  id: string;
+  kind: "event";
+  tier: StreamRowTier;
+  timestampMs: number;
+  timestamp: string;
+  event: Event;
+}
+
+interface StreamStatusRow {
+  id: string;
+  kind: "status";
+  tier: StreamRowTier;
+  timestampMs: number;
+  timestamp: string;
+  title: string;
+  detail?: string;
+}
+
+interface StreamChatRow {
+  id: string;
+  kind: "chat";
+  tier: StreamRowTier;
+  timestampMs: number;
+  timestamp: string;
+  message: AIMessage;
+}
+
+type StreamRow = StreamProposalGroupRow | StreamEventRow | StreamStatusRow | StreamChatRow;
+
+interface DayBucket {
+  key: string;
+  label: string;
+  rows: StreamRow[];
+  olderThanYesterday: boolean;
+}
 
 const AUTOMATION_OPTIONS: { mode: AutomationMode; label: string; description: string }[] = [
   {
@@ -211,6 +269,22 @@ function wait(ms: number) {
   });
 }
 
+function toTimestampMs(timestamp: string): number {
+  const parsed = Date.parse(timestamp);
+  return Number.isNaN(parsed) ? Date.now() : parsed;
+}
+
+function getDayKey(timestampMs: number): string {
+  return format(new Date(timestampMs), "yyyy-MM-dd");
+}
+
+function getDayLabel(timestampMs: number): string {
+  const date = new Date(timestampMs);
+  if (isToday(date)) return "Today";
+  if (isYesterday(date)) return "Yesterday";
+  return format(date, "MMM d, yyyy");
+}
+
 export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -256,6 +330,10 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const composerTextareaRef = useRef<HTMLTextAreaElement>(null);
   const voiceTimersRef = useRef<number[]>([]);
   const [highlightedEventIds, setHighlightedEventIds] = useState<Set<string>>(new Set());
+  const [proposalExecutionLinks, setProposalExecutionLinks] = useState<Record<string, ProposalExecutionGroupMeta>>({});
+  const [expandedProposalEventIds, setExpandedProposalEventIds] = useState<Set<string>>(new Set());
+  const [expandedDayKeys, setExpandedDayKeys] = useState<Set<string>>(new Set());
+  const [demoScenario, setDemoScenario] = useState<DemoScenarioId>("live");
 
   // Photo consult state
   const [photoConsult, setPhotoConsult] = useState<PhotoConsultContext | null>(null);
@@ -333,6 +411,10 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     initializedEventsRef.current = false;
     knownEventIdsRef.current = new Set();
     setHighlightedEventIds(new Set());
+    setProposalExecutionLinks({});
+    setExpandedProposalEventIds(new Set());
+    setExpandedDayKeys(new Set());
+    setDemoScenario("live");
   }, [projectId, isProjectContext]);
 
   useEffect(() => {
@@ -487,6 +569,20 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
 
         if (result.success) {
           success = true;
+          const proposalEventId = result.eventIds.find((eventId) => eventId.startsWith("evt-proposal-"));
+          if (proposalEventId) {
+            const childEventIds = result.eventIds.filter((eventId) => eventId !== proposalEventId);
+            if (childEventIds.length > 0) {
+              setProposalExecutionLinks((prev) => ({
+                ...prev,
+                [proposalEventId]: {
+                  summary: queueItem.proposal.summary,
+                  proposalId: queueItem.proposal.id,
+                  childEventIds,
+                },
+              }));
+            }
+          }
           toast({
             title: "Changes applied",
             description: `${queueItem.proposal.summary} completed.`,
@@ -971,34 +1067,165 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
       .filter((name): name is string => Boolean(name))
   ), [members]);
 
-  const isAiActionEvent = (event: Event) => {
-    const payload = event.payload as Record<string, unknown>;
-    return (
-      event.actor_id === "ai"
-      || payload.source === "ai"
-      || payload.createdFrom === "ai"
-      || event.type.startsWith("ai.")
-    );
-  };
+  const showDemoScenarioSwitch = import.meta.env.DEV && isProjectContext;
+  const demoScenarioData = useMemo(() => {
+    if (!showDemoScenarioSwitch || demoScenario === "live" || !projectId) return null;
+    return getSidebarDemoScenarioData(demoScenario, {
+      projectId,
+      userId: user.id,
+    });
+  }, [showDemoScenarioSwitch, demoScenario, projectId, user.id]);
+  const scenarioExpandedProposalIds = useMemo(
+    () => new Set(demoScenarioData?.expandedGroupEventIds ?? []),
+    [demoScenarioData?.expandedGroupEventIds],
+  );
+
+  const sourceEvents = demoScenarioData?.events ?? events;
+  const sourceMessages = demoScenarioData?.messages ?? messages;
+  const sourceProposalLinks: Record<string, ProposalExecutionLink> = demoScenarioData?.proposalLinks ?? proposalExecutionLinks;
 
   const filteredEvents = useMemo(() => {
-    if (activityFilter === "all") return events;
-    if (activityFilter === "ai_actions") return events.filter(isAiActionEvent);
-    return events.filter((event) => event.type.startsWith(activityFilter));
-  }, [activityFilter, events]);
+    if (activityFilter === "all") return sourceEvents;
+    if (activityFilter === "ai_actions") return sourceEvents.filter((event) => isAIEvent(event));
+    return sourceEvents.filter((event) => event.type.startsWith(activityFilter));
+  }, [activityFilter, sourceEvents]);
 
-  const timelineEvents = useMemo(() => [...filteredEvents].reverse(), [filteredEvents]);
-  const newestEventId = events[0]?.id ?? null;
+  const chronologicalFilteredEvents = useMemo(() => (
+    [...filteredEvents]
+      .map((event, idx) => ({ event, idx }))
+      .sort((a, b) => {
+        const tsDiff = toTimestampMs(a.event.timestamp) - toTimestampMs(b.event.timestamp);
+        if (tsDiff !== 0) return tsDiff;
+        return a.idx - b.idx;
+      })
+      .map((item) => item.event)
+  ), [filteredEvents]);
 
-  const roleLabel = perm?.role === "owner"
-    ? "Owner"
-    : perm?.role === "co_owner"
-      ? "Co-owner"
-      : perm?.role === "contractor"
-        ? "Contractor"
-        : perm?.role === "viewer"
-          ? "Viewer"
-          : null;
+  const eventById = useMemo(() => {
+    const map = new Map<string, Event>();
+    sourceEvents.forEach((event) => {
+      map.set(event.id, event);
+    });
+    return map;
+  }, [sourceEvents]);
+
+  const streamRows = useMemo<StreamRow[]>(() => {
+    const visibleEventIds = new Set(chronologicalFilteredEvents.map((event) => event.id));
+    const groupedChildIds = new Set<string>();
+    Object.entries(sourceProposalLinks).forEach(([proposalEventId, link]) => {
+      if (!visibleEventIds.has(proposalEventId)) return;
+      const proposalEvent = eventById.get(proposalEventId);
+      if (!proposalEvent || proposalEvent.type !== "proposal_confirmed") return;
+      const childIds = link.childEventIds.filter((childId) => Boolean(eventById.get(childId)));
+      if (childIds.length === 0) return;
+      childIds.forEach((childId) => groupedChildIds.add(childId));
+    });
+
+    const rows: StreamRow[] = [];
+    chronologicalFilteredEvents.forEach((event) => {
+      const timestampMs = toTimestampMs(event.timestamp);
+      const payload = event.payload as Record<string, unknown>;
+
+      if (event.type === "proposal_confirmed") {
+        const link = sourceProposalLinks[event.id];
+        if (!link || link.childEventIds.length === 0) return;
+        const childEvents = link.childEventIds
+          .map((childId) => eventById.get(childId))
+          .filter((candidate): candidate is Event => Boolean(candidate));
+        if (childEvents.length === 0) return;
+
+        rows.push({
+          id: `proposal-group-${event.id}`,
+          kind: "proposal_group",
+          tier: 1,
+          timestamp: event.timestamp,
+          timestampMs,
+          proposalEvent: event,
+          summary: (typeof payload.summary === "string" && payload.summary)
+            || link.summary
+            || "Execution completed",
+          childEvents,
+        });
+        return;
+      }
+
+      if (groupedChildIds.has(event.id)) {
+        return;
+      }
+
+      if (event.type === "proposal_cancelled") {
+        const status = typeof payload.status === "string" ? payload.status : "cancelled";
+        const summary = typeof payload.summary === "string" ? payload.summary : "Proposal";
+        const reason = typeof payload.reason === "string" ? payload.reason.replace(/_/g, " ") : "";
+        const title = status === "failed" ? "AI proposal failed" : "AI proposal declined";
+        const detail = reason ? `${summary} · ${reason}` : summary;
+        rows.push({
+          id: `status-${event.id}`,
+          kind: "status",
+          tier: 3,
+          timestamp: event.timestamp,
+          timestampMs,
+          title,
+          detail,
+        });
+        return;
+      }
+
+      rows.push({
+        id: `event-${event.id}`,
+        kind: "event",
+        tier: 2,
+        timestamp: event.timestamp,
+        timestampMs,
+        event,
+      });
+    });
+
+    if (activityFilter === "all") {
+      sourceMessages.forEach((message) => {
+        rows.push({
+          id: `chat-${message.id}`,
+          kind: "chat",
+          tier: 2,
+          timestamp: message.timestamp,
+          timestampMs: toTimestampMs(message.timestamp),
+          message,
+        });
+      });
+    }
+
+    return rows
+      .map((row, idx) => ({ row, idx }))
+      .sort((a, b) => {
+        const tsDiff = a.row.timestampMs - b.row.timestampMs;
+        if (tsDiff !== 0) return tsDiff;
+        return a.idx - b.idx;
+      })
+      .map((item) => item.row);
+  }, [activityFilter, chronologicalFilteredEvents, eventById, sourceMessages, sourceProposalLinks]);
+
+  const dayBuckets = useMemo<DayBucket[]>(() => {
+    const map = new Map<string, DayBucket>();
+    streamRows.forEach((row) => {
+      const dayKey = getDayKey(row.timestampMs);
+      const existing = map.get(dayKey);
+      if (existing) {
+        existing.rows.push(row);
+        return;
+      }
+
+      const date = new Date(row.timestampMs);
+      map.set(dayKey, {
+        key: dayKey,
+        label: getDayLabel(row.timestampMs),
+        rows: [row],
+        olderThanYesterday: !isToday(date) && !isYesterday(date),
+      });
+    });
+    return Array.from(map.values()).sort((a, b) => a.key.localeCompare(b.key));
+  }, [streamRows]);
+
+  const latestRenderedRowId = streamRows[streamRows.length - 1]?.id ?? null;
   const activeExecutionItem = useMemo(() => {
     if (!proposalQueue || proposalQueue.phase !== "executing") return null;
     const confirmed = proposalQueue.items.filter((item) => item.decision === "confirmed");
@@ -1026,14 +1253,26 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   useEffect(() => {
     const viewport = getFeedViewport();
     if (!viewport) return;
-    if (!newestEventId) return;
+    if (!latestRenderedRowId) return;
 
-    const hasNewEvent = latestEventIdRef.current !== newestEventId;
+    const hasNewEvent = latestEventIdRef.current !== latestRenderedRowId;
     if (hasNewEvent && isNearBottomRef.current) {
       viewport.scrollTop = viewport.scrollHeight;
     }
-    latestEventIdRef.current = newestEventId;
-  }, [getFeedViewport, newestEventId]);
+    latestEventIdRef.current = latestRenderedRowId;
+  }, [getFeedViewport, latestRenderedRowId]);
+
+  useEffect(() => {
+    setExpandedDayKeys((prev) => {
+      const next = new Set<string>();
+      dayBuckets.forEach((bucket) => {
+        if (!bucket.olderThanYesterday || prev.has(bucket.key)) {
+          next.add(bucket.key);
+        }
+      });
+      return next;
+    });
+  }, [dayBuckets]);
 
   useEffect(() => {
     if (!isProjectContext) {
@@ -1095,14 +1334,33 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     { key: "member", label: "Member" },
     { key: "ai_actions", label: "AI actions" },
   ];
+  const demoScenarioOptions: { value: DemoScenarioId; label: string }[] = [
+    { value: "live", label: "Live" },
+    { value: "A", label: "A: Baseline" },
+    { value: "B", label: "B: Grouped" },
+    { value: "C", label: "C: Expanded" },
+    { value: "D", label: "D: Declined" },
+    { value: "E", label: "E: Learn Q&A" },
+    { value: "F", label: "F: Mixed" },
+  ];
 
-  const userInitials = (user.name ?? "User")
-    .split(" ")
-    .map((part) => part[0] ?? "")
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-  const creditsChipText = `${totalCredits} +${user.credits_free}/d`;
+  const toggleProposalGroup = (proposalEventId: string) => {
+    setExpandedProposalEventIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(proposalEventId)) next.delete(proposalEventId);
+      else next.add(proposalEventId);
+      return next;
+    });
+  };
+
+  const toggleDayBucket = (dayKey: string) => {
+    setExpandedDayKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(dayKey)) next.delete(dayKey);
+      else next.add(dayKey);
+      return next;
+    });
+  };
 
   const handleToggleLearnMode = () => {
     setLearnMode((prev) => !prev);
@@ -1171,31 +1429,6 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
           </div>
         ) : (
           <>
-            {/* === HEADER (sticky) === */}
-            <div className="p-3 space-y-2 shrink-0 box-border border-b border-border" style={{ width: "100%" }}>
-              <div className="flex items-center gap-2 min-w-0">
-                <Avatar className="h-7 w-7 shrink-0">
-                  <AvatarImage src={user.avatar} alt={user.name} />
-                  <AvatarFallback className="text-[10px] bg-accent/15 text-accent">
-                    {userInitials}
-                  </AvatarFallback>
-                </Avatar>
-                <span className="text-body-sm font-semibold text-sidebar-foreground truncate">
-                  {user.name}
-                </span>
-                {roleLabel && (
-                  <span className="text-[10px] font-medium text-muted-foreground bg-muted rounded-pill px-1.5 py-0.5 shrink-0">
-                    {roleLabel}
-                  </span>
-                )}
-                {!isGuest && (
-                  <span className="text-caption font-bold px-1.5 py-0.5 rounded-pill bg-accent/10 text-accent shrink-0">
-                    {creditsChipText}
-                  </span>
-                )}
-              </div>
-            </div>
-
             {/* Guest overlay */}
             {isGuest ? (
               <div className="flex-1 flex flex-col items-center justify-center text-center px-4">
@@ -1232,19 +1465,35 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                             {filter.label}
                           </button>
                         ))}
-                        {showNearLimitIndicator && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span
-                                className="ml-auto inline-block h-2.5 w-2.5 rounded-full border border-destructive/40 shrink-0"
-                                style={{ background: "conic-gradient(#ef4444 0deg 288deg, rgba(239,68,68,0.2) 288deg 360deg)" }}
-                              />
-                            </TooltipTrigger>
-                            <TooltipContent className="text-caption">
-                              Rovno will archive activity soon to clear the space
-                            </TooltipContent>
-                          </Tooltip>
-                        )}
+                        <div className="ml-auto flex items-center gap-1.5 shrink-0">
+                          {showDemoScenarioSwitch && (
+                            <Select value={demoScenario} onValueChange={(value) => setDemoScenario(value as DemoScenarioId)}>
+                              <SelectTrigger className="h-6 w-[110px] border-border bg-transparent px-2 text-[10px] text-muted-foreground">
+                                <SelectValue placeholder="Live" />
+                              </SelectTrigger>
+                              <SelectContent align="end">
+                                {demoScenarioOptions.map((option) => (
+                                  <SelectItem key={`demo-scenario-${option.value}`} value={option.value} className="text-caption">
+                                    {option.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
+                          {showNearLimitIndicator && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span
+                                  className="inline-block h-2.5 w-2.5 rounded-full border border-destructive/40"
+                                  style={{ background: "conic-gradient(#ef4444 0deg 288deg, rgba(239,68,68,0.2) 288deg 360deg)" }}
+                                />
+                              </TooltipTrigger>
+                              <TooltipContent className="text-caption">
+                                Rovno will archive activity soon to clear the space
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )}
@@ -1253,19 +1502,146 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                   <div className="flex-1 min-h-0 overflow-hidden px-3 box-border" style={{ width: "100%" }}>
                     <ScrollArea ref={scrollRef} className="h-full">
                       <div className="space-y-2 py-2 pr-1">
-                        {timelineEvents.length === 0 ? (
+                        {streamRows.length === 0 ? (
                           <p className="text-caption text-muted-foreground text-center py-8">
                             No activity yet
                           </p>
                         ) : (
-                          <div className="glass rounded-card divide-y divide-border">
-                            {timelineEvents.map((evt) => (
-                              <EventFeedItem
-                                key={evt.id}
-                                event={evt}
-                                highlighted={highlightedEventIds.has(evt.id)}
-                              />
-                            ))}
+                          <div className="space-y-2">
+                            {dayBuckets.map((bucket) => {
+                              const isExpanded = expandedDayKeys.has(bucket.key);
+                              return (
+                                <section key={bucket.key} className="space-y-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleDayBucket(bucket.key)}
+                                    className="w-full flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground/90 hover:text-foreground transition-colors"
+                                  >
+                                    {isExpanded ? (
+                                      <ChevronDown className="h-3.5 w-3.5" />
+                                    ) : (
+                                      <ChevronRight className="h-3.5 w-3.5" />
+                                    )}
+                                    <span>{bucket.label}</span>
+                                  </button>
+
+                                  {isExpanded && (
+                                    <div className="glass rounded-card divide-y divide-border">
+                                      {bucket.rows.map((row) => {
+                                        if (row.kind === "event") {
+                                          return (
+                                            <EventFeedItem
+                                              key={row.id}
+                                              event={row.event}
+                                              highlighted={highlightedEventIds.has(row.event.id)}
+                                            />
+                                          );
+                                        }
+
+                                        if (row.kind === "proposal_group") {
+                                          const groupExpanded = expandedProposalEventIds.has(row.proposalEvent.id)
+                                            || scenarioExpandedProposalIds.has(row.proposalEvent.id);
+                                          const groupHighlighted = highlightedEventIds.has(row.proposalEvent.id);
+                                          return (
+                                            <div key={row.id} className="px-2 py-1.5">
+                                              <button
+                                                type="button"
+                                                onClick={() => toggleProposalGroup(row.proposalEvent.id)}
+                                                className={`w-full flex items-start gap-2 text-left rounded-md px-1.5 py-1 transition-colors ${
+                                                  groupHighlighted ? "bg-destructive/15" : "hover:bg-accent/10"
+                                                }`}
+                                                style={{ transitionDuration: groupHighlighted ? "2500ms" : undefined }}
+                                              >
+                                                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md mt-0.5 bg-accent/10">
+                                                  <Bot className="h-3.5 w-3.5 text-accent" />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                  <p className="text-caption leading-tight">
+                                                    <span className="font-medium text-foreground">AI proposal executed</span>
+                                                  </p>
+                                                  <p className="text-caption text-muted-foreground truncate">{row.summary}</p>
+                                                </div>
+                                                <span className="text-[10px] text-muted-foreground whitespace-nowrap mt-0.5 shrink-0">
+                                                  {new Date(row.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                                </span>
+                                                {groupExpanded ? (
+                                                  <ChevronDown className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
+                                                ) : (
+                                                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
+                                                )}
+                                              </button>
+                                              {groupExpanded && (
+                                                <div className="mt-1 ml-3 border-l border-border pl-2 space-y-0.5">
+                                                  {row.childEvents.map((childEvent) => (
+                                                    <EventFeedItem
+                                                      key={`group-child-${row.id}-${childEvent.id}`}
+                                                      event={childEvent}
+                                                      compact
+                                                      highlighted={highlightedEventIds.has(childEvent.id)}
+                                                    />
+                                                  ))}
+                                                </div>
+                                              )}
+                                            </div>
+                                          );
+                                        }
+
+                                        if (row.kind === "status") {
+                                          return (
+                                            <div key={row.id} className="px-2 py-1.5">
+                                              <div className="inline-flex w-full items-start gap-2 rounded-md border border-border/60 bg-muted/20 px-2 py-1.5">
+                                                <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-muted">
+                                                  <XIcon className="h-3 w-3 text-muted-foreground" />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                  <p className="text-caption text-muted-foreground">{row.title}</p>
+                                                  {row.detail && <p className="text-caption text-muted-foreground/90 truncate">{row.detail}</p>}
+                                                </div>
+                                                <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
+                                                  {new Date(row.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                                </span>
+                                              </div>
+                                            </div>
+                                          );
+                                        }
+
+                                        const isLearnMessage = row.message.mode === "learn";
+                                        const isUserMessage = row.message.role === "user";
+                                        return (
+                                          <div key={row.id} className="px-2 py-1.5">
+                                            <div className={`rounded-md border border-border/60 px-2 py-1.5 ${
+                                              isUserMessage ? "bg-sidebar-accent/40" : "bg-muted/20"
+                                            }`}>
+                                              <div className="flex items-center gap-1.5">
+                                                <div className="flex h-5 w-5 items-center justify-center rounded-md bg-muted">
+                                                  {isUserMessage
+                                                    ? <User className="h-3 w-3 text-muted-foreground" />
+                                                    : <Bot className="h-3 w-3 text-accent" />}
+                                                </div>
+                                                <p className="text-caption font-medium text-foreground">
+                                                  {isUserMessage ? "You" : "AI"}
+                                                </p>
+                                                {isLearnMessage && (
+                                                  <span className="rounded-pill bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium text-accent">
+                                                    Learn
+                                                  </span>
+                                                )}
+                                                <span className="ml-auto text-[10px] text-muted-foreground whitespace-nowrap">
+                                                  {new Date(row.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                                </span>
+                                              </div>
+                                              <p className="mt-1 text-caption text-foreground/95 whitespace-pre-wrap break-words">
+                                                {row.message.content}
+                                              </p>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </section>
+                              );
+                            })}
                           </div>
                         )}
                       </div>
