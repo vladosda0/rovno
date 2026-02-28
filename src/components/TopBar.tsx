@@ -1,5 +1,6 @@
 import { Link, useMatch, useNavigate } from "react-router-dom";
 import { ChevronDown, Hammer, LogOut, PanelLeft, Settings, User } from "lucide-react";
+import { useState, type MouseEvent } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,12 +12,44 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ProjectTabs } from "@/components/ProjectTabs";
 import { cn } from "@/lib/utils";
+import { toast } from "@/hooks/use-toast";
 import { useCurrentUser, useProjects } from "@/hooks/use-mock-data";
 
-const DAILY_TOTAL = 5;
-const PAID_TOTAL = 250;
-const DAILY_REMAINING = 3;
-const PAID_REMAINING = 247;
+interface MockCredits {
+  dailyTotal: number;
+  paidTotal: number;
+  dailyUsed: number;
+  paidUsed: number;
+}
+
+const DEFAULT_CREDITS: MockCredits = {
+  dailyTotal: 5,
+  paidTotal: 250,
+  dailyUsed: 0,
+  paidUsed: 0,
+};
+
+function consumeCredit(credits: MockCredits, amount = 1): MockCredits {
+  const spend = Number.isInteger(amount) && amount > 0 ? amount : 1;
+  const dailyRemaining = Math.max(credits.dailyTotal - credits.dailyUsed, 0);
+  const paidRemaining = Math.max(credits.paidTotal - credits.paidUsed, 0);
+
+  if (dailyRemaining > 0) {
+    return {
+      ...credits,
+      dailyUsed: Math.min(credits.dailyUsed + spend, credits.dailyTotal),
+    };
+  }
+
+  if (paidRemaining > 0) {
+    return {
+      ...credits,
+      paidUsed: Math.min(credits.paidUsed + spend, credits.paidTotal),
+    };
+  }
+
+  return credits;
+}
 
 interface TopBarProps {
   aiSidebarCollapsed: boolean;
@@ -33,14 +66,37 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
   const projects = useProjects();
   const currentProject = projects.find((project) => project.id === projectId);
   const projectName = currentProject?.title ?? "Demo Project";
+  const [credits, setCredits] = useState<MockCredits>(DEFAULT_CREDITS);
   const initials = user.name.split(" ").map((word) => word[0]).join("").slice(0, 2).toUpperCase();
 
-  const totalRemaining = DAILY_REMAINING + PAID_REMAINING;
-  const maxCredits = PAID_TOTAL + DAILY_TOTAL;
-  const dailyRemainingPct = Math.max((DAILY_REMAINING / maxCredits) * 100, 0);
-  const paidRemainingPct = Math.max((PAID_REMAINING / maxCredits) * 100, 0);
-  const dailyUsed = DAILY_TOTAL - DAILY_REMAINING;
-  const paidUsed = PAID_TOTAL - PAID_REMAINING;
+  const dailyRemaining = Math.max(credits.dailyTotal - credits.dailyUsed, 0);
+  const paidRemaining = Math.max(credits.paidTotal - credits.paidUsed, 0);
+  const totalRemaining = dailyRemaining + paidRemaining;
+  const maxCredits = credits.paidTotal + credits.dailyTotal;
+  const paidRemainingPct = maxCredits > 0 ? Math.max((paidRemaining / maxCredits) * 100, 0) : 0;
+  const dailyRemainingPct = maxCredits > 0 ? Math.max((dailyRemaining / maxCredits) * 100, 0) : 0;
+  const displayName = user.name || "Alex Petrov";
+
+  const handleCreditsCardClick = () => {
+    navigate("/settings?tab=billing");
+  };
+
+  const handleUseOneCredit = (event: MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setCredits((prev) => {
+      const next = consumeCredit(prev, 1);
+      if (next === prev) {
+        toast({ title: "No credits left" });
+      }
+      return next;
+    });
+  };
+
+  const handleLogout = () => {
+    setCredits(DEFAULT_CREDITS);
+    toast({ title: "Logged out (demo)" });
+  };
 
   if (isInProject && projectId) {
     return (
@@ -58,61 +114,75 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-72 glass-elevated rounded-card">
               <DropdownMenuItem asChild>
-                <Link to="/home">All projects</Link>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-
-              <div className="px-2 py-1.5">
-                <div className="rounded-md border border-border bg-muted/30 p-2.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-caption font-semibold text-foreground">Credits</span>
-                    <button
-                      type="button"
-                      onClick={() => navigate("/profile/upgrade")}
-                      className="inline-flex items-center gap-1 text-body-sm font-semibold text-foreground hover:text-accent transition-colors"
-                    >
-                      {totalRemaining}
-                      <ChevronDown className="h-3.5 w-3.5 -rotate-90 text-muted-foreground" />
-                    </button>
-                  </div>
-
-                  <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted flex">
-                    {DAILY_REMAINING > 0 && (
-                      <div className="h-full bg-info/70 transition-all" style={{ width: `${dailyRemainingPct}%` }} />
-                    )}
-                    {PAID_REMAINING > 0 && (
-                      <div className="h-full bg-accent/70 transition-all" style={{ width: `${paidRemainingPct}%` }} />
-                    )}
-                  </div>
-
-                  <p className="mt-1.5 text-[11px] text-muted-foreground">
-                    {DAILY_REMAINING > 0
-                      ? `Daily credits used: ${dailyUsed}/${DAILY_TOTAL}`
-                      : `Paid credits used: ${paidUsed}/${PAID_TOTAL}`}
-                  </p>
-                </div>
-              </div>
-
-              <DropdownMenuSeparator />
-
-              <div className="px-2 py-1.5 space-y-2">
-                <div className="flex items-center gap-2 rounded-md border border-border bg-muted/30 p-2">
+                <Link to="/home" className="flex items-center gap-2">
                   <Avatar className="h-7 w-7">
                     <AvatarFallback className="text-caption bg-accent text-accent-foreground">
                       {initials}
                     </AvatarFallback>
                   </Avatar>
-                  <div className="min-w-0">
-                    <p className="text-body-sm font-medium text-foreground truncate">{user.name || "User"}</p>
+                  <span className="truncate text-body-sm font-medium text-foreground">{displayName}</span>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+
+              <div className="px-2 py-1.5">
+                <div
+                  className="rounded-md border border-border bg-muted/30 p-2.5 cursor-pointer hover:bg-muted/40 transition-colors"
+                  role="button"
+                  tabIndex={0}
+                  onClick={handleCreditsCardClick}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      handleCreditsCardClick();
+                    }
+                  }}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-caption font-semibold text-foreground">Credits</span>
+                    <span className="inline-flex items-center gap-1 text-body-sm font-semibold text-foreground">
+                      {totalRemaining}
+                      <ChevronDown className="h-3.5 w-3.5 -rotate-90 text-muted-foreground" />
+                    </span>
                   </div>
+
+                  <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted flex">
+                    {credits.paidTotal > 0 && paidRemaining > 0 && (
+                      <div className="h-full bg-success/70 transition-all" style={{ width: `${paidRemainingPct}%` }} />
+                    )}
+                    {dailyRemaining > 0 && (
+                      <div className="h-full bg-info/70 transition-all" style={{ width: `${dailyRemainingPct}%` }} />
+                    )}
+                  </div>
+
+                  <p className="mt-1.5 text-[11px] text-muted-foreground">{dailyRemaining > 0 ? "Daily credits used" : "Paid credits used"}</p>
+
+                  {import.meta.env.DEV && (
+                    <div className="mt-2">
+                      <button
+                        type="button"
+                        onClick={handleUseOneCredit}
+                        className="text-[10px] text-muted-foreground hover:text-foreground underline underline-offset-2"
+                      >
+                        Use 1 credit
+                      </button>
+                    </div>
+                  )}
                 </div>
-              <DropdownMenuItem asChild>
-                  <Link to="/home">
-                    <User className="mr-2 h-4 w-4" />
-                    Home
-                  </Link>
-                </DropdownMenuItem>
               </div>
+
+              <DropdownMenuSeparator />
+
+              <DropdownMenuItem asChild>
+                <Link to="/settings">
+                  <Settings className="mr-2 h-4 w-4" />
+                  Settings
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleLogout}>
+                <LogOut className="mr-2 h-4 w-4" />
+                Log out
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 

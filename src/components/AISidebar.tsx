@@ -18,6 +18,11 @@ import {
   ChevronRight,
   Check,
   User,
+  Copy,
+  ThumbsUp,
+  ThumbsDown,
+  BookmarkPlus,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -45,13 +50,13 @@ import type { AIMessage, AIProposal, ProposalChange } from "@/types/ai";
 import type { Event } from "@/types/entities";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { getProfileAutomationLevelMode, isAuthenticated, setProfileAutomationLevelMode } from "@/lib/auth-state";
-import { getSidebarDemoScenarioData, type DemoScenarioId, type ProposalExecutionLink } from "@/components/ai/sidebar-demo-scenarios";
 import {
   subscribePhotoConsult, closePhotoConsult, buildConsultPrompt,
   type PhotoConsultContext,
 } from "@/lib/photo-consult-store";
 import {
-  addTask, addComment as addTaskComment, addEvent, getCurrentUser, getStages, getUserById, updateProject,
+  addTask, addComment as addTaskComment, addEvent, addDocument, addDocumentVersion,
+  getCurrentUser, getStages, getUserById, updateProject, getDocuments,
 } from "@/data/store";
 import { format, isToday, isYesterday } from "date-fns";
 
@@ -76,8 +81,10 @@ const VALID_AUTOMATION_MODES: Set<AutomationMode> = new Set(["full", "assisted",
 const COMPOSER_MAX_HEIGHT = 220;
 const GENERAL_MODE_VALUE = "general";
 const ACTIONABLE_PROPOSAL_PATTERN = /\b(task|add task|create task|estimate|cost|budget|procurement|buy|purchase|material|document|contract|report|generate)\b/i;
+const LEARN_USER_PROMPT_PATTERN = /^\s*(how|what|why|explain|как|что|почему|объясни|объясните)\b/i;
+const LEARN_LIST_PATTERN = /(?:^|\n)\s*(?:[-*•]|\d+\.)\s+/m;
 
-type FeedFilter = "all" | "task" | "estimate" | "document" | "photo" | "member" | "ai_actions";
+type FeedFilter = "all" | "task" | "estimate" | "document" | "photo" | "member" | "ai_actions" | "learn";
 type ActiveWindow = "none" | "worklog" | "proposal_queue" | "photo_consult";
 type AutomationMode = "full" | "assisted" | "manual" | "observer";
 type VoiceState = "idle" | "listening" | "processing";
@@ -97,6 +104,7 @@ interface StreamProposalGroupRow {
   timestamp: string;
   proposalEvent: Event;
   summary: string;
+  summaryLines: string[];
   childEvents: Event[];
 }
 
@@ -285,6 +293,39 @@ function getDayLabel(timestampMs: number): string {
   return format(date, "MMM d, yyyy");
 }
 
+function buildProposalSummaryLines(childEvents: Event[]): string[] {
+  let taskCount = 0;
+  let documentCount = 0;
+  let procurementCount = 0;
+  let hasEstimateUpdate = false;
+
+  childEvents.forEach((event) => {
+    if (event.type === "task_created") taskCount += 1;
+    if (event.type === "document_created" || event.type === "document_uploaded") documentCount += 1;
+    if (event.type === "procurement_created") procurementCount += 1;
+    if (event.type === "estimate_created" || event.type === "estimate_approved") hasEstimateUpdate = true;
+  });
+
+  const lines: string[] = [];
+  if (taskCount > 0) lines.push(`${taskCount} task${taskCount === 1 ? "" : "s"} created`);
+  if (documentCount > 0) lines.push(`${documentCount} document${documentCount === 1 ? "" : "s"} drafted`);
+  if (hasEstimateUpdate) lines.push("Estimate updated");
+  if (procurementCount > 0) lines.push(`Procurement: ${procurementCount} item${procurementCount === 1 ? "" : "s"} added`);
+
+  if (lines.length > 0) return lines.slice(0, 4);
+
+  const fallbackTitles = childEvents
+    .map((event) => {
+      const payload = event.payload as Record<string, unknown>;
+      return [payload.title, payload.caption, payload.text, payload.name]
+        .find((value): value is string => typeof value === "string" && value.trim().length > 0);
+    })
+    .filter((value): value is string => Boolean(value))
+    .slice(0, 2);
+
+  return fallbackTitles.length > 0 ? fallbackTitles : ["Execution completed"];
+}
+
 export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -329,11 +370,14 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const executingQueueRef = useRef(false);
   const composerTextareaRef = useRef<HTMLTextAreaElement>(null);
   const voiceTimersRef = useRef<number[]>([]);
+  const regenerateTimersRef = useRef<number[]>([]);
   const [highlightedEventIds, setHighlightedEventIds] = useState<Set<string>>(new Set());
   const [proposalExecutionLinks, setProposalExecutionLinks] = useState<Record<string, ProposalExecutionGroupMeta>>({});
   const [expandedProposalEventIds, setExpandedProposalEventIds] = useState<Set<string>>(new Set());
   const [expandedDayKeys, setExpandedDayKeys] = useState<Set<string>>(new Set());
-  const [demoScenario, setDemoScenario] = useState<DemoScenarioId>("live");
+  const [messageRatings, setMessageRatings] = useState<Record<string, "good" | "bad" | undefined>>({});
+  const [savedMessageIds, setSavedMessageIds] = useState<Set<string>>(new Set());
+  const [regeneratingMessageId, setRegeneratingMessageId] = useState<string | null>(null);
 
   // Photo consult state
   const [photoConsult, setPhotoConsult] = useState<PhotoConsultContext | null>(null);
@@ -393,10 +437,15 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     setProposalQueue(null);
     setPendingGeneralProposalInput(null);
     setVoiceState("idle");
+    setRegeneratingMessageId(null);
     voiceTimersRef.current.forEach((timerId) => {
       window.clearTimeout(timerId);
     });
     voiceTimersRef.current = [];
+    regenerateTimersRef.current.forEach((timerId) => {
+      window.clearTimeout(timerId);
+    });
+    regenerateTimersRef.current = [];
     if (location.pathname === "/home") {
       setHomeProjectMode(GENERAL_MODE_VALUE);
     }
@@ -414,7 +463,6 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     setProposalExecutionLinks({});
     setExpandedProposalEventIds(new Set());
     setExpandedDayKeys(new Set());
-    setDemoScenario("live");
   }, [projectId, isProjectContext]);
 
   useEffect(() => {
@@ -428,11 +476,19 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     voiceTimersRef.current = [];
   }, []);
 
+  const clearRegenerateTimers = useCallback(() => {
+    regenerateTimersRef.current.forEach((timerId) => {
+      window.clearTimeout(timerId);
+    });
+    regenerateTimersRef.current = [];
+  }, []);
+
   useEffect(() => {
     return () => {
       clearVoiceTimers();
+      clearRegenerateTimers();
     };
-  }, [clearVoiceTimers]);
+  }, [clearRegenerateTimers, clearVoiceTimers]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -645,7 +701,12 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     void runQueueExecution(queueSnapshot);
   }, [runQueueExecution]);
 
-  const runAssistantForContent = useCallback((content: string, userMessageId: string, targetProjectId?: string) => {
+  const runAssistantForContent = useCallback((
+    content: string,
+    userMessageId: string,
+    targetProjectId?: string,
+    responseMode: AIMessage["mode"] = "default",
+  ) => {
     const workLogId = `wl-${Date.now()}`;
     setWorkLogs((prev) => {
       const next = new Map(prev);
@@ -666,6 +727,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
         role: "assistant",
         content: assistantContent,
         timestamp: new Date().toISOString(),
+        mode: responseMode,
       };
 
       setWorkLogs((prev) => {
@@ -721,7 +783,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
 
     const pendingContent = pendingGeneralProposalInput;
     setPendingGeneralProposalInput(null);
-    runAssistantForContent(pendingContent, `pending-${Date.now()}`, nextProjectMode);
+    runAssistantForContent(pendingContent, `pending-${Date.now()}`, nextProjectMode, learnMode ? "learn" : "default");
   }
 
   function handleVoiceInput() {
@@ -793,7 +855,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     const targetProjectId = isProjectContext
       ? projectId
       : (isHomeContext && homeProjectMode !== GENERAL_MODE_VALUE ? homeProjectMode : "");
-    runAssistantForContent(content, userMsg.id, targetProjectId || undefined);
+    runAssistantForContent(content, userMsg.id, targetProjectId || undefined, userMsg.mode);
   }
 
   function updateQueueDecision(decision: ProposalDecision) {
@@ -1067,28 +1129,12 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
       .filter((name): name is string => Boolean(name))
   ), [members]);
 
-  const showDemoScenarioSwitch = import.meta.env.DEV && isProjectContext;
-  const demoScenarioData = useMemo(() => {
-    if (!showDemoScenarioSwitch || demoScenario === "live" || !projectId) return null;
-    return getSidebarDemoScenarioData(demoScenario, {
-      projectId,
-      userId: user.id,
-    });
-  }, [showDemoScenarioSwitch, demoScenario, projectId, user.id]);
-  const scenarioExpandedProposalIds = useMemo(
-    () => new Set(demoScenarioData?.expandedGroupEventIds ?? []),
-    [demoScenarioData?.expandedGroupEventIds],
-  );
-
-  const sourceEvents = demoScenarioData?.events ?? events;
-  const sourceMessages = demoScenarioData?.messages ?? messages;
-  const sourceProposalLinks: Record<string, ProposalExecutionLink> = demoScenarioData?.proposalLinks ?? proposalExecutionLinks;
-
   const filteredEvents = useMemo(() => {
-    if (activityFilter === "all") return sourceEvents;
-    if (activityFilter === "ai_actions") return sourceEvents.filter((event) => isAIEvent(event));
-    return sourceEvents.filter((event) => event.type.startsWith(activityFilter));
-  }, [activityFilter, sourceEvents]);
+    if (activityFilter === "learn") return [] as Event[];
+    if (activityFilter === "all") return events;
+    if (activityFilter === "ai_actions") return events.filter((event) => isAIEvent(event));
+    return events.filter((event) => event.type.startsWith(activityFilter));
+  }, [activityFilter, events]);
 
   const chronologicalFilteredEvents = useMemo(() => (
     [...filteredEvents]
@@ -1103,16 +1149,55 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
 
   const eventById = useMemo(() => {
     const map = new Map<string, Event>();
-    sourceEvents.forEach((event) => {
+    events.forEach((event) => {
       map.set(event.id, event);
     });
     return map;
-  }, [sourceEvents]);
+  }, [events]);
+
+  const learnMessages = useMemo(() => {
+    const ids = new Set<string>();
+    const isLearnExplicit = (message: AIMessage) => (
+      message.mode === "learn"
+      || ((message as AIMessage & { meta?: { mode?: string } }).meta?.mode === "learn")
+    );
+    const isLearnLikeUser = (message: AIMessage) => (
+      message.role === "user" && LEARN_USER_PROMPT_PATTERN.test(message.content.trim())
+    );
+    const isLearnLikeAssistant = (message: AIMessage) => (
+      message.role === "assistant"
+      && (message.content.length >= 240 || LEARN_LIST_PATTERN.test(message.content))
+    );
+
+    messages.forEach((message, index) => {
+      const qualifies = isLearnExplicit(message) || isLearnLikeUser(message) || isLearnLikeAssistant(message);
+      if (!qualifies) return;
+
+      ids.add(message.id);
+      if (message.role === "user") {
+        for (let nextIndex = index + 1; nextIndex < messages.length; nextIndex += 1) {
+          if (messages[nextIndex]?.role === "assistant") {
+            ids.add(messages[nextIndex].id);
+            break;
+          }
+        }
+      } else {
+        for (let prevIndex = index - 1; prevIndex >= 0; prevIndex -= 1) {
+          if (messages[prevIndex]?.role === "user") {
+            ids.add(messages[prevIndex].id);
+            break;
+          }
+        }
+      }
+    });
+
+    return messages.filter((message) => ids.has(message.id));
+  }, [messages]);
 
   const streamRows = useMemo<StreamRow[]>(() => {
     const visibleEventIds = new Set(chronologicalFilteredEvents.map((event) => event.id));
     const groupedChildIds = new Set<string>();
-    Object.entries(sourceProposalLinks).forEach(([proposalEventId, link]) => {
+    Object.entries(proposalExecutionLinks).forEach(([proposalEventId, link]) => {
       if (!visibleEventIds.has(proposalEventId)) return;
       const proposalEvent = eventById.get(proposalEventId);
       if (!proposalEvent || proposalEvent.type !== "proposal_confirmed") return;
@@ -1127,7 +1212,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
       const payload = event.payload as Record<string, unknown>;
 
       if (event.type === "proposal_confirmed") {
-        const link = sourceProposalLinks[event.id];
+        const link = proposalExecutionLinks[event.id];
         if (!link || link.childEventIds.length === 0) return;
         const childEvents = link.childEventIds
           .map((childId) => eventById.get(childId))
@@ -1144,6 +1229,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
           summary: (typeof payload.summary === "string" && payload.summary)
             || link.summary
             || "Execution completed",
+          summaryLines: buildProposalSummaryLines(childEvents),
           childEvents,
         });
         return;
@@ -1181,8 +1267,14 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
       });
     });
 
-    if (activityFilter === "all") {
-      sourceMessages.forEach((message) => {
+    const chatSource = activityFilter === "learn"
+      ? learnMessages
+      : activityFilter === "all"
+        ? messages
+        : [];
+
+    if (chatSource.length > 0) {
+      chatSource.forEach((message) => {
         rows.push({
           id: `chat-${message.id}`,
           kind: "chat",
@@ -1202,7 +1294,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
         return a.idx - b.idx;
       })
       .map((item) => item.row);
-  }, [activityFilter, chronologicalFilteredEvents, eventById, sourceMessages, sourceProposalLinks]);
+  }, [activityFilter, chronologicalFilteredEvents, eventById, learnMessages, messages, proposalExecutionLinks]);
 
   const dayBuckets = useMemo<DayBucket[]>(() => {
     const map = new Map<string, DayBucket>();
@@ -1327,21 +1419,13 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
 
   const filterOptions: { key: FeedFilter; label: string }[] = [
     { key: "all", label: "All" },
+    { key: "learn", label: "Learn" },
     { key: "task", label: "Task" },
     { key: "estimate", label: "Estimate" },
     { key: "document", label: "Document" },
     { key: "photo", label: "Photo" },
     { key: "member", label: "Member" },
     { key: "ai_actions", label: "AI actions" },
-  ];
-  const demoScenarioOptions: { value: DemoScenarioId; label: string }[] = [
-    { value: "live", label: "Live" },
-    { value: "A", label: "A: Baseline" },
-    { value: "B", label: "B: Grouped" },
-    { value: "C", label: "C: Expanded" },
-    { value: "D", label: "D: Declined" },
-    { value: "E", label: "E: Learn Q&A" },
-    { value: "F", label: "F: Mixed" },
   ];
 
   const toggleProposalGroup = (proposalEventId: string) => {
@@ -1397,6 +1481,158 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     setPlusMenuOpen(false);
   };
 
+  function resolveActiveProjectForLearnDocument() {
+    if (isProjectContext) return projectId;
+    if (isHomeContext && homeProjectMode !== GENERAL_MODE_VALUE) return homeProjectMode;
+    return "";
+  }
+
+  async function handleCopyLearnMessage(message: AIMessage) {
+    try {
+      await navigator.clipboard.writeText(message.content);
+      toast({ title: "Copied", description: "AI message copied to clipboard." });
+    } catch {
+      toast({ title: "Copy failed", description: "Clipboard is unavailable.", variant: "destructive" });
+    }
+  }
+
+  function handleRateLearnMessage(messageId: string, rating: "good" | "bad") {
+    setMessageRatings((prev) => {
+      const current = prev[messageId];
+      const next: Record<string, "good" | "bad" | undefined> = { ...prev };
+      next[messageId] = current === rating ? undefined : rating;
+      return next;
+    });
+  }
+
+  function handleSaveLearnMessage(message: AIMessage) {
+    if (savedMessageIds.has(message.id)) {
+      toast({ title: "Already saved", description: "This answer is already in Documents." });
+      return;
+    }
+
+    const targetProjectId = resolveActiveProjectForLearnDocument();
+    if (!targetProjectId) {
+      toast({
+        title: "Select a project",
+        description: "Choose a project before saving Learn notes.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const marker = `<!-- learn-msg:${message.id} -->`;
+    const timestampHeader = format(new Date(), "MMM d, yyyy HH:mm");
+    const entry = `${marker}\n## ${timestampHeader}\n\n${message.content}`;
+    const docs = getDocuments(targetProjectId);
+    const learnDoc = docs.find((doc) => doc.title === "Learn notes");
+    const existingDocWithMarker = docs.find((doc) => doc.versions.some((version) => version.content.includes(marker)));
+    if (existingDocWithMarker) {
+      setSavedMessageIds((prev) => {
+        const next = new Set(prev);
+        next.add(message.id);
+        return next;
+      });
+      toast({ title: "Already saved", description: "This answer is already in Documents." });
+      return;
+    }
+
+    if (!learnDoc) {
+      const docId = `doc-learn-${Date.now()}`;
+      const versionId = `dv-learn-${Date.now()}`;
+      addDocument({
+        id: docId,
+        project_id: targetProjectId,
+        type: "report",
+        title: "Learn notes",
+        origin: "ai_generated",
+        versions: [{
+          id: versionId,
+          document_id: docId,
+          number: 1,
+          status: "draft",
+          content: `# Learn notes\n\n${entry}`,
+        }],
+      });
+      addEvent({
+        id: `evt-learn-doc-${Date.now()}`,
+        project_id: targetProjectId,
+        actor_id: user.id,
+        type: "document_created",
+        object_type: "document",
+        object_id: docId,
+        timestamp: new Date().toISOString(),
+        payload: { title: "Learn notes", source: "learn" },
+      });
+    } else {
+      const latest = learnDoc.versions[learnDoc.versions.length - 1];
+      const nextVersionNumber = learnDoc.versions.length + 1;
+      addDocumentVersion(learnDoc.id, {
+        id: `dv-learn-${Date.now()}`,
+        document_id: learnDoc.id,
+        number: nextVersionNumber,
+        status: "draft",
+        content: `${latest?.content ?? ""}\n\n${entry}`.trim(),
+      });
+      addEvent({
+        id: `evt-learn-docv-${Date.now()}`,
+        project_id: targetProjectId,
+        actor_id: user.id,
+        type: "document_version_created",
+        object_type: "document",
+        object_id: learnDoc.id,
+        timestamp: new Date().toISOString(),
+        payload: { title: "Learn notes", version: nextVersionNumber, source: "learn" },
+      });
+    }
+
+    setSavedMessageIds((prev) => {
+      const next = new Set(prev);
+      next.add(message.id);
+      return next;
+    });
+    toast({ title: "Saved to Documents", description: "Learn notes updated." });
+  }
+
+  function handleRegenerateLearnMessage(message: AIMessage) {
+    if (activeWindow !== "none" || proposalQueue) {
+      toast({ title: "AI is busy", description: "Finish the current action before regenerating.", variant: "destructive" });
+      return;
+    }
+
+    const messageIndex = messages.findIndex((item) => item.id === message.id);
+    if (messageIndex < 0) return;
+
+    let sourceUserMessage: AIMessage | undefined;
+    for (let idx = messageIndex - 1; idx >= 0; idx -= 1) {
+      if (messages[idx]?.role === "user") {
+        sourceUserMessage = messages[idx];
+        break;
+      }
+    }
+    if (!sourceUserMessage) {
+      toast({ title: "Nothing to regenerate", description: "No user prompt found for this answer.", variant: "destructive" });
+      return;
+    }
+
+    setRegeneratingMessageId(message.id);
+    const targetProjectId = isProjectContext
+      ? projectId
+      : (isHomeContext && homeProjectMode !== GENERAL_MODE_VALUE ? homeProjectMode : "");
+    runAssistantForContent(
+      sourceUserMessage.content,
+      sourceUserMessage.id,
+      targetProjectId || undefined,
+      sourceUserMessage.mode ?? "default",
+    );
+
+    const timerId = window.setTimeout(() => {
+      setRegeneratingMessageId((current) => (current === message.id ? null : current));
+      regenerateTimersRef.current = regenerateTimersRef.current.filter((id) => id !== timerId);
+    }, WORK_STEPS_GENERATE.length * 600 + 500);
+    regenerateTimersRef.current.push(timerId);
+  }
+
   const placeholderColors = [
     "bg-accent/10", "bg-info/10", "bg-warning/10", "bg-muted",
     "bg-success/10", "bg-destructive/10",
@@ -1451,40 +1687,26 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                   {/* Inline filters */}
                   {isProjectContext && (
                     <div className="px-3 pt-2 shrink-0">
-                      <div className="flex items-center gap-1 flex-wrap">
-                        {filterOptions.map((filter) => (
-                          <button
-                            key={filter.key}
-                            onClick={() => setActivityFilter(filter.key)}
-                            className={`rounded-pill px-2.5 py-0.5 text-caption font-medium transition-colors border ${
-                              activityFilter === filter.key
-                                ? "bg-accent/15 text-accent border-accent/20"
-                                : "bg-transparent text-muted-foreground border-border hover:border-accent/20"
-                            }`}
-                          >
-                            {filter.label}
-                          </button>
-                        ))}
-                        <div className="ml-auto flex items-center gap-1.5 shrink-0">
-                          {showDemoScenarioSwitch && (
-                            <Select value={demoScenario} onValueChange={(value) => setDemoScenario(value as DemoScenarioId)}>
-                              <SelectTrigger className="h-6 w-[110px] border-border bg-transparent px-2 text-[10px] text-muted-foreground">
-                                <SelectValue placeholder="Live" />
-                              </SelectTrigger>
-                              <SelectContent align="end">
-                                {demoScenarioOptions.map((option) => (
-                                  <SelectItem key={`demo-scenario-${option.value}`} value={option.value} className="text-caption">
-                                    {option.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          )}
+                      <div className="overflow-x-auto overflow-y-hidden no-scrollbar">
+                        <div className="flex items-center gap-1 flex-nowrap min-w-max pb-1">
+                          {filterOptions.map((filter) => (
+                            <button
+                              key={filter.key}
+                              onClick={() => setActivityFilter(filter.key)}
+                              className={`rounded-pill px-2.5 py-0.5 text-caption font-medium transition-colors border shrink-0 ${
+                                activityFilter === filter.key
+                                  ? "bg-accent/15 text-accent border-accent/20"
+                                  : "bg-transparent text-muted-foreground border-border hover:border-accent/20"
+                              }`}
+                            >
+                              {filter.label}
+                            </button>
+                          ))}
                           {showNearLimitIndicator && (
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <span
-                                  className="inline-block h-2.5 w-2.5 rounded-full border border-destructive/40"
+                                  className="inline-block h-2.5 w-2.5 rounded-full border border-destructive/40 shrink-0 ml-1"
                                   style={{ background: "conic-gradient(#ef4444 0deg 288deg, rgba(239,68,68,0.2) 288deg 360deg)" }}
                                 />
                               </TooltipTrigger>
@@ -1527,7 +1749,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
 
                                   {isExpanded && (
                                     <div className="glass rounded-card divide-y divide-border">
-                                      {bucket.rows.map((row) => {
+                                      {bucket.rows.map((row, rowIndex) => {
                                         if (row.kind === "event") {
                                           return (
                                             <EventFeedItem
@@ -1539,27 +1761,32 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                                         }
 
                                         if (row.kind === "proposal_group") {
-                                          const groupExpanded = expandedProposalEventIds.has(row.proposalEvent.id)
-                                            || scenarioExpandedProposalIds.has(row.proposalEvent.id);
+                                          const groupExpanded = expandedProposalEventIds.has(row.proposalEvent.id);
                                           const groupHighlighted = highlightedEventIds.has(row.proposalEvent.id);
                                           return (
-                                            <div key={row.id} className="px-2 py-1.5">
+                                            <div key={row.id} className={`px-2 py-1.5 ${rowIndex > 0 ? "mt-2" : ""}`}>
                                               <button
                                                 type="button"
                                                 onClick={() => toggleProposalGroup(row.proposalEvent.id)}
-                                                className={`w-full flex items-start gap-2 text-left rounded-md px-1.5 py-1 transition-colors ${
+                                                className={`w-full flex items-start gap-2 text-left rounded-lg border border-accent/25 bg-accent/5 px-3 py-2.5 transition-colors ${
                                                   groupHighlighted ? "bg-destructive/15" : "hover:bg-accent/10"
                                                 }`}
                                                 style={{ transitionDuration: groupHighlighted ? "2500ms" : undefined }}
                                               >
-                                                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md mt-0.5 bg-accent/10">
+                                                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md mt-0.5 bg-accent/15">
                                                   <Bot className="h-3.5 w-3.5 text-accent" />
                                                 </div>
                                                 <div className="flex-1 min-w-0">
-                                                  <p className="text-caption leading-tight">
-                                                    <span className="font-medium text-foreground">AI proposal executed</span>
+                                                  <p className="text-body-sm font-semibold leading-tight text-foreground">
+                                                    AI proposal executed
                                                   </p>
-                                                  <p className="text-caption text-muted-foreground truncate">{row.summary}</p>
+                                                  <div className="mt-1 space-y-0.5">
+                                                    {row.summaryLines.map((line, lineIndex) => (
+                                                      <p key={`${row.id}-summary-line-${lineIndex}`} className="text-caption leading-5 text-muted-foreground">
+                                                        {line}
+                                                      </p>
+                                                    ))}
+                                                  </div>
                                                 </div>
                                                 <span className="text-[10px] text-muted-foreground whitespace-nowrap mt-0.5 shrink-0">
                                                   {new Date(row.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
@@ -1588,16 +1815,12 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
 
                                         if (row.kind === "status") {
                                           return (
-                                            <div key={row.id} className="px-2 py-1.5">
-                                              <div className="inline-flex w-full items-start gap-2 rounded-md border border-border/60 bg-muted/20 px-2 py-1.5">
-                                                <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-muted">
-                                                  <XIcon className="h-3 w-3 text-muted-foreground" />
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                  <p className="text-caption text-muted-foreground">{row.title}</p>
-                                                  {row.detail && <p className="text-caption text-muted-foreground/90 truncate">{row.detail}</p>}
-                                                </div>
-                                                <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
+                                            <div key={row.id} className="px-2 py-1 text-caption text-muted-foreground">
+                                              <div className="flex items-center gap-2">
+                                                <p className="truncate">
+                                                  {row.detail ? `${row.title}: ${row.detail}` : row.title}
+                                                </p>
+                                                <span className="ml-auto text-[10px] text-muted-foreground/90 whitespace-nowrap shrink-0">
                                                   {new Date(row.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                                                 </span>
                                               </div>
@@ -1606,7 +1829,16 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                                         }
 
                                         const isLearnMessage = row.message.mode === "learn";
+                                        const isLearnContext = isLearnMessage
+                                          || learnMode
+                                          || activityFilter === "learn"
+                                          || ((
+                                            row.message as AIMessage & { meta?: { mode?: string } }
+                                          ).meta?.mode === "learn");
                                         const isUserMessage = row.message.role === "user";
+                                        const rating = messageRatings[row.message.id];
+                                        const isSaved = savedMessageIds.has(row.message.id);
+                                        const isRegenerating = regeneratingMessageId === row.message.id;
                                         return (
                                           <div key={row.id} className="px-2 py-1.5">
                                             <div className={`rounded-md border border-border/60 px-2 py-1.5 ${
@@ -1633,6 +1865,65 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                                               <p className="mt-1 text-caption text-foreground/95 whitespace-pre-wrap break-words">
                                                 {row.message.content}
                                               </p>
+                                              {!isUserMessage && isLearnContext && (
+                                                <div className="mt-1.5 flex items-center gap-0.5 opacity-70 hover:opacity-100 transition-opacity">
+                                                  <button
+                                                    type="button"
+                                                    title="Copy"
+                                                    className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/10 transition-colors"
+                                                    onClick={() => { void handleCopyLearnMessage(row.message); }}
+                                                  >
+                                                    <Copy className="h-3.5 w-3.5" />
+                                                  </button>
+                                                  <button
+                                                    type="button"
+                                                    title="Rate good"
+                                                    className={`inline-flex h-6 w-6 items-center justify-center rounded-md transition-colors ${
+                                                      rating === "good"
+                                                        ? "text-accent bg-accent/15"
+                                                        : "text-muted-foreground hover:text-foreground hover:bg-accent/10"
+                                                    }`}
+                                                    onClick={() => handleRateLearnMessage(row.message.id, "good")}
+                                                  >
+                                                    <ThumbsUp className="h-3.5 w-3.5" />
+                                                  </button>
+                                                  <button
+                                                    type="button"
+                                                    title="Rate bad"
+                                                    className={`inline-flex h-6 w-6 items-center justify-center rounded-md transition-colors ${
+                                                      rating === "bad"
+                                                        ? "text-destructive bg-destructive/15"
+                                                        : "text-muted-foreground hover:text-foreground hover:bg-accent/10"
+                                                    }`}
+                                                    onClick={() => handleRateLearnMessage(row.message.id, "bad")}
+                                                  >
+                                                    <ThumbsDown className="h-3.5 w-3.5" />
+                                                  </button>
+                                                  <button
+                                                    type="button"
+                                                    title="Save to Documents"
+                                                    className={`inline-flex h-6 w-6 items-center justify-center rounded-md transition-colors ${
+                                                      isSaved
+                                                        ? "text-accent bg-accent/15"
+                                                        : "text-muted-foreground hover:text-foreground hover:bg-accent/10"
+                                                    }`}
+                                                    onClick={() => handleSaveLearnMessage(row.message)}
+                                                  >
+                                                    <BookmarkPlus className="h-3.5 w-3.5" />
+                                                  </button>
+                                                  <button
+                                                    type="button"
+                                                    title={isRegenerating ? "Regenerating..." : "Regenerate"}
+                                                    className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/10 transition-colors disabled:opacity-60"
+                                                    disabled={isRegenerating}
+                                                    onClick={() => handleRegenerateLearnMessage(row.message)}
+                                                  >
+                                                    {isRegenerating
+                                                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                      : <RefreshCw className="h-3.5 w-3.5" />}
+                                                  </button>
+                                                </div>
+                                              )}
                                             </div>
                                           </div>
                                         );
@@ -1762,7 +2053,11 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
 
                   {!isInputLocked && (
                     <>
-                      <SuggestionChips suggestions={suggestions} onSelect={(text) => setInputValue(text)} />
+                      <SuggestionChips
+                        suggestions={suggestions}
+                        onSelect={(text) => setInputValue(text)}
+                        singleLineScrollable
+                      />
 
                       <Textarea
                         ref={composerTextareaRef}

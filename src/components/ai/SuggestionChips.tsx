@@ -1,9 +1,28 @@
 interface SuggestionChipsProps {
   suggestions: string[];
   onSelect: (text: string) => void;
+  singleLineScrollable?: boolean;
 }
 
-export function SuggestionChips({ suggestions, onSelect }: SuggestionChipsProps) {
+export function SuggestionChips({ suggestions, onSelect, singleLineScrollable = false }: SuggestionChipsProps) {
+  if (singleLineScrollable) {
+    return (
+      <div className="w-full min-w-0 overflow-x-auto overflow-y-hidden no-scrollbar">
+        <div className="flex flex-nowrap gap-1.5 min-w-max">
+          {suggestions.map((s) => (
+            <button
+              key={s}
+              onClick={() => onSelect(s)}
+              className="shrink-0 whitespace-nowrap rounded-pill px-3 py-1 text-caption font-medium bg-accent/10 text-accent hover:bg-accent/20 transition-colors border border-accent/20"
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-wrap gap-1.5 w-full min-w-0">
       {suggestions.map((s) => (
