@@ -1,35 +1,46 @@
+import { Suspense, lazy, type ReactElement } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
 
-import AppLayout from "@/layouts/AppLayout";
-import AuthLayout from "@/layouts/AuthLayout";
-import ProjectLayout from "@/layouts/ProjectLayout";
+const AppLayout = lazy(() => import("@/layouts/AppLayout"));
+const AuthLayout = lazy(() => import("@/layouts/AuthLayout"));
+const ProjectLayout = lazy(() => import("@/layouts/ProjectLayout"));
 
-import Landing from "@/pages/Landing";
-import Demo from "@/pages/Demo";
-import Login from "@/pages/auth/Login";
-import Signup from "@/pages/auth/Signup";
-import ForgotPassword from "@/pages/auth/ForgotPassword";
-import Onboarding from "@/pages/Onboarding";
-import Home from "@/pages/Home";
-import Pricing from "@/pages/Pricing";
-import Profile from "@/pages/Profile";
-import Settings from "@/pages/Settings";
-import ProjectDashboard from "@/pages/project/ProjectDashboard";
-import ProjectTasks from "@/pages/project/ProjectTasks";
-import ProjectEstimate from "@/pages/project/ProjectEstimate";
-import ProjectProcurement from "@/pages/project/ProjectProcurement";
-import ProjectGallery from "@/pages/project/ProjectGallery";
-import ProjectDocuments from "@/pages/project/ProjectDocuments";
-import ProjectActivity from "@/pages/project/ProjectActivity";
-import ProjectParticipants from "@/pages/project/ProjectParticipants";
-import ThemeDemo from "@/pages/ThemeDemo";
-import NotFound from "@/pages/NotFound";
+const Landing = lazy(() => import("@/pages/Landing"));
+const Demo = lazy(() => import("@/pages/Demo"));
+const Login = lazy(() => import("@/pages/auth/Login"));
+const Signup = lazy(() => import("@/pages/auth/Signup"));
+const ForgotPassword = lazy(() => import("@/pages/auth/ForgotPassword"));
+const Onboarding = lazy(() => import("@/pages/Onboarding"));
+const Home = lazy(() => import("@/pages/Home"));
+const Pricing = lazy(() => import("@/pages/Pricing"));
+const Profile = lazy(() => import("@/pages/Profile"));
+const Settings = lazy(() => import("@/pages/Settings"));
+const ProjectDashboard = lazy(() => import("@/pages/project/ProjectDashboard"));
+const ProjectTasks = lazy(() => import("@/pages/project/ProjectTasks"));
+const ProjectEstimate = lazy(() => import("@/pages/project/ProjectEstimate"));
+const ProjectProcurement = lazy(() => import("@/pages/project/ProjectProcurement"));
+const ProjectGallery = lazy(() => import("@/pages/project/ProjectGallery"));
+const ProjectDocuments = lazy(() => import("@/pages/project/ProjectDocuments"));
+const ProjectActivity = lazy(() => import("@/pages/project/ProjectActivity"));
+const ProjectParticipants = lazy(() => import("@/pages/project/ProjectParticipants"));
+const ThemeDemo = lazy(() => import("@/pages/ThemeDemo"));
+const NotFound = lazy(() => import("@/pages/NotFound"));
 
 const queryClient = new QueryClient();
+
+const RouteFallback = () => (
+  <div className="min-h-screen flex items-center justify-center text-sm text-muted-foreground">
+    Loading...
+  </div>
+);
+
+function routeElement(element: ReactElement): ReactElement {
+  return <Suspense fallback={<RouteFallback />}>{element}</Suspense>;
+}
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -39,42 +50,42 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           {/* Standalone pages */}
-          <Route path="/" element={<Landing />} />
-          <Route path="/onboarding" element={<Onboarding />} />
-          <Route path="/pricing" element={<Pricing />} />
-          <Route path="/theme" element={<ThemeDemo />} />
+          <Route path="/" element={routeElement(<Landing />)} />
+          <Route path="/onboarding" element={routeElement(<Onboarding />)} />
+          <Route path="/pricing" element={routeElement(<Pricing />)} />
+          <Route path="/theme" element={routeElement(<ThemeDemo />)} />
 
           {/* Auth layout */}
-          <Route element={<AuthLayout />}>
-            <Route path="/auth/login" element={<Login />} />
-            <Route path="/auth/signup" element={<Signup />} />
-            <Route path="/auth/forgot" element={<ForgotPassword />} />
+          <Route element={routeElement(<AuthLayout />)}>
+            <Route path="/auth/login" element={routeElement(<Login />)} />
+            <Route path="/auth/signup" element={routeElement(<Signup />)} />
+            <Route path="/auth/forgot" element={routeElement(<ForgotPassword />)} />
           </Route>
 
           {/* App layout (sidebar + topbar) */}
-          <Route element={<AppLayout />}>
-            <Route path="/home" element={<Home />} />
-            <Route path="/demo" element={<Demo />} />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/profile/upgrade" element={<Navigate to="/settings?tab=billing" replace />} />
-            <Route path="/settings" element={<Settings />} />
+          <Route element={routeElement(<AppLayout />)}>
+            <Route path="/home" element={routeElement(<Home />)} />
+            <Route path="/demo" element={routeElement(<Demo />)} />
+            <Route path="/profile" element={routeElement(<Profile />)} />
+            <Route path="/profile/upgrade" element={routeElement(<Navigate to="/settings?tab=billing" replace />)} />
+            <Route path="/settings" element={routeElement(<Settings />)} />
 
             {/* Project with nested tabs */}
-            <Route path="/project/:id" element={<ProjectLayout />}>
-              <Route path="dashboard" element={<ProjectDashboard />} />
-              <Route path="tasks" element={<ProjectTasks />} />
-              <Route path="estimate" element={<ProjectEstimate />} />
-              <Route path="procurement" element={<ProjectProcurement />} />
-              <Route path="procurement/order/:orderId" element={<ProjectProcurement />} />
-              <Route path="procurement/:itemId" element={<ProjectProcurement />} />
-              <Route path="gallery" element={<ProjectGallery />} />
-              <Route path="documents" element={<ProjectDocuments />} />
-              <Route path="activity" element={<ProjectActivity />} />
-              <Route path="participants" element={<ProjectParticipants />} />
+            <Route path="/project/:id" element={routeElement(<ProjectLayout />)}>
+              <Route path="dashboard" element={routeElement(<ProjectDashboard />)} />
+              <Route path="tasks" element={routeElement(<ProjectTasks />)} />
+              <Route path="estimate" element={routeElement(<ProjectEstimate />)} />
+              <Route path="procurement" element={routeElement(<ProjectProcurement />)} />
+              <Route path="procurement/order/:orderId" element={routeElement(<ProjectProcurement />)} />
+              <Route path="procurement/:itemId" element={routeElement(<ProjectProcurement />)} />
+              <Route path="gallery" element={routeElement(<ProjectGallery />)} />
+              <Route path="documents" element={routeElement(<ProjectDocuments />)} />
+              <Route path="activity" element={routeElement(<ProjectActivity />)} />
+              <Route path="participants" element={routeElement(<ProjectParticipants />)} />
             </Route>
           </Route>
 
-          <Route path="*" element={<NotFound />} />
+          <Route path="*" element={routeElement(<NotFound />)} />
         </Routes>
       </BrowserRouter>
     </TooltipProvider>

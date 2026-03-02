@@ -45,6 +45,10 @@ export function ReceiveOrderModal({
 
   const submit = () => {
     if (!order) return;
+    if (order.status !== "placed") {
+      toast({ title: "Order is not receivable", variant: "destructive" });
+      return;
+    }
     const lines = order.lines
       .map((line) => ({ lineId: line.id, qty: Number(lineQty[line.id] ?? 0) }))
       .filter((line) => line.qty > 0);
@@ -128,7 +132,7 @@ export function ReceiveOrderModal({
 
         <DialogFooter className="px-5 py-4 border-t border-border">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
-          <Button type="button" onClick={submit} disabled={!order}>Receive</Button>
+          <Button type="button" onClick={submit} disabled={!order || order.status !== "placed"}>Receive</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

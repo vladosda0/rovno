@@ -22,14 +22,17 @@ import { toast } from "@/hooks/use-toast";
 import { useProject, useTasks, usePermission } from "@/hooks/use-mock-data";
 import { isOwnerOrCoOwner } from "@/lib/permissions";
 import { useStageEstimateItems } from "@/hooks/use-estimate-data";
-import { getCurrentUser, addTask } from "@/data/store";
+import { getCurrentUser, addTask, deleteTask as storeDeleteTask } from "@/data/store";
 import {
   addStageEstimateItem, updateStageEstimateItem, deleteStageEstimateItem,
   unlinkEstimateItem, deleteEstimateItemsForTask, countLinkedEstimateItems,
   inferItemType, getEstimateItemBySourceId,
   type StageEstimateItem, type EstimateItemType,
 } from "@/data/estimate-store";
-import { addChecklistItem as storeAddChecklistItem } from "@/data/store";
+import {
+  addChecklistItem as storeAddChecklistItem,
+  deleteChecklistItem as storeDeleteChecklistItem,
+} from "@/data/store";
 import { createEstimateItemForChecklist } from "@/data/estimate-store";
 import type { Task, ChecklistItem } from "@/types/entities";
 
@@ -235,7 +238,7 @@ export default function ProjectEstimate() {
         const task = tasks.find((t) => t.id === deleteItem.sourceId);
         if (task) {
           deleteEstimateItemsForTask(task.id, task.checklist.map((c) => c.id));
-          import("@/data/store").then(({ deleteTask }) => deleteTask(task.id));
+          storeDeleteTask(task.id);
         }
       } else if (deleteItem.sourceType === "CHECKLIST" && deleteItem.sourceId) {
         deleteStageEstimateItem(deleteItem.id);
@@ -243,7 +246,7 @@ export default function ProjectEstimate() {
         for (const t of tasks) {
           const cl = t.checklist.find((c) => c.id === deleteItem.sourceId);
           if (cl) {
-            import("@/data/store").then(({ deleteChecklistItem }) => deleteChecklistItem(t.id, cl.id));
+            storeDeleteChecklistItem(t.id, cl.id);
             break;
           }
         }

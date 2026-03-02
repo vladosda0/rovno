@@ -11,7 +11,7 @@ export type ProposalStatus = "submitted" | "accepted" | "rejected";
 export type ProcurementStatus = "to_buy" | "ordered" | "in_stock";
 export type ProcurementCreatedFrom = "estimate" | "task_material" | "manual" | "ai";
 export type ProcurementItemType = "material" | "tool" | "other";
-export type OrderStatus = "draft" | "placed" | "received";
+export type OrderStatus = "draft" | "placed" | "received" | "voided";
 export type OrderKind = "supplier" | "stock";
 export type ChecklistItemType = "subtask" | "material" | "tool";
 export type DocumentVersionStatus = "draft" | "active" | "archived" | "awaiting_approval";
@@ -212,6 +212,7 @@ export interface ProcurementItemV2 {
   supplierPreferred?: string | null;
   locationPreferredId?: string | null;
   lockedFromEstimate?: boolean;
+  sourceEstimateItemId?: string | null;
   linkUrl: string | null;
   notes: string | null;
   attachments: ProcurementAttachment[];
@@ -257,8 +258,20 @@ export interface OrderLine {
   actualUnitPrice?: number | null;
 }
 
+export interface OrderReceiveEvent {
+  id: string;
+  orderId: string;
+  orderLineId: string;
+  procurementItemId: string;
+  locationId: string;
+  deltaQty: number;
+  eventType: "receive" | "move_in" | "move_out" | "void_reversal";
+  createdAt: string;
+}
+
 export interface OrderWithLines extends Order {
   lines: OrderLine[];
+  receiveEvents?: OrderReceiveEvent[];
 }
 
 export interface DocumentVersion {

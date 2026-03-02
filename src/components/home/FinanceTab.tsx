@@ -5,9 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { TrendingUp, TrendingDown, DollarSign, ArrowRight, FileDown } from "lucide-react";
 import * as store from "@/data/store";
+import { useProcurementReadSnapshot } from "@/hooks/use-procurement-read-model";
 
 export function FinanceTab() {
   const projects = store.getProjects();
+  const procurementSnapshot = useProcurementReadSnapshot();
 
   const stats = useMemo(() => {
     let totalBudget = 0;
@@ -27,8 +29,7 @@ export function FinanceTab() {
     return { totalBudget, totalSpent, variance: totalBudget - totalSpent };
   }, [projects]);
 
-  const procItems = store.getAllProcurementItems();
-  const procSpend = procItems.reduce((sum, i) => sum + (i.status === "purchased" ? i.cost : 0), 0);
+  const procSpend = procurementSnapshot.totals.inStockActualTotal;
 
   return (
     <div className="space-y-4 sm:space-y-6">

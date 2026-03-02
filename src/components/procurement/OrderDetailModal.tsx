@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { cancelDraftOrder, voidOrder } from "@/data/order-store";
 import { useOrder } from "@/hooks/use-order-data";
 import { useProcurementV2 } from "@/hooks/use-mock-data";
 import { useLocations } from "@/hooks/use-inventory-data";
+import { useToast } from "@/hooks/use-toast";
 import { fmtCost } from "@/lib/procurement-utils";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ReceiveOrderModal } from "@/components/procurement/ReceiveOrderModal";
@@ -16,9 +18,10 @@ interface OrderDetailModalProps {
   onOpenRequest?: (requestId: string) => void;
 }
 
-function orderStatusLabel(status: "draft" | "placed" | "received") {
+function orderStatusLabel(status: "draft" | "placed" | "received" | "voided") {
   if (status === "draft") return "Draft";
   if (status === "placed") return "Ordered";
+  if (status === "voided") return "Voided";
   return "In stock";
 }
 
@@ -33,6 +36,7 @@ export function OrderDetailModal({
   const items = useProcurementV2(projectId);
   const locations = useLocations(projectId);
   const [receiveOpen, setReceiveOpen] = useState(false);
+  const { toast } = useToast();
 
   const itemById = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
   const locationById = useMemo(() => new Map(locations.map((location) => [location.id, location])), [locations]);
@@ -49,6 +53,26 @@ export function OrderDetailModal({
       return sum + unitPrice * line.qty;
     }, 0);
   }, [order, itemById]);
+
+  const onCancelDraft = () => {
+    if (!order) return;
+    const result = cancelDraftOrder(order.id);
+    if (!result.ok) {
+      toast({ title: "Unable to cancel draft", description: result.error, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Draft cancelled" });
+  };
+
+  const onVoidOrder = () => {
+    if (!order) return;
+    const result = voidOrder(order.id);
+    if (!result.ok) {
+      toast({ title: "Unable to void order", description: result.error, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Order voided" });
+  };
 
   return (
     <>
@@ -154,6 +178,15 @@ export function OrderDetailModal({
 
           <DialogFooter className="px-5 py-4 border-t border-border">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+            {order?.status === "draft" && (
+              <Button type="button" variant="destructive" onClick={onCancelDraft}>Cancel draft</Button>
+            )}
+            {order?.status === "placed" && (
+              <Button type="button" variant="destructive" onClick={onVoidOrder}>Void order</Button>
+            )}
+            {order?.kind === "stock" && order?.status === "received" && (
+              <Button type="button" variant="destructive" onClick={onVoidOrder}>Void allocation</Button>
+            )}
             {order?.kind === "supplier" && order.status === "placed" && (
               <Button type="button" onClick={() => setReceiveOpen(true)}>Receive</Button>
             )}

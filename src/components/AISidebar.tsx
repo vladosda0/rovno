@@ -56,7 +56,7 @@ import {
 } from "@/lib/photo-consult-store";
 import {
   addTask, addComment as addTaskComment, addEvent, addDocument, addDocumentVersion,
-  getCurrentUser, getStages, getUserById, updateProject, getDocuments,
+  getCurrentUser, getStages, getUserById, updateProject, getDocuments, updateTask,
 } from "@/data/store";
 import { format, isToday, isYesterday } from "date-fns";
 
@@ -1089,9 +1089,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
       }
 
       if (action.entity_type === "task" && action.action === "update" && photoConsult.task) {
-        import("@/data/store").then(({ updateTask }) => {
-          updateTask(photoConsult.task!.id, { status: "done" as const });
-        });
+        updateTask(photoConsult.task.id, { status: "done" as const });
         appliedCount++;
       }
     });

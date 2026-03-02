@@ -163,6 +163,14 @@ function findByMatchingKey(key: string, projectId: string): ProcurementItemV2 | 
   );
 }
 
+function findByEstimateSource(projectId: string, estimateItemId: string): ProcurementItemV2 | undefined {
+  return items.find((i) =>
+    i.projectId === projectId
+    && !i.archived
+    && i.sourceEstimateItemId === estimateItemId
+  );
+}
+
 // --- Write ---
 function genId(): string {
   return `proc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -217,14 +225,21 @@ export function syncFromEstimate(projectId: string, stageId: string, estimateIte
   for (const ei of estimateItems) {
     if (ei.type !== "material") continue;
     const key = matchingKey(ei.itemName, null, ei.unit ?? "pcs", stageId);
-    const existing = findByMatchingKey(key, projectId);
+    const existingBySource = findByEstimateSource(projectId, ei.id);
+    const existing = existingBySource ?? findByMatchingKey(key, projectId);
     if (existing) {
       const shouldSkipProtectedFields = existing.createdFrom === "estimate" && existing.lockedFromEstimate;
       const plannedUnit = ei.qty && ei.qty > 0 ? ei.planned / ei.qty : null;
-      if (shouldSkipProtectedFields) continue;
+      if (shouldSkipProtectedFields) {
+        if (!existing.sourceEstimateItemId) {
+          updateProcurementItem(existing.id, { sourceEstimateItemId: ei.id });
+        }
+        continue;
+      }
       updateProcurementItem(existing.id, {
         requiredQty: ei.qty ?? existing.requiredQty,
         plannedUnitPrice: plannedUnit ?? existing.plannedUnitPrice,
+        sourceEstimateItemId: existing.sourceEstimateItemId ?? ei.id,
       });
     } else {
       const plannedUnit = ei.qty && ei.qty > 0 ? ei.planned / ei.qty : null;
@@ -246,6 +261,7 @@ export function syncFromEstimate(projectId: string, stageId: string, estimateIte
         supplierPreferred: null,
         locationPreferredId: null,
         lockedFromEstimate: false,
+        sourceEstimateItemId: ei.id,
         linkUrl: null,
         notes: null,
         attachments: [],

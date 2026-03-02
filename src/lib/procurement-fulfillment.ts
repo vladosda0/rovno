@@ -41,7 +41,7 @@ export interface InventoryStockSnapshotRow {
 }
 
 function isAppliedOrder(order: OrderWithLines): boolean {
-  return order.status !== "draft";
+  return order.status === "placed" || order.status === "received";
 }
 
 function unitPriceForItem(item: ProcurementItemV2): number {
@@ -112,6 +112,17 @@ export function computeInStockByLocation(
     .filter((order) => order.projectId === projectId && isAppliedOrder(order))
     .forEach((order) => {
       const fallbackLocation = locations.find((location) => location.isDefault)?.id ?? locations[0]?.id ?? "";
+      const events = order.receiveEvents ?? [];
+
+      if (events.length > 0) {
+        events.forEach((event) => {
+          if (!itemById.has(event.procurementItemId)) return;
+          applyQty(event.locationId, event.procurementItemId, event.deltaQty, order.id);
+        });
+        return;
+      }
+
+      // Legacy fallback for orders without receive/move event history.
       order.lines.forEach((line) => {
         if (!itemById.has(line.procurementItemId)) return;
 

@@ -2,10 +2,12 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { addProcurementItem, getProcurementItemById } from "@/data/procurement-store";
 import {
   __unsafeResetOrdersForTests,
+  cancelDraftOrder,
   createDraftOrder,
   getOrder,
   placeOrder,
   receiveOrder,
+  voidOrder,
 } from "@/data/order-store";
 import {
   __unsafeResetInventoryForTests,
@@ -139,5 +141,123 @@ describe("order-store", () => {
     const mirroredRequest = getProcurementItemById(item.id);
     expect(mirroredRequest?.orderedQty).toBe(8);
     expect(mirroredRequest?.receivedQty).toBe(8);
+  });
+
+  it("can cancel draft orders", () => {
+    const projectId = `cancel-project-${Date.now()}`;
+    const item = createRequestLine(projectId, `line-${Date.now()}`);
+    const site = ensureDefaultLocation(projectId);
+
+    const draft = createDraftOrder({
+      projectId,
+      kind: "supplier",
+      deliverToLocationId: site.id,
+      lines: [{ procurementItemId: item.id, qty: 2, unit: "pcs" }],
+    });
+
+    const cancelled = cancelDraftOrder(draft.id);
+    expect(cancelled.ok).toBe(true);
+    if (cancelled.ok) {
+      expect(cancelled.order.status).toBe("voided");
+    }
+  });
+
+  it("can void placed supplier orders with zero receipts", () => {
+    const projectId = `void-supplier-project-${Date.now()}`;
+    const item = createRequestLine(projectId, `line-${Date.now()}`);
+    const site = ensureDefaultLocation(projectId);
+
+    const draft = createDraftOrder({
+      projectId,
+      kind: "supplier",
+      deliverToLocationId: site.id,
+      lines: [{ procurementItemId: item.id, qty: 5, unit: "pcs" }],
+    });
+
+    const placed = placeOrder(draft.id);
+    expect(placed.ok).toBe(true);
+
+    const voided = voidOrder(draft.id);
+    expect(voided.ok).toBe(true);
+    if (voided.ok) {
+      expect(voided.order.status).toBe("voided");
+    }
+
+    const mirroredRequest = getProcurementItemById(item.id);
+    expect(mirroredRequest?.orderedQty).toBe(0);
+    expect(mirroredRequest?.receivedQty).toBe(0);
+  });
+
+  it("voids stock allocations by reversing inventory movements", () => {
+    const projectId = `void-stock-project-${Date.now()}`;
+    const item = createRequestLine(projectId, `line-${Date.now()}`);
+    const from = ensureDefaultLocation(projectId);
+    const to = createLocation(projectId, { name: "Storage" });
+
+    adjustStock(projectId, from.id, toInventoryKey(item), 7);
+
+    const draft = createDraftOrder({
+      projectId,
+      kind: "stock",
+      fromLocationId: from.id,
+      toLocationId: to.id,
+      lines: [{ procurementItemId: item.id, qty: 4, unit: "pcs" }],
+    });
+
+    const placed = placeOrder(draft.id);
+    expect(placed.ok).toBe(true);
+    expect(getStock(projectId, from.id, toInventoryKey(item))).toBe(3);
+    expect(getStock(projectId, to.id, toInventoryKey(item))).toBe(4);
+
+    const voided = voidOrder(draft.id);
+    expect(voided.ok).toBe(true);
+    if (voided.ok) {
+      expect(voided.order.status).toBe("voided");
+    }
+    expect(getStock(projectId, from.id, toInventoryKey(item))).toBe(7);
+    expect(getStock(projectId, to.id, toInventoryKey(item))).toBe(0);
+  });
+
+  it("tracks receive events per location across partial receives", () => {
+    const projectId = `receive-events-project-${Date.now()}`;
+    const item = createRequestLine(projectId, `line-${Date.now()}`);
+    const site = ensureDefaultLocation(projectId);
+    const warehouse = createLocation(projectId, { name: "Warehouse" });
+
+    const draft = createDraftOrder({
+      projectId,
+      kind: "supplier",
+      supplierName: "Supplier",
+      deliverToLocationId: site.id,
+      lines: [{ procurementItemId: item.id, qty: 6, unit: "pcs" }],
+    });
+
+    const placed = placeOrder(draft.id);
+    expect(placed.ok).toBe(true);
+
+    const firstLineId = getOrder(draft.id)?.lines[0]?.id;
+    expect(firstLineId).toBeTruthy();
+    if (!firstLineId) return;
+
+    const firstReceive = receiveOrder(draft.id, {
+      locationId: site.id,
+      lines: [{ lineId: firstLineId, qty: 2 }],
+    });
+    expect(firstReceive.ok).toBe(true);
+
+    const secondReceive = receiveOrder(draft.id, {
+      locationId: warehouse.id,
+      lines: [{ lineId: firstLineId, qty: 4 }],
+    });
+    expect(secondReceive.ok).toBe(true);
+
+    const updated = getOrder(draft.id);
+    const eventsByLocation = new Map<string, number>();
+    (updated?.receiveEvents ?? []).forEach((event) => {
+      eventsByLocation.set(event.locationId, (eventsByLocation.get(event.locationId) ?? 0) + event.deltaQty);
+    });
+
+    expect(eventsByLocation.get(site.id)).toBe(2);
+    expect(eventsByLocation.get(warehouse.id)).toBe(4);
   });
 });

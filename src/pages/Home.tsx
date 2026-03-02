@@ -1,18 +1,35 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense, lazy } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   LayoutDashboard, FolderOpen, CheckSquare, FileText,
   Package, Warehouse, TrendingUp, Users,
 } from "lucide-react";
-import { OverviewTab } from "@/components/home/OverviewTab";
-import { ProjectsTab } from "@/components/home/ProjectsTab";
-import { TasksTab } from "@/components/home/TasksTab";
-import { DocumentsTab } from "@/components/home/DocumentsTab";
-import { ProcurementTab } from "@/components/home/ProcurementTab";
-import { InventoryTab } from "@/components/home/InventoryTab";
-import { FinanceTab } from "@/components/home/FinanceTab";
-import { ResourcesTab } from "@/components/home/ResourcesTab";
+
+const OverviewTab = lazy(() =>
+  import("@/components/home/OverviewTab").then((module) => ({ default: module.OverviewTab })),
+);
+const ProjectsTab = lazy(() =>
+  import("@/components/home/ProjectsTab").then((module) => ({ default: module.ProjectsTab })),
+);
+const TasksTab = lazy(() =>
+  import("@/components/home/TasksTab").then((module) => ({ default: module.TasksTab })),
+);
+const DocumentsTab = lazy(() =>
+  import("@/components/home/DocumentsTab").then((module) => ({ default: module.DocumentsTab })),
+);
+const ProcurementTab = lazy(() =>
+  import("@/components/home/ProcurementTab").then((module) => ({ default: module.ProcurementTab })),
+);
+const InventoryTab = lazy(() =>
+  import("@/components/home/InventoryTab").then((module) => ({ default: module.InventoryTab })),
+);
+const FinanceTab = lazy(() =>
+  import("@/components/home/FinanceTab").then((module) => ({ default: module.FinanceTab })),
+);
+const ResourcesTab = lazy(() =>
+  import("@/components/home/ResourcesTab").then((module) => ({ default: module.ResourcesTab })),
+);
 
 const TABS = [
   { value: "overview", label: "Overview", icon: LayoutDashboard },
@@ -29,6 +46,12 @@ type TabValue = (typeof TABS)[number]["value"];
 
 const VALID_TABS = new Set<string>(TABS.map((t) => t.value));
 
+const TAB_FALLBACK = (
+  <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
+    Loading tab...
+  </div>
+);
+
 export default function Home() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<TabValue>(() => {
@@ -41,7 +64,7 @@ export default function Home() {
     if (param && VALID_TABS.has(param) && param !== activeTab) {
       setActiveTab(param as TabValue);
     }
-  }, [searchParams]);
+  }, [searchParams, activeTab]);
 
   function handleTabChange(value: string) {
     setActiveTab(value as TabValue);
@@ -75,14 +98,62 @@ export default function Home() {
           ))}
         </TabsList>
 
-        <TabsContent value="overview" className="mt-0"><OverviewTab /></TabsContent>
-        <TabsContent value="projects" className="mt-0"><ProjectsTab /></TabsContent>
-        <TabsContent value="tasks" className="mt-0"><TasksTab /></TabsContent>
-        <TabsContent value="documents" className="mt-0"><DocumentsTab /></TabsContent>
-        <TabsContent value="procurement" className="mt-0"><ProcurementTab /></TabsContent>
-        <TabsContent value="inventory" className="mt-0"><InventoryTab /></TabsContent>
-        <TabsContent value="finance" className="mt-0"><FinanceTab /></TabsContent>
-        <TabsContent value="resources" className="mt-0"><ResourcesTab /></TabsContent>
+        <TabsContent value="overview" className="mt-0">
+          {activeTab === "overview" && (
+            <Suspense fallback={TAB_FALLBACK}>
+              <OverviewTab />
+            </Suspense>
+          )}
+        </TabsContent>
+        <TabsContent value="projects" className="mt-0">
+          {activeTab === "projects" && (
+            <Suspense fallback={TAB_FALLBACK}>
+              <ProjectsTab />
+            </Suspense>
+          )}
+        </TabsContent>
+        <TabsContent value="tasks" className="mt-0">
+          {activeTab === "tasks" && (
+            <Suspense fallback={TAB_FALLBACK}>
+              <TasksTab />
+            </Suspense>
+          )}
+        </TabsContent>
+        <TabsContent value="documents" className="mt-0">
+          {activeTab === "documents" && (
+            <Suspense fallback={TAB_FALLBACK}>
+              <DocumentsTab />
+            </Suspense>
+          )}
+        </TabsContent>
+        <TabsContent value="procurement" className="mt-0">
+          {activeTab === "procurement" && (
+            <Suspense fallback={TAB_FALLBACK}>
+              <ProcurementTab />
+            </Suspense>
+          )}
+        </TabsContent>
+        <TabsContent value="inventory" className="mt-0">
+          {activeTab === "inventory" && (
+            <Suspense fallback={TAB_FALLBACK}>
+              <InventoryTab />
+            </Suspense>
+          )}
+        </TabsContent>
+        <TabsContent value="finance" className="mt-0">
+          {activeTab === "finance" && (
+            <Suspense fallback={TAB_FALLBACK}>
+              <FinanceTab />
+            </Suspense>
+          )}
+        </TabsContent>
+        <TabsContent value="resources" className="mt-0">
+          {activeTab === "resources" && (
+            <Suspense fallback={TAB_FALLBACK}>
+              <ResourcesTab />
+            </Suspense>
+          )}
+        </TabsContent>
       </Tabs>
     </div>
   );

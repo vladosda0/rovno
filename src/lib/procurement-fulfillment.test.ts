@@ -87,6 +87,28 @@ describe("procurement fulfillment utils", () => {
           },
         ],
       },
+      {
+        id: "o-voided",
+        projectId,
+        status: "voided",
+        kind: "supplier",
+        supplierName: "Supplier B",
+        deliverToLocationId: "loc-site",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        lines: [
+          {
+            id: "l-voided",
+            orderId: "o-voided",
+            procurementItemId: item.id,
+            qty: 2,
+            receivedQty: 0,
+            unit: "pcs",
+            plannedUnitPrice: 100,
+            actualUnitPrice: 120,
+          },
+        ],
+      },
     ];
 
     expect(computeRemainingRequestedQty(item.id, orders)).toBe(3);
@@ -119,6 +141,28 @@ describe("procurement fulfillment utils", () => {
             actualUnitPrice: 120,
           },
         ],
+        receiveEvents: [
+          {
+            id: "ev-a",
+            orderId: "supplier-received",
+            orderLineId: "line-a",
+            procurementItemId: item.id,
+            locationId: "loc-site",
+            deltaQty: 3,
+            eventType: "receive",
+            createdAt: new Date().toISOString(),
+          },
+          {
+            id: "ev-b",
+            orderId: "supplier-received",
+            orderLineId: "line-a",
+            procurementItemId: item.id,
+            locationId: "loc-wh",
+            deltaQty: 2,
+            eventType: "receive",
+            createdAt: new Date().toISOString(),
+          },
+        ],
       },
       {
         id: "stock-move",
@@ -141,6 +185,28 @@ describe("procurement fulfillment utils", () => {
             actualUnitPrice: 120,
           },
         ],
+        receiveEvents: [
+          {
+            id: "ev-c",
+            orderId: "stock-move",
+            orderLineId: "line-b",
+            procurementItemId: item.id,
+            locationId: "loc-site",
+            deltaQty: -2,
+            eventType: "move_out",
+            createdAt: new Date().toISOString(),
+          },
+          {
+            id: "ev-d",
+            orderId: "stock-move",
+            orderLineId: "line-b",
+            procurementItemId: item.id,
+            locationId: "loc-wh",
+            deltaQty: 2,
+            eventType: "move_in",
+            createdAt: new Date().toISOString(),
+          },
+        ],
       },
     ];
 
@@ -153,7 +219,7 @@ describe("procurement fulfillment utils", () => {
     expect(groups.length).toBe(2);
 
     const byLocation = new Map(groups.map((group) => [group.locationId, group]));
-    expect(byLocation.get("loc-site")?.items[0]?.qty).toBe(3);
-    expect(byLocation.get("loc-wh")?.items[0]?.qty).toBe(2);
+    expect(byLocation.get("loc-site")?.items[0]?.qty).toBe(1);
+    expect(byLocation.get("loc-wh")?.items[0]?.qty).toBe(4);
   });
 });

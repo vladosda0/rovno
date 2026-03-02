@@ -12,7 +12,7 @@ import {
   getUserById, getCurrentUser, addComment,
   updateChecklist, deleteTask, updateTaskDescription,
   updateTaskDeadline, addChecklistItem, deleteChecklistItem,
-  getMedia,
+  getMedia, updateTask, addMedia,
 } from "@/data/store";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -97,9 +97,7 @@ export function TaskDetailModal({ task, open, onOpenChange, canEdit, onStatusCha
       return;
     }
     if (titleDraft.trim() !== task.title) {
-      import("@/data/store").then(({ updateTask }) => {
-        updateTask(task.id, { title: titleDraft.trim() });
-      });
+      updateTask(task.id, { title: titleDraft.trim() });
       syncEstimateItemName(task.id, titleDraft.trim());
     }
     setEditingTitle(false);
@@ -522,20 +520,18 @@ export function TaskDetailModal({ task, open, onOpenChange, canEdit, onStatusCha
             <AlertDialogAction
               className="bg-accent text-accent-foreground hover:bg-accent/90"
               onClick={() => {
-                import("@/data/store").then(({ addMedia, getCurrentUser }) => {
-                  const user = getCurrentUser();
-                  const mediaId = `media-${Date.now()}`;
-                  addMedia({
-                    id: mediaId,
-                    project_id: task.project_id,
-                    task_id: task.id,
-                    uploader_id: user.id,
-                    caption: uploadCaption || "Photo",
-                    is_final: false,
-                    created_at: new Date().toISOString(),
-                  });
-                  toast({ title: "Photo uploaded" });
+                const user = getCurrentUser();
+                const mediaId = `media-${Date.now()}`;
+                addMedia({
+                  id: mediaId,
+                  project_id: task.project_id,
+                  task_id: task.id,
+                  uploader_id: user.id,
+                  caption: uploadCaption || "Photo",
+                  is_final: false,
+                  created_at: new Date().toISOString(),
                 });
+                toast({ title: "Photo uploaded" });
               }}
             >
               Add

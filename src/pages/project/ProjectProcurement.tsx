@@ -153,9 +153,10 @@ function newAttachmentId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
-function orderStatusLabel(status: "draft" | "placed" | "received"): string {
+function orderStatusLabel(status: "draft" | "placed" | "received" | "voided"): string {
   if (status === "draft") return "Draft";
   if (status === "placed") return "Ordered";
+  if (status === "voided") return "Voided";
   return "In stock";
 }
 

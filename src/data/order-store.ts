@@ -12,6 +12,7 @@ import { toInventoryKey } from "@/lib/procurement-fulfillment";
 import type {
   Order,
   OrderLine,
+  OrderReceiveEvent,
   OrderWithLines,
   ProcurementAttachment,
 } from "@/types/entities";
@@ -48,6 +49,7 @@ type Listener = () => void;
 const listeners = new Set<Listener>();
 let orders: Order[] = [];
 let orderLines: OrderLine[] = [];
+let orderReceiveEvents: OrderReceiveEvent[] = [];
 
 function notify() {
   listeners.forEach((listener) => listener());
@@ -61,12 +63,19 @@ function genOrderLineId(): string {
   return `oline-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
+function genReceiveEventId(): string {
+  return `orevt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+}
+
 function withLines(order: Order): OrderWithLines {
   return {
     ...order,
     lines: orderLines
       .filter((line) => line.orderId === order.id)
       .map((line) => ({ ...line })),
+    receiveEvents: orderReceiveEvents
+      .filter((event) => event.orderId === order.id)
+      .map((event) => ({ ...event })),
   };
 }
 
@@ -74,7 +83,11 @@ function refreshLegacyProcurementQuantities(projectId: string) {
   const orderedByItem = new Map<string, number>();
   const receivedByItem = new Map<string, number>();
 
-  const appliedOrders = orders.filter((order) => order.projectId === projectId && order.status !== "draft");
+  const appliedOrders = orders.filter((order) => (
+    order.projectId === projectId
+    && order.status !== "draft"
+    && order.status !== "voided"
+  ));
   appliedOrders.forEach((order) => {
     orderLines
       .filter((line) => line.orderId === order.id)
@@ -99,6 +112,7 @@ function refreshLegacyProcurementQuantities(projectId: string) {
   const items = getAllProcurementItemsV2();
   const seededOrders: Order[] = [];
   const seededLines: OrderLine[] = [];
+  const seededReceiveEvents: OrderReceiveEvent[] = [];
 
   items.forEach((item) => {
     if (item.orderedQty <= 0 && item.receivedQty <= 0) return;
@@ -125,7 +139,7 @@ function refreshLegacyProcurementQuantities(projectId: string) {
       updatedAt: now,
     });
 
-    seededLines.push({
+    const seededLine: OrderLine = {
       id: `oline-seed-${item.id}`,
       orderId,
       procurementItemId: item.id,
@@ -134,11 +148,26 @@ function refreshLegacyProcurementQuantities(projectId: string) {
       unit: item.unit,
       plannedUnitPrice: item.plannedUnitPrice,
       actualUnitPrice: item.actualUnitPrice,
-    });
+    };
+    seededLines.push(seededLine);
+
+    if (seededLine.receivedQty > 0) {
+      seededReceiveEvents.push({
+        id: `orevt-seed-${item.id}`,
+        orderId,
+        orderLineId: seededLine.id,
+        procurementItemId: item.id,
+        locationId: deliverToLocation.id,
+        deltaQty: seededLine.receivedQty,
+        eventType: "receive",
+        createdAt: now,
+      });
+    }
   });
 
   orders = seededOrders;
   orderLines = seededLines;
+  orderReceiveEvents = seededReceiveEvents;
 })();
 
 export function subscribeOrders(listener: Listener): () => void {
@@ -255,6 +284,7 @@ export function updateOrder(
 export function placeOrder(orderId: string): { ok: true; order: OrderWithLines } | { ok: false; error: string } {
   const order = orders.find((entry) => entry.id === orderId);
   if (!order) return { ok: false, error: "Order not found" };
+  if (order.status !== "draft") return { ok: false, error: "Only draft orders can be placed" };
 
   const lines = orderLines.filter((line) => line.orderId === orderId);
   if (lines.length === 0) return { ok: false, error: "Order has no lines" };
@@ -277,13 +307,37 @@ export function placeOrder(orderId: string): { ok: true; order: OrderWithLines }
       }
     }
 
+    const now = new Date().toISOString();
+    const events: OrderReceiveEvent[] = [];
+
     lines.forEach((line) => {
       const item = getProcurementItemById(line.procurementItemId);
       if (!item) return;
       const key = toInventoryKey(item);
       adjustStock(order.projectId, fromLocationId, key, -line.qty);
       adjustStock(order.projectId, toLocationId, key, line.qty);
+      events.push({
+        id: genReceiveEventId(),
+        orderId: order.id,
+        orderLineId: line.id,
+        procurementItemId: line.procurementItemId,
+        locationId: fromLocationId,
+        deltaQty: -line.qty,
+        eventType: "move_out",
+        createdAt: now,
+      });
+      events.push({
+        id: genReceiveEventId(),
+        orderId: order.id,
+        orderLineId: line.id,
+        procurementItemId: line.procurementItemId,
+        locationId: toLocationId,
+        deltaQty: line.qty,
+        eventType: "move_in",
+        createdAt: now,
+      });
     });
+    orderReceiveEvents = [...orderReceiveEvents, ...events];
 
     orderLines = orderLines.map((line) => (
       line.orderId === orderId
@@ -324,10 +378,13 @@ export function receiveOrder(
   if (!order) return { ok: false, error: "Order not found" };
   if (order.kind !== "supplier") return { ok: false, error: "Only supplier orders can be received" };
   if (order.status === "draft") return { ok: false, error: "Draft order must be placed before receiving" };
+  if (order.status === "voided") return { ok: false, error: "Voided order cannot be received" };
 
   const locationId = payload.locationId ?? order.deliverToLocationId ?? ensureDefaultLocation(order.projectId).id;
   const linesById = new Map(payload.lines.map((line) => [line.lineId, line.qty]));
   let receivedSomething = false;
+  const newEvents: OrderReceiveEvent[] = [];
+  const now = new Date().toISOString();
 
   orderLines = orderLines.map((line) => {
     if (line.orderId !== orderId) return line;
@@ -345,6 +402,16 @@ export function receiveOrder(
     if (item) {
       adjustStock(order.projectId, locationId, toInventoryKey(item), appliedQty);
     }
+    newEvents.push({
+      id: genReceiveEventId(),
+      orderId: order.id,
+      orderLineId: line.id,
+      procurementItemId: line.procurementItemId,
+      locationId,
+      deltaQty: appliedQty,
+      eventType: "receive",
+      createdAt: now,
+    });
 
     receivedSomething = true;
     return {
@@ -356,6 +423,7 @@ export function receiveOrder(
   if (!receivedSomething) {
     return { ok: false, error: "No quantities were received" };
   }
+  orderReceiveEvents = [...orderReceiveEvents, ...newEvents];
 
   const currentLines = orderLines.filter((line) => line.orderId === orderId);
   const isFullyReceived = currentLines.every((line) => line.receivedQty >= line.qty);
@@ -363,7 +431,7 @@ export function receiveOrder(
   const nextOrder: Order = {
     ...order,
     status: isFullyReceived ? "received" : "placed",
-    deliverToLocationId: locationId,
+    deliverToLocationId: order.deliverToLocationId ?? locationId,
     updatedAt: new Date().toISOString(),
   };
 
@@ -373,7 +441,94 @@ export function receiveOrder(
   return { ok: true, order: withLines(nextOrder) };
 }
 
+export function cancelDraftOrder(
+  orderId: string,
+): { ok: true; order: OrderWithLines } | { ok: false; error: string } {
+  const order = orders.find((entry) => entry.id === orderId);
+  if (!order) return { ok: false, error: "Order not found" };
+  if (order.status !== "draft") return { ok: false, error: "Only draft orders can be cancelled" };
+
+  const nextOrder: Order = {
+    ...order,
+    status: "voided",
+    updatedAt: new Date().toISOString(),
+  };
+  orders = orders.map((entry) => (entry.id === orderId ? nextOrder : entry));
+  refreshLegacyProcurementQuantities(order.projectId);
+  notify();
+  return { ok: true, order: withLines(nextOrder) };
+}
+
+export function voidOrder(
+  orderId: string,
+): { ok: true; order: OrderWithLines } | { ok: false; error: string } {
+  const order = orders.find((entry) => entry.id === orderId);
+  if (!order) return { ok: false, error: "Order not found" };
+  if (order.status === "voided") return { ok: false, error: "Order is already voided" };
+
+  if (order.kind === "supplier") {
+    if (order.status !== "placed") {
+      return { ok: false, error: "Only placed supplier orders can be voided" };
+    }
+    const lines = orderLines.filter((line) => line.orderId === orderId);
+    if (lines.some((line) => line.receivedQty > 0)) {
+      return { ok: false, error: "Supplier order with received quantities cannot be voided" };
+    }
+  }
+
+  if (order.kind === "stock") {
+    if (order.status !== "received") {
+      return { ok: false, error: "Only completed stock allocations can be voided" };
+    }
+    const movementEvents = orderReceiveEvents.filter((event) => event.orderId === orderId);
+    if (movementEvents.length === 0) {
+      return { ok: false, error: "Stock movement history is missing for this order" };
+    }
+
+    for (const event of movementEvents) {
+      if (event.deltaQty <= 0) continue;
+      const item = getProcurementItemById(event.procurementItemId);
+      if (!item) continue;
+      const available = getStock(order.projectId, event.locationId, toInventoryKey(item));
+      if (available < event.deltaQty) {
+        return { ok: false, error: `Cannot void: insufficient stock in ${event.locationId}` };
+      }
+    }
+
+    const reversalEvents: OrderReceiveEvent[] = [];
+    const now = new Date().toISOString();
+    for (const event of movementEvents) {
+      const item = getProcurementItemById(event.procurementItemId);
+      if (!item) continue;
+      const key = toInventoryKey(item);
+      adjustStock(order.projectId, event.locationId, key, -event.deltaQty);
+      reversalEvents.push({
+        id: genReceiveEventId(),
+        orderId: order.id,
+        orderLineId: event.orderLineId,
+        procurementItemId: event.procurementItemId,
+        locationId: event.locationId,
+        deltaQty: -event.deltaQty,
+        eventType: "void_reversal",
+        createdAt: now,
+      });
+    }
+    orderReceiveEvents = [...orderReceiveEvents, ...reversalEvents];
+  }
+
+  const nextOrder: Order = {
+    ...order,
+    status: "voided",
+    updatedAt: new Date().toISOString(),
+  };
+  orders = orders.map((entry) => (entry.id === orderId ? nextOrder : entry));
+  refreshLegacyProcurementQuantities(order.projectId);
+  notify();
+  return { ok: true, order: withLines(nextOrder) };
+}
+
 export function __unsafeResetOrdersForTests() {
   orders = [];
   orderLines = [];
+  orderReceiveEvents = [];
 }
