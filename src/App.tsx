@@ -65,6 +65,7 @@ const App = () => (
               <Route path="tasks" element={<ProjectTasks />} />
               <Route path="estimate" element={<ProjectEstimate />} />
               <Route path="procurement" element={<ProjectProcurement />} />
+              <Route path="procurement/order/:orderId" element={<ProjectProcurement />} />
               <Route path="procurement/:itemId" element={<ProjectProcurement />} />
               <Route path="gallery" element={<ProjectGallery />} />
               <Route path="documents" element={<ProjectDocuments />} />

@@ -10,6 +10,9 @@ export type EstimateItemType = "work" | "material";
 export type ProposalStatus = "submitted" | "accepted" | "rejected";
 export type ProcurementStatus = "to_buy" | "ordered" | "in_stock";
 export type ProcurementCreatedFrom = "estimate" | "task_material" | "manual" | "ai";
+export type ProcurementItemType = "material" | "tool" | "other";
+export type OrderStatus = "draft" | "placed" | "received";
+export type OrderKind = "supplier" | "stock";
 export type ChecklistItemType = "subtask" | "material" | "tool";
 export type DocumentVersionStatus = "draft" | "active" | "archived" | "awaiting_approval";
 
@@ -195,15 +198,20 @@ export interface ProcurementItemV2 {
   projectId: string;
   stageId: string | null;
   categoryId: string | null;
+  type: ProcurementItemType;
   name: string;
   spec: string | null;
   unit: string;
+  requiredByDate?: string | null;
   requiredQty: number;
   orderedQty: number;
   receivedQty: number;
   plannedUnitPrice: number | null;
   actualUnitPrice: number | null;
   supplier: string | null;
+  supplierPreferred?: string | null;
+  locationPreferredId?: string | null;
+  lockedFromEstimate?: boolean;
   linkUrl: string | null;
   notes: string | null;
   attachments: ProcurementAttachment[];
@@ -212,6 +220,45 @@ export interface ProcurementItemV2 {
   archived: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface InventoryLocation {
+  id: string;
+  name: string;
+  address?: string;
+  isDefault?: boolean;
+}
+
+export interface Order {
+  id: string;
+  projectId: string;
+  status: OrderStatus;
+  kind: OrderKind;
+  supplierName?: string | null;
+  deliverToLocationId?: string | null;
+  fromLocationId?: string | null;
+  toLocationId?: string | null;
+  dueDate?: string | null;
+  deliveryDeadline?: string | null;
+  invoiceAttachment?: ProcurementAttachment | null;
+  note?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OrderLine {
+  id: string;
+  orderId: string;
+  procurementItemId: string;
+  qty: number;
+  receivedQty: number;
+  unit: string;
+  plannedUnitPrice?: number | null;
+  actualUnitPrice?: number | null;
+}
+
+export interface OrderWithLines extends Order {
+  lines: OrderLine[];
 }
 
 export interface DocumentVersion {

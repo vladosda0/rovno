@@ -7,6 +7,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Search, Plus, AlertTriangle, Minus, Package } from "lucide-react";
+import { ReceiveOrderPickerModal } from "@/components/procurement/ReceiveOrderPickerModal";
 
 interface InventoryItem {
   id: string;
@@ -31,6 +32,7 @@ export function InventoryTab() {
   const [items, setItems] = useState(MOCK_INVENTORY);
   const [search, setSearch] = useState("");
   const [showLowOnly, setShowLowOnly] = useState(false);
+  const [receiveOrderOpen, setReceiveOrderOpen] = useState(false);
 
   const filtered = items.filter((item) => {
     if (search && !item.name.toLowerCase().includes(search.toLowerCase())) return false;
@@ -67,6 +69,9 @@ export function InventoryTab() {
         </div>
         <Button variant="outline" size="sm">
           <Plus className="h-3.5 w-3.5 mr-1.5" /> Add item
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => setReceiveOrderOpen(true)}>
+          Receive purchase order
         </Button>
       </div>
 
@@ -124,6 +129,11 @@ export function InventoryTab() {
           </div>
         </CardContent>
       </Card>
+
+      <ReceiveOrderPickerModal
+        open={receiveOrderOpen}
+        onOpenChange={setReceiveOrderOpen}
+      />
     </div>
   );
 }

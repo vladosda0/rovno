@@ -56,6 +56,7 @@ import {
   UserPlus,
   X,
 } from "lucide-react";
+import { ReceiveOrderPickerModal } from "@/components/procurement/ReceiveOrderPickerModal";
 import type { Member, MemberRole, Stage, Task, TaskStatus } from "@/types/entities";
 
 type ModalKey = "task" | "document" | "photo" | "participant" | "credits";
@@ -104,6 +105,7 @@ export function QuickActions({
 
   const [openModal, setOpenModal] = useState<ModalKey | null>(null);
   const [discardModal, setDiscardModal] = useState<ModalKey | null>(null);
+  const [receiveOrderOpen, setReceiveOrderOpen] = useState(false);
 
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDescription, setTaskDescription] = useState("");
@@ -455,6 +457,9 @@ export function QuickActions({
         </Button>
         <Button size="sm" variant="outline" className="text-caption h-7" onClick={() => setOpenModal("photo")}>
           <ImagePlus className="h-3 w-3 mr-1" /> Photo
+        </Button>
+        <Button size="sm" variant="outline" className="text-caption h-7" onClick={() => setReceiveOrderOpen(true)}>
+          Receive order
         </Button>
 
         <Tooltip>
@@ -980,6 +985,12 @@ export function QuickActions({
           setDiscardModal(null);
         }}
         onCancel={() => setDiscardModal(null)}
+      />
+
+      <ReceiveOrderPickerModal
+        open={receiveOrderOpen}
+        onOpenChange={setReceiveOrderOpen}
+        projectId={projectId}
       />
     </>
   );
