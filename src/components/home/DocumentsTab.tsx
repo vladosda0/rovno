@@ -43,7 +43,7 @@ export function DocumentsTab() {
   }
 
   return (
-    <div className="space-y-sp-3">
+    <div className="space-y-4 sm:space-y-6">
       {/* Toolbar */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
@@ -111,10 +111,10 @@ export function DocumentsTab() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-sp-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3">
           {filtered.map((doc) => (
             <Card key={doc.id} className="hover:shadow-md transition-shadow cursor-pointer">
-              <CardContent className="p-sp-3 space-y-2">
+              <CardContent className="space-y-2 p-4 sm:p-6">
                 <div className="flex items-start gap-2">
                   <FileText className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
                   <p className="text-body-sm font-medium text-foreground">

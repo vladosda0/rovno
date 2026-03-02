@@ -1653,15 +1653,15 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
         }}
       >
         {collapsed ? (
-          <div className="flex flex-col items-center py-3 gap-2">
-            {isProjectContext && (
-              <button
-                onClick={() => onCollapsedChange(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/10 hover:bg-accent/20 transition-colors"
-              >
-                <PanelLeft className="h-4 w-4 text-accent" />
-              </button>
-            )}
+          <div className="flex flex-col items-center gap-2 py-3">
+            <button
+              type="button"
+              onClick={() => onCollapsedChange(false)}
+              className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/10 transition-colors hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              <PanelLeft className="h-4 w-4 text-accent" />
+              <span className="sr-only">Open AI sidebar</span>
+            </button>
           </div>
         ) : (
           <>

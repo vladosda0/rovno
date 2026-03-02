@@ -130,9 +130,9 @@ export function ProjectsTab() {
   }
 
   return (
-    <div className="space-y-sp-3">
+    <div className="space-y-4 sm:space-y-6">
       {/* AI Project Input */}
-      <div className="glass rounded-card p-sp-2 space-y-sp-1">
+      <div className="glass space-y-3 rounded-card p-4 sm:space-y-4 sm:p-6">
         <div className="flex gap-2 items-start">
           <Textarea
             value={description}
@@ -183,7 +183,7 @@ export function ProjectsTab() {
         </Button>
       </div>
 
-      <div className="flex gap-sp-3">
+      <div className="flex gap-4 sm:gap-6">
         {/* Folders sidebar */}
         <div className="w-48 shrink-0 space-y-1">
           <button
@@ -212,9 +212,9 @@ export function ProjectsTab() {
         </div>
 
         {/* Projects grid */}
-        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-sp-2">
+        <div className="grid flex-1 grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2">
           {filteredProjects.map((p) => (
-            <div key={p.id} className="glass rounded-card p-sp-3 space-y-2 group relative">
+            <div key={p.id} className="glass group relative space-y-2 rounded-card p-4 sm:p-6">
               <Link to={`/project/${p.id}/dashboard`} className="space-y-2">
                 <div className="flex items-start justify-between gap-2">
                   <h3 className="text-body font-semibold text-foreground truncate">{p.title}</h3>

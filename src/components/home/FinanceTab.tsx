@@ -31,11 +31,11 @@ export function FinanceTab() {
   const procSpend = procItems.reduce((sum, i) => sum + (i.status === "purchased" ? i.cost : 0), 0);
 
   return (
-    <div className="space-y-sp-3">
+    <div className="space-y-4 sm:space-y-6">
       {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-sp-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 sm:gap-6">
         <Card>
-          <CardContent className="p-sp-3">
+          <CardContent className="p-4 sm:p-6">
             <div className="flex items-center gap-2 mb-2">
               <DollarSign className="h-4 w-4 text-accent" />
               <span className="text-caption text-muted-foreground">Total Budget</span>
@@ -44,7 +44,7 @@ export function FinanceTab() {
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-sp-3">
+          <CardContent className="p-4 sm:p-6">
             <div className="flex items-center gap-2 mb-2">
               <TrendingDown className="h-4 w-4 text-destructive" />
               <span className="text-caption text-muted-foreground">Actual Spend</span>
@@ -53,7 +53,7 @@ export function FinanceTab() {
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-sp-3">
+          <CardContent className="p-4 sm:p-6">
             <div className="flex items-center gap-2 mb-2">
               <TrendingUp className="h-4 w-4 text-success" />
               <span className="text-caption text-muted-foreground">Variance</span>
@@ -67,9 +67,9 @@ export function FinanceTab() {
 
       {/* Per-project breakdown */}
       <Card>
-        <CardContent className="p-sp-3">
-          <h3 className="text-body font-semibold text-foreground mb-sp-2">Budget by Project</h3>
-          <div className="divide-y divide-border">
+        <CardContent className="p-0">
+          <h3 className="px-4 pt-4 pb-3 text-body font-semibold text-foreground sm:px-6 sm:pt-6 sm:pb-4">Budget by Project</h3>
+          <div className="divide-y divide-border px-4 pb-4 sm:px-6 sm:pb-6">
             {projects.map((p) => {
               const est = store.getEstimate(p.id);
               if (!est) return null;

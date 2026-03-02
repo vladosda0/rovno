@@ -293,17 +293,21 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onToggleAiSidebar}>
-            <PanelLeft className="h-4 w-4" />
-            <span className="sr-only">Toggle Sidebar</span>
-          </Button>
+          {!aiSidebarCollapsed && (
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onToggleAiSidebar}>
+              <PanelLeft className="h-4 w-4" />
+              <span className="sr-only">Toggle Sidebar</span>
+            </Button>
+          )}
         </div>
       ) : (
         <>
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onToggleAiSidebar}>
-            <PanelLeft className="h-4 w-4" />
-            <span className="sr-only">Toggle Sidebar</span>
-          </Button>
+          {!aiSidebarCollapsed && (
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onToggleAiSidebar}>
+              <PanelLeft className="h-4 w-4" />
+              <span className="sr-only">Toggle Sidebar</span>
+            </Button>
+          )}
 
           <div className="flex items-center gap-1.5">
             <Link to="/home" className="text-body font-semibold text-foreground hover:text-foreground/80 transition-colors">

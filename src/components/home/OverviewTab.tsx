@@ -42,7 +42,7 @@ export function OverviewTab() {
     .slice(0, 5);
 
   return (
-    <div className="space-y-sp-3">
+    <div className="space-y-4 sm:space-y-6">
       {/* Quick actions */}
       <div className="flex items-center gap-2 flex-wrap">
         <Button size="sm" onClick={() => navigate("/home?tab=projects")}>
@@ -59,13 +59,13 @@ export function OverviewTab() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-sp-3">
+      <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
         {/* Left column */}
-        <div className="space-y-sp-3">
+        <div className="space-y-4 sm:space-y-6">
           {/* My Projects */}
           <Card>
-            <CardContent className="p-sp-3">
-              <div className="flex items-center justify-between mb-sp-2">
+            <CardContent className="p-4 sm:p-6">
+              <div className="mb-3 flex items-center justify-between sm:mb-4">
                 <h3 className="text-body font-semibold text-foreground flex items-center gap-2">
                   <FolderOpen className="h-4 w-4 text-accent" /> My Projects
                 </h3>
@@ -98,8 +98,8 @@ export function OverviewTab() {
 
           {/* Upcoming Tasks */}
           <Card>
-            <CardContent className="p-sp-3">
-              <div className="flex items-center justify-between mb-sp-2">
+            <CardContent className="p-4 sm:p-6">
+              <div className="mb-3 flex items-center justify-between sm:mb-4">
                 <h3 className="text-body font-semibold text-foreground flex items-center gap-2">
                   <Clock className="h-4 w-4 text-info" /> Upcoming Tasks
                 </h3>
@@ -136,8 +136,8 @@ export function OverviewTab() {
           {/* Overdue */}
           {overdueTasks.length > 0 && (
             <Card className="border-destructive/30">
-              <CardContent className="p-sp-3">
-                <h3 className="text-body font-semibold text-destructive flex items-center gap-2 mb-sp-2">
+              <CardContent className="p-4 sm:p-6">
+                <h3 className="mb-3 flex items-center gap-2 text-body font-semibold text-destructive sm:mb-4">
                   <AlertTriangle className="h-4 w-4" /> Overdue Tasks
                 </h3>
                 <div className="space-y-1.5">
@@ -160,16 +160,16 @@ export function OverviewTab() {
         </div>
 
         {/* Right column */}
-        <div className="space-y-sp-3">
+        <div className="space-y-4 sm:space-y-6">
           {/* Credits */}
           <Card>
-            <CardContent className="p-sp-3">
-              <h3 className="text-body font-semibold text-foreground mb-sp-2">Credits</h3>
+            <CardContent className="p-4 sm:p-6">
+              <h3 className="mb-3 text-body font-semibold text-foreground sm:mb-4">Credits</h3>
               <div className="flex items-baseline gap-2 mb-1">
                 <span className="text-h3 font-bold text-foreground">{totalCredits}</span>
                 <span className="text-caption text-muted-foreground">remaining</span>
               </div>
-              <p className="text-caption text-muted-foreground mb-sp-2">
+              <p className="mb-3 text-caption text-muted-foreground sm:mb-4">
                 {user.credits_free} daily · {user.credits_paid} paid
               </p>
               {totalCredits === 0 && (
@@ -186,8 +186,8 @@ export function OverviewTab() {
 
           {/* Documents needing attention */}
           <Card>
-            <CardContent className="p-sp-3">
-              <h3 className="text-body font-semibold text-foreground flex items-center gap-2 mb-sp-2">
+            <CardContent className="p-4 sm:p-6">
+              <h3 className="mb-3 flex items-center gap-2 text-body font-semibold text-foreground sm:mb-4">
                 <FileText className="h-4 w-4 text-warning" /> Documents
               </h3>
               <p className="text-caption text-muted-foreground py-4 text-center">
@@ -198,8 +198,8 @@ export function OverviewTab() {
 
           {/* Inventory alerts */}
           <Card>
-            <CardContent className="p-sp-3">
-              <h3 className="text-body font-semibold text-foreground mb-sp-2">Inventory Alerts</h3>
+            <CardContent className="p-4 sm:p-6">
+              <h3 className="mb-3 text-body font-semibold text-foreground sm:mb-4">Inventory Alerts</h3>
               <p className="text-caption text-muted-foreground py-4 text-center">
                 No low-stock alerts.
               </p>
@@ -208,8 +208,8 @@ export function OverviewTab() {
 
           {/* Recent activity */}
           <Card>
-            <CardContent className="p-sp-3">
-              <h3 className="text-body font-semibold text-foreground mb-sp-2">Recent Activity</h3>
+            <CardContent className="p-4 sm:p-6">
+              <h3 className="mb-3 text-body font-semibold text-foreground sm:mb-4">Recent Activity</h3>
               <div className="space-y-1.5">
                 {projects.slice(0, 3).map((p) => {
                   const events = store.getEvents(p.id).slice(0, 2);

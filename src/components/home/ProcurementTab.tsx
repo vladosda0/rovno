@@ -24,8 +24,8 @@ export function ProcurementTab() {
   }, [allItems]);
 
   return (
-    <div className="space-y-sp-3">
-      <div className="flex items-center gap-2 mb-sp-2">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex items-center gap-2">
         <Package className="h-5 w-5 text-accent" />
         <h2 className="text-body font-semibold text-foreground">All Procurement</h2>
         <Badge variant="secondary" className="text-caption">{allItems.length} items</Badge>
@@ -36,14 +36,14 @@ export function ProcurementTab() {
         if (!items?.length) return null;
         return (
           <Card key={p.id}>
-            <CardContent className="p-sp-3">
-              <div className="flex items-center justify-between mb-sp-2">
+            <CardContent className="p-0">
+              <div className="flex items-center justify-between px-4 pt-4 pb-3 sm:px-6 sm:pt-6 sm:pb-4">
                 <h3 className="text-body-sm font-semibold text-foreground">{p.title}</h3>
                 <Link to={`/project/${p.id}/procurement`} className="text-caption text-accent hover:underline flex items-center gap-1">
                   View <ArrowRight className="h-3 w-3" />
                 </Link>
               </div>
-              <div className="divide-y divide-border">
+              <div className="divide-y divide-border px-4 pb-4 sm:px-6 sm:pb-6">
                 {items.map((item) => {
                   const st = STATUS_LABELS[item.status] || { label: item.status, color: "bg-muted text-muted-foreground" };
                   return (
@@ -66,7 +66,7 @@ export function ProcurementTab() {
 
       {allItems.length === 0 && (
         <Card>
-          <CardContent className="p-sp-3">
+          <CardContent className="p-4 sm:p-6">
             <p className="text-caption text-muted-foreground py-8 text-center">No procurement items across projects.</p>
           </CardContent>
         </Card>

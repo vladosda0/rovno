@@ -45,11 +45,11 @@ export function InventoryTab() {
   }
 
   return (
-    <div className="space-y-sp-3">
+    <div className="space-y-4 sm:space-y-6">
       {/* Low stock alert */}
       {lowStockCount > 0 && (
         <Card className="border-warning/30">
-          <CardContent className="p-sp-2 flex items-center gap-2">
+          <CardContent className="flex items-center gap-2 p-4 sm:p-6">
             <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
             <p className="text-body-sm text-warning">{lowStockCount} items below reorder threshold</p>
             <Button variant="outline" size="sm" className="ml-auto text-caption h-7" onClick={() => setShowLowOnly(!showLowOnly)}>

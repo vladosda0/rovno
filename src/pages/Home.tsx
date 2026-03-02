@@ -53,8 +53,8 @@ export default function Home() {
   }
 
   return (
-    <div className="p-sp-3 max-w-6xl mx-auto">
-      <div className="mb-sp-3">
+    <div className="mx-auto max-w-6xl p-4 sm:p-6">
+      <div className="mb-4 sm:mb-6">
         <h1 className="text-h2 text-foreground">Home</h1>
         <p className="text-body-sm text-muted-foreground mt-1">
           Your workspace — projects, tasks, documents, and more.
@@ -62,7 +62,7 @@ export default function Home() {
       </div>
 
       <Tabs value={activeTab} onValueChange={handleTabChange}>
-        <TabsList className="w-full justify-start h-auto flex-wrap gap-0.5 bg-transparent p-0 mb-sp-3">
+        <TabsList className="mb-4 h-auto w-full flex-wrap justify-start gap-0.5 bg-transparent p-0 sm:mb-6">
           {TABS.map((tab) => (
             <TabsTrigger
               key={tab.value}
@@ -75,14 +75,14 @@ export default function Home() {
           ))}
         </TabsList>
 
-        <TabsContent value="overview"><OverviewTab /></TabsContent>
-        <TabsContent value="projects"><ProjectsTab /></TabsContent>
-        <TabsContent value="tasks"><TasksTab /></TabsContent>
-        <TabsContent value="documents"><DocumentsTab /></TabsContent>
-        <TabsContent value="procurement"><ProcurementTab /></TabsContent>
-        <TabsContent value="inventory"><InventoryTab /></TabsContent>
-        <TabsContent value="finance"><FinanceTab /></TabsContent>
-        <TabsContent value="resources"><ResourcesTab /></TabsContent>
+        <TabsContent value="overview" className="mt-0"><OverviewTab /></TabsContent>
+        <TabsContent value="projects" className="mt-0"><ProjectsTab /></TabsContent>
+        <TabsContent value="tasks" className="mt-0"><TasksTab /></TabsContent>
+        <TabsContent value="documents" className="mt-0"><DocumentsTab /></TabsContent>
+        <TabsContent value="procurement" className="mt-0"><ProcurementTab /></TabsContent>
+        <TabsContent value="inventory" className="mt-0"><InventoryTab /></TabsContent>
+        <TabsContent value="finance" className="mt-0"><FinanceTab /></TabsContent>
+        <TabsContent value="resources" className="mt-0"><ResourcesTab /></TabsContent>
       </Tabs>
     </div>
   );

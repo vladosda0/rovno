@@ -57,7 +57,7 @@ export function TasksTab() {
   }
 
   return (
-    <div className="space-y-sp-3">
+    <div className="space-y-4 sm:space-y-6">
       {/* Filters */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
@@ -86,8 +86,8 @@ export function TasksTab() {
       {/* Overdue section */}
       {overdue.length > 0 && statusFilter === "all" && projectFilter === "all" && (
         <Card className="border-destructive/30">
-          <CardContent className="p-sp-3">
-            <h3 className="text-body font-semibold text-destructive flex items-center gap-2 mb-sp-2">
+          <CardContent className="p-4 sm:p-6">
+            <h3 className="mb-3 flex items-center gap-2 text-body font-semibold text-destructive sm:mb-4">
               <AlertTriangle className="h-4 w-4" /> Overdue ({overdue.length})
             </h3>
             <div className="space-y-1">
@@ -104,8 +104,8 @@ export function TasksTab() {
 
       {/* All tasks */}
       <Card>
-        <CardContent className="p-sp-3">
-          <h3 className="text-body font-semibold text-foreground mb-sp-2">
+        <CardContent className="p-4 sm:p-6">
+          <h3 className="mb-3 text-body font-semibold text-foreground sm:mb-4">
             Tasks ({filtered.length})
           </h3>
           <div className="space-y-1">
