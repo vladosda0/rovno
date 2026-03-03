@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { allUsers } from "@/data/seed";
 import {
@@ -63,6 +63,7 @@ type ModalKey = "task" | "document" | "photo" | "participant" | "credits";
 
 interface Props {
   projectId: string;
+  projectMode?: "build_myself" | "contractor";
   members: Member[];
   stages: Stage[];
   tasks: Task[];
@@ -92,6 +93,7 @@ const DASHBOARD_MODAL_OVERLAY_CLASS = "bg-black/40";
 
 export function QuickActions({
   projectId,
+  projectMode = "contractor",
   members,
   stages,
   tasks,
@@ -131,9 +133,18 @@ export function QuickActions({
 
   const [participantEmail, setParticipantEmail] = useState("");
   const [participantRole, setParticipantRole] = useState<MemberRole>("contractor");
+  const [participantViewerRegime, setParticipantViewerRegime] = useState<"contractor" | "client" | "build_myself">(
+    projectMode === "build_myself" ? "build_myself" : "client",
+  );
   const [participantCredits, setParticipantCredits] = useState("0");
 
   const [creditPack, setCreditPack] = useState<string>("100");
+
+  useEffect(() => {
+    if (projectMode === "build_myself" && participantViewerRegime === "client") {
+      setParticipantViewerRegime("build_myself");
+    }
+  }, [participantViewerRegime, projectMode]);
 
   const memberOptions = useMemo(
     () => members.map((member) => ({ member, user: getUserById(member.user_id) })).filter((item) => !!item.user),
@@ -174,6 +185,7 @@ export function QuickActions({
       return Boolean(
         participantEmail.trim()
         || participantRole !== "contractor"
+        || (participantRole === "viewer" && participantViewerRegime !== (projectMode === "build_myself" ? "build_myself" : "client"))
         || participantCredits !== "0",
       );
     }
@@ -211,6 +223,7 @@ export function QuickActions({
   const resetParticipantForm = () => {
     setParticipantEmail("");
     setParticipantRole("contractor");
+    setParticipantViewerRegime(projectMode === "build_myself" ? "build_myself" : "client");
     setParticipantCredits("0");
   };
 
@@ -415,6 +428,7 @@ export function QuickActions({
       project_id: projectId,
       user_id: candidateUserId,
       role: participantRole,
+      viewer_regime: participantRole === "viewer" ? participantViewerRegime : undefined,
       ai_access: participantRole === "viewer" ? "none" : "consult_only",
       credit_limit: parseInt(participantCredits, 10) || 0,
       used_credits: 0,
@@ -433,6 +447,19 @@ export function QuickActions({
         role: participantRole,
       },
     });
+
+    if (participantRole === "viewer") {
+      addEvent({
+        id: `evt-viewer-regime-${Date.now()}`,
+        project_id: projectId,
+        actor_id: currentUser.id,
+        type: "estimate.viewer_regime_set",
+        object_type: "member",
+        object_id: candidateUserId,
+        timestamp: new Date().toISOString(),
+        payload: { regime: participantViewerRegime },
+      });
+    }
 
     toast({ title: "Invitation sent", description: participantEmail.trim() });
     forceClose("participant");
@@ -898,7 +925,16 @@ export function QuickActions({
             </div>
             <div className="space-y-1">
               <label className="text-body-sm font-medium text-foreground">Role</label>
-              <Select value={participantRole} onValueChange={(value) => setParticipantRole(value as MemberRole)}>
+              <Select
+                value={participantRole}
+                onValueChange={(value) => {
+                  const nextRole = value as MemberRole;
+                  setParticipantRole(nextRole);
+                  if (nextRole === "viewer" && projectMode === "build_myself") {
+                    setParticipantViewerRegime("build_myself");
+                  }
+                }}
+              >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="co_owner">Co-owner</SelectItem>
@@ -907,6 +943,22 @@ export function QuickActions({
                 </SelectContent>
               </Select>
             </div>
+            {participantRole === "viewer" && (
+              <div className="space-y-1">
+                <label className="text-body-sm font-medium text-foreground">Regime</label>
+                <Select
+                  value={participantViewerRegime}
+                  onValueChange={(value) => setParticipantViewerRegime(value as "contractor" | "client" | "build_myself")}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {projectMode !== "build_myself" && <SelectItem value="client">client</SelectItem>}
+                    <SelectItem value="contractor">contractor</SelectItem>
+                    <SelectItem value="build_myself">build myself</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="space-y-1">
               <label className="text-body-sm font-medium text-foreground">Credits grant</label>
               <Input

@@ -10,6 +10,7 @@ import {
   computeEffectiveDiscountBps,
   computeLineTotals,
   computeProjectTotals,
+  computeStageSubtotals,
   computeClientUnitCents,
 } from "@/lib/estimate-v2/pricing";
 
@@ -18,6 +19,7 @@ function createProject(partial: Partial<EstimateV2Project> = {}): EstimateV2Proj
     id: "estimate-1",
     projectId: "project-1",
     title: "Project",
+    projectMode: "contractor",
     currency: "RUB",
     regime: "contractor",
     taxBps: 2000,
@@ -132,5 +134,38 @@ describe("estimate-v2 pricing", () => {
     const totals = computeLineTotals(line, stage, project, "contractor" as Regime);
 
     expect(totals.clientTotalCents).toBe(1);
+  });
+
+  it("computes stage subtotals from client line totals", () => {
+    const project = createProject({ taxBps: 0, discountBps: 0 });
+    const stages = [
+      createStage({ id: "stage-a", order: 1 }),
+      createStage({ id: "stage-b", order: 2 }),
+    ];
+    const lines = [
+      createLine({ id: "l1", stageId: "stage-a", costUnitCents: 1_000, qtyMilli: 1_000, markupBps: 0, discountBpsOverride: 0 }),
+      createLine({ id: "l2", stageId: "stage-a", costUnitCents: 2_000, qtyMilli: 2_000, markupBps: 0, discountBpsOverride: 0 }),
+      createLine({ id: "l3", stageId: "stage-b", costUnitCents: 3_000, qtyMilli: 1_000, markupBps: 0, discountBpsOverride: 0 }),
+    ];
+
+    const subtotals = computeStageSubtotals(project, stages, lines, "contractor");
+    const byStage = new Map(subtotals.map((item) => [item.stageId, item.subtotalCents]));
+
+    expect(byStage.get("stage-a")).toBe(5_000);
+    expect(byStage.get("stage-b")).toBe(3_000);
+  });
+
+  it("applies project-level discount and tax to total", () => {
+    const project = createProject({ discountBps: 1_000, taxBps: 2_200 });
+    const stage = createStage();
+    const lines = [
+      createLine({ id: "l1", costUnitCents: 10_000, qtyMilli: 1_000, markupBps: 0, discountBpsOverride: null }),
+      createLine({ id: "l2", costUnitCents: 10_000, qtyMilli: 1_000, markupBps: 0, discountBpsOverride: null }),
+    ];
+
+    const totals = computeProjectTotals(project, [stage], [], lines, "contractor");
+    expect(totals.subtotalCents).toBe(18_000);
+    expect(totals.taxAmountCents).toBe(3_960);
+    expect(totals.totalCents).toBe(21_960);
   });
 });

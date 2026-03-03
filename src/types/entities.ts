@@ -28,6 +28,13 @@ export type EventType =
   | "estimate_paid_updated"
   | "estimate.version_submitted"
   | "estimate.version_approved"
+  | "estimate.status_changed"
+  | "estimate.tax_changed"
+  | "estimate.discount_changed"
+  | "estimate.dependency_added"
+  | "estimate.dependency_removed"
+  | "estimate.viewer_regime_set"
+  | "estimate.project_mode_set"
   | "procurement_created"
   | "procurement_updated"
   | "procurement_deleted"
@@ -68,6 +75,7 @@ export interface Project {
   owner_id: string;
   title: string;
   type: string;
+  project_mode?: "build_myself" | "contractor";
   automation_level: string;
   current_stage_id: string;
   progress_pct: number;
@@ -79,6 +87,7 @@ export interface Member {
   project_id: string;
   user_id: string;
   role: MemberRole;
+  viewer_regime?: "contractor" | "client" | "build_myself";
   ai_access: AIAccess;
   credit_limit: number;
   used_credits: number;

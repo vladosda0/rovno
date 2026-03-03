@@ -136,6 +136,7 @@ export default function ProjectDashboard() {
 
       <QuickActions
         projectId={projectId}
+        projectMode={project.project_mode === "build_myself" ? "build_myself" : "contractor"}
         members={members}
         stages={stages}
         tasks={tasks}

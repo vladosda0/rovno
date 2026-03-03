@@ -3,7 +3,11 @@ import type { EstimateV2Dependency, EstimateV2Work } from "@/types/estimate-v2";
 import {
   applyFSConstraints,
   autoScheduleSequential,
+  buildMonthTicks,
+  buildWeekTicks,
   clampWorkDates,
+  computeTimelineRange,
+  computeVisibleWindow,
   detectCycle,
   earliestAllowedStart,
   toDayIndex,
@@ -163,5 +167,58 @@ describe("estimate-v2 schedule helpers", () => {
     expect(fixed.fixedStart).toBe(20);
     expect(fixed.fixedEnd).toBe(20);
     expect(fixed.reasons).toContain("min_duration");
+  });
+
+  it("computes timeline range across all works with padding", () => {
+    const range = computeTimelineRange([
+      work("a", "stage-1", 1, {
+        plannedStart: "2025-01-10T00:00:00.000Z",
+        plannedEnd: "2025-01-12T00:00:00.000Z",
+      }),
+      work("b", "stage-1", 2, {
+        plannedStart: "2025-04-20T00:00:00.000Z",
+        plannedEnd: "2025-04-22T00:00:00.000Z",
+      }),
+    ], { paddingDays: 10 });
+
+    const expectedStart = (toDayIndex("2025-01-10T00:00:00.000Z") as number) - 10;
+    const expectedEnd = (toDayIndex("2025-04-22T00:00:00.000Z") as number) + 10;
+    expect(range.start).toBe(expectedStart);
+    expect(range.end).toBe(expectedEnd);
+  });
+
+  it("builds week ticks beyond week 12 deterministically", () => {
+    const ticks = buildWeekTicks(
+      toDayIndex("2025-01-01T00:00:00.000Z") as number,
+      toDayIndex("2025-05-31T00:00:00.000Z") as number,
+    );
+
+    expect(ticks.length).toBeGreaterThan(20);
+    expect(ticks.some((tick) => tick.weekNumber > 12)).toBe(true);
+  });
+
+  it("builds month ticks across long spans", () => {
+    const ticks = buildMonthTicks(
+      toDayIndex("2025-01-10T00:00:00.000Z") as number,
+      toDayIndex("2025-08-20T00:00:00.000Z") as number,
+    );
+
+    expect(ticks.length).toBeGreaterThanOrEqual(8);
+    expect(ticks[0]?.monthStartDay).toBe(toDayIndex("2025-01-01T00:00:00.000Z"));
+  });
+
+  it("clamps invalid visible window even with stale scroll state", () => {
+    const window = computeVisibleWindow({
+      timelineStartDay: 10,
+      timelineEndDay: 120,
+      scrollLeftPx: 5000,
+      viewportWidthPx: 800,
+      pxPerDay: 6,
+      bufferDays: 30,
+    });
+
+    expect(window.start).toBeGreaterThanOrEqual(10);
+    expect(window.end).toBeLessThanOrEqual(120);
+    expect(window.end).toBeGreaterThanOrEqual(window.start);
   });
 });

@@ -70,6 +70,7 @@ export function ProjectsTab() {
   const [manualOpen, setManualOpen] = useState(false);
   const [manualTitle, setManualTitle] = useState("");
   const [manualType, setManualType] = useState("residential");
+  const [manualProjectMode, setManualProjectMode] = useState<"build_myself" | "contractor">("contractor");
 
   const filteredProjects = projects
     .filter((p) => {
@@ -108,13 +109,33 @@ export function ProjectsTab() {
     const id = `project-manual-${Date.now()}`;
     const stageId = `stage-manual-${Date.now()}-0`;
     const user = getCurrentUser();
-    addProject({ id, owner_id: user.id, title, type: manualType, automation_level: "manual", current_stage_id: stageId, progress_pct: 0 });
+    addProject({
+      id,
+      owner_id: user.id,
+      title,
+      type: manualType,
+      project_mode: manualProjectMode,
+      automation_level: "manual",
+      current_stage_id: stageId,
+      progress_pct: 0,
+    });
     addMember({ project_id: id, user_id: user.id, role: "owner", ai_access: "project_pool", credit_limit: 500, used_credits: 0 });
     addStage({ id: stageId, project_id: id, title: "Stage 1", description: "", order: 1, status: "open" });
     addEvent({ id: `evt-manual-${Date.now()}`, project_id: id, actor_id: user.id, type: "project_created", object_type: "project", object_id: id, timestamp: new Date().toISOString(), payload: { title } });
+    addEvent({
+      id: `evt-project-mode-${Date.now()}`,
+      project_id: id,
+      actor_id: user.id,
+      type: "estimate.project_mode_set",
+      object_type: "estimate_v2_project",
+      object_id: id,
+      timestamp: new Date().toISOString(),
+      payload: { projectMode: manualProjectMode },
+    });
     toast({ title: "Project created", description: title });
     setManualOpen(false);
     setManualTitle("");
+    setManualProjectMode("contractor");
     navigate(`/project/${id}/dashboard`);
   }
 
@@ -264,6 +285,17 @@ export function ProjectsTab() {
                 <option value="residential">Residential</option>
                 <option value="commercial">Commercial</option>
                 <option value="industrial">Industrial</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-body-sm font-medium text-foreground">Project mode</label>
+              <select
+                value={manualProjectMode}
+                onChange={(e) => setManualProjectMode(e.target.value as "build_myself" | "contractor")}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="build_myself">I'm building/renovating for myself</option>
+                <option value="contractor">I'm a contractor working for a client</option>
               </select>
             </div>
           </div>

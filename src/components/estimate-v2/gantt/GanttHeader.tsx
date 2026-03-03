@@ -1,5 +1,9 @@
 import type { ReactNode } from "react";
-import { fromDayIndex } from "@/lib/estimate-v2/schedule";
+import {
+  buildMonthTicks,
+  buildWeekTicks,
+  fromDayIndex,
+} from "@/lib/estimate-v2/schedule";
 
 export type GanttScale = "days" | "weeks" | "months";
 
@@ -18,32 +22,6 @@ const monthLabel = new Intl.DateTimeFormat("en-US", { month: "short", year: "num
 
 function dayToDate(dayIndex: number): Date {
   return new Date(fromDayIndex(dayIndex));
-}
-
-function isoWeek(date: Date): number {
-  const target = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  const dayNr = (target.getUTCDay() + 6) % 7;
-  target.setUTCDate(target.getUTCDate() - dayNr + 3);
-  const firstThursday = new Date(Date.UTC(target.getUTCFullYear(), 0, 4));
-  const diff = target.getTime() - firstThursday.getTime();
-  return 1 + Math.round(diff / (7 * 24 * 60 * 60 * 1000));
-}
-
-function startOfIsoWeek(dayIndex: number): number {
-  const date = dayToDate(dayIndex);
-  const mondayOffset = (date.getDay() + 6) % 7;
-  return dayIndex - mondayOffset;
-}
-
-function startOfMonth(dayIndex: number): number {
-  const date = dayToDate(dayIndex);
-  const first = new Date(date.getFullYear(), date.getMonth(), 1);
-  return Math.trunc(new Date(Date.UTC(first.getFullYear(), first.getMonth(), first.getDate())).getTime() / 86400000);
-}
-
-function monthDayCount(dayIndex: number): number {
-  const date = dayToDate(dayIndex);
-  return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
 }
 
 export function GanttHeader({
@@ -88,9 +66,9 @@ export function GanttHeader({
 
         {scale === "weeks" && (() => {
           const blocks: ReactNode[] = [];
-          const firstWeek = startOfIsoWeek(visibleStartDay);
-          for (let weekStart = firstWeek; weekStart <= visibleEndDay; weekStart += 7) {
-            const date = dayToDate(weekStart);
+          const weekTicks = buildWeekTicks(visibleStartDay, visibleEndDay);
+          for (const tick of weekTicks) {
+            const weekStart = tick.weekStartDay;
             blocks.push(
               <div
                 key={`week-${weekStart}`}
@@ -100,7 +78,7 @@ export function GanttHeader({
                   width: 7 * pxPerDay,
                 }}
               >
-                <span className="text-[10px] text-muted-foreground">W{isoWeek(date)}</span>
+                <span className="text-[10px] text-muted-foreground">W{tick.weekNumber}</span>
               </div>,
             );
           }
@@ -109,23 +87,22 @@ export function GanttHeader({
 
         {scale === "months" && (() => {
           const blocks: ReactNode[] = [];
-          let monthStart = startOfMonth(visibleStartDay);
-          while (monthStart <= visibleEndDay) {
+          const monthTicks = buildMonthTicks(visibleStartDay, visibleEndDay);
+          for (const tick of monthTicks) {
+            const monthStart = tick.monthStartDay;
             const date = dayToDate(monthStart);
-            const days = monthDayCount(monthStart);
             blocks.push(
               <div
                 key={`month-${monthStart}`}
                 className="absolute top-0 h-full border-r border-border/60 px-2 pt-1"
                 style={{
                   left: (monthStart - timelineStartDay) * pxPerDay,
-                  width: days * pxPerDay,
+                  width: tick.dayCount * pxPerDay,
                 }}
               >
                 <span className="text-[10px] text-muted-foreground">{monthLabel.format(date)}</span>
               </div>,
             );
-            monthStart += days;
           }
           return blocks;
         })()}

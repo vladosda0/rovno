@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/EmptyState";
 import { useToast } from "@/hooks/use-toast";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   useCurrentUser,
   useHRItems,
@@ -51,13 +52,14 @@ import {
 } from "@/data/estimate-v2-store";
 import { useEstimateV2Project } from "@/hooks/use-estimate-v2-data";
 import { addEvent } from "@/data/store";
-import { computeLineTotals, computeProjectTotals } from "@/lib/estimate-v2/pricing";
+import { computeLineTotals, computeProjectTotals, computeStageSubtotals } from "@/lib/estimate-v2/pricing";
 import { resolveProjectEstimateCtaState } from "@/lib/estimate-v2/project-estimate-cta";
 import {
   combinePlanFact,
   computeFactFromDataSources,
   computePlannedFromEstimateV2,
 } from "@/lib/estimate-v2/rollups";
+import { toDayIndex } from "@/lib/estimate-v2/schedule";
 import { useOrders } from "@/hooks/use-order-data";
 import { ApprovalStampCard } from "@/components/estimate-v2/ApprovalStampCard";
 import { ApprovalStampFormModal } from "@/components/estimate-v2/ApprovalStampFormModal";
@@ -116,6 +118,12 @@ function labelForType(type: ResourceLineType): string {
   return "Other";
 }
 
+function effectiveDiscountForDisplay(line: EstimateV2ResourceLine, stage: EstimateV2Stage, projectDiscountBps: number): number {
+  if (line.discountBpsOverride != null) return line.discountBpsOverride;
+  if (stage.discountBps > 0) return stage.discountBps;
+  return projectDiscountBps;
+}
+
 function estimateStatusLabel(status: EstimateExecutionStatus): string {
   if (status === "planning") return "Planning";
   if (status === "in_work") return "In work";
@@ -128,6 +136,27 @@ function estimateStatusClassName(status: EstimateExecutionStatus): string {
   if (status === "in_work") return "bg-info/15 text-info";
   if (status === "paused") return "bg-warning/15 text-warning-foreground";
   return "bg-success/15 text-success";
+}
+
+function durationDays(startDay: number | null, endDay: number | null): number | null {
+  if (startDay == null || endDay == null) return null;
+  return Math.max(endDay - startDay + 1, 1);
+}
+
+function worksRangeDays(works: EstimateV2Work[]): { startDay: number; endDay: number } | null {
+  let min = Number.POSITIVE_INFINITY;
+  let max = Number.NEGATIVE_INFINITY;
+
+  works.forEach((work) => {
+    const start = toDayIndex(work.plannedStart);
+    const end = toDayIndex(work.plannedEnd);
+    if (start == null || end == null) return;
+    min = Math.min(min, start);
+    max = Math.max(max, end);
+  });
+
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return null;
+  return { startDay: min, endDay: max };
 }
 
 function buildCsv(rows: string[][]): string {
@@ -166,6 +195,7 @@ export default function ProjectEstimate() {
   const authRole = getAuthRole();
   const isOwner = authRole === "owner" && project?.owner_id === currentUser.id;
   const regime = estimateProject.regime;
+  const canEditEstimate = isOwner && regime !== "client";
 
   const [activeTab, setActiveTab] = useState("estimate");
   const [approvalModalOpen, setApprovalModalOpen] = useState(false);
@@ -249,6 +279,13 @@ export default function ProjectEstimate() {
     [estimateProject, stages, works, lines, regime],
   );
 
+  const stageSubtotalById = useMemo(
+    () => new Map(
+      computeStageSubtotals(estimateProject, stages, lines, regime).map((item) => [item.stageId, item.subtotalCents]),
+    ),
+    [estimateProject, stages, lines, regime],
+  );
+
   const plannedRollups = useMemo(
     () => computePlannedFromEstimateV2({
       project: estimateProject,
@@ -290,6 +327,48 @@ export default function ProjectEstimate() {
 
   const showInWorkPlanFactSummary = estimateProject.estimateStatus === "in_work" && regime !== "client";
 
+  const todayDay = toDayIndex(new Date());
+  const currentRange = useMemo(() => worksRangeDays(works), [works]);
+  const baselineRange = useMemo(() => {
+    if (!scheduleBaseline?.projectBaselineStart || !scheduleBaseline.projectBaselineEnd) return null;
+    const startDay = toDayIndex(scheduleBaseline.projectBaselineStart);
+    const endDay = toDayIndex(scheduleBaseline.projectBaselineEnd);
+    if (startDay == null || endDay == null) return null;
+    return { startDay, endDay };
+  }, [scheduleBaseline]);
+
+  const timingMetrics = useMemo(() => {
+    if (estimateProject.estimateStatus === "planning") {
+      const plannedDuration = durationDays(currentRange?.startDay ?? null, currentRange?.endDay ?? null);
+      const daysToEnd = currentRange && todayDay != null
+        ? Math.max(0, currentRange.endDay - todayDay)
+        : null;
+      return {
+        durationPlannedDays: plannedDuration,
+        durationEstimatedDays: null,
+        daysToEnd,
+        behindScheduleDays: 0,
+      };
+    }
+
+    const plannedDuration = durationDays(baselineRange?.startDay ?? null, baselineRange?.endDay ?? null);
+    const estimatedDuration = durationDays(currentRange?.startDay ?? null, currentRange?.endDay ?? null);
+    const targetEnd = currentRange?.endDay ?? baselineRange?.endDay ?? null;
+    const daysToEnd = targetEnd != null && todayDay != null
+      ? Math.max(0, targetEnd - todayDay)
+      : null;
+    const behindScheduleDays = baselineRange && todayDay != null && incompleteLinkedTaskCount > 0 && todayDay > baselineRange.endDay
+      ? todayDay - baselineRange.endDay
+      : 0;
+
+    return {
+      durationPlannedDays: plannedDuration,
+      durationEstimatedDays: estimatedDuration,
+      daysToEnd,
+      behindScheduleDays,
+    };
+  }, [baselineRange, currentRange, estimateProject.estimateStatus, incompleteLinkedTaskCount, todayDay]);
+
   const ctaState = resolveProjectEstimateCtaState({
     regime,
     isOwner,
@@ -297,6 +376,14 @@ export default function ProjectEstimate() {
   });
   const reviewExpandedByDefault = regime === "client" && !isOwner;
   const approvedVersionWithStamp = latestApproved?.approvalStamp ? latestApproved : null;
+  const latestVersionNumber = useMemo(
+    () => versions.reduce((max, version) => Math.max(max, version.number), 1),
+    [versions],
+  );
+  const latestVersionApproved = Boolean(
+    latestApproved
+    && (!latestProposed || latestApproved.number >= latestProposed.number),
+  );
 
   if (!project) {
     return <EmptyState icon={AlertTriangle} title="Not found" description="Project not found." />;
@@ -306,7 +393,7 @@ export default function ProjectEstimate() {
     nextStatus: EstimateExecutionStatus,
     options?: { skipSetup?: boolean },
   ) => {
-    if (!isOwner) return;
+    if (!canEditEstimate) return;
     if (nextStatus === estimateProject.estimateStatus && !options?.skipSetup) return;
     const result = setProjectEstimateStatus(pid, nextStatus, options);
     if (!result.ok) {
@@ -341,7 +428,17 @@ export default function ProjectEstimate() {
     navigate(`/project/${pid}/tasks`);
   };
 
+  const handleTabChange = (nextTab: string) => {
+    if (nextTab === "work_log") {
+      if (estimateProject.estimateStatus !== "in_work") return;
+      navigate(`/project/${pid}/tasks`);
+      return;
+    }
+    setActiveTab(nextTab);
+  };
+
   const handleSubmitToClient = () => {
+    if (!canEditEstimate) return;
     const snapshot = createVersionSnapshot(pid, currentUser.id);
     const ok = submitVersion(pid, snapshot.versionId);
     if (!ok) {
@@ -426,7 +523,7 @@ export default function ProjectEstimate() {
               money(line.costUnitCents, estimateProject.currency),
               money(lineTotals.costTotalCents, estimateProject.currency),
               fromBpsToPercent(line.markupBps),
-              fromBpsToPercent(line.discountBpsOverride ?? stage.discountBps ?? 0),
+              fromBpsToPercent(effectiveDiscountForDisplay(line, stage, estimateProject.discountBps)),
               money(lineTotals.clientUnitCents, estimateProject.currency),
               money(lineTotals.clientTotalCents, estimateProject.currency),
             ]);
@@ -442,7 +539,7 @@ export default function ProjectEstimate() {
             line.unit,
             money(line.costUnitCents, estimateProject.currency),
             money(lineTotals.costTotalCents, estimateProject.currency),
-            fromBpsToPercent(line.discountBpsOverride ?? stage.discountBps ?? 0),
+            fromBpsToPercent(effectiveDiscountForDisplay(line, stage, estimateProject.discountBps)),
             money(lineTotals.clientUnitCents, estimateProject.currency),
             money(lineTotals.clientTotalCents, estimateProject.currency),
           ]);
@@ -452,6 +549,9 @@ export default function ProjectEstimate() {
 
     rows.push([]);
     rows.push(["Subtotal", money(totals.subtotalCents, estimateProject.currency)]);
+    if (totals.discountTotalCents > 0) {
+      rows.push(["Discount", money(totals.discountTotalCents, estimateProject.currency)]);
+    }
     rows.push(["Tax", `${(estimateProject.taxBps / 100).toFixed(2)}%`]);
     rows.push(["Tax amount", money(totals.taxAmountCents, estimateProject.currency)]);
     rows.push(["Total", money(totals.totalCents, estimateProject.currency)]);
@@ -477,16 +577,29 @@ export default function ProjectEstimate() {
           <div className="space-y-1">
             <h2 className="text-lg font-semibold text-foreground">{project.title}</h2>
             <div className="flex flex-wrap items-center gap-2">
-              <Badge className={estimateStatusClassName(estimateProject.estimateStatus)}>
-                {estimateStatusLabel(estimateProject.estimateStatus)}
-              </Badge>
+              <p className="text-caption text-muted-foreground">Estimate</p>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge
+                    variant="secondary"
+                    className={latestVersionApproved ? "bg-success/15 text-success" : "bg-warning/15 text-warning-foreground"}
+                  >
+                    v{latestVersionNumber}
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent>
+                  Share link with client for approval of the latest estimate version.
+                </TooltipContent>
+              </Tooltip>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
               <Select
                 value={estimateProject.estimateStatus}
                 onValueChange={(value) => handleEstimateStatusChange(value as EstimateExecutionStatus)}
-                disabled={!isOwner}
+                disabled={!canEditEstimate}
               >
-                <SelectTrigger className="h-8 w-[160px]">
-                  <SelectValue />
+                <SelectTrigger className={`h-9 w-[180px] border-0 text-sm font-medium ${estimateStatusClassName(estimateProject.estimateStatus)}`}>
+                  <SelectValue placeholder={estimateStatusLabel(estimateProject.estimateStatus)} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="planning">Planning</SelectItem>
@@ -495,13 +608,11 @@ export default function ProjectEstimate() {
                   <SelectItem value="finished">Finished</SelectItem>
                 </SelectContent>
               </Select>
-              {!isOwner && <span className="text-caption text-muted-foreground">Owner only</span>}
+              {!canEditEstimate && <span className="text-caption text-muted-foreground">Owner only</span>}
             </div>
             <p className="text-caption text-muted-foreground">Stage → Work → ResourceLine</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="secondary">Regime: {regime.replace("_", " ")}</Badge>
-
             <Button variant="outline" size="sm" onClick={handleExportCsv}>
               <Download className="mr-1 h-4 w-4" /> Export CSV
             </Button>
@@ -523,13 +634,92 @@ export default function ProjectEstimate() {
               </Button>
             )}
 
-            {ctaState.showClientPreviewBadge && (
-              <Badge variant="secondary">Client preview</Badge>
-            )}
-
             {ctaState.showApprove && ctaState.approveDisabledReason && (
               <span className="text-caption text-muted-foreground">{ctaState.approveDisabledReason}</span>
             )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          <div className="rounded-lg border border-border p-3">
+            <p className="text-sm font-semibold text-foreground">Timing</p>
+            <div className="mt-2 grid grid-cols-2 gap-2 text-caption">
+              <div className="rounded-md border border-border/70 p-2">
+                <p className="text-muted-foreground">Duration planned</p>
+                <p className="text-sm font-medium text-foreground">
+                  {timingMetrics.durationPlannedDays == null ? "—" : `${timingMetrics.durationPlannedDays} d`}
+                </p>
+              </div>
+              <div className="rounded-md border border-border/70 p-2">
+                <p className="text-muted-foreground">Duration estimated</p>
+                <p className="text-sm font-medium text-foreground">
+                  {timingMetrics.durationEstimatedDays == null ? "—" : `${timingMetrics.durationEstimatedDays} d`}
+                </p>
+              </div>
+              <div className="rounded-md border border-border/70 p-2">
+                <p className="text-muted-foreground">Days to end</p>
+                <p className="text-sm font-medium text-foreground">
+                  {timingMetrics.daysToEnd == null ? "—" : `${timingMetrics.daysToEnd} d`}
+                </p>
+              </div>
+              <div className="rounded-md border border-border/70 p-2">
+                <p className="text-muted-foreground">Behind schedule</p>
+                <p className="text-sm font-medium text-foreground">{timingMetrics.behindScheduleDays} d</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-border p-3">
+            <p className="text-sm font-semibold text-foreground">Financial</p>
+            <p className="mt-2 text-xs text-muted-foreground">Total</p>
+            <p className="text-2xl font-semibold text-foreground">{money(totals.totalCents, estimateProject.currency)}</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {regime === "client" ? (
+                <>
+                  <Badge variant="secondary">Tax: {(estimateProject.taxBps / 100).toFixed(2)}%</Badge>
+                  <Badge variant="secondary">Tax amount: {money(totals.taxAmountCents, estimateProject.currency)}</Badge>
+                  {totals.discountTotalCents > 0 && <Badge variant="secondary">Discount: {money(totals.discountTotalCents, estimateProject.currency)}</Badge>}
+                </>
+              ) : (
+                <>
+                  <Badge variant="secondary">Subtotal: {money(totals.subtotalCents, estimateProject.currency)}</Badge>
+                  <Badge variant="secondary">Tax amount: {money(totals.taxAmountCents, estimateProject.currency)}</Badge>
+                  {totals.discountTotalCents > 0 && <Badge variant="secondary">Discount: {money(totals.discountTotalCents, estimateProject.currency)}</Badge>}
+                  {showInWorkPlanFactSummary && (
+                    <>
+                      <Badge variant="secondary">Budget: {money(combinedPlanFact.planned.plannedBudgetCents, estimateProject.currency)}</Badge>
+                      <Badge variant="secondary">Spent: {money(combinedPlanFact.fact.spentCents, estimateProject.currency)}</Badge>
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="text-caption text-muted-foreground">Tax %</span>
+              <Input
+                className="h-8 w-20"
+                defaultValue={(estimateProject.taxBps / 100).toString()}
+                readOnly={!canEditEstimate}
+                onBlur={(e) => {
+                  if (!canEditEstimate) return;
+                  const nextTax = toBpsFromPercent(e.target.value);
+                  updateEstimateV2Project(pid, { taxBps: nextTax });
+                }}
+              />
+
+              <span className="text-caption text-muted-foreground">Discount %</span>
+              <Input
+                className="h-8 w-20"
+                defaultValue={(estimateProject.discountBps / 100).toString()}
+                readOnly={!canEditEstimate}
+                onBlur={(e) => {
+                  if (!canEditEstimate) return;
+                  const nextDiscount = toBpsFromPercent(e.target.value);
+                  updateEstimateV2Project(pid, { discountBps: nextDiscount });
+                }}
+              />
+            </div>
           </div>
         </div>
 
@@ -547,11 +737,22 @@ export default function ProjectEstimate() {
           <VersionDiffList changes={diff.changes} regime={regime} currency={estimateProject.currency} />
         </VersionBanner>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <Tabs value={activeTab} onValueChange={handleTabChange}>
           <TabsList className="h-auto w-full justify-start gap-1 bg-transparent p-0">
             <TabsTrigger value="estimate">Estimate</TabsTrigger>
             <TabsTrigger value="work_schedule">Work schedule</TabsTrigger>
-            <TabsTrigger value="work_log">Work log</TabsTrigger>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <TabsTrigger value="work_log" disabled={estimateProject.estimateStatus !== "in_work"}>
+                    Work log
+                  </TabsTrigger>
+                </span>
+              </TooltipTrigger>
+              {estimateProject.estimateStatus !== "in_work" && (
+                <TooltipContent>Available after moving project to In work</TooltipContent>
+              )}
+            </Tooltip>
           </TabsList>
 
           <TabsContent value="estimate" className="mt-3 space-y-3">
@@ -643,22 +844,11 @@ export default function ProjectEstimate() {
               </div>
             )}
 
-            {isOwner && (
+            {canEditEstimate && (
               <div className="flex flex-wrap items-center gap-2">
                 <Button size="sm" variant="outline" onClick={() => createStage(pid, { title: `Stage ${stages.length + 1}` })}>
                   <Plus className="mr-1 h-4 w-4" /> Add stage
                 </Button>
-                <div className="flex items-center gap-1">
-                  <span className="text-caption text-muted-foreground">Tax %</span>
-                  <Input
-                    className="h-8 w-20"
-                    defaultValue={(estimateProject.taxBps / 100).toString()}
-                    onBlur={(e) => {
-                      const nextTax = toBpsFromPercent(e.target.value);
-                      updateEstimateV2Project(pid, { taxBps: nextTax });
-                    }}
-                  />
-                </div>
               </div>
             )}
 
@@ -672,7 +862,7 @@ export default function ProjectEstimate() {
                   <div key={stage.id} className="rounded-card border border-border p-2 space-y-2">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex flex-wrap items-center gap-2">
-                        {isOwner ? (
+                        {canEditEstimate ? (
                           <Input
                             className="h-8 w-[220px]"
                             defaultValue={stage.title}
@@ -682,7 +872,7 @@ export default function ProjectEstimate() {
                           <h3 className="text-body-sm font-semibold">{stage.title}</h3>
                         )}
 
-                        {isOwner && (
+                        {canEditEstimate && (
                           <div className="flex items-center gap-1">
                             <span className="text-caption text-muted-foreground">Stage discount %</span>
                             <Input
@@ -694,7 +884,7 @@ export default function ProjectEstimate() {
                         )}
                       </div>
 
-                      {isOwner && (
+                      {canEditEstimate && (
                         <div className="flex items-center gap-1">
                           <Button size="sm" variant="outline" onClick={() => createWork(pid, { stageId: stage.id, title: `Work ${(stageWorks.length || 0) + 1}` })}>
                             <Plus className="mr-1 h-4 w-4" /> Add work
@@ -711,7 +901,7 @@ export default function ProjectEstimate() {
                       return (
                         <div key={work.id} className="rounded-md border border-border/80 p-2 space-y-2">
                           <div className="flex flex-wrap items-center justify-between gap-2">
-                            {isOwner ? (
+                            {canEditEstimate ? (
                               <Input
                                 className="h-8 w-[220px]"
                                 defaultValue={work.title}
@@ -721,7 +911,7 @@ export default function ProjectEstimate() {
                               <h4 className="text-caption font-medium text-foreground">{work.title}</h4>
                             )}
 
-                            {isOwner && (
+                            {canEditEstimate && (
                               <div className="flex items-center gap-1">
                                 <Button
                                   size="sm"
@@ -750,7 +940,7 @@ export default function ProjectEstimate() {
                                 {regime !== "client" && <TableHead className="text-right">Discount %</TableHead>}
                                 <TableHead className="text-right">Client unit</TableHead>
                                 <TableHead className="text-right">Client total</TableHead>
-                                {isOwner && <TableHead className="w-10" />}
+                                {canEditEstimate && <TableHead className="w-10" />}
                               </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -761,7 +951,7 @@ export default function ProjectEstimate() {
                                 return (
                                   <TableRow key={line.id} className={changedLineIds.has(line.id) ? "bg-warning/10" : ""}>
                                     <TableCell>
-                                      {isOwner ? (
+                                      {canEditEstimate ? (
                                         <Input
                                           className="h-8"
                                           defaultValue={line.title}
@@ -774,7 +964,7 @@ export default function ProjectEstimate() {
 
                                     {regime !== "client" && (
                                       <TableCell>
-                                        {isOwner ? (
+                                        {canEditEstimate ? (
                                           <Select
                                             value={line.type}
                                             onValueChange={(value) => updateLine(pid, line.id, { type: value as ResourceLineType })}
@@ -795,7 +985,7 @@ export default function ProjectEstimate() {
                                     )}
 
                                     <TableCell className="text-right">
-                                      {isOwner ? (
+                                      {canEditEstimate ? (
                                         <Input
                                           className="h-8 text-right"
                                           defaultValue={qtyFromMilli(line.qtyMilli)}
@@ -805,7 +995,7 @@ export default function ProjectEstimate() {
                                     </TableCell>
 
                                     <TableCell>
-                                      {isOwner ? (
+                                      {canEditEstimate ? (
                                         <Input
                                           className="h-8"
                                           defaultValue={line.unit}
@@ -816,7 +1006,7 @@ export default function ProjectEstimate() {
 
                                     {regime !== "client" && (
                                       <TableCell className="text-right">
-                                        {isOwner ? (
+                                        {canEditEstimate ? (
                                           <Input
                                             className="h-8 text-right"
                                             defaultValue={(line.costUnitCents / 100).toString()}
@@ -832,7 +1022,7 @@ export default function ProjectEstimate() {
 
                                     {regime === "contractor" && (
                                       <TableCell className="text-right">
-                                        {isOwner ? (
+                                        {canEditEstimate ? (
                                           <Input
                                             className="h-8 text-right"
                                             defaultValue={fromBpsToPercent(line.markupBps)}
@@ -844,20 +1034,20 @@ export default function ProjectEstimate() {
 
                                     {regime !== "client" && (
                                       <TableCell className="text-right">
-                                        {isOwner ? (
+                                        {canEditEstimate ? (
                                           <Input
                                             className="h-8 text-right"
                                             defaultValue={fromBpsToPercent(line.discountBpsOverride ?? 0)}
                                             onBlur={(e) => updateLine(pid, line.id, { discountBpsOverride: toBpsFromPercent(e.target.value) })}
                                           />
-                                        ) : fromBpsToPercent(line.discountBpsOverride ?? stage.discountBps)}
+                                        ) : fromBpsToPercent(effectiveDiscountForDisplay(line, stage, estimateProject.discountBps))}
                                       </TableCell>
                                     )}
 
                                     <TableCell className="text-right">{money(computed.clientUnitCents, estimateProject.currency)}</TableCell>
                                     <TableCell className="text-right">{money(computed.clientTotalCents, estimateProject.currency)}</TableCell>
 
-                                    {isOwner && (
+                                    {canEditEstimate && (
                                       <TableCell>
                                         <Button
                                           size="icon"
@@ -877,6 +1067,13 @@ export default function ProjectEstimate() {
                         </div>
                       );
                     })}
+
+                    <div className="flex items-center justify-between rounded-md border border-border/70 bg-muted/20 px-3 py-2">
+                      <span className="text-caption font-medium text-muted-foreground">Stage subtotal</span>
+                      <span className="text-sm font-semibold text-foreground">
+                        {money(stageSubtotalById.get(stage.id) ?? 0, estimateProject.currency)}
+                      </span>
+                    </div>
                   </div>
                 );
               })
@@ -889,18 +1086,10 @@ export default function ProjectEstimate() {
               stages={stages}
               works={works}
               dependencies={dependencies}
-              isOwner={isOwner}
+              isOwner={canEditEstimate}
             />
           </TabsContent>
 
-          <TabsContent value="work_log" className="mt-3">
-            <div className="rounded-card border border-border p-3">
-              <p className="text-caption text-muted-foreground mb-2">Work log is planned for Phase 2.</p>
-              <Button variant="outline" onClick={() => toast({ title: "Open Work log (Phase 2)" })}>
-                Open Work log (Phase 2)
-              </Button>
-            </div>
-          </TabsContent>
         </Tabs>
 
         <ConfirmModal

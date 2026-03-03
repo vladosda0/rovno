@@ -28,6 +28,11 @@ export interface ProjectTotals {
   breakdownByType: Record<ResourceLineType, number>;
 }
 
+export interface StageSubtotal {
+  stageId: string;
+  subtotalCents: number;
+}
+
 const BPS_BASE = 10_000;
 const QTY_MILLI_BASE = 1_000;
 
@@ -148,6 +153,28 @@ export function computeProjectTotals(
     discountTotalCents,
     breakdownByType,
   };
+}
+
+export function computeStageSubtotals(
+  project: EstimateV2Project,
+  stages: EstimateV2Stage[],
+  lines: EstimateV2ResourceLine[],
+  regime: Regime,
+): StageSubtotal[] {
+  const stageById = new Map(stages.map((stage) => [stage.id, stage]));
+  const subtotalByStageId = new Map<string, number>();
+
+  lines.forEach((line) => {
+    const stage = stageById.get(line.stageId);
+    if (!stage) return;
+    const totals = computeLineTotals(line, stage, project, regime);
+    subtotalByStageId.set(line.stageId, (subtotalByStageId.get(line.stageId) ?? 0) + totals.clientTotalCents);
+  });
+
+  return stages.map((stage) => ({
+    stageId: stage.id,
+    subtotalCents: subtotalByStageId.get(stage.id) ?? 0,
+  }));
 }
 
 export function applyLastLineAdjustment(

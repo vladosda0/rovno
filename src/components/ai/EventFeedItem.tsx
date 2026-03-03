@@ -17,6 +17,13 @@ const typeIcons: Record<string, typeof Activity> = {
   estimate_archived: Calculator,
   "estimate.version_submitted": Calculator,
   "estimate.version_approved": CheckCircle2,
+  "estimate.status_changed": Activity,
+  "estimate.tax_changed": Calculator,
+  "estimate.discount_changed": Calculator,
+  "estimate.dependency_added": GitBranch,
+  "estimate.dependency_removed": XCircle,
+  "estimate.viewer_regime_set": Users,
+  "estimate.project_mode_set": Activity,
   procurement_created: ShoppingCart,
   procurement_updated: ShoppingCart,
   document_created: FileText,
@@ -44,6 +51,7 @@ function getEventRoute(evt: Event): string | null {
   switch (evt.object_type) {
     case "task": return `${base}/tasks`;
     case "estimate_version": return `${base}/estimate`;
+    case "estimate_v2_project": return `${base}/estimate`;
     case "procurement_item": return `${base}/procurement`;
     case "document": return `${base}/documents`;
     case "media": return `${base}/gallery`;

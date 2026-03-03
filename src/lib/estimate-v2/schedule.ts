@@ -5,6 +5,26 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export type ScheduleTzPolicy = "local_day_iso";
 export type WorksById = Record<string, EstimateV2Work>;
 
+export interface TimelineRange {
+  start: number;
+  end: number;
+}
+
+export interface VisibleWindow {
+  start: number;
+  end: number;
+}
+
+export interface WeekTick {
+  weekStartDay: number;
+  weekNumber: number;
+}
+
+export interface MonthTick {
+  monthStartDay: number;
+  dayCount: number;
+}
+
 function parseDate(value: string | Date | null | undefined): Date | null {
   if (!value) return null;
   const parsed = value instanceof Date ? value : new Date(value);
@@ -286,6 +306,143 @@ function workSortKey(
   stageOrderById: Map<string, number>,
 ): [number, number, string] {
   return [stageOrderById.get(work.stageId) ?? Number.MAX_SAFE_INTEGER, work.order, work.id];
+}
+
+function dayToLocalDate(dayIndex: number): Date {
+  return new Date(fromDayIndex(dayIndex));
+}
+
+function isoWeek(date: Date): number {
+  const target = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNr = (target.getUTCDay() + 6) % 7;
+  target.setUTCDate(target.getUTCDate() - dayNr + 3);
+  const firstThursday = new Date(Date.UTC(target.getUTCFullYear(), 0, 4));
+  const diff = target.getTime() - firstThursday.getTime();
+  return 1 + Math.round(diff / (7 * DAY_MS));
+}
+
+function startOfIsoWeek(dayIndex: number): number {
+  const date = dayToLocalDate(dayIndex);
+  const mondayOffset = (date.getDay() + 6) % 7;
+  return dayIndex - mondayOffset;
+}
+
+function startOfMonth(dayIndex: number): number {
+  const date = dayToLocalDate(dayIndex);
+  const first = new Date(date.getFullYear(), date.getMonth(), 1);
+  return toDayIndex(first) ?? dayIndex;
+}
+
+function monthDayCount(dayIndex: number): number {
+  const date = dayToLocalDate(dayIndex);
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+}
+
+export function computeTimelineRange(
+  works: Pick<EstimateV2Work, "plannedStart" | "plannedEnd">[],
+  options: {
+    paddingDays?: number;
+    emptySpanDays?: number;
+    anchorDate?: string | Date;
+  } = {},
+): TimelineRange {
+  const paddingDays = Math.max(0, Math.round(options.paddingDays ?? 14));
+  const emptySpanDays = Math.max(1, Math.round(options.emptySpanDays ?? 30));
+  const anchorDay = toDayIndex(options.anchorDate ?? new Date()) ?? 0;
+
+  let minDay = Number.POSITIVE_INFINITY;
+  let maxDay = Number.NEGATIVE_INFINITY;
+
+  works.forEach((work) => {
+    const start = toDayIndex(work.plannedStart);
+    const end = toDayIndex(work.plannedEnd);
+    if (start == null || end == null) return;
+    if (start < minDay) minDay = start;
+    if (end > maxDay) maxDay = end;
+  });
+
+  if (!Number.isFinite(minDay) || !Number.isFinite(maxDay)) {
+    minDay = anchorDay;
+    maxDay = anchorDay + emptySpanDays;
+  }
+
+  return {
+    start: Math.trunc(minDay) - paddingDays,
+    end: Math.trunc(maxDay) + paddingDays,
+  };
+}
+
+export function computeVisibleWindow(input: {
+  timelineStartDay: number;
+  timelineEndDay: number;
+  scrollLeftPx: number;
+  viewportWidthPx: number;
+  pxPerDay: number;
+  bufferDays?: number;
+}): VisibleWindow {
+  const timelineStartDay = Math.trunc(input.timelineStartDay);
+  const timelineEndDay = Math.max(timelineStartDay, Math.trunc(input.timelineEndDay));
+  const pxPerDay = Math.max(1, Math.round(input.pxPerDay));
+  const bufferDays = Math.max(0, Math.round(input.bufferDays ?? 30));
+  const scrollLeftPx = Number.isFinite(input.scrollLeftPx) ? input.scrollLeftPx : 0;
+  const viewportWidthPx = Number.isFinite(input.viewportWidthPx) ? input.viewportWidthPx : pxPerDay;
+
+  const rawStart = timelineStartDay + Math.floor(scrollLeftPx / pxPerDay) - bufferDays;
+  const rawEnd = timelineStartDay + Math.ceil((scrollLeftPx + viewportWidthPx) / pxPerDay) + bufferDays;
+
+  const start = Math.max(timelineStartDay, rawStart);
+  const end = Math.min(timelineEndDay, rawEnd);
+
+  if (end >= start) return { start, end };
+
+  const anchor = Math.min(
+    timelineEndDay,
+    Math.max(
+      timelineStartDay,
+      timelineStartDay + Math.floor(scrollLeftPx / pxPerDay),
+    ),
+  );
+
+  return {
+    start: anchor,
+    end: anchor,
+  };
+}
+
+export function buildWeekTicks(visibleStartDay: number, visibleEndDay: number): WeekTick[] {
+  const start = Math.trunc(visibleStartDay);
+  const end = Math.trunc(visibleEndDay);
+  if (end < start) return [];
+
+  const ticks: WeekTick[] = [];
+  for (let weekStart = startOfIsoWeek(start); weekStart <= end; weekStart += 7) {
+    const date = dayToLocalDate(weekStart);
+    ticks.push({
+      weekStartDay: weekStart,
+      weekNumber: isoWeek(date),
+    });
+  }
+
+  return ticks;
+}
+
+export function buildMonthTicks(visibleStartDay: number, visibleEndDay: number): MonthTick[] {
+  const start = Math.trunc(visibleStartDay);
+  const end = Math.trunc(visibleEndDay);
+  if (end < start) return [];
+
+  const ticks: MonthTick[] = [];
+  let monthStart = startOfMonth(start);
+  while (monthStart <= end) {
+    const dayCount = monthDayCount(monthStart);
+    ticks.push({
+      monthStartDay: monthStart,
+      dayCount,
+    });
+    monthStart += dayCount;
+  }
+
+  return ticks;
 }
 
 export function autoScheduleSequential(

@@ -2,13 +2,12 @@ import { NavLink } from "@/components/NavLink";
 import { useParams } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import {
-  LayoutDashboard, ListTodo, Calculator, ShoppingCart,
+  LayoutDashboard, Calculator, ShoppingCart,
   Image, FileText, Users, HardHat,
 } from "lucide-react";
 
 const tabs = [
   { label: "Dashboard", path: "dashboard", icon: LayoutDashboard },
-  { label: "Tasks", path: "tasks", icon: ListTodo },
   { label: "Estimate", path: "estimate", icon: Calculator },
   { label: "Procurement", path: "procurement", icon: ShoppingCart },
   { label: "HR", path: "hr", icon: HardHat },

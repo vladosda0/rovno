@@ -8,11 +8,12 @@ import {
   setProjectEstimateStatus,
   setRegime,
   setRegimeDev,
+  updateEstimateV2Project,
   updateLine,
 } from "@/data/estimate-v2-store";
 import { getHRItems } from "@/data/hr-store";
 import { getProcurementItems } from "@/data/procurement-store";
-import { getTask, updateChecklist, updateTask } from "@/data/store";
+import { getEvents, getTask, updateChecklist, updateTask } from "@/data/store";
 import { setAuthRole } from "@/lib/auth-state";
 import { toDayIndex } from "@/lib/estimate-v2/schedule";
 import type {
@@ -29,6 +30,7 @@ function project(partial: Partial<EstimateV2Project> = {}): EstimateV2Project {
     id: "estimate-v2-project-1",
     projectId: "project-1",
     title: "Project",
+    projectMode: "contractor",
     currency: "RUB",
     regime: "contractor",
     taxBps: 2000,
@@ -205,6 +207,7 @@ describe("estimate-v2 regime switching", () => {
   });
 
   it("setRegime keeps owner-only role gate unchanged", () => {
+    setRegimeDev("project-1", "contractor");
     setAuthRole("viewer");
     const blocked = setRegime("project-1", "build_myself");
     expect(blocked).toBe(false);
@@ -212,6 +215,54 @@ describe("estimate-v2 regime switching", () => {
     setAuthRole("owner");
     const allowed = setRegime("project-1", "build_myself");
     expect(allowed).toBe(true);
+  });
+
+  it("blocks switching to client regime when project mode is build_myself", () => {
+    const projectId = "project-1";
+    setAuthRole("owner");
+
+    updateEstimateV2Project(projectId, { projectMode: "build_myself", regime: "build_myself" });
+    const blocked = setRegime(projectId, "client");
+    expect(blocked).toBe(false);
+
+    updateEstimateV2Project(projectId, { projectMode: "contractor", regime: "contractor" });
+  });
+
+  it("rejects estimate mutations in client regime", () => {
+    const projectId = "project-1";
+    setAuthRole("owner");
+    const switched = setRegimeDev(projectId, "client");
+    expect(switched).toBe(true);
+
+    const before = getEstimateV2ProjectState(projectId);
+    const firstLine = before.lines[0];
+    const firstWork = before.works[0];
+    const secondWork = before.works[1];
+    expect(firstLine).toBeDefined();
+    expect(firstWork).toBeDefined();
+    expect(secondWork).toBeDefined();
+    if (!firstLine || !firstWork || !secondWork) return;
+
+    updateLine(projectId, firstLine.id, { title: "Blocked line update" });
+    updateEstimateV2Project(projectId, { taxBps: before.project.taxBps + 100 });
+    const depResult = addDependency(projectId, firstWork.id, secondWork.id, 1);
+    const dateResult = updateWorkDates(projectId, firstWork.id, "2026-01-01T00:00:00.000Z", "2026-01-02T00:00:00.000Z", { source: "gantt" });
+    const statusResult = setProjectEstimateStatus(projectId, "paused");
+
+    expect(depResult.ok).toBe(false);
+    if (!depResult.ok) expect(depResult.reason).toBe("forbidden");
+    expect(dateResult.ok).toBe(false);
+    if (!dateResult.ok) expect(dateResult.reason).toBe("forbidden");
+    expect(statusResult.ok).toBe(false);
+    expect(statusResult.reason).toBe("forbidden");
+
+    const after = getEstimateV2ProjectState(projectId);
+    const lineAfter = after.lines.find((line) => line.id === firstLine.id);
+    expect(lineAfter?.title).toBe(firstLine.title);
+    expect(after.project.taxBps).toBe(before.project.taxBps);
+    expect(after.dependencies.length).toBe(before.dependencies.length);
+
+    setRegimeDev(projectId, "contractor");
   });
 });
 
@@ -436,5 +487,49 @@ describe("estimate-v2 execution foundation", () => {
     expect(toDayIndex(linkedTask?.deadline ?? null)).toBe(toDayIndex(nextEnd));
 
     expect(JSON.stringify(after.scheduleBaseline)).toBe(baselineBefore);
+  });
+
+  it("appends dependency comment to successor task comments", () => {
+    const projectId = "project-2";
+    setAuthRole("owner");
+    setRegimeDev(projectId, "contractor");
+    setProjectEstimateStatus(projectId, "in_work", { skipSetup: true });
+
+    const before = getEstimateV2ProjectState(projectId);
+    const fromWork = before.works[0];
+    const toWork = before.works[1];
+    expect(fromWork).toBeDefined();
+    expect(toWork).toBeDefined();
+    if (!fromWork || !toWork) return;
+
+    const successorTaskId = toWork.taskId as string;
+    const commentCountBefore = (getTask(successorTaskId)?.comments ?? []).length;
+    const result = addDependency(projectId, fromWork.id, toWork.id, 3, "Concrete cure");
+    expect(result.ok).toBe(true);
+
+    const successorComments = getTask(successorTaskId)?.comments ?? [];
+    expect(successorComments.length).toBe(commentCountBefore + 1);
+    expect(successorComments[successorComments.length - 1]?.text).toContain("Concrete cure");
+  });
+
+  it("emits tax/discount events only on meaningful value change", () => {
+    const projectId = "project-3";
+    setAuthRole("owner");
+    setRegimeDev(projectId, "contractor");
+    const initial = getEstimateV2ProjectState(projectId).project;
+
+    updateEstimateV2Project(projectId, { taxBps: initial.taxBps + 100 });
+    updateEstimateV2Project(projectId, { taxBps: initial.taxBps + 100 });
+    updateEstimateV2Project(projectId, { discountBps: initial.discountBps + 100 });
+    updateEstimateV2Project(projectId, { discountBps: initial.discountBps + 100 });
+
+    const events = getEvents(projectId);
+    const taxEvents = events.filter((event) => event.type === "estimate.tax_changed");
+    const discountEvents = events.filter((event) => event.type === "estimate.discount_changed");
+    expect(taxEvents.length).toBeGreaterThanOrEqual(1);
+    expect(discountEvents.length).toBeGreaterThanOrEqual(1);
+
+    expect(taxEvents[0]?.payload.nextTaxBps).toBe(initial.taxBps + 100);
+    expect(discountEvents[0]?.payload.nextDiscountBps).toBe(initial.discountBps + 100);
   });
 });

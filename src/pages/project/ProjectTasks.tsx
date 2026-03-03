@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import type { Task, Stage, TaskStatus } from "@/types/entities";
 import { createEstimateItemForTask } from "@/data/estimate-store";
+import { useEstimateV2Project } from "@/hooks/use-estimate-v2-data";
 
 const statusMeta: Record<TaskStatus, { label: string; Icon: typeof Circle; colorClass: string; bgClass: string }> = {
   not_started: { label: "Not started", Icon: Circle, colorClass: "text-muted-foreground", bgClass: "bg-muted" },
@@ -44,9 +45,13 @@ export default function ProjectTasks() {
   const tasks = useTasks(pid);
   const media = useMedia(pid);
   const { role, can: userCan } = usePermission(pid);
+  const { project: estimateProject } = useEstimateV2Project(pid);
   const { toast } = useToast();
   const authRole = getAuthRole();
   const currentUser = getCurrentUser();
+  const isClientRegime = estimateProject.regime === "client";
+  const canCreateTask = !isClientRegime && userCan("task.create");
+  const canEditTask = !isClientRegime && userCan("task.edit");
 
   const location = useLocation();
 
@@ -118,6 +123,7 @@ export default function ProjectTasks() {
 
   // --- Central status change handler (intercepts Done / Blocked) ---
   const handleStatusChange = useCallback((taskId: string, newStatus: TaskStatus) => {
+    if (!canEditTask) return;
     const task = tasks.find((t) => t.id === taskId);
     if (!task || task.status === newStatus) return;
 
@@ -136,7 +142,7 @@ export default function ProjectTasks() {
     }
     updateTask(taskId, { status: newStatus });
     toast({ title: "Status updated", description: statusMeta[newStatus].label });
-  }, [tasks, toast]);
+  }, [canEditTask, tasks, toast]);
 
   // Confirm Done
   const handleConfirmDone = useCallback(() => {
@@ -334,7 +340,7 @@ export default function ProjectTasks() {
               <User className="h-3 w-3 inline mr-1" /> Assigned to me
             </button>
           )}
-          {userCan("task.create") && (
+          {canCreateTask && (
             <Button
               size="sm"
               className="bg-accent text-accent-foreground hover:bg-accent/90"
@@ -345,6 +351,9 @@ export default function ProjectTasks() {
           )}
         </div>
       </div>
+      {isClientRegime && (
+        <p className="mb-2 text-caption text-muted-foreground">Client regime: tasks are read-only.</p>
+      )}
 
       {/* Stage Tabs */}
       <div className="flex gap-1 overflow-x-auto pb-sp-1 mb-sp-2 shrink-0">
@@ -368,7 +377,7 @@ export default function ProjectTasks() {
             {stage.status === "completed" && <Check className="h-3 w-3" />}
           </button>
         ))}
-        {userCan("task.create") && (
+        {canCreateTask && (
           <button
             onClick={() => setStageModalOpen(true)}
             className="rounded-full px-3 py-1.5 text-caption font-medium whitespace-nowrap text-muted-foreground hover:bg-muted/80 transition-colors border border-dashed border-border"
@@ -379,7 +388,7 @@ export default function ProjectTasks() {
       </div>
 
       {/* Stage actions */}
-      {activeTab !== "all" && userCan("task.create") && (() => {
+      {activeTab !== "all" && canCreateTask && (() => {
         const stage = stages.find((s) => s.id === activeTab);
         if (!stage || stage.status === "completed") return null;
         return (
@@ -418,7 +427,7 @@ export default function ProjectTasks() {
                   <span className="text-sm font-semibold text-foreground">{meta.label}</span>
                   <span className="text-caption text-muted-foreground">({columnTasks.length})</span>
                 </div>
-                {userCan("task.create") && (
+                {canCreateTask && (
                   <button
                     onClick={() => openNewTask(status)}
                     className="p-1 rounded-full hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
@@ -438,7 +447,7 @@ export default function ProjectTasks() {
                   return (
                     <div
                       key={task.id}
-                      draggable={userCan("task.edit")}
+                      draggable={canEditTask}
                       onDragStart={(e) => handleDragStart(e, task.id)}
                       onClick={() => setSelectedTaskId(task.id)}
                       className={`bg-card border border-border rounded-lg p-2 px-2.5 cursor-pointer hover:shadow-md transition-all ${
@@ -446,7 +455,7 @@ export default function ProjectTasks() {
                       }`}
                     >
                       <div className="flex items-center gap-1.5 mb-0.5">
-                        {userCan("task.edit") && (
+                        {canEditTask && (
                           <GripVertical className="h-3 w-3 text-muted-foreground shrink-0 cursor-grab" />
                         )}
                         <span className="text-caption font-medium text-foreground flex-1 truncate">{task.title}</span>
@@ -498,7 +507,7 @@ export default function ProjectTasks() {
         task={selectedTask}
         open={!!selectedTaskId}
         onOpenChange={(open) => { if (!open) setSelectedTaskId(null); }}
-        canEdit={userCan("task.edit")}
+        canEdit={canEditTask}
         onStatusChange={handleStatusChange}
         projectMedia={media}
       />

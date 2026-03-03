@@ -1,6 +1,7 @@
 import { getAuthRole } from "@/lib/auth-state";
 import { getStageEstimateItems } from "@/data/estimate-store";
 import {
+  addComment,
   addEvent,
   addTask,
   getCurrentUser,
@@ -44,6 +45,7 @@ import type {
   EstimateV2Work,
   EstimateV2WorkStatus,
   Regime,
+  ProjectMode,
   ResourceLineType,
   ScheduleBaseline,
 } from "@/types/estimate-v2";
@@ -275,6 +277,40 @@ function isOwnerActionAllowed(projectId: string): boolean {
 
   const role = getAuthRole();
   return role === "owner";
+}
+
+function normalizeProjectMode(value: string | null | undefined): ProjectMode {
+  return value === "build_myself" ? "build_myself" : "contractor";
+}
+
+function canEditEstimateState(projectId: string, state: EstimateV2ProjectState): boolean {
+  if (!isOwnerActionAllowed(projectId)) return false;
+  if (state.project.regime === "client") return false;
+  return true;
+}
+
+function emitEstimateEvent(
+  projectId: string,
+  type:
+    | "estimate.status_changed"
+    | "estimate.tax_changed"
+    | "estimate.discount_changed"
+    | "estimate.dependency_added"
+    | "estimate.dependency_removed"
+    | "estimate.project_mode_set",
+  payload: Record<string, unknown>,
+) {
+  const actor = getCurrentUser();
+  addEvent({
+    id: id("evt-estimate-v2"),
+    project_id: projectId,
+    actor_id: actor.id,
+    type,
+    object_type: "estimate_v2_project",
+    object_id: projectId,
+    timestamp: nowIso(),
+    payload,
+  });
 }
 
 export function isDemoProject(projectId: string): boolean {
@@ -596,9 +632,10 @@ function ensureProjectState(projectId: string): EstimateV2ProjectState {
     id: `estimate-v2-${projectId}`,
     projectId,
     title: projectEntity?.title ?? "Estimate",
+    projectMode: normalizeProjectMode(projectEntity?.project_mode),
     currency: resolveCurrency(),
-    regime: "contractor",
-    taxBps: 2000,
+    regime: normalizeProjectMode(projectEntity?.project_mode) === "build_myself" ? "build_myself" : "contractor",
+    taxBps: 2200,
     discountBps: 0,
     markupBps: 0,
     estimateStatus: "planning",
@@ -867,8 +904,9 @@ export function getEstimateV2ProjectState(projectId: string): EstimateV2ProjectV
   return cloneState(state);
 }
 
-export function createStage(projectId: string, input: { title: string; discountBps?: number }): EstimateV2Stage {
+export function createStage(projectId: string, input: { title: string; discountBps?: number }): EstimateV2Stage | null {
   const state = ensureProjectState(projectId);
+  if (!canEditEstimateState(projectId, state)) return null;
   const now = nowIso();
   const stage: EstimateV2Stage = {
     id: id("stage-v2"),
@@ -887,6 +925,7 @@ export function createStage(projectId: string, input: { title: string; discountB
 
 export function updateStage(projectId: string, stageId: string, partial: Partial<EstimateV2Stage>) {
   const state = ensureProjectState(projectId);
+  if (!canEditEstimateState(projectId, state)) return;
   const now = nowIso();
   state.stages = state.stages.map((stage) => (
     stage.id === stageId
@@ -903,6 +942,7 @@ export function updateStage(projectId: string, stageId: string, partial: Partial
 
 export function deleteStage(projectId: string, stageId: string) {
   const state = ensureProjectState(projectId);
+  if (!canEditEstimateState(projectId, state)) return;
   const workIdsToDelete = new Set(state.works.filter((work) => work.stageId === stageId).map((work) => work.id));
 
   state.stages = state.stages.filter((stage) => stage.id !== stageId);
@@ -914,8 +954,9 @@ export function deleteStage(projectId: string, stageId: string) {
   notify();
 }
 
-export function createWork(projectId: string, input: { stageId: string; title: string; discountBps?: number }): EstimateV2Work {
+export function createWork(projectId: string, input: { stageId: string; title: string; discountBps?: number }): EstimateV2Work | null {
   const state = ensureProjectState(projectId);
+  if (!canEditEstimateState(projectId, state)) return null;
   const now = nowIso();
   const nextOrder = state.works
     .filter((work) => work.stageId === input.stageId)
@@ -944,6 +985,7 @@ export function createWork(projectId: string, input: { stageId: string; title: s
 
 export function updateWork(projectId: string, workId: string, partial: Partial<EstimateV2Work>) {
   const state = ensureProjectState(projectId);
+  if (!canEditEstimateState(projectId, state)) return;
   const now = nowIso();
   let changedWork: EstimateV2Work | null = null;
   state.works = state.works.map((work) => (
@@ -971,8 +1013,9 @@ export function updateWorkDates(
   plannedStart: string,
   plannedEnd: string,
   _options: { source: "gantt" },
-): { ok: true; shiftedWorkIds: string[] } | { ok: false; reason: "invalid_work" | "invalid_date" } {
+): { ok: true; shiftedWorkIds: string[] } | { ok: false; reason: "forbidden" | "invalid_work" | "invalid_date" } {
   const state = ensureProjectState(projectId);
+  if (!canEditEstimateState(projectId, state)) return { ok: false, reason: "forbidden" };
   const target = state.works.find((work) => work.id === workId);
   if (!target) return { ok: false, reason: "invalid_work" };
 
@@ -1016,6 +1059,7 @@ export function updateWorkDates(
 
 export function deleteWork(projectId: string, workId: string) {
   const state = ensureProjectState(projectId);
+  if (!canEditEstimateState(projectId, state)) return;
   state.works = state.works.filter((work) => work.id !== workId);
   state.lines = state.lines.filter((line) => line.workId !== workId);
   state.dependencies = state.dependencies.filter((dep) => dep.fromWorkId !== workId && dep.toWorkId !== workId);
@@ -1037,8 +1081,9 @@ export function createLine(
     markupBps?: number;
     discountBpsOverride?: number | null;
   },
-): EstimateV2ResourceLine {
+): EstimateV2ResourceLine | null {
   const state = ensureProjectState(projectId);
+  if (!canEditEstimateState(projectId, state)) return null;
   const now = nowIso();
   const line: EstimateV2ResourceLine = {
     id: id("line-v2"),
@@ -1069,6 +1114,7 @@ export function createLine(
 
 export function updateLine(projectId: string, lineId: string, partial: Partial<EstimateV2ResourceLine>) {
   const state = ensureProjectState(projectId);
+  if (!canEditEstimateState(projectId, state)) return;
   const now = nowIso();
   const previous = state.lines.find((line) => line.id === lineId) ?? null;
   state.lines = state.lines.map((line) => (
@@ -1096,6 +1142,7 @@ export function updateLine(projectId: string, lineId: string, partial: Partial<E
 
 export function deleteLine(projectId: string, lineId: string) {
   const state = ensureProjectState(projectId);
+  if (!canEditEstimateState(projectId, state)) return;
   const existing = state.lines.find((line) => line.id === lineId) ?? null;
   state.lines = state.lines.filter((line) => line.id !== lineId);
   if (existing) {
@@ -1112,14 +1159,13 @@ export function setProjectEstimateStatus(
   status: EstimateExecutionStatus,
   options: SetProjectEstimateStatusOptions = {},
 ): SetProjectEstimateStatusResult {
-  if (!isOwnerActionAllowed(projectId)) {
+  const state = ensureProjectState(projectId);
+  if (!isOwnerActionAllowed(projectId) || state.project.regime === "client") {
     return {
       ok: false,
       reason: "forbidden",
     };
   }
-
-  const state = ensureProjectState(projectId);
   const now = nowIso();
   const previousStatus = state.project.estimateStatus;
   let autoScheduled = false;
@@ -1192,6 +1238,14 @@ export function setProjectEstimateStatus(
   }
 
   notify();
+
+  if (previousStatus !== status) {
+    emitEstimateEvent(projectId, "estimate.status_changed", {
+      previousStatus,
+      nextStatus: status,
+    });
+  }
+
   return {
     ok: true,
     autoScheduled,
@@ -1201,17 +1255,52 @@ export function setProjectEstimateStatus(
 
 export function updateEstimateV2Project(projectId: string, partial: Partial<EstimateV2Project>) {
   const state = ensureProjectState(projectId);
+  if (!canEditEstimateState(projectId, state)) return;
+  const prevTax = state.project.taxBps;
+  const prevDiscount = state.project.discountBps;
+  const prevProjectMode = state.project.projectMode;
+  const nextProjectMode = partial.projectMode ?? state.project.projectMode;
+  const requestedRegime = partial.regime ?? state.project.regime;
+  const safeRegime = nextProjectMode === "build_myself" && requestedRegime === "client"
+    ? "build_myself"
+    : requestedRegime;
   state.project = {
     ...state.project,
     ...partial,
+    projectMode: nextProjectMode,
+    regime: safeRegime,
     updatedAt: nowIso(),
   };
+
+  if (partial.taxBps != null && partial.taxBps !== prevTax) {
+    emitEstimateEvent(projectId, "estimate.tax_changed", {
+      previousTaxBps: prevTax,
+      nextTaxBps: partial.taxBps,
+    });
+  }
+
+  if (partial.discountBps != null && partial.discountBps !== prevDiscount) {
+    emitEstimateEvent(projectId, "estimate.discount_changed", {
+      previousDiscountBps: prevDiscount,
+      nextDiscountBps: partial.discountBps,
+    });
+  }
+
+  if (partial.projectMode != null && partial.projectMode !== prevProjectMode) {
+    emitEstimateEvent(projectId, "estimate.project_mode_set", {
+      previousProjectMode: prevProjectMode,
+      nextProjectMode: partial.projectMode,
+    });
+  }
+
   notify();
 }
 
 export function setRegime(projectId: string, regime: Regime): boolean {
-  if (!isOwnerActionAllowed(projectId)) return false;
   const state = ensureProjectState(projectId);
+  if (!isOwnerActionAllowed(projectId)) return false;
+  if (state.project.regime === "client") return false;
+  if (state.project.projectMode === "build_myself" && regime === "client") return false;
   state.project = {
     ...state.project,
     regime,
@@ -1225,6 +1314,7 @@ export function setRegimeDev(projectId: string, regime: Regime): boolean {
   if (!import.meta.env.DEV) return false;
   if (!isDemoProject(projectId)) return false;
   const state = ensureProjectState(projectId);
+  if (state.project.projectMode === "build_myself" && regime === "client") return false;
   state.project = {
     ...state.project,
     regime,
@@ -1239,10 +1329,14 @@ export function addDependency(
   fromWorkId: string,
   toWorkId: string,
   lagDays: number,
+  comment?: string,
 ):
   | { ok: true; dependency: EstimateV2Dependency; shiftedWorkIds: string[] }
-  | { ok: false; reason: "self_dependency" | "invalid_work" | "cycle"; cyclePath?: string[] } {
+  | { ok: false; reason: "forbidden" | "self_dependency" | "invalid_work" | "cycle"; cyclePath?: string[] } {
   const state = ensureProjectState(projectId);
+  if (!canEditEstimateState(projectId, state)) {
+    return { ok: false, reason: "forbidden" };
+  }
 
   if (fromWorkId === toWorkId) {
     return { ok: false, reason: "self_dependency" };
@@ -1288,6 +1382,28 @@ export function addDependency(
 
   state.project.updatedAt = now;
   notify();
+
+  const fromWorkTitle = worksById[fromWorkId]?.title ?? fromWorkId;
+  const toWorkTitle = worksById[toWorkId]?.title ?? toWorkId;
+  const normalizedComment = comment?.trim() || null;
+  if (normalizedComment) {
+    const successor = state.works.find((work) => work.id === toWorkId);
+    if (successor?.taskId) {
+      addComment(
+        successor.taskId,
+        `Dependency: "${normalizedComment}" — wait ${dependency.lagDays} day(s) after "${fromWorkTitle}" before starting this.`,
+      );
+    }
+  }
+
+  emitEstimateEvent(projectId, "estimate.dependency_added", {
+    dependencyId: dependency.id,
+    fromWorkId,
+    toWorkId,
+    lagDays: dependency.lagDays,
+    ...(normalizedComment ? { comment: normalizedComment } : {}),
+  });
+
   return {
     ok: true,
     dependency: { ...dependency },
@@ -1297,24 +1413,33 @@ export function addDependency(
 
 export function removeDependency(projectId: string, dependencyId: string) {
   const state = ensureProjectState(projectId);
+  if (!canEditEstimateState(projectId, state)) return;
   const now = nowIso();
+  const existing = state.dependencies.find((dep) => dep.id === dependencyId) ?? null;
   state.dependencies = state.dependencies.filter((dep) => dep.id !== dependencyId);
+  if (!existing) return;
   state.project.updatedAt = now;
   notify();
+  emitEstimateEvent(projectId, "estimate.dependency_removed", {
+    dependencyId,
+    fromWorkId: existing.fromWorkId,
+    toWorkId: existing.toWorkId,
+  });
 }
 
 export function createDependency(
   projectId: string,
-  input: { fromWorkId: string; toWorkId: string; lagDays?: number },
-): EstimateV2Dependency {
+  input: { fromWorkId: string; toWorkId: string; lagDays?: number; comment?: string },
+): EstimateV2Dependency | null {
   const result = addDependency(
     projectId,
     input.fromWorkId,
     input.toWorkId,
     input.lagDays ?? 0,
+    input.comment,
   );
   if (!result.ok) {
-    throw new Error(`Unable to create dependency: ${result.reason}`);
+    return null;
   }
   return result.dependency;
 }
@@ -1355,8 +1480,8 @@ export function createVersionSnapshot(projectId: string, createdBy: string): { v
 }
 
 export function submitVersion(projectId: string, versionId: string): boolean {
-  if (!isOwnerActionAllowed(projectId)) return false;
   const state = ensureProjectState(projectId);
+  if (!isOwnerActionAllowed(projectId) || state.project.regime === "client") return false;
   const now = nowIso();
   const actor = getCurrentUser();
 

@@ -24,7 +24,7 @@ interface DependencyEditorProps {
   works: EstimateV2Work[];
   dependencies: EstimateV2Dependency[];
   isOwner: boolean;
-  onAddDependency: (fromWorkId: string, toWorkId: string, lagDays: number) => void;
+  onAddDependency: (fromWorkId: string, toWorkId: string, lagDays: number, comment?: string) => void;
   onRemoveDependency: (dependencyId: string) => void;
 }
 
@@ -40,6 +40,7 @@ export function DependencyEditor({
   const [fromWorkId, setFromWorkId] = useState("");
   const [toWorkId, setToWorkId] = useState("");
   const [lagDays, setLagDays] = useState("0");
+  const [comment, setComment] = useState("");
 
   const worksById = useMemo(
     () => new Map(works.map((work) => [work.id, work])),
@@ -56,7 +57,9 @@ export function DependencyEditor({
       <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-lg">
         <SheetHeader>
           <SheetTitle>Dependencies</SheetTitle>
-          <SheetDescription>Finish-to-start constraints with lag days.</SheetDescription>
+          <SheetDescription>
+            Finish-to-start constraints with lag days. Lag days means waiting time between tasks, e.g., concrete drying for 3 days before next work starts.
+          </SheetDescription>
         </SheetHeader>
 
         <div className="mt-4 space-y-4">
@@ -92,14 +95,21 @@ export function DependencyEditor({
                 placeholder="Lag days"
               />
 
+              <Input
+                value={comment}
+                onChange={(event) => setComment(event.target.value)}
+                placeholder="Comment (optional)"
+              />
+
               <Button
                 disabled={!isOwner}
                 onClick={() => {
                   if (!fromWorkId || !toWorkId) return;
-                  onAddDependency(fromWorkId, toWorkId, Number(lagDays) || 0);
+                  onAddDependency(fromWorkId, toWorkId, Number(lagDays) || 0, comment.trim() || undefined);
                   setFromWorkId("");
                   setToWorkId("");
                   setLagDays("0");
+                  setComment("");
                 }}
               >
                 Add FS dependency

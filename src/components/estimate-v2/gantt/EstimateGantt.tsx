@@ -17,6 +17,8 @@ import {
 } from "@/data/estimate-v2-store";
 import {
   clampWorkDates,
+  computeTimelineRange,
+  computeVisibleWindow,
   fromDayIndex,
   toDayIndex,
   validateAndFixOnDrag,
@@ -173,28 +175,12 @@ export function EstimateGantt({
   const pxPerDay = SCALE_PIXELS_PER_DAY[scale];
 
   const timelineRange = useMemo(() => {
-    let minDay = Number.POSITIVE_INFINITY;
-    let maxDay = Number.NEGATIVE_INFINITY;
-
-    works.forEach((work) => {
-      const draft = draftWorksById[work.id] ?? work;
-      const start = toDayIndex(draft.plannedStart);
-      const end = toDayIndex(draft.plannedEnd);
-      if (start == null || end == null) return;
-      if (start < minDay) minDay = start;
-      if (end > maxDay) maxDay = end;
+    const draftWorks = works.map((work) => draftWorksById[work.id] ?? work);
+    return computeTimelineRange(draftWorks, {
+      paddingDays: 14,
+      emptySpanDays: 30,
+      anchorDate: new Date(),
     });
-
-    if (!Number.isFinite(minDay) || !Number.isFinite(maxDay)) {
-      const today = toDayIndex(new Date()) ?? 0;
-      minDay = today;
-      maxDay = today + 30;
-    }
-
-    return {
-      start: Math.trunc(minDay) - 14,
-      end: Math.trunc(maxDay) + 14,
-    };
   }, [draftWorksById, works]);
 
   const timelineStartDay = timelineRange.start;
@@ -219,14 +205,30 @@ export function EstimateGantt({
     return () => observer.disconnect();
   }, []);
 
-  const visibleStartDay = Math.max(
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+
+    const maxScrollLeft = Math.max(0, timelineWidth - viewport.clientWidth);
+    const nextScrollLeft = Math.min(Math.max(viewport.scrollLeft, 0), maxScrollLeft);
+    if (viewport.scrollLeft !== nextScrollLeft) {
+      viewport.scrollLeft = nextScrollLeft;
+    }
+    if (scrollLeft !== nextScrollLeft) {
+      setScrollLeft(nextScrollLeft);
+    }
+  }, [scrollLeft, scale, timelineStartDay, timelineEndDay, timelineWidth, viewportWidth]);
+
+  const visibleWindow = computeVisibleWindow({
     timelineStartDay,
-    timelineStartDay + Math.floor(scrollLeft / pxPerDay) - HORIZONTAL_BUFFER_DAYS,
-  );
-  const visibleEndDay = Math.min(
     timelineEndDay,
-    timelineStartDay + Math.ceil((scrollLeft + viewportWidth) / pxPerDay) + HORIZONTAL_BUFFER_DAYS,
-  );
+    scrollLeftPx: scrollLeft,
+    viewportWidthPx: viewportWidth,
+    pxPerDay,
+    bufferDays: HORIZONTAL_BUFFER_DAYS,
+  });
+  const visibleStartDay = visibleWindow.start;
+  const visibleEndDay = visibleWindow.end;
 
   const clientXToDayIndex = useCallback((clientX: number): number => {
     const viewport = viewportRef.current;
@@ -400,8 +402,8 @@ export function EstimateGantt({
     event.preventDefault();
   }, [clientXToDayIndex, handlePointerCancel, handlePointerMove, handlePointerUp, isOwner]);
 
-  const handleAddDependency = useCallback((fromWorkId: string, toWorkId: string, lagDays: number) => {
-    const result = addDependency(projectId, fromWorkId, toWorkId, lagDays);
+  const handleAddDependency = useCallback((fromWorkId: string, toWorkId: string, lagDays: number, comment?: string) => {
+    const result = addDependency(projectId, fromWorkId, toWorkId, lagDays, comment);
     if (!result.ok) {
       if (result.reason === "cycle") {
         toast({

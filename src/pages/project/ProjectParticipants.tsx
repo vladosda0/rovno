@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Users, Plus, MoreVertical, Shield, Eye, Wrench, Crown } from "lucide-react";
 import { useProject, useCurrentUser } from "@/hooks/use-mock-data";
@@ -42,13 +42,19 @@ const aiLabels: Record<AIAccess, string> = {
 
 export default function ProjectParticipants() {
   const { id } = useParams<{ id: string }>();
-  const { members } = useProject(id!);
+  const { project, members } = useProject(id!);
   const perm = usePermission(id!);
   const currentUser = useCurrentUser();
+  const projectMode = project?.project_mode ?? "contractor";
+  const defaultViewerRegime = projectMode === "build_myself" ? "build_myself" : "client";
+  const availableViewerRegimes = projectMode === "build_myself"
+    ? (["build_myself", "contractor"] as const)
+    : (["client", "contractor", "build_myself"] as const);
 
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<MemberRole>("contractor");
+  const [inviteViewerRegime, setInviteViewerRegime] = useState<"contractor" | "client" | "build_myself">(defaultViewerRegime);
   const [inviteAI, setInviteAI] = useState<AIAccess>("consult_only");
   const [inviteLimit, setInviteLimit] = useState("50");
 
@@ -58,6 +64,12 @@ export default function ProjectParticipants() {
 
   const [removeOpen, setRemoveOpen] = useState(false);
   const [removeMemberId, setRemoveMemberId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (projectMode === "build_myself" && inviteViewerRegime === "client") {
+      setInviteViewerRegime("build_myself");
+    }
+  }, [inviteViewerRegime, projectMode]);
 
   const canInvite = perm.can("member.invite");
 
@@ -72,6 +84,7 @@ export default function ProjectParticipants() {
       project_id: id!,
       user_id: userId,
       role: inviteRole,
+      viewer_regime: inviteRole === "viewer" ? inviteViewerRegime : undefined,
       ai_access: inviteAI,
       credit_limit: parseInt(inviteLimit) || 50,
       used_credits: 0,
@@ -88,9 +101,23 @@ export default function ProjectParticipants() {
       payload: { name: existingUser?.name ?? inviteEmail, role: inviteRole },
     });
 
+    if (inviteRole === "viewer") {
+      addEvent({
+        id: `evt-viewer-regime-${Date.now()}`,
+        project_id: id!,
+        actor_id: currentUser.id,
+        type: "estimate.viewer_regime_set",
+        object_type: "member",
+        object_id: userId,
+        timestamp: new Date().toISOString(),
+        payload: { regime: inviteViewerRegime },
+      });
+    }
+
     toast({ title: "Member invited", description: `${existingUser?.name ?? inviteEmail} added as ${roleLabels[inviteRole]}.` });
     setInviteOpen(false);
     setInviteEmail("");
+    setInviteViewerRegime(defaultViewerRegime);
   }
 
   function handleChangeRole() {
@@ -246,7 +273,16 @@ export default function ProjectParticipants() {
           </div>
           <div>
             <label className="text-caption font-medium text-foreground">Role</label>
-            <Select value={inviteRole} onValueChange={(v) => setInviteRole(v as MemberRole)}>
+            <Select
+              value={inviteRole}
+              onValueChange={(v) => {
+                const nextRole = v as MemberRole;
+                setInviteRole(nextRole);
+                if (nextRole === "viewer" && projectMode === "build_myself") {
+                  setInviteViewerRegime("build_myself");
+                }
+              }}
+            >
               <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="co_owner">Co-owner</SelectItem>
@@ -255,6 +291,24 @@ export default function ProjectParticipants() {
               </SelectContent>
             </Select>
           </div>
+          {inviteRole === "viewer" && (
+            <div>
+              <label className="text-caption font-medium text-foreground">Regime</label>
+              <Select
+                value={inviteViewerRegime}
+                onValueChange={(value) => setInviteViewerRegime(value as "contractor" | "client" | "build_myself")}
+              >
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {availableViewerRegimes.map((regime) => (
+                    <SelectItem key={regime} value={regime}>
+                      {regime.replace("_", " ")}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div>
             <label className="text-caption font-medium text-foreground">AI Access</label>
             <Select value={inviteAI} onValueChange={(v) => setInviteAI(v as AIAccess)}>
