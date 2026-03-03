@@ -3,6 +3,8 @@ export type ResourceLineType = "material" | "tool" | "labor" | "subcontractor" |
 export type Regime = "contractor" | "client" | "build_myself";
 
 export type EstimateV2VersionStatus = "proposed" | "approved";
+export type EstimateExecutionStatus = "planning" | "in_work" | "paused" | "finished";
+export type EstimateV2WorkStatus = "not_started" | "in_progress" | "done" | "blocked";
 
 export interface EstimateV2Project {
   id: string;
@@ -13,7 +15,7 @@ export interface EstimateV2Project {
   taxBps: number;
   discountBps: number;
   markupBps: number;
-  estimateStatus: string;
+  estimateStatus: EstimateExecutionStatus;
   receivedCents: number;
   pnlPlaceholderCents: number;
   createdAt: string;
@@ -37,6 +39,10 @@ export interface EstimateV2Work {
   title: string;
   order: number;
   discountBps: number;
+  plannedStart: string | null;
+  plannedEnd: string | null;
+  taskId: string | null;
+  status: EstimateV2WorkStatus;
   createdAt: string;
   updatedAt: string;
 }
@@ -83,6 +89,19 @@ export interface EstimateV2Snapshot {
   works: EstimateV2Work[];
   lines: EstimateV2ResourceLine[];
   dependencies: EstimateV2Dependency[];
+}
+
+export interface ScheduleBaselineWork {
+  workId: string;
+  baselineStart: string | null;
+  baselineEnd: string | null;
+}
+
+export interface ScheduleBaseline {
+  capturedAt: string;
+  projectBaselineStart: string | null;
+  projectBaselineEnd: string | null;
+  works: ScheduleBaselineWork[];
 }
 
 export interface EstimateV2Version {

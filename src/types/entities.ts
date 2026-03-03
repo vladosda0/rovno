@@ -99,6 +99,11 @@ export interface ChecklistItem {
   done: boolean;
   type?: ChecklistItemType;
   procurementItemId?: string | null;
+  estimateV2LineId?: string;
+  estimateV2WorkId?: string;
+  estimateV2ResourceType?: "material" | "tool" | "labor" | "subcontractor" | "other";
+  estimateV2QtyMilli?: number;
+  estimateV2Unit?: string;
 }
 
 export interface Comment {
@@ -122,6 +127,7 @@ export interface Task {
   photos: string[];
   linked_estimate_item_ids: string[];
   created_at: string;
+  startDate?: string;
   deadline?: string;
 }
 

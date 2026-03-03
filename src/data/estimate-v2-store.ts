@@ -1,12 +1,31 @@
 import { getAuthRole } from "@/lib/auth-state";
 import { getStageEstimateItems } from "@/data/estimate-store";
-import { addEvent, getCurrentUser, getProject, getProjects, getStages } from "@/data/store";
+import {
+  addEvent,
+  addTask,
+  getCurrentUser,
+  getProject,
+  getProjects,
+  getStages,
+  getTask,
+  getTasks,
+  subscribe as subscribeMainStore,
+  updateChecklist,
+  updateTask,
+} from "@/data/store";
 import {
   computeLineTotals,
   roundHalfUpDiv,
 } from "@/lib/estimate-v2/pricing";
+import {
+  applyFSConstraints,
+  autoScheduleSequential,
+  validateNoCycles,
+} from "@/lib/estimate-v2/schedule";
+import type { ChecklistItem, ChecklistItemType, Task, TaskStatus } from "@/types/entities";
 import type {
   ApprovalStamp,
+  EstimateExecutionStatus,
   EstimateV2Dependency,
   EstimateV2DiffFieldChange,
   EstimateV2DiffEntityChange,
@@ -18,8 +37,10 @@ import type {
   EstimateV2StructuredChange,
   EstimateV2Version,
   EstimateV2Work,
+  EstimateV2WorkStatus,
   Regime,
   ResourceLineType,
+  ScheduleBaseline,
 } from "@/types/estimate-v2";
 
 interface EstimateV2ProjectState {
@@ -29,6 +50,7 @@ interface EstimateV2ProjectState {
   lines: EstimateV2ResourceLine[];
   dependencies: EstimateV2Dependency[];
   versions: EstimateV2Version[];
+  scheduleBaseline: ScheduleBaseline | null;
 }
 
 export interface EstimateV2ProjectView {
@@ -38,10 +60,31 @@ export interface EstimateV2ProjectView {
   lines: EstimateV2ResourceLine[];
   dependencies: EstimateV2Dependency[];
   versions: EstimateV2Version[];
+  scheduleBaseline: ScheduleBaseline | null;
 }
 
 interface ApproveVersionOptions {
   actorId?: string;
+}
+
+interface SetProjectEstimateStatusOptions {
+  skipSetup?: boolean;
+}
+
+type SetProjectEstimateStatusFailureReason = "forbidden" | "missing_work_dates" | "incomplete_tasks";
+
+interface StatusFailureTask {
+  taskId: string | null;
+  title: string;
+}
+
+export interface SetProjectEstimateStatusResult {
+  ok: boolean;
+  reason?: SetProjectEstimateStatusFailureReason;
+  missingWorkIds?: string[];
+  incompleteTasks?: StatusFailureTask[];
+  autoScheduled?: boolean;
+  baselineCaptured?: boolean;
 }
 
 type Listener = () => void;
@@ -49,6 +92,16 @@ type Listener = () => void;
 const listeners = new Set<Listener>();
 const statesByProjectId = new Map<string, EstimateV2ProjectState>();
 const DEMO_PROJECT_IDS = new Set(["project-1", "project-2", "project-3"]);
+const RESOURCE_TYPE_ORDER: Record<ResourceLineType, number> = {
+  material: 0,
+  tool: 1,
+  labor: 2,
+  subcontractor: 3,
+  other: 4,
+};
+
+let crossSyncInProgress = false;
+let mainStoreUnsubscribe: (() => void) | null = null;
 
 function notify() {
   listeners.forEach((listener) => listener());
@@ -60,6 +113,77 @@ function nowIso(): string {
 
 function id(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function runWithCrossSyncGuard<T>(fn: () => T): T {
+  crossSyncInProgress = true;
+  try {
+    return fn();
+  } finally {
+    crossSyncInProgress = false;
+  }
+}
+
+function checklistTypeForLineType(type: ResourceLineType): ChecklistItemType {
+  if (type === "material") return "material";
+  if (type === "tool") return "tool";
+  return "subtask";
+}
+
+function mapTaskStatusToWorkStatus(status: TaskStatus): EstimateV2WorkStatus {
+  if (status === "in_progress") return "in_progress";
+  if (status === "done") return "done";
+  if (status === "blocked") return "blocked";
+  return "not_started";
+}
+
+function mapWorkStatusToTaskStatus(status: EstimateV2WorkStatus): TaskStatus {
+  if (status === "in_progress") return "in_progress";
+  if (status === "done") return "done";
+  if (status === "blocked") return "blocked";
+  return "not_started";
+}
+
+function normalizedLagDays(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.round(value);
+}
+
+function isoStartOfToday(): string {
+  const date = new Date();
+  const start = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  return start.toISOString();
+}
+
+function normalizeIsoDate(input: string): string | null {
+  const date = new Date(input);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString();
+}
+
+function normalizeChecklistItemText(line: EstimateV2ResourceLine): string {
+  return line.title;
+}
+
+function equalChecklistItem(a: ChecklistItem, b: ChecklistItem): boolean {
+  return a.id === b.id
+    && a.text === b.text
+    && a.done === b.done
+    && (a.type ?? "subtask") === (b.type ?? "subtask")
+    && (a.procurementItemId ?? null) === (b.procurementItemId ?? null)
+    && (a.estimateV2LineId ?? null) === (b.estimateV2LineId ?? null)
+    && (a.estimateV2WorkId ?? null) === (b.estimateV2WorkId ?? null)
+    && (a.estimateV2ResourceType ?? null) === (b.estimateV2ResourceType ?? null)
+    && (a.estimateV2QtyMilli ?? null) === (b.estimateV2QtyMilli ?? null)
+    && (a.estimateV2Unit ?? null) === (b.estimateV2Unit ?? null);
+}
+
+function equalChecklistArray(a: ChecklistItem[], b: ChecklistItem[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (!equalChecklistItem(a[i], b[i])) return false;
+  }
+  return true;
 }
 
 function resolveCurrency(): string {
@@ -111,6 +235,12 @@ function cloneState(state: EstimateV2ProjectState): EstimateV2ProjectView {
       approvalStamp: version.approvalStamp ? { ...version.approvalStamp } : null,
       snapshot: cloneSnapshot(version.snapshot),
     })),
+    scheduleBaseline: state.scheduleBaseline
+      ? {
+        ...state.scheduleBaseline,
+        works: state.scheduleBaseline.works.map((work) => ({ ...work })),
+      }
+      : null,
   };
 }
 
@@ -135,6 +265,239 @@ function isOwnerActionAllowed(projectId: string): boolean {
 
 export function isDemoProject(projectId: string): boolean {
   return DEMO_PROJECT_IDS.has(projectId);
+}
+
+function sortWorksByStageAndOrder(state: EstimateV2ProjectState): EstimateV2Work[] {
+  const stageOrderById = new Map(state.stages.map((stage) => [stage.id, stage.order]));
+  return [...state.works].sort((a, b) => {
+    const stageOrderA = stageOrderById.get(a.stageId) ?? Number.MAX_SAFE_INTEGER;
+    const stageOrderB = stageOrderById.get(b.stageId) ?? Number.MAX_SAFE_INTEGER;
+    if (stageOrderA !== stageOrderB) return stageOrderA - stageOrderB;
+    if (a.order !== b.order) return a.order - b.order;
+    return a.id.localeCompare(b.id);
+  });
+}
+
+function syncChecklistForWork(state: EstimateV2ProjectState, work: EstimateV2Work) {
+  if (!work.taskId) return;
+  const task = getTask(work.taskId);
+  if (!task) return;
+
+  const lines = state.lines
+    .filter((line) => line.workId === work.id)
+    .sort((a, b) => {
+      const typeOrderA = RESOURCE_TYPE_ORDER[a.type];
+      const typeOrderB = RESOURCE_TYPE_ORDER[b.type];
+      if (typeOrderA !== typeOrderB) return typeOrderA - typeOrderB;
+      return a.id.localeCompare(b.id);
+    });
+
+  const existingEstimateItems = new Map(
+    task.checklist
+      .filter((item) => item.estimateV2LineId)
+      .map((item) => [item.estimateV2LineId as string, item]),
+  );
+
+  const generatedItems: ChecklistItem[] = lines.map((line) => {
+    const existing = existingEstimateItems.get(line.id);
+    return {
+      id: `ev2-line-${line.id}`,
+      text: normalizeChecklistItemText(line),
+      done: existing?.done ?? false,
+      type: checklistTypeForLineType(line.type),
+      estimateV2LineId: line.id,
+      estimateV2WorkId: work.id,
+      estimateV2ResourceType: line.type,
+      estimateV2QtyMilli: line.qtyMilli,
+      estimateV2Unit: line.unit,
+    };
+  });
+
+  const manualItems = task.checklist.filter((item) => !item.estimateV2LineId);
+  const nextChecklist = [...manualItems, ...generatedItems];
+
+  if (equalChecklistArray(task.checklist, nextChecklist)) return;
+  runWithCrossSyncGuard(() => updateChecklist(task.id, nextChecklist));
+}
+
+function syncTaskFromWork(work: EstimateV2Work): boolean {
+  if (!work.taskId) return false;
+  const task = getTask(work.taskId);
+  if (!task) return false;
+
+  const partial: Partial<Task> = {};
+  if (task.title !== work.title) partial.title = work.title;
+  if ((task.startDate ?? null) !== (work.plannedStart ?? null)) {
+    partial.startDate = work.plannedStart ?? undefined;
+  }
+  if ((task.deadline ?? null) !== (work.plannedEnd ?? null)) {
+    partial.deadline = work.plannedEnd ?? undefined;
+  }
+  const expectedTaskStatus = mapWorkStatusToTaskStatus(work.status);
+  if (task.status !== expectedTaskStatus) partial.status = expectedTaskStatus;
+
+  if (Object.keys(partial).length === 0) return false;
+  runWithCrossSyncGuard(() => updateTask(task.id, partial));
+  return true;
+}
+
+function materializeTasksForAllWorks(projectId: string, state: EstimateV2ProjectState): { created: number; updated: number } {
+  const user = getCurrentUser();
+  const now = nowIso();
+  let created = 0;
+  let updated = 0;
+
+  const sortedWorks = sortWorksByStageAndOrder(state);
+  const nextWorksById = new Map<string, EstimateV2Work>();
+  sortedWorks.forEach((work) => {
+    let linkedTask = work.taskId ? getTask(work.taskId) : undefined;
+
+    if (!linkedTask) {
+      const taskId = `task-ev2-${work.id}`;
+      const newTask: Task = {
+        id: taskId,
+        project_id: projectId,
+        stage_id: work.stageId,
+        title: work.title,
+        description: "Auto-created from Estimate v2 work",
+        status: "not_started",
+        assignee_id: user.id,
+        checklist: [],
+        comments: [],
+        attachments: [],
+        photos: [],
+        linked_estimate_item_ids: [],
+        created_at: now,
+        startDate: work.plannedStart ?? undefined,
+        deadline: work.plannedEnd ?? undefined,
+      };
+      runWithCrossSyncGuard(() => addTask(newTask, { actorId: user.id, source: "estimate_v2_materialize" }));
+      linkedTask = getTask(taskId);
+      created += 1;
+    }
+
+    if (linkedTask) {
+      const partial: Partial<Task> = {};
+      if (linkedTask.title !== work.title) partial.title = work.title;
+      if ((linkedTask.startDate ?? null) !== (work.plannedStart ?? null)) {
+        partial.startDate = work.plannedStart ?? undefined;
+      }
+      if ((linkedTask.deadline ?? null) !== (work.plannedEnd ?? null)) {
+        partial.deadline = work.plannedEnd ?? undefined;
+      }
+      if (linkedTask.status !== "not_started") partial.status = "not_started";
+      if (Object.keys(partial).length > 0) {
+        runWithCrossSyncGuard(() => updateTask(linkedTask!.id, partial));
+        updated += 1;
+      }
+
+      const nextWork: EstimateV2Work = {
+        ...work,
+        taskId: linkedTask.id,
+        status: "not_started",
+        updatedAt: now,
+      };
+      nextWorksById.set(work.id, nextWork);
+      syncChecklistForWork(state, nextWork);
+    }
+  });
+
+  if (nextWorksById.size > 0) {
+    state.works = state.works.map((work) => nextWorksById.get(work.id) ?? work);
+  }
+
+  return { created, updated };
+}
+
+function syncFromMainTaskStore() {
+  if (crossSyncInProgress) return;
+  const now = nowIso();
+  let hasChanges = false;
+
+  statesByProjectId.forEach((state, projectId) => {
+    const tasksById = new Map(getTasks(projectId).map((task) => [task.id, task]));
+    let stateChanged = false;
+
+    state.works = state.works.map((work) => {
+      if (!work.taskId) return work;
+      const task = tasksById.get(work.taskId);
+      if (!task) return work;
+
+      const nextTitle = task.title;
+      const nextStatus = mapTaskStatusToWorkStatus(task.status);
+      const nextPlannedStart = task.startDate ?? null;
+      const nextPlannedEnd = task.deadline ?? null;
+
+      if (
+        nextTitle === work.title
+        && nextStatus === work.status
+        && nextPlannedStart === (work.plannedStart ?? null)
+        && nextPlannedEnd === (work.plannedEnd ?? null)
+      ) {
+        return work;
+      }
+
+      stateChanged = true;
+      return {
+        ...work,
+        title: nextTitle,
+        status: nextStatus,
+        plannedStart: nextPlannedStart,
+        plannedEnd: nextPlannedEnd,
+        updatedAt: now,
+      };
+    });
+
+    state.lines = state.lines.map((line) => {
+      const work = state.works.find((entry) => entry.id === line.workId);
+      if (!work?.taskId) return line;
+      const task = tasksById.get(work.taskId);
+      if (!task) return line;
+
+      const checklistItem = task.checklist.find((item) => item.estimateV2LineId === line.id);
+      if (!checklistItem) return line;
+
+      const nextTitle = checklistItem.text || line.title;
+      const nextQtyMilli = Number.isFinite(checklistItem.estimateV2QtyMilli)
+        ? Math.max(1, Math.round(checklistItem.estimateV2QtyMilli as number))
+        : line.qtyMilli;
+      const nextUnit = checklistItem.estimateV2Unit?.trim() || line.unit;
+      const nextType = checklistItem.estimateV2ResourceType ?? line.type;
+
+      if (
+        nextTitle === line.title
+        && nextQtyMilli === line.qtyMilli
+        && nextUnit === line.unit
+        && nextType === line.type
+      ) {
+        return line;
+      }
+
+      stateChanged = true;
+      return {
+        ...line,
+        title: nextTitle,
+        qtyMilli: nextQtyMilli,
+        unit: nextUnit,
+        type: nextType,
+        updatedAt: now,
+      };
+    });
+
+    if (stateChanged) {
+      state.project.updatedAt = now;
+      hasChanges = true;
+    }
+  });
+
+  if (hasChanges) notify();
+}
+
+function ensureMainStoreSubscription() {
+  if (mainStoreUnsubscribe) return;
+  mainStoreUnsubscribe = subscribeMainStore(() => {
+    syncFromMainTaskStore();
+  });
 }
 
 function ensureProjectState(projectId: string): EstimateV2ProjectState {
@@ -181,6 +544,10 @@ function ensureProjectState(projectId: string): EstimateV2ProjectState {
     title: "General work",
     order: 1,
     discountBps: 0,
+    plannedStart: null,
+    plannedEnd: null,
+    taskId: null,
+    status: "not_started",
     createdAt,
     updatedAt: createdAt,
   }));
@@ -220,7 +587,7 @@ function ensureProjectState(projectId: string): EstimateV2ProjectState {
     taxBps: 2000,
     discountBps: 0,
     markupBps: 0,
-    estimateStatus: "draft",
+    estimateStatus: "planning",
     receivedCents: 0,
     pnlPlaceholderCents: 0,
     createdAt,
@@ -234,10 +601,53 @@ function ensureProjectState(projectId: string): EstimateV2ProjectState {
     lines,
     dependencies: [],
     versions: [],
+    scheduleBaseline: null,
   };
 
+  ensureMainStoreSubscription();
   statesByProjectId.set(projectId, state);
   return state;
+}
+
+function projectScheduleAnchor(projectId: string): string {
+  const tasks = getTasks(projectId)
+    .map((task) => normalizeIsoDate(task.created_at))
+    .filter((value): value is string => Boolean(value))
+    .sort((a, b) => a.localeCompare(b));
+  return tasks[0] ?? isoStartOfToday();
+}
+
+function captureScheduleBaseline(state: EstimateV2ProjectState, capturedAt: string): ScheduleBaseline {
+  const works = sortWorksByStageAndOrder(state);
+  const baselineWorks = works.map((work) => ({
+    workId: work.id,
+    baselineStart: work.plannedStart ?? null,
+    baselineEnd: work.plannedEnd ?? null,
+  }));
+
+  const starts = baselineWorks
+    .map((work) => work.baselineStart)
+    .filter((value): value is string => Boolean(value))
+    .sort((a, b) => a.localeCompare(b));
+  const ends = baselineWorks
+    .map((work) => work.baselineEnd)
+    .filter((value): value is string => Boolean(value))
+    .sort((a, b) => a.localeCompare(b));
+
+  return {
+    capturedAt,
+    projectBaselineStart: starts[0] ?? null,
+    projectBaselineEnd: ends[ends.length - 1] ?? null,
+    works: baselineWorks,
+  };
+}
+
+function applyWorkToTaskSync(state: EstimateV2ProjectState, workIds: string[]) {
+  const changedWorkIds = new Set(workIds);
+  state.works.forEach((work) => {
+    if (!changedWorkIds.has(work.id)) return;
+    syncTaskFromWork(work);
+  });
 }
 
 function shallowEqualExcludingUpdatedAt(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
@@ -472,6 +882,10 @@ export function createWork(projectId: string, input: { stageId: string; title: s
     title: input.title.trim() || "New work",
     order: nextOrder,
     discountBps: Math.max(0, Math.round(input.discountBps ?? 0)),
+    plannedStart: null,
+    plannedEnd: null,
+    taskId: null,
+    status: "not_started",
     createdAt: now,
     updatedAt: now,
   };
@@ -485,6 +899,7 @@ export function createWork(projectId: string, input: { stageId: string; title: s
 export function updateWork(projectId: string, workId: string, partial: Partial<EstimateV2Work>) {
   const state = ensureProjectState(projectId);
   const now = nowIso();
+  let changedWork: EstimateV2Work | null = null;
   state.works = state.works.map((work) => (
     work.id === workId
       ? {
@@ -494,6 +909,12 @@ export function updateWork(projectId: string, workId: string, partial: Partial<E
       }
       : work
   ));
+  changedWork = state.works.find((work) => work.id === workId) ?? null;
+
+  if (changedWork) {
+    applyWorkToTaskSync(state, [changedWork.id]);
+    syncChecklistForWork(state, changedWork);
+  }
   state.project.updatedAt = now;
   notify();
 }
@@ -542,6 +963,8 @@ export function createLine(
   };
 
   state.lines.push(line);
+  const parentWork = state.works.find((work) => work.id === line.workId);
+  if (parentWork) syncChecklistForWork(state, parentWork);
   state.project.updatedAt = now;
   notify();
   return { ...line };
@@ -550,6 +973,7 @@ export function createLine(
 export function updateLine(projectId: string, lineId: string, partial: Partial<EstimateV2ResourceLine>) {
   const state = ensureProjectState(projectId);
   const now = nowIso();
+  const previous = state.lines.find((line) => line.id === lineId) ?? null;
   state.lines = state.lines.map((line) => (
     line.id === lineId
       ? {
@@ -559,25 +983,115 @@ export function updateLine(projectId: string, lineId: string, partial: Partial<E
       }
       : line
   ));
+  const updated = state.lines.find((line) => line.id === lineId) ?? null;
+  if (previous) {
+    const oldWork = state.works.find((work) => work.id === previous.workId);
+    if (oldWork) syncChecklistForWork(state, oldWork);
+  }
+  if (updated) {
+    const newWork = state.works.find((work) => work.id === updated.workId);
+    if (newWork) syncChecklistForWork(state, newWork);
+  }
   state.project.updatedAt = now;
   notify();
 }
 
 export function deleteLine(projectId: string, lineId: string) {
   const state = ensureProjectState(projectId);
+  const existing = state.lines.find((line) => line.id === lineId) ?? null;
   state.lines = state.lines.filter((line) => line.id !== lineId);
+  if (existing) {
+    const parentWork = state.works.find((work) => work.id === existing.workId);
+    if (parentWork) syncChecklistForWork(state, parentWork);
+  }
   state.project.updatedAt = nowIso();
   notify();
 }
 
-export function setProjectEstimateStatus(projectId: string, status: string) {
+export function setProjectEstimateStatus(
+  projectId: string,
+  status: EstimateExecutionStatus,
+  options: SetProjectEstimateStatusOptions = {},
+): SetProjectEstimateStatusResult {
+  if (!isOwnerActionAllowed(projectId)) {
+    return {
+      ok: false,
+      reason: "forbidden",
+    };
+  }
+
   const state = ensureProjectState(projectId);
+  const now = nowIso();
+  const previousStatus = state.project.estimateStatus;
+  let autoScheduled = false;
+  let baselineCaptured = false;
+
+  if (previousStatus === "planning" && status === "in_work") {
+    const missingWorks = sortWorksByStageAndOrder(state).filter((work) => !work.plannedStart || !work.plannedEnd);
+    if (missingWorks.length > 0 && !options.skipSetup) {
+      return {
+        ok: false,
+        reason: "missing_work_dates",
+        missingWorkIds: missingWorks.map((work) => work.id),
+      };
+    }
+
+    if (missingWorks.length > 0 && options.skipSetup) {
+      const stageOrderById = new Map(state.stages.map((stage) => [stage.id, stage.order]));
+      const anchor = projectScheduleAnchor(projectId);
+      let scheduled = autoScheduleSequential(state.works, anchor, stageOrderById);
+      const cycleValidation = validateNoCycles(state.dependencies);
+      if (cycleValidation.valid) {
+        scheduled = applyFSConstraints(scheduled, state.dependencies);
+      }
+      state.works = state.works.map((work) => scheduled.find((entry) => entry.id === work.id) ?? work);
+      autoScheduled = true;
+    }
+
+    materializeTasksForAllWorks(projectId, state);
+    state.scheduleBaseline = captureScheduleBaseline(state, now);
+    baselineCaptured = true;
+  }
+
+  if (status === "finished") {
+    const incompleteTasks: StatusFailureTask[] = [];
+    state.works.forEach((work) => {
+      const linkedTask = work.taskId ? getTask(work.taskId) : undefined;
+      if (!linkedTask || linkedTask.status !== "done") {
+        incompleteTasks.push({
+          taskId: linkedTask?.id ?? null,
+          title: linkedTask?.title ?? work.title,
+        });
+      }
+    });
+    if (incompleteTasks.length > 0) {
+      return {
+        ok: false,
+        reason: "incomplete_tasks",
+        incompleteTasks,
+      };
+    }
+  }
+
   state.project = {
     ...state.project,
     estimateStatus: status,
-    updatedAt: nowIso(),
+    updatedAt: now,
   };
+
+  if (status !== "in_work") {
+    state.works = state.works.map((work) => ({
+      ...work,
+      updatedAt: now,
+    }));
+  }
+
   notify();
+  return {
+    ok: true,
+    autoScheduled,
+    baselineCaptured,
+  };
 }
 
 export function updateEstimateV2Project(projectId: string, partial: Partial<EstimateV2Project>) {
@@ -627,7 +1141,7 @@ export function createDependency(
     kind: "FS",
     fromWorkId: input.fromWorkId,
     toWorkId: input.toWorkId,
-    lagDays: Math.round(input.lagDays ?? 0),
+    lagDays: normalizedLagDays(input.lagDays ?? 0),
     createdAt: now,
     updatedAt: now,
   };

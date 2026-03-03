@@ -23,7 +23,7 @@ function createProject(partial: Partial<EstimateV2Project> = {}): EstimateV2Proj
     taxBps: 2000,
     discountBps: 500,
     markupBps: 2000,
-    estimateStatus: "draft",
+    estimateStatus: "planning",
     receivedCents: 0,
     pnlPlaceholderCents: 0,
     createdAt: "2025-01-01T00:00:00.000Z",

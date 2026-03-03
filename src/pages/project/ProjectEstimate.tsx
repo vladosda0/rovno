@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { AlertTriangle, Download, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { ConfirmModal } from "@/components/ConfirmModal";
 import {
   Select,
   SelectContent,
@@ -36,6 +37,7 @@ import {
   deleteLine,
   deleteStage,
   deleteWork,
+  setProjectEstimateStatus,
   submitVersion,
   updateEstimateV2Project,
   updateLine,
@@ -55,6 +57,7 @@ import type {
   EstimateV2ResourceLine,
   EstimateV2Stage,
   EstimateV2Work,
+  EstimateExecutionStatus,
   ResourceLineType,
 } from "@/types/estimate-v2";
 
@@ -101,6 +104,20 @@ function labelForType(type: ResourceLineType): string {
   return "Other";
 }
 
+function estimateStatusLabel(status: EstimateExecutionStatus): string {
+  if (status === "planning") return "Planning";
+  if (status === "in_work") return "In work";
+  if (status === "paused") return "Paused";
+  return "Finished";
+}
+
+function estimateStatusClassName(status: EstimateExecutionStatus): string {
+  if (status === "planning") return "bg-muted text-muted-foreground";
+  if (status === "in_work") return "bg-info/15 text-info";
+  if (status === "paused") return "bg-warning/15 text-warning-foreground";
+  return "bg-success/15 text-success";
+}
+
 function buildCsv(rows: string[][]): string {
   return rows
     .map((row) => row.map((cell) => {
@@ -113,6 +130,7 @@ function buildCsv(rows: string[][]): string {
 
 export default function ProjectEstimate() {
   const { id: projectId } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const pid = projectId!;
   const { toast } = useToast();
   const currentUser = useCurrentUser();
@@ -136,6 +154,8 @@ export default function ProjectEstimate() {
   const [depFromWorkId, setDepFromWorkId] = useState<string>("");
   const [depToWorkId, setDepToWorkId] = useState<string>("");
   const [depLagDays, setDepLagDays] = useState("0");
+  const [missingDatesWorkIds, setMissingDatesWorkIds] = useState<string[]>([]);
+  const [incompleteTaskBlocks, setIncompleteTaskBlocks] = useState<Array<{ taskId: string | null; title: string }>>([]);
 
   const sortedStages = useMemo(
     () => [...stages].sort((a, b) => a.order - b.order),
@@ -162,6 +182,8 @@ export default function ProjectEstimate() {
     });
     return map;
   }, [lines]);
+
+  const workById = useMemo(() => new Map(works.map((work) => [work.id, work])), [works]);
 
   const latestApproved = useMemo(() => (
     versions
@@ -223,6 +245,45 @@ export default function ProjectEstimate() {
   if (!project) {
     return <EmptyState icon={AlertTriangle} title="Not found" description="Project not found." />;
   }
+
+  const handleEstimateStatusChange = (
+    nextStatus: EstimateExecutionStatus,
+    options?: { skipSetup?: boolean },
+  ) => {
+    if (!isOwner) return;
+    if (nextStatus === estimateProject.estimateStatus && !options?.skipSetup) return;
+    const result = setProjectEstimateStatus(pid, nextStatus, options);
+    if (!result.ok) {
+      if (result.reason === "missing_work_dates") {
+        setMissingDatesWorkIds(result.missingWorkIds ?? []);
+        return;
+      }
+      if (result.reason === "incomplete_tasks") {
+        setIncompleteTaskBlocks(result.incompleteTasks ?? []);
+        return;
+      }
+      toast({ title: "Only project owner can change status", variant: "destructive" });
+      return;
+    }
+
+    setMissingDatesWorkIds([]);
+    setIncompleteTaskBlocks([]);
+
+    if (result.autoScheduled) {
+      toast({ title: "Status updated", description: "Missing work dates were auto-scheduled." });
+      return;
+    }
+    toast({ title: "Status updated" });
+  };
+
+  const handleSkipSetup = () => {
+    handleEstimateStatusChange("in_work", { skipSetup: true });
+  };
+
+  const handleGoToWorkLog = () => {
+    setIncompleteTaskBlocks([]);
+    navigate(`/project/${pid}/tasks`);
+  };
 
   const handleSubmitToClient = () => {
     const snapshot = createVersionSnapshot(pid, currentUser.id);
@@ -357,11 +418,30 @@ export default function ProjectEstimate() {
     <div className="space-y-sp-2 p-sp-2">
       <div className="rounded-card border border-border bg-card p-sp-2 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h2 className="text-lg font-semibold text-foreground">Estimate</h2>
-            <p className="text-caption text-muted-foreground">
-              Stage → Work → ResourceLine
-            </p>
+          <div className="space-y-1">
+            <h2 className="text-lg font-semibold text-foreground">{project.title}</h2>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge className={estimateStatusClassName(estimateProject.estimateStatus)}>
+                {estimateStatusLabel(estimateProject.estimateStatus)}
+              </Badge>
+              <Select
+                value={estimateProject.estimateStatus}
+                onValueChange={(value) => handleEstimateStatusChange(value as EstimateExecutionStatus)}
+                disabled={!isOwner}
+              >
+                <SelectTrigger className="h-8 w-[160px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="planning">Planning</SelectItem>
+                  <SelectItem value="in_work">In work</SelectItem>
+                  <SelectItem value="paused">Paused</SelectItem>
+                  <SelectItem value="finished">Finished</SelectItem>
+                </SelectContent>
+              </Select>
+              {!isOwner && <span className="text-caption text-muted-foreground">Owner only</span>}
+            </div>
+            <p className="text-caption text-muted-foreground">Stage → Work → ResourceLine</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="secondary">Regime: {regime.replace("_", " ")}</Badge>
@@ -785,6 +865,57 @@ export default function ProjectEstimate() {
             </div>
           </TabsContent>
         </Tabs>
+
+        <ConfirmModal
+          open={missingDatesWorkIds.length > 0}
+          onOpenChange={(open) => {
+            if (!open) setMissingDatesWorkIds([]);
+          }}
+          title="Missing work dates"
+          description="Some works are missing planned start/end dates. You can skip setup to auto-generate a sequential schedule."
+          confirmLabel="Skip setup"
+          cancelLabel="Cancel"
+          onConfirm={handleSkipSetup}
+          onCancel={() => setMissingDatesWorkIds([])}
+        >
+          <div className="max-h-48 overflow-auto rounded-md border border-border p-2">
+            <ul className="space-y-1">
+              {missingDatesWorkIds.map((workId) => {
+                const work = workById.get(workId);
+                return (
+                  <li key={workId} className="text-caption text-foreground">
+                    {work?.title ?? workId}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </ConfirmModal>
+
+        <ConfirmModal
+          open={incompleteTaskBlocks.length > 0}
+          onOpenChange={(open) => {
+            if (!open) setIncompleteTaskBlocks([]);
+          }}
+          title="Cannot mark as Finished"
+          description="All linked tasks must be Done before project status can move to Finished."
+          confirmLabel="Close"
+          cancelLabel="Cancel"
+          tertiaryLabel="Go to Work log"
+          onTertiary={handleGoToWorkLog}
+          onConfirm={() => setIncompleteTaskBlocks([])}
+          onCancel={() => setIncompleteTaskBlocks([])}
+        >
+          <div className="max-h-48 overflow-auto rounded-md border border-border p-2">
+            <ul className="space-y-1">
+              {incompleteTaskBlocks.map((task, index) => (
+                <li key={`${task.taskId ?? "missing"}-${index}`} className="text-caption text-foreground">
+                  {task.title}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </ConfirmModal>
 
         <ApprovalStampFormModal
           open={approvalModalOpen}
