@@ -15,6 +15,8 @@ const typeIcons: Record<string, typeof Activity> = {
   estimate_created: Calculator,
   estimate_approved: CheckCircle2,
   estimate_archived: Calculator,
+  "estimate.version_submitted": Calculator,
+  "estimate.version_approved": CheckCircle2,
   procurement_created: ShoppingCart,
   procurement_updated: ShoppingCart,
   document_created: FileText,
@@ -86,7 +88,7 @@ export function EventFeedItem({ event, compact, highlighted }: EventFeedItemProp
       <div className="flex-1 min-w-0">
         <p className="text-caption leading-tight">
           <span className="font-medium text-foreground">{actorLabel}</span>
-          <span className="text-muted-foreground"> {event.type.replace(/_/g, " ")}</span>
+          <span className="text-muted-foreground"> {event.type.replace(/[._]/g, " ")}</span>
         </p>
         {detail && <p className="text-caption text-muted-foreground truncate">{detail}</p>}
       </div>

@@ -31,7 +31,7 @@ export default function ProjectActivity() {
               <div className="flex-1 min-w-0">
                 <p className="text-body-sm">
                   <span className="font-medium text-foreground">{actor?.name ?? "Unknown"}</span>
-                  <span className="text-muted-foreground"> {evt.type.replace(/_/g, " ")}</span>
+                  <span className="text-muted-foreground"> {evt.type.replace(/[._]/g, " ")}</span>
                 </p>
                 {detail && <p className="text-caption text-muted-foreground truncate">{detail}</p>}
               </div>

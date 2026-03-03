@@ -26,6 +26,8 @@ export type EventType =
   | "estimate_archived"
   | "estimate_deleted"
   | "estimate_paid_updated"
+  | "estimate.version_submitted"
+  | "estimate.version_approved"
   | "procurement_created"
   | "procurement_updated"
   | "procurement_deleted"
