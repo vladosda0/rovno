@@ -28,12 +28,10 @@ import { getAuthRole } from "@/lib/auth-state";
 import {
   approveVersion,
   computeVersionDiff,
-  createDependency,
   createLine,
   createStage,
   createVersionSnapshot,
   createWork,
-  deleteDependency,
   deleteLine,
   deleteStage,
   deleteWork,
@@ -52,6 +50,7 @@ import { ApprovalStampCard } from "@/components/estimate-v2/ApprovalStampCard";
 import { ApprovalStampFormModal } from "@/components/estimate-v2/ApprovalStampFormModal";
 import { VersionBanner } from "@/components/estimate-v2/VersionBanner";
 import { VersionDiffList } from "@/components/estimate-v2/VersionDiffList";
+import { EstimateGantt } from "@/components/estimate-v2/gantt/EstimateGantt";
 import type {
   ApprovalStamp,
   EstimateV2ResourceLine,
@@ -151,9 +150,6 @@ export default function ProjectEstimate() {
 
   const [activeTab, setActiveTab] = useState("estimate");
   const [approvalModalOpen, setApprovalModalOpen] = useState(false);
-  const [depFromWorkId, setDepFromWorkId] = useState<string>("");
-  const [depToWorkId, setDepToWorkId] = useState<string>("");
-  const [depLagDays, setDepLagDays] = useState("0");
   const [missingDatesWorkIds, setMissingDatesWorkIds] = useState<string[]>([]);
   const [incompleteTaskBlocks, setIncompleteTaskBlocks] = useState<Array<{ taskId: string | null; title: string }>>([]);
 
@@ -790,70 +786,13 @@ export default function ProjectEstimate() {
           </TabsContent>
 
           <TabsContent value="work_schedule" className="mt-3 space-y-3">
-            <div className="rounded-card border border-border p-3 space-y-3">
-              <h3 className="text-body-sm font-semibold text-foreground">Dependencies (optional)</h3>
-              <p className="text-caption text-muted-foreground">Phase 1 supports FS dependencies only.</p>
-
-              <div className="grid gap-2 sm:grid-cols-4">
-                <Select value={depFromWorkId} onValueChange={setDepFromWorkId}>
-                  <SelectTrigger><SelectValue placeholder="From work" /></SelectTrigger>
-                  <SelectContent>
-                    {works.map((work) => <SelectItem key={work.id} value={work.id}>{work.title}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-
-                <Select value={depToWorkId} onValueChange={setDepToWorkId}>
-                  <SelectTrigger><SelectValue placeholder="To work" /></SelectTrigger>
-                  <SelectContent>
-                    {works.map((work) => <SelectItem key={work.id} value={work.id}>{work.title}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-
-                <Input
-                  value={depLagDays}
-                  onChange={(e) => setDepLagDays(e.target.value)}
-                  placeholder="Lag days"
-                  type="number"
-                />
-
-                <Button
-                  onClick={() => {
-                    if (!depFromWorkId || !depToWorkId || depFromWorkId === depToWorkId) return;
-                    createDependency(pid, {
-                      fromWorkId: depFromWorkId,
-                      toWorkId: depToWorkId,
-                      lagDays: Number(depLagDays) || 0,
-                    });
-                    setDepFromWorkId("");
-                    setDepToWorkId("");
-                    setDepLagDays("0");
-                  }}
-                >
-                  Add FS dependency
-                </Button>
-              </div>
-
-              {dependencies.length === 0 ? (
-                <p className="text-caption text-muted-foreground">No dependencies yet.</p>
-              ) : (
-                <div className="space-y-1">
-                  {dependencies.map((dep) => {
-                    const fromWork = works.find((work) => work.id === dep.fromWorkId);
-                    const toWork = works.find((work) => work.id === dep.toWorkId);
-                    return (
-                      <div key={dep.id} className="flex items-center justify-between rounded-md border border-border px-2 py-1.5">
-                        <span className="text-caption text-foreground">
-                          {fromWork?.title ?? dep.fromWorkId} → {toWork?.title ?? dep.toWorkId} (FS, lag {dep.lagDays}d)
-                        </span>
-                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => deleteDependency(pid, dep.id)}>
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+            <EstimateGantt
+              projectId={pid}
+              stages={stages}
+              works={works}
+              dependencies={dependencies}
+              isOwner={isOwner}
+            />
           </TabsContent>
 
           <TabsContent value="work_log" className="mt-3">

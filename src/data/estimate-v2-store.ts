@@ -20,6 +20,9 @@ import {
 import {
   applyFSConstraints,
   autoScheduleSequential,
+  clampWorkDates,
+  detectCycle,
+  toDayIndex,
   validateNoCycles,
 } from "@/lib/estimate-v2/schedule";
 import type { ChecklistItem, ChecklistItemType, Task, TaskStatus } from "@/types/entities";
@@ -650,6 +653,37 @@ function applyWorkToTaskSync(state: EstimateV2ProjectState, workIds: string[]) {
   });
 }
 
+function buildWorksById(works: EstimateV2Work[]): Record<string, EstimateV2Work> {
+  return Object.fromEntries(works.map((work) => [work.id, { ...work }]));
+}
+
+function applyScheduledDatesFromMap(
+  state: EstimateV2ProjectState,
+  nextWorksById: Record<string, EstimateV2Work>,
+  now: string,
+): string[] {
+  const changedWorkIds: string[] = [];
+
+  state.works = state.works.map((work) => {
+    const next = nextWorksById[work.id];
+    if (!next) return work;
+
+    const startChanged = (work.plannedStart ?? null) !== (next.plannedStart ?? null);
+    const endChanged = (work.plannedEnd ?? null) !== (next.plannedEnd ?? null);
+    if (!startChanged && !endChanged) return work;
+
+    changedWorkIds.push(work.id);
+    return {
+      ...work,
+      plannedStart: next.plannedStart,
+      plannedEnd: next.plannedEnd,
+      updatedAt: now,
+    };
+  });
+
+  return changedWorkIds;
+}
+
 function shallowEqualExcludingUpdatedAt(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
   const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
   keys.delete("updatedAt");
@@ -919,6 +953,55 @@ export function updateWork(projectId: string, workId: string, partial: Partial<E
   notify();
 }
 
+export function updateWorkDates(
+  projectId: string,
+  workId: string,
+  plannedStart: string,
+  plannedEnd: string,
+  _options: { source: "gantt" },
+): { ok: true; shiftedWorkIds: string[] } | { ok: false; reason: "invalid_work" | "invalid_date" } {
+  const state = ensureProjectState(projectId);
+  const target = state.works.find((work) => work.id === workId);
+  if (!target) return { ok: false, reason: "invalid_work" };
+
+  if (toDayIndex(plannedStart) == null || toDayIndex(plannedEnd) == null) {
+    return { ok: false, reason: "invalid_date" };
+  }
+
+  const normalized = clampWorkDates({
+    plannedStart,
+    plannedEnd,
+  }, 1);
+
+  const worksById = buildWorksById(state.works);
+  const nextTarget = worksById[workId];
+  if (!nextTarget) return { ok: false, reason: "invalid_work" };
+  worksById[workId] = {
+    ...nextTarget,
+    plannedStart: normalized.plannedStart,
+    plannedEnd: normalized.plannedEnd,
+  };
+
+  const constrainedById = applyFSConstraints(worksById, state.dependencies);
+  const now = nowIso();
+  const changedWorkIds = applyScheduledDatesFromMap(state, constrainedById, now);
+
+  if (changedWorkIds.length === 0) {
+    return { ok: true, shiftedWorkIds: [] };
+  }
+
+  if (state.project.estimateStatus === "in_work") {
+    applyWorkToTaskSync(state, changedWorkIds);
+  }
+
+  state.project.updatedAt = now;
+  notify();
+  return {
+    ok: true,
+    shiftedWorkIds: changedWorkIds.filter((id) => id !== workId),
+  };
+}
+
 export function deleteWork(projectId: string, workId: string) {
   const state = ensureProjectState(projectId);
   state.works = state.works.filter((work) => work.id !== workId);
@@ -1042,7 +1125,11 @@ export function setProjectEstimateStatus(
       let scheduled = autoScheduleSequential(state.works, anchor, stageOrderById);
       const cycleValidation = validateNoCycles(state.dependencies);
       if (cycleValidation.valid) {
-        scheduled = applyFSConstraints(scheduled, state.dependencies);
+        const constrainedById = applyFSConstraints(
+          Object.fromEntries(scheduled.map((work) => [work.id, work])),
+          state.dependencies,
+        );
+        scheduled = scheduled.map((work) => constrainedById[work.id] ?? work);
       }
       state.works = state.works.map((work) => scheduled.find((entry) => entry.id === work.id) ?? work);
       autoScheduled = true;
@@ -1129,33 +1216,93 @@ export function setRegimeDev(projectId: string, regime: Regime): boolean {
   return true;
 }
 
-export function createDependency(
+export function addDependency(
   projectId: string,
-  input: { fromWorkId: string; toWorkId: string; lagDays?: number },
-): EstimateV2Dependency {
+  fromWorkId: string,
+  toWorkId: string,
+  lagDays: number,
+):
+  | { ok: true; dependency: EstimateV2Dependency; shiftedWorkIds: string[] }
+  | { ok: false; reason: "self_dependency" | "invalid_work" | "cycle"; cyclePath?: string[] } {
   const state = ensureProjectState(projectId);
+
+  if (fromWorkId === toWorkId) {
+    return { ok: false, reason: "self_dependency" };
+  }
+
+  const worksById = buildWorksById(state.works);
+  if (!worksById[fromWorkId] || !worksById[toWorkId]) {
+    return { ok: false, reason: "invalid_work" };
+  }
+
   const now = nowIso();
   const dependency: EstimateV2Dependency = {
     id: id("dep-v2"),
     projectId,
     kind: "FS",
-    fromWorkId: input.fromWorkId,
-    toWorkId: input.toWorkId,
-    lagDays: normalizedLagDays(input.lagDays ?? 0),
+    fromWorkId,
+    toWorkId,
+    lagDays: normalizedLagDays(lagDays),
     createdAt: now,
     updatedAt: now,
   };
-  state.dependencies.push(dependency);
+
+  const candidateDependencies = [...state.dependencies, dependency];
+  const cycle = detectCycle(
+    state.works.map((work) => ({ id: work.id })),
+    candidateDependencies,
+  );
+  if (cycle.hasCycle) {
+    return {
+      ok: false,
+      reason: "cycle",
+      cyclePath: cycle.cyclePath,
+    };
+  }
+
+  state.dependencies = candidateDependencies;
+  const constrainedById = applyFSConstraints(worksById, state.dependencies);
+  const changedWorkIds = applyScheduledDatesFromMap(state, constrainedById, now);
+
+  if (state.project.estimateStatus === "in_work" && changedWorkIds.length > 0) {
+    applyWorkToTaskSync(state, changedWorkIds);
+  }
+
   state.project.updatedAt = now;
   notify();
-  return { ...dependency };
+  return {
+    ok: true,
+    dependency: { ...dependency },
+    shiftedWorkIds: changedWorkIds,
+  };
+}
+
+export function removeDependency(projectId: string, dependencyId: string) {
+  const state = ensureProjectState(projectId);
+  const now = nowIso();
+  state.dependencies = state.dependencies.filter((dep) => dep.id !== dependencyId);
+  state.project.updatedAt = now;
+  notify();
+}
+
+export function createDependency(
+  projectId: string,
+  input: { fromWorkId: string; toWorkId: string; lagDays?: number },
+): EstimateV2Dependency {
+  const result = addDependency(
+    projectId,
+    input.fromWorkId,
+    input.toWorkId,
+    input.lagDays ?? 0,
+  );
+  if (!result.ok) {
+    throw new Error(`Unable to create dependency: ${result.reason}`);
+  }
+  return result.dependency;
 }
 
 export function deleteDependency(projectId: string, dependencyId: string) {
-  const state = ensureProjectState(projectId);
-  state.dependencies = state.dependencies.filter((dep) => dep.id !== dependencyId);
-  state.project.updatedAt = nowIso();
-  notify();
+  removeDependency(projectId, dependencyId);
 }
 
 export function createVersionSnapshot(projectId: string, createdBy: string): { versionId: string; snapshot: EstimateV2Snapshot } {

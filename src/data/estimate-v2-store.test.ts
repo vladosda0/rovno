@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  addDependency,
   computeVersionDiff,
   getEstimateV2ProjectState,
+  updateWorkDates,
   setProjectEstimateStatus,
   setRegime,
   setRegimeDev,
@@ -9,6 +11,7 @@ import {
 } from "@/data/estimate-v2-store";
 import { getTask, updateChecklist, updateTask } from "@/data/store";
 import { setAuthRole } from "@/lib/auth-state";
+import { toDayIndex } from "@/lib/estimate-v2/schedule";
 import type {
   EstimateV2Project,
   EstimateV2ResourceLine,
@@ -319,5 +322,63 @@ describe("estimate-v2 execution foundation", () => {
     expect(syncedLine?.title).toBe("Checklist rename");
     expect(syncedLine?.qtyMilli).toBe(8_888);
     expect(syncedLine?.unit).toBe("pack");
+  });
+
+  it("blocks dependency creation when it introduces a cycle", () => {
+    const projectId = "project-2";
+    setAuthRole("owner");
+
+    setProjectEstimateStatus(projectId, "in_work", { skipSetup: true });
+    const state = getEstimateV2ProjectState(projectId);
+    expect(state.works.length).toBeGreaterThanOrEqual(2);
+
+    const from = state.works[0];
+    const to = state.works[1];
+    const initialDepsCount = state.dependencies.length;
+
+    const first = addDependency(projectId, from.id, to.id, 0);
+    expect(first.ok).toBe(true);
+
+    const cyclic = addDependency(projectId, to.id, from.id, 0);
+    expect(cyclic.ok).toBe(false);
+    if (!cyclic.ok) {
+      expect(cyclic.reason).toBe("cycle");
+    }
+
+    const after = getEstimateV2ProjectState(projectId);
+    expect(after.dependencies.length).toBe(initialDepsCount + 1);
+  });
+
+  it("updates linked task dates in in_work without changing baseline snapshot", () => {
+    const projectId = "project-3";
+    setAuthRole("owner");
+
+    setProjectEstimateStatus(projectId, "planning");
+    const inWork = setProjectEstimateStatus(projectId, "in_work", { skipSetup: true });
+    expect(inWork.ok).toBe(true);
+
+    const before = getEstimateV2ProjectState(projectId);
+    expect(before.scheduleBaseline).not.toBeNull();
+
+    const workToUpdate = before.works.find((work) => Boolean(work.taskId));
+    expect(workToUpdate).toBeDefined();
+
+    const baselineBefore = JSON.stringify(before.scheduleBaseline);
+    const nextStart = "2025-05-01T00:00:00.000Z";
+    const nextEnd = "2025-05-03T00:00:00.000Z";
+
+    const result = updateWorkDates(projectId, workToUpdate!.id, nextStart, nextEnd, { source: "gantt" });
+    expect(result.ok).toBe(true);
+
+    const after = getEstimateV2ProjectState(projectId);
+    const updatedWork = after.works.find((work) => work.id === workToUpdate!.id);
+    expect(toDayIndex(updatedWork?.plannedStart ?? null)).toBe(toDayIndex(nextStart));
+    expect(toDayIndex(updatedWork?.plannedEnd ?? null)).toBe(toDayIndex(nextEnd));
+
+    const linkedTask = getTask(workToUpdate!.taskId as string);
+    expect(toDayIndex(linkedTask?.startDate ?? null)).toBe(toDayIndex(nextStart));
+    expect(toDayIndex(linkedTask?.deadline ?? null)).toBe(toDayIndex(nextEnd));
+
+    expect(JSON.stringify(after.scheduleBaseline)).toBe(baselineBefore);
   });
 });

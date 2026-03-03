@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { EstimateV2Dependency, EstimateV2Work } from "@/types/estimate-v2";
-import { applyFSConstraints, autoScheduleSequential, validateNoCycles } from "@/lib/estimate-v2/schedule";
+import {
+  applyFSConstraints,
+  autoScheduleSequential,
+  clampWorkDates,
+  detectCycle,
+  earliestAllowedStart,
+  toDayIndex,
+  validateAndFixOnDrag,
+} from "@/lib/estimate-v2/schedule";
 
 function work(id: string, stageId: string, order: number, partial: Partial<EstimateV2Work> = {}): EstimateV2Work {
   return {
@@ -33,6 +41,10 @@ function dep(fromWorkId: string, toWorkId: string, lagDays = 0): EstimateV2Depen
   };
 }
 
+function worksById(works: EstimateV2Work[]): Record<string, EstimateV2Work> {
+  return Object.fromEntries(works.map((entry) => [entry.id, entry]));
+}
+
 describe("estimate-v2 schedule helpers", () => {
   it("auto schedules sequentially by stage then work order", () => {
     const works = [
@@ -57,35 +69,99 @@ describe("estimate-v2 schedule helpers", () => {
   });
 
   it("detects dependency cycles", () => {
-    const result = validateNoCycles([
-      dep("a", "b"),
-      dep("b", "c"),
-      dep("c", "a"),
-    ]);
-    expect(result.valid).toBe(false);
-    if (!result.valid) {
-      expect(result.cyclePath.length).toBeGreaterThan(0);
-    }
+    const result = detectCycle(
+      [{ id: "a" }, { id: "b" }, { id: "c" }],
+      [
+        dep("a", "b"),
+        dep("b", "c"),
+        dep("c", "a"),
+      ],
+    );
+    expect(result.hasCycle).toBe(true);
+    expect(result.cyclePath.length).toBeGreaterThan(0);
   });
 
-  it("applies FS constraints with lag days", () => {
-    const scheduled = [
+  it("returns earliest allowed start for FS + lag", () => {
+    const works = worksById([
       work("a", "stage-1", 1, {
         plannedStart: "2025-01-10T00:00:00.000Z",
         plannedEnd: "2025-01-10T00:00:00.000Z",
       }),
       work("b", "stage-1", 2, {
+        plannedStart: "2025-01-09T00:00:00.000Z",
+        plannedEnd: "2025-01-09T00:00:00.000Z",
+      }),
+    ]);
+
+    const earliest = earliestAllowedStart("b", [dep("a", "b", 2)], works);
+    const expected = (toDayIndex("2025-01-10T00:00:00.000Z") as number) + 2;
+
+    expect(earliest).toBe(expected);
+  });
+
+  it("snaps dragged range to earliest valid FS start", () => {
+    const works = worksById([
+      work("a", "stage-1", 1, {
         plannedStart: "2025-01-10T00:00:00.000Z",
         plannedEnd: "2025-01-10T00:00:00.000Z",
       }),
-    ];
+      work("b", "stage-1", 2, {
+        plannedStart: "2025-01-11T00:00:00.000Z",
+        plannedEnd: "2025-01-11T00:00:00.000Z",
+      }),
+    ]);
 
-    const constrained = applyFSConstraints(scheduled, [dep("a", "b", 2)]);
-    const b = constrained.find((entry) => entry.id === "b");
-    const bStart = new Date(b?.plannedStart ?? "");
-    const bEnd = new Date(b?.plannedEnd ?? "");
+    const fixed = validateAndFixOnDrag(
+      "b",
+      toDayIndex("2025-01-09T00:00:00.000Z") as number,
+      toDayIndex("2025-01-09T00:00:00.000Z") as number,
+      [dep("a", "b", 2)],
+      works,
+    );
 
-    expect(bStart.getDate()).toBe(12);
-    expect(bEnd.getDate()).toBe(12);
+    expect(fixed.fixedStart).toBe((toDayIndex("2025-01-10T00:00:00.000Z") as number) + 2);
+    expect(fixed.reasons).toContain("fs_snap");
+  });
+
+  it("pushes successor chain forward deterministically", () => {
+    const constrained = applyFSConstraints(
+      worksById([
+        work("a", "stage-1", 1, {
+          plannedStart: "2025-01-10T00:00:00.000Z",
+          plannedEnd: "2025-01-10T00:00:00.000Z",
+        }),
+        work("b", "stage-1", 2, {
+          plannedStart: "2025-01-10T00:00:00.000Z",
+          plannedEnd: "2025-01-11T00:00:00.000Z",
+        }),
+        work("c", "stage-1", 3, {
+          plannedStart: "2025-01-10T00:00:00.000Z",
+          plannedEnd: "2025-01-10T00:00:00.000Z",
+        }),
+      ]),
+      [
+        dep("b", "c", 1),
+        dep("a", "b", 1),
+      ],
+    );
+
+    expect(new Date(constrained.b.plannedStart ?? "").getDate()).toBe(11);
+    expect(new Date(constrained.b.plannedEnd ?? "").getDate()).toBe(12);
+    expect(new Date(constrained.c.plannedStart ?? "").getDate()).toBe(13);
+  });
+
+  it("enforces minimum one-day duration", () => {
+    const clamped = clampWorkDates({
+      plannedStart: "2025-01-10T00:00:00.000Z",
+      plannedEnd: "2025-01-08T00:00:00.000Z",
+    });
+
+    expect(new Date(clamped.plannedStart).getDate()).toBe(10);
+    expect(new Date(clamped.plannedEnd).getDate()).toBe(10);
+
+    const fixed = validateAndFixOnDrag("x", 20, 19, [], {});
+    expect(fixed.fixedStart).toBe(20);
+    expect(fixed.fixedEnd).toBe(20);
+    expect(fixed.reasons).toContain("min_duration");
   });
 });
