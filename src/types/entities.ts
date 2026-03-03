@@ -221,6 +221,10 @@ export interface ProcurementItemV2 {
   locationPreferredId?: string | null;
   lockedFromEstimate?: boolean;
   sourceEstimateItemId?: string | null;
+  sourceEstimateV2LineId?: string | null;
+  orphaned?: boolean;
+  orphanedAt?: string | null;
+  orphanedReason?: "estimate_line_deleted" | "estimate_line_type_changed" | null;
   linkUrl: string | null;
   notes: string | null;
   attachments: ProcurementAttachment[];

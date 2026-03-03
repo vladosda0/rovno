@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   addDependency,
   computeVersionDiff,
+  deleteLine,
   getEstimateV2ProjectState,
   updateWorkDates,
   setProjectEstimateStatus,
@@ -9,6 +10,8 @@ import {
   setRegimeDev,
   updateLine,
 } from "@/data/estimate-v2-store";
+import { getHRItems } from "@/data/hr-store";
+import { getProcurementItems } from "@/data/procurement-store";
 import { getTask, updateChecklist, updateTask } from "@/data/store";
 import { setAuthRole } from "@/lib/auth-state";
 import { toDayIndex } from "@/lib/estimate-v2/schedule";
@@ -322,6 +325,59 @@ describe("estimate-v2 execution foundation", () => {
     expect(syncedLine?.title).toBe("Checklist rename");
     expect(syncedLine?.qtyMilli).toBe(8_888);
     expect(syncedLine?.unit).toBe("pack");
+  });
+
+  it("syncs procurement and HR, including orphaning on type change and delete", () => {
+    const projectId = "project-2";
+    setAuthRole("owner");
+
+    setProjectEstimateStatus(projectId, "in_work", { skipSetup: true });
+    const state = getEstimateV2ProjectState(projectId);
+    const materialLine = state.lines.find((line) => line.type === "material");
+    const laborLine = state.lines.find((line) => line.type === "labor");
+
+    expect(materialLine).toBeDefined();
+    expect(laborLine).toBeDefined();
+    if (!materialLine || !laborLine) return;
+
+    const linkedProc = getProcurementItems(projectId, true).find((item) => item.sourceEstimateV2LineId === materialLine.id);
+    const linkedHr = getHRItems(projectId).find((item) => item.sourceEstimateV2LineId === laborLine.id);
+
+    expect(linkedProc).toBeDefined();
+    expect(linkedProc?.lockedFromEstimate).toBe(true);
+    expect(linkedHr).toBeDefined();
+    expect(linkedHr?.lockedFromEstimate).toBe(true);
+
+    updateLine(projectId, materialLine.id, {
+      title: "Updated material title",
+      qtyMilli: 7_777,
+      costUnitCents: 3_456,
+    });
+
+    const updatedProc = getProcurementItems(projectId, true).find((item) => item.id === linkedProc?.id);
+    expect(updatedProc?.name).toBe("Updated material title");
+    expect(updatedProc?.requiredQty).toBe(7.777);
+    expect(updatedProc?.plannedUnitPrice).toBe(34.56);
+
+    updateLine(projectId, materialLine.id, { type: "labor" });
+    const orphanedProc = getProcurementItems(projectId, true).find((item) => item.id === linkedProc?.id);
+    expect(orphanedProc?.orphaned).toBe(true);
+    expect(orphanedProc?.orphanedReason).toBe("estimate_line_type_changed");
+    expect(orphanedProc?.sourceEstimateV2LineId).toBeNull();
+
+    const hrFromCrossFamily = getHRItems(projectId).find((item) => item.sourceEstimateV2LineId === materialLine.id);
+    expect(hrFromCrossFamily).toBeDefined();
+    expect(hrFromCrossFamily?.lockedFromEstimate).toBe(true);
+
+    const existingHr = getHRItems(projectId).find((item) => item.sourceEstimateV2LineId === laborLine.id);
+    expect(existingHr).toBeDefined();
+    if (!existingHr) return;
+
+    deleteLine(projectId, laborLine.id);
+    const orphanedHr = getHRItems(projectId).find((item) => item.id === existingHr.id);
+    expect(orphanedHr?.orphaned).toBe(true);
+    expect(orphanedHr?.orphanedReason).toBe("estimate_line_deleted");
+    expect(orphanedHr?.sourceEstimateV2LineId).toBeNull();
   });
 
   it("blocks dependency creation when it introduces a cycle", () => {

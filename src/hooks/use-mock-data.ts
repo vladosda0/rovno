@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import * as store from "@/data/store";
 import { getProcurementItems, subscribeProcurement } from "@/data/procurement-store";
+import { getHRItems, getHRPayments, subscribeHR } from "@/data/hr-store";
 
 function useStoreSubscription<T>(getter: () => T): T {
   const [value, setValue] = useState(getter);
@@ -58,6 +59,28 @@ export function useProcurementV2(projectId: string) {
     const update = () => setValue(getter());
     const unsub1 = subscribeProcurement(update);
     return unsub1;
+  }, [getter]);
+  return value;
+}
+
+export function useHRItems(projectId: string) {
+  const getter = useCallback(() => getHRItems(projectId), [projectId]);
+  const [value, setValue] = useState(getter);
+  useEffect(() => {
+    const update = () => setValue(getter());
+    const unsub = subscribeHR(update);
+    return unsub;
+  }, [getter]);
+  return value;
+}
+
+export function useHRPayments(projectId: string) {
+  const getter = useCallback(() => getHRPayments(projectId), [projectId]);
+  const [value, setValue] = useState(getter);
+  useEffect(() => {
+    const update = () => setValue(getter());
+    const unsub = subscribeHR(update);
+    return unsub;
   }, [getter]);
   return value;
 }

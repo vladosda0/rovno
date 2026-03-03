@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, ListTodo, Calculator, ShoppingCart,
-  Image, FileText, Users,
+  Image, FileText, Users, HardHat,
 } from "lucide-react";
 
 const tabs = [
@@ -11,6 +11,7 @@ const tabs = [
   { label: "Tasks", path: "tasks", icon: ListTodo },
   { label: "Estimate", path: "estimate", icon: Calculator },
   { label: "Procurement", path: "procurement", icon: ShoppingCart },
+  { label: "HR", path: "hr", icon: HardHat },
   { label: "Gallery", path: "gallery", icon: Image },
   { label: "Documents", path: "documents", icon: FileText },
   { label: "Participants", path: "participants", icon: Users },

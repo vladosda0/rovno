@@ -23,6 +23,7 @@ const ProjectDashboard = lazy(() => import("@/pages/project/ProjectDashboard"));
 const ProjectTasks = lazy(() => import("@/pages/project/ProjectTasks"));
 const ProjectEstimate = lazy(() => import("@/pages/project/ProjectEstimate"));
 const ProjectProcurement = lazy(() => import("@/pages/project/ProjectProcurement"));
+const ProjectHR = lazy(() => import("@/pages/project/ProjectHR"));
 const ProjectGallery = lazy(() => import("@/pages/project/ProjectGallery"));
 const ProjectDocuments = lazy(() => import("@/pages/project/ProjectDocuments"));
 const ProjectActivity = lazy(() => import("@/pages/project/ProjectActivity"));
@@ -80,6 +81,7 @@ const App = () => (
               <Route path="procurement" element={routeElement(<ProjectProcurement />)} />
               <Route path="procurement/order/:orderId" element={routeElement(<ProjectProcurement />)} />
               <Route path="procurement/:itemId" element={routeElement(<ProjectProcurement />)} />
+              <Route path="hr" element={routeElement(<ProjectHR />)} />
               <Route path="gallery" element={routeElement(<ProjectGallery />)} />
               <Route path="documents" element={routeElement(<ProjectDocuments />)} />
               <Route path="activity" element={routeElement(<ProjectActivity />)} />

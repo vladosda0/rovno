@@ -14,6 +14,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogFooter,
@@ -50,6 +57,8 @@ import { OrderModal } from "@/components/procurement/OrderModal";
 import { OrderDetailModal } from "@/components/procurement/OrderDetailModal";
 import { ItemTypePicker } from "@/components/procurement/ItemTypePicker";
 import { UnitPicker } from "@/components/procurement/UnitPicker";
+import { useEstimateV2Project } from "@/hooks/use-estimate-v2-data";
+import { relinkProcurementItemToEstimateV2Line } from "@/lib/estimate-v2/procurement-sync";
 import type {
   OrderWithLines,
   ProcurementAttachment,
@@ -186,6 +195,7 @@ export default function ProjectProcurement() {
   const locations = useLocations(pid);
   const stockRows = useInventoryStock(pid);
   const { stages } = useProject(pid);
+  const estimateState = useEstimateV2Project(pid);
   const perm = usePermission(pid);
   const canEdit = perm.can("procurement.edit");
 
@@ -204,6 +214,7 @@ export default function ProjectProcurement() {
   const detailItem = itemId ? (items.find((item) => item.id === itemId) ?? null) : null;
   const [editForm, setEditForm] = useState<Partial<ProcurementItemV2>>({});
   const [attachmentUrl, setAttachmentUrl] = useState("");
+  const [relinkLineId, setRelinkLineId] = useState<string>("");
 
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const draftRef = useRef<Partial<ProcurementItemV2>>({});
@@ -316,6 +327,11 @@ export default function ProjectProcurement() {
 
     return { map, unstaged };
   }, [requestedItems]);
+
+  const procurementEstimateLines = useMemo(
+    () => estimateState.lines.filter((line) => line.type === "material" || line.type === "tool"),
+    [estimateState.lines],
+  );
 
   const placedSupplierOrders = useMemo(() => (
     orders
@@ -531,6 +547,7 @@ export default function ProjectProcurement() {
   useEffect(() => {
     if (!detailItem) {
       initializedDetailIdRef.current = null;
+      setRelinkLineId("");
       return;
     }
     if (initializedDetailIdRef.current === detailItem.id) return;
@@ -540,6 +557,7 @@ export default function ProjectProcurement() {
     draftRef.current = { ...detailItem };
     lastPersistedSignatureRef.current = computeDraftSignature(detailItem);
     setAttachmentUrl("");
+    setRelinkLineId(detailItem.sourceEstimateV2LineId ?? "");
     clearAutosaveTimer();
   }, [detailItem, computeDraftSignature, clearAutosaveTimer]);
 
@@ -550,15 +568,7 @@ export default function ProjectProcurement() {
   }, [clearAutosaveTimer, persistDraftNowIfChanged, flushPendingRevokes]);
 
   const patchRequestLine = (item: ProcurementItemV2, partial: Partial<ProcurementItemV2>) => {
-    const next = { ...partial };
-    if (
-      item.createdFrom === "estimate"
-      && (Object.prototype.hasOwnProperty.call(partial, "requiredQty")
-        || Object.prototype.hasOwnProperty.call(partial, "plannedUnitPrice"))
-    ) {
-      next.lockedFromEstimate = true;
-    }
-    updateProcurementItem(item.id, next);
+    updateProcurementItem(item.id, partial);
   };
 
   const toggleSelected = (itemId: string, checked: boolean) => {
@@ -813,6 +823,11 @@ export default function ProjectProcurement() {
                                     <td className="px-2 py-2 min-w-[220px]">
                                       <button type="button" onClick={() => openDetail(item)} className="text-left hover:underline">
                                         <p className="font-medium text-foreground truncate">{item.name}</p>
+                                        {item.orphaned && (
+                                          <span className="inline-flex rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] text-destructive">
+                                            Orphaned
+                                          </span>
+                                        )}
                                         {item.spec && <p className="text-xs text-muted-foreground truncate">{item.spec}</p>}
                                       </button>
                                     </td>
@@ -858,10 +873,10 @@ export default function ProjectProcurement() {
                                         type="number"
                                         min="0"
                                         value={item.requiredQty}
-                                        disabled={!canEdit}
+                                        disabled={!canEdit || !!item.lockedFromEstimate}
                                         onChange={(event) => {
                                           const requiredQty = Math.max(0, Number(event.target.value));
-                                          patchRequestLine(item, { requiredQty, lockedFromEstimate: item.createdFrom === "estimate" ? true : item.lockedFromEstimate });
+                                          patchRequestLine(item, { requiredQty });
                                         }}
                                         className="h-8 text-right"
                                       />
@@ -892,26 +907,34 @@ export default function ProjectProcurement() {
                                         type="number"
                                         min="0"
                                         value={item.plannedUnitPrice ?? ""}
-                                        disabled={!canEdit}
+                                        disabled={!canEdit || !!item.lockedFromEstimate}
                                         onChange={(event) => {
                                           const plannedUnitPrice = event.target.value ? Number(event.target.value) : null;
-                                          patchRequestLine(item, {
-                                            plannedUnitPrice,
-                                            lockedFromEstimate: item.createdFrom === "estimate" ? true : item.lockedFromEstimate,
-                                          });
+                                          patchRequestLine(item, { plannedUnitPrice });
                                         }}
                                         className="h-8 text-right"
                                       />
                                     </td>
                                     <td className="px-2 py-2 text-right text-sm">{fmtCost(qtyPrice.factual)}</td>
                                     <td className="px-2 py-2">
-                                      <button
-                                        type="button"
-                                        onClick={() => openDetail(item)}
-                                        className="text-xs text-accent hover:underline"
-                                      >
-                                        Requested
-                                      </button>
+                                      <div className="flex flex-col items-start gap-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => openDetail(item)}
+                                          className="text-xs text-accent hover:underline"
+                                        >
+                                          Requested
+                                        </button>
+                                        {item.orphaned && (
+                                          <button
+                                            type="button"
+                                            onClick={() => openDetail(item)}
+                                            className="text-xs text-accent hover:underline"
+                                          >
+                                            Relink
+                                          </button>
+                                        )}
+                                      </div>
                                     </td>
                                   </tr>
                                 );
@@ -968,6 +991,11 @@ export default function ProjectProcurement() {
                                 <td className="px-2 py-2 min-w-[220px]">
                                   <button type="button" onClick={() => openDetail(item)} className="text-left hover:underline">
                                     <p className="font-medium text-foreground truncate">{item.name}</p>
+                                    {item.orphaned && (
+                                      <span className="inline-flex rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] text-destructive">
+                                        Orphaned
+                                      </span>
+                                    )}
                                     {item.spec && <p className="text-xs text-muted-foreground truncate">{item.spec}</p>}
                                   </button>
                                 </td>
@@ -1013,10 +1041,10 @@ export default function ProjectProcurement() {
                                     type="number"
                                     min="0"
                                     value={item.requiredQty}
-                                    disabled={!canEdit}
+                                    disabled={!canEdit || !!item.lockedFromEstimate}
                                     onChange={(event) => {
                                       const requiredQty = Math.max(0, Number(event.target.value));
-                                      patchRequestLine(item, { requiredQty, lockedFromEstimate: item.createdFrom === "estimate" ? true : item.lockedFromEstimate });
+                                      patchRequestLine(item, { requiredQty });
                                     }}
                                     className="h-8 text-right"
                                   />
@@ -1047,26 +1075,34 @@ export default function ProjectProcurement() {
                                     type="number"
                                     min="0"
                                     value={item.plannedUnitPrice ?? ""}
-                                    disabled={!canEdit}
+                                    disabled={!canEdit || !!item.lockedFromEstimate}
                                     onChange={(event) => {
                                       const plannedUnitPrice = event.target.value ? Number(event.target.value) : null;
-                                      patchRequestLine(item, {
-                                        plannedUnitPrice,
-                                        lockedFromEstimate: item.createdFrom === "estimate" ? true : item.lockedFromEstimate,
-                                      });
+                                      patchRequestLine(item, { plannedUnitPrice });
                                     }}
                                     className="h-8 text-right"
                                   />
                                 </td>
                                 <td className="px-2 py-2 text-right text-sm">{fmtCost(qtyPrice.factual)}</td>
                                 <td className="px-2 py-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => openDetail(item)}
-                                    className="text-xs text-accent hover:underline"
-                                  >
-                                    Requested
-                                  </button>
+                                  <div className="flex flex-col items-start gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => openDetail(item)}
+                                      className="text-xs text-accent hover:underline"
+                                    >
+                                      Requested
+                                    </button>
+                                    {item.orphaned && (
+                                      <button
+                                        type="button"
+                                        onClick={() => openDetail(item)}
+                                        className="text-xs text-accent hover:underline"
+                                      >
+                                        Relink
+                                      </button>
+                                    )}
+                                  </div>
                                 </td>
                               </tr>
                             );
@@ -1130,6 +1166,11 @@ export default function ProjectProcurement() {
                                 <td className="px-2 py-2 min-w-[220px]">
                                   <button type="button" className="text-left hover:underline" onClick={() => openDetail(item)}>
                                     <p className="font-medium text-foreground truncate">{item.name}</p>
+                                    {item.orphaned && (
+                                      <span className="inline-flex rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] text-destructive">
+                                        Orphaned
+                                      </span>
+                                    )}
                                     {item.spec && <p className="text-xs text-muted-foreground truncate">{item.spec}</p>}
                                   </button>
                                 </td>
@@ -1147,9 +1188,16 @@ export default function ProjectProcurement() {
                                 <td className="px-2 py-2 text-right">{fmtCost(plannedPrice)}</td>
                                 <td className="px-2 py-2 text-right">{fmtCost(unitPrice * openQty)}</td>
                                 <td className="px-2 py-2">
-                                  <button type="button" className="text-xs text-accent hover:underline" onClick={() => openOrderDetail(order.id)}>
-                                    Ordered
-                                  </button>
+                                  <div className="flex flex-col items-start gap-1">
+                                    <button type="button" className="text-xs text-accent hover:underline" onClick={() => openOrderDetail(order.id)}>
+                                      Ordered
+                                    </button>
+                                    {item.orphaned && (
+                                      <button type="button" className="text-xs text-accent hover:underline" onClick={() => openDetail(item)}>
+                                        Relink
+                                      </button>
+                                    )}
+                                  </div>
                                 </td>
                               </tr>
                             );
@@ -1210,6 +1258,11 @@ export default function ProjectProcurement() {
                                 <td className="px-2 py-2 min-w-[220px]">
                                   <button type="button" className="text-left hover:underline" onClick={() => openDetail(item)}>
                                     <p className="font-medium text-foreground truncate">{item.name}</p>
+                                    {item.orphaned && (
+                                      <span className="inline-flex rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] text-destructive">
+                                        Orphaned
+                                      </span>
+                                    )}
                                     {item.spec && <p className="text-xs text-muted-foreground truncate">{item.spec}</p>}
                                   </button>
                                 </td>
@@ -1229,9 +1282,16 @@ export default function ProjectProcurement() {
                                 <td className="px-2 py-2 text-right">{fmtCost(qtyPrice.planned)}</td>
                                 <td className="px-2 py-2 text-right">{fmtCost(qtyPrice.factual)}</td>
                                 <td className="px-2 py-2">
-                                  <button type="button" className="text-xs text-accent hover:underline" onClick={() => openDetail(item)}>
-                                    In stock
-                                  </button>
+                                  <div className="flex flex-col items-start gap-1">
+                                    <button type="button" className="text-xs text-accent hover:underline" onClick={() => openDetail(item)}>
+                                      In stock
+                                    </button>
+                                    {item.orphaned && (
+                                      <button type="button" className="text-xs text-accent hover:underline" onClick={() => openDetail(item)}>
+                                        Relink
+                                      </button>
+                                    )}
+                                  </div>
                                 </td>
                               </tr>
                             );
@@ -1277,6 +1337,19 @@ export default function ProjectProcurement() {
           ) : (
             <div className="overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
               <div className="mx-auto w-full max-w-4xl space-y-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  {detailItem.lockedFromEstimate && (
+                    <span className="inline-flex rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                      Locked from estimate
+                    </span>
+                  )}
+                  {detailItem.orphaned && (
+                    <span className="inline-flex rounded-full bg-destructive/15 px-2 py-0.5 text-[11px] text-destructive">
+                      Orphaned
+                    </span>
+                  )}
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs text-muted-foreground">Type</label>
@@ -1333,6 +1406,54 @@ export default function ProjectProcurement() {
                   />
                 </div>
 
+                <div>
+                  <label className="text-xs text-muted-foreground">Estimate line link</label>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <Select value={relinkLineId || undefined} onValueChange={setRelinkLineId}>
+                      <SelectTrigger className="h-9 w-[320px]">
+                        <SelectValue placeholder="Select estimate line" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {procurementEstimateLines.map((line) => (
+                          <SelectItem key={line.id} value={line.id}>
+                            {line.title}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-9"
+                      disabled={!canEdit || !relinkLineId}
+                      onClick={() => {
+                        if (!relinkLineId) return;
+                        const ok = relinkProcurementItemToEstimateV2Line(
+                          pid,
+                          detailItem.id,
+                          relinkLineId,
+                          estimateState,
+                        );
+                        if (!ok) {
+                          toast({ title: "Unable to relink", variant: "destructive" });
+                          return;
+                        }
+                        patchEditForm((prev) => ({
+                          ...prev,
+                          sourceEstimateV2LineId: relinkLineId,
+                          orphaned: false,
+                          orphanedAt: null,
+                          orphanedReason: null,
+                          lockedFromEstimate: true,
+                        }), "immediate");
+                        toast({ title: "Item relinked" });
+                      }}
+                    >
+                      Relink
+                    </Button>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs text-muted-foreground">Requested amount</label>
@@ -1342,15 +1463,11 @@ export default function ProjectProcurement() {
                       value={editForm.requiredQty ?? 0}
                       onChange={(event) => {
                         const requiredQty = Math.max(0, Number(event.target.value));
-                        patchEditForm((prev) => ({
-                          ...prev,
-                          requiredQty,
-                          lockedFromEstimate: detailItem.createdFrom === "estimate" ? true : prev.lockedFromEstimate,
-                        }));
+                        patchEditForm((prev) => ({ ...prev, requiredQty }));
                       }}
                       onBlur={() => persistDraftNowIfChanged(draftRef.current)}
                       className="h-9"
-                      disabled={!canEdit}
+                      disabled={!canEdit || !!detailItem.lockedFromEstimate}
                     />
                   </div>
                   <div>
@@ -1375,16 +1492,12 @@ export default function ProjectProcurement() {
                       value={editForm.plannedUnitPrice ?? ""}
                       onChange={(event) => {
                         const plannedUnitPrice = event.target.value ? Number(event.target.value) : null;
-                        patchEditForm((prev) => ({
-                          ...prev,
-                          plannedUnitPrice,
-                          lockedFromEstimate: detailItem.createdFrom === "estimate" ? true : prev.lockedFromEstimate,
-                        }));
+                        patchEditForm((prev) => ({ ...prev, plannedUnitPrice }));
                       }}
                       onBlur={() => persistDraftNowIfChanged(draftRef.current)}
                       className="h-9"
                       placeholder="RUB"
-                      disabled={!canEdit}
+                      disabled={!canEdit || !!detailItem.lockedFromEstimate}
                     />
                   </div>
                   <div>

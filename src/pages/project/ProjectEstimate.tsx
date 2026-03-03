@@ -23,7 +23,14 @@ import {
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/EmptyState";
 import { useToast } from "@/hooks/use-toast";
-import { useCurrentUser, useProject } from "@/hooks/use-mock-data";
+import {
+  useCurrentUser,
+  useHRItems,
+  useHRPayments,
+  useProcurementV2,
+  useProject,
+  useTasks,
+} from "@/hooks/use-mock-data";
 import { getAuthRole } from "@/lib/auth-state";
 import {
   approveVersion,
@@ -46,6 +53,12 @@ import { useEstimateV2Project } from "@/hooks/use-estimate-v2-data";
 import { addEvent } from "@/data/store";
 import { computeLineTotals, computeProjectTotals } from "@/lib/estimate-v2/pricing";
 import { resolveProjectEstimateCtaState } from "@/lib/estimate-v2/project-estimate-cta";
+import {
+  combinePlanFact,
+  computeFactFromDataSources,
+  computePlannedFromEstimateV2,
+} from "@/lib/estimate-v2/rollups";
+import { useOrders } from "@/hooks/use-order-data";
 import { ApprovalStampCard } from "@/components/estimate-v2/ApprovalStampCard";
 import { ApprovalStampFormModal } from "@/components/estimate-v2/ApprovalStampFormModal";
 import { VersionBanner } from "@/components/estimate-v2/VersionBanner";
@@ -134,6 +147,11 @@ export default function ProjectEstimate() {
   const { toast } = useToast();
   const currentUser = useCurrentUser();
   const { project } = useProject(pid);
+  const tasks = useTasks(pid);
+  const procurementItems = useProcurementV2(pid);
+  const orders = useOrders(pid);
+  const hrItems = useHRItems(pid);
+  const hrPayments = useHRPayments(pid);
 
   const {
     project: estimateProject,
@@ -142,6 +160,7 @@ export default function ProjectEstimate() {
     lines,
     dependencies,
     versions,
+    scheduleBaseline,
   } = useEstimateV2Project(pid);
 
   const authRole = getAuthRole();
@@ -229,6 +248,47 @@ export default function ProjectEstimate() {
     () => computeProjectTotals(estimateProject, stages, works, lines, regime),
     [estimateProject, stages, works, lines, regime],
   );
+
+  const plannedRollups = useMemo(
+    () => computePlannedFromEstimateV2({
+      project: estimateProject,
+      stages,
+      lines,
+    }),
+    [estimateProject, stages, lines],
+  );
+
+  const factRollups = useMemo(
+    () => computeFactFromDataSources({
+      procurementItems,
+      orders,
+      hrItems,
+      hrPayments,
+    }),
+    [procurementItems, orders, hrItems, hrPayments],
+  );
+
+  const incompleteLinkedTaskCount = useMemo(() => {
+    const taskById = new Map(tasks.map((task) => [task.id, task]));
+    return works.reduce((count, work) => {
+      if (!work.taskId) return count;
+      const task = taskById.get(work.taskId);
+      if (!task) return count + 1;
+      return task.status === "done" ? count : count + 1;
+    }, 0);
+  }, [tasks, works]);
+
+  const combinedPlanFact = useMemo(
+    () => combinePlanFact(
+      plannedRollups,
+      factRollups,
+      scheduleBaseline,
+      { unfinishedTaskCount: incompleteLinkedTaskCount },
+    ),
+    [plannedRollups, factRollups, scheduleBaseline, incompleteLinkedTaskCount],
+  );
+
+  const showInWorkPlanFactSummary = estimateProject.estimateStatus === "in_work" && regime !== "client";
 
   const ctaState = resolveProjectEstimateCtaState({
     regime,
@@ -502,48 +562,86 @@ export default function ProjectEstimate() {
               />
             )}
 
-            <div className="rounded-lg border border-border p-2 flex flex-wrap gap-2">
-              {regime === "client" && (
-                <>
-                  <Badge variant="secondary">Tax: {(estimateProject.taxBps / 100).toFixed(2)}%</Badge>
-                  <Badge variant="secondary">Tax amount: {money(totals.taxAmountCents, estimateProject.currency)}</Badge>
-                  <Badge variant="default">Total: {money(totals.totalCents, estimateProject.currency)}</Badge>
-                </>
-              )}
+            {showInWorkPlanFactSummary ? (
+              <div className="rounded-lg border border-border p-3 space-y-3">
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="default">Budget: {money(combinedPlanFact.planned.plannedBudgetCents, estimateProject.currency)}</Badge>
+                  <Badge variant="secondary">Total spent: {money(combinedPlanFact.fact.spentCents, estimateProject.currency)}</Badge>
+                  <Badge variant="secondary">Spent above planned: {money(combinedPlanFact.fact.spentAbovePlannedCents, estimateProject.currency)}</Badge>
+                  <Badge variant="secondary">To be paid: {money(combinedPlanFact.fact.toBePaidPlannedCents, estimateProject.currency)}</Badge>
+                  <Badge variant="secondary">
+                    Duration planned: {combinedPlanFact.durationPlannedDays == null ? "—" : `${combinedPlanFact.durationPlannedDays} d`}
+                  </Badge>
+                  <Badge variant="secondary">
+                    Days to end: {combinedPlanFact.daysToEnd == null ? "—" : `${combinedPlanFact.daysToEnd}`}
+                  </Badge>
+                  <Badge variant="secondary">Behind schedule: {combinedPlanFact.behindScheduleDays} d</Badge>
+                </div>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Category</TableHead>
+                        <TableHead className="text-right">Planned cost</TableHead>
+                        <TableHead className="text-right">Fact spent</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(["material", "tool", "labor", "subcontractor", "other"] as const).map((type) => (
+                        <TableRow key={type}>
+                          <TableCell className="capitalize">{type}</TableCell>
+                          <TableCell className="text-right">{money(combinedPlanFact.planned.plannedCostByTypeCents[type], estimateProject.currency)}</TableCell>
+                          <TableCell className="text-right">{money(combinedPlanFact.fact.spentByTypeCents[type], estimateProject.currency)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-border p-2 flex flex-wrap gap-2">
+                {regime === "client" && (
+                  <>
+                    <Badge variant="secondary">Tax: {(estimateProject.taxBps / 100).toFixed(2)}%</Badge>
+                    <Badge variant="secondary">Tax amount: {money(totals.taxAmountCents, estimateProject.currency)}</Badge>
+                    <Badge variant="default">Total: {money(totals.totalCents, estimateProject.currency)}</Badge>
+                  </>
+                )}
 
-              {regime === "contractor" && (
-                <>
-                  <Badge variant="secondary">Material cost: {money(totals.breakdownByType.material, estimateProject.currency)}</Badge>
-                  <Badge variant="secondary">Tool cost: {money(totals.breakdownByType.tool, estimateProject.currency)}</Badge>
-                  <Badge variant="secondary">Labor cost: {money(totals.breakdownByType.labor, estimateProject.currency)}</Badge>
-                  <Badge variant="secondary">Subcontractor cost: {money(totals.breakdownByType.subcontractor, estimateProject.currency)}</Badge>
-                  <Badge variant="secondary">Other cost: {money(totals.breakdownByType.other, estimateProject.currency)}</Badge>
-                  <Badge variant="secondary">Markup: {money(totals.markupTotalCents, estimateProject.currency)}</Badge>
-                  {totals.discountTotalCents > 0 && (
-                    <Badge variant="secondary">Discount: {money(totals.discountTotalCents, estimateProject.currency)}</Badge>
-                  )}
-                  <Badge variant="secondary">Subtotal: {money(totals.subtotalCents, estimateProject.currency)}</Badge>
-                  <Badge variant="secondary">Tax: {money(totals.taxAmountCents, estimateProject.currency)}</Badge>
-                  <Badge variant="default">Total: {money(totals.totalCents, estimateProject.currency)}</Badge>
-                </>
-              )}
+                {regime === "contractor" && (
+                  <>
+                    <Badge variant="secondary">Material cost: {money(totals.breakdownByType.material, estimateProject.currency)}</Badge>
+                    <Badge variant="secondary">Tool cost: {money(totals.breakdownByType.tool, estimateProject.currency)}</Badge>
+                    <Badge variant="secondary">Labor cost: {money(totals.breakdownByType.labor, estimateProject.currency)}</Badge>
+                    <Badge variant="secondary">Subcontractor cost: {money(totals.breakdownByType.subcontractor, estimateProject.currency)}</Badge>
+                    <Badge variant="secondary">Other cost: {money(totals.breakdownByType.other, estimateProject.currency)}</Badge>
+                    <Badge variant="secondary">Markup: {money(totals.markupTotalCents, estimateProject.currency)}</Badge>
+                    {totals.discountTotalCents > 0 && (
+                      <Badge variant="secondary">Discount: {money(totals.discountTotalCents, estimateProject.currency)}</Badge>
+                    )}
+                    <Badge variant="secondary">Subtotal: {money(totals.subtotalCents, estimateProject.currency)}</Badge>
+                    <Badge variant="secondary">Tax: {money(totals.taxAmountCents, estimateProject.currency)}</Badge>
+                    <Badge variant="default">Total: {money(totals.totalCents, estimateProject.currency)}</Badge>
+                  </>
+                )}
 
-              {regime === "build_myself" && (
-                <>
-                  <Badge variant="secondary">Material cost: {money(totals.breakdownByType.material, estimateProject.currency)}</Badge>
-                  <Badge variant="secondary">Tool cost: {money(totals.breakdownByType.tool, estimateProject.currency)}</Badge>
-                  <Badge variant="secondary">Labor cost: {money(totals.breakdownByType.labor, estimateProject.currency)}</Badge>
-                  <Badge variant="secondary">Subcontractor cost: {money(totals.breakdownByType.subcontractor, estimateProject.currency)}</Badge>
-                  <Badge variant="secondary">Other cost: {money(totals.breakdownByType.other, estimateProject.currency)}</Badge>
-                  {totals.discountTotalCents > 0 && (
-                    <Badge variant="secondary">Discount: {money(totals.discountTotalCents, estimateProject.currency)}</Badge>
-                  )}
-                  <Badge variant="secondary">Subtotal: {money(totals.subtotalCents, estimateProject.currency)}</Badge>
-                  <Badge variant="secondary">Tax: {money(totals.taxAmountCents, estimateProject.currency)}</Badge>
-                  <Badge variant="default">Total: {money(totals.totalCents, estimateProject.currency)}</Badge>
-                </>
-              )}
-            </div>
+                {regime === "build_myself" && (
+                  <>
+                    <Badge variant="secondary">Material cost: {money(totals.breakdownByType.material, estimateProject.currency)}</Badge>
+                    <Badge variant="secondary">Tool cost: {money(totals.breakdownByType.tool, estimateProject.currency)}</Badge>
+                    <Badge variant="secondary">Labor cost: {money(totals.breakdownByType.labor, estimateProject.currency)}</Badge>
+                    <Badge variant="secondary">Subcontractor cost: {money(totals.breakdownByType.subcontractor, estimateProject.currency)}</Badge>
+                    <Badge variant="secondary">Other cost: {money(totals.breakdownByType.other, estimateProject.currency)}</Badge>
+                    {totals.discountTotalCents > 0 && (
+                      <Badge variant="secondary">Discount: {money(totals.discountTotalCents, estimateProject.currency)}</Badge>
+                    )}
+                    <Badge variant="secondary">Subtotal: {money(totals.subtotalCents, estimateProject.currency)}</Badge>
+                    <Badge variant="secondary">Tax: {money(totals.taxAmountCents, estimateProject.currency)}</Badge>
+                    <Badge variant="default">Total: {money(totals.totalCents, estimateProject.currency)}</Badge>
+                  </>
+                )}
+              </div>
+            )}
 
             {isOwner && (
               <div className="flex flex-wrap items-center gap-2">

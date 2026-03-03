@@ -25,6 +25,8 @@ import {
   toDayIndex,
   validateNoCycles,
 } from "@/lib/estimate-v2/schedule";
+import { syncProcurementFromEstimateV2 } from "@/lib/estimate-v2/procurement-sync";
+import { syncHRFromEstimateV2 } from "@/data/hr-store";
 import type { ChecklistItem, ChecklistItemType, Task, TaskStatus } from "@/types/entities";
 import type {
   ApprovalStamp,
@@ -255,6 +257,15 @@ function getSnapshotFromState(state: EstimateV2ProjectState): EstimateV2Snapshot
     lines: state.lines.map((line) => ({ ...line })),
     dependencies: state.dependencies.map((dep) => ({ ...dep })),
   };
+}
+
+function syncExternalDomainsFromEstimate(projectId: string, state: EstimateV2ProjectState) {
+  const syncState = {
+    project: state.project,
+    lines: state.lines,
+  };
+  syncProcurementFromEstimateV2(projectId, syncState);
+  syncHRFromEstimateV2(projectId, syncState);
 }
 
 function isOwnerActionAllowed(projectId: string): boolean {
@@ -898,6 +909,7 @@ export function deleteStage(projectId: string, stageId: string) {
   state.works = state.works.filter((work) => !workIdsToDelete.has(work.id));
   state.lines = state.lines.filter((line) => line.stageId !== stageId && !workIdsToDelete.has(line.workId));
   state.dependencies = state.dependencies.filter((dep) => !workIdsToDelete.has(dep.fromWorkId) && !workIdsToDelete.has(dep.toWorkId));
+  syncExternalDomainsFromEstimate(projectId, state);
   state.project.updatedAt = nowIso();
   notify();
 }
@@ -1007,6 +1019,7 @@ export function deleteWork(projectId: string, workId: string) {
   state.works = state.works.filter((work) => work.id !== workId);
   state.lines = state.lines.filter((line) => line.workId !== workId);
   state.dependencies = state.dependencies.filter((dep) => dep.fromWorkId !== workId && dep.toWorkId !== workId);
+  syncExternalDomainsFromEstimate(projectId, state);
   state.project.updatedAt = nowIso();
   notify();
 }
@@ -1048,6 +1061,7 @@ export function createLine(
   state.lines.push(line);
   const parentWork = state.works.find((work) => work.id === line.workId);
   if (parentWork) syncChecklistForWork(state, parentWork);
+  syncExternalDomainsFromEstimate(projectId, state);
   state.project.updatedAt = now;
   notify();
   return { ...line };
@@ -1075,6 +1089,7 @@ export function updateLine(projectId: string, lineId: string, partial: Partial<E
     const newWork = state.works.find((work) => work.id === updated.workId);
     if (newWork) syncChecklistForWork(state, newWork);
   }
+  syncExternalDomainsFromEstimate(projectId, state);
   state.project.updatedAt = now;
   notify();
 }
@@ -1087,6 +1102,7 @@ export function deleteLine(projectId: string, lineId: string) {
     const parentWork = state.works.find((work) => work.id === existing.workId);
     if (parentWork) syncChecklistForWork(state, parentWork);
   }
+  syncExternalDomainsFromEstimate(projectId, state);
   state.project.updatedAt = nowIso();
   notify();
 }
@@ -1165,6 +1181,8 @@ export function setProjectEstimateStatus(
     estimateStatus: status,
     updatedAt: now,
   };
+
+  syncExternalDomainsFromEstimate(projectId, state);
 
   if (status !== "in_work") {
     state.works = state.works.map((work) => ({
