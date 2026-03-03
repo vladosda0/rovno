@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -17,6 +16,9 @@ import { addEvent } from "@/data/store";
 import { useEstimateV2Share } from "@/hooks/use-estimate-v2-data";
 import { approveVersion, getLatestProposedVersion } from "@/data/estimate-v2-store";
 import { computeLineTotals, computeProjectTotals } from "@/lib/estimate-v2/pricing";
+import { ApprovalStampCard } from "@/components/estimate-v2/ApprovalStampCard";
+import { ApprovalStampFormModal } from "@/components/estimate-v2/ApprovalStampFormModal";
+import type { ApprovalStamp } from "@/types/estimate-v2";
 
 function money(cents: number, currency: string): string {
   return new Intl.NumberFormat("ru-RU", {
@@ -37,9 +39,7 @@ export default function ShareEstimate() {
   const navigate = useNavigate();
   const shared = useEstimateV2Share(shareId);
 
-  const [name, setName] = useState("");
-  const [surname, setSurname] = useState("");
-  const [email, setEmail] = useState("");
+  const [approvalModalOpen, setApprovalModalOpen] = useState(false);
 
   const snapshot = shared?.version.snapshot;
   const projectId = shared?.projectId ?? "";
@@ -125,25 +125,16 @@ export default function ShareEstimate() {
     );
   }
 
-  const handleApprove = () => {
-    if (!name.trim() || !surname.trim() || !email.trim()) {
-      toast({ title: "Fill in name, surname, and email", variant: "destructive" });
-      return;
-    }
-
-    const ok = approveVersion(projectId, version.id, {
-      name: name.trim(),
-      surname: surname.trim(),
-      email: email.trim(),
-      timestamp: new Date().toISOString(),
-    }, { actorId: "client" });
+  const handleApprove = (stamp: ApprovalStamp) => {
+    const ok = approveVersion(projectId, version.id, stamp, { actorId: "client" });
 
     if (!ok) {
       toast({ title: "Unable to approve this version", variant: "destructive" });
       return;
     }
 
-    toast({ title: "Estimate approved" });
+    setApprovalModalOpen(false);
+    toast({ title: "Approved" });
   };
 
   const handleAskQuestion = () => {
@@ -180,6 +171,13 @@ export default function ShareEstimate() {
       </div>
 
       <div className="rounded-card border border-border bg-card p-sp-2 flex flex-wrap gap-2">
+        {version.approvalStamp && (
+          <ApprovalStampCard
+            stamp={version.approvalStamp}
+            versionNumber={version.number}
+            className="w-full"
+          />
+        )}
         <span className="inline-flex items-center rounded-md border border-border px-2 py-1 text-caption">
           Tax: {(snapshot.project.taxBps / 100).toFixed(2)}% ({money(totals.taxAmountCents, snapshot.project.currency)})
         </span>
@@ -232,17 +230,19 @@ export default function ShareEstimate() {
       })}
 
       <div className="rounded-card border border-border bg-card p-sp-2 space-y-2">
-        <h2 className="text-body-sm font-semibold text-foreground">Approval stamp</h2>
-        <div className="grid gap-2 sm:grid-cols-3">
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" />
-          <Input value={surname} onChange={(e) => setSurname(e.target.value)} placeholder="Surname" />
-          <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />
-        </div>
+        <h2 className="text-body-sm font-semibold text-foreground">Approval</h2>
         <div className="flex flex-wrap gap-2">
-          <Button onClick={handleApprove}>Approve</Button>
+          <Button onClick={() => setApprovalModalOpen(true)}>Approve</Button>
           <Button variant="outline" onClick={handleAskQuestion}>Ask questions</Button>
         </div>
       </div>
+
+      <ApprovalStampFormModal
+        open={approvalModalOpen}
+        onOpenChange={setApprovalModalOpen}
+        title="Approve estimate version"
+        onSubmit={handleApprove}
+      />
     </div>
   );
 }

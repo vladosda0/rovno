@@ -2,17 +2,20 @@ import { getAuthRole } from "@/lib/auth-state";
 import { getStageEstimateItems } from "@/data/estimate-store";
 import { addEvent, getCurrentUser, getProject, getProjects, getStages } from "@/data/store";
 import {
+  computeLineTotals,
   roundHalfUpDiv,
 } from "@/lib/estimate-v2/pricing";
 import type {
   ApprovalStamp,
   EstimateV2Dependency,
+  EstimateV2DiffFieldChange,
   EstimateV2DiffEntityChange,
   EstimateV2DiffResult,
   EstimateV2Project,
   EstimateV2ResourceLine,
   EstimateV2Snapshot,
   EstimateV2Stage,
+  EstimateV2StructuredChange,
   EstimateV2Version,
   EstimateV2Work,
   Regime,
@@ -45,6 +48,7 @@ type Listener = () => void;
 
 const listeners = new Set<Listener>();
 const statesByProjectId = new Map<string, EstimateV2ProjectState>();
+const DEMO_PROJECT_IDS = new Set(["project-1", "project-2", "project-3"]);
 
 function notify() {
   listeners.forEach((listener) => listener());
@@ -127,6 +131,10 @@ function isOwnerActionAllowed(projectId: string): boolean {
 
   const role = getAuthRole();
   return role === "owner";
+}
+
+export function isDemoProject(projectId: string): boolean {
+  return DEMO_PROJECT_IDS.has(projectId);
 }
 
 function ensureProjectState(projectId: string): EstimateV2ProjectState {
@@ -269,6 +277,129 @@ function diffById<T extends { id: string }>(
   });
 
   return result;
+}
+
+function buildStageNumberById(stages: EstimateV2Stage[]): Map<string, number> {
+  const sorted = [...stages].sort((a, b) => a.order - b.order);
+  return new Map(sorted.map((stage, index) => [stage.id, index + 1]));
+}
+
+function buildWorkNumberById(
+  works: EstimateV2Work[],
+  stageNumberById: Map<string, number>,
+): Map<string, string> {
+  const worksByStage = new Map<string, EstimateV2Work[]>();
+  works.forEach((work) => {
+    const list = worksByStage.get(work.stageId) ?? [];
+    list.push(work);
+    worksByStage.set(work.stageId, list);
+  });
+
+  const result = new Map<string, string>();
+  worksByStage.forEach((list, stageId) => {
+    const stageNumber = stageNumberById.get(stageId);
+    const sorted = [...list].sort((a, b) => a.order - b.order);
+    sorted.forEach((work, index) => {
+      if (stageNumber == null) return;
+      result.set(work.id, `${stageNumber}.${index + 1}`);
+    });
+  });
+
+  return result;
+}
+
+function mapById<T extends { id: string }>(items: T[]): Map<string, T> {
+  return new Map(items.map((item) => [item.id, item]));
+}
+
+function lineClientTotals(
+  snapshot: EstimateV2Snapshot,
+  line: EstimateV2ResourceLine,
+): { clientUnitCents: number; clientTotalCents: number } | null {
+  const stage = snapshot.stages.find((entry) => entry.id === line.stageId);
+  if (!stage) return null;
+  const totals = computeLineTotals(line, stage, snapshot.project, snapshot.project.regime);
+  return {
+    clientUnitCents: totals.clientUnitCents,
+    clientTotalCents: totals.clientTotalCents,
+  };
+}
+
+function pushFieldChange(
+  changes: EstimateV2DiffFieldChange[],
+  field: string,
+  label: string,
+  before: unknown,
+  after: unknown,
+) {
+  if (before === after) return;
+  changes.push({ field, label, before, after });
+}
+
+function buildLineFieldChanges(
+  prevSnapshot: EstimateV2Snapshot | null,
+  nextSnapshot: EstimateV2Snapshot,
+  prevLine: EstimateV2ResourceLine,
+  nextLine: EstimateV2ResourceLine,
+): EstimateV2DiffFieldChange[] {
+  const fieldChanges: EstimateV2DiffFieldChange[] = [];
+  pushFieldChange(fieldChanges, "title", "name", prevLine.title, nextLine.title);
+  pushFieldChange(fieldChanges, "type", "type", prevLine.type, nextLine.type);
+  pushFieldChange(fieldChanges, "qtyMilli", "qty", prevLine.qtyMilli, nextLine.qtyMilli);
+  pushFieldChange(fieldChanges, "unit", "unit", prevLine.unit, nextLine.unit);
+  pushFieldChange(fieldChanges, "costUnitCents", "cost price", prevLine.costUnitCents, nextLine.costUnitCents);
+  pushFieldChange(fieldChanges, "markupBps", "markup", prevLine.markupBps, nextLine.markupBps);
+  pushFieldChange(
+    fieldChanges,
+    "discountBpsOverride",
+    "discount",
+    prevLine.discountBpsOverride ?? null,
+    nextLine.discountBpsOverride ?? null,
+  );
+
+  const prevClientTotals = prevSnapshot ? lineClientTotals(prevSnapshot, prevLine) : null;
+  const nextClientTotals = lineClientTotals(nextSnapshot, nextLine);
+
+  if (prevClientTotals && nextClientTotals) {
+    pushFieldChange(
+      fieldChanges,
+      "clientUnitCents",
+      "client unit price",
+      prevClientTotals.clientUnitCents,
+      nextClientTotals.clientUnitCents,
+    );
+    pushFieldChange(
+      fieldChanges,
+      "clientTotalCents",
+      "line total",
+      prevClientTotals.clientTotalCents,
+      nextClientTotals.clientTotalCents,
+    );
+  }
+
+  return fieldChanges;
+}
+
+function structuredSort(a: EstimateV2StructuredChange, b: EstimateV2StructuredChange): number {
+  const stageA = a.stageNumber ?? Number.MAX_SAFE_INTEGER;
+  const stageB = b.stageNumber ?? Number.MAX_SAFE_INTEGER;
+  if (stageA !== stageB) return stageA - stageB;
+
+  const parseWorkOrder = (workNumber: string | null): number => {
+    if (!workNumber) return Number.MAX_SAFE_INTEGER;
+    const tail = Number(workNumber.split(".")[1]);
+    return Number.isFinite(tail) ? tail : Number.MAX_SAFE_INTEGER;
+  };
+  const workA = parseWorkOrder(a.workNumber);
+  const workB = parseWorkOrder(b.workNumber);
+  if (workA !== workB) return workA - workB;
+
+  const kindOrder = { stage: 0, work: 1, line: 2 } as const;
+  if (kindOrder[a.entityKind] !== kindOrder[b.entityKind]) {
+    return kindOrder[a.entityKind] - kindOrder[b.entityKind];
+  }
+
+  return a.title.localeCompare(b.title);
 }
 
 export function subscribeEstimateV2(listener: Listener): () => void {
@@ -461,6 +592,19 @@ export function updateEstimateV2Project(projectId: string, partial: Partial<Esti
 
 export function setRegime(projectId: string, regime: Regime): boolean {
   if (!isOwnerActionAllowed(projectId)) return false;
+  const state = ensureProjectState(projectId);
+  state.project = {
+    ...state.project,
+    regime,
+    updatedAt: nowIso(),
+  };
+  notify();
+  return true;
+}
+
+export function setRegimeDev(projectId: string, regime: Regime): boolean {
+  if (!import.meta.env.DEV) return false;
+  if (!isDemoProject(projectId)) return false;
   const state = ensureProjectState(projectId);
   state.project = {
     ...state.project,
@@ -702,11 +846,125 @@ export function computeVersionDiff(
   prevVersion: EstimateV2Version | null,
   nextVersion: EstimateV2Version,
 ): EstimateV2DiffResult {
-  const prevSnapshot = prevVersion?.snapshot;
+  const prevSnapshot = prevVersion?.snapshot ?? null;
+  const nextSnapshot = nextVersion.snapshot;
 
-  const stageChanges = diffById(prevSnapshot?.stages ?? [], nextVersion.snapshot.stages);
-  const workChanges = diffById(prevSnapshot?.works ?? [], nextVersion.snapshot.works);
-  const lineChanges = diffById(prevSnapshot?.lines ?? [], nextVersion.snapshot.lines);
+  const stageChanges = diffById(prevSnapshot?.stages ?? [], nextSnapshot.stages);
+  const workChanges = diffById(prevSnapshot?.works ?? [], nextSnapshot.works);
+  const lineChanges = diffById(prevSnapshot?.lines ?? [], nextSnapshot.lines);
+
+  const prevStageById = mapById(prevSnapshot?.stages ?? []);
+  const nextStageById = mapById(nextSnapshot.stages);
+  const prevWorkById = mapById(prevSnapshot?.works ?? []);
+  const nextWorkById = mapById(nextSnapshot.works);
+  const prevLineById = mapById(prevSnapshot?.lines ?? []);
+  const nextLineById = mapById(nextSnapshot.lines);
+
+  const prevStageNumberById = buildStageNumberById(prevSnapshot?.stages ?? []);
+  const nextStageNumberById = buildStageNumberById(nextSnapshot.stages);
+  const prevWorkNumberById = buildWorkNumberById(prevSnapshot?.works ?? [], prevStageNumberById);
+  const nextWorkNumberById = buildWorkNumberById(nextSnapshot.works, nextStageNumberById);
+
+  const changes: EstimateV2StructuredChange[] = [];
+
+  stageChanges.forEach((change) => {
+    const prevStage = prevStageById.get(change.id);
+    const nextStage = nextStageById.get(change.id);
+    const source = change.type === "removed" ? prevStage : (nextStage ?? prevStage);
+    if (!source) return;
+
+    const fieldChanges: EstimateV2DiffFieldChange[] = [];
+    if (change.type === "updated" && prevStage && nextStage) {
+      pushFieldChange(fieldChanges, "title", "name", prevStage.title, nextStage.title);
+    }
+
+    changes.push({
+      entityKind: "stage",
+      entityId: source.id,
+      changeType: change.type,
+      stageId: source.id,
+      stageTitle: source.title,
+      workId: null,
+      workTitle: null,
+      title: source.title,
+      stageNumber: change.type === "removed"
+        ? (prevStageNumberById.get(source.id) ?? null)
+        : (nextStageNumberById.get(source.id) ?? prevStageNumberById.get(source.id) ?? null),
+      workNumber: null,
+      fieldChanges,
+    });
+  });
+
+  workChanges.forEach((change) => {
+    const prevWork = prevWorkById.get(change.id);
+    const nextWork = nextWorkById.get(change.id);
+    const source = change.type === "removed" ? prevWork : (nextWork ?? prevWork);
+    if (!source) return;
+
+    const fieldChanges: EstimateV2DiffFieldChange[] = [];
+    if (change.type === "updated" && prevWork && nextWork) {
+      pushFieldChange(fieldChanges, "title", "name", prevWork.title, nextWork.title);
+    }
+
+    const stageId = source.stageId;
+    const stageTitle = change.type === "removed"
+      ? (prevStageById.get(stageId)?.title ?? nextStageById.get(stageId)?.title ?? null)
+      : (nextStageById.get(stageId)?.title ?? prevStageById.get(stageId)?.title ?? null);
+    changes.push({
+      entityKind: "work",
+      entityId: source.id,
+      changeType: change.type,
+      stageId,
+      stageTitle,
+      workId: source.id,
+      workTitle: source.title,
+      title: source.title,
+      stageNumber: change.type === "removed"
+        ? (prevStageNumberById.get(stageId) ?? null)
+        : (nextStageNumberById.get(stageId) ?? prevStageNumberById.get(stageId) ?? null),
+      workNumber: change.type === "removed"
+        ? (prevWorkNumberById.get(source.id) ?? null)
+        : (nextWorkNumberById.get(source.id) ?? prevWorkNumberById.get(source.id) ?? null),
+      fieldChanges,
+    });
+  });
+
+  lineChanges.forEach((change) => {
+    const prevLine = prevLineById.get(change.id);
+    const nextLine = nextLineById.get(change.id);
+    const source = change.type === "removed" ? prevLine : (nextLine ?? prevLine);
+    if (!source) return;
+
+    const fieldChanges = change.type === "updated" && prevLine && nextLine
+      ? buildLineFieldChanges(prevSnapshot, nextSnapshot, prevLine, nextLine)
+      : [];
+
+    const stageId = source.stageId;
+    const workId = source.workId;
+    const stageTitle = change.type === "removed"
+      ? (prevStageById.get(stageId)?.title ?? nextStageById.get(stageId)?.title ?? null)
+      : (nextStageById.get(stageId)?.title ?? prevStageById.get(stageId)?.title ?? null);
+    const workTitle = change.type === "removed"
+      ? (prevWorkById.get(workId)?.title ?? nextWorkById.get(workId)?.title ?? null)
+      : (nextWorkById.get(workId)?.title ?? prevWorkById.get(workId)?.title ?? null);
+    changes.push({
+      entityKind: "line",
+      entityId: source.id,
+      changeType: change.type,
+      stageId,
+      stageTitle,
+      workId,
+      workTitle,
+      title: source.title,
+      stageNumber: change.type === "removed"
+        ? (prevStageNumberById.get(stageId) ?? null)
+        : (nextStageNumberById.get(stageId) ?? prevStageNumberById.get(stageId) ?? null),
+      workNumber: change.type === "removed"
+        ? (prevWorkNumberById.get(workId) ?? null)
+        : (nextWorkNumberById.get(workId) ?? prevWorkNumberById.get(workId) ?? null),
+      fieldChanges,
+    });
+  });
 
   return {
     stageChanges,
@@ -715,5 +973,6 @@ export function computeVersionDiff(
     changedStageIds: stageChanges.map((change) => change.id),
     changedWorkIds: workChanges.map((change) => change.id),
     changedLineIds: lineChanges.map((change) => change.id),
+    changes: changes.sort(structuredSort),
   };
 }

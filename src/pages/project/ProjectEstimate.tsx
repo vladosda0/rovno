@@ -36,7 +36,6 @@ import {
   deleteLine,
   deleteStage,
   deleteWork,
-  setRegime,
   submitVersion,
   updateEstimateV2Project,
   updateLine,
@@ -46,12 +45,16 @@ import {
 import { useEstimateV2Project } from "@/hooks/use-estimate-v2-data";
 import { addEvent } from "@/data/store";
 import { computeLineTotals, computeProjectTotals } from "@/lib/estimate-v2/pricing";
+import { resolveProjectEstimateCtaState } from "@/lib/estimate-v2/project-estimate-cta";
+import { ApprovalStampCard } from "@/components/estimate-v2/ApprovalStampCard";
+import { ApprovalStampFormModal } from "@/components/estimate-v2/ApprovalStampFormModal";
+import { VersionBanner } from "@/components/estimate-v2/VersionBanner";
+import { VersionDiffList } from "@/components/estimate-v2/VersionDiffList";
 import type {
-  EstimateV2DiffResult,
+  ApprovalStamp,
   EstimateV2ResourceLine,
   EstimateV2Stage,
   EstimateV2Work,
-  Regime,
   ResourceLineType,
 } from "@/types/estimate-v2";
 
@@ -98,14 +101,6 @@ function labelForType(type: ResourceLineType): string {
   return "Other";
 }
 
-function changeLabel(diff: EstimateV2DiffResult): string[] {
-  const lines: string[] = [];
-  diff.stageChanges.forEach((change) => lines.push(`Stage ${change.type}: ${change.id}`));
-  diff.workChanges.forEach((change) => lines.push(`Work ${change.type}: ${change.id}`));
-  diff.lineChanges.forEach((change) => lines.push(`Line ${change.type}: ${change.id}`));
-  return lines;
-}
-
 function buildCsv(rows: string[][]): string {
   return rows
     .map((row) => row.map((cell) => {
@@ -137,7 +132,7 @@ export default function ProjectEstimate() {
   const regime = estimateProject.regime;
 
   const [activeTab, setActiveTab] = useState("estimate");
-  const [reviewChangesOpen, setReviewChangesOpen] = useState(false);
+  const [approvalModalOpen, setApprovalModalOpen] = useState(false);
   const [depFromWorkId, setDepFromWorkId] = useState<string>("");
   const [depToWorkId, setDepToWorkId] = useState<string>("");
   const [depLagDays, setDepLagDays] = useState("0");
@@ -193,6 +188,7 @@ export default function ProjectEstimate() {
       changedStageIds: [],
       changedWorkIds: [],
       changedLineIds: [],
+      changes: [],
     }),
     [latestApproved, latestProposed],
   );
@@ -216,6 +212,14 @@ export default function ProjectEstimate() {
     [estimateProject, stages, works, lines, regime],
   );
 
+  const ctaState = resolveProjectEstimateCtaState({
+    regime,
+    isOwner,
+    hasProposedVersion: Boolean(latestProposed),
+  });
+  const reviewExpandedByDefault = regime === "client" && !isOwner;
+  const approvedVersionWithStamp = latestApproved?.approvalStamp ? latestApproved : null;
+
   if (!project) {
     return <EmptyState icon={AlertTriangle} title="Not found" description="Project not found." />;
   }
@@ -230,22 +234,15 @@ export default function ProjectEstimate() {
     toast({ title: "New estimate version submitted" });
   };
 
-  const handleProjectApprove = () => {
+  const handleProjectApprove = (stamp: ApprovalStamp) => {
     if (!latestProposed) return;
-    const [firstName = "Client", ...rest] = currentUser.name.split(" ");
-    const stamp = {
-      name: firstName,
-      surname: rest.join(" ") || "User",
-      email: currentUser.email,
-      timestamp: new Date().toISOString(),
-    };
-
     const ok = approveVersion(pid, latestProposed.id, stamp, { actorId: currentUser.id });
     if (!ok) {
       toast({ title: "Unable to approve version", variant: "destructive" });
       return;
     }
-    toast({ title: "Estimate version approved" });
+    setApprovalModalOpen(false);
+    toast({ title: "Approved" });
   };
 
   const handleAskQuestions = () => {
@@ -367,81 +364,52 @@ export default function ProjectEstimate() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {isOwner ? (
-              <Select
-                value={regime}
-                onValueChange={(value) => {
-                  const ok = setRegime(pid, value as Regime);
-                  if (!ok) {
-                    toast({ title: "Only project owner can switch regime", variant: "destructive" });
-                  }
-                }}
-              >
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="contractor">Contractor</SelectItem>
-                  <SelectItem value="client">Client</SelectItem>
-                  <SelectItem value="build_myself">Build myself</SelectItem>
-                </SelectContent>
-              </Select>
-            ) : (
-              <Badge variant="secondary">Regime: {regime.replace("_", " ")}</Badge>
-            )}
+            <Badge variant="secondary">Regime: {regime.replace("_", " ")}</Badge>
 
             <Button variant="outline" size="sm" onClick={handleExportCsv}>
               <Download className="mr-1 h-4 w-4" /> Export CSV
             </Button>
 
-            {isOwner && (
+            {ctaState.showSubmit && (
               <Button size="sm" className="bg-accent text-accent-foreground hover:bg-accent/90" onClick={handleSubmitToClient}>
                 Submit to client
               </Button>
             )}
+
+            {ctaState.showApprove && (
+              <Button
+                size="sm"
+                onClick={() => setApprovalModalOpen(true)}
+                disabled={ctaState.approveDisabled}
+                title={ctaState.approveDisabledReason ?? undefined}
+              >
+                Approve
+              </Button>
+            )}
+
+            {ctaState.showClientPreviewBadge && (
+              <Badge variant="secondary">Client preview</Badge>
+            )}
+
+            {ctaState.showApprove && ctaState.approveDisabledReason && (
+              <span className="text-caption text-muted-foreground">{ctaState.approveDisabledReason}</span>
+            )}
           </div>
         </div>
 
-        {pendingProposed && latestProposed && (
-          <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 space-y-2">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="text-body-sm text-foreground font-medium">
-                New version submitted, review changes.
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button variant="outline" size="sm" onClick={() => setReviewChangesOpen((prev) => !prev)}>
-                  Review changes
-                </Button>
-                {isOwner && (
-                  <Button size="sm" onClick={handleSubmitToClient}>
-                    Submit to client
-                  </Button>
-                )}
-                {!isOwner && regime === "client" && (
-                  <>
-                    <Button size="sm" onClick={handleProjectApprove}>Approve</Button>
-                    <Button variant="outline" size="sm" onClick={handleAskQuestions}>Ask questions</Button>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {reviewChangesOpen && (
-              <div className="rounded-md border border-border bg-background p-2">
-                <p className="text-caption font-medium mb-1">Changed items</p>
-                {changeLabel(diff).length === 0 ? (
-                  <p className="text-caption text-muted-foreground">No detected changes.</p>
-                ) : (
-                  <div className="space-y-1">
-                    {changeLabel(diff).map((line) => (
-                      <p key={line} className="text-caption text-muted-foreground">• {line}</p>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+        <VersionBanner
+          hasPending={pendingProposed && Boolean(latestProposed)}
+          isOpenByDefault={reviewExpandedByDefault}
+          title="New version submitted"
+          secondaryActions={(
+            !isOwner && regime === "client" ? (
+              <Button variant="outline" size="sm" onClick={handleAskQuestions}>Ask questions</Button>
+            ) : undefined
+          )}
+        >
+          <p className="mb-2 text-caption font-medium text-foreground">Changed items</p>
+          <VersionDiffList changes={diff.changes} regime={regime} currency={estimateProject.currency} />
+        </VersionBanner>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="h-auto w-full justify-start gap-1 bg-transparent p-0">
@@ -451,6 +419,13 @@ export default function ProjectEstimate() {
           </TabsList>
 
           <TabsContent value="estimate" className="mt-3 space-y-3">
+            {approvedVersionWithStamp && approvedVersionWithStamp.approvalStamp && (
+              <ApprovalStampCard
+                stamp={approvedVersionWithStamp.approvalStamp}
+                versionNumber={approvedVersionWithStamp.number}
+              />
+            )}
+
             <div className="rounded-lg border border-border p-2 flex flex-wrap gap-2">
               {regime === "client" && (
                 <>
@@ -810,6 +785,18 @@ export default function ProjectEstimate() {
             </div>
           </TabsContent>
         </Tabs>
+
+        <ApprovalStampFormModal
+          open={approvalModalOpen}
+          onOpenChange={setApprovalModalOpen}
+          title="Approve estimate version"
+          defaults={{
+            name: currentUser.name.split(" ")[0] ?? "",
+            surname: currentUser.name.split(" ").slice(1).join(" "),
+            email: currentUser.email,
+          }}
+          onSubmit={handleProjectApprove}
+        />
       </div>
     </div>
   );

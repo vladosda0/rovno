@@ -105,6 +105,27 @@ export interface EstimateV2DiffEntityChange {
   type: "added" | "removed" | "updated";
 }
 
+export interface EstimateV2DiffFieldChange {
+  field: string;
+  before: unknown;
+  after: unknown;
+  label: string;
+}
+
+export interface EstimateV2StructuredChange {
+  entityKind: "stage" | "work" | "line";
+  entityId: string;
+  changeType: "added" | "removed" | "updated";
+  stageId: string | null;
+  stageTitle: string | null;
+  workId: string | null;
+  workTitle: string | null;
+  title: string;
+  stageNumber: number | null;
+  workNumber: string | null;
+  fieldChanges: EstimateV2DiffFieldChange[];
+}
+
 export interface EstimateV2DiffResult {
   stageChanges: EstimateV2DiffEntityChange[];
   workChanges: EstimateV2DiffEntityChange[];
@@ -112,4 +133,5 @@ export interface EstimateV2DiffResult {
   changedStageIds: string[];
   changedWorkIds: string[];
   changedLineIds: string[];
+  changes: EstimateV2StructuredChange[];
 }
