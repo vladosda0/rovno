@@ -61,6 +61,9 @@ export interface EstimateV2ResourceLine {
   costUnitCents: number;
   markupBps: number;
   discountBpsOverride: number | null;
+  assigneeId: string | null;
+  assigneeName: string | null;
+  assigneeEmail: string | null;
   receivedCents: number;
   pnlPlaceholderCents: number;
   createdAt: string;

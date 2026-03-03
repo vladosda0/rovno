@@ -1,10 +1,16 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { AlertTriangle, Download, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronRight, Download, Plus, Trash2, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ConfirmModal } from "@/components/ConfirmModal";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Select,
   SelectContent,
@@ -24,6 +30,10 @@ import {
 import { EmptyState } from "@/components/EmptyState";
 import { useToast } from "@/hooks/use-toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { AssigneeCell } from "@/components/estimate-v2/AssigneeCell";
+import { InlineEditableNumber } from "@/components/estimate-v2/InlineEditableNumber";
+import { InlineEditableText } from "@/components/estimate-v2/InlineEditableText";
+import { ResourceTypeBadge } from "@/components/estimate-v2/ResourceTypeBadge";
 import {
   useCurrentUser,
   useHRItems,
@@ -51,7 +61,7 @@ import {
   updateWork,
 } from "@/data/estimate-v2-store";
 import { useEstimateV2Project } from "@/hooks/use-estimate-v2-data";
-import { addEvent } from "@/data/store";
+import { addEvent, getUserById } from "@/data/store";
 import { computeLineTotals, computeProjectTotals, computeStageSubtotals } from "@/lib/estimate-v2/pricing";
 import { resolveProjectEstimateCtaState } from "@/lib/estimate-v2/project-estimate-cta";
 import {
@@ -118,6 +128,33 @@ function labelForType(type: ResourceLineType): string {
   return "Other";
 }
 
+function isAssignableResourceType(type: ResourceLineType): boolean {
+  return type === "labor" || type === "subcontractor";
+}
+
+function buildHierarchyNumbers(
+  sortedStages: EstimateV2Stage[],
+  worksByStage: Map<string, EstimateV2Work[]>,
+): {
+  stageNumberById: Map<string, number>;
+  workNumberById: Map<string, string>;
+} {
+  const stageNumberById = new Map<string, number>();
+  const workNumberById = new Map<string, string>();
+
+  sortedStages.forEach((stage, stageIndex) => {
+    const stageNumber = stageIndex + 1;
+    stageNumberById.set(stage.id, stageNumber);
+
+    const stageWorks = worksByStage.get(stage.id) ?? [];
+    stageWorks.forEach((work, workIndex) => {
+      workNumberById.set(work.id, `${stageNumber}.${workIndex + 1}`);
+    });
+  });
+
+  return { stageNumberById, workNumberById };
+}
+
 function effectiveDiscountForDisplay(line: EstimateV2ResourceLine, stage: EstimateV2Stage, projectDiscountBps: number): number {
   if (line.discountBpsOverride != null) return line.discountBpsOverride;
   if (stage.discountBps > 0) return stage.discountBps;
@@ -169,13 +206,30 @@ function buildCsv(rows: string[][]): string {
     .join("\n");
 }
 
+const RESOURCE_TYPE_OPTIONS: Array<{ value: ResourceLineType; label: string }> = [
+  { value: "material", label: "Material" },
+  { value: "tool", label: "Tool" },
+  { value: "labor", label: "Labor" },
+  { value: "subcontractor", label: "Subcontractor" },
+  { value: "other", label: "Other" },
+];
+
+const RESOURCE_CREATE_OPTIONS: Array<{ label: string; value: ResourceLineType; defaultTitle: string }> = [
+  { label: "Material", value: "material", defaultTitle: "Material" },
+  { label: "Tool", value: "tool", defaultTitle: "Tool" },
+  { label: "HR", value: "labor", defaultTitle: "Labor" },
+  { label: "Overheads", value: "other", defaultTitle: "Overheads" },
+  { label: "Subcontractor", value: "subcontractor", defaultTitle: "Subcontractor" },
+  { label: "Other", value: "other", defaultTitle: "Other" },
+];
+
 export default function ProjectEstimate() {
   const { id: projectId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const pid = projectId!;
   const { toast } = useToast();
   const currentUser = useCurrentUser();
-  const { project } = useProject(pid);
+  const { project, members } = useProject(pid);
   const tasks = useTasks(pid);
   const procurementItems = useProcurementV2(pid);
   const orders = useOrders(pid);
@@ -201,6 +255,16 @@ export default function ProjectEstimate() {
   const [approvalModalOpen, setApprovalModalOpen] = useState(false);
   const [missingDatesWorkIds, setMissingDatesWorkIds] = useState<string[]>([]);
   const [incompleteTaskBlocks, setIncompleteTaskBlocks] = useState<Array<{ taskId: string | null; title: string }>>([]);
+  const [collapsedStageIds, setCollapsedStageIds] = useState<Set<string>>(new Set());
+  const [pendingLineTitleEditId, setPendingLineTitleEditId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!pendingLineTitleEditId) return;
+    const timeoutId = window.setTimeout(() => {
+      setPendingLineTitleEditId(null);
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [pendingLineTitleEditId]);
 
   const sortedStages = useMemo(
     () => [...stages].sort((a, b) => a.order - b.order),
@@ -227,6 +291,25 @@ export default function ProjectEstimate() {
     });
     return map;
   }, [lines]);
+
+  const hierarchyNumbers = useMemo(
+    () => buildHierarchyNumbers(sortedStages, worksByStage),
+    [sortedStages, worksByStage],
+  );
+
+  const participantOptions = useMemo(() => (
+    members
+      .map((member) => {
+        const participant = getUserById(member.user_id);
+        if (!participant) return null;
+        return {
+          id: participant.id,
+          name: participant.name,
+          email: participant.email,
+        };
+      })
+      .filter((entry): entry is { id: string; name: string; email: string } => Boolean(entry))
+  ), [members]);
 
   const workById = useMemo(() => new Map(works.map((work) => [work.id, work])), [works]);
 
@@ -570,6 +653,35 @@ export default function ProjectEstimate() {
     toast({ title: "Estimate export generated" });
   };
 
+  const toggleStageCollapsed = (stageId: string) => {
+    setCollapsedStageIds((current) => {
+      const next = new Set(current);
+      if (next.has(stageId)) {
+        next.delete(stageId);
+        return next;
+      }
+      next.add(stageId);
+      return next;
+    });
+  };
+
+  const handleCreateResourceLine = (
+    stageId: string,
+    workId: string,
+    option: { value: ResourceLineType; defaultTitle: string },
+  ) => {
+    const created = createLine(pid, {
+      stageId,
+      workId,
+      title: option.defaultTitle,
+      type: option.value,
+      qtyMilli: 1_000,
+      costUnitCents: 0,
+    });
+    if (!created) return;
+    setPendingLineTitleEditId(created.id);
+  };
+
   return (
     <div className="space-y-sp-2 p-sp-2">
       <div className="rounded-card border border-border bg-card p-sp-2 space-y-3">
@@ -844,239 +956,362 @@ export default function ProjectEstimate() {
               </div>
             )}
 
-            {canEditEstimate && (
-              <div className="flex flex-wrap items-center gap-2">
-                <Button size="sm" variant="outline" onClick={() => createStage(pid, { title: `Stage ${stages.length + 1}` })}>
-                  <Plus className="mr-1 h-4 w-4" /> Add stage
-                </Button>
-              </div>
-            )}
-
             {sortedStages.length === 0 ? (
               <EmptyState icon={AlertTriangle} title="No stages" description="Add your first stage to start Estimate v2." />
             ) : (
-              sortedStages.map((stage) => {
-                const stageWorks = worksByStage.get(stage.id) ?? [];
+              <div className="space-y-3">
+                {sortedStages.map((stage) => {
+                  const stageWorks = worksByStage.get(stage.id) ?? [];
+                  const stageNumber = hierarchyNumbers.stageNumberById.get(stage.id) ?? stage.order;
+                  const isCollapsed = collapsedStageIds.has(stage.id);
 
-                return (
-                  <div key={stage.id} className="rounded-card border border-border p-2 space-y-2">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        {canEditEstimate ? (
-                          <Input
-                            className="h-8 w-[220px]"
-                            defaultValue={stage.title}
-                            onBlur={(e) => updateStage(pid, stage.id, { title: e.target.value || stage.title })}
+                  return (
+                    <div key={stage.id} className="group/stage rounded-card border border-border p-2">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="flex min-w-0 flex-1 items-center gap-1">
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 shrink-0"
+                            onClick={() => toggleStageCollapsed(stage.id)}
+                          >
+                            {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                          </Button>
+                          <span className="w-7 shrink-0 text-sm font-semibold text-muted-foreground tabular-nums">
+                            {stageNumber}
+                          </span>
+                          <InlineEditableText
+                            value={stage.title}
+                            readOnly={!canEditEstimate}
+                            onCommit={(nextValue) => updateStage(pid, stage.id, { title: nextValue || stage.title })}
+                            className="min-w-[220px] flex-1"
+                            displayClassName="text-body-sm font-semibold"
+                            inputClassName="text-body-sm font-semibold"
                           />
-                        ) : (
-                          <h3 className="text-body-sm font-semibold">{stage.title}</h3>
-                        )}
+                        </div>
 
-                        {canEditEstimate && (
-                          <div className="flex items-center gap-1">
-                            <span className="text-caption text-muted-foreground">Stage discount %</span>
-                            <Input
-                              className="h-8 w-20"
-                              defaultValue={fromBpsToPercent(stage.discountBps)}
-                              onBlur={(e) => updateStage(pid, stage.id, { discountBps: toBpsFromPercent(e.target.value) })}
-                            />
-                          </div>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {canEditEstimate && (
+                            <div className="flex items-center gap-1">
+                              <span className="text-caption text-muted-foreground">Stage discount %</span>
+                              <InlineEditableNumber
+                                value={stage.discountBps}
+                                onCommit={(nextValue) => updateStage(pid, stage.id, { discountBps: nextValue })}
+                                formatDisplay={(value) => fromBpsToPercent(value)}
+                                formatInput={(value) => fromBpsToPercent(value)}
+                                parseInput={(raw) => toBpsFromPercent(raw)}
+                                className="w-16"
+                              />
+                            </div>
+                          )}
+                          {canEditEstimate && (
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => deleteStage(pid, stage.id)}>
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          )}
+                        </div>
                       </div>
 
-                      {canEditEstimate && (
-                        <div className="flex items-center gap-1">
-                          <Button size="sm" variant="outline" onClick={() => createWork(pid, { stageId: stage.id, title: `Work ${(stageWorks.length || 0) + 1}` })}>
-                            <Plus className="mr-1 h-4 w-4" /> Add work
-                          </Button>
-                          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => deleteStage(pid, stage.id)}>
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
+                      {!isCollapsed && (
+                        <div className="mt-2 space-y-2 pl-6">
+                          {stageWorks.map((work) => {
+                            const workLines = linesByWork.get(work.id) ?? [];
+                            const workNumber = hierarchyNumbers.workNumberById.get(work.id) ?? `${stageNumber}.1`;
+                            const showAssignmentColumn = workLines.some((line) => isAssignableResourceType(line.type));
+                            const tableColumnCount = 6
+                              + (showAssignmentColumn ? 1 : 0)
+                              + (regime !== "client" ? 2 : 0)
+                              + (regime === "contractor" ? 1 : 0)
+                              + (regime !== "client" ? 1 : 0)
+                              + (canEditEstimate ? 1 : 0);
+
+                            return (
+                              <div key={work.id} className="group/work space-y-2 rounded-md border border-border/80 p-2">
+                                <div className="flex flex-wrap items-start justify-between gap-2 pl-2">
+                                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                                    <span className="w-12 shrink-0 text-xs font-medium text-muted-foreground tabular-nums">{workNumber}</span>
+                                    <InlineEditableText
+                                      value={work.title}
+                                      readOnly={!canEditEstimate}
+                                      onCommit={(nextValue) => updateWork(pid, work.id, { title: nextValue || work.title })}
+                                      className="min-w-[220px] flex-1"
+                                      displayClassName="text-sm font-medium"
+                                      inputClassName="text-sm font-medium"
+                                    />
+                                  </div>
+                                  {canEditEstimate && (
+                                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => deleteWork(pid, work.id)}>
+                                      <Trash2 className="h-4 w-4 text-destructive" />
+                                    </Button>
+                                  )}
+                                </div>
+
+                                <div className="pl-4">
+                                  <Table className="table-fixed">
+                                    <TableHeader>
+                                      <TableRow>
+                                        <TableHead className="h-9 w-[340px] py-1 pr-2">Resource</TableHead>
+                                        <TableHead className="h-9 w-[150px] py-1 pr-2">Type</TableHead>
+                                        {showAssignmentColumn && (
+                                          <TableHead className="h-9 w-[170px] py-1 pr-2">
+                                            <span className="inline-flex items-center gap-1">
+                                              <User className="h-3.5 w-3.5" />
+                                              <span>Assigned</span>
+                                            </span>
+                                          </TableHead>
+                                        )}
+                                        <TableHead className="h-9 w-[92px] py-1 pr-2 text-right tabular-nums">Qty</TableHead>
+                                        <TableHead className="h-9 w-[92px] py-1 pr-2">Unit</TableHead>
+                                        {regime !== "client" && <TableHead className="h-9 w-[120px] py-1 pr-2 text-right tabular-nums">Cost unit</TableHead>}
+                                        {regime !== "client" && <TableHead className="h-9 w-[120px] py-1 pr-2 text-right tabular-nums">Cost total</TableHead>}
+                                        {regime === "contractor" && <TableHead className="h-9 w-[92px] py-1 pr-2 text-right tabular-nums">Markup %</TableHead>}
+                                        {regime !== "client" && <TableHead className="h-9 w-[92px] py-1 pr-2 text-right tabular-nums">Discount %</TableHead>}
+                                        <TableHead className="h-9 w-[120px] py-1 pr-2 text-right tabular-nums">Client unit</TableHead>
+                                        <TableHead className="h-9 w-[126px] py-1 pr-2 text-right tabular-nums">Client total</TableHead>
+                                        {canEditEstimate && <TableHead className="h-9 w-10 py-1 pr-0" />}
+                                      </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                      {workLines.map((line) => {
+                                        const computed = lineTotalsById.get(line.id);
+                                        if (!computed) return null;
+                                        const otherLabel = line.type === "other" && line.title.toLowerCase().includes("overhead")
+                                          ? "Overheads"
+                                          : undefined;
+
+                                        return (
+                                          <TableRow key={line.id} className={changedLineIds.has(line.id) ? "bg-warning/10" : ""}>
+                                            <TableCell className="w-[340px] py-1.5 pr-2 align-top">
+                                              <InlineEditableText
+                                                value={line.title}
+                                                readOnly={!canEditEstimate}
+                                                startInEditMode={pendingLineTitleEditId === line.id}
+                                                onCommit={(nextValue) => updateLine(pid, line.id, { title: nextValue || line.title })}
+                                                displayClassName="whitespace-normal break-words leading-5 max-h-10 overflow-hidden font-medium"
+                                              />
+                                            </TableCell>
+
+                                            <TableCell className="w-[150px] py-1.5 pr-2 align-top">
+                                              {canEditEstimate ? (
+                                                <DropdownMenu>
+                                                  <DropdownMenuTrigger asChild>
+                                                    <button type="button" className="rounded-full focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/40">
+                                                      <ResourceTypeBadge type={line.type} labelOverride={otherLabel} />
+                                                    </button>
+                                                  </DropdownMenuTrigger>
+                                                  <DropdownMenuContent align="start">
+                                                    {RESOURCE_TYPE_OPTIONS.map((option) => (
+                                                      <DropdownMenuItem
+                                                        key={option.value}
+                                                        onSelect={() => updateLine(pid, line.id, { type: option.value })}
+                                                      >
+                                                        <ResourceTypeBadge type={option.value} className="border-transparent" />
+                                                      </DropdownMenuItem>
+                                                    ))}
+                                                  </DropdownMenuContent>
+                                                </DropdownMenu>
+                                              ) : (
+                                                <ResourceTypeBadge type={line.type} labelOverride={otherLabel} />
+                                              )}
+                                            </TableCell>
+
+                                            {showAssignmentColumn && (
+                                              <TableCell className="w-[170px] py-1.5 pr-2 align-top">
+                                                {isAssignableResourceType(line.type) ? (
+                                                  <AssigneeCell
+                                                    assigneeId={line.assigneeId}
+                                                    assigneeName={line.assigneeName}
+                                                    assigneeEmail={line.assigneeEmail}
+                                                    participants={participantOptions}
+                                                    editable={canEditEstimate}
+                                                    clientView={regime === "client"}
+                                                    onCommit={(nextValue) => updateLine(pid, line.id, nextValue)}
+                                                  />
+                                                ) : (
+                                                  <span className="text-xs text-muted-foreground">—</span>
+                                                )}
+                                              </TableCell>
+                                            )}
+
+                                            <TableCell className="w-[92px] py-1.5 pr-2 align-top">
+                                              <InlineEditableNumber
+                                                value={line.qtyMilli}
+                                                readOnly={!canEditEstimate}
+                                                onCommit={(nextValue) => updateLine(pid, line.id, { qtyMilli: nextValue })}
+                                                formatDisplay={(value) => qtyFromMilli(value)}
+                                                formatInput={(value) => qtyFromMilli(value)}
+                                                parseInput={(raw) => toQtyMilli(raw)}
+                                              />
+                                            </TableCell>
+
+                                            <TableCell className="w-[92px] py-1.5 pr-2 align-top">
+                                              <InlineEditableText
+                                                value={line.unit}
+                                                readOnly={!canEditEstimate}
+                                                onCommit={(nextValue) => updateLine(pid, line.id, { unit: nextValue || line.unit })}
+                                              />
+                                            </TableCell>
+
+                                            {regime !== "client" && (
+                                              <TableCell className="w-[120px] py-1.5 pr-2 align-top">
+                                                <InlineEditableNumber
+                                                  value={line.costUnitCents}
+                                                  readOnly={!canEditEstimate}
+                                                  onCommit={(nextValue) => updateLine(pid, line.id, { costUnitCents: nextValue })}
+                                                  formatDisplay={(value) => money(value, estimateProject.currency)}
+                                                  formatInput={(value) => (value / 100).toString()}
+                                                  parseInput={(raw) => toCentsFromMajor(raw)}
+                                                />
+                                              </TableCell>
+                                            )}
+
+                                            {regime !== "client" && (
+                                              <TableCell className="w-[120px] py-1.5 pr-2 text-right text-sm tabular-nums align-top">
+                                                {money(computed.costTotalCents, estimateProject.currency)}
+                                              </TableCell>
+                                            )}
+
+                                            {regime === "contractor" && (
+                                              <TableCell className="w-[92px] py-1.5 pr-2 align-top">
+                                                <InlineEditableNumber
+                                                  value={line.markupBps}
+                                                  readOnly={!canEditEstimate}
+                                                  onCommit={(nextValue) => updateLine(pid, line.id, { markupBps: nextValue })}
+                                                  formatDisplay={(value) => fromBpsToPercent(value)}
+                                                  formatInput={(value) => fromBpsToPercent(value)}
+                                                  parseInput={(raw) => toBpsFromPercent(raw)}
+                                                />
+                                              </TableCell>
+                                            )}
+
+                                            {regime !== "client" && (
+                                              <TableCell className="w-[92px] py-1.5 pr-2 align-top">
+                                                {canEditEstimate ? (
+                                                  <InlineEditableNumber
+                                                    value={line.discountBpsOverride ?? 0}
+                                                    onCommit={(nextValue) => updateLine(pid, line.id, { discountBpsOverride: nextValue })}
+                                                    formatDisplay={(value) => fromBpsToPercent(value)}
+                                                    formatInput={(value) => fromBpsToPercent(value)}
+                                                    parseInput={(raw) => toBpsFromPercent(raw)}
+                                                  />
+                                                ) : (
+                                                  <div className="min-h-7 px-1 py-0.5 text-right text-sm tabular-nums text-foreground">
+                                                    {fromBpsToPercent(effectiveDiscountForDisplay(line, stage, estimateProject.discountBps))}
+                                                  </div>
+                                                )}
+                                              </TableCell>
+                                            )}
+
+                                            <TableCell className="w-[120px] py-1.5 pr-2 text-right text-sm tabular-nums align-top">
+                                              {money(computed.clientUnitCents, estimateProject.currency)}
+                                            </TableCell>
+                                            <TableCell className="w-[126px] py-1.5 pr-2 text-right text-sm tabular-nums align-top">
+                                              {money(computed.clientTotalCents, estimateProject.currency)}
+                                            </TableCell>
+
+                                            {canEditEstimate && (
+                                              <TableCell className="w-10 py-1.5 pr-0 align-top">
+                                                <Button
+                                                  size="icon"
+                                                  variant="ghost"
+                                                  className="h-7 w-7"
+                                                  onClick={() => deleteLine(pid, line.id)}
+                                                >
+                                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                                </Button>
+                                              </TableCell>
+                                            )}
+                                          </TableRow>
+                                        );
+                                      })}
+
+                                      {canEditEstimate && (
+                                        <TableRow className="border-b-0 hover:bg-transparent">
+                                          <TableCell colSpan={tableColumnCount} className="py-1">
+                                            <div className="flex h-8 items-center rounded-md border border-dashed border-border/70 bg-background/40 px-2">
+                                              <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                  <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="secondary"
+                                                    className="h-6 gap-1 px-2 text-xs opacity-0 transition-opacity group-hover/work:opacity-100 focus-visible:opacity-100"
+                                                  >
+                                                    <Plus className="h-3.5 w-3.5" />
+                                                    Add resource
+                                                  </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="start">
+                                                  {RESOURCE_CREATE_OPTIONS.map((option) => (
+                                                    <DropdownMenuItem
+                                                      key={`${work.id}-${option.label}`}
+                                                      onSelect={() => handleCreateResourceLine(stage.id, work.id, option)}
+                                                    >
+                                                      <ResourceTypeBadge
+                                                        type={option.value}
+                                                        labelOverride={option.label}
+                                                        className="border-transparent"
+                                                      />
+                                                    </DropdownMenuItem>
+                                                  ))}
+                                                </DropdownMenuContent>
+                                              </DropdownMenu>
+                                            </div>
+                                          </TableCell>
+                                        </TableRow>
+                                      )}
+                                    </TableBody>
+                                  </Table>
+                                </div>
+                              </div>
+                            );
+                          })}
+
+                          {canEditEstimate && (
+                            <div className="rounded-md border border-dashed border-border/70 bg-background/40 px-2 py-1">
+                              <div className="flex h-7 items-center">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="secondary"
+                                  className="h-6 gap-1 px-2 text-xs opacity-0 transition-opacity group-hover/stage:opacity-100 focus-visible:opacity-100"
+                                  onClick={() => createWork(pid, { stageId: stage.id, title: `Work ${stageWorks.length + 1}` })}
+                                >
+                                  <Plus className="h-3.5 w-3.5" />
+                                  Add work
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="flex items-center justify-between rounded-md border border-border/70 bg-muted/20 px-3 py-2">
+                            <span className="text-caption font-medium text-muted-foreground">Stage subtotal</span>
+                            <span className="text-sm font-semibold text-foreground tabular-nums">
+                              {money(stageSubtotalById.get(stage.id) ?? 0, estimateProject.currency)}
+                            </span>
+                          </div>
                         </div>
                       )}
                     </div>
+                  );
+                })}
+              </div>
+            )}
 
-                    {stageWorks.map((work) => {
-                      const workLines = linesByWork.get(work.id) ?? [];
-                      return (
-                        <div key={work.id} className="rounded-md border border-border/80 p-2 space-y-2">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            {canEditEstimate ? (
-                              <Input
-                                className="h-8 w-[220px]"
-                                defaultValue={work.title}
-                                onBlur={(e) => updateWork(pid, work.id, { title: e.target.value || work.title })}
-                              />
-                            ) : (
-                              <h4 className="text-caption font-medium text-foreground">{work.title}</h4>
-                            )}
-
-                            {canEditEstimate && (
-                              <div className="flex items-center gap-1">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => createLine(pid, { stageId: stage.id, workId: work.id, title: "New line", type: "material", qtyMilli: 1000, costUnitCents: 0 })}
-                                >
-                                  <Plus className="mr-1 h-4 w-4" /> Add line
-                                </Button>
-                                <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => deleteWork(pid, work.id)}>
-                                  <Trash2 className="h-4 w-4 text-destructive" />
-                                </Button>
-                              </div>
-                            )}
-                          </div>
-
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>Line</TableHead>
-                                {regime !== "client" && <TableHead>Type</TableHead>}
-                                <TableHead className="text-right">Qty</TableHead>
-                                <TableHead>Unit</TableHead>
-                                {regime !== "client" && <TableHead className="text-right">Cost unit</TableHead>}
-                                {regime !== "client" && <TableHead className="text-right">Cost total</TableHead>}
-                                {regime === "contractor" && <TableHead className="text-right">Markup %</TableHead>}
-                                {regime !== "client" && <TableHead className="text-right">Discount %</TableHead>}
-                                <TableHead className="text-right">Client unit</TableHead>
-                                <TableHead className="text-right">Client total</TableHead>
-                                {canEditEstimate && <TableHead className="w-10" />}
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {workLines.map((line) => {
-                                const computed = lineTotalsById.get(line.id);
-                                if (!computed) return null;
-
-                                return (
-                                  <TableRow key={line.id} className={changedLineIds.has(line.id) ? "bg-warning/10" : ""}>
-                                    <TableCell>
-                                      {canEditEstimate ? (
-                                        <Input
-                                          className="h-8"
-                                          defaultValue={line.title}
-                                          onBlur={(e) => updateLine(pid, line.id, { title: e.target.value || line.title })}
-                                        />
-                                      ) : (
-                                        <span className="text-body-sm font-medium">{line.title}</span>
-                                      )}
-                                    </TableCell>
-
-                                    {regime !== "client" && (
-                                      <TableCell>
-                                        {canEditEstimate ? (
-                                          <Select
-                                            value={line.type}
-                                            onValueChange={(value) => updateLine(pid, line.id, { type: value as ResourceLineType })}
-                                          >
-                                            <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                                            <SelectContent>
-                                              <SelectItem value="material">Material</SelectItem>
-                                              <SelectItem value="tool">Tool</SelectItem>
-                                              <SelectItem value="labor">Labor</SelectItem>
-                                              <SelectItem value="subcontractor">Subcontractor</SelectItem>
-                                              <SelectItem value="other">Other</SelectItem>
-                                            </SelectContent>
-                                          </Select>
-                                        ) : (
-                                          labelForType(line.type)
-                                        )}
-                                      </TableCell>
-                                    )}
-
-                                    <TableCell className="text-right">
-                                      {canEditEstimate ? (
-                                        <Input
-                                          className="h-8 text-right"
-                                          defaultValue={qtyFromMilli(line.qtyMilli)}
-                                          onBlur={(e) => updateLine(pid, line.id, { qtyMilli: toQtyMilli(e.target.value) })}
-                                        />
-                                      ) : qtyFromMilli(line.qtyMilli)}
-                                    </TableCell>
-
-                                    <TableCell>
-                                      {canEditEstimate ? (
-                                        <Input
-                                          className="h-8"
-                                          defaultValue={line.unit}
-                                          onBlur={(e) => updateLine(pid, line.id, { unit: e.target.value || line.unit })}
-                                        />
-                                      ) : line.unit}
-                                    </TableCell>
-
-                                    {regime !== "client" && (
-                                      <TableCell className="text-right">
-                                        {canEditEstimate ? (
-                                          <Input
-                                            className="h-8 text-right"
-                                            defaultValue={(line.costUnitCents / 100).toString()}
-                                            onBlur={(e) => updateLine(pid, line.id, { costUnitCents: toCentsFromMajor(e.target.value) })}
-                                          />
-                                        ) : money(line.costUnitCents, estimateProject.currency)}
-                                      </TableCell>
-                                    )}
-
-                                    {regime !== "client" && (
-                                      <TableCell className="text-right">{money(computed.costTotalCents, estimateProject.currency)}</TableCell>
-                                    )}
-
-                                    {regime === "contractor" && (
-                                      <TableCell className="text-right">
-                                        {canEditEstimate ? (
-                                          <Input
-                                            className="h-8 text-right"
-                                            defaultValue={fromBpsToPercent(line.markupBps)}
-                                            onBlur={(e) => updateLine(pid, line.id, { markupBps: toBpsFromPercent(e.target.value) })}
-                                          />
-                                        ) : fromBpsToPercent(line.markupBps)}
-                                      </TableCell>
-                                    )}
-
-                                    {regime !== "client" && (
-                                      <TableCell className="text-right">
-                                        {canEditEstimate ? (
-                                          <Input
-                                            className="h-8 text-right"
-                                            defaultValue={fromBpsToPercent(line.discountBpsOverride ?? 0)}
-                                            onBlur={(e) => updateLine(pid, line.id, { discountBpsOverride: toBpsFromPercent(e.target.value) })}
-                                          />
-                                        ) : fromBpsToPercent(effectiveDiscountForDisplay(line, stage, estimateProject.discountBps))}
-                                      </TableCell>
-                                    )}
-
-                                    <TableCell className="text-right">{money(computed.clientUnitCents, estimateProject.currency)}</TableCell>
-                                    <TableCell className="text-right">{money(computed.clientTotalCents, estimateProject.currency)}</TableCell>
-
-                                    {canEditEstimate && (
-                                      <TableCell>
-                                        <Button
-                                          size="icon"
-                                          variant="ghost"
-                                          className="h-8 w-8"
-                                          onClick={() => deleteLine(pid, line.id)}
-                                        >
-                                          <Trash2 className="h-4 w-4 text-destructive" />
-                                        </Button>
-                                      </TableCell>
-                                    )}
-                                  </TableRow>
-                                );
-                              })}
-                            </TableBody>
-                          </Table>
-                        </div>
-                      );
-                    })}
-
-                    <div className="flex items-center justify-between rounded-md border border-border/70 bg-muted/20 px-3 py-2">
-                      <span className="text-caption font-medium text-muted-foreground">Stage subtotal</span>
-                      <span className="text-sm font-semibold text-foreground">
-                        {money(stageSubtotalById.get(stage.id) ?? 0, estimateProject.currency)}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })
+            {canEditEstimate && (
+              <div className="rounded-md border border-dashed border-border/70 bg-background/40 p-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  className="h-7 gap-1 px-2 text-xs"
+                  onClick={() => createStage(pid, { title: `Stage ${stages.length + 1}` })}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add stage
+                </Button>
+              </div>
             )}
           </TabsContent>
 
