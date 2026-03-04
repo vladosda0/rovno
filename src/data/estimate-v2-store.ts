@@ -272,6 +272,7 @@ function getSnapshotFromState(state: EstimateV2ProjectState): EstimateV2Snapshot
 function syncExternalDomainsFromEstimate(projectId: string, state: EstimateV2ProjectState) {
   const syncState = {
     project: state.project,
+    works: state.works,
     lines: state.lines,
   };
   syncProcurementFromEstimateV2(projectId, syncState);
@@ -552,6 +553,7 @@ function syncFromMainTaskStore() {
     });
 
     if (stateChanged) {
+      syncExternalDomainsFromEstimate(projectId, state);
       state.project.updatedAt = now;
       hasChanges = true;
     }
@@ -1007,6 +1009,7 @@ export function updateWork(projectId: string, workId: string, partial: Partial<E
   const state = ensureProjectState(projectId);
   if (!canEditEstimateState(projectId, state)) return;
   const now = nowIso();
+  const previousWork = state.works.find((work) => work.id === workId) ?? null;
   let changedWork: EstimateV2Work | null = null;
   state.works = state.works.map((work) => (
     work.id === workId
@@ -1022,6 +1025,11 @@ export function updateWork(projectId: string, workId: string, partial: Partial<E
   if (changedWork) {
     applyWorkToTaskSync(state, [changedWork.id]);
     syncChecklistForWork(state, changedWork);
+  }
+  const plannedStartChanged = (previousWork?.plannedStart ?? null) !== (changedWork?.plannedStart ?? null);
+  const plannedEndChanged = (previousWork?.plannedEnd ?? null) !== (changedWork?.plannedEnd ?? null);
+  if (plannedStartChanged || plannedEndChanged) {
+    syncExternalDomainsFromEstimate(projectId, state);
   }
   state.project.updatedAt = now;
   notify();
@@ -1069,6 +1077,7 @@ export function updateWorkDates(
     applyWorkToTaskSync(state, changedWorkIds);
   }
 
+  syncExternalDomainsFromEstimate(projectId, state);
   state.project.updatedAt = now;
   notify();
   return {

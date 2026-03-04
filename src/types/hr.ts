@@ -1,4 +1,4 @@
-export type HRItemStatus = "planned" | "requested" | "approved" | "paid" | "cancelled";
+export type HRItemStatus = "planned" | "in_progress" | "blocked" | "done" | "cancelled";
 export type HRItemType = "labor" | "subcontractor";
 
 export interface HRPlannedItem {
@@ -11,6 +11,7 @@ export interface HRPlannedItem {
   plannedQty: number;
   plannedRate: number;
   assignee: string | null;
+  assigneeIds: string[];
   status: HRItemStatus;
   lockedFromEstimate: boolean;
   sourceEstimateV2LineId: string | null;

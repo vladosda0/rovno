@@ -26,11 +26,11 @@ export default function AppLayout() {
       <div className="flex flex-1 pt-12">
         {!hideAi && (
           aiSidebarCollapsed ? (
-            <div className="w-12 shrink-0 flex items-start justify-center pt-3">
+            <div className="sticky top-12 z-20 h-[calc(100svh-48px)] w-12 shrink-0 self-start border-r border-border/60 bg-background/80 pt-3 backdrop-blur supports-[backdrop-filter]:bg-background/70">
               <button
                 type="button"
                 onClick={() => setAiSidebarCollapsed(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/10 transition-colors hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                className="mx-auto flex h-8 w-8 items-center justify-center rounded-lg bg-accent/10 transition-colors hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
                 <PanelLeft className="h-4 w-4 text-accent" />
                 <span className="sr-only">Open AI sidebar</span>

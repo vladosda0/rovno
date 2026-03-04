@@ -499,6 +499,36 @@ describe("estimate-v2 execution foundation", () => {
     expect(JSON.stringify(after.scheduleBaseline)).toBe(baselineBefore);
   });
 
+  it("syncs linked procurement requiredByDate from work plannedStart on gantt updates", () => {
+    const projectId = "project-1";
+    setAuthRole("owner");
+
+    setProjectEstimateStatus(projectId, "planning");
+    const transitioned = setProjectEstimateStatus(projectId, "in_work", { skipSetup: true });
+    expect(transitioned.ok).toBe(true);
+
+    const before = getEstimateV2ProjectState(projectId);
+    const linkedProcurement = getProcurementItems(projectId, true).find((item) => Boolean(item.sourceEstimateV2LineId));
+    expect(linkedProcurement).toBeDefined();
+    if (!linkedProcurement?.sourceEstimateV2LineId) return;
+
+    const linkedLine = before.lines.find((line) => line.id === linkedProcurement.sourceEstimateV2LineId);
+    expect(linkedLine).toBeDefined();
+    if (!linkedLine) return;
+
+    const linkedWork = before.works.find((work) => work.id === linkedLine.workId);
+    expect(linkedWork).toBeDefined();
+    if (!linkedWork) return;
+
+    const nextStart = "2026-05-10T00:00:00.000Z";
+    const nextEnd = "2026-05-12T00:00:00.000Z";
+    const result = updateWorkDates(projectId, linkedWork.id, nextStart, nextEnd, { source: "gantt" });
+    expect(result.ok).toBe(true);
+
+    const afterProcurement = getProcurementItems(projectId, true).find((item) => item.id === linkedProcurement.id);
+    expect(toDayIndex(afterProcurement?.requiredByDate ?? null)).toBe(toDayIndex(nextStart));
+  });
+
   it("appends dependency comment to successor task comments", () => {
     const projectId = "project-2";
     setAuthRole("owner");

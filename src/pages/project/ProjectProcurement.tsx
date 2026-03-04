@@ -59,6 +59,7 @@ import { ItemTypePicker } from "@/components/procurement/ItemTypePicker";
 import { UnitPicker } from "@/components/procurement/UnitPicker";
 import { useEstimateV2Project } from "@/hooks/use-estimate-v2-data";
 import { relinkProcurementItemToEstimateV2Line } from "@/lib/estimate-v2/procurement-sync";
+import { computeProjectTotals } from "@/lib/estimate-v2/pricing";
 import type {
   OrderWithLines,
   ProcurementAttachment,
@@ -85,23 +86,6 @@ const TAB_META: Record<ProcurementTab, { label: string; className: string }> = {
 
 function listStateKey(projectId: string): string {
   return `procurement-v3:list-state:${projectId}`;
-}
-
-function budgetKey(projectId: string): string {
-  return `procurement-v3:budget:${projectId}`;
-}
-
-function readBudget(projectId: string): number {
-  if (typeof window === "undefined") return 0;
-  const raw = window.sessionStorage.getItem(budgetKey(projectId));
-  if (!raw) return 0;
-  const parsed = Number(raw);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
-}
-
-function writeBudget(projectId: string, value: number) {
-  if (typeof window === "undefined") return;
-  window.sessionStorage.setItem(budgetKey(projectId), String(Math.max(0, value)));
 }
 
 function readListState(projectId: string): ProcurementListState | null {
@@ -209,8 +193,6 @@ export default function ProjectProcurement() {
   const [createOrderOpen, setCreateOrderOpen] = useState(false);
   const [createOrderItemIds, setCreateOrderItemIds] = useState<string[]>([]);
 
-  const [budgetInput, setBudgetInput] = useState<string>(() => String(readBudget(pid)));
-
   const detailItem = itemId ? (items.find((item) => item.id === itemId) ?? null) : null;
   const [editForm, setEditForm] = useState<Partial<ProcurementItemV2>>({});
   const [attachmentUrl, setAttachmentUrl] = useState("");
@@ -224,12 +206,17 @@ export default function ProjectProcurement() {
   const pendingRevokesRef = useRef<Set<string>>(new Set());
   const filePickerRef = useRef<HTMLInputElement | null>(null);
 
-  const budgetValue = Number(budgetInput || 0);
-  const normalizedBudget = Number.isFinite(budgetValue) && budgetValue >= 0 ? budgetValue : 0;
-
-  useEffect(() => {
-    writeBudget(pid, normalizedBudget);
-  }, [pid, normalizedBudget]);
+  const normalizedBudget = useMemo(() => {
+    const totals = computeProjectTotals(
+      estimateState.project,
+      estimateState.stages,
+      estimateState.works,
+      estimateState.lines,
+      estimateState.project.regime,
+    );
+    const procurementCostCents = totals.breakdownByType.material + totals.breakdownByType.tool;
+    return procurementCostCents / 100;
+  }, [estimateState.project, estimateState.stages, estimateState.works, estimateState.lines]);
 
   const persistListState = useCallback((overrides?: Partial<ProcurementListState>) => {
     writeListState(pid, {
@@ -739,10 +726,9 @@ export default function ProjectProcurement() {
           <div>
             <label className="text-xs text-muted-foreground">Budget</label>
             <Input
-              type="number"
-              min="0"
-              value={budgetInput}
-              onChange={(event) => setBudgetInput(event.target.value)}
+              type="text"
+              readOnly
+              value={fmtCost(normalizedBudget)}
               className="h-9"
             />
           </div>
@@ -839,7 +825,7 @@ export default function ProjectProcurement() {
                                             variant="ghost"
                                             size="sm"
                                             className={cn("h-7 px-2 text-xs", isOverdue(item.requiredByDate) && "text-destructive")}
-                                            disabled={!canEdit}
+                                            disabled={!canEdit || !!item.lockedFromEstimate}
                                           >
                                             <CalendarIcon className="h-3.5 w-3.5 mr-1" />
                                             {formatDate(item.requiredByDate)}
@@ -1007,7 +993,7 @@ export default function ProjectProcurement() {
                                         variant="ghost"
                                         size="sm"
                                         className={cn("h-7 px-2 text-xs", isOverdue(item.requiredByDate) && "text-destructive")}
-                                        disabled={!canEdit}
+                                        disabled={!canEdit || !!item.lockedFromEstimate}
                                       >
                                         <CalendarIcon className="h-3.5 w-3.5 mr-1" />
                                         {formatDate(item.requiredByDate)}
@@ -1366,7 +1352,11 @@ export default function ProjectProcurement() {
                     <div className="mt-1">
                       <Popover>
                         <PopoverTrigger asChild>
-                          <Button variant="outline" className={cn("h-9 w-full justify-start text-left", isOverdue(editForm.requiredByDate) && "text-destructive")}>
+                          <Button
+                            variant="outline"
+                            disabled={!canEdit || !!detailItem.lockedFromEstimate}
+                            className={cn("h-9 w-full justify-start text-left", isOverdue(editForm.requiredByDate) && "text-destructive")}
+                          >
                             <CalendarIcon className="h-4 w-4 mr-2" />
                             {formatDate(editForm.requiredByDate)}
                           </Button>
@@ -1380,6 +1370,9 @@ export default function ProjectProcurement() {
                           />
                         </PopoverContent>
                       </Popover>
+                      {detailItem.lockedFromEstimate && (
+                        <p className="mt-1 text-[11px] text-muted-foreground">Synced from linked work start date</p>
+                      )}
                     </div>
                   </div>
                 </div>

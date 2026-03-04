@@ -10,6 +10,11 @@ interface EstimateV2SyncStateLike {
   lines: EstimateV2ResourceLine[];
 }
 
+export interface HRStoreMutationResult {
+  ok: boolean;
+  error?: string;
+}
+
 type Listener = () => void;
 
 const listeners = new Set<Listener>();
@@ -41,11 +46,28 @@ function rateFromLine(line: EstimateV2ResourceLine): number {
   return Math.max(0, line.costUnitCents / 100);
 }
 
-function statusFromPaid(item: HRPlannedItem): HRItemStatus {
-  const paidTotal = getHRPaidTotal(item.id);
-  const planned = item.plannedQty * item.plannedRate;
-  if (planned > 0 && paidTotal >= planned) return "paid";
-  return item.status;
+function normalizeAssigneeIds(assigneeIds: string[]): string[] {
+  const uniq = new Set<string>();
+  assigneeIds.forEach((id) => {
+    const normalized = id.trim();
+    if (!normalized) return;
+    uniq.add(normalized);
+  });
+  return Array.from(uniq);
+}
+
+function currentAssigneeIds(item: HRPlannedItem): string[] {
+  if (Array.isArray(item.assigneeIds)) return normalizeAssigneeIds(item.assigneeIds);
+  if (item.assignee) return [item.assignee];
+  return [];
+}
+
+function arraysEqual(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
 }
 
 function findLinkedByLineId(projectId: string, lineId: string): HRPlannedItem | null {
@@ -156,8 +178,10 @@ export function createFromEstimateLine(
     plannedRate: number;
     assignee?: string | null;
   },
+  options?: { notify?: boolean },
 ): HRPlannedItem {
   const now = nowIso();
+  const normalizedAssigneeIds = normalizeAssigneeIds(fields.assignee ? [fields.assignee] : []);
   const item: HRPlannedItem = {
     id: genId("hr-item"),
     projectId,
@@ -168,6 +192,7 @@ export function createFromEstimateLine(
     plannedQty: Math.max(0, fields.plannedQty),
     plannedRate: Math.max(0, fields.plannedRate),
     assignee: fields.assignee ?? null,
+    assigneeIds: normalizedAssigneeIds,
     status: "planned",
     lockedFromEstimate: true,
     sourceEstimateV2LineId: lineId,
@@ -179,7 +204,7 @@ export function createFromEstimateLine(
   };
 
   items = [...items, item];
-  notify();
+  if (options?.notify !== false) notify();
   return item;
 }
 
@@ -210,6 +235,7 @@ export function updateFromEstimateLine(
     plannedQty: patch.plannedQty == null ? existing.plannedQty : Math.max(0, patch.plannedQty),
     plannedRate: patch.plannedRate == null ? existing.plannedRate : Math.max(0, patch.plannedRate),
     assignee: patch.assignee === undefined ? existing.assignee : patch.assignee,
+    assigneeIds: currentAssigneeIds(existing),
     lockedFromEstimate: true,
     sourceEstimateV2LineId: patch.lineId ?? existing.sourceEstimateV2LineId,
     orphaned: false,
@@ -221,6 +247,35 @@ export function updateFromEstimateLine(
   items = items.map((item) => (item.id === hrItemId ? next : item));
   notify();
   return next;
+}
+
+export function setHRAssignees(
+  projectId: string,
+  hrItemId: string,
+  assigneeIds: string[],
+): HRStoreMutationResult {
+  const existing = getHRItemById(hrItemId);
+  if (!existing || existing.projectId !== projectId) {
+    return { ok: false, error: "HR item not found" };
+  }
+
+  const normalized = normalizeAssigneeIds(assigneeIds);
+  const prevAssigneeIds = currentAssigneeIds(existing);
+  if (arraysEqual(normalized, prevAssigneeIds)) return { ok: true };
+
+  items = items.map((item) => (
+    item.id === hrItemId
+      ? {
+        ...item,
+        assignee: normalized[0] ?? null,
+        assigneeIds: normalized,
+        updatedAt: nowIso(),
+      }
+      : item
+  ));
+
+  notify();
+  return { ok: true };
 }
 
 export function addPayment(
@@ -244,26 +299,22 @@ export function addPayment(
 
   payments = [...payments, payment];
 
-  const nextStatus = statusFromPaid(item);
-  if (nextStatus !== item.status) {
-    items = items.map((entry) => (
-      entry.id === item.id
-        ? {
-          ...entry,
-          status: nextStatus,
-          updatedAt: nowIso(),
-        }
-        : entry
-    ));
-  }
-
   notify();
   return payment;
 }
 
-export function setStatus(hrItemId: string, status: HRItemStatus): boolean {
+export function setStatus(hrItemId: string, status: HRItemStatus): HRStoreMutationResult {
   const existing = getHRItemById(hrItemId);
-  if (!existing) return false;
+  if (!existing) return { ok: false, error: "HR item not found" };
+
+  if (
+    (status === "in_progress" || status === "done")
+    && currentAssigneeIds(existing).length === 0
+  ) {
+    return { ok: false, error: "Assign at least one person before starting/completing work" };
+  }
+
+  if (existing.status === status) return { ok: true };
 
   items = items.map((item) => (
     item.id === hrItemId
@@ -276,12 +327,21 @@ export function setStatus(hrItemId: string, status: HRItemStatus): boolean {
   ));
 
   notify();
-  return true;
+  return { ok: true };
 }
 
-export function relinkToEstimateLine(hrItemId: string, newLineId: string): boolean {
+export function relinkToEstimateLine(hrItemId: string, newLineId: string): HRStoreMutationResult {
   const existing = getHRItemById(hrItemId);
-  if (!existing) return false;
+  if (!existing) return { ok: false, error: "HR item not found" };
+
+  const conflict = items.find((item) => (
+    item.projectId === existing.projectId
+    && item.id !== hrItemId
+    && item.sourceEstimateV2LineId === newLineId
+  ));
+  if (conflict) {
+    return { ok: false, error: "Another HR item is already linked to this estimate line" };
+  }
 
   items = items.map((item) => (
     item.id === hrItemId
@@ -297,7 +357,7 @@ export function relinkToEstimateLine(hrItemId: string, newLineId: string): boole
   ));
 
   notify();
-  return true;
+  return { ok: true };
 }
 
 export function syncHRFromEstimateV2(projectId: string, estimateState: EstimateV2SyncStateLike) {
@@ -336,7 +396,7 @@ export function syncHRFromEstimateV2(projectId: string, estimateState: EstimateV
       type: line.type === "subcontractor" ? "subcontractor" : "labor",
       plannedQty: qtyFromLine(line),
       plannedRate: rateFromLine(line),
-    });
+    }, { notify: false });
     didMutate = true;
   });
 

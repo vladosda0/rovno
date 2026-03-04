@@ -185,7 +185,7 @@ describe("estimate-v2 rollups", () => {
       plannedQty: 10,
       plannedRate: 50,
     });
-    setStatus(hrItem.id, "requested");
+    setStatus(hrItem.id, "planned");
     addPayment(hrItem.id, 200, "2026-01-01T00:00:00.000Z");
 
     const fact = computeFactFromProcurementAndHR(projectId);

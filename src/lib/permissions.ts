@@ -8,10 +8,11 @@ export type Action =
   | "estimate.approve"
   | "member.invite"
   | "document.create"
-  | "procurement.edit";
+  | "procurement.edit"
+  | "hr.edit";
 
 const CONTRACTOR_ACTIONS: Action[] = [
-  "ai.generate", "task.create", "task.edit", "document.create", "procurement.edit",
+  "ai.generate", "task.create", "task.edit", "document.create", "procurement.edit", "hr.edit",
 ];
 
 export function isOwnerOrCoOwner(role: MemberRole): role is "owner" | "co_owner" {

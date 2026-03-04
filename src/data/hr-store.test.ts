@@ -5,6 +5,7 @@ import {
   createFromEstimateLine,
   getHRItems,
   relinkToEstimateLine,
+  setHRAssignees,
   setStatus,
   syncHRFromEstimateV2,
   updateFromEstimateLine,
@@ -52,6 +53,7 @@ describe("hr-store", () => {
 
     expect(created.lockedFromEstimate).toBe(true);
     expect(created.sourceEstimateV2LineId).toBe("line-1");
+    expect(created.assigneeIds).toEqual([]);
 
     updateFromEstimateLine(projectId, created.id, {
       title: "Electrician lead",
@@ -69,7 +71,7 @@ describe("hr-store", () => {
     expect(updated.lockedFromEstimate).toBe(true);
   });
 
-  it("tracks payments and supports status updates", () => {
+  it("tracks payments without changing work status", () => {
     const projectId = `hr-pay-${Date.now()}`;
     const created = createFromEstimateLine(projectId, "line-1", {
       stageId: "stage-1",
@@ -80,15 +82,46 @@ describe("hr-store", () => {
       plannedRate: 100,
     });
 
-    setStatus(created.id, "requested");
+    const blocked = setStatus(created.id, "in_progress");
+    expect(blocked.ok).toBe(false);
+
+    setHRAssignees(projectId, created.id, ["user-2"]);
+    const changed = setStatus(created.id, "in_progress");
+    expect(changed.ok).toBe(true);
+
     addPayment(created.id, 50, "2026-01-01T00:00:00.000Z");
-
-    const afterFirst = getHRItems(projectId)[0];
-    expect(afterFirst.status).toBe("requested");
-
     addPayment(created.id, 200, "2026-01-02T00:00:00.000Z");
-    const afterSecond = getHRItems(projectId)[0];
-    expect(afterSecond.status).toBe("paid");
+
+    const afterPayments = getHRItems(projectId)[0];
+    expect(afterPayments.status).toBe("in_progress");
+  });
+
+  it("enforces C2: in_progress/done require at least one assignee", () => {
+    const projectId = `hr-c2-${Date.now()}`;
+    const created = createFromEstimateLine(projectId, "line-1", {
+      stageId: "stage-1",
+      workId: "work-1",
+      title: "Crew",
+      type: "labor",
+      plannedQty: 1,
+      plannedRate: 100,
+    });
+
+    const blockedStart = setStatus(created.id, "in_progress");
+    expect(blockedStart.ok).toBe(false);
+    expect(blockedStart.error).toContain("Assign at least one person");
+
+    const blockedDone = setStatus(created.id, "done");
+    expect(blockedDone.ok).toBe(false);
+
+    const assignResult = setHRAssignees(projectId, created.id, ["user-2", "user-3"]);
+    expect(assignResult.ok).toBe(true);
+
+    const allowedStart = setStatus(created.id, "in_progress");
+    expect(allowedStart.ok).toBe(true);
+
+    const allowedDone = setStatus(created.id, "done");
+    expect(allowedDone.ok).toBe(true);
   });
 
   it("applies orphan policy for delete/cross-family and keeps intra-family linkage", () => {
@@ -128,28 +161,55 @@ describe("hr-store", () => {
     expect(deleted.orphaned).toBe(true);
   });
 
-  it("relinks orphaned items", () => {
-    const projectId = `hr-relink-${Date.now()}`;
-    const created = createFromEstimateLine(projectId, "line-1", {
+  it("prevents relinking two HR items to the same estimate line", () => {
+    const projectId = `hr-relink-conflict-${Date.now()}`;
+    const first = createFromEstimateLine(projectId, "line-1", {
       stageId: "stage-1",
       workId: "work-1",
-      title: "Crew",
+      title: "Crew A",
+      type: "labor",
+      plannedQty: 1,
+      plannedRate: 100,
+    });
+    const second = createFromEstimateLine(projectId, "line-2", {
+      stageId: "stage-1",
+      workId: "work-1",
+      title: "Crew B",
       type: "labor",
       plannedQty: 1,
       plannedRate: 100,
     });
 
+    const relink = relinkToEstimateLine(second.id, "line-1");
+    expect(relink.ok).toBe(false);
+
+    const unchanged = getHRItems(projectId).find((item) => item.id === second.id);
+    expect(unchanged?.sourceEstimateV2LineId).toBe("line-2");
+
+    const unaffectedFirst = getHRItems(projectId).find((item) => item.id === first.id);
+    expect(unaffectedFirst?.sourceEstimateV2LineId).toBe("line-1");
+  });
+
+  it("preserves assigneeIds across estimate sync updates", () => {
+    const projectId = `hr-assignees-sync-${Date.now()}`;
+    const lineId = `line-${Date.now()}`;
+
     syncHRFromEstimateV2(projectId, {
       project: { estimateStatus: "in_work" },
-      lines: [],
+      lines: [line({ id: lineId, projectId, title: "Crew" })],
     });
 
-    const orphaned = getHRItems(projectId)[0];
-    expect(orphaned.orphaned).toBe(true);
+    const created = getHRItems(projectId)[0];
+    const setResult = setHRAssignees(projectId, created.id, ["user-2", "user-3"]);
+    expect(setResult.ok).toBe(true);
 
-    relinkToEstimateLine(created.id, "line-2");
-    const relinked = getHRItems(projectId)[0];
-    expect(relinked.orphaned).toBe(false);
-    expect(relinked.sourceEstimateV2LineId).toBe("line-2");
+    syncHRFromEstimateV2(projectId, {
+      project: { estimateStatus: "in_work" },
+      lines: [line({ id: lineId, projectId, title: "Crew updated", qtyMilli: 15_000 })],
+    });
+
+    const updated = getHRItems(projectId)[0];
+    expect(updated.title).toBe("Crew updated");
+    expect(updated.assigneeIds).toEqual(["user-2", "user-3"]);
   });
 });

@@ -140,7 +140,7 @@ export function computeFactFromDataSources(input: {
     }
 
     if (item.orphaned) return;
-    if (item.status !== "requested" && item.status !== "approved") return;
+    if (item.status === "cancelled") return;
     const plannedCost = toCents(item.plannedQty * item.plannedRate);
     const paidCents = toCents(paidTotal);
     toBePaidPlannedCents += Math.max(plannedCost - paidCents, 0);

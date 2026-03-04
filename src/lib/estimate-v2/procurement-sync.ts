@@ -10,6 +10,7 @@ import type {
   EstimateExecutionStatus,
   EstimateV2Project,
   EstimateV2ResourceLine,
+  EstimateV2Work,
 } from "@/types/estimate-v2";
 
 export type ProcurementSyncReason = "estimate_line_deleted" | "estimate_line_type_changed";
@@ -17,6 +18,7 @@ export type ProcurementSyncReason = "estimate_line_deleted" | "estimate_line_typ
 interface EstimateV2SyncStateLike {
   project: Pick<EstimateV2Project, "estimateStatus">;
   lines: EstimateV2ResourceLine[];
+  works: Pick<EstimateV2Work, "id" | "plannedStart">[];
 }
 
 const PROCUREMENT_TYPES = new Set<EstimateV2ResourceLine["type"]>(["material", "tool"]);
@@ -31,6 +33,13 @@ function qtyFromLine(line: EstimateV2ResourceLine): number {
 
 function plannedUnitPriceFromLine(line: EstimateV2ResourceLine): number {
   return Math.max(0, line.costUnitCents / 100);
+}
+
+function requiredByDateFromWorkStart(
+  line: EstimateV2ResourceLine,
+  workStartByWorkId: Map<string, string | null>,
+): string | null {
+  return workStartByWorkId.get(line.workId) ?? null;
 }
 
 function isEstimateV2Linked(
@@ -48,12 +57,17 @@ function isEstimateV2Linked(
   return { linked: false, lineId: null };
 }
 
-function applyEstimateLineToProcurementItem(itemId: string, line: EstimateV2ResourceLine) {
+function applyEstimateLineToProcurementItem(
+  itemId: string,
+  line: EstimateV2ResourceLine,
+  workStartByWorkId: Map<string, string | null>,
+) {
   updateProcurementItem(itemId, {
     stageId: line.stageId,
     type: line.type === "tool" ? "tool" : "material",
     name: line.title,
     unit: line.unit,
+    requiredByDate: requiredByDateFromWorkStart(line, workStartByWorkId),
     requiredQty: qtyFromLine(line),
     plannedUnitPrice: plannedUnitPriceFromLine(line),
     lockedFromEstimate: true,
@@ -94,7 +108,11 @@ function findBackfillCandidate(
   );
 }
 
-function createFromLine(projectId: string, line: EstimateV2ResourceLine) {
+function createFromLine(
+  projectId: string,
+  line: EstimateV2ResourceLine,
+  workStartByWorkId: Map<string, string | null>,
+) {
   addProcurementItem({
     projectId,
     stageId: line.stageId,
@@ -103,7 +121,7 @@ function createFromLine(projectId: string, line: EstimateV2ResourceLine) {
     name: line.title,
     spec: null,
     unit: line.unit,
-    requiredByDate: null,
+    requiredByDate: requiredByDateFromWorkStart(line, workStartByWorkId),
     requiredQty: qtyFromLine(line),
     orderedQty: 0,
     receivedQty: 0,
@@ -130,11 +148,12 @@ function createFromLine(projectId: string, line: EstimateV2ResourceLine) {
 function relinkProcurementItem(
   itemId: string,
   line: EstimateV2ResourceLine,
+  workStartByWorkId: Map<string, string | null>,
 ): boolean {
   const existing = getProcurementItemById(itemId);
   if (!existing || existing.projectId !== line.projectId) return false;
 
-  applyEstimateLineToProcurementItem(itemId, line);
+  applyEstimateLineToProcurementItem(itemId, line, workStartByWorkId);
   return true;
 }
 
@@ -147,7 +166,10 @@ export function relinkProcurementItemToEstimateV2Line(
   const line = estimateState.lines.find((entry) => entry.id === lineId && entry.projectId === projectId);
   if (!line) return false;
   if (!PROCUREMENT_TYPES.has(line.type)) return false;
-  return relinkProcurementItem(itemId, line);
+  const workStartByWorkId = new Map(
+    estimateState.works.map((work) => [work.id, work.plannedStart ?? null]),
+  );
+  return relinkProcurementItem(itemId, line, workStartByWorkId);
 }
 
 export function syncProcurementFromEstimateV2(
@@ -159,6 +181,9 @@ export function syncProcurementFromEstimateV2(
   const allLineIds = new Set(lines.map((line) => line.id));
   const linesById = new Map(lines.map((line) => [line.id, line]));
   const procurementLines = lines.filter((line) => PROCUREMENT_TYPES.has(line.type));
+  const workStartByWorkId = new Map(
+    estimateState.works.map((work) => [work.id, work.plannedStart ?? null]),
+  );
 
   const items = getProcurementItems(projectId, true);
   const claimedItemIds = new Set<string>();
@@ -210,12 +235,12 @@ export function syncProcurementFromEstimateV2(
     }
 
     if (existing) {
-      applyEstimateLineToProcurementItem(existing.id, line);
+      applyEstimateLineToProcurementItem(existing.id, line, workStartByWorkId);
       return;
     }
 
     if (nowInWork) {
-      createFromLine(projectId, line);
+      createFromLine(projectId, line, workStartByWorkId);
     }
   });
 }

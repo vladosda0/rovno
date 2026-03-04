@@ -4,7 +4,7 @@ import {
   getProcurementItems,
 } from "@/data/procurement-store";
 import { syncProcurementFromEstimateV2 } from "@/lib/estimate-v2/procurement-sync";
-import type { EstimateV2ResourceLine } from "@/types/estimate-v2";
+import type { EstimateV2ResourceLine, EstimateV2Work } from "@/types/estimate-v2";
 
 function line(partial: Partial<EstimateV2ResourceLine>): EstimateV2ResourceLine {
   return {
@@ -29,13 +29,23 @@ function line(partial: Partial<EstimateV2ResourceLine>): EstimateV2ResourceLine 
   };
 }
 
+function work(partial: Partial<EstimateV2Work> = {}): Pick<EstimateV2Work, "id" | "plannedStart"> {
+  return {
+    id: partial.id ?? "work-1",
+    plannedStart: partial.plannedStart ?? null,
+  };
+}
+
 describe("estimate-v2 procurement sync", () => {
   it("creates locked linked procurement items when in_work", () => {
     const projectId = `proc-sync-create-${Date.now()}`;
+    const workId = `work-${Date.now()}`;
+    const plannedStart = "2026-04-10T00:00:00.000Z";
 
     syncProcurementFromEstimateV2(projectId, {
       project: { estimateStatus: "in_work" },
-      lines: [line({ id: `line-${Date.now()}`, projectId, type: "material", qtyMilli: 2_500, costUnitCents: 1_230 })],
+      lines: [line({ id: `line-${Date.now()}`, projectId, workId, type: "material", qtyMilli: 2_500, costUnitCents: 1_230 })],
+      works: [work({ id: workId, plannedStart })],
     });
 
     const created = getProcurementItems(projectId);
@@ -44,20 +54,26 @@ describe("estimate-v2 procurement sync", () => {
     expect(created[0].sourceEstimateV2LineId).toBeTruthy();
     expect(created[0].requiredQty).toBe(2.5);
     expect(created[0].plannedUnitPrice).toBe(12.3);
+    expect(created[0].requiredByDate).toBe(plannedStart);
   });
 
-  it("updates linked locked planned fields from estimate edits", () => {
+  it("updates linked locked planned fields and requiredByDate from estimate edits", () => {
     const projectId = `proc-sync-update-${Date.now()}`;
     const lineId = `line-${Date.now()}`;
+    const workId = `work-${Date.now()}`;
+    const firstStart = "2026-04-10T00:00:00.000Z";
+    const nextStart = "2026-04-14T00:00:00.000Z";
 
     syncProcurementFromEstimateV2(projectId, {
       project: { estimateStatus: "in_work" },
-      lines: [line({ id: lineId, projectId, title: "Primer", type: "material", qtyMilli: 1_000, costUnitCents: 1_000 })],
+      lines: [line({ id: lineId, projectId, workId, title: "Primer", type: "material", qtyMilli: 1_000, costUnitCents: 1_000 })],
+      works: [work({ id: workId, plannedStart: firstStart })],
     });
 
     syncProcurementFromEstimateV2(projectId, {
       project: { estimateStatus: "in_work" },
-      lines: [line({ id: lineId, projectId, title: "Primer updated", type: "material", qtyMilli: 3_000, costUnitCents: 1_500 })],
+      lines: [line({ id: lineId, projectId, workId, title: "Primer updated", type: "material", qtyMilli: 3_000, costUnitCents: 1_500 })],
+      works: [work({ id: workId, plannedStart: nextStart })],
     });
 
     const updated = getProcurementItems(projectId).find((item) => item.sourceEstimateV2LineId === lineId);
@@ -65,6 +81,7 @@ describe("estimate-v2 procurement sync", () => {
     expect(updated?.requiredQty).toBe(3);
     expect(updated?.plannedUnitPrice).toBe(15);
     expect(updated?.lockedFromEstimate).toBe(true);
+    expect(updated?.requiredByDate).toBe(nextStart);
   });
 
   it("marks orphan on estimate line delete", () => {
@@ -74,11 +91,13 @@ describe("estimate-v2 procurement sync", () => {
     syncProcurementFromEstimateV2(projectId, {
       project: { estimateStatus: "in_work" },
       lines: [line({ id: lineId, projectId, type: "material" })],
+      works: [],
     });
 
     syncProcurementFromEstimateV2(projectId, {
       project: { estimateStatus: "in_work" },
       lines: [],
+      works: [],
     });
 
     const orphaned = getProcurementItems(projectId, true)[0];
@@ -94,11 +113,13 @@ describe("estimate-v2 procurement sync", () => {
     syncProcurementFromEstimateV2(projectId, {
       project: { estimateStatus: "in_work" },
       lines: [line({ id: lineId, projectId, type: "material" })],
+      works: [],
     });
 
     syncProcurementFromEstimateV2(projectId, {
       project: { estimateStatus: "in_work" },
       lines: [line({ id: lineId, projectId, type: "tool" })],
+      works: [],
     });
 
     const stillLinked = getProcurementItems(projectId, true)[0];
@@ -108,6 +129,7 @@ describe("estimate-v2 procurement sync", () => {
     syncProcurementFromEstimateV2(projectId, {
       project: { estimateStatus: "in_work" },
       lines: [line({ id: lineId, projectId, type: "labor" })],
+      works: [],
     });
 
     const orphaned = getProcurementItems(projectId, true)[0];
@@ -154,6 +176,7 @@ describe("estimate-v2 procurement sync", () => {
     syncProcurementFromEstimateV2(projectId, {
       project: { estimateStatus: "in_work" },
       lines: [line({ id: lineId, projectId, stageId: "stage-1", title: "Backfill line", unit: "pcs", type: "material" })],
+      works: [],
     });
 
     const projectItems = getProcurementItems(projectId, true);

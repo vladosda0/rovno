@@ -204,4 +204,21 @@ describe("estimate-v2 pricing", () => {
     expect(stageB?.taxAmountCents).toBe(1_000);
     expect(stageB?.totalCents).toBe(6_000);
   });
+
+  it("exposes material and tool cost subtotal for procurement budget (ex VAT)", () => {
+    const project = createProject({ discountBps: 1_500, taxBps: 2_000 });
+    const stage = createStage();
+    const lines = [
+      createLine({ id: "l-material", type: "material", costUnitCents: 10_000, qtyMilli: 1_000 }),
+      createLine({ id: "l-tool", type: "tool", costUnitCents: 5_555, qtyMilli: 1_500 }),
+      createLine({ id: "l-labor", type: "labor", costUnitCents: 7_000, qtyMilli: 2_000 }),
+    ];
+
+    const totals = computeProjectTotals(project, [stage], [], lines, "contractor");
+    const procurementSubtotalCents = totals.breakdownByType.material + totals.breakdownByType.tool;
+
+    expect(totals.breakdownByType.material).toBe(10_000);
+    expect(totals.breakdownByType.tool).toBe(8_333);
+    expect(procurementSubtotalCents).toBe(18_333);
+  });
 });
