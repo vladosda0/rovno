@@ -4,6 +4,7 @@ import { AlertTriangle, ChevronDown, ChevronRight, Download, Info, Plus, Trash2,
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import {
   DropdownMenu,
@@ -914,17 +915,207 @@ export default function ProjectEstimate() {
 
         {isInWork ? (
           <div className="rounded-lg border border-border p-3">
-            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            {regime === "client" ? (
               <div className="space-y-3">
-                <p className="text-sm font-semibold text-foreground">Financial</p>
-                {regime === "client" ? (
-                  <div className="rounded-md border border-border/70 p-2">
-                    <p className="text-xs text-muted-foreground">Total (inc VAT)</p>
-                    <p className="text-xl font-semibold text-foreground">{money(totals.totalCents, estimateProject.currency)}</p>
+                <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4">
+                  <div className="rounded-md bg-muted/30 px-2.5 py-2">
+                    <p className="text-[11px] text-muted-foreground">Total (inc VAT)</p>
+                    <p className="text-sm font-semibold tabular-nums text-foreground">{money(totals.totalCents, estimateProject.currency)}</p>
                   </div>
-                ) : (
-                  <>
-                    <div className="space-y-1 text-caption">
+                  <div className="rounded-md bg-muted/30 px-2.5 py-2">
+                    <p className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                      Days to end
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button type="button" className="text-muted-foreground hover:text-foreground">
+                            <Info className="h-3 w-3" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>{TIMING_TOOLTIP_TEXT.daysToEnd}</TooltipContent>
+                      </Tooltip>
+                    </p>
+                    <p className="text-sm font-semibold tabular-nums text-foreground">
+                      {timingMetrics.daysToEnd == null ? "—" : `${timingMetrics.daysToEnd} d`}
+                    </p>
+                  </div>
+                  <div className="rounded-md bg-muted/30 px-2.5 py-2">
+                    <p className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                      Behind schedule
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button type="button" className="text-muted-foreground hover:text-foreground">
+                            <Info className="h-3 w-3" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>{TIMING_TOOLTIP_TEXT.behindSchedule}</TooltipContent>
+                      </Tooltip>
+                    </p>
+                    <p className="text-sm font-semibold tabular-nums text-foreground">{timingMetrics.behindScheduleDays} d</p>
+                  </div>
+                  <div className="rounded-md bg-muted/30 px-2.5 py-2">
+                    <p className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                      Duration planned
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button type="button" className="text-muted-foreground hover:text-foreground">
+                            <Info className="h-3 w-3" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>{TIMING_TOOLTIP_TEXT.durationPlanned}</TooltipContent>
+                      </Tooltip>
+                    </p>
+                    <p className="text-sm font-semibold tabular-nums text-foreground">
+                      {timingMetrics.durationPlannedDays == null ? "—" : `${timingMetrics.durationPlannedDays} d`}
+                    </p>
+                  </div>
+                  <div className="rounded-md bg-muted/30 px-2.5 py-2">
+                    <p className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                      Duration estimated
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button type="button" className="text-muted-foreground hover:text-foreground">
+                            <Info className="h-3 w-3" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>{TIMING_TOOLTIP_TEXT.durationEstimated}</TooltipContent>
+                      </Tooltip>
+                    </p>
+                    <p className="text-sm font-semibold tabular-nums text-foreground">
+                      {timingMetrics.durationEstimatedDays == null ? "—" : `${timingMetrics.durationEstimatedDays} d`}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4">
+                  <div className="rounded-md bg-muted/30 px-2.5 py-2">
+                    <p className="text-[11px] text-muted-foreground">Planned total</p>
+                    <p className="text-sm font-semibold tabular-nums text-foreground">
+                      {money(combinedPlanFact.planned.plannedBudgetCents, estimateProject.currency)}
+                    </p>
+                  </div>
+                  <div className="rounded-md bg-muted/30 px-2.5 py-2">
+                    <p className="text-[11px] text-muted-foreground">Actual spent</p>
+                    <p className="text-sm font-semibold tabular-nums text-foreground">
+                      {hasActualFinancialData ? money(combinedPlanFact.fact.spentCents, estimateProject.currency) : "—"}
+                    </p>
+                  </div>
+                  <div className="rounded-md bg-muted/30 px-2.5 py-2">
+                    <p className="text-[11px] text-muted-foreground">Over/Under</p>
+                    <p className="text-sm font-semibold tabular-nums text-foreground">
+                      {hasActualFinancialData
+                        ? money(combinedPlanFact.fact.spentCents - combinedPlanFact.planned.plannedBudgetCents, estimateProject.currency)
+                        : "—"}
+                    </p>
+                  </div>
+                  <div className="rounded-md bg-muted/30 px-2.5 py-2">
+                    <p className="text-[11px] text-muted-foreground">To be paid</p>
+                    <p className="text-sm font-semibold tabular-nums text-foreground">
+                      {money(combinedPlanFact.fact.toBePaidPlannedCents, estimateProject.currency)}
+                    </p>
+                  </div>
+                  <div className="rounded-md bg-muted/30 px-2.5 py-2">
+                    <p className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                      Days to end
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button type="button" className="text-muted-foreground hover:text-foreground">
+                            <Info className="h-3 w-3" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>{TIMING_TOOLTIP_TEXT.daysToEnd}</TooltipContent>
+                      </Tooltip>
+                    </p>
+                    <p className="text-sm font-semibold tabular-nums text-foreground">
+                      {timingMetrics.daysToEnd == null ? "—" : `${timingMetrics.daysToEnd} d`}
+                    </p>
+                  </div>
+                  <div className="rounded-md bg-muted/30 px-2.5 py-2">
+                    <p className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                      Behind schedule
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button type="button" className="text-muted-foreground hover:text-foreground">
+                            <Info className="h-3 w-3" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>{TIMING_TOOLTIP_TEXT.behindSchedule}</TooltipContent>
+                      </Tooltip>
+                    </p>
+                    <p className="text-sm font-semibold tabular-nums text-foreground">{timingMetrics.behindScheduleDays} d</p>
+                  </div>
+                  <div className="rounded-md bg-muted/30 px-2.5 py-2">
+                    <p className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                      Duration planned
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button type="button" className="text-muted-foreground hover:text-foreground">
+                            <Info className="h-3 w-3" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>{TIMING_TOOLTIP_TEXT.durationPlanned}</TooltipContent>
+                      </Tooltip>
+                    </p>
+                    <p className="text-sm font-semibold tabular-nums text-foreground">
+                      {timingMetrics.durationPlannedDays == null ? "—" : `${timingMetrics.durationPlannedDays} d`}
+                    </p>
+                  </div>
+                  <div className="rounded-md bg-muted/30 px-2.5 py-2">
+                    <p className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                      Duration estimated
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button type="button" className="text-muted-foreground hover:text-foreground">
+                            <Info className="h-3 w-3" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>{TIMING_TOOLTIP_TEXT.durationEstimated}</TooltipContent>
+                      </Tooltip>
+                    </p>
+                    <p className="text-sm font-semibold tabular-nums text-foreground">
+                      {timingMetrics.durationEstimatedDays == null ? "—" : `${timingMetrics.durationEstimatedDays} d`}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-2 border-t border-border/60 pt-3">
+                  {(["material", "tool", "labor", "subcontractor", "other"] as const).map((type) => {
+                    const planned = combinedPlanFact.planned.plannedCostByTypeCents[type];
+                    const actual = combinedPlanFact.fact.spentByTypeCents[type];
+                    const progress = hasActualFinancialData && planned > 0
+                      ? Math.min(100, (actual / planned) * 100)
+                      : 0;
+                    const overrun = hasActualFinancialData ? Math.max(actual - planned, 0) : 0;
+                    return (
+                      <div key={type} className="space-y-1">
+                        <div className="flex items-center justify-between gap-2 text-caption">
+                          <span className="text-muted-foreground">{labelForType(type)}</span>
+                          <span className="tabular-nums text-foreground">
+                            {hasActualFinancialData ? money(actual, estimateProject.currency) : "—"}
+                            {" / "}
+                            {money(planned, estimateProject.currency)}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Progress value={progress} className="h-1.5 flex-1 bg-muted/60" />
+                          {overrun > 0 && (
+                            <span className="shrink-0 text-[11px] font-medium tabular-nums text-warning-foreground">
+                              +{money(overrun, estimateProject.currency)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="space-y-2 border-t border-border/60 pt-3">
+                  <details className="rounded-md border border-border/60">
+                    <summary className="cursor-pointer px-2 py-1.5 text-caption font-medium text-muted-foreground">
+                      Details: Financial breakdown
+                    </summary>
+                    <div className="space-y-1 border-t border-border/50 p-2 text-caption">
                       <button
                         type="button"
                         className="flex w-full items-center justify-between rounded-md border border-border/70 px-2 py-1 text-left hover:bg-muted/30"
@@ -981,8 +1172,13 @@ export default function ProjectEstimate() {
                         <span className="font-semibold tabular-nums text-foreground">{money(totals.totalCents, estimateProject.currency)}</span>
                       </div>
                     </div>
+                  </details>
 
-                    <div className="overflow-x-auto">
+                  <details className="rounded-md border border-border/60">
+                    <summary className="cursor-pointer px-2 py-1.5 text-caption font-medium text-muted-foreground">
+                      Details: Plan vs actual table
+                    </summary>
+                    <div className="overflow-x-auto border-t border-border/50 p-2 pt-1">
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -1004,101 +1200,10 @@ export default function ProjectEstimate() {
                         </TableBody>
                       </Table>
                     </div>
-
-                    <div className="grid grid-cols-2 gap-2 text-caption">
-                      <div className="rounded-md border border-border/70 p-2">
-                        <p className="text-muted-foreground">Planned total</p>
-                        <p className="text-sm font-medium text-foreground">{money(combinedPlanFact.planned.plannedBudgetCents, estimateProject.currency)}</p>
-                      </div>
-                      <div className="rounded-md border border-border/70 p-2">
-                        <p className="text-muted-foreground">Actual spent</p>
-                        <p className="text-sm font-medium text-foreground">
-                          {hasActualFinancialData ? money(combinedPlanFact.fact.spentCents, estimateProject.currency) : "—"}
-                        </p>
-                      </div>
-                      <div className="rounded-md border border-border/70 p-2">
-                        <p className="text-muted-foreground">Spent above planned</p>
-                        <p className="text-sm font-medium text-foreground">
-                          {hasActualFinancialData ? money(combinedPlanFact.fact.spentAbovePlannedCents, estimateProject.currency) : "—"}
-                        </p>
-                      </div>
-                      <div className="rounded-md border border-border/70 p-2">
-                        <p className="text-muted-foreground">To be paid</p>
-                        <p className="text-sm font-medium text-foreground">{money(combinedPlanFact.fact.toBePaidPlannedCents, estimateProject.currency)}</p>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <p className="text-sm font-semibold text-foreground">Timing</p>
-                <div className="grid grid-cols-2 gap-2 text-caption">
-                  <div className="rounded-md border border-border/70 p-2">
-                    <p className="inline-flex items-center gap-1 text-muted-foreground">
-                      Duration planned
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button type="button" className="text-muted-foreground hover:text-foreground">
-                            <Info className="h-3.5 w-3.5" />
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent>{TIMING_TOOLTIP_TEXT.durationPlanned}</TooltipContent>
-                      </Tooltip>
-                    </p>
-                    <p className="text-sm font-medium text-foreground">
-                      {timingMetrics.durationPlannedDays == null ? "—" : `${timingMetrics.durationPlannedDays} d`}
-                    </p>
-                  </div>
-                  <div className="rounded-md border border-border/70 p-2">
-                    <p className="inline-flex items-center gap-1 text-muted-foreground">
-                      Duration estimated
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button type="button" className="text-muted-foreground hover:text-foreground">
-                            <Info className="h-3.5 w-3.5" />
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent>{TIMING_TOOLTIP_TEXT.durationEstimated}</TooltipContent>
-                      </Tooltip>
-                    </p>
-                    <p className="text-sm font-medium text-foreground">
-                      {timingMetrics.durationEstimatedDays == null ? "—" : `${timingMetrics.durationEstimatedDays} d`}
-                    </p>
-                  </div>
-                  <div className="rounded-md border border-border/70 p-2">
-                    <p className="inline-flex items-center gap-1 text-muted-foreground">
-                      Days to end
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button type="button" className="text-muted-foreground hover:text-foreground">
-                            <Info className="h-3.5 w-3.5" />
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent>{TIMING_TOOLTIP_TEXT.daysToEnd}</TooltipContent>
-                      </Tooltip>
-                    </p>
-                    <p className="text-sm font-medium text-foreground">
-                      {timingMetrics.daysToEnd == null ? "—" : `${timingMetrics.daysToEnd} d`}
-                    </p>
-                  </div>
-                  <div className="rounded-md border border-border/70 p-2">
-                    <p className="inline-flex items-center gap-1 text-muted-foreground">
-                      Behind schedule
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button type="button" className="text-muted-foreground hover:text-foreground">
-                            <Info className="h-3.5 w-3.5" />
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent>{TIMING_TOOLTIP_TEXT.behindSchedule}</TooltipContent>
-                      </Tooltip>
-                    </p>
-                    <p className="text-sm font-medium text-foreground">{timingMetrics.behindScheduleDays} d</p>
-                  </div>
+                  </details>
                 </div>
               </div>
-            </div>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
