@@ -7,6 +7,7 @@ import {
   getOrder,
   placeOrder,
   receiveOrder,
+  updateOrder,
   voidOrder,
 } from "@/data/order-store";
 import {
@@ -141,6 +142,83 @@ describe("order-store", () => {
     const mirroredRequest = getProcurementItemById(item.id);
     expect(mirroredRequest?.orderedQty).toBe(8);
     expect(mirroredRequest?.receivedQty).toBe(8);
+  });
+
+  it("applies bulk receive quantities across multiple order lines", () => {
+    const projectId = `bulk-receive-project-${Date.now()}`;
+    const itemA = createRequestLine(projectId, `line-a-${Date.now()}`, 10);
+    const itemB = createRequestLine(projectId, `line-b-${Date.now()}`, 7);
+    const site = ensureDefaultLocation(projectId);
+
+    const draft = createDraftOrder({
+      projectId,
+      kind: "supplier",
+      supplierName: "Supplier",
+      deliverToLocationId: site.id,
+      lines: [
+        { procurementItemId: itemA.id, qty: 5, unit: "pcs", plannedUnitPrice: 100, actualUnitPrice: 120 },
+        { procurementItemId: itemB.id, qty: 3, unit: "pcs", plannedUnitPrice: 90, actualUnitPrice: 95 },
+      ],
+    });
+    placeOrder(draft.id);
+
+    const placed = getOrder(draft.id);
+    const lineAId = placed?.lines.find((line) => line.procurementItemId === itemA.id)?.id;
+    const lineBId = placed?.lines.find((line) => line.procurementItemId === itemB.id)?.id;
+    expect(lineAId).toBeTruthy();
+    expect(lineBId).toBeTruthy();
+    if (!lineAId || !lineBId) return;
+
+    const firstReceive = receiveOrder(draft.id, {
+      locationId: site.id,
+      lines: [
+        { lineId: lineAId, qty: 2 },
+        { lineId: lineBId, qty: 3 },
+      ],
+    });
+    expect(firstReceive.ok).toBe(true);
+    if (firstReceive.ok) {
+      expect(firstReceive.order.status).toBe("placed");
+      const nextLineA = firstReceive.order.lines.find((line) => line.id === lineAId);
+      const nextLineB = firstReceive.order.lines.find((line) => line.id === lineBId);
+      expect(nextLineA?.receivedQty).toBe(2);
+      expect(nextLineB?.receivedQty).toBe(3);
+    }
+
+    const secondReceive = receiveOrder(draft.id, {
+      locationId: site.id,
+      lines: [{ lineId: lineAId, qty: 3 }],
+    });
+    expect(secondReceive.ok).toBe(true);
+    if (secondReceive.ok) {
+      expect(secondReceive.order.status).toBe("received");
+    }
+
+    expect(getStock(projectId, site.id, toInventoryKey(itemA))).toBe(5);
+    expect(getStock(projectId, site.id, toInventoryKey(itemB))).toBe(3);
+
+    expect(getProcurementItemById(itemA.id)?.receivedQty).toBe(5);
+    expect(getProcurementItemById(itemB.id)?.receivedQty).toBe(3);
+  });
+
+  it("persists delivery scheduled updates on existing order", () => {
+    const projectId = `delivery-date-project-${Date.now()}`;
+    const item = createRequestLine(projectId, `line-${Date.now()}`, 6);
+    const site = ensureDefaultLocation(projectId);
+
+    const draft = createDraftOrder({
+      projectId,
+      kind: "supplier",
+      supplierName: "Supplier",
+      deliverToLocationId: site.id,
+      lines: [{ procurementItemId: item.id, qty: 4, unit: "pcs", plannedUnitPrice: 100, actualUnitPrice: 120 }],
+    });
+    placeOrder(draft.id);
+
+    const deliveryDate = "2026-05-01T00:00:00.000Z";
+    const updated = updateOrder(draft.id, { deliveryDeadline: deliveryDate });
+    expect(updated?.deliveryDeadline).toBe(deliveryDate);
+    expect(getOrder(draft.id)?.deliveryDeadline).toBe(deliveryDate);
   });
 
   it("can cancel draft orders", () => {

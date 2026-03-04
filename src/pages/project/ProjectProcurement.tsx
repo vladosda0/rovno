@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
+  AlertTriangle,
   CalendarIcon,
   ChevronDown,
   ChevronRight,
@@ -31,6 +32,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Calendar } from "@/components/ui/calendar";
 import { EmptyState } from "@/components/EmptyState";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -42,6 +44,7 @@ import {
   archiveProcurementItem,
   updateProcurementItem,
 } from "@/data/procurement-store";
+import { receiveOrder, updateOrder } from "@/data/order-store";
 import { getTask } from "@/data/store";
 import {
   computeFulfilledQty,
@@ -56,6 +59,7 @@ import { cn } from "@/lib/utils";
 import { OrderModal } from "@/components/procurement/OrderModal";
 import { OrderDetailModal } from "@/components/procurement/OrderDetailModal";
 import { ItemTypePicker } from "@/components/procurement/ItemTypePicker";
+import { LocationPicker } from "@/components/procurement/LocationPicker";
 import { ResourceTypeBadge } from "@/components/estimate-v2/ResourceTypeBadge";
 import { useEstimateV2Project } from "@/hooks/use-estimate-v2-data";
 import { relinkProcurementItemToEstimateV2Line } from "@/lib/estimate-v2/procurement-sync";
@@ -166,6 +170,22 @@ function rowQtyPrice(
   };
 }
 
+type OrderedReceivableTarget = {
+  selectionKey: string;
+  orderId: string;
+  lineId: string;
+  procurementItemId: string;
+  itemType: ProcurementItemType;
+  itemName: string;
+  itemSpec: string | null;
+  orderedQty: number;
+  alreadyReceivedQty: number;
+  remainingQty: number;
+  unit: string;
+  unitPrice: number;
+  locationId: string | null;
+};
+
 export default function ProjectProcurement() {
   const { id: projectId, itemId, orderId } = useParams<{ id: string; itemId?: string; orderId?: string }>();
   const navigate = useNavigate();
@@ -189,6 +209,11 @@ export default function ProjectProcurement() {
   const [collapsedOrderIds, setCollapsedOrderIds] = useState<Set<string>>(new Set());
   const [collapsedLocationIds, setCollapsedLocationIds] = useState<Set<string>>(new Set());
   const [selectedRequestedIds, setSelectedRequestedIds] = useState<Set<string>>(new Set());
+  const [selectedOrderedLineKeys, setSelectedOrderedLineKeys] = useState<Set<string>>(new Set());
+  const [receiveModalOpen, setReceiveModalOpen] = useState(false);
+  const [receiveModalTargets, setReceiveModalTargets] = useState<OrderedReceivableTarget[]>([]);
+  const [receiveModalQtyByKey, setReceiveModalQtyByKey] = useState<Record<string, number>>({});
+  const [receiveModalLocationByKey, setReceiveModalLocationByKey] = useState<Record<string, string>>({});
 
   const [createOrderOpen, setCreateOrderOpen] = useState(false);
   const [createOrderItemIds, setCreateOrderItemIds] = useState<string[]>([]);
@@ -280,6 +305,16 @@ export default function ProjectProcurement() {
     [pid, items, orders, stockRows],
   );
 
+  const itemById = useMemo(
+    () => new Map(items.map((item) => [item.id, item])),
+    [items],
+  );
+
+  const defaultLocationId = useMemo(
+    () => locations.find((location) => location.isDefault)?.id ?? locations[0]?.id ?? null,
+    [locations],
+  );
+
   const isItemSearchMatch = useCallback((item: ProcurementItemV2) => {
     if (!search.trim()) return true;
     const q = search.trim().toLowerCase();
@@ -317,6 +352,12 @@ export default function ProjectProcurement() {
   }, [activeTab, selectedRequestedIds.size]);
 
   useEffect(() => {
+    if (activeTab !== "ordered" && selectedOrderedLineKeys.size > 0) {
+      setSelectedOrderedLineKeys(new Set());
+    }
+  }, [activeTab, selectedOrderedLineKeys.size]);
+
+  useEffect(() => {
     setSelectedRequestedIds((prev) => {
       if (prev.size === 0) return prev;
       const visibleIds = new Set(requestedItems.map((item) => item.id));
@@ -338,7 +379,7 @@ export default function ProjectProcurement() {
         const q = search.trim().toLowerCase();
         const supplierMatch = (order.supplierName ?? "").toLowerCase().includes(q);
         const lineMatch = order.lines.some((line) => {
-          const item = items.find((entry) => entry.id === line.procurementItemId);
+          const item = itemById.get(line.procurementItemId);
           return (
             item?.name.toLowerCase().includes(q)
             || (item?.spec?.toLowerCase().includes(q) ?? false)
@@ -346,7 +387,75 @@ export default function ProjectProcurement() {
         });
         return supplierMatch || lineMatch;
       })
-  ), [orders, search, items]);
+  ), [orders, search, itemById]);
+
+  const supplierOrderNumberById = useMemo(() => {
+    const sortedSupplierOrders = orders
+      .filter((order) => order.kind === "supplier")
+      .slice()
+      .sort((a, b) => {
+        const dateDelta = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        if (dateDelta !== 0) return dateDelta;
+        return a.id.localeCompare(b.id);
+      });
+    const map = new Map<string, number>();
+    sortedSupplierOrders.forEach((order, index) => {
+      map.set(order.id, index + 1);
+    });
+    return map;
+  }, [orders]);
+
+  const orderedReceivableTargets = useMemo(() => {
+    const targets: OrderedReceivableTarget[] = [];
+
+    placedSupplierOrders.forEach((order) => {
+      const orderLocationId = order.deliverToLocationId ?? defaultLocationId;
+
+      order.lines.forEach((line) => {
+        const item = itemById.get(line.procurementItemId);
+        if (!item) return;
+        const remainingQty = Math.max(0, line.qty - line.receivedQty);
+        if (remainingQty <= 0) return;
+
+        const unitPrice = line.actualUnitPrice
+          ?? item.actualUnitPrice
+          ?? line.plannedUnitPrice
+          ?? item.plannedUnitPrice
+          ?? 0;
+
+        targets.push({
+          selectionKey: `${order.id}:${line.id}`,
+          orderId: order.id,
+          lineId: line.id,
+          procurementItemId: item.id,
+          itemType: item.type,
+          itemName: item.name,
+          itemSpec: item.spec,
+          orderedQty: line.qty,
+          alreadyReceivedQty: line.receivedQty,
+          remainingQty,
+          unit: line.unit,
+          unitPrice,
+          locationId: orderLocationId,
+        });
+      });
+    });
+
+    return targets;
+  }, [placedSupplierOrders, itemById, defaultLocationId]);
+
+  const orderedReceivableTargetByKey = useMemo(() => (
+    new Map(orderedReceivableTargets.map((target) => [target.selectionKey, target]))
+  ), [orderedReceivableTargets]);
+
+  useEffect(() => {
+    setSelectedOrderedLineKeys((prev) => {
+      if (prev.size === 0) return prev;
+      const visibleKeys = new Set(orderedReceivableTargets.map((target) => target.selectionKey));
+      const next = new Set(Array.from(prev).filter((selectionKey) => visibleKeys.has(selectionKey)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [orderedReceivableTargets]);
 
   const inStockGroups = useMemo(() => {
     const groups = computeInStockByLocation(pid, items, orders, locations);
@@ -571,6 +680,94 @@ export default function ProjectProcurement() {
     });
   };
 
+  const toggleSelectedOrderedLine = (selectionKey: string, checked: boolean) => {
+    setSelectedOrderedLineKeys((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(selectionKey);
+      else next.delete(selectionKey);
+      return next;
+    });
+  };
+
+  const openReceiveItemsModal = useCallback((targets: OrderedReceivableTarget[]) => {
+    if (targets.length === 0) return;
+    const nextQtyByKey: Record<string, number> = {};
+    const nextLocationByKey: Record<string, string> = {};
+    targets.forEach((target) => {
+      nextQtyByKey[target.selectionKey] = target.remainingQty;
+      const locationId = target.locationId ?? defaultLocationId ?? "";
+      nextLocationByKey[target.selectionKey] = locationId;
+    });
+    setReceiveModalTargets(targets);
+    setReceiveModalQtyByKey(nextQtyByKey);
+    setReceiveModalLocationByKey(nextLocationByKey);
+    setReceiveModalOpen(true);
+  }, [defaultLocationId]);
+
+  const openReceiveModalForSelection = () => {
+    const targets = Array.from(selectedOrderedLineKeys)
+      .map((selectionKey) => orderedReceivableTargetByKey.get(selectionKey))
+      .filter((target): target is OrderedReceivableTarget => !!target);
+    openReceiveItemsModal(targets);
+  };
+
+  const submitReceiveItems = () => {
+    const payloadByOrderAndLocation = new Map<string, { orderId: string; locationId: string; lines: Array<{ lineId: string; qty: number }> }>();
+    let hasMissingLocation = false;
+
+    receiveModalTargets.forEach((target) => {
+      const rawQty = Number(receiveModalQtyByKey[target.selectionKey] ?? 0);
+      const clampedQty = Math.min(target.remainingQty, Math.max(0, Number.isFinite(rawQty) ? rawQty : 0));
+      if (clampedQty <= 0) return;
+      const locationId = receiveModalLocationByKey[target.selectionKey] ?? target.locationId ?? defaultLocationId ?? "";
+      if (!locationId) {
+        hasMissingLocation = true;
+        return;
+      }
+
+      const payloadKey = `${target.orderId}:${locationId}`;
+      const existing = payloadByOrderAndLocation.get(payloadKey);
+      if (!existing) {
+        payloadByOrderAndLocation.set(payloadKey, {
+          orderId: target.orderId,
+          locationId,
+          lines: [{ lineId: target.lineId, qty: clampedQty }],
+        });
+        return;
+      }
+
+      existing.lines.push({ lineId: target.lineId, qty: clampedQty });
+    });
+
+    if (hasMissingLocation) {
+      toast({ title: "Location is required", description: "Select receive location for each item", variant: "destructive" });
+      return;
+    }
+
+    if (payloadByOrderAndLocation.size === 0) {
+      toast({ title: "No quantities entered", description: "Set at least one quantity greater than zero", variant: "destructive" });
+      return;
+    }
+
+    for (const payload of payloadByOrderAndLocation.values()) {
+      const result = receiveOrder(payload.orderId, {
+        locationId: payload.locationId,
+        lines: payload.lines,
+      });
+      if (!result.ok) {
+        toast({ title: "Receive failed", description: result.error, variant: "destructive" });
+        return;
+      }
+    }
+
+    toast({ title: payloadByOrderAndLocation.size > 1 ? "Items received" : "Item received" });
+    setReceiveModalOpen(false);
+    setReceiveModalTargets([]);
+    setReceiveModalQtyByKey({});
+    setReceiveModalLocationByKey({});
+    setSelectedOrderedLineKeys(new Set());
+  };
+
   const addUrlAttachment = () => {
     const url = attachmentUrl.trim();
     if (!url) return;
@@ -650,7 +847,23 @@ export default function ProjectProcurement() {
     </thead>
   );
 
-  const renderFactTableHeader = () => (
+  const renderOrderedTableHeader = () => (
+    <thead className="bg-muted/30 border-b border-border">
+      <tr>
+        <th className="w-10 text-left px-2 py-2 text-xs font-medium text-muted-foreground" />
+        <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Name / Spec</th>
+        <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">When needed</th>
+        <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Delivery scheduled</th>
+        <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Amount</th>
+        <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Unit</th>
+        <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Unit price</th>
+        <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Total</th>
+        <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Action</th>
+      </tr>
+    </thead>
+  );
+
+  const renderInStockTableHeader = () => (
     <thead className="bg-muted/30 border-b border-border">
       <tr>
         <th className="w-10 text-left px-2 py-2 text-xs font-medium text-muted-foreground" />
@@ -681,6 +894,17 @@ export default function ProjectProcurement() {
               onClick={() => openCreateOrder(Array.from(selectedRequestedIds))}
             >
               Create order ({selectedRequestedIds.size})
+            </Button>
+          )}
+          {activeTab === "ordered" && selectedOrderedLineKeys.size > 0 && (
+            <Button
+              type="button"
+              size="sm"
+              className="h-8"
+              onClick={openReceiveModalForSelection}
+              disabled={!canEdit}
+            >
+              Items received ({selectedOrderedLineKeys.size})
             </Button>
           )}
         </div>
@@ -922,8 +1146,9 @@ export default function ProjectProcurement() {
           ) : (
             placedSupplierOrders.map((order) => {
               const collapsed = collapsedOrderIds.has(order.id);
+              const orderNumber = supplierOrderNumberById.get(order.id) ?? 0;
               const total = order.lines.reduce((sum, line) => {
-                const item = items.find((entry) => entry.id === line.procurementItemId);
+                const item = itemById.get(line.procurementItemId);
                 const unitPrice = line.actualUnitPrice ?? line.plannedUnitPrice ?? item?.actualUnitPrice ?? item?.plannedUnitPrice ?? 0;
                 const openQty = Math.max(line.qty - line.receivedQty, 0);
                 return sum + unitPrice * openQty;
@@ -931,69 +1156,136 @@ export default function ProjectProcurement() {
 
               return (
                 <div key={order.id} className="rounded-lg border border-border overflow-hidden">
-                  <button
-                    type="button"
-                    className="w-full flex items-center gap-2 px-3 py-2 bg-muted/40 hover:bg-muted/60 transition-colors"
-                    onClick={() => toggleOrder(order.id)}
-                  >
-                    {collapsed ? <ChevronRight className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-                    <span className="text-sm font-semibold text-foreground truncate">{order.supplierName || "Supplier order"}</span>
-                    <span className="text-xs text-muted-foreground">{order.lines.length} lines</span>
+                  <div className="w-full flex items-center gap-2 px-3 py-2 bg-muted/40">
+                    <button
+                      type="button"
+                      className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-muted/70"
+                      onClick={() => toggleOrder(order.id)}
+                      aria-label={collapsed ? "Expand order" : "Collapse order"}
+                    >
+                      {collapsed ? <ChevronRight className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+                    </button>
+                    <button
+                      type="button"
+                      className="text-sm font-semibold text-foreground hover:underline"
+                      onClick={() => openOrderDetail(order.id)}
+                    >
+                      {`Supplier order #${orderNumber}`}
+                    </button>
+                    {order.supplierName && (
+                      <span className="text-xs text-muted-foreground truncate">{order.supplierName}</span>
+                    )}
                     <span className="ml-auto text-xs text-muted-foreground">{fmtCost(total)}</span>
-                  </button>
+                  </div>
 
                   {!collapsed && (
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
-                        {renderFactTableHeader()}
+                        {renderOrderedTableHeader()}
                         <tbody>
                           {order.lines.map((line) => {
-                            const item = items.find((entry) => entry.id === line.procurementItemId);
+                            const item = itemById.get(line.procurementItemId);
                             if (!item) return null;
                             const openQty = Math.max(line.qty - line.receivedQty, 0);
                             const unitPrice = line.actualUnitPrice ?? line.plannedUnitPrice ?? item.actualUnitPrice ?? item.plannedUnitPrice ?? 0;
-                            const plannedPrice = line.plannedUnitPrice ?? item.plannedUnitPrice ?? 0;
+                            const selectionKey = `${order.id}:${line.id}`;
+                            const receivableTarget = orderedReceivableTargetByKey.get(selectionKey);
+                            const selected = !!receivableTarget && selectedOrderedLineKeys.has(selectionKey);
+                            const parsedDelivery = order.deliveryDeadline ? new Date(order.deliveryDeadline) : null;
+                            const selectedDeliveryDate = parsedDelivery && !Number.isNaN(parsedDelivery.getTime()) ? parsedDelivery : undefined;
 
                             return (
                               <tr key={line.id} className="border-b border-border/70 last:border-0 hover:bg-muted/20">
-                                <td className="px-2 py-2" />
                                 <td className="px-2 py-2">
-                                  <span className="inline-flex rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground capitalize">{item.type}</span>
+                                  <Checkbox
+                                    checked={selected}
+                                    onCheckedChange={(checked) => {
+                                      if (!receivableTarget) return;
+                                      toggleSelectedOrderedLine(receivableTarget.selectionKey, !!checked);
+                                    }}
+                                    disabled={!canEdit || !receivableTarget}
+                                  />
                                 </td>
                                 <td className="px-2 py-2 min-w-[220px]">
                                   <button type="button" className="text-left hover:underline" onClick={() => openDetail(item)}>
-                                    <p className="font-medium text-foreground truncate">{item.name}</p>
+                                    <div className="flex min-w-0 items-start gap-2">
+                                      <ResourceTypeBadge type={item.type} className="shrink-0 border-transparent" />
+                                      <div className="min-w-0">
+                                        <p className="font-medium text-foreground truncate">{item.name}</p>
+                                        {item.spec && <p className="text-xs text-muted-foreground truncate">{item.spec}</p>}
+                                      </div>
+                                    </div>
                                     {item.orphaned && (
                                       <span className="inline-flex rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] text-destructive">
                                         Orphaned
                                       </span>
                                     )}
-                                    {item.spec && <p className="text-xs text-muted-foreground truncate">{item.spec}</p>}
                                   </button>
                                 </td>
                                 <td className={cn("px-2 py-2 text-xs", isOverdue(item.requiredByDate) && "text-destructive")}>
                                   {formatDate(item.requiredByDate)}
                                 </td>
                                 <td className="px-2 py-2">
-                                  <button type="button" className="text-xs text-accent hover:underline" onClick={() => openOrderDetail(order.id)}>
-                                    {formatDate(order.deliveryDeadline)}
-                                  </button>
+                                  <Popover>
+                                    <PopoverTrigger asChild>
+                                      <button type="button" className="text-xs text-accent hover:underline">
+                                        {order.deliveryDeadline ? formatDate(order.deliveryDeadline) : "-"}
+                                      </button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0" align="start">
+                                      <Calendar
+                                        mode="single"
+                                        selected={selectedDeliveryDate}
+                                        onSelect={(nextDate) => {
+                                          if (!nextDate) return;
+                                          updateOrder(order.id, { deliveryDeadline: nextDate.toISOString() });
+                                        }}
+                                        initialFocus
+                                      />
+                                    </PopoverContent>
+                                  </Popover>
                                 </td>
-                                <td className="px-2 py-2 text-right">{openQty}</td>
+                                <td className="px-2 py-2 text-right">
+                                  <div className="flex items-center justify-end gap-1">
+                                    <p className="tabular-nums text-foreground">{openQty}</p>
+                                    {line.receivedQty > 0 && openQty > 0 && (
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <button type="button" className="text-warning" aria-label="Partial receive details">
+                                            <AlertTriangle className="h-3.5 w-3.5" />
+                                          </button>
+                                        </TooltipTrigger>
+                                        <TooltipContent className="max-w-xs text-caption">
+                                          <p>{`Received ${line.receivedQty} out of ${line.qty}.`}</p>
+                                          <button
+                                            type="button"
+                                            className="mt-1 text-accent hover:underline"
+                                            onClick={(event) => {
+                                              event.stopPropagation();
+                                              setActiveTab("in_stock");
+                                            }}
+                                          >
+                                            Learn more
+                                          </button>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    )}
+                                  </div>
+                                </td>
                                 <td className="px-2 py-2">{line.unit}</td>
                                 <td className="px-2 py-2 text-right">{fmtCost(unitPrice)}</td>
-                                <td className="px-2 py-2 text-right">{fmtCost(plannedPrice)}</td>
                                 <td className="px-2 py-2 text-right">{fmtCost(unitPrice * openQty)}</td>
                                 <td className="px-2 py-2">
-                                  <div className="flex flex-col items-start gap-1">
-                                    <button type="button" className="text-xs text-accent hover:underline" onClick={() => openOrderDetail(order.id)}>
-                                      Ordered
-                                    </button>
-                                    {item.orphaned && (
-                                      <button type="button" className="text-xs text-accent hover:underline" onClick={() => openDetail(item)}>
-                                        Relink
-                                      </button>
-                                    )}
+                                  <div className="flex justify-end">
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      className="h-7"
+                                      onClick={() => receivableTarget && openReceiveItemsModal([receivableTarget])}
+                                      disabled={!canEdit || !receivableTarget}
+                                    >
+                                      Receive
+                                    </Button>
                                   </div>
                                 </td>
                               </tr>
@@ -1034,7 +1326,7 @@ export default function ProjectProcurement() {
                   {!collapsed && (
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
-                        {renderFactTableHeader()}
+                        {renderInStockTableHeader()}
                         <tbody>
                           {group.items.map((entry) => {
                             const item = items.find((candidate) => candidate.id === entry.procurementItemId);
@@ -1103,6 +1395,106 @@ export default function ProjectProcurement() {
           )}
         </div>
       )}
+
+      <Dialog
+        open={receiveModalOpen}
+        onOpenChange={(nextOpen) => {
+          setReceiveModalOpen(nextOpen);
+          if (!nextOpen) {
+            setReceiveModalTargets([]);
+            setReceiveModalQtyByKey({});
+            setReceiveModalLocationByKey({});
+          }
+        }}
+      >
+        <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] p-0 gap-0 overflow-hidden">
+          <DialogHeader className="px-5 py-4 border-b border-border">
+            <DialogTitle>Receive items</DialogTitle>
+          </DialogHeader>
+
+          {receiveModalTargets.length === 0 ? (
+            <div className="px-5 py-4 text-sm text-muted-foreground">No items selected.</div>
+          ) : (
+            <div className="px-5 py-4 overflow-y-auto space-y-3">
+              {receiveModalTargets.length === 1 && (
+                <div className="rounded-lg border border-border p-3">
+                  <p className="font-medium text-foreground">{receiveModalTargets[0].itemName}</p>
+                  {receiveModalTargets[0].itemSpec && (
+                    <p className="text-xs text-muted-foreground mt-1">{receiveModalTargets[0].itemSpec}</p>
+                  )}
+                </div>
+              )}
+
+              <div className="rounded-lg border border-border overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/30 border-b border-border">
+                    <tr>
+                      <th className="text-left px-3 py-2">Item</th>
+                      <th className="text-right px-3 py-2">Ordered</th>
+                      <th className="text-right px-3 py-2">Already received</th>
+                      <th className="text-right px-3 py-2">Remaining</th>
+                      <th className="text-left px-3 py-2">Location</th>
+                      <th className="text-right px-3 py-2">Quantity received now</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {receiveModalTargets.map((target) => (
+                      <tr key={target.selectionKey} className="border-b border-border/70 last:border-0">
+                        <td className="px-3 py-2">
+                          <div className="flex min-w-0 items-start gap-2">
+                            <ResourceTypeBadge type={target.itemType} className="shrink-0 border-transparent" />
+                            <div className="min-w-0">
+                              <p className="font-medium text-foreground">{target.itemName}</p>
+                              {target.itemSpec && <p className="text-xs text-muted-foreground">{target.itemSpec}</p>}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums">{target.orderedQty} {target.unit}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{target.alreadyReceivedQty} {target.unit}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{target.remainingQty} {target.unit}</td>
+                        <td className="px-3 py-2">
+                          <LocationPicker
+                            projectId={pid}
+                            value={receiveModalLocationByKey[target.selectionKey] ?? ""}
+                            onChange={(nextLocationId) => {
+                              setReceiveModalLocationByKey((prev) => ({
+                                ...prev,
+                                [target.selectionKey]: nextLocationId,
+                              }));
+                            }}
+                            className="h-8"
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <Input
+                            type="number"
+                            min="0"
+                            max={target.remainingQty}
+                            value={receiveModalQtyByKey[target.selectionKey] ?? target.remainingQty}
+                            onChange={(event) => {
+                              const rawQty = Number(event.target.value);
+                              const clampedQty = Math.min(target.remainingQty, Math.max(0, Number.isFinite(rawQty) ? rawQty : 0));
+                              setReceiveModalQtyByKey((prev) => ({ ...prev, [target.selectionKey]: clampedQty }));
+                            }}
+                            className="h-8 text-right"
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="px-5 py-4 border-t border-border">
+            <Button type="button" variant="outline" onClick={() => setReceiveModalOpen(false)}>Close</Button>
+            <Button type="button" onClick={submitReceiveItems} disabled={!canEdit || receiveModalTargets.length === 0}>
+              Confirm received
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <OrderModal
         open={createOrderOpen}

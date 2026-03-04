@@ -54,6 +54,30 @@ export function OrderDetailModal({
     }, 0);
   }, [order, itemById]);
 
+  const plannedTotal = useMemo(() => {
+    if (!order) return 0;
+    return order.lines.reduce((sum, line) => {
+      const fallback = itemById.get(line.procurementItemId);
+      const plannedUnit = line.plannedUnitPrice
+        ?? fallback?.plannedUnitPrice
+        ?? 0;
+      return sum + plannedUnit * line.qty;
+    }, 0);
+  }, [order, itemById]);
+
+  const factualTotal = useMemo(() => {
+    if (!order) return 0;
+    return order.lines.reduce((sum, line) => {
+      const fallback = itemById.get(line.procurementItemId);
+      const factualUnit = line.actualUnitPrice
+        ?? fallback?.actualUnitPrice
+        ?? line.plannedUnitPrice
+        ?? fallback?.plannedUnitPrice
+        ?? 0;
+      return sum + factualUnit * line.qty;
+    }, 0);
+  }, [order, itemById]);
+
   const onCancelDraft = () => {
     if (!order) return;
     const result = cancelDraftOrder(order.id);
@@ -119,7 +143,11 @@ export function OrderDetailModal({
                 <div className="rounded-lg border border-border p-3 space-y-1">
                   <p className="text-xs text-muted-foreground">Invoice</p>
                   <p className="text-foreground">{order.invoiceAttachment?.name ?? "—"}</p>
-                  <p className="text-xs text-muted-foreground pt-1">Total</p>
+                  <p className="text-xs text-muted-foreground pt-1">Planned total</p>
+                  <p className="text-foreground">{fmtCost(plannedTotal)}</p>
+                  <p className="text-xs text-muted-foreground pt-1">Factual total</p>
+                  <p className="text-foreground">{fmtCost(factualTotal)}</p>
+                  <p className="text-xs text-muted-foreground pt-1">Open value</p>
                   <p className="text-foreground">{fmtCost(total)}</p>
                 </div>
               </div>
@@ -138,16 +166,22 @@ export function OrderDetailModal({
                       <th className="text-left px-3 py-2">Item</th>
                       <th className="text-right px-3 py-2">Qty</th>
                       <th className="text-left px-3 py-2">Unit</th>
+                      <th className="text-right px-3 py-2">Planned unit</th>
+                      <th className="text-right px-3 py-2">Factual unit</th>
+                      <th className="text-right px-3 py-2">Planned total</th>
+                      <th className="text-right px-3 py-2">Factual total</th>
                       <th className="text-right px-3 py-2">Received</th>
-                      <th className="text-right px-3 py-2">Value</th>
                     </tr>
                   </thead>
                   <tbody>
                     {order.lines.map((line) => {
                       const item = itemById.get(line.procurementItemId);
-                      const unitPrice = line.actualUnitPrice
-                        ?? line.plannedUnitPrice
+                      const plannedUnit = line.plannedUnitPrice
+                        ?? item?.plannedUnitPrice
+                        ?? 0;
+                      const factualUnit = line.actualUnitPrice
                         ?? item?.actualUnitPrice
+                        ?? line.plannedUnitPrice
                         ?? item?.plannedUnitPrice
                         ?? 0;
 
@@ -165,8 +199,11 @@ export function OrderDetailModal({
                           </td>
                           <td className="px-3 py-2 text-right">{line.qty}</td>
                           <td className="px-3 py-2">{line.unit}</td>
+                          <td className="px-3 py-2 text-right">{fmtCost(plannedUnit)}</td>
+                          <td className="px-3 py-2 text-right">{fmtCost(factualUnit)}</td>
+                          <td className="px-3 py-2 text-right">{fmtCost(plannedUnit * line.qty)}</td>
+                          <td className="px-3 py-2 text-right">{fmtCost(factualUnit * line.qty)}</td>
                           <td className="px-3 py-2 text-right">{line.receivedQty}</td>
-                          <td className="px-3 py-2 text-right">{fmtCost(unitPrice * line.qty)}</td>
                         </tr>
                       );
                     })}
