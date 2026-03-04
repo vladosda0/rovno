@@ -54,6 +54,7 @@ import {
   deleteLine,
   deleteStage,
   deleteWork,
+  refreshVersionSnapshot,
   setProjectEstimateStatus,
   submitVersion,
   updateLine,
@@ -64,6 +65,7 @@ import { useEstimateV2Project } from "@/hooks/use-estimate-v2-data";
 import { addEvent, getUserById } from "@/data/store";
 import { computeLineTotals, computeProjectTotals, computeStageTotals } from "@/lib/estimate-v2/pricing";
 import { resolveProjectEstimateCtaState } from "@/lib/estimate-v2/project-estimate-cta";
+import { resolveSubmitToClientState } from "@/lib/estimate-v2/project-estimate-submit-state";
 import {
   combinePlanFact,
   computeFactFromDataSources,
@@ -85,10 +87,13 @@ import type {
   ApprovalStamp,
   EstimateV2ResourceLine,
   EstimateV2Stage,
+  EstimateV2Version,
   EstimateV2Work,
   EstimateExecutionStatus,
   ResourceLineType,
 } from "@/types/estimate-v2";
+import type { UserPlan } from "@/types/entities";
+import { Checkbox } from "@/components/ui/checkbox";
 
 function money(cents: number, currency: string): string {
   return new Intl.NumberFormat("ru-RU", {
@@ -253,6 +258,18 @@ const RESOURCE_CREATE_OPTIONS: Array<{ label: string; value: ResourceLineType; d
   { label: "Other", value: "other", defaultTitle: "Other" },
 ];
 
+const PLAN_PARTICIPANT_CAP: Record<UserPlan, number> = {
+  free: 1,
+  pro: 5,
+  business: 15,
+};
+
+interface ClientRecipient {
+  userId: string;
+  name: string;
+  email: string;
+}
+
 export default function ProjectEstimate() {
   const { id: projectId } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -277,12 +294,24 @@ export default function ProjectEstimate() {
   } = useEstimateV2Project(pid);
 
   const authRole = getAuthRole();
+  const currentMembership = members.find((member) => member.user_id === currentUser.id) ?? null;
   const isOwner = authRole === "owner" && project?.owner_id === currentUser.id;
+  const canSubmitByRole = authRole === "owner" || authRole === "co_owner";
+  const canSubmitByMembership = currentMembership?.role === "owner" || currentMembership?.role === "co_owner";
   const regime = estimateProject.regime;
   const canEditEstimate = isOwner && regime !== "client";
+  const canSubmitToClient = canSubmitByRole && canSubmitByMembership && regime !== "client";
 
   const [activeTab, setActiveTab] = useState("estimate");
   const [approvalModalOpen, setApprovalModalOpen] = useState(false);
+  const [recipientPickerOpen, setRecipientPickerOpen] = useState(false);
+  const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>([]);
+  const [shareLinkModalState, setShareLinkModalState] = useState<{
+    title: string;
+    description: string;
+    link: string;
+    suggestUpgrade: boolean;
+  } | null>(null);
   const [missingDatesWorkIds, setMissingDatesWorkIds] = useState<string[]>([]);
   const [incompleteTaskBlocks, setIncompleteTaskBlocks] = useState<Array<{ taskId: string | null; title: string }>>([]);
   const [collapsedStageIds, setCollapsedStageIds] = useState<Set<string>>(new Set());
@@ -355,6 +384,29 @@ export default function ProjectEstimate() {
       .filter((entry): entry is { id: string; name: string; email: string } => Boolean(entry))
   ), [members]);
 
+  const clientRecipients = useMemo<ClientRecipient[]>(() => (
+    members
+      .filter((member) => member.role === "viewer" && member.viewer_regime === "client")
+      .map((member) => {
+        const user = getUserById(member.user_id);
+        if (!user?.email) return null;
+        return {
+          userId: member.user_id,
+          name: user.name,
+          email: user.email,
+        };
+      })
+      .filter((entry): entry is ClientRecipient => Boolean(entry))
+  ), [members]);
+
+  const ownerPlan = useMemo<UserPlan>(() => {
+    if (!project?.owner_id) return currentUser.plan;
+    const owner = getUserById(project.owner_id);
+    return owner?.plan ?? currentUser.plan;
+  }, [currentUser.plan, project?.owner_id]);
+  const participantLimit = PLAN_PARTICIPANT_CAP[ownerPlan];
+  const availableParticipantSlots = Math.max(participantLimit - members.length, 0);
+
   const workById = useMemo(() => new Map(works.map((work) => [work.id, work])), [works]);
 
   const latestApproved = useMemo(() => (
@@ -372,6 +424,31 @@ export default function ProjectEstimate() {
   const pendingProposed = Boolean(
     latestProposed
     && (!latestApproved || latestProposed.number > latestApproved.number),
+  );
+
+  const currentVersionSnapshot = useMemo(() => ({
+    project: { ...estimateProject },
+    stages: stages.map((stage) => ({ ...stage })),
+    works: works.map((work) => ({ ...work })),
+    lines: lines.map((line) => ({ ...line })),
+    dependencies: dependencies.map((dependency) => ({ ...dependency })),
+  }), [dependencies, estimateProject, lines, stages, works]);
+
+  const hasPendingChangesSinceSubmission = useMemo(() => {
+    if (!pendingProposed || !latestProposed) return true;
+    const nextVersionLike: EstimateV2Version = {
+      ...latestProposed,
+      snapshot: currentVersionSnapshot,
+    };
+    return computeVersionDiff(latestProposed, nextVersionLike).changes.length > 0;
+  }, [currentVersionSnapshot, latestProposed, pendingProposed]);
+
+  const submitState = useMemo(
+    () => resolveSubmitToClientState({
+      hasPendingSubmittedVersion: pendingProposed,
+      hasChangesSincePendingSubmission: hasPendingChangesSinceSubmission,
+    }),
+    [hasPendingChangesSinceSubmission, pendingProposed],
   );
 
   const diff = useMemo(
@@ -535,7 +612,7 @@ export default function ProjectEstimate() {
 
   const ctaState = resolveProjectEstimateCtaState({
     regime,
-    isOwner,
+    isOwner: canSubmitToClient,
     hasProposedVersion: Boolean(latestProposed),
   });
   const reviewExpandedByDefault = regime === "client" && !isOwner;
@@ -597,15 +674,124 @@ export default function ProjectEstimate() {
     setActiveTab(nextTab);
   };
 
-  const handleSubmitToClient = () => {
-    if (!canEditEstimate) return;
-    const snapshot = createVersionSnapshot(pid, currentUser.id);
-    const ok = submitVersion(pid, snapshot.versionId);
-    if (!ok) {
-      toast({ title: "Only project owner can submit versions", variant: "destructive" });
+  const buildShareLink = useCallback((shareId: string) => {
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    return `${origin}/share/estimate/${shareId}`;
+  }, []);
+
+  const copyShareLink = useCallback(async (link: string) => {
+    if (!navigator.clipboard?.writeText) {
+      toast({ title: "Copy failed", description: "Clipboard is unavailable.", variant: "destructive" });
+      return false;
+    }
+    try {
+      await navigator.clipboard.writeText(link);
+      toast({ title: "Share link copied" });
+      return true;
+    } catch {
+      toast({ title: "Copy failed", description: "Clipboard is unavailable.", variant: "destructive" });
+      return false;
+    }
+  }, [toast]);
+
+  const submitToClientRecipients = useCallback((recipients: ClientRecipient[]) => {
+    if (!canSubmitToClient) return;
+    if (submitState.submitDisabled) {
+      toast({ title: submitState.submitDisabledReason ?? "No changes since last submission", variant: "destructive" });
       return;
     }
-    toast({ title: "New estimate version submitted" });
+
+    const hasDirectRecipients = recipients.length > 0;
+    const previewOnly = !hasDirectRecipients && availableParticipantSlots === 0;
+    const submitOptions = previewOnly
+      ? {
+        shareApprovalPolicy: "disabled" as const,
+        shareApprovalDisabledReason: "no_participant_slot" as const,
+      }
+      : {
+        shareApprovalPolicy: "registered" as const,
+      };
+
+    let ok = false;
+    let shareId = "";
+
+    if (pendingProposed && latestProposed) {
+      ok = refreshVersionSnapshot(pid, latestProposed.id, currentUser.id, submitOptions);
+      shareId = latestProposed.shareId;
+    } else {
+      const snapshot = createVersionSnapshot(pid, currentUser.id);
+      ok = submitVersion(pid, snapshot.versionId, submitOptions);
+      shareId = snapshot.shareId;
+    }
+
+    if (!ok) {
+      toast({ title: "Only owner or co-owner can submit versions", variant: "destructive" });
+      return;
+    }
+
+    if (hasDirectRecipients) {
+      const recipientEmails = recipients.map((recipient) => recipient.email).join(", ");
+      toast({
+        title: pendingProposed && latestProposed ? "Estimate resubmitted to client" : "Estimate submitted to client",
+        description: recipientEmails,
+      });
+      return;
+    }
+
+    const shareLink = buildShareLink(shareId);
+    void copyShareLink(shareLink);
+    if (previewOnly) {
+      setShareLinkModalState({
+        title: "Client not added and no participant slots",
+        description: "Client can preview this estimate via link. Approval is disabled until you upgrade the plan and add client as participant.",
+        link: shareLink,
+        suggestUpgrade: true,
+      });
+      return;
+    }
+    setShareLinkModalState({
+      title: "Client not added",
+      description: "Share this link with client. They can preview without registration and register in app to approve.",
+      link: shareLink,
+      suggestUpgrade: false,
+    });
+  }, [
+    availableParticipantSlots,
+    buildShareLink,
+    canSubmitToClient,
+    copyShareLink,
+    currentUser.id,
+    latestProposed,
+    pendingProposed,
+    pid,
+    submitState.submitDisabled,
+    submitState.submitDisabledReason,
+    toast,
+  ]);
+
+  const handleSubmitToClient = () => {
+    if (!canSubmitToClient) return;
+    if (clientRecipients.length > 1) {
+      setSelectedRecipientIds([]);
+      setRecipientPickerOpen(true);
+      return;
+    }
+    submitToClientRecipients(clientRecipients);
+  };
+
+  const handleSubmitToSelectedRecipients = () => {
+    const selectedRecipients = clientRecipients.filter((recipient) => selectedRecipientIds.includes(recipient.userId));
+    if (selectedRecipients.length === 0) {
+      toast({ title: "Select at least one client recipient", variant: "destructive" });
+      return;
+    }
+    setRecipientPickerOpen(false);
+    submitToClientRecipients(selectedRecipients);
+  };
+
+  const handleCopyShareLink = () => {
+    if (!shareLinkModalState?.link) return;
+    void copyShareLink(shareLinkModalState.link);
   };
 
   const handleProjectApprove = (stamp: ApprovalStamp) => {
@@ -891,7 +1077,13 @@ export default function ProjectEstimate() {
             </Button>
 
             {ctaState.showSubmit && (
-              <Button size="sm" className="bg-accent text-accent-foreground hover:bg-accent/90" onClick={handleSubmitToClient}>
+              <Button
+                size="sm"
+                className="bg-accent text-accent-foreground hover:bg-accent/90"
+                onClick={handleSubmitToClient}
+                disabled={submitState.submitDisabled}
+                title={submitState.submitDisabledReason ?? undefined}
+              >
                 Submit to client
               </Button>
             )}
@@ -909,6 +1101,9 @@ export default function ProjectEstimate() {
 
             {ctaState.showApprove && ctaState.approveDisabledReason && (
               <span className="text-caption text-muted-foreground">{ctaState.approveDisabledReason}</span>
+            )}
+            {ctaState.showSubmit && submitState.submitDisabledReason && (
+              <span className="text-caption text-muted-foreground">{submitState.submitDisabledReason}</span>
             )}
           </div>
         </div>
@@ -1458,7 +1653,9 @@ export default function ProjectEstimate() {
                                   >
                                     <TableHeader>
                                       <TableRow>
-                                        <TableHead className="sticky left-0 z-20 h-9 w-[360px] bg-card py-1 pr-2">Resource</TableHead>
+                                        <TableHead className="sticky left-0 z-30 h-9 w-[360px] border-r border-border bg-card py-1 pr-2 shadow-[6px_0_10px_-10px_hsl(var(--foreground)/0.45)]">
+                                          Resource
+                                        </TableHead>
                                         {showAssignmentColumn && (
                                           <TableHead className="h-9 w-[170px] py-1 pr-2">
                                             <span className="inline-flex items-center gap-1">
@@ -1492,11 +1689,9 @@ export default function ProjectEstimate() {
                                           : resolvedUnitSelectValue;
                                         const customDraft = customUnitDraftByLineId[line.id] ?? (isCustomUnit ? line.unit : "");
                                         const shouldShowCustomInput = isCustomUnit || customUnitInputLineIds.has(line.id);
-                                        const stickyBackground = changedLineIds.has(line.id) ? "bg-warning/10" : "bg-card";
-
                                         return (
                                           <TableRow key={line.id} className={changedLineIds.has(line.id) ? "bg-warning/10" : ""}>
-                                            <TableCell className={`sticky left-0 z-10 w-[360px] py-1.5 pr-2 align-top ${stickyBackground}`}>
+                                            <TableCell className="sticky left-0 z-20 w-[360px] border-r border-border bg-card py-1.5 pr-2 align-top shadow-[6px_0_10px_-10px_hsl(var(--foreground)/0.35)]">
                                               <div className="flex min-w-0 items-start gap-2">
                                                 {canEditEstimate ? (
                                                   <DropdownMenu>
@@ -1837,6 +2032,77 @@ export default function ProjectEstimate() {
                 </li>
               ))}
             </ul>
+          </div>
+        </ConfirmModal>
+
+        <ConfirmModal
+          open={recipientPickerOpen}
+          onOpenChange={(open) => {
+            setRecipientPickerOpen(open);
+            if (!open) setSelectedRecipientIds([]);
+          }}
+          title="Choose client recipients"
+          description="Select client emails that should receive this submission."
+          confirmLabel="Submit to selected"
+          cancelLabel="Cancel"
+          onConfirm={handleSubmitToSelectedRecipients}
+          onCancel={() => {
+            setRecipientPickerOpen(false);
+            setSelectedRecipientIds([]);
+          }}
+        >
+          <div className="max-h-56 overflow-auto rounded-md border border-border p-2 space-y-2">
+            {clientRecipients.map((recipient) => {
+              const checked = selectedRecipientIds.includes(recipient.userId);
+              return (
+                <label
+                  key={recipient.userId}
+                  className="flex items-center gap-2 rounded-md border border-border/70 px-2 py-1.5 text-sm text-foreground"
+                >
+                  <Checkbox
+                    checked={checked}
+                    onCheckedChange={(nextChecked) => {
+                      const isChecked = Boolean(nextChecked);
+                      setSelectedRecipientIds((current) => {
+                        if (isChecked) {
+                          if (current.includes(recipient.userId)) return current;
+                          return [...current, recipient.userId];
+                        }
+                        return current.filter((id) => id !== recipient.userId);
+                      });
+                    }}
+                  />
+                  <span>{recipient.name}</span>
+                  <span className="text-caption text-muted-foreground">{recipient.email}</span>
+                </label>
+              );
+            })}
+          </div>
+        </ConfirmModal>
+
+        <ConfirmModal
+          open={Boolean(shareLinkModalState)}
+          onOpenChange={(open) => {
+            if (!open) setShareLinkModalState(null);
+          }}
+          title={shareLinkModalState?.title ?? "Share estimate"}
+          description={shareLinkModalState?.description ?? ""}
+          confirmLabel={shareLinkModalState?.suggestUpgrade ? "Upgrade plan" : "Close"}
+          showCancel={Boolean(shareLinkModalState?.suggestUpgrade)}
+          cancelLabel="Close"
+          tertiaryLabel="Copy link"
+          onTertiary={handleCopyShareLink}
+          onConfirm={() => {
+            if (shareLinkModalState?.suggestUpgrade) {
+              navigate("/pricing");
+            }
+            setShareLinkModalState(null);
+          }}
+          onCancel={() => setShareLinkModalState(null)}
+        >
+          <div className="space-y-2 py-1">
+            <p className="text-caption text-muted-foreground">Share estimate link</p>
+            <Input readOnly value={shareLinkModalState?.link ?? ""} />
           </div>
         </ConfirmModal>
 

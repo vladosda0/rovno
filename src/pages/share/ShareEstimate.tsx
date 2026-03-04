@@ -19,6 +19,7 @@ import { computeLineTotals, computeProjectTotals } from "@/lib/estimate-v2/prici
 import { ApprovalStampCard } from "@/components/estimate-v2/ApprovalStampCard";
 import { ApprovalStampFormModal } from "@/components/estimate-v2/ApprovalStampFormModal";
 import type { ApprovalStamp } from "@/types/estimate-v2";
+import { isAuthenticated } from "@/lib/auth-state";
 
 function money(cents: number, currency: string): string {
   return new Intl.NumberFormat("ru-RU", {
@@ -118,10 +119,14 @@ export default function ShareEstimate() {
 
   const latestProposed = projectId ? getLatestProposedVersion(projectId) : null;
   const newerProposed = latestProposed && version && latestProposed.number > version.number ? latestProposed : null;
-  const canApprove = version?.status === "proposed"
+  const approvalEligible = version?.status === "proposed"
     && version.submitted
     && !version.archived
     && !version.approvalStamp;
+  const isGuest = !isAuthenticated();
+  const approvalBlockedByPolicy = version?.shareApprovalPolicy === "disabled";
+  const canApprove = Boolean(approvalEligible && !isGuest && !approvalBlockedByPolicy);
+  const requiresRegistrationToApprove = Boolean(approvalEligible && isGuest && !approvalBlockedByPolicy);
 
   if (!shared || !snapshot || !version) {
     return (
@@ -146,6 +151,10 @@ export default function ShareEstimate() {
 
     setApprovalModalOpen(false);
     toast({ title: "Approved" });
+  };
+
+  const handleRegisterToApprove = () => {
+    navigate("/auth/signup");
   };
 
   const handleAskQuestion = () => {
@@ -177,6 +186,16 @@ export default function ShareEstimate() {
             <Button size="sm" variant="outline" onClick={() => navigate(`/share/estimate/${newerProposed.shareId}`)}>
               Open latest
             </Button>
+          </div>
+        )}
+        {requiresRegistrationToApprove && (
+          <div className="rounded-md border border-info/50 bg-info/10 p-2 text-caption text-foreground">
+            Register or sign in to approve this estimate version.
+          </div>
+        )}
+        {approvalBlockedByPolicy && (
+          <div className="rounded-md border border-warning/40 bg-warning/10 p-2 text-caption text-foreground">
+            Approval is unavailable until project owner upgrades plan and adds client as participant.
           </div>
         )}
       </div>
@@ -244,6 +263,9 @@ export default function ShareEstimate() {
         <h2 className="text-body-sm font-semibold text-foreground">Approval</h2>
         <div className="flex flex-wrap gap-2">
           {canApprove && <Button onClick={() => setApprovalModalOpen(true)}>Approve</Button>}
+          {requiresRegistrationToApprove && (
+            <Button onClick={handleRegisterToApprove}>Register to approve</Button>
+          )}
           <Button variant="outline" onClick={handleAskQuestion}>Ask questions</Button>
         </div>
       </div>

@@ -4,6 +4,8 @@ export type Regime = "contractor" | "client" | "build_myself";
 export type ProjectMode = "build_myself" | "contractor";
 
 export type EstimateV2VersionStatus = "proposed" | "approved";
+export type EstimateV2VersionShareApprovalPolicy = "registered" | "disabled";
+export type EstimateV2VersionShareApprovalDisabledReason = "no_participant_slot" | null;
 export type EstimateExecutionStatus = "planning" | "in_work" | "paused" | "finished";
 export type EstimateV2WorkStatus = "not_started" | "in_progress" | "done" | "blocked";
 
@@ -116,6 +118,8 @@ export interface EstimateV2Version {
   status: EstimateV2VersionStatus;
   snapshot: EstimateV2Snapshot;
   shareId: string;
+  shareApprovalPolicy: EstimateV2VersionShareApprovalPolicy;
+  shareApprovalDisabledReason: EstimateV2VersionShareApprovalDisabledReason;
   approvalStamp: ApprovalStamp | null;
   archived: boolean;
   submitted: boolean;

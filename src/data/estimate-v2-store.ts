@@ -5,6 +5,7 @@ import {
   addEvent,
   addTask,
   getCurrentUser,
+  getMembers,
   getProject,
   getProjects,
   getStages,
@@ -42,6 +43,8 @@ import type {
   EstimateV2Stage,
   EstimateV2StructuredChange,
   EstimateV2Version,
+  EstimateV2VersionShareApprovalDisabledReason,
+  EstimateV2VersionShareApprovalPolicy,
   EstimateV2Work,
   EstimateV2WorkStatus,
   Regime,
@@ -72,6 +75,11 @@ export interface EstimateV2ProjectView {
 
 interface ApproveVersionOptions {
   actorId?: string;
+}
+
+interface SubmitVersionOptions {
+  shareApprovalPolicy?: EstimateV2VersionShareApprovalPolicy;
+  shareApprovalDisabledReason?: EstimateV2VersionShareApprovalDisabledReason;
 }
 
 interface SetProjectEstimateStatusOptions {
@@ -277,6 +285,15 @@ function isOwnerActionAllowed(projectId: string): boolean {
 
   const role = getAuthRole();
   return role === "owner";
+}
+
+function isSubmissionActionAllowed(projectId: string): boolean {
+  const authRole = getAuthRole();
+  if (authRole !== "owner" && authRole !== "co_owner") return false;
+  const user = getCurrentUser();
+  const membership = getMembers(projectId).find((member) => member.user_id === user.id);
+  if (!membership) return false;
+  return membership.role === "owner" || membership.role === "co_owner";
 }
 
 function normalizeProjectMode(value: string | null | undefined): ProjectMode {
@@ -1454,11 +1471,15 @@ export function deleteDependency(projectId: string, dependencyId: string) {
   removeDependency(projectId, dependencyId);
 }
 
-export function createVersionSnapshot(projectId: string, createdBy: string): { versionId: string; snapshot: EstimateV2Snapshot } {
+export function createVersionSnapshot(
+  projectId: string,
+  createdBy: string,
+): { versionId: string; shareId: string; snapshot: EstimateV2Snapshot } {
   const state = ensureProjectState(projectId);
   const now = nowIso();
   const snapshot = getSnapshotFromState(state);
   const nextNumber = state.versions.reduce((max, version) => Math.max(max, version.number), 0) + 1;
+  const shareId = id("share");
 
   const version: EstimateV2Version = {
     id: id("estimate-v2-version"),
@@ -1466,7 +1487,9 @@ export function createVersionSnapshot(projectId: string, createdBy: string): { v
     number: nextNumber,
     status: "proposed",
     snapshot,
-    shareId: id("share"),
+    shareId,
+    shareApprovalPolicy: "registered",
+    shareApprovalDisabledReason: null,
     approvalStamp: null,
     archived: true,
     submitted: false,
@@ -1481,15 +1504,36 @@ export function createVersionSnapshot(projectId: string, createdBy: string): { v
 
   return {
     versionId: version.id,
+    shareId,
     snapshot: cloneSnapshot(version.snapshot),
   };
 }
 
-export function submitVersion(projectId: string, versionId: string): boolean {
+function resolveShareApprovalPolicy(
+  options: SubmitVersionOptions,
+): {
+  shareApprovalPolicy: EstimateV2VersionShareApprovalPolicy;
+  shareApprovalDisabledReason: EstimateV2VersionShareApprovalDisabledReason;
+} {
+  const shareApprovalPolicy = options.shareApprovalPolicy ?? "registered";
+  if (shareApprovalPolicy === "disabled") {
+    return {
+      shareApprovalPolicy,
+      shareApprovalDisabledReason: options.shareApprovalDisabledReason ?? "no_participant_slot",
+    };
+  }
+  return {
+    shareApprovalPolicy,
+    shareApprovalDisabledReason: null,
+  };
+}
+
+export function submitVersion(projectId: string, versionId: string, options: SubmitVersionOptions = {}): boolean {
   const state = ensureProjectState(projectId);
-  if (!isOwnerActionAllowed(projectId) || state.project.regime === "client") return false;
+  if (!isSubmissionActionAllowed(projectId) || state.project.regime === "client") return false;
   const now = nowIso();
   const actor = getCurrentUser();
+  const approvalPolicy = resolveShareApprovalPolicy(options);
 
   let submittedVersion: EstimateV2Version | null = null;
 
@@ -1500,6 +1544,9 @@ export function submitVersion(projectId: string, versionId: string): boolean {
         status: "proposed" as const,
         archived: false,
         submitted: true,
+        approvalStamp: null,
+        shareApprovalPolicy: approvalPolicy.shareApprovalPolicy,
+        shareApprovalDisabledReason: approvalPolicy.shareApprovalDisabledReason,
         updatedAt: now,
       };
       submittedVersion = next;
@@ -1535,6 +1582,69 @@ export function submitVersion(projectId: string, versionId: string): boolean {
   return true;
 }
 
+export function refreshVersionSnapshot(
+  projectId: string,
+  versionId: string,
+  actorId: string,
+  options: SubmitVersionOptions = {},
+): boolean {
+  const state = ensureProjectState(projectId);
+  if (!isSubmissionActionAllowed(projectId) || state.project.regime === "client") return false;
+  const target = state.versions.find((version) => version.id === versionId);
+  if (!target || !target.submitted || target.archived || target.status !== "proposed") return false;
+  const now = nowIso();
+  const snapshot = getSnapshotFromState(state);
+  const approvalPolicy = resolveShareApprovalPolicy(options);
+
+  let refreshedVersion: EstimateV2Version | null = null;
+
+  state.versions = state.versions.map((version) => {
+    if (version.id === versionId) {
+      const next = {
+        ...version,
+        status: "proposed" as const,
+        snapshot,
+        archived: false,
+        submitted: true,
+        approvalStamp: null,
+        shareApprovalPolicy: approvalPolicy.shareApprovalPolicy,
+        shareApprovalDisabledReason: approvalPolicy.shareApprovalDisabledReason,
+        updatedAt: now,
+      };
+      refreshedVersion = next;
+      return next;
+    }
+    return {
+      ...version,
+      archived: true,
+      updatedAt: now,
+    };
+  });
+
+  if (!refreshedVersion) return false;
+
+  addEvent({
+    id: id("evt-estimate-v2-submitted"),
+    project_id: projectId,
+    actor_id: actorId,
+    type: "estimate.version_submitted",
+    object_type: "estimate_version",
+    object_id: refreshedVersion.id,
+    timestamp: now,
+    payload: {
+      projectId,
+      versionId: refreshedVersion.id,
+      actor: actorId,
+      versionNumber: refreshedVersion.number,
+      refreshed: true,
+    },
+  });
+
+  state.project.updatedAt = now;
+  notify();
+  return true;
+}
+
 export function approveVersion(
   projectId: string,
   versionId: string,
@@ -1545,6 +1655,7 @@ export function approveVersion(
   const target = state.versions.find((version) => version.id === versionId);
   if (!target) return false;
   if (!target.submitted || target.archived || target.status !== "proposed") return false;
+  if (target.shareApprovalPolicy === "disabled") return false;
   const now = nowIso();
 
   let approvedVersion: EstimateV2Version | null = null;

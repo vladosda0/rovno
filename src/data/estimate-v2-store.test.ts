@@ -7,6 +7,7 @@ import {
   deleteLine,
   getEstimateV2ProjectState,
   getLatestProposedVersion,
+  refreshVersionSnapshot,
   submitVersion,
   updateWorkDates,
   setProjectEstimateStatus,
@@ -125,6 +126,8 @@ function version(id: string, number: number, snap: EstimateV2Snapshot): Estimate
     status: "proposed",
     snapshot: snap,
     shareId: `share-${id}`,
+    shareApprovalPolicy: "registered",
+    shareApprovalDisabledReason: null,
     approvalStamp: null,
     archived: false,
     submitted: true,
@@ -602,5 +605,77 @@ describe("estimate-v2 execution foundation", () => {
       && event.payload.versionId === v2.versionId
     ));
     expect(approvalEventsForVersion.length).toBe(1);
+  });
+
+  it("allows co-owner submissions but blocks non-privileged roles", () => {
+    const projectId = "project-1";
+    setRegimeDev(projectId, "contractor");
+
+    setAuthRole("co_owner");
+    const coOwnerVersion = createVersionSnapshot(projectId, "user-1");
+    expect(submitVersion(projectId, coOwnerVersion.versionId)).toBe(true);
+
+    setAuthRole("contractor");
+    const blockedVersion = createVersionSnapshot(projectId, "user-1");
+    expect(submitVersion(projectId, blockedVersion.versionId)).toBe(false);
+  });
+
+  it("refreshes pending version snapshot without changing number or share link", () => {
+    const projectId = "project-2";
+    setAuthRole("owner");
+    setRegimeDev(projectId, "contractor");
+
+    const initial = createVersionSnapshot(projectId, "user-1");
+    expect(submitVersion(projectId, initial.versionId)).toBe(true);
+    const stateBefore = getEstimateV2ProjectState(projectId);
+    const versionBefore = stateBefore.versions.find((versionItem) => versionItem.id === initial.versionId);
+    const firstLine = stateBefore.lines[0];
+    expect(versionBefore).toBeTruthy();
+    expect(firstLine).toBeTruthy();
+    if (!versionBefore || !firstLine) return;
+    const versionsCountBefore = stateBefore.versions.length;
+
+    const nextTitle = `${firstLine.title} (resubmitted)`;
+    updateLine(projectId, firstLine.id, { title: nextTitle });
+
+    expect(refreshVersionSnapshot(projectId, initial.versionId, "user-1")).toBe(true);
+
+    const stateAfter = getEstimateV2ProjectState(projectId);
+    const versionAfter = stateAfter.versions.find((versionItem) => versionItem.id === initial.versionId);
+    expect(versionAfter).toBeTruthy();
+    if (!versionAfter) return;
+
+    expect(versionAfter.number).toBe(versionBefore.number);
+    expect(versionAfter.shareId).toBe(versionBefore.shareId);
+    expect(stateAfter.versions.length).toBe(versionsCountBefore);
+    expect(versionAfter.snapshot.lines.find((lineItem) => lineItem.id === firstLine.id)?.title).toBe(nextTitle);
+  });
+
+  it("stores share approval policy for submitted versions", () => {
+    const projectId = "project-3";
+    setAuthRole("owner");
+    setRegimeDev(projectId, "contractor");
+
+    const disabledVersion = createVersionSnapshot(projectId, "user-1");
+    expect(
+      submitVersion(projectId, disabledVersion.versionId, {
+        shareApprovalPolicy: "disabled",
+        shareApprovalDisabledReason: "no_participant_slot",
+      }),
+    ).toBe(true);
+
+    const disabledStored = getEstimateV2ProjectState(projectId).versions.find((versionItem) => (
+      versionItem.id === disabledVersion.versionId
+    ));
+    expect(disabledStored?.shareApprovalPolicy).toBe("disabled");
+    expect(disabledStored?.shareApprovalDisabledReason).toBe("no_participant_slot");
+
+    const registeredVersion = createVersionSnapshot(projectId, "user-1");
+    expect(submitVersion(projectId, registeredVersion.versionId)).toBe(true);
+    const registeredStored = getEstimateV2ProjectState(projectId).versions.find((versionItem) => (
+      versionItem.id === registeredVersion.versionId
+    ));
+    expect(registeredStored?.shareApprovalPolicy).toBe("registered");
+    expect(registeredStored?.shareApprovalDisabledReason).toBeNull();
   });
 });

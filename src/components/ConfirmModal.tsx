@@ -21,6 +21,7 @@ interface ConfirmModalProps {
   onCancel?: () => void;
   tertiaryLabel?: string;
   onTertiary?: () => void;
+  showCancel?: boolean;
   children?: React.ReactNode;
 }
 
@@ -35,6 +36,7 @@ export function ConfirmModal({
   onCancel,
   tertiaryLabel,
   onTertiary,
+  showCancel = true,
   children,
 }: ConfirmModalProps) {
   return (
@@ -51,7 +53,7 @@ export function ConfirmModal({
               {tertiaryLabel}
             </Button>
           )}
-          <AlertDialogCancel onClick={onCancel}>{cancelLabel}</AlertDialogCancel>
+          {showCancel && <AlertDialogCancel onClick={onCancel}>{cancelLabel}</AlertDialogCancel>}
           <AlertDialogAction onClick={onConfirm} className="bg-accent text-accent-foreground hover:bg-accent/90">
             {confirmLabel}
           </AlertDialogAction>
