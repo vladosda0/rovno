@@ -11,6 +11,7 @@ import {
   computeLineTotals,
   computeProjectTotals,
   computeStageSubtotals,
+  computeStageTotals,
   computeClientUnitCents,
 } from "@/lib/estimate-v2/pricing";
 
@@ -123,6 +124,8 @@ describe("estimate-v2 pricing", () => {
     const totals = computeProjectTotals(project, [stage], [], lines, "contractor");
 
     expect(totals.subtotalCents).toBe(20_000);
+    expect(totals.taxableBaseCents).toBe(20_000);
+    expect(totals.subtotalBeforeDiscountCents).toBe(20_000);
     expect(totals.taxAmountCents).toBe(2_000);
     expect(totals.totalCents).toBe(22_000);
   });
@@ -168,7 +171,37 @@ describe("estimate-v2 pricing", () => {
 
     const totals = computeProjectTotals(project, [stage], [], lines, "contractor");
     expect(totals.subtotalCents).toBe(18_000);
+    expect(totals.taxableBaseCents).toBe(18_000);
+    expect(totals.subtotalBeforeDiscountCents).toBe(20_000);
     expect(totals.taxAmountCents).toBe(3_960);
     expect(totals.totalCents).toBe(21_960);
+  });
+
+  it("computes stage totals with tax applied to post-discount base", () => {
+    const project = createProject({ discountBps: 0, taxBps: 2_000 });
+    const stages = [
+      createStage({ id: "stage-a", order: 1 }),
+      createStage({ id: "stage-b", order: 2 }),
+    ];
+    const lines = [
+      createLine({ id: "l1", stageId: "stage-a", costUnitCents: 10_000, qtyMilli: 1_000, markupBps: 0, discountBpsOverride: 1_000 }),
+      createLine({ id: "l2", stageId: "stage-b", costUnitCents: 5_000, qtyMilli: 1_000, markupBps: 0, discountBpsOverride: 0 }),
+    ];
+
+    const totals = computeStageTotals(project, stages, lines, "contractor");
+    const stageA = totals.find((item) => item.stageId === "stage-a");
+    const stageB = totals.find((item) => item.stageId === "stage-b");
+
+    expect(stageA?.taxableBaseCents).toBe(9_000);
+    expect(stageA?.subtotalBeforeDiscountCents).toBe(10_000);
+    expect(stageA?.discountTotalCents).toBe(1_000);
+    expect(stageA?.taxAmountCents).toBe(1_800);
+    expect(stageA?.totalCents).toBe(10_800);
+
+    expect(stageB?.taxableBaseCents).toBe(5_000);
+    expect(stageB?.subtotalBeforeDiscountCents).toBe(5_000);
+    expect(stageB?.discountTotalCents).toBe(0);
+    expect(stageB?.taxAmountCents).toBe(1_000);
+    expect(stageB?.totalCents).toBe(6_000);
   });
 });

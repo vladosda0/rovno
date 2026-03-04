@@ -96,6 +96,8 @@ export default function ShareEstimate() {
     if (!snapshot) {
       return {
         subtotalCents: 0,
+        taxableBaseCents: 0,
+        subtotalBeforeDiscountCents: 0,
         taxAmountCents: 0,
         totalCents: 0,
         costTotalCents: 0,

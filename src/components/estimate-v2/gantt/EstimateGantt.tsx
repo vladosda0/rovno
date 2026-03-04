@@ -173,6 +173,9 @@ export function EstimateGantt({
   }, [draftWorksById, sortedStages, worksByStage]);
 
   const pxPerDay = SCALE_PIXELS_PER_DAY[scale];
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const [scrollLeft, setScrollLeft] = useState(0);
+  const [viewportWidth, setViewportWidth] = useState(800);
 
   const timelineRange = useMemo(() => {
     const draftWorks = works.map((work) => draftWorksById[work.id] ?? work);
@@ -185,11 +188,8 @@ export function EstimateGantt({
 
   const timelineStartDay = timelineRange.start;
   const timelineEndDay = timelineRange.end;
-  const timelineWidth = Math.max(pxPerDay, (timelineEndDay - timelineStartDay + 1) * pxPerDay);
-
-  const viewportRef = useRef<HTMLDivElement | null>(null);
-  const [scrollLeft, setScrollLeft] = useState(0);
-  const [viewportWidth, setViewportWidth] = useState(800);
+  const computedTimelineWidth = Math.max(pxPerDay, (timelineEndDay - timelineStartDay + 1) * pxPerDay);
+  const timelineWidth = Math.max(computedTimelineWidth, viewportWidth);
 
   useEffect(() => {
     const node = viewportRef.current;

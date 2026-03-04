@@ -7,6 +7,7 @@ interface ResourceTypeBadgeProps {
   type: ResourceLineType;
   className?: string;
   labelOverride?: string;
+  iconOnly?: boolean;
 }
 
 const typeMeta: Record<ResourceLineType, { label: string; className: string; Icon: typeof Package }> = {
@@ -37,21 +38,24 @@ const typeMeta: Record<ResourceLineType, { label: string; className: string; Ico
   },
 };
 
-export function ResourceTypeBadge({ type, className, labelOverride }: ResourceTypeBadgeProps) {
+export function ResourceTypeBadge({ type, className, labelOverride, iconOnly = false }: ResourceTypeBadgeProps) {
   const meta = typeMeta[type];
   const Icon = meta.Icon;
+  const label = labelOverride ?? meta.label;
 
   return (
     <Badge
       variant="outline"
       className={cn(
         "inline-flex h-6 items-center gap-1 rounded-full px-2 text-[11px] font-medium",
+        iconOnly && "w-6 justify-center px-0",
         meta.className,
         className,
       )}
     >
       <Icon className="h-3 w-3" />
-      <span>{labelOverride ?? meta.label}</span>
+      {!iconOnly && <span>{label}</span>}
+      {iconOnly && <span className="sr-only">{label}</span>}
     </Badge>
   );
 }

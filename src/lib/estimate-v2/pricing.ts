@@ -20,6 +20,21 @@ export interface ComputedLineTotals {
 
 export interface ProjectTotals {
   subtotalCents: number;
+  taxableBaseCents: number;
+  subtotalBeforeDiscountCents: number;
+  taxAmountCents: number;
+  totalCents: number;
+  costTotalCents: number;
+  markupTotalCents: number;
+  discountTotalCents: number;
+  breakdownByType: Record<ResourceLineType, number>;
+}
+
+export interface StageTotals {
+  stageId: string;
+  subtotalCents: number;
+  taxableBaseCents: number;
+  subtotalBeforeDiscountCents: number;
   taxAmountCents: number;
   totalCents: number;
   costTotalCents: number;
@@ -54,6 +69,16 @@ function multiplyBps(value: number, bps: number): number {
 
 function multiplyQtyMilli(valueCents: number, qtyMilli: number): number {
   return roundHalfUpDiv(valueCents * qtyMilli, QTY_MILLI_BASE);
+}
+
+function emptyBreakdownByType(): Record<ResourceLineType, number> {
+  return {
+    material: 0,
+    tool: 0,
+    labor: 0,
+    subcontractor: 0,
+    other: 0,
+  };
 }
 
 export function computeEffectiveDiscountBps(
@@ -118,13 +143,7 @@ export function computeProjectTotals(
 ): ProjectTotals {
   const stageById = new Map(stages.map((stage) => [stage.id, stage]));
 
-  const breakdownByType: Record<ResourceLineType, number> = {
-    material: 0,
-    tool: 0,
-    labor: 0,
-    subcontractor: 0,
-    other: 0,
-  };
+  const breakdownByType = emptyBreakdownByType();
 
   let subtotalCents = 0;
   let costTotalCents = 0;
@@ -143,16 +162,78 @@ export function computeProjectTotals(
     breakdownByType[line.type] += totals.costTotalCents;
   });
 
-  const taxAmountCents = multiplyBps(subtotalCents, clampBps(project.taxBps));
+  const taxableBaseCents = subtotalCents;
+  const subtotalBeforeDiscountCents = taxableBaseCents + discountTotalCents;
+  const taxAmountCents = multiplyBps(taxableBaseCents, clampBps(project.taxBps));
   return {
-    subtotalCents,
+    subtotalCents: taxableBaseCents,
+    taxableBaseCents,
+    subtotalBeforeDiscountCents,
     taxAmountCents,
-    totalCents: subtotalCents + taxAmountCents,
+    totalCents: taxableBaseCents + taxAmountCents,
     costTotalCents,
     markupTotalCents,
     discountTotalCents,
     breakdownByType,
   };
+}
+
+export function computeStageTotals(
+  project: EstimateV2Project,
+  stages: EstimateV2Stage[],
+  lines: EstimateV2ResourceLine[],
+  regime: Regime,
+): StageTotals[] {
+  const stageById = new Map(stages.map((stage) => [stage.id, stage]));
+  const totalsByStageId = new Map<string, Omit<StageTotals, "stageId" | "taxAmountCents" | "totalCents" | "subtotalBeforeDiscountCents" | "subtotalCents">>();
+
+  lines.forEach((line) => {
+    const stage = stageById.get(line.stageId);
+    if (!stage) return;
+
+    const current = totalsByStageId.get(stage.id) ?? {
+      taxableBaseCents: 0,
+      costTotalCents: 0,
+      markupTotalCents: 0,
+      discountTotalCents: 0,
+      breakdownByType: emptyBreakdownByType(),
+    };
+
+    const lineTotals = computeLineTotals(line, stage, project, regime);
+    current.taxableBaseCents += lineTotals.clientTotalCents;
+    current.costTotalCents += lineTotals.costTotalCents;
+    current.markupTotalCents += lineTotals.markupCents;
+    current.discountTotalCents += lineTotals.discountCents;
+    current.breakdownByType[line.type] += lineTotals.costTotalCents;
+
+    totalsByStageId.set(stage.id, current);
+  });
+
+  return stages.map((stage) => {
+    const byStage = totalsByStageId.get(stage.id) ?? {
+      taxableBaseCents: 0,
+      costTotalCents: 0,
+      markupTotalCents: 0,
+      discountTotalCents: 0,
+      breakdownByType: emptyBreakdownByType(),
+    };
+    const subtotalBeforeDiscountCents = byStage.taxableBaseCents + byStage.discountTotalCents;
+    const taxAmountCents = multiplyBps(byStage.taxableBaseCents, clampBps(project.taxBps));
+    const totalCents = byStage.taxableBaseCents + taxAmountCents;
+
+    return {
+      stageId: stage.id,
+      subtotalCents: byStage.taxableBaseCents,
+      taxableBaseCents: byStage.taxableBaseCents,
+      subtotalBeforeDiscountCents,
+      taxAmountCents,
+      totalCents,
+      costTotalCents: byStage.costTotalCents,
+      markupTotalCents: byStage.markupTotalCents,
+      discountTotalCents: byStage.discountTotalCents,
+      breakdownByType: byStage.breakdownByType,
+    };
+  });
 }
 
 export function computeStageSubtotals(

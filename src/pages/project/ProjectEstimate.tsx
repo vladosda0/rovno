@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { AlertTriangle, ChevronDown, ChevronRight, Download, Plus, Trash2, User } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronRight, Download, Info, Plus, Trash2, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -55,27 +55,31 @@ import {
   deleteWork,
   setProjectEstimateStatus,
   submitVersion,
-  updateEstimateV2Project,
   updateLine,
   updateStage,
   updateWork,
 } from "@/data/estimate-v2-store";
 import { useEstimateV2Project } from "@/hooks/use-estimate-v2-data";
 import { addEvent, getUserById } from "@/data/store";
-import { computeLineTotals, computeProjectTotals, computeStageSubtotals } from "@/lib/estimate-v2/pricing";
+import { computeLineTotals, computeProjectTotals, computeStageTotals } from "@/lib/estimate-v2/pricing";
 import { resolveProjectEstimateCtaState } from "@/lib/estimate-v2/project-estimate-cta";
 import {
   combinePlanFact,
   computeFactFromDataSources,
   computePlannedFromEstimateV2,
 } from "@/lib/estimate-v2/rollups";
-import { toDayIndex } from "@/lib/estimate-v2/schedule";
+import { fromDayIndex, toDayIndex } from "@/lib/estimate-v2/schedule";
 import { useOrders } from "@/hooks/use-order-data";
 import { ApprovalStampCard } from "@/components/estimate-v2/ApprovalStampCard";
 import { ApprovalStampFormModal } from "@/components/estimate-v2/ApprovalStampFormModal";
 import { VersionBanner } from "@/components/estimate-v2/VersionBanner";
 import { VersionDiffList } from "@/components/estimate-v2/VersionDiffList";
 import { EstimateGantt } from "@/components/estimate-v2/gantt/EstimateGantt";
+import {
+  buildUnitSelectOptions,
+  CUSTOM_UNIT_SENTINEL,
+  resolveUnitSelectValue,
+} from "@/lib/estimate-v2/resource-units";
 import type {
   ApprovalStamp,
   EstimateV2ResourceLine,
@@ -196,6 +200,31 @@ function worksRangeDays(works: EstimateV2Work[]): { startDay: number; endDay: nu
   return { startDay: min, endDay: max };
 }
 
+const dayRangeFormatter = new Intl.DateTimeFormat("ru-RU", {
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+});
+
+const TIMING_TOOLTIP_TEXT: Record<
+  "durationPlanned" | "durationEstimated" | "daysToEnd" | "behindSchedule",
+  string
+> = {
+  durationPlanned: "Planned calendar days between scheduled start and end dates.",
+  durationEstimated: "Estimated calendar days based on current progress and velocity, if available.",
+  daysToEnd: "Days remaining until scheduled end date.",
+  behindSchedule: "How many days the estimated finish exceeds the planned finish.",
+};
+
+function formatDayIndex(dayIndex: number | null): string {
+  if (dayIndex == null) return "—";
+  return dayRangeFormatter.format(new Date(fromDayIndex(dayIndex)));
+}
+
+function formatPercent(value: number): string {
+  return `${value.toFixed(1)}%`;
+}
+
 function buildCsv(rows: string[][]): string {
   return rows
     .map((row) => row.map((cell) => {
@@ -257,6 +286,13 @@ export default function ProjectEstimate() {
   const [incompleteTaskBlocks, setIncompleteTaskBlocks] = useState<Array<{ taskId: string | null; title: string }>>([]);
   const [collapsedStageIds, setCollapsedStageIds] = useState<Set<string>>(new Set());
   const [pendingLineTitleEditId, setPendingLineTitleEditId] = useState<string | null>(null);
+  const [financialResourcesExpanded, setFinancialResourcesExpanded] = useState(false);
+  const [customUnitDraftByLineId, setCustomUnitDraftByLineId] = useState<Record<string, string>>({});
+  const [customUnitInputLineIds, setCustomUnitInputLineIds] = useState<Set<string>>(new Set());
+  const [workTableScrollStateById, setWorkTableScrollStateById] = useState<
+    Record<string, { hasOverflow: boolean; isScrolled: boolean }>
+  >({});
+  const workTableScrollCleanupRef = useRef<Map<string, () => void>>(new Map());
 
   useEffect(() => {
     if (!pendingLineTitleEditId) return;
@@ -265,6 +301,13 @@ export default function ProjectEstimate() {
     }, 0);
     return () => window.clearTimeout(timeoutId);
   }, [pendingLineTitleEditId]);
+
+  useEffect(() => (
+    () => {
+      workTableScrollCleanupRef.current.forEach((cleanup) => cleanup());
+      workTableScrollCleanupRef.current.clear();
+    }
+  ), []);
 
   const sortedStages = useMemo(
     () => [...stages].sort((a, b) => a.order - b.order),
@@ -362,9 +405,9 @@ export default function ProjectEstimate() {
     [estimateProject, stages, works, lines, regime],
   );
 
-  const stageSubtotalById = useMemo(
+  const stageTotalsById = useMemo(
     () => new Map(
-      computeStageSubtotals(estimateProject, stages, lines, regime).map((item) => [item.stageId, item.subtotalCents]),
+      computeStageTotals(estimateProject, stages, lines, regime).map((item) => [item.stageId, item]),
     ),
     [estimateProject, stages, lines, regime],
   );
@@ -407,8 +450,28 @@ export default function ProjectEstimate() {
     ),
     [plannedRollups, factRollups, scheduleBaseline, incompleteLinkedTaskCount],
   );
+  const isInWork = estimateProject.estimateStatus === "in_work";
 
-  const showInWorkPlanFactSummary = estimateProject.estimateStatus === "in_work" && regime !== "client";
+  const hasActualFinancialData = useMemo(
+    () => (
+      hrPayments.length > 0
+      || orders.some((order) => (
+        order.kind === "supplier"
+        && (order.status === "placed" || order.status === "received")
+        && order.lines.length > 0
+      ))
+    ),
+    [hrPayments.length, orders],
+  );
+
+  const resourcesTotalCents = useMemo(
+    () => totals.breakdownByType.material
+      + totals.breakdownByType.tool
+      + totals.breakdownByType.labor
+      + totals.breakdownByType.subcontractor
+      + totals.breakdownByType.other,
+    [totals.breakdownByType],
+  );
 
   const todayDay = toDayIndex(new Date());
   const currentRange = useMemo(() => worksRangeDays(works), [works]);
@@ -419,6 +482,23 @@ export default function ProjectEstimate() {
     if (startDay == null || endDay == null) return null;
     return { startDay, endDay };
   }, [scheduleBaseline]);
+
+  const planningRangeLabel = useMemo(() => {
+    if (!currentRange) return "—";
+    return `${formatDayIndex(currentRange.startDay)} → ${formatDayIndex(currentRange.endDay)}`;
+  }, [currentRange]);
+
+  const planningDurationDays = useMemo(
+    () => durationDays(currentRange?.startDay ?? null, currentRange?.endDay ?? null),
+    [currentRange],
+  );
+
+  const revenueExVatCents = totals.taxableBaseCents;
+  const costExVatCents = totals.costTotalCents;
+  const profitExVatCents = revenueExVatCents - costExVatCents;
+  const profitabilityPct = revenueExVatCents > 0
+    ? (profitExVatCents / revenueExVatCents) * 100
+    : null;
 
   const timingMetrics = useMemo(() => {
     if (estimateProject.estimateStatus === "planning") {
@@ -467,10 +547,6 @@ export default function ProjectEstimate() {
     latestApproved
     && (!latestProposed || latestApproved.number >= latestProposed.number),
   );
-
-  if (!project) {
-    return <EmptyState icon={AlertTriangle} title="Not found" description="Project not found." />;
-  }
 
   const handleEstimateStatusChange = (
     nextStatus: EstimateExecutionStatus,
@@ -631,13 +707,12 @@ export default function ProjectEstimate() {
     });
 
     rows.push([]);
-    rows.push(["Subtotal", money(totals.subtotalCents, estimateProject.currency)]);
-    if (totals.discountTotalCents > 0) {
-      rows.push(["Discount", money(totals.discountTotalCents, estimateProject.currency)]);
-    }
+    rows.push(["Subtotal (ex VAT)", money(totals.subtotalBeforeDiscountCents, estimateProject.currency)]);
+    rows.push(["Discount", money(totals.discountTotalCents, estimateProject.currency)]);
+    rows.push(["Taxable base (ex VAT)", money(totals.taxableBaseCents, estimateProject.currency)]);
     rows.push(["Tax", `${(estimateProject.taxBps / 100).toFixed(2)}%`]);
     rows.push(["Tax amount", money(totals.taxAmountCents, estimateProject.currency)]);
-    rows.push(["Total", money(totals.totalCents, estimateProject.currency)]);
+    rows.push(["Total (inc VAT)", money(totals.totalCents, estimateProject.currency)]);
 
     const csv = buildCsv(rows);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -682,6 +757,90 @@ export default function ProjectEstimate() {
     setPendingLineTitleEditId(created.id);
   };
 
+  const updateWorkTableScrollState = useCallback((workId: string, container: HTMLDivElement) => {
+    const hasOverflow = container.scrollWidth > container.clientWidth + 1;
+    const isScrolled = container.scrollLeft > 0;
+    setWorkTableScrollStateById((current) => {
+      const prev = current[workId];
+      if (prev && prev.hasOverflow === hasOverflow && prev.isScrolled === isScrolled) return current;
+      return {
+        ...current,
+        [workId]: { hasOverflow, isScrolled },
+      };
+    });
+  }, []);
+
+  const registerWorkTable = useCallback((workId: string, tableNode: HTMLTableElement | null) => {
+    const existingCleanup = workTableScrollCleanupRef.current.get(workId);
+    if (existingCleanup) {
+      existingCleanup();
+      workTableScrollCleanupRef.current.delete(workId);
+    }
+
+    if (!tableNode) {
+      return;
+    }
+
+    const container = tableNode.parentElement as HTMLDivElement | null;
+    if (!container) return;
+
+    const handleScrollOrResize = () => {
+      updateWorkTableScrollState(workId, container);
+    };
+
+    handleScrollOrResize();
+    container.addEventListener("scroll", handleScrollOrResize, { passive: true });
+    const resizeObserver = typeof ResizeObserver !== "undefined"
+      ? new ResizeObserver(handleScrollOrResize)
+      : null;
+    resizeObserver?.observe(container);
+    resizeObserver?.observe(tableNode);
+
+    const cleanup = () => {
+      container.removeEventListener("scroll", handleScrollOrResize);
+      resizeObserver?.disconnect();
+    };
+
+    workTableScrollCleanupRef.current.set(workId, cleanup);
+  }, [updateWorkTableScrollState]);
+
+  const openCustomUnitInput = (lineId: string, currentUnit: string) => {
+    setCustomUnitInputLineIds((current) => {
+      const next = new Set(current);
+      next.add(lineId);
+      return next;
+    });
+    setCustomUnitDraftByLineId((current) => ({
+      ...current,
+      [lineId]: current[lineId] ?? currentUnit,
+    }));
+  };
+
+  const closeCustomUnitInput = (lineId: string) => {
+    setCustomUnitInputLineIds((current) => {
+      if (!current.has(lineId)) return current;
+      const next = new Set(current);
+      next.delete(lineId);
+      return next;
+    });
+  };
+
+  const commitCustomUnit = (line: EstimateV2ResourceLine) => {
+    const nextUnit = (customUnitDraftByLineId[line.id] ?? "").trim();
+    if (!nextUnit) {
+      closeCustomUnitInput(line.id);
+      return;
+    }
+    if (nextUnit !== line.unit) {
+      updateLine(pid, line.id, { unit: nextUnit });
+    }
+    closeCustomUnitInput(line.id);
+  };
+
+  if (!project) {
+    return <EmptyState icon={AlertTriangle} title="Not found" description="Project not found." />;
+  }
+
   return (
     <div className="space-y-sp-2 p-sp-2">
       <div className="rounded-card border border-border bg-card p-sp-2 space-y-3">
@@ -692,12 +851,14 @@ export default function ProjectEstimate() {
               <p className="text-caption text-muted-foreground">Estimate</p>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Badge
-                    variant="secondary"
-                    className={latestVersionApproved ? "bg-success/15 text-success" : "bg-warning/15 text-warning-foreground"}
-                  >
-                    v{latestVersionNumber}
-                  </Badge>
+                  <span>
+                    <Badge
+                      variant="secondary"
+                      className={latestVersionApproved ? "bg-success/15 text-success" : "bg-warning/15 text-warning-foreground"}
+                    >
+                      v{latestVersionNumber}
+                    </Badge>
+                  </span>
                 </TooltipTrigger>
                 <TooltipContent>
                   Share link with client for approval of the latest estimate version.
@@ -722,7 +883,6 @@ export default function ProjectEstimate() {
               </Select>
               {!canEditEstimate && <span className="text-caption text-muted-foreground">Owner only</span>}
             </div>
-            <p className="text-caption text-muted-foreground">Stage → Work → ResourceLine</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" size="sm" onClick={handleExportCsv}>
@@ -752,88 +912,299 @@ export default function ProjectEstimate() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        {isInWork ? (
           <div className="rounded-lg border border-border p-3">
-            <p className="text-sm font-semibold text-foreground">Timing</p>
-            <div className="mt-2 grid grid-cols-2 gap-2 text-caption">
-              <div className="rounded-md border border-border/70 p-2">
-                <p className="text-muted-foreground">Duration planned</p>
-                <p className="text-sm font-medium text-foreground">
-                  {timingMetrics.durationPlannedDays == null ? "—" : `${timingMetrics.durationPlannedDays} d`}
-                </p>
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+              <div className="space-y-3">
+                <p className="text-sm font-semibold text-foreground">Financial</p>
+                {regime === "client" ? (
+                  <div className="rounded-md border border-border/70 p-2">
+                    <p className="text-xs text-muted-foreground">Total (inc VAT)</p>
+                    <p className="text-xl font-semibold text-foreground">{money(totals.totalCents, estimateProject.currency)}</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-1 text-caption">
+                      <button
+                        type="button"
+                        className="flex w-full items-center justify-between rounded-md border border-border/70 px-2 py-1 text-left hover:bg-muted/30"
+                        onClick={() => setFinancialResourcesExpanded((current) => !current)}
+                      >
+                        <span className="inline-flex items-center gap-1 text-muted-foreground">
+                          {financialResourcesExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                          Resources
+                        </span>
+                        <span className="font-medium tabular-nums text-foreground">{money(resourcesTotalCents, estimateProject.currency)}</span>
+                      </button>
+                      {financialResourcesExpanded && (
+                        <div className="space-y-1 pl-5">
+                          <div className="flex items-center justify-between rounded-md border border-border/60 px-2 py-1">
+                            <span className="text-muted-foreground">Material cost</span>
+                            <span className="tabular-nums text-foreground">{money(totals.breakdownByType.material, estimateProject.currency)}</span>
+                          </div>
+                          <div className="flex items-center justify-between rounded-md border border-border/60 px-2 py-1">
+                            <span className="text-muted-foreground">Tool cost</span>
+                            <span className="tabular-nums text-foreground">{money(totals.breakdownByType.tool, estimateProject.currency)}</span>
+                          </div>
+                          <div className="flex items-center justify-between rounded-md border border-border/60 px-2 py-1">
+                            <span className="text-muted-foreground">Labor cost</span>
+                            <span className="tabular-nums text-foreground">{money(totals.breakdownByType.labor, estimateProject.currency)}</span>
+                          </div>
+                          <div className="flex items-center justify-between rounded-md border border-border/60 px-2 py-1">
+                            <span className="text-muted-foreground">Subcontractor cost</span>
+                            <span className="tabular-nums text-foreground">{money(totals.breakdownByType.subcontractor, estimateProject.currency)}</span>
+                          </div>
+                          <div className="flex items-center justify-between rounded-md border border-border/60 px-2 py-1">
+                            <span className="text-muted-foreground">Other cost</span>
+                            <span className="tabular-nums text-foreground">{money(totals.breakdownByType.other, estimateProject.currency)}</span>
+                          </div>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
+                        <span className="text-muted-foreground">Markup</span>
+                        <span className="tabular-nums text-foreground">{money(totals.markupTotalCents, estimateProject.currency)}</span>
+                      </div>
+                      <div className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
+                        <span className="text-muted-foreground">Subtotal (ex VAT)</span>
+                        <span className="tabular-nums text-foreground">{money(totals.subtotalBeforeDiscountCents, estimateProject.currency)}</span>
+                      </div>
+                      <div className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
+                        <span className="text-muted-foreground">Discount</span>
+                        <span className="tabular-nums text-foreground">{money(totals.discountTotalCents, estimateProject.currency)}</span>
+                      </div>
+                      <div className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
+                        <span className="text-muted-foreground">VAT amount</span>
+                        <span className="tabular-nums text-foreground">{money(totals.taxAmountCents, estimateProject.currency)}</span>
+                      </div>
+                      <div className="flex items-center justify-between rounded-md border border-border/70 bg-muted/30 px-2 py-1">
+                        <span className="font-medium text-foreground">Total (inc VAT)</span>
+                        <span className="font-semibold tabular-nums text-foreground">{money(totals.totalCents, estimateProject.currency)}</span>
+                      </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Category</TableHead>
+                            <TableHead className="text-right">Planned</TableHead>
+                            <TableHead className="text-right">Actual</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {(["material", "tool", "labor", "subcontractor", "other"] as const).map((type) => (
+                            <TableRow key={type}>
+                              <TableCell>{labelForType(type)}</TableCell>
+                              <TableCell className="text-right">{money(combinedPlanFact.planned.plannedCostByTypeCents[type], estimateProject.currency)}</TableCell>
+                              <TableCell className="text-right">
+                                {hasActualFinancialData ? money(combinedPlanFact.fact.spentByTypeCents[type], estimateProject.currency) : "—"}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-caption">
+                      <div className="rounded-md border border-border/70 p-2">
+                        <p className="text-muted-foreground">Planned total</p>
+                        <p className="text-sm font-medium text-foreground">{money(combinedPlanFact.planned.plannedBudgetCents, estimateProject.currency)}</p>
+                      </div>
+                      <div className="rounded-md border border-border/70 p-2">
+                        <p className="text-muted-foreground">Actual spent</p>
+                        <p className="text-sm font-medium text-foreground">
+                          {hasActualFinancialData ? money(combinedPlanFact.fact.spentCents, estimateProject.currency) : "—"}
+                        </p>
+                      </div>
+                      <div className="rounded-md border border-border/70 p-2">
+                        <p className="text-muted-foreground">Spent above planned</p>
+                        <p className="text-sm font-medium text-foreground">
+                          {hasActualFinancialData ? money(combinedPlanFact.fact.spentAbovePlannedCents, estimateProject.currency) : "—"}
+                        </p>
+                      </div>
+                      <div className="rounded-md border border-border/70 p-2">
+                        <p className="text-muted-foreground">To be paid</p>
+                        <p className="text-sm font-medium text-foreground">{money(combinedPlanFact.fact.toBePaidPlannedCents, estimateProject.currency)}</p>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
-              <div className="rounded-md border border-border/70 p-2">
-                <p className="text-muted-foreground">Duration estimated</p>
-                <p className="text-sm font-medium text-foreground">
-                  {timingMetrics.durationEstimatedDays == null ? "—" : `${timingMetrics.durationEstimatedDays} d`}
-                </p>
-              </div>
-              <div className="rounded-md border border-border/70 p-2">
-                <p className="text-muted-foreground">Days to end</p>
-                <p className="text-sm font-medium text-foreground">
-                  {timingMetrics.daysToEnd == null ? "—" : `${timingMetrics.daysToEnd} d`}
-                </p>
-              </div>
-              <div className="rounded-md border border-border/70 p-2">
-                <p className="text-muted-foreground">Behind schedule</p>
-                <p className="text-sm font-medium text-foreground">{timingMetrics.behindScheduleDays} d</p>
+
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-foreground">Timing</p>
+                <div className="grid grid-cols-2 gap-2 text-caption">
+                  <div className="rounded-md border border-border/70 p-2">
+                    <p className="inline-flex items-center gap-1 text-muted-foreground">
+                      Duration planned
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button type="button" className="text-muted-foreground hover:text-foreground">
+                            <Info className="h-3.5 w-3.5" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>{TIMING_TOOLTIP_TEXT.durationPlanned}</TooltipContent>
+                      </Tooltip>
+                    </p>
+                    <p className="text-sm font-medium text-foreground">
+                      {timingMetrics.durationPlannedDays == null ? "—" : `${timingMetrics.durationPlannedDays} d`}
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-border/70 p-2">
+                    <p className="inline-flex items-center gap-1 text-muted-foreground">
+                      Duration estimated
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button type="button" className="text-muted-foreground hover:text-foreground">
+                            <Info className="h-3.5 w-3.5" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>{TIMING_TOOLTIP_TEXT.durationEstimated}</TooltipContent>
+                      </Tooltip>
+                    </p>
+                    <p className="text-sm font-medium text-foreground">
+                      {timingMetrics.durationEstimatedDays == null ? "—" : `${timingMetrics.durationEstimatedDays} d`}
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-border/70 p-2">
+                    <p className="inline-flex items-center gap-1 text-muted-foreground">
+                      Days to end
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button type="button" className="text-muted-foreground hover:text-foreground">
+                            <Info className="h-3.5 w-3.5" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>{TIMING_TOOLTIP_TEXT.daysToEnd}</TooltipContent>
+                      </Tooltip>
+                    </p>
+                    <p className="text-sm font-medium text-foreground">
+                      {timingMetrics.daysToEnd == null ? "—" : `${timingMetrics.daysToEnd} d`}
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-border/70 p-2">
+                    <p className="inline-flex items-center gap-1 text-muted-foreground">
+                      Behind schedule
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button type="button" className="text-muted-foreground hover:text-foreground">
+                            <Info className="h-3.5 w-3.5" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>{TIMING_TOOLTIP_TEXT.behindSchedule}</TooltipContent>
+                      </Tooltip>
+                    </p>
+                    <p className="text-sm font-medium text-foreground">{timingMetrics.behindScheduleDays} d</p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            <div className="rounded-lg border border-border p-3">
+              <p className="text-sm font-semibold text-foreground">Timing</p>
+              <div className="mt-2 grid grid-cols-2 gap-2 text-caption">
+                <div className="rounded-md border border-border/70 p-2">
+                  <p className="text-muted-foreground">Duration range</p>
+                  <p className="text-sm font-medium text-foreground">{planningRangeLabel}</p>
+                </div>
+                <div className="rounded-md border border-border/70 p-2">
+                  <p className="text-muted-foreground">Duration days</p>
+                  <p className="text-sm font-medium text-foreground">{planningDurationDays == null ? "—" : `${planningDurationDays} d`}</p>
+                </div>
+                <div className="rounded-md border border-border/70 p-2">
+                  <p className="text-muted-foreground">Days to end</p>
+                  <p className="text-sm font-medium text-foreground">
+                    {timingMetrics.daysToEnd == null ? "—" : `${timingMetrics.daysToEnd} d`}
+                  </p>
+                </div>
+                <div className="rounded-md border border-border/70 p-2">
+                  <p className="text-muted-foreground">Behind schedule</p>
+                  <p className="text-sm font-medium text-foreground">{timingMetrics.behindScheduleDays} d</p>
+                </div>
+              </div>
+            </div>
 
-          <div className="rounded-lg border border-border p-3">
-            <p className="text-sm font-semibold text-foreground">Financial</p>
-            <p className="mt-2 text-xs text-muted-foreground">Total</p>
-            <p className="text-2xl font-semibold text-foreground">{money(totals.totalCents, estimateProject.currency)}</p>
-            <div className="mt-2 flex flex-wrap gap-2">
+            <div className="rounded-lg border border-border p-3">
+              <p className="text-sm font-semibold text-foreground">Financial</p>
               {regime === "client" ? (
-                <>
-                  <Badge variant="secondary">Tax: {(estimateProject.taxBps / 100).toFixed(2)}%</Badge>
-                  <Badge variant="secondary">Tax amount: {money(totals.taxAmountCents, estimateProject.currency)}</Badge>
-                  {totals.discountTotalCents > 0 && <Badge variant="secondary">Discount: {money(totals.discountTotalCents, estimateProject.currency)}</Badge>}
-                </>
+                <div className="mt-2 rounded-md border border-border/70 p-2">
+                  <p className="text-xs text-muted-foreground">Total (inc VAT)</p>
+                  <p className="text-2xl font-semibold text-foreground">{money(totals.totalCents, estimateProject.currency)}</p>
+                </div>
               ) : (
-                <>
-                  <Badge variant="secondary">Subtotal: {money(totals.subtotalCents, estimateProject.currency)}</Badge>
-                  <Badge variant="secondary">Tax amount: {money(totals.taxAmountCents, estimateProject.currency)}</Badge>
-                  {totals.discountTotalCents > 0 && <Badge variant="secondary">Discount: {money(totals.discountTotalCents, estimateProject.currency)}</Badge>}
-                  {showInWorkPlanFactSummary && (
-                    <>
-                      <Badge variant="secondary">Budget: {money(combinedPlanFact.planned.plannedBudgetCents, estimateProject.currency)}</Badge>
-                      <Badge variant="secondary">Spent: {money(combinedPlanFact.fact.spentCents, estimateProject.currency)}</Badge>
-                    </>
+                <div className="mt-2 space-y-1 text-caption">
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between rounded-md border border-border/70 px-2 py-1 text-left hover:bg-muted/30"
+                    onClick={() => setFinancialResourcesExpanded((current) => !current)}
+                  >
+                    <span className="inline-flex items-center gap-1 text-muted-foreground">
+                      {financialResourcesExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                      Resources
+                    </span>
+                    <span className="font-medium tabular-nums text-foreground">{money(resourcesTotalCents, estimateProject.currency)}</span>
+                  </button>
+                  {financialResourcesExpanded && (
+                    <div className="space-y-1 pl-5">
+                      <div className="flex items-center justify-between rounded-md border border-border/60 px-2 py-1">
+                        <span className="text-muted-foreground">Material cost</span>
+                        <span className="tabular-nums text-foreground">{money(totals.breakdownByType.material, estimateProject.currency)}</span>
+                      </div>
+                      <div className="flex items-center justify-between rounded-md border border-border/60 px-2 py-1">
+                        <span className="text-muted-foreground">Tool cost</span>
+                        <span className="tabular-nums text-foreground">{money(totals.breakdownByType.tool, estimateProject.currency)}</span>
+                      </div>
+                      <div className="flex items-center justify-between rounded-md border border-border/60 px-2 py-1">
+                        <span className="text-muted-foreground">Labor cost</span>
+                        <span className="tabular-nums text-foreground">{money(totals.breakdownByType.labor, estimateProject.currency)}</span>
+                      </div>
+                      <div className="flex items-center justify-between rounded-md border border-border/60 px-2 py-1">
+                        <span className="text-muted-foreground">Subcontractor cost</span>
+                        <span className="tabular-nums text-foreground">{money(totals.breakdownByType.subcontractor, estimateProject.currency)}</span>
+                      </div>
+                      <div className="flex items-center justify-between rounded-md border border-border/60 px-2 py-1">
+                        <span className="text-muted-foreground">Other cost</span>
+                        <span className="tabular-nums text-foreground">{money(totals.breakdownByType.other, estimateProject.currency)}</span>
+                      </div>
+                    </div>
                   )}
-                </>
+                  <div className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
+                    <span className="text-muted-foreground">Markup</span>
+                    <span className="tabular-nums text-foreground">{money(totals.markupTotalCents, estimateProject.currency)}</span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
+                    <span className="text-muted-foreground">Subtotal (ex VAT)</span>
+                    <span className="tabular-nums text-foreground">{money(totals.subtotalBeforeDiscountCents, estimateProject.currency)}</span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
+                    <span className="text-muted-foreground">Discount</span>
+                    <span className="tabular-nums text-foreground">{money(totals.discountTotalCents, estimateProject.currency)}</span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
+                    <span className="text-muted-foreground">VAT amount</span>
+                    <span className="tabular-nums text-foreground">{money(totals.taxAmountCents, estimateProject.currency)}</span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-md border border-border/70 bg-muted/30 px-2 py-1">
+                    <span className="font-medium text-foreground">Total (inc VAT)</span>
+                    <span className="font-semibold tabular-nums text-foreground">{money(totals.totalCents, estimateProject.currency)}</span>
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <div className="rounded-md border border-border/70 p-2">
+                      <p className="text-muted-foreground">Profit (ex VAT)</p>
+                      <p className="text-sm font-medium text-foreground">{money(profitExVatCents, estimateProject.currency)}</p>
+                    </div>
+                    <div className="rounded-md border border-border/70 p-2">
+                      <p className="text-muted-foreground">Profitability (%)</p>
+                      <p className="text-sm font-medium text-foreground">{profitabilityPct == null ? "—" : formatPercent(profitabilityPct)}</p>
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
-
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span className="text-caption text-muted-foreground">Tax %</span>
-              <Input
-                className="h-8 w-20"
-                defaultValue={(estimateProject.taxBps / 100).toString()}
-                readOnly={!canEditEstimate}
-                onBlur={(e) => {
-                  if (!canEditEstimate) return;
-                  const nextTax = toBpsFromPercent(e.target.value);
-                  updateEstimateV2Project(pid, { taxBps: nextTax });
-                }}
-              />
-
-              <span className="text-caption text-muted-foreground">Discount %</span>
-              <Input
-                className="h-8 w-20"
-                defaultValue={(estimateProject.discountBps / 100).toString()}
-                readOnly={!canEditEstimate}
-                onBlur={(e) => {
-                  if (!canEditEstimate) return;
-                  const nextDiscount = toBpsFromPercent(e.target.value);
-                  updateEstimateV2Project(pid, { discountBps: nextDiscount });
-                }}
-              />
-            </div>
           </div>
-        </div>
+        )}
 
         <VersionBanner
           hasPending={pendingProposed && Boolean(latestProposed)}
@@ -875,87 +1246,6 @@ export default function ProjectEstimate() {
               />
             )}
 
-            {showInWorkPlanFactSummary ? (
-              <div className="rounded-lg border border-border p-3 space-y-3">
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant="default">Budget: {money(combinedPlanFact.planned.plannedBudgetCents, estimateProject.currency)}</Badge>
-                  <Badge variant="secondary">Total spent: {money(combinedPlanFact.fact.spentCents, estimateProject.currency)}</Badge>
-                  <Badge variant="secondary">Spent above planned: {money(combinedPlanFact.fact.spentAbovePlannedCents, estimateProject.currency)}</Badge>
-                  <Badge variant="secondary">To be paid: {money(combinedPlanFact.fact.toBePaidPlannedCents, estimateProject.currency)}</Badge>
-                  <Badge variant="secondary">
-                    Duration planned: {combinedPlanFact.durationPlannedDays == null ? "—" : `${combinedPlanFact.durationPlannedDays} d`}
-                  </Badge>
-                  <Badge variant="secondary">
-                    Days to end: {combinedPlanFact.daysToEnd == null ? "—" : `${combinedPlanFact.daysToEnd}`}
-                  </Badge>
-                  <Badge variant="secondary">Behind schedule: {combinedPlanFact.behindScheduleDays} d</Badge>
-                </div>
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Category</TableHead>
-                        <TableHead className="text-right">Planned cost</TableHead>
-                        <TableHead className="text-right">Fact spent</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {(["material", "tool", "labor", "subcontractor", "other"] as const).map((type) => (
-                        <TableRow key={type}>
-                          <TableCell className="capitalize">{type}</TableCell>
-                          <TableCell className="text-right">{money(combinedPlanFact.planned.plannedCostByTypeCents[type], estimateProject.currency)}</TableCell>
-                          <TableCell className="text-right">{money(combinedPlanFact.fact.spentByTypeCents[type], estimateProject.currency)}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-lg border border-border p-2 flex flex-wrap gap-2">
-                {regime === "client" && (
-                  <>
-                    <Badge variant="secondary">Tax: {(estimateProject.taxBps / 100).toFixed(2)}%</Badge>
-                    <Badge variant="secondary">Tax amount: {money(totals.taxAmountCents, estimateProject.currency)}</Badge>
-                    <Badge variant="default">Total: {money(totals.totalCents, estimateProject.currency)}</Badge>
-                  </>
-                )}
-
-                {regime === "contractor" && (
-                  <>
-                    <Badge variant="secondary">Material cost: {money(totals.breakdownByType.material, estimateProject.currency)}</Badge>
-                    <Badge variant="secondary">Tool cost: {money(totals.breakdownByType.tool, estimateProject.currency)}</Badge>
-                    <Badge variant="secondary">Labor cost: {money(totals.breakdownByType.labor, estimateProject.currency)}</Badge>
-                    <Badge variant="secondary">Subcontractor cost: {money(totals.breakdownByType.subcontractor, estimateProject.currency)}</Badge>
-                    <Badge variant="secondary">Other cost: {money(totals.breakdownByType.other, estimateProject.currency)}</Badge>
-                    <Badge variant="secondary">Markup: {money(totals.markupTotalCents, estimateProject.currency)}</Badge>
-                    {totals.discountTotalCents > 0 && (
-                      <Badge variant="secondary">Discount: {money(totals.discountTotalCents, estimateProject.currency)}</Badge>
-                    )}
-                    <Badge variant="secondary">Subtotal: {money(totals.subtotalCents, estimateProject.currency)}</Badge>
-                    <Badge variant="secondary">Tax: {money(totals.taxAmountCents, estimateProject.currency)}</Badge>
-                    <Badge variant="default">Total: {money(totals.totalCents, estimateProject.currency)}</Badge>
-                  </>
-                )}
-
-                {regime === "build_myself" && (
-                  <>
-                    <Badge variant="secondary">Material cost: {money(totals.breakdownByType.material, estimateProject.currency)}</Badge>
-                    <Badge variant="secondary">Tool cost: {money(totals.breakdownByType.tool, estimateProject.currency)}</Badge>
-                    <Badge variant="secondary">Labor cost: {money(totals.breakdownByType.labor, estimateProject.currency)}</Badge>
-                    <Badge variant="secondary">Subcontractor cost: {money(totals.breakdownByType.subcontractor, estimateProject.currency)}</Badge>
-                    <Badge variant="secondary">Other cost: {money(totals.breakdownByType.other, estimateProject.currency)}</Badge>
-                    {totals.discountTotalCents > 0 && (
-                      <Badge variant="secondary">Discount: {money(totals.discountTotalCents, estimateProject.currency)}</Badge>
-                    )}
-                    <Badge variant="secondary">Subtotal: {money(totals.subtotalCents, estimateProject.currency)}</Badge>
-                    <Badge variant="secondary">Tax: {money(totals.taxAmountCents, estimateProject.currency)}</Badge>
-                    <Badge variant="default">Total: {money(totals.totalCents, estimateProject.currency)}</Badge>
-                  </>
-                )}
-              </div>
-            )}
-
             {sortedStages.length === 0 ? (
               <EmptyState icon={AlertTriangle} title="No stages" description="Add your first stage to start Estimate v2." />
             ) : (
@@ -964,6 +1254,7 @@ export default function ProjectEstimate() {
                   const stageWorks = worksByStage.get(stage.id) ?? [];
                   const stageNumber = hierarchyNumbers.stageNumberById.get(stage.id) ?? stage.order;
                   const isCollapsed = collapsedStageIds.has(stage.id);
+                  const stageTotals = stageTotalsById.get(stage.id);
 
                   return (
                     <div key={stage.id} className="group/stage rounded-card border border-border p-2">
@@ -992,19 +1283,27 @@ export default function ProjectEstimate() {
                         </div>
 
                         <div className="flex items-center gap-2">
-                          {canEditEstimate && (
-                            <div className="flex items-center gap-1">
-                              <span className="text-caption text-muted-foreground">Stage discount %</span>
+                          <div className="flex items-center gap-1">
+                            <span className="text-caption text-muted-foreground">Stage discount:</span>
+                            {canEditEstimate ? (
                               <InlineEditableNumber
                                 value={stage.discountBps}
                                 onCommit={(nextValue) => updateStage(pid, stage.id, { discountBps: nextValue })}
-                                formatDisplay={(value) => fromBpsToPercent(value)}
+                                formatDisplay={(value) => `${fromBpsToPercent(value)}%`}
                                 formatInput={(value) => fromBpsToPercent(value)}
                                 parseInput={(raw) => toBpsFromPercent(raw)}
-                                className="w-16"
+                                className="w-20"
                               />
-                            </div>
-                          )}
+                            ) : (
+                              <span className="text-sm tabular-nums text-foreground">{fromBpsToPercent(stage.discountBps)}%</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-caption text-muted-foreground">Stage total:</span>
+                            <span className="text-sm font-semibold tabular-nums text-foreground">
+                              {money(stageTotals?.totalCents ?? 0, estimateProject.currency)}
+                            </span>
+                          </div>
                           {canEditEstimate && (
                             <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => deleteStage(pid, stage.id)}>
                               <Trash2 className="h-4 w-4 text-destructive" />
@@ -1019,7 +1318,7 @@ export default function ProjectEstimate() {
                             const workLines = linesByWork.get(work.id) ?? [];
                             const workNumber = hierarchyNumbers.workNumberById.get(work.id) ?? `${stageNumber}.1`;
                             const showAssignmentColumn = workLines.some((line) => isAssignableResourceType(line.type));
-                            const tableColumnCount = 6
+                            const tableColumnCount = 5
                               + (showAssignmentColumn ? 1 : 0)
                               + (regime !== "client" ? 2 : 0)
                               + (regime === "contractor" ? 1 : 0)
@@ -1047,12 +1346,14 @@ export default function ProjectEstimate() {
                                   )}
                                 </div>
 
-                                <div className="pl-4">
-                                  <Table className="table-fixed">
+                                <div className="relative pl-4">
+                                  <Table
+                                    ref={(node) => registerWorkTable(work.id, node)}
+                                    className="table-fixed min-w-[980px]"
+                                  >
                                     <TableHeader>
                                       <TableRow>
-                                        <TableHead className="h-9 w-[340px] py-1 pr-2">Resource</TableHead>
-                                        <TableHead className="h-9 w-[150px] py-1 pr-2">Type</TableHead>
+                                        <TableHead className="sticky left-0 z-20 h-9 w-[360px] bg-card py-1 pr-2">Resource</TableHead>
                                         {showAssignmentColumn && (
                                           <TableHead className="h-9 w-[170px] py-1 pr-2">
                                             <span className="inline-flex items-center gap-1">
@@ -1062,7 +1363,7 @@ export default function ProjectEstimate() {
                                           </TableHead>
                                         )}
                                         <TableHead className="h-9 w-[92px] py-1 pr-2 text-right tabular-nums">Qty</TableHead>
-                                        <TableHead className="h-9 w-[92px] py-1 pr-2">Unit</TableHead>
+                                        <TableHead className="h-9 w-[128px] py-1 pr-2">Unit</TableHead>
                                         {regime !== "client" && <TableHead className="h-9 w-[120px] py-1 pr-2 text-right tabular-nums">Cost unit</TableHead>}
                                         {regime !== "client" && <TableHead className="h-9 w-[120px] py-1 pr-2 text-right tabular-nums">Cost total</TableHead>}
                                         {regime === "contractor" && <TableHead className="h-9 w-[92px] py-1 pr-2 text-right tabular-nums">Markup %</TableHead>}
@@ -1076,44 +1377,58 @@ export default function ProjectEstimate() {
                                       {workLines.map((line) => {
                                         const computed = lineTotalsById.get(line.id);
                                         if (!computed) return null;
-                                        const otherLabel = line.type === "other" && line.title.toLowerCase().includes("overhead")
+                                        const typeLabel = line.type === "other" && line.title.toLowerCase().includes("overhead")
                                           ? "Overheads"
-                                          : undefined;
+                                          : labelForType(line.type);
+                                        const resolvedUnitSelectValue = resolveUnitSelectValue(line.type, line.unit);
+                                        const isCustomUnit = resolvedUnitSelectValue === CUSTOM_UNIT_SENTINEL;
+                                        const unitSelectValue = customUnitInputLineIds.has(line.id)
+                                          ? CUSTOM_UNIT_SENTINEL
+                                          : resolvedUnitSelectValue;
+                                        const customDraft = customUnitDraftByLineId[line.id] ?? (isCustomUnit ? line.unit : "");
+                                        const shouldShowCustomInput = isCustomUnit || customUnitInputLineIds.has(line.id);
+                                        const stickyBackground = changedLineIds.has(line.id) ? "bg-warning/10" : "bg-card";
 
                                         return (
                                           <TableRow key={line.id} className={changedLineIds.has(line.id) ? "bg-warning/10" : ""}>
-                                            <TableCell className="w-[340px] py-1.5 pr-2 align-top">
-                                              <InlineEditableText
-                                                value={line.title}
-                                                readOnly={!canEditEstimate}
-                                                startInEditMode={pendingLineTitleEditId === line.id}
-                                                onCommit={(nextValue) => updateLine(pid, line.id, { title: nextValue || line.title })}
-                                                displayClassName="whitespace-normal break-words leading-5 max-h-10 overflow-hidden font-medium"
-                                              />
-                                            </TableCell>
-
-                                            <TableCell className="w-[150px] py-1.5 pr-2 align-top">
-                                              {canEditEstimate ? (
-                                                <DropdownMenu>
-                                                  <DropdownMenuTrigger asChild>
-                                                    <button type="button" className="rounded-full focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/40">
-                                                      <ResourceTypeBadge type={line.type} labelOverride={otherLabel} />
-                                                    </button>
-                                                  </DropdownMenuTrigger>
-                                                  <DropdownMenuContent align="start">
-                                                    {RESOURCE_TYPE_OPTIONS.map((option) => (
-                                                      <DropdownMenuItem
-                                                        key={option.value}
-                                                        onSelect={() => updateLine(pid, line.id, { type: option.value })}
+                                            <TableCell className={`sticky left-0 z-10 w-[360px] py-1.5 pr-2 align-top ${stickyBackground}`}>
+                                              <div className="flex min-w-0 items-start gap-2">
+                                                {canEditEstimate ? (
+                                                  <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                      <button
+                                                        type="button"
+                                                        title={typeLabel}
+                                                        className="rounded-full focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/40"
                                                       >
-                                                        <ResourceTypeBadge type={option.value} className="border-transparent" />
-                                                      </DropdownMenuItem>
-                                                    ))}
-                                                  </DropdownMenuContent>
-                                                </DropdownMenu>
-                                              ) : (
-                                                <ResourceTypeBadge type={line.type} labelOverride={otherLabel} />
-                                              )}
+                                                        <ResourceTypeBadge type={line.type} iconOnly />
+                                                      </button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="start">
+                                                      {RESOURCE_TYPE_OPTIONS.map((option) => (
+                                                        <DropdownMenuItem
+                                                          key={option.value}
+                                                          onSelect={() => updateLine(pid, line.id, { type: option.value })}
+                                                        >
+                                                          <ResourceTypeBadge type={option.value} className="border-transparent" />
+                                                        </DropdownMenuItem>
+                                                      ))}
+                                                    </DropdownMenuContent>
+                                                  </DropdownMenu>
+                                                ) : (
+                                                  <span title={typeLabel}>
+                                                    <ResourceTypeBadge type={line.type} iconOnly />
+                                                  </span>
+                                                )}
+                                                <InlineEditableText
+                                                  value={line.title}
+                                                  readOnly={!canEditEstimate}
+                                                  startInEditMode={pendingLineTitleEditId === line.id}
+                                                  onCommit={(nextValue) => updateLine(pid, line.id, { title: nextValue || line.title })}
+                                                  className="min-w-0 flex-1"
+                                                  displayClassName="whitespace-normal break-words leading-5 max-h-10 overflow-hidden font-medium"
+                                                />
+                                              </div>
                                             </TableCell>
 
                                             {showAssignmentColumn && (
@@ -1145,12 +1460,57 @@ export default function ProjectEstimate() {
                                               />
                                             </TableCell>
 
-                                            <TableCell className="w-[92px] py-1.5 pr-2 align-top">
-                                              <InlineEditableText
-                                                value={line.unit}
-                                                readOnly={!canEditEstimate}
-                                                onCommit={(nextValue) => updateLine(pid, line.id, { unit: nextValue || line.unit })}
-                                              />
+                                            <TableCell className="w-[128px] py-1.5 pr-2 align-top">
+                                              {canEditEstimate ? (
+                                                <div className="space-y-1">
+                                                  <Select
+                                                    value={unitSelectValue}
+                                                    onValueChange={(nextValue) => {
+                                                      if (nextValue === CUSTOM_UNIT_SENTINEL) {
+                                                        openCustomUnitInput(line.id, isCustomUnit ? line.unit : "");
+                                                        return;
+                                                      }
+                                                      closeCustomUnitInput(line.id);
+                                                      updateLine(pid, line.id, { unit: nextValue });
+                                                    }}
+                                                  >
+                                                    <SelectTrigger className="h-7 border-transparent bg-transparent px-1 py-0 text-sm shadow-none focus:ring-1 focus:ring-ring/40">
+                                                      <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                      {buildUnitSelectOptions(line.type).map((option) => (
+                                                        <SelectItem key={`${line.id}-${option.value}`} value={option.value}>
+                                                          {option.label}
+                                                        </SelectItem>
+                                                      ))}
+                                                    </SelectContent>
+                                                  </Select>
+                                                  {shouldShowCustomInput && (
+                                                    <Input
+                                                      className="h-7"
+                                                      value={customDraft}
+                                                      placeholder="Custom unit"
+                                                      onChange={(event) => {
+                                                        const nextValue = event.target.value;
+                                                        setCustomUnitDraftByLineId((current) => ({
+                                                          ...current,
+                                                          [line.id]: nextValue,
+                                                        }));
+                                                      }}
+                                                      onBlur={() => commitCustomUnit(line)}
+                                                      onKeyDown={(event) => {
+                                                        if (event.key !== "Enter") return;
+                                                        event.preventDefault();
+                                                        commitCustomUnit(line);
+                                                      }}
+                                                    />
+                                                  )}
+                                                </div>
+                                              ) : (
+                                                <div className="min-h-7 px-1 py-0.5 text-sm text-foreground">
+                                                  {line.unit || "—"}
+                                                </div>
+                                              )}
                                             </TableCell>
 
                                             {regime !== "client" && (
@@ -1236,7 +1596,7 @@ export default function ProjectEstimate() {
                                                     type="button"
                                                     size="sm"
                                                     variant="secondary"
-                                                    className="h-6 gap-1 px-2 text-xs opacity-0 transition-opacity group-hover/work:opacity-100 focus-visible:opacity-100"
+                                                    className="h-6 gap-1 px-2 text-xs"
                                                   >
                                                     <Plus className="h-3.5 w-3.5" />
                                                     Add resource
@@ -1263,6 +1623,9 @@ export default function ProjectEstimate() {
                                       )}
                                     </TableBody>
                                   </Table>
+                                  {workTableScrollStateById[work.id]?.hasOverflow && !workTableScrollStateById[work.id]?.isScrolled && (
+                                    <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-card via-card/80 to-transparent" />
+                                  )}
                                 </div>
                               </div>
                             );
@@ -1275,7 +1638,7 @@ export default function ProjectEstimate() {
                                   type="button"
                                   size="sm"
                                   variant="secondary"
-                                  className="h-6 gap-1 px-2 text-xs opacity-0 transition-opacity group-hover/stage:opacity-100 focus-visible:opacity-100"
+                                  className="h-6 gap-1 px-2 text-xs"
                                   onClick={() => createWork(pid, { stageId: stage.id, title: `Work ${stageWorks.length + 1}` })}
                                 >
                                   <Plus className="h-3.5 w-3.5" />
@@ -1285,12 +1648,6 @@ export default function ProjectEstimate() {
                             </div>
                           )}
 
-                          <div className="flex items-center justify-between rounded-md border border-border/70 bg-muted/20 px-3 py-2">
-                            <span className="text-caption font-medium text-muted-foreground">Stage subtotal</span>
-                            <span className="text-sm font-semibold text-foreground tabular-nums">
-                              {money(stageSubtotalById.get(stage.id) ?? 0, estimateProject.currency)}
-                            </span>
-                          </div>
                         </div>
                       )}
                     </div>
