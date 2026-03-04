@@ -85,7 +85,7 @@ describe("estimate-v2 schedule helpers", () => {
     expect(result.cyclePath.length).toBeGreaterThan(0);
   });
 
-  it("returns earliest allowed start for FS + lag", () => {
+  it("returns earliest allowed start for FS + lag without same-day overlap", () => {
     const works = worksById([
       work("a", "stage-1", 1, {
         plannedStart: "2025-01-10T00:00:00.000Z",
@@ -98,7 +98,7 @@ describe("estimate-v2 schedule helpers", () => {
     ]);
 
     const earliest = earliestAllowedStart("b", [dep("a", "b", 2)], works);
-    const expected = (toDayIndex("2025-01-10T00:00:00.000Z") as number) + 2;
+    const expected = (toDayIndex("2025-01-10T00:00:00.000Z") as number) + 3;
 
     expect(earliest).toBe(expected);
   });
@@ -123,7 +123,7 @@ describe("estimate-v2 schedule helpers", () => {
       works,
     );
 
-    expect(fixed.fixedStart).toBe((toDayIndex("2025-01-10T00:00:00.000Z") as number) + 2);
+    expect(fixed.fixedStart).toBe((toDayIndex("2025-01-10T00:00:00.000Z") as number) + 3);
     expect(fixed.reasons).toContain("fs_snap");
   });
 
@@ -149,9 +149,9 @@ describe("estimate-v2 schedule helpers", () => {
       ],
     );
 
-    expect(new Date(constrained.b.plannedStart ?? "").getDate()).toBe(11);
-    expect(new Date(constrained.b.plannedEnd ?? "").getDate()).toBe(12);
-    expect(new Date(constrained.c.plannedStart ?? "").getDate()).toBe(13);
+    expect(new Date(constrained.b.plannedStart ?? "").getDate()).toBe(12);
+    expect(new Date(constrained.b.plannedEnd ?? "").getDate()).toBe(13);
+    expect(new Date(constrained.c.plannedStart ?? "").getDate()).toBe(15);
   });
 
   it("enforces minimum one-day duration", () => {

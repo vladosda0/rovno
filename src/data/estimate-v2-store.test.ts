@@ -1,9 +1,13 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  approveVersion,
   addDependency,
   computeVersionDiff,
+  createVersionSnapshot,
   deleteLine,
   getEstimateV2ProjectState,
+  getLatestProposedVersion,
+  submitVersion,
   updateWorkDates,
   setProjectEstimateStatus,
   setRegime,
@@ -534,5 +538,69 @@ describe("estimate-v2 execution foundation", () => {
 
     expect(taxEvents[0]?.payload.nextTaxBps).toBe(initial.taxBps + 100);
     expect(discountEvents[0]?.payload.nextDiscountBps).toBe(initial.discountBps + 100);
+  });
+
+  it("keeps archived proposed versions out of latest proposed selector", () => {
+    const projectId = "project-1";
+    setAuthRole("owner");
+    setRegimeDev(projectId, "contractor");
+
+    const v1 = createVersionSnapshot(projectId, "user-1");
+    expect(submitVersion(projectId, v1.versionId)).toBe(true);
+
+    const v2 = createVersionSnapshot(projectId, "user-1");
+    expect(submitVersion(projectId, v2.versionId)).toBe(true);
+
+    const approved = approveVersion(projectId, v2.versionId, {
+      name: "Client",
+      surname: "Approver",
+      email: "client@example.com",
+      timestamp: "2026-03-01T10:00:00.000Z",
+    }, { actorId: "client" });
+    expect(approved).toBe(true);
+
+    expect(getLatestProposedVersion(projectId)).toBeNull();
+  });
+
+  it("rejects replay approval for archived and already-approved versions", () => {
+    const projectId = "project-2";
+    setAuthRole("owner");
+    setRegimeDev(projectId, "contractor");
+
+    const v1 = createVersionSnapshot(projectId, "user-1");
+    expect(submitVersion(projectId, v1.versionId)).toBe(true);
+
+    const v2 = createVersionSnapshot(projectId, "user-1");
+    expect(submitVersion(projectId, v2.versionId)).toBe(true);
+
+    const archivedApproval = approveVersion(projectId, v1.versionId, {
+      name: "Client",
+      surname: "Replay",
+      email: "client@example.com",
+      timestamp: "2026-03-01T10:00:00.000Z",
+    }, { actorId: "client" });
+    expect(archivedApproval).toBe(false);
+
+    const firstApproval = approveVersion(projectId, v2.versionId, {
+      name: "Client",
+      surname: "Replay",
+      email: "client@example.com",
+      timestamp: "2026-03-01T10:00:00.000Z",
+    }, { actorId: "client" });
+    expect(firstApproval).toBe(true);
+
+    const replayApproval = approveVersion(projectId, v2.versionId, {
+      name: "Client",
+      surname: "Replay",
+      email: "client@example.com",
+      timestamp: "2026-03-01T10:00:00.000Z",
+    }, { actorId: "client" });
+    expect(replayApproval).toBe(false);
+
+    const approvalEventsForVersion = getEvents(projectId).filter((event) => (
+      event.type === "estimate.version_approved"
+      && event.payload.versionId === v2.versionId
+    ));
+    expect(approvalEventsForVersion.length).toBe(1);
   });
 });

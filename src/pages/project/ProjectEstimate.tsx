@@ -364,7 +364,7 @@ export default function ProjectEstimate() {
 
   const latestProposed = useMemo(() => (
     versions
-      .filter((version) => version.submitted && version.status === "proposed")
+      .filter((version) => version.submitted && version.status === "proposed" && !version.archived)
       .sort((a, b) => b.number - a.number)[0] ?? null
   ), [versions]);
 

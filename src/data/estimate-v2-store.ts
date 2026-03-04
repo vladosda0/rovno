@@ -1542,6 +1542,9 @@ export function approveVersion(
   options: ApproveVersionOptions = {},
 ): boolean {
   const state = ensureProjectState(projectId);
+  const target = state.versions.find((version) => version.id === versionId);
+  if (!target) return false;
+  if (!target.submitted || target.archived || target.status !== "proposed") return false;
   const now = nowIso();
 
   let approvedVersion: EstimateV2Version | null = null;
@@ -1642,7 +1645,7 @@ export function findVersionByShareId(shareId: string): { projectId: string; vers
 export function getLatestProposedVersion(projectId: string): EstimateV2Version | null {
   const state = ensureProjectState(projectId);
   const version = state.versions
-    .filter((entry) => entry.status === "proposed" && entry.submitted)
+    .filter((entry) => entry.status === "proposed" && entry.submitted && !entry.archived)
     .sort((a, b) => b.number - a.number)[0];
 
   return version ? {

@@ -220,7 +220,8 @@ export function earliestAllowedStart(
     const predecessorEnd = toDayIndex(predecessor.plannedEnd);
     if (predecessorEnd == null) return;
 
-    const candidate = predecessorEnd + normalizeLagDays(dep.lagDays);
+    // FS means successor starts after predecessor finish; lag adds extra wait days.
+    const candidate = predecessorEnd + normalizeLagDays(dep.lagDays) + 1;
     if (earliest == null || candidate > earliest) earliest = candidate;
   });
 

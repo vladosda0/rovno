@@ -118,6 +118,10 @@ export default function ShareEstimate() {
 
   const latestProposed = projectId ? getLatestProposedVersion(projectId) : null;
   const newerProposed = latestProposed && version && latestProposed.number > version.number ? latestProposed : null;
+  const canApprove = version?.status === "proposed"
+    && version.submitted
+    && !version.archived
+    && !version.approvalStamp;
 
   if (!shared || !snapshot || !version) {
     return (
@@ -128,6 +132,11 @@ export default function ShareEstimate() {
   }
 
   const handleApprove = (stamp: ApprovalStamp) => {
+    if (!canApprove) {
+      toast({ title: "This version can no longer be approved", variant: "destructive" });
+      return;
+    }
+
     const ok = approveVersion(projectId, version.id, stamp, { actorId: "client" });
 
     if (!ok) {
@@ -234,7 +243,7 @@ export default function ShareEstimate() {
       <div className="rounded-card border border-border bg-card p-sp-2 space-y-2">
         <h2 className="text-body-sm font-semibold text-foreground">Approval</h2>
         <div className="flex flex-wrap gap-2">
-          <Button onClick={() => setApprovalModalOpen(true)}>Approve</Button>
+          {canApprove && <Button onClick={() => setApprovalModalOpen(true)}>Approve</Button>}
           <Button variant="outline" onClick={handleAskQuestion}>Ask questions</Button>
         </div>
       </div>
