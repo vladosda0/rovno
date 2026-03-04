@@ -48,6 +48,12 @@ function unitPriceForItem(item: ProcurementItemV2): number {
   return item.actualUnitPrice ?? item.plannedUnitPrice ?? 0;
 }
 
+export function isEstimateLinkedProcurementItem(
+  item: Pick<ProcurementItemV2, "sourceEstimateV2LineId" | "sourceEstimateItemId">,
+): boolean {
+  return Boolean(item.sourceEstimateV2LineId || item.sourceEstimateItemId);
+}
+
 export function toInventoryKey(item: Pick<ProcurementItemV2, "name" | "spec" | "unit">): string {
   return [
     normalizeName(item.name),
@@ -185,6 +191,7 @@ export function computeTabChipTotals(
 ): ProcurementTabChipTotals {
   const requestedItems = items
     .filter((item) => item.projectId === projectId)
+    .filter(isEstimateLinkedProcurementItem)
     .map((item) => ({ item, remaining: computeRemainingRequestedQty(item.id, orders) }))
     .filter(({ remaining }) => remaining > 0);
 

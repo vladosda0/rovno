@@ -15,7 +15,6 @@ import { fmtCost } from "@/lib/procurement-utils";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { LocationPicker } from "@/components/procurement/LocationPicker";
-import { UnitPicker } from "@/components/procurement/UnitPicker";
 import type { DraftOrderLineInput } from "@/data/order-store";
 import type { OrderKind } from "@/types/entities";
 
@@ -342,33 +341,12 @@ export function OrderModal({
                         />
                       </td>
                       <td className="px-3 py-2">
-                        <UnitPicker
-                          value={line.unit}
-                          onChange={(nextUnit) => {
-                            setLines((prev) => prev.map((entry) => (
-                              entry.procurementItemId === line.procurementItemId
-                                ? { ...entry, unit: nextUnit }
-                                : entry
-                            )));
-                          }}
-                          className="h-8"
-                        />
+                        <span className="text-sm text-foreground">{line.unit}</span>
                       </td>
-                      <td className="px-3 py-2">
-                        <Input
-                          type="number"
-                          min="0"
-                          value={line.plannedUnitPrice ?? ""}
-                          onChange={(event) => {
-                            const value = event.target.value ? Number(event.target.value) : null;
-                            setLines((prev) => prev.map((entry) => (
-                              entry.procurementItemId === line.procurementItemId
-                                ? { ...entry, plannedUnitPrice: value }
-                                : entry
-                            )));
-                          }}
-                          className="h-8 text-right"
-                        />
+                      <td className="px-3 py-2 text-right">
+                        <span className="text-sm tabular-nums text-foreground">
+                          {line.plannedUnitPrice == null ? "—" : fmtCost(line.plannedUnitPrice)}
+                        </span>
                       </td>
                       <td className="px-3 py-2">
                         <Input

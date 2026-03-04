@@ -1,14 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { addProcurementItem } from "@/data/procurement-store";
 import {
+  computeTabChipTotals,
   computeFulfilledQty,
   computeInStockByLocation,
   computeOrderedOpenQty,
   computeRemainingRequestedQty,
+  isEstimateLinkedProcurementItem,
 } from "@/lib/procurement-fulfillment";
-import type { InventoryLocation, OrderWithLines } from "@/types/entities";
+import type { InventoryLocation, OrderWithLines, ProcurementItemV2 } from "@/types/entities";
 
-function addTestRequestLine(projectId: string, id: string, requiredQty = 10) {
+function addTestRequestLine(
+  projectId: string,
+  id: string,
+  requiredQty = 10,
+  overrides: Partial<ProcurementItemV2> = {},
+) {
   return addProcurementItem({
     id,
     projectId,
@@ -28,16 +35,37 @@ function addTestRequestLine(projectId: string, id: string, requiredQty = 10) {
     supplierPreferred: null,
     locationPreferredId: null,
     lockedFromEstimate: false,
+    sourceEstimateItemId: null,
+    sourceEstimateV2LineId: null,
+    orphaned: false,
+    orphanedAt: null,
+    orphanedReason: null,
     linkUrl: null,
     notes: null,
     attachments: [],
     createdFrom: "manual",
     linkedTaskIds: [],
     archived: false,
+    ...overrides,
   });
 }
 
 describe("procurement fulfillment utils", () => {
+  it("detects estimate-linked procurement requests by active linkage keys", () => {
+    expect(isEstimateLinkedProcurementItem({
+      sourceEstimateV2LineId: "line-1",
+      sourceEstimateItemId: null,
+    } as ProcurementItemV2)).toBe(true);
+    expect(isEstimateLinkedProcurementItem({
+      sourceEstimateV2LineId: null,
+      sourceEstimateItemId: "legacy-1",
+    } as ProcurementItemV2)).toBe(true);
+    expect(isEstimateLinkedProcurementItem({
+      sourceEstimateV2LineId: null,
+      sourceEstimateItemId: null,
+    } as ProcurementItemV2)).toBe(false);
+  });
+
   it("computes remaining qty with split supplier + stock fulfillments", () => {
     const projectId = `test-project-${Date.now()}`;
     const item = addTestRequestLine(projectId, `req-${Date.now()}`, 10);
@@ -114,6 +142,57 @@ describe("procurement fulfillment utils", () => {
     expect(computeRemainingRequestedQty(item.id, orders)).toBe(3);
     expect(computeOrderedOpenQty(item.id, orders)).toBe(2);
     expect(computeFulfilledQty(item.id, orders)).toBe(7);
+  });
+
+  it("clamps requested remaining to zero when ordered quantity exceeds requested", () => {
+    const projectId = `remaining-clamp-${Date.now()}`;
+    const item = addTestRequestLine(projectId, `req-over-${Date.now()}`, 5);
+    const orders: OrderWithLines[] = [
+      {
+        id: "o-over",
+        projectId,
+        status: "placed",
+        kind: "supplier",
+        supplierName: "Supplier X",
+        deliverToLocationId: "loc-site",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        lines: [
+          {
+            id: "l-over",
+            orderId: "o-over",
+            procurementItemId: item.id,
+            qty: 7,
+            receivedQty: 0,
+            unit: "pcs",
+            plannedUnitPrice: 100,
+            actualUnitPrice: 120,
+          },
+        ],
+      },
+    ];
+
+    expect(computeRemainingRequestedQty(item.id, orders)).toBe(0);
+  });
+
+  it("excludes non-estimate-linked items from requested chip totals", () => {
+    const projectId = `chip-filter-${Date.now()}`;
+    const linked = addTestRequestLine(projectId, `linked-${Date.now()}`, 4, {
+      sourceEstimateV2LineId: "line-linked",
+      createdFrom: "estimate",
+      plannedUnitPrice: 250,
+    });
+    const manual = addTestRequestLine(projectId, `manual-${Date.now()}`, 6, {
+      sourceEstimateV2LineId: null,
+      sourceEstimateItemId: null,
+      createdFrom: "manual",
+      plannedUnitPrice: 999,
+    });
+
+    const totals = computeTabChipTotals(projectId, [linked, manual], [], []);
+
+    expect(totals.requested.count).toBe(1);
+    expect(totals.requested.total).toBe(1_000);
   });
 
   it("builds in-stock groups only from location placements", () => {

@@ -12,7 +12,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Select,
   SelectContent,
@@ -49,6 +48,7 @@ import {
   computeInStockByLocation,
   computeRemainingRequestedQty,
   computeTabChipTotals,
+  isEstimateLinkedProcurementItem,
 } from "@/lib/procurement-fulfillment";
 import { fmtCost } from "@/lib/procurement-utils";
 import { useToast } from "@/hooks/use-toast";
@@ -56,7 +56,7 @@ import { cn } from "@/lib/utils";
 import { OrderModal } from "@/components/procurement/OrderModal";
 import { OrderDetailModal } from "@/components/procurement/OrderDetailModal";
 import { ItemTypePicker } from "@/components/procurement/ItemTypePicker";
-import { UnitPicker } from "@/components/procurement/UnitPicker";
+import { ResourceTypeBadge } from "@/components/estimate-v2/ResourceTypeBadge";
 import { useEstimateV2Project } from "@/hooks/use-estimate-v2-data";
 import { relinkProcurementItemToEstimateV2Line } from "@/lib/estimate-v2/procurement-sync";
 import { computeProjectTotals } from "@/lib/estimate-v2/pricing";
@@ -188,8 +188,8 @@ export default function ProjectProcurement() {
   const [collapsedStages, setCollapsedStages] = useState<Set<string>>(new Set(savedListState?.collapsedStageIds ?? []));
   const [collapsedOrderIds, setCollapsedOrderIds] = useState<Set<string>>(new Set());
   const [collapsedLocationIds, setCollapsedLocationIds] = useState<Set<string>>(new Set());
-
   const [selectedRequestedIds, setSelectedRequestedIds] = useState<Set<string>>(new Set());
+
   const [createOrderOpen, setCreateOrderOpen] = useState(false);
   const [createOrderItemIds, setCreateOrderItemIds] = useState<string[]>([]);
 
@@ -249,12 +249,6 @@ export default function ProjectProcurement() {
     return () => window.clearTimeout(timer);
   }, [savedListState]);
 
-  useEffect(() => {
-    if (activeTab !== "requested" && selectedRequestedIds.size > 0) {
-      setSelectedRequestedIds(new Set());
-    }
-  }, [activeTab, selectedRequestedIds.size]);
-
   const remainingByItemId = useMemo(() => {
     const map = new Map<string, number>();
     items.forEach((item) => {
@@ -294,6 +288,7 @@ export default function ProjectProcurement() {
 
   const requestedItems = useMemo(() => (
     items
+      .filter(isEstimateLinkedProcurementItem)
       .filter((item) => (remainingByItemId.get(item.id) ?? 0) > 0)
       .filter(isItemSearchMatch)
   ), [items, remainingByItemId, isItemSearchMatch]);
@@ -313,6 +308,21 @@ export default function ProjectProcurement() {
     });
 
     return { map, unstaged };
+  }, [requestedItems]);
+
+  useEffect(() => {
+    if (activeTab !== "requested" && selectedRequestedIds.size > 0) {
+      setSelectedRequestedIds(new Set());
+    }
+  }, [activeTab, selectedRequestedIds.size]);
+
+  useEffect(() => {
+    setSelectedRequestedIds((prev) => {
+      if (prev.size === 0) return prev;
+      const visibleIds = new Set(requestedItems.map((item) => item.id));
+      const next = new Set(Array.from(prev).filter((id) => visibleIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
   }, [requestedItems]);
 
   const procurementEstimateLines = useMemo(
@@ -376,14 +386,6 @@ export default function ProjectProcurement() {
     });
     return map;
   }, [items, orders]);
-
-  const getEarliestDelivery = useCallback((procurementItemId: string) => {
-    const related = relatedOrdersByItemId.get(procurementItemId) ?? [];
-    const supplierOrders = related
-      .filter((order) => order.kind === "supplier" && !!order.deliveryDeadline)
-      .sort((a, b) => new Date(a.deliveryDeadline ?? "").getTime() - new Date(b.deliveryDeadline ?? "").getTime());
-    return supplierOrders[0] ?? null;
-  }, [relatedOrdersByItemId]);
 
   const toggleStage = (stageId: string) => {
     setCollapsedStages((prev) => {
@@ -554,8 +556,10 @@ export default function ProjectProcurement() {
     flushPendingRevokes();
   }, [clearAutosaveTimer, persistDraftNowIfChanged, flushPendingRevokes]);
 
-  const patchRequestLine = (item: ProcurementItemV2, partial: Partial<ProcurementItemV2>) => {
-    updateProcurementItem(item.id, partial);
+  const openCreateOrder = (itemIds: string[]) => {
+    if (itemIds.length === 0) return;
+    setCreateOrderItemIds(itemIds);
+    setCreateOrderOpen(true);
   };
 
   const toggleSelected = (itemId: string, checked: boolean) => {
@@ -565,12 +569,6 @@ export default function ProjectProcurement() {
       else next.delete(itemId);
       return next;
     });
-  };
-
-  const openCreateOrder = (itemIds: string[]) => {
-    if (itemIds.length === 0) return;
-    setCreateOrderItemIds(itemIds);
-    setCreateOrderOpen(true);
   };
 
   const addUrlAttachment = () => {
@@ -638,10 +636,24 @@ export default function ProjectProcurement() {
     );
   }
 
-  const renderTableHeader = (showCheckbox: boolean) => (
+  const renderRequestedTableHeader = () => (
     <thead className="bg-muted/30 border-b border-border">
       <tr>
-        <th className="w-10 text-left px-2 py-2 text-xs font-medium text-muted-foreground">{showCheckbox ? "" : ""}</th>
+        <th className="w-10 text-left px-2 py-2 text-xs font-medium text-muted-foreground" />
+        <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Name / Spec</th>
+        <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">When needed</th>
+        <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Amount</th>
+        <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Unit</th>
+        <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Planned</th>
+        <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Action</th>
+      </tr>
+    </thead>
+  );
+
+  const renderFactTableHeader = () => (
+    <thead className="bg-muted/30 border-b border-border">
+      <tr>
+        <th className="w-10 text-left px-2 py-2 text-xs font-medium text-muted-foreground" />
         <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Type</th>
         <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Name / Spec</th>
         <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">When needed</th>
@@ -661,26 +673,15 @@ export default function ProjectProcurement() {
       <div className="glass-elevated rounded-card p-sp-2 space-y-3">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <h2 className="text-h3 text-foreground">Procurement</h2>
-
-          {activeTab === "requested" && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span>
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="h-8"
-                    disabled={selectedRequestedIds.size === 0 || !canEdit}
-                    onClick={() => openCreateOrder(Array.from(selectedRequestedIds))}
-                  >
-                    Create order
-                  </Button>
-                </span>
-              </TooltipTrigger>
-              {selectedRequestedIds.size === 0 && (
-                <TooltipContent>Choose items to order</TooltipContent>
-              )}
-            </Tooltip>
+          {activeTab === "requested" && selectedRequestedIds.size > 0 && (
+            <Button
+              type="button"
+              size="sm"
+              className="h-8"
+              onClick={() => openCreateOrder(Array.from(selectedRequestedIds))}
+            >
+              Create order ({selectedRequestedIds.size})
+            </Button>
           )}
         </div>
 
@@ -780,35 +781,27 @@ export default function ProjectProcurement() {
                       {!collapsed && (
                         <div className="overflow-x-auto">
                           <table className="w-full text-sm">
-                            {renderTableHeader(true)}
+                            {renderRequestedTableHeader()}
                             <tbody>
                               {stageItems.map((item) => {
                                 const remaining = remainingByItemId.get(item.id) ?? 0;
-                                const qtyPrice = rowQtyPrice(item, remaining);
-                                const delivery = getEarliestDelivery(item.id);
                                 const selected = selectedRequestedIds.has(item.id);
 
                                 return (
-                                  <tr key={item.id} className="group border-b border-border/70 last:border-0 hover:bg-muted/20">
+                                  <tr key={item.id} className="border-b border-border/70 last:border-0 hover:bg-muted/20">
                                     <td className="px-2 py-2">
-                                      <div className={cn("transition-opacity", selected ? "opacity-100" : "opacity-0 group-hover:opacity-100")}>
-                                        <Checkbox
-                                          checked={selected}
-                                          onCheckedChange={(checked) => toggleSelected(item.id, !!checked)}
-                                          disabled={!canEdit}
-                                        />
-                                      </div>
-                                    </td>
-                                    <td className="px-2 py-2">
-                                      <ItemTypePicker
-                                        value={item.type}
+                                      <Checkbox
+                                        checked={selected}
+                                        onCheckedChange={(checked) => toggleSelected(item.id, !!checked)}
                                         disabled={!canEdit}
-                                        onChange={(nextType) => patchRequestLine(item, { type: nextType })}
                                       />
                                     </td>
                                     <td className="px-2 py-2 min-w-[220px]">
                                       <button type="button" onClick={() => openDetail(item)} className="text-left hover:underline">
-                                        <p className="font-medium text-foreground truncate">{item.name}</p>
+                                        <div className="flex min-w-0 items-center gap-2">
+                                          <ResourceTypeBadge type={item.type} className="shrink-0 border-transparent" />
+                                          <p className="font-medium text-foreground truncate">{item.name}</p>
+                                        </div>
                                         {item.orphaned && (
                                           <span className="inline-flex rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] text-destructive">
                                             Orphaned
@@ -817,110 +810,22 @@ export default function ProjectProcurement() {
                                         {item.spec && <p className="text-xs text-muted-foreground truncate">{item.spec}</p>}
                                       </button>
                                     </td>
-                                    <td className="px-2 py-2">
-                                      <Popover>
-                                        <PopoverTrigger asChild>
-                                          <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="sm"
-                                            className={cn("h-7 px-2 text-xs", isOverdue(item.requiredByDate) && "text-destructive")}
-                                            disabled={!canEdit || !!item.lockedFromEstimate}
-                                          >
-                                            <CalendarIcon className="h-3.5 w-3.5 mr-1" />
-                                            {formatDate(item.requiredByDate)}
-                                          </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent className="w-auto p-0" align="start">
-                                          <Calendar
-                                            mode="single"
-                                            selected={item.requiredByDate ? new Date(item.requiredByDate) : undefined}
-                                            onSelect={(nextDate) => patchRequestLine(item, { requiredByDate: nextDate ? nextDate.toISOString() : null })}
-                                            initialFocus
-                                          />
-                                        </PopoverContent>
-                                      </Popover>
+                                    <td className={cn("px-2 py-2 text-xs", isOverdue(item.requiredByDate) && "text-destructive")}>
+                                      {formatDate(item.requiredByDate)}
                                     </td>
+                                    <td className="px-2 py-2 text-right tabular-nums text-foreground">{remaining}</td>
+                                    <td className="px-2 py-2 text-foreground">{item.unit}</td>
+                                    <td className="px-2 py-2 text-right tabular-nums text-foreground">{fmtCost(item.plannedUnitPrice ?? 0)}</td>
                                     <td className="px-2 py-2">
-                                      {delivery ? (
-                                        <button
-                                          type="button"
-                                          className="text-xs text-accent hover:underline"
-                                          onClick={() => openOrderDetail(delivery.id)}
-                                        >
-                                          {formatDate(delivery.deliveryDeadline)}
-                                        </button>
-                                      ) : (
-                                        <span className="text-xs text-muted-foreground">—</span>
-                                      )}
-                                    </td>
-                                    <td className="px-2 py-2">
-                                      <Input
-                                        type="number"
-                                        min="0"
-                                        value={item.requiredQty}
-                                        disabled={!canEdit || !!item.lockedFromEstimate}
-                                        onChange={(event) => {
-                                          const requiredQty = Math.max(0, Number(event.target.value));
-                                          patchRequestLine(item, { requiredQty });
-                                        }}
-                                        className="h-8 text-right"
-                                      />
-                                    </td>
-                                    <td className="px-2 py-2">
-                                      <UnitPicker
-                                        value={item.unit}
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        className="h-7"
+                                        onClick={() => openCreateOrder([item.id])}
                                         disabled={!canEdit}
-                                        className="h-8"
-                                        onChange={(nextUnit) => patchRequestLine(item, { unit: nextUnit })}
-                                      />
-                                    </td>
-                                    <td className="px-2 py-2">
-                                      <Input
-                                        type="number"
-                                        min="0"
-                                        value={item.actualUnitPrice ?? ""}
-                                        disabled={!canEdit}
-                                        onChange={(event) => {
-                                          const actualUnitPrice = event.target.value ? Number(event.target.value) : null;
-                                          patchRequestLine(item, { actualUnitPrice });
-                                        }}
-                                        className="h-8 text-right"
-                                      />
-                                    </td>
-                                    <td className="px-2 py-2">
-                                      <Input
-                                        type="number"
-                                        min="0"
-                                        value={item.plannedUnitPrice ?? ""}
-                                        disabled={!canEdit || !!item.lockedFromEstimate}
-                                        onChange={(event) => {
-                                          const plannedUnitPrice = event.target.value ? Number(event.target.value) : null;
-                                          patchRequestLine(item, { plannedUnitPrice });
-                                        }}
-                                        className="h-8 text-right"
-                                      />
-                                    </td>
-                                    <td className="px-2 py-2 text-right text-sm">{fmtCost(qtyPrice.factual)}</td>
-                                    <td className="px-2 py-2">
-                                      <div className="flex flex-col items-start gap-1">
-                                        <button
-                                          type="button"
-                                          onClick={() => openDetail(item)}
-                                          className="text-xs text-accent hover:underline"
-                                        >
-                                          Requested
-                                        </button>
-                                        {item.orphaned && (
-                                          <button
-                                            type="button"
-                                            onClick={() => openDetail(item)}
-                                            className="text-xs text-accent hover:underline"
-                                          >
-                                            Relink
-                                          </button>
-                                        )}
-                                      </div>
+                                      >
+                                        Order
+                                      </Button>
                                     </td>
                                   </tr>
                                 );
@@ -948,35 +853,27 @@ export default function ProjectProcurement() {
                   {!collapsedStages.has("__unstaged__") && (
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
-                        {renderTableHeader(true)}
+                        {renderRequestedTableHeader()}
                         <tbody>
                           {requestedStageMap.unstaged.map((item) => {
                             const remaining = remainingByItemId.get(item.id) ?? 0;
-                            const qtyPrice = rowQtyPrice(item, remaining);
-                            const delivery = getEarliestDelivery(item.id);
                             const selected = selectedRequestedIds.has(item.id);
 
                             return (
-                              <tr key={item.id} className="group border-b border-border/70 last:border-0 hover:bg-muted/20">
+                              <tr key={item.id} className="border-b border-border/70 last:border-0 hover:bg-muted/20">
                                 <td className="px-2 py-2">
-                                  <div className={cn("transition-opacity", selected ? "opacity-100" : "opacity-0 group-hover:opacity-100")}>
-                                    <Checkbox
-                                      checked={selected}
-                                      onCheckedChange={(checked) => toggleSelected(item.id, !!checked)}
-                                      disabled={!canEdit}
-                                    />
-                                  </div>
-                                </td>
-                                <td className="px-2 py-2">
-                                  <ItemTypePicker
-                                    value={item.type}
+                                  <Checkbox
+                                    checked={selected}
+                                    onCheckedChange={(checked) => toggleSelected(item.id, !!checked)}
                                     disabled={!canEdit}
-                                    onChange={(nextType) => patchRequestLine(item, { type: nextType })}
                                   />
                                 </td>
                                 <td className="px-2 py-2 min-w-[220px]">
                                   <button type="button" onClick={() => openDetail(item)} className="text-left hover:underline">
-                                    <p className="font-medium text-foreground truncate">{item.name}</p>
+                                    <div className="flex min-w-0 items-center gap-2">
+                                      <ResourceTypeBadge type={item.type} className="shrink-0 border-transparent" />
+                                      <p className="font-medium text-foreground truncate">{item.name}</p>
+                                    </div>
                                     {item.orphaned && (
                                       <span className="inline-flex rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] text-destructive">
                                         Orphaned
@@ -985,110 +882,20 @@ export default function ProjectProcurement() {
                                     {item.spec && <p className="text-xs text-muted-foreground truncate">{item.spec}</p>}
                                   </button>
                                 </td>
+                                <td className={cn("px-2 py-2 text-xs", isOverdue(item.requiredByDate) && "text-destructive")}>{formatDate(item.requiredByDate)}</td>
+                                <td className="px-2 py-2 text-right tabular-nums text-foreground">{remaining}</td>
+                                <td className="px-2 py-2 text-foreground">{item.unit}</td>
+                                <td className="px-2 py-2 text-right tabular-nums text-foreground">{fmtCost(item.plannedUnitPrice ?? 0)}</td>
                                 <td className="px-2 py-2">
-                                  <Popover>
-                                    <PopoverTrigger asChild>
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        className={cn("h-7 px-2 text-xs", isOverdue(item.requiredByDate) && "text-destructive")}
-                                        disabled={!canEdit || !!item.lockedFromEstimate}
-                                      >
-                                        <CalendarIcon className="h-3.5 w-3.5 mr-1" />
-                                        {formatDate(item.requiredByDate)}
-                                      </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0" align="start">
-                                      <Calendar
-                                        mode="single"
-                                        selected={item.requiredByDate ? new Date(item.requiredByDate) : undefined}
-                                        onSelect={(nextDate) => patchRequestLine(item, { requiredByDate: nextDate ? nextDate.toISOString() : null })}
-                                        initialFocus
-                                      />
-                                    </PopoverContent>
-                                  </Popover>
-                                </td>
-                                <td className="px-2 py-2">
-                                  {delivery ? (
-                                    <button
-                                      type="button"
-                                      className="text-xs text-accent hover:underline"
-                                      onClick={() => openOrderDetail(delivery.id)}
-                                    >
-                                      {formatDate(delivery.deliveryDeadline)}
-                                    </button>
-                                  ) : (
-                                    <span className="text-xs text-muted-foreground">—</span>
-                                  )}
-                                </td>
-                                <td className="px-2 py-2">
-                                  <Input
-                                    type="number"
-                                    min="0"
-                                    value={item.requiredQty}
-                                    disabled={!canEdit || !!item.lockedFromEstimate}
-                                    onChange={(event) => {
-                                      const requiredQty = Math.max(0, Number(event.target.value));
-                                      patchRequestLine(item, { requiredQty });
-                                    }}
-                                    className="h-8 text-right"
-                                  />
-                                </td>
-                                <td className="px-2 py-2">
-                                  <UnitPicker
-                                    value={item.unit}
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    className="h-7"
+                                    onClick={() => openCreateOrder([item.id])}
                                     disabled={!canEdit}
-                                    className="h-8"
-                                    onChange={(nextUnit) => patchRequestLine(item, { unit: nextUnit })}
-                                  />
-                                </td>
-                                <td className="px-2 py-2">
-                                  <Input
-                                    type="number"
-                                    min="0"
-                                    value={item.actualUnitPrice ?? ""}
-                                    disabled={!canEdit}
-                                    onChange={(event) => {
-                                      const actualUnitPrice = event.target.value ? Number(event.target.value) : null;
-                                      patchRequestLine(item, { actualUnitPrice });
-                                    }}
-                                    className="h-8 text-right"
-                                  />
-                                </td>
-                                <td className="px-2 py-2">
-                                  <Input
-                                    type="number"
-                                    min="0"
-                                    value={item.plannedUnitPrice ?? ""}
-                                    disabled={!canEdit || !!item.lockedFromEstimate}
-                                    onChange={(event) => {
-                                      const plannedUnitPrice = event.target.value ? Number(event.target.value) : null;
-                                      patchRequestLine(item, { plannedUnitPrice });
-                                    }}
-                                    className="h-8 text-right"
-                                  />
-                                </td>
-                                <td className="px-2 py-2 text-right text-sm">{fmtCost(qtyPrice.factual)}</td>
-                                <td className="px-2 py-2">
-                                  <div className="flex flex-col items-start gap-1">
-                                    <button
-                                      type="button"
-                                      onClick={() => openDetail(item)}
-                                      className="text-xs text-accent hover:underline"
-                                    >
-                                      Requested
-                                    </button>
-                                    {item.orphaned && (
-                                      <button
-                                        type="button"
-                                        onClick={() => openDetail(item)}
-                                        className="text-xs text-accent hover:underline"
-                                      >
-                                        Relink
-                                      </button>
-                                    )}
-                                  </div>
+                                  >
+                                    Order
+                                  </Button>
                                 </td>
                               </tr>
                             );
@@ -1134,7 +941,7 @@ export default function ProjectProcurement() {
                   {!collapsed && (
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
-                        {renderTableHeader(false)}
+                        {renderFactTableHeader()}
                         <tbody>
                           {order.lines.map((line) => {
                             const item = items.find((entry) => entry.id === line.procurementItemId);
@@ -1223,7 +1030,7 @@ export default function ProjectProcurement() {
                   {!collapsed && (
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
-                        {renderTableHeader(false)}
+                        {renderFactTableHeader()}
                         <tbody>
                           {group.items.map((entry) => {
                             const item = items.find((candidate) => candidate.id === entry.procurementItemId);
@@ -1465,33 +1272,16 @@ export default function ProjectProcurement() {
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground">Unit</label>
-                    <div className="mt-1">
-                      <UnitPicker
-                        value={editForm.unit ?? "pcs"}
-                        onChange={(nextUnit) => patchEditForm((prev) => ({ ...prev, unit: nextUnit }), "immediate")}
-                        disabled={!canEdit}
-                        className="h-9"
-                      />
-                    </div>
+                    <p className="mt-1 h-9 flex items-center text-sm text-foreground">{editForm.unit ?? "—"}</p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs text-muted-foreground">Planned unit price</label>
-                    <Input
-                      type="number"
-                      min="0"
-                      value={editForm.plannedUnitPrice ?? ""}
-                      onChange={(event) => {
-                        const plannedUnitPrice = event.target.value ? Number(event.target.value) : null;
-                        patchEditForm((prev) => ({ ...prev, plannedUnitPrice }));
-                      }}
-                      onBlur={() => persistDraftNowIfChanged(draftRef.current)}
-                      className="h-9"
-                      placeholder="RUB"
-                      disabled={!canEdit || !!detailItem.lockedFromEstimate}
-                    />
+                    <p className="mt-1 h-9 flex items-center justify-end tabular-nums text-sm text-foreground">
+                      {fmtCost(editForm.plannedUnitPrice ?? 0)}
+                    </p>
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground">Actual unit price</label>
