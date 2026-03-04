@@ -44,9 +44,11 @@ import {
   archiveProcurementItem,
   updateProcurementItem,
 } from "@/data/procurement-store";
-import { receiveOrder, updateOrder } from "@/data/order-store";
-import { getTask } from "@/data/store";
+import { consumeStockFromInventory, receiveOrder, updateOrder } from "@/data/order-store";
+import { addEvent, addTask, getCurrentUser, getTask, getUserById } from "@/data/store";
 import {
+  collectItemLocationEventHistory,
+  computeLastReceivedAt,
   computeFulfilledQty,
   computeInStockByLocation,
   computeRemainingRequestedQty,
@@ -65,10 +67,12 @@ import { useEstimateV2Project } from "@/hooks/use-estimate-v2-data";
 import { relinkProcurementItemToEstimateV2Line } from "@/lib/estimate-v2/procurement-sync";
 import { computeProjectTotals } from "@/lib/estimate-v2/pricing";
 import type {
+  Event,
   OrderWithLines,
   ProcurementAttachment,
   ProcurementItemV2,
   ProcurementItemType,
+  Task,
 } from "@/types/entities";
 
 type ProcurementTab = "requested" | "ordered" | "in_stock";
@@ -157,19 +161,6 @@ function orderStatusLabel(status: "draft" | "placed" | "received" | "voided"): s
   return "In stock";
 }
 
-function rowQtyPrice(
-  item: ProcurementItemV2,
-  qty: number,
-): { planned: number; actual: number; factual: number } {
-  const planned = item.plannedUnitPrice ?? 0;
-  const actual = item.actualUnitPrice ?? 0;
-  return {
-    planned,
-    actual,
-    factual: actual * qty,
-  };
-}
-
 type OrderedReceivableTarget = {
   selectionKey: string;
   orderId: string;
@@ -186,6 +177,17 @@ type OrderedReceivableTarget = {
   locationId: string | null;
 };
 
+type InStockTableRow = {
+  key: string;
+  procurementItemId: string;
+  item: ProcurementItemV2;
+  locationId: string;
+  locationName: string;
+  qty: number;
+  orderIds: string[];
+  lastReceivedAt: string | null;
+};
+
 export default function ProjectProcurement() {
   const { id: projectId, itemId, orderId } = useParams<{ id: string; itemId?: string; orderId?: string }>();
   const navigate = useNavigate();
@@ -198,7 +200,7 @@ export default function ProjectProcurement() {
   const orders = useOrders(pid);
   const locations = useLocations(pid);
   const stockRows = useInventoryStock(pid);
-  const { stages } = useProject(pid);
+  const { project, members, stages } = useProject(pid);
   const estimateState = useEstimateV2Project(pid);
   const perm = usePermission(pid);
   const canEdit = perm.can("procurement.edit");
@@ -207,13 +209,20 @@ export default function ProjectProcurement() {
   const [activeTab, setActiveTab] = useState<ProcurementTab>(savedListState?.activeTab ?? "requested");
   const [collapsedStages, setCollapsedStages] = useState<Set<string>>(new Set(savedListState?.collapsedStageIds ?? []));
   const [collapsedOrderIds, setCollapsedOrderIds] = useState<Set<string>>(new Set());
-  const [collapsedLocationIds, setCollapsedLocationIds] = useState<Set<string>>(new Set());
   const [selectedRequestedIds, setSelectedRequestedIds] = useState<Set<string>>(new Set());
   const [selectedOrderedLineKeys, setSelectedOrderedLineKeys] = useState<Set<string>>(new Set());
   const [receiveModalOpen, setReceiveModalOpen] = useState(false);
   const [receiveModalTargets, setReceiveModalTargets] = useState<OrderedReceivableTarget[]>([]);
   const [receiveModalQtyByKey, setReceiveModalQtyByKey] = useState<Record<string, number>>({});
   const [receiveModalLocationByKey, setReceiveModalLocationByKey] = useState<Record<string, string>>({});
+  const [useFromStockOpen, setUseFromStockOpen] = useState(false);
+  const [useFromStockTarget, setUseFromStockTarget] = useState<InStockTableRow | null>(null);
+  const [useFromStockQty, setUseFromStockQty] = useState("");
+  const [useFromStockParticipantId, setUseFromStockParticipantId] = useState("none");
+  const [useFromStockManualName, setUseFromStockManualName] = useState("");
+  const [useFromStockNote, setUseFromStockNote] = useState("");
+  const [inStockDetailTarget, setInStockDetailTarget] = useState<InStockTableRow | null>(null);
+  const [inStockDetailOpen, setInStockDetailOpen] = useState(false);
 
   const [createOrderOpen, setCreateOrderOpen] = useState(false);
   const [createOrderItemIds, setCreateOrderItemIds] = useState<string[]>([]);
@@ -313,6 +322,36 @@ export default function ProjectProcurement() {
   const defaultLocationId = useMemo(
     () => locations.find((location) => location.isDefault)?.id ?? locations[0]?.id ?? null,
     [locations],
+  );
+
+  const locationById = useMemo(
+    () => new Map(locations.map((location) => [location.id, location])),
+    [locations],
+  );
+
+  const participantNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    members.forEach((member) => {
+      const user = getUserById(member.user_id);
+      if (!user) return;
+      map.set(user.id, user.name);
+    });
+    return map;
+  }, [members]);
+
+  const participantOptions = useMemo(() => (
+    members
+      .map((member) => {
+        const user = getUserById(member.user_id);
+        if (!user) return null;
+        return { id: user.id, name: user.name };
+      })
+      .filter((entry): entry is { id: string; name: string } => !!entry)
+  ), [members]);
+
+  const ownerAssigneeId = useMemo(
+    () => project?.owner_id ?? members.find((member) => member.role === "owner")?.user_id ?? getCurrentUser().id,
+    [project?.owner_id, members],
   );
 
   const isItemSearchMatch = useCallback((item: ProcurementItemV2) => {
@@ -457,31 +496,49 @@ export default function ProjectProcurement() {
     });
   }, [orderedReceivableTargets]);
 
-  const inStockGroups = useMemo(() => {
-    const groups = computeInStockByLocation(pid, items, orders, locations);
-    if (!search.trim()) return groups;
+  const inStockRows = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const rows = computeInStockByLocation(pid, items, orders, locations)
+      .flatMap((group) => (
+        group.items.map((entry) => {
+          const item = itemById.get(entry.procurementItemId);
+          if (!item) return null;
+          return {
+            key: `${group.locationId}-${entry.procurementItemId}`,
+            procurementItemId: entry.procurementItemId,
+            item,
+            locationId: group.locationId,
+            locationName: group.locationName,
+            qty: entry.qty,
+            orderIds: entry.orderIds,
+            lastReceivedAt: computeLastReceivedAt(entry.procurementItemId, group.locationId, orders),
+          } satisfies InStockTableRow;
+        }).filter((row): row is InStockTableRow => !!row)
+      ))
+      .sort((a, b) => {
+        const nameDelta = a.item.name.localeCompare(b.item.name);
+        if (nameDelta !== 0) return nameDelta;
+        return a.locationName.localeCompare(b.locationName);
+      });
 
-    return groups
-      .map((group) => {
-        const itemsFiltered = group.items.filter((entry) => {
-          const item = items.find((candidate) => candidate.id === entry.procurementItemId);
-          return (
-            item?.name.toLowerCase().includes(q)
-            || (item?.spec?.toLowerCase().includes(q) ?? false)
-          );
-        });
+    if (!q) return rows;
+    return rows.filter((row) => (
+      row.item.name.toLowerCase().includes(q)
+      || (row.item.spec?.toLowerCase().includes(q) ?? false)
+      || row.locationName.toLowerCase().includes(q)
+    ));
+  }, [pid, items, orders, locations, search, itemById]);
 
-        if (group.locationName.toLowerCase().includes(q)) return group;
-        if (itemsFiltered.length === 0) return null;
-
-        return {
-          ...group,
-          items: itemsFiltered,
-        };
-      })
-      .filter((group): group is NonNullable<typeof group> => !!group);
-  }, [pid, items, orders, locations, search]);
+  const inStockDetailHistory = useMemo(() => {
+    if (!inStockDetailTarget) {
+      return { receiptEvents: [], usageEvents: [] };
+    }
+    return collectItemLocationEventHistory(
+      inStockDetailTarget.procurementItemId,
+      inStockDetailTarget.locationId,
+      orders,
+    );
+  }, [inStockDetailTarget, orders]);
 
   const relatedOrdersByItemId = useMemo(() => {
     const map = new Map<string, OrderWithLines[]>();
@@ -507,15 +564,6 @@ export default function ProjectProcurement() {
 
   const toggleOrder = (id: string) => {
     setCollapsedOrderIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const toggleLocation = (id: string) => {
-    setCollapsedLocationIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -768,6 +816,114 @@ export default function ProjectProcurement() {
     setSelectedOrderedLineKeys(new Set());
   };
 
+  const openUseFromStockModal = (row: InStockTableRow) => {
+    setUseFromStockTarget(row);
+    setUseFromStockQty("");
+    setUseFromStockParticipantId("none");
+    setUseFromStockManualName("");
+    setUseFromStockNote("");
+    setUseFromStockOpen(true);
+  };
+
+  const submitUseFromStock = () => {
+    if (!useFromStockTarget) return;
+
+    const qty = Number(useFromStockQty);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      toast({ title: "Quantity is required", description: "Enter quantity greater than zero", variant: "destructive" });
+      return;
+    }
+    if (qty > useFromStockTarget.qty) {
+      toast({ title: "Insufficient stock", description: "Quantity exceeds available stock", variant: "destructive" });
+      return;
+    }
+
+    const manualName = useFromStockManualName.trim() || null;
+    const participantId = manualName ? null : (useFromStockParticipantId === "none" ? null : useFromStockParticipantId);
+    const note = useFromStockNote.trim() || null;
+
+    const result = consumeStockFromInventory({
+      projectId: pid,
+      procurementItemId: useFromStockTarget.procurementItemId,
+      locationId: useFromStockTarget.locationId,
+      qty,
+      usedByParticipantId: participantId,
+      usedByName: manualName,
+      note,
+    });
+    if (!result.ok) {
+      toast({ title: "Use failed", description: result.error, variant: "destructive" });
+      return;
+    }
+
+    const usedByLabel = manualName || (participantId ? participantNameById.get(participantId) : "") || "—";
+    const summary = `Used ${qty} ${useFromStockTarget.item.unit} of ${useFromStockTarget.item.name} at ${useFromStockTarget.locationName}`;
+    const currentUser = getCurrentUser();
+    addEvent({
+      id: `evt-stock-used-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      project_id: pid,
+      actor_id: currentUser.id,
+      type: "procurement_updated",
+      object_type: "procurement_item",
+      object_id: useFromStockTarget.procurementItemId,
+      timestamp: new Date().toISOString(),
+      payload: {
+        source: "ai",
+        sidebarKind: "stock_used",
+        sidebarTier: 1,
+        title: "Stock used",
+        summary,
+        details: {
+          usedBy: usedByLabel,
+          note,
+          remainingQty: result.remainingQty,
+        },
+      },
+    } satisfies Event);
+
+    toast({ title: "Stock updated", description: summary });
+    setUseFromStockOpen(false);
+    setUseFromStockTarget(null);
+    setUseFromStockQty("");
+    setUseFromStockParticipantId("none");
+    setUseFromStockManualName("");
+    setUseFromStockNote("");
+  };
+
+  const handleRequestMore = (row: InStockTableRow) => {
+    const now = new Date().toISOString();
+    const task: Task = {
+      id: `task-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      project_id: pid,
+      stage_id: project?.current_stage_id || stages[0]?.id || "",
+      title: `Procure more: ${row.item.name}`,
+      description: [
+        `Item: ${row.item.name}`,
+        `Spec: ${row.item.spec ?? "—"}`,
+        `Type: ${row.item.type}`,
+        `Location: ${row.locationName}`,
+        `Qty available: ${row.qty} ${row.item.unit}`,
+        "Suggested qty: 0",
+        `Reference: /project/${pid}/procurement/${row.procurementItemId}`,
+      ].join("\n"),
+      status: "not_started",
+      assignee_id: ownerAssigneeId,
+      checklist: [],
+      comments: [],
+      attachments: [],
+      photos: [],
+      linked_estimate_item_ids: [],
+      created_at: now,
+    };
+    addTask(task);
+    toast({ title: "Task created", description: task.title });
+  };
+
+  const openInStockDetail = (row: InStockTableRow) => {
+    setInStockDetailTarget(row);
+    setInStockDetailOpen(true);
+  };
+
   const addUrlAttachment = () => {
     const url = attachmentUrl.trim();
     if (!url) return;
@@ -866,17 +1022,11 @@ export default function ProjectProcurement() {
   const renderInStockTableHeader = () => (
     <thead className="bg-muted/30 border-b border-border">
       <tr>
-        <th className="w-10 text-left px-2 py-2 text-xs font-medium text-muted-foreground" />
-        <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Type</th>
         <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Name / Spec</th>
-        <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">When needed</th>
-        <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Delivery scheduled</th>
-        <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Amount</th>
-        <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Unit</th>
-        <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Price</th>
-        <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Planned</th>
-        <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Factual</th>
-        <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Status</th>
+        <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Location</th>
+        <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Qty available</th>
+        <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Date last received</th>
+        <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Actions</th>
       </tr>
     </thead>
   );
@@ -1304,97 +1454,267 @@ export default function ProjectProcurement() {
 
       {activeTab === "in_stock" && (
         <div className="glass rounded-card p-2 space-y-2">
-          {inStockGroups.length === 0 ? (
+          {inStockRows.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">No inventory placements yet.</p>
           ) : (
-            inStockGroups.map((group) => {
-              const collapsed = collapsedLocationIds.has(group.locationId);
-
-              return (
-                <div key={group.locationId} className="rounded-lg border border-border overflow-hidden">
-                  <button
-                    type="button"
-                    className="w-full flex items-center gap-2 px-3 py-2 bg-muted/40 hover:bg-muted/60 transition-colors"
-                    onClick={() => toggleLocation(group.locationId)}
-                  >
-                    {collapsed ? <ChevronRight className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-                    <span className="text-sm font-semibold text-foreground">{group.locationName}</span>
-                    {group.locationAddress && <span className="text-xs text-muted-foreground truncate">{group.locationAddress}</span>}
-                    <span className="ml-auto text-xs text-muted-foreground">{fmtCost(group.totalValue)}</span>
-                  </button>
-
-                  {!collapsed && (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        {renderInStockTableHeader()}
-                        <tbody>
-                          {group.items.map((entry) => {
-                            const item = items.find((candidate) => candidate.id === entry.procurementItemId);
-                            if (!item) return null;
-                            const relatedOrder = entry.orderIds
-                              .map((id) => orders.find((order) => order.id === id))
-                              .filter((value): value is OrderWithLines => !!value)
-                              .filter((order) => !!order.deliveryDeadline)
-                              .sort((a, b) => new Date(a.deliveryDeadline ?? "").getTime() - new Date(b.deliveryDeadline ?? "").getTime())[0] ?? null;
-                            const qtyPrice = rowQtyPrice(item, entry.qty);
-
-                            return (
-                              <tr key={`${group.locationId}-${entry.procurementItemId}`} className="border-b border-border/70 last:border-0 hover:bg-muted/20">
-                                <td className="px-2 py-2" />
-                                <td className="px-2 py-2">
-                                  <span className="inline-flex rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground capitalize">{item.type}</span>
-                                </td>
-                                <td className="px-2 py-2 min-w-[220px]">
-                                  <button type="button" className="text-left hover:underline" onClick={() => openDetail(item)}>
-                                    <p className="font-medium text-foreground truncate">{item.name}</p>
-                                    {item.orphaned && (
-                                      <span className="inline-flex rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] text-destructive">
-                                        Orphaned
-                                      </span>
-                                    )}
-                                    {item.spec && <p className="text-xs text-muted-foreground truncate">{item.spec}</p>}
-                                  </button>
-                                </td>
-                                <td className={cn("px-2 py-2 text-xs", isOverdue(item.requiredByDate) && "text-destructive")}>{formatDate(item.requiredByDate)}</td>
-                                <td className="px-2 py-2">
-                                  {relatedOrder ? (
-                                    <button type="button" className="text-xs text-accent hover:underline" onClick={() => openOrderDetail(relatedOrder.id)}>
-                                      {formatDate(relatedOrder.deliveryDeadline)}
-                                    </button>
-                                  ) : (
-                                    <span className="text-xs text-muted-foreground">—</span>
-                                  )}
-                                </td>
-                                <td className="px-2 py-2 text-right">{entry.qty}</td>
-                                <td className="px-2 py-2">{item.unit}</td>
-                                <td className="px-2 py-2 text-right">{fmtCost(qtyPrice.actual)}</td>
-                                <td className="px-2 py-2 text-right">{fmtCost(qtyPrice.planned)}</td>
-                                <td className="px-2 py-2 text-right">{fmtCost(qtyPrice.factual)}</td>
-                                <td className="px-2 py-2">
-                                  <div className="flex flex-col items-start gap-1">
-                                    <button type="button" className="text-xs text-accent hover:underline" onClick={() => openDetail(item)}>
-                                      In stock
-                                    </button>
-                                    {item.orphaned && (
-                                      <button type="button" className="text-xs text-accent hover:underline" onClick={() => openDetail(item)}>
-                                        Relink
-                                      </button>
-                                    )}
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              );
-            })
+            <div className="rounded-lg border border-border overflow-x-auto">
+              <table className="w-full text-sm">
+                {renderInStockTableHeader()}
+                <tbody>
+                  {inStockRows.map((row) => (
+                    <tr key={row.key} className="border-b border-border/70 last:border-0 hover:bg-muted/20">
+                      <td className="px-2 py-2 min-w-[240px]">
+                        <button type="button" className="text-left hover:underline" onClick={() => openInStockDetail(row)}>
+                          <p className="font-medium text-foreground truncate">{row.item.name}</p>
+                          {row.item.spec && <p className="text-xs text-muted-foreground truncate">{row.item.spec}</p>}
+                          <div className="mt-1">
+                            <ResourceTypeBadge type={row.item.type} className="border-transparent" />
+                          </div>
+                        </button>
+                      </td>
+                      <td className="px-2 py-2 text-muted-foreground">{row.locationName}</td>
+                      <td className="px-2 py-2 text-right tabular-nums">{row.qty} {row.item.unit}</td>
+                      <td className="px-2 py-2 text-xs text-muted-foreground">{formatDate(row.lastReceivedAt)}</td>
+                      <td className="px-2 py-2">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="h-7"
+                            onClick={() => openUseFromStockModal(row)}
+                            disabled={!canEdit}
+                          >
+                            Use
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="h-7"
+                            onClick={() => handleRequestMore(row)}
+                            disabled={!canEdit}
+                          >
+                            Request more
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}
+
+      <Dialog
+        open={useFromStockOpen}
+        onOpenChange={(nextOpen) => {
+          setUseFromStockOpen(nextOpen);
+          if (!nextOpen) {
+            setUseFromStockTarget(null);
+            setUseFromStockQty("");
+            setUseFromStockParticipantId("none");
+            setUseFromStockManualName("");
+            setUseFromStockNote("");
+          }
+        }}
+      >
+        <DialogContent className="w-[95vw] max-w-xl max-h-[90vh] p-0 gap-0 overflow-hidden">
+          <DialogHeader className="px-5 py-4 border-b border-border">
+            <DialogTitle>Use from stock</DialogTitle>
+          </DialogHeader>
+
+          {!useFromStockTarget ? (
+            <div className="px-5 py-4 text-sm text-muted-foreground">No stock item selected.</div>
+          ) : (
+            <div className="px-5 py-4 space-y-4">
+              <div className="rounded-lg border border-border p-3 space-y-1">
+                <p className="font-medium text-foreground">{useFromStockTarget.item.name}</p>
+                {useFromStockTarget.item.spec && (
+                  <p className="text-xs text-muted-foreground">{useFromStockTarget.item.spec}</p>
+                )}
+                <div className="pt-1">
+                  <ResourceTypeBadge type={useFromStockTarget.item.type} className="border-transparent" />
+                </div>
+                <p className="text-xs text-muted-foreground pt-1">
+                  Location: {useFromStockTarget.locationName}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Qty available: {useFromStockTarget.qty} {useFromStockTarget.item.unit}
+                </p>
+              </div>
+
+              <div>
+                <label htmlFor="use-from-stock-qty" className="text-xs text-muted-foreground">Quantity to use now</label>
+                <Input
+                  id="use-from-stock-qty"
+                  type="number"
+                  min="0"
+                  max={useFromStockTarget.qty}
+                  value={useFromStockQty}
+                  onChange={(event) => setUseFromStockQty(event.target.value)}
+                  placeholder={String(useFromStockTarget.qty)}
+                  className="h-9 mt-1"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="use-from-stock-participant" className="text-xs text-muted-foreground">Used by (participant)</label>
+                  <Select value={useFromStockParticipantId} onValueChange={setUseFromStockParticipantId}>
+                    <SelectTrigger id="use-from-stock-participant" className="h-9 mt-1">
+                      <SelectValue placeholder="Not specified" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Not specified</SelectItem>
+                      {participantOptions.map((participant) => (
+                        <SelectItem key={participant.id} value={participant.id}>{participant.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label htmlFor="use-from-stock-manual-name" className="text-xs text-muted-foreground">Manual name</label>
+                  <Input
+                    id="use-from-stock-manual-name"
+                    value={useFromStockManualName}
+                    onChange={(event) => setUseFromStockManualName(event.target.value)}
+                    className="h-9 mt-1"
+                    placeholder="Optional"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="use-from-stock-note" className="text-xs text-muted-foreground">Note</label>
+                <Textarea
+                  id="use-from-stock-note"
+                  value={useFromStockNote}
+                  onChange={(event) => setUseFromStockNote(event.target.value)}
+                  className="mt-1 min-h-[72px]"
+                  placeholder="Optional note"
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="px-5 py-4 border-t border-border">
+            <Button type="button" variant="outline" onClick={() => setUseFromStockOpen(false)}>Cancel</Button>
+            <Button type="button" onClick={submitUseFromStock} disabled={!canEdit || !useFromStockTarget}>Use</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={inStockDetailOpen}
+        onOpenChange={(nextOpen) => {
+          setInStockDetailOpen(nextOpen);
+          if (!nextOpen) setInStockDetailTarget(null);
+        }}
+      >
+        <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] p-0 gap-0 overflow-hidden">
+          <DialogHeader className="px-5 py-4 border-b border-border">
+            <DialogTitle>Stock details</DialogTitle>
+          </DialogHeader>
+
+          {!inStockDetailTarget ? (
+            <div className="px-5 py-4 text-sm text-muted-foreground">No stock item selected.</div>
+          ) : (
+            <div className="px-5 py-4 space-y-4 overflow-y-auto">
+              <div className="rounded-lg border border-border p-3">
+                <div className="flex flex-wrap items-start gap-2">
+                  <ResourceTypeBadge type={inStockDetailTarget.item.type} className="border-transparent" />
+                  <div className="min-w-0">
+                    <p className="font-medium text-foreground">{inStockDetailTarget.item.name}</p>
+                    {inStockDetailTarget.item.spec && (
+                      <p className="text-xs text-muted-foreground">{inStockDetailTarget.item.spec}</p>
+                    )}
+                  </div>
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">Current location: {inStockDetailTarget.locationName}</p>
+                <p className="text-xs text-muted-foreground">Qty available: {inStockDetailTarget.qty} {inStockDetailTarget.item.unit}</p>
+              </div>
+
+              <div className="rounded-lg border border-border overflow-hidden">
+                <div className="px-3 py-2 border-b border-border bg-muted/30 text-sm font-medium text-foreground">Receipt history</div>
+                {inStockDetailHistory.receiptEvents.length === 0 ? (
+                  <p className="px-3 py-3 text-xs text-muted-foreground">No receipt events yet.</p>
+                ) : (
+                  <div className="divide-y divide-border">
+                    {inStockDetailHistory.receiptEvents.map((entry) => {
+                      const receiverLabel = entry.event.receiverName
+                        || (entry.event.receiverParticipantId ? participantNameById.get(entry.event.receiverParticipantId) : "")
+                        || "—";
+                      const sourceLocationLabel = entry.event.sourceLocationId
+                        ? (locationById.get(entry.event.sourceLocationId)?.name ?? entry.event.sourceLocationId)
+                        : "—";
+                      const docs = entry.event.documents?.length
+                        ? entry.event.documents
+                        : (entry.order.invoiceAttachment ? [entry.order.invoiceAttachment] : []);
+
+                      return (
+                        <div key={entry.event.id} className="px-3 py-2 space-y-1">
+                          <p className="text-xs text-muted-foreground">{new Date(entry.event.createdAt).toLocaleString()}</p>
+                          <p className="text-sm text-foreground">
+                            +{entry.event.deltaQty} {entry.line?.unit ?? inStockDetailTarget.item.unit}
+                          </p>
+                          <p className="text-xs text-muted-foreground">Receiver: {receiverLabel}</p>
+                          <p className="text-xs text-muted-foreground">Source location: {sourceLocationLabel}</p>
+                          {docs.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-2 pt-1">
+                              {docs.map((doc) => (
+                                <a
+                                  key={doc.id}
+                                  href={doc.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-xs text-accent hover:underline"
+                                >
+                                  {attachmentDisplayName(doc)}
+                                </a>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-lg border border-border overflow-hidden">
+                <div className="px-3 py-2 border-b border-border bg-muted/30 text-sm font-medium text-foreground">Usage history</div>
+                {inStockDetailHistory.usageEvents.length === 0 ? (
+                  <p className="px-3 py-3 text-xs text-muted-foreground">No usage events yet.</p>
+                ) : (
+                  <div className="divide-y divide-border">
+                    {inStockDetailHistory.usageEvents.map((entry) => {
+                      const usedByLabel = entry.event.usedByName
+                        || (entry.event.usedByParticipantId ? participantNameById.get(entry.event.usedByParticipantId) : "")
+                        || "—";
+                      return (
+                        <div key={entry.event.id} className="px-3 py-2 space-y-1">
+                          <p className="text-xs text-muted-foreground">{new Date(entry.event.createdAt).toLocaleString()}</p>
+                          <p className="text-sm text-foreground">
+                            {entry.event.deltaQty} {entry.line?.unit ?? inStockDetailTarget.item.unit}
+                          </p>
+                          <p className="text-xs text-muted-foreground">Used by: {usedByLabel}</p>
+                          {entry.event.note && <p className="text-xs text-muted-foreground">Note: {entry.event.note}</p>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="px-5 py-4 border-t border-border">
+            <Button type="button" variant="outline" onClick={() => setInStockDetailOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={receiveModalOpen}

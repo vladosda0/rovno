@@ -2,6 +2,8 @@ import { getProcurementItemById } from "@/data/procurement-store";
 import { normalizeName } from "@/lib/procurement-utils";
 import type {
   InventoryLocation,
+  OrderLine,
+  OrderReceiveEvent,
   OrderWithLines,
   ProcurementItemV2,
 } from "@/types/entities";
@@ -38,6 +40,17 @@ export interface InventoryStockSnapshotRow {
   locationId: string;
   inventoryKey: string;
   qty: number;
+}
+
+export interface ItemLocationEventEntry {
+  order: OrderWithLines;
+  line: OrderLine | null;
+  event: OrderReceiveEvent;
+}
+
+export interface ItemLocationEventHistory {
+  receiptEvents: ItemLocationEventEntry[];
+  usageEvents: ItemLocationEventEntry[];
 }
 
 function isAppliedOrder(order: OrderWithLines): boolean {
@@ -181,6 +194,72 @@ export function computeInStockByLocation(
       items: group.items.sort((a, b) => a.procurementItemId.localeCompare(b.procurementItemId)),
     }))
     .sort((a, b) => a.locationName.localeCompare(b.locationName));
+}
+
+function isReceiptLikeEvent(event: OrderReceiveEvent): boolean {
+  return event.deltaQty > 0 && (event.eventType === "receive" || event.eventType === "move_in");
+}
+
+export function computeLastReceivedAt(
+  procurementItemId: string,
+  locationId: string,
+  orders: OrderWithLines[],
+): string | null {
+  let maxTimestampMs = Number.NEGATIVE_INFINITY;
+  let maxTimestampIso: string | null = null;
+
+  orders.forEach((order) => {
+    if (!isAppliedOrder(order)) return;
+    (order.receiveEvents ?? []).forEach((event) => {
+      if (event.procurementItemId !== procurementItemId || event.locationId !== locationId) return;
+      if (!isReceiptLikeEvent(event)) return;
+      const ts = new Date(event.createdAt).getTime();
+      if (Number.isNaN(ts) || ts <= maxTimestampMs) return;
+      maxTimestampMs = ts;
+      maxTimestampIso = event.createdAt;
+    });
+  });
+
+  return maxTimestampIso;
+}
+
+export function collectItemLocationEventHistory(
+  procurementItemId: string,
+  locationId: string,
+  orders: OrderWithLines[],
+): ItemLocationEventHistory {
+  const receiptEvents: ItemLocationEventEntry[] = [];
+  const usageEvents: ItemLocationEventEntry[] = [];
+
+  orders.forEach((order) => {
+    if (!isAppliedOrder(order)) return;
+    const lineById = new Map(order.lines.map((line) => [line.id, line]));
+
+    (order.receiveEvents ?? []).forEach((event) => {
+      if (event.procurementItemId !== procurementItemId || event.locationId !== locationId) return;
+      const entry: ItemLocationEventEntry = {
+        order,
+        line: lineById.get(event.orderLineId) ?? null,
+        event,
+      };
+      if (isReceiptLikeEvent(event)) {
+        receiptEvents.push(entry);
+        return;
+      }
+      if (event.eventType === "use" && event.deltaQty < 0) {
+        usageEvents.push(entry);
+      }
+    });
+  });
+
+  const sortByNewest = (a: ItemLocationEventEntry, b: ItemLocationEventEntry) => (
+    new Date(b.event.createdAt).getTime() - new Date(a.event.createdAt).getTime()
+  );
+
+  receiptEvents.sort(sortByNewest);
+  usageEvents.sort(sortByNewest);
+
+  return { receiptEvents, usageEvents };
 }
 
 export function computeTabChipTotals(

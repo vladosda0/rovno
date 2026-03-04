@@ -286,7 +286,14 @@ export interface OrderReceiveEvent {
   procurementItemId: string;
   locationId: string;
   deltaQty: number;
-  eventType: "receive" | "move_in" | "move_out" | "void_reversal";
+  eventType: "receive" | "move_in" | "move_out" | "void_reversal" | "use";
+  sourceLocationId?: string | null;
+  receiverParticipantId?: string | null;
+  receiverName?: string | null;
+  usedByParticipantId?: string | null;
+  usedByName?: string | null;
+  note?: string | null;
+  documents?: ProcurementAttachment[];
   createdAt: string;
 }
 

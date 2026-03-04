@@ -127,6 +127,18 @@ interface StreamStatusRow {
   detail?: string;
 }
 
+interface StreamStockUsedRow {
+  id: string;
+  kind: "stock_used";
+  tier: StreamRowTier;
+  timestampMs: number;
+  timestamp: string;
+  event: Event;
+  title: string;
+  summary: string;
+  detailLines: string[];
+}
+
 interface StreamChatRow {
   id: string;
   kind: "chat";
@@ -136,7 +148,7 @@ interface StreamChatRow {
   message: AIMessage;
 }
 
-type StreamRow = StreamProposalGroupRow | StreamEventRow | StreamStatusRow | StreamChatRow;
+type StreamRow = StreamProposalGroupRow | StreamEventRow | StreamStatusRow | StreamStockUsedRow | StreamChatRow;
 
 interface DayBucket {
   key: string;
@@ -374,6 +386,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const [highlightedEventIds, setHighlightedEventIds] = useState<Set<string>>(new Set());
   const [proposalExecutionLinks, setProposalExecutionLinks] = useState<Record<string, ProposalExecutionGroupMeta>>({});
   const [expandedProposalEventIds, setExpandedProposalEventIds] = useState<Set<string>>(new Set());
+  const [expandedStockUsedEventIds, setExpandedStockUsedEventIds] = useState<Set<string>>(new Set());
   const [expandedDayKeys, setExpandedDayKeys] = useState<Set<string>>(new Set());
   const [messageRatings, setMessageRatings] = useState<Record<string, "good" | "bad" | undefined>>({});
   const [savedMessageIds, setSavedMessageIds] = useState<Set<string>>(new Set());
@@ -1255,6 +1268,29 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
         return;
       }
 
+      if (event.type === "procurement_updated" && payload.sidebarKind === "stock_used") {
+        const details = (payload.details && typeof payload.details === "object")
+          ? payload.details as Record<string, unknown>
+          : {};
+        const detailLines = [
+          typeof details.usedBy === "string" && details.usedBy.trim() ? `Used by: ${details.usedBy}` : "",
+          typeof details.note === "string" && details.note.trim() ? `Note: ${details.note}` : "",
+          typeof details.remainingQty === "number" ? `Remaining qty: ${details.remainingQty}` : "",
+        ].filter((line) => line.length > 0);
+        rows.push({
+          id: `stock-used-${event.id}`,
+          kind: "stock_used",
+          tier: 1,
+          timestamp: event.timestamp,
+          timestampMs,
+          event,
+          title: typeof payload.title === "string" && payload.title ? payload.title : "Stock used",
+          summary: typeof payload.summary === "string" && payload.summary ? payload.summary : "Stock usage recorded",
+          detailLines,
+        });
+        return;
+      }
+
       rows.push({
         id: `event-${event.id}`,
         kind: "event",
@@ -1431,6 +1467,15 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
       const next = new Set(prev);
       if (next.has(proposalEventId)) next.delete(proposalEventId);
       else next.add(proposalEventId);
+      return next;
+    });
+  };
+
+  const toggleStockUsedGroup = (eventId: string) => {
+    setExpandedStockUsedEventIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(eventId)) next.delete(eventId);
+      else next.add(eventId);
       return next;
     });
   };
@@ -1804,6 +1849,48 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                                                       compact
                                                       highlighted={highlightedEventIds.has(childEvent.id)}
                                                     />
+                                                  ))}
+                                                </div>
+                                              )}
+                                            </div>
+                                          );
+                                        }
+
+                                        if (row.kind === "stock_used") {
+                                          const expanded = expandedStockUsedEventIds.has(row.event.id);
+                                          const highlighted = highlightedEventIds.has(row.event.id);
+                                          return (
+                                            <div key={row.id} className={`px-2 py-1.5 ${rowIndex > 0 ? "mt-2" : ""}`}>
+                                              <button
+                                                type="button"
+                                                onClick={() => toggleStockUsedGroup(row.event.id)}
+                                                className={`w-full flex items-start gap-2 text-left rounded-lg border border-accent/25 bg-accent/5 px-3 py-2.5 transition-colors ${
+                                                  highlighted ? "bg-destructive/15" : "hover:bg-accent/10"
+                                                }`}
+                                                style={{ transitionDuration: highlighted ? "2500ms" : undefined }}
+                                              >
+                                                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md mt-0.5 bg-accent/15">
+                                                  <Bot className="h-3.5 w-3.5 text-accent" />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                  <p className="text-body-sm font-semibold leading-tight text-foreground">{row.title}</p>
+                                                  <p className="mt-1 text-caption leading-5 text-muted-foreground">{row.summary}</p>
+                                                </div>
+                                                <span className="text-[10px] text-muted-foreground whitespace-nowrap mt-0.5 shrink-0">
+                                                  {new Date(row.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                                </span>
+                                                {expanded ? (
+                                                  <ChevronDown className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
+                                                ) : (
+                                                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
+                                                )}
+                                              </button>
+                                              {expanded && row.detailLines.length > 0 && (
+                                                <div className="mt-1 ml-3 border-l border-border pl-2 space-y-0.5">
+                                                  {row.detailLines.map((line, lineIndex) => (
+                                                    <p key={`${row.id}-line-${lineIndex}`} className="text-caption text-muted-foreground">
+                                                      {line}
+                                                    </p>
                                                   ))}
                                                 </div>
                                               )}

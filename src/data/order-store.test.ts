@@ -7,6 +7,7 @@ import {
   getOrder,
   placeOrder,
   receiveOrder,
+  consumeStockFromInventory,
   updateOrder,
   voidOrder,
 } from "@/data/order-store";
@@ -20,8 +21,9 @@ import {
 import { toInventoryKey } from "@/lib/procurement-fulfillment";
 
 function createRequestLine(projectId: string, id: string, qty = 10) {
+  const uniqueId = `${id}-${Math.random().toString(36).slice(2, 6)}`;
   return addProcurementItem({
-    id,
+    id: uniqueId,
     projectId,
     stageId: null,
     categoryId: null,
@@ -337,5 +339,52 @@ describe("order-store", () => {
 
     expect(eventsByLocation.get(site.id)).toBe(2);
     expect(eventsByLocation.get(warehouse.id)).toBe(4);
+  });
+
+  it("uses stock partially and logs usage metadata in receive events", () => {
+    const projectId = `use-stock-project-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const item = createRequestLine(projectId, `line-${Date.now()}`, 10);
+    const site = ensureDefaultLocation(projectId);
+
+    const draft = createDraftOrder({
+      projectId,
+      kind: "supplier",
+      supplierName: "Supplier",
+      deliverToLocationId: site.id,
+      lines: [{ procurementItemId: item.id, qty: 8, unit: "pcs", plannedUnitPrice: 100, actualUnitPrice: 120 }],
+    });
+    placeOrder(draft.id);
+
+    const lineId = getOrder(draft.id)?.lines[0]?.id;
+    expect(lineId).toBeTruthy();
+    if (!lineId) return;
+
+    const receiveResult = receiveOrder(draft.id, {
+      locationId: site.id,
+      lines: [{ lineId, qty: 8 }],
+    });
+    expect(receiveResult.ok).toBe(true);
+    expect(getStock(projectId, site.id, toInventoryKey(item))).toBe(8);
+
+    const useResult = consumeStockFromInventory({
+      projectId,
+      procurementItemId: item.id,
+      locationId: site.id,
+      qty: 3,
+      usedByName: "Ivan Petrov",
+      note: "Used for stage prep",
+    });
+    if (!useResult.ok) {
+      throw new Error(useResult.error);
+    }
+    expect(useResult.remainingQty).toBe(5);
+    expect(getStock(projectId, site.id, toInventoryKey(item))).toBe(5);
+
+    const updated = getOrder(draft.id);
+    const usageEvent = (updated?.receiveEvents ?? []).find((event) => event.eventType === "use");
+    expect(usageEvent).toBeTruthy();
+    expect(usageEvent?.deltaQty).toBe(-3);
+    expect(usageEvent?.usedByName).toBe("Ivan Petrov");
+    expect(usageEvent?.note).toBe("Used for stage prep");
   });
 });

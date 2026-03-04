@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { addProcurementItem } from "@/data/procurement-store";
 import {
+  computeLastReceivedAt,
   computeTabChipTotals,
+  collectItemLocationEventHistory,
   computeFulfilledQty,
   computeInStockByLocation,
   computeOrderedOpenQty,
@@ -300,5 +302,124 @@ describe("procurement fulfillment utils", () => {
     const byLocation = new Map(groups.map((group) => [group.locationId, group]));
     expect(byLocation.get("loc-site")?.items[0]?.qty).toBe(1);
     expect(byLocation.get("loc-wh")?.items[0]?.qty).toBe(4);
+  });
+
+  it("computes last received date from positive receipt events only", () => {
+    const projectId = `last-received-${Date.now()}`;
+    const item = addTestRequestLine(projectId, `req-last-${Date.now()}`, 10);
+    const older = "2026-01-10T10:00:00.000Z";
+    const newer = "2026-02-15T12:00:00.000Z";
+    const usage = "2026-03-01T09:00:00.000Z";
+
+    const orders: OrderWithLines[] = [
+      {
+        id: "order-last",
+        projectId,
+        status: "received",
+        kind: "supplier",
+        deliverToLocationId: "loc-site",
+        createdAt: older,
+        updatedAt: usage,
+        lines: [
+          {
+            id: "line-last",
+            orderId: "order-last",
+            procurementItemId: item.id,
+            qty: 10,
+            receivedQty: 10,
+            unit: "pcs",
+          },
+        ],
+        receiveEvents: [
+          {
+            id: "ev-receive-1",
+            orderId: "order-last",
+            orderLineId: "line-last",
+            procurementItemId: item.id,
+            locationId: "loc-site",
+            deltaQty: 4,
+            eventType: "receive",
+            createdAt: older,
+          },
+          {
+            id: "ev-receive-2",
+            orderId: "order-last",
+            orderLineId: "line-last",
+            procurementItemId: item.id,
+            locationId: "loc-site",
+            deltaQty: 6,
+            eventType: "receive",
+            createdAt: newer,
+          },
+          {
+            id: "ev-use",
+            orderId: "order-last",
+            orderLineId: "line-last",
+            procurementItemId: item.id,
+            locationId: "loc-site",
+            deltaQty: -2,
+            eventType: "use",
+            createdAt: usage,
+          },
+        ],
+      },
+    ];
+
+    expect(computeLastReceivedAt(item.id, "loc-site", orders)).toBe(newer);
+  });
+
+  it("separates receipt and usage event history by item+location", () => {
+    const projectId = `event-history-${Date.now()}`;
+    const item = addTestRequestLine(projectId, `req-history-${Date.now()}`, 8);
+    const now = new Date().toISOString();
+    const orders: OrderWithLines[] = [
+      {
+        id: "order-history",
+        projectId,
+        status: "received",
+        kind: "supplier",
+        deliverToLocationId: "loc-site",
+        createdAt: now,
+        updatedAt: now,
+        lines: [
+          {
+            id: "line-history",
+            orderId: "order-history",
+            procurementItemId: item.id,
+            qty: 8,
+            receivedQty: 8,
+            unit: "pcs",
+          },
+        ],
+        receiveEvents: [
+          {
+            id: "ev-history-receive",
+            orderId: "order-history",
+            orderLineId: "line-history",
+            procurementItemId: item.id,
+            locationId: "loc-site",
+            deltaQty: 8,
+            eventType: "receive",
+            createdAt: now,
+          },
+          {
+            id: "ev-history-use",
+            orderId: "order-history",
+            orderLineId: "line-history",
+            procurementItemId: item.id,
+            locationId: "loc-site",
+            deltaQty: -3,
+            eventType: "use",
+            createdAt: now,
+          },
+        ],
+      },
+    ];
+
+    const history = collectItemLocationEventHistory(item.id, "loc-site", orders);
+    expect(history.receiptEvents).toHaveLength(1);
+    expect(history.usageEvents).toHaveLength(1);
+    expect(history.receiptEvents[0]?.event.id).toBe("ev-history-receive");
+    expect(history.usageEvents[0]?.event.id).toBe("ev-history-use");
   });
 });

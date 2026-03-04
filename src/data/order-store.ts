@@ -44,6 +44,16 @@ export interface ReceiveOrderInput {
   lines: Array<{ lineId: string; qty: number }>;
 }
 
+export interface UseStockFromInventoryInput {
+  projectId: string;
+  procurementItemId: string;
+  locationId: string;
+  qty: number;
+  usedByParticipantId?: string | null;
+  usedByName?: string | null;
+  note?: string | null;
+}
+
 type Listener = () => void;
 
 const listeners = new Set<Listener>();
@@ -324,6 +334,7 @@ export function placeOrder(orderId: string): { ok: true; order: OrderWithLines }
         locationId: fromLocationId,
         deltaQty: -line.qty,
         eventType: "move_out",
+        sourceLocationId: toLocationId,
         createdAt: now,
       });
       events.push({
@@ -334,6 +345,7 @@ export function placeOrder(orderId: string): { ok: true; order: OrderWithLines }
         locationId: toLocationId,
         deltaQty: line.qty,
         eventType: "move_in",
+        sourceLocationId: fromLocationId,
         createdAt: now,
       });
     });
@@ -439,6 +451,71 @@ export function receiveOrder(
   refreshLegacyProcurementQuantities(order.projectId);
   notify();
   return { ok: true, order: withLines(nextOrder) };
+}
+
+export function consumeStockFromInventory(
+  payload: UseStockFromInventoryInput,
+): { ok: true; event: OrderReceiveEvent; remainingQty: number } | { ok: false; error: string } {
+  const qty = Number(payload.qty);
+  if (!Number.isFinite(qty) || qty <= 0) {
+    return { ok: false, error: "Quantity must be greater than zero" };
+  }
+
+  const item = getProcurementItemById(payload.procurementItemId);
+  if (!item || item.projectId !== payload.projectId) {
+    return { ok: false, error: "Procurement item not found" };
+  }
+
+  const inventoryKey = toInventoryKey(item);
+  const available = getStock(payload.projectId, payload.locationId, inventoryKey);
+  if (qty > available) {
+    return { ok: false, error: "Quantity exceeds available stock" };
+  }
+
+  const anchor = orders
+    .filter((order) => (
+      order.projectId === payload.projectId
+      && order.status !== "draft"
+      && order.status !== "voided"
+    ))
+    .map((order) => ({
+      order,
+      line: orderLines.find((line) => line.orderId === order.id && line.procurementItemId === payload.procurementItemId) ?? null,
+    }))
+    .filter((entry): entry is { order: Order; line: OrderLine } => !!entry.line)
+    .sort((a, b) => {
+      const updatedDiff = new Date(b.order.updatedAt).getTime() - new Date(a.order.updatedAt).getTime();
+      if (updatedDiff !== 0) return updatedDiff;
+      return b.order.id.localeCompare(a.order.id);
+    })[0];
+
+  if (!anchor) {
+    return { ok: false, error: "No order history found for this item" };
+  }
+
+  adjustStock(payload.projectId, payload.locationId, inventoryKey, -qty);
+
+  const event: OrderReceiveEvent = {
+    id: genReceiveEventId(),
+    orderId: anchor.order.id,
+    orderLineId: anchor.line.id,
+    procurementItemId: payload.procurementItemId,
+    locationId: payload.locationId,
+    deltaQty: -qty,
+    eventType: "use",
+    usedByParticipantId: payload.usedByParticipantId ?? null,
+    usedByName: payload.usedByName ?? null,
+    note: payload.note ?? null,
+    createdAt: new Date().toISOString(),
+  };
+  orderReceiveEvents = [...orderReceiveEvents, event];
+  notify();
+
+  return {
+    ok: true,
+    event,
+    remainingQty: Math.max(0, available - qty),
+  };
 }
 
 export function cancelDraftOrder(
