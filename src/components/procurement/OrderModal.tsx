@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { CalendarIcon, Save, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -9,7 +9,6 @@ import { createDraftOrder, placeOrder } from "@/data/order-store";
 import { getStock, ensureDefaultLocation } from "@/data/inventory-store";
 import { useProcurementV2 } from "@/hooks/use-mock-data";
 import { useOrders } from "@/hooks/use-order-data";
-import { useLocations } from "@/hooks/use-inventory-data";
 import { computeRemainingRequestedQty, toInventoryKey } from "@/lib/procurement-fulfillment";
 import { fmtCost } from "@/lib/procurement-utils";
 import { cn } from "@/lib/utils";
@@ -34,11 +33,8 @@ interface DraftLineState {
   actualUnitPrice: number | null;
 }
 
-function toDateInput(dateIso?: string | null): Date | undefined {
-  if (!dateIso) return undefined;
-  const parsed = new Date(dateIso);
-  if (Number.isNaN(parsed.getTime())) return undefined;
-  return parsed;
+function isValidActualUnitPrice(value: number | null | undefined): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
 }
 
 export function OrderModal({
@@ -50,7 +46,6 @@ export function OrderModal({
 }: OrderModalProps) {
   const items = useProcurementV2(projectId);
   const orders = useOrders(projectId);
-  const locations = useLocations(projectId);
   const { toast } = useToast();
 
   const [kind, setKind] = useState<OrderKind>("supplier");
@@ -58,7 +53,6 @@ export function OrderModal({
   const [deliverToLocationId, setDeliverToLocationId] = useState("");
   const [fromLocationId, setFromLocationId] = useState("");
   const [toLocationId, setToLocationId] = useState("");
-  const [dueDate, setDueDate] = useState<Date | undefined>(undefined);
   const [deliveryDeadline, setDeliveryDeadline] = useState<Date | undefined>(undefined);
   const [invoiceAttachment, setInvoiceAttachment] = useState<{ name: string; url: string } | null>(null);
   const [note, setNote] = useState("");
@@ -98,14 +92,20 @@ export function OrderModal({
     setDeliverToLocationId(defaultLocation.id);
     setFromLocationId(defaultLocation.id);
     setToLocationId(defaultLocation.id);
-    setDueDate(undefined);
     setDeliveryDeadline(undefined);
     setInvoiceAttachment(null);
     setNote("");
     setLines(nextLines);
   }, [open, initialItemIds, itemById, items, orders, projectId]);
 
-  const hasValidLines = lines.some((line) => line.qty > 0);
+  const requestedRemainingByItemId = useMemo(() => (
+    new Map(lines.map((line) => [line.procurementItemId, computeRemainingRequestedQty(line.procurementItemId, orders)]))
+  ), [lines, orders]);
+
+  const orderedLines = useMemo(() => lines.filter((line) => line.qty > 0), [lines]);
+  const hasOrderedLines = orderedLines.length > 0;
+  const allOrderedLinesHaveValidActualPrices = orderedLines.every((line) => isValidActualUnitPrice(line.actualUnitPrice));
+  const canPlaceOrder = hasOrderedLines && allOrderedLinesHaveValidActualPrices;
 
   const saveOrder = (action: "draft" | "place") => {
     const payloadLines: DraftOrderLineInput[] = lines
@@ -120,6 +120,10 @@ export function OrderModal({
 
     if (payloadLines.length === 0) {
       toast({ title: "No lines selected", description: "Add at least one line with quantity", variant: "destructive" });
+      return;
+    }
+    if (action === "place" && !allOrderedLinesHaveValidActualPrices) {
+      toast({ title: "Actual price required", description: "Set a valid actual price for each ordered line", variant: "destructive" });
       return;
     }
 
@@ -151,7 +155,7 @@ export function OrderModal({
       deliverToLocationId,
       fromLocationId: kind === "stock" ? fromLocationId : null,
       toLocationId: kind === "stock" ? toLocationId : null,
-      dueDate: dueDate?.toISOString() ?? null,
+      dueDate: null,
       deliveryDeadline: deliveryDeadline?.toISOString() ?? null,
       invoiceAttachment: invoiceAttachment
         ? {
@@ -184,10 +188,9 @@ export function OrderModal({
     onOpenChange(false);
   };
 
-  const totalAmount = lines.reduce((sum, line) => {
-    const unitPrice = line.actualUnitPrice ?? line.plannedUnitPrice ?? 0;
-    return sum + unitPrice * line.qty;
-  }, 0);
+  const totalAmount = allOrderedLinesHaveValidActualPrices
+    ? orderedLines.reduce((sum, line) => sum + ((line.actualUnitPrice ?? 0) * line.qty), 0)
+    : 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -219,61 +222,45 @@ export function OrderModal({
           </div>
 
           {kind === "supplier" ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div className="space-y-1">
                 <label className="text-xs text-muted-foreground">Supplier</label>
                 <Input value={supplierName} onChange={(event) => setSupplierName(event.target.value)} className="h-9" placeholder="Supplier name" />
               </div>
-              <div>
+              <div className="space-y-1">
                 <label className="text-xs text-muted-foreground">Deliver to</label>
-                <LocationPicker projectId={projectId} value={deliverToLocationId} onChange={setDeliverToLocationId} />
+                <LocationPicker projectId={projectId} value={deliverToLocationId} onChange={setDeliverToLocationId} className="h-9" />
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div className="space-y-1">
                 <label className="text-xs text-muted-foreground">From location</label>
-                <LocationPicker projectId={projectId} value={fromLocationId} onChange={setFromLocationId} />
+                <LocationPicker projectId={projectId} value={fromLocationId} onChange={setFromLocationId} className="h-9" />
               </div>
-              <div>
+              <div className="space-y-1">
                 <label className="text-xs text-muted-foreground">To location</label>
-                <LocationPicker projectId={projectId} value={toLocationId} onChange={setToLocationId} />
+                <LocationPicker projectId={projectId} value={toLocationId} onChange={setToLocationId} className="h-9" />
               </div>
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-muted-foreground">Due date</label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-full justify-start h-9 text-left font-normal">
-                    <CalendarIcon className="h-4 w-4 mr-2" />
-                    {dueDate ? dueDate.toLocaleDateString() : "Set date"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar mode="single" selected={dueDate} onSelect={setDueDate} initialFocus />
-                </PopoverContent>
-              </Popover>
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Delivery deadline</label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-full justify-start h-9 text-left font-normal">
-                    <CalendarIcon className="h-4 w-4 mr-2" />
-                    {deliveryDeadline ? deliveryDeadline.toLocaleDateString() : "Set date"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar mode="single" selected={deliveryDeadline} onSelect={setDeliveryDeadline} initialFocus />
-                </PopoverContent>
-              </Popover>
-            </div>
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">Delivery date</label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="w-full justify-start h-9 text-left font-normal">
+                  <CalendarIcon className="h-4 w-4 mr-2" />
+                  {deliveryDeadline ? deliveryDeadline.toLocaleDateString() : "Set date"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar mode="single" selected={deliveryDeadline} onSelect={setDeliveryDeadline} initialFocus />
+              </PopoverContent>
+            </Popover>
           </div>
 
-          <div>
+          <div className="space-y-1">
             <label className="text-xs text-muted-foreground">Invoice attachment</label>
             <Input
               type="file"
@@ -293,21 +280,29 @@ export function OrderModal({
             />
           </div>
 
-          <div>
+          <div className="space-y-1">
             <label className="text-xs text-muted-foreground">Note</label>
             <Input value={note} onChange={(event) => setNote(event.target.value)} className="h-9" placeholder="Optional note" />
           </div>
 
           <div className="rounded-lg border border-border overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full table-fixed text-sm">
+              <colgroup>
+                <col />
+                <col className="w-[132px]" />
+                <col className="w-[96px]" />
+                <col className="w-[140px]" />
+                <col className="w-[192px]" />
+                {kind === "stock" && <col className="w-[136px]" />}
+              </colgroup>
               <thead className="bg-muted/30 border-b border-border">
                 <tr>
-                  <th className="text-left px-3 py-2">Item</th>
-                  <th className="text-right px-3 py-2">Qty</th>
-                  <th className="text-left px-3 py-2">Unit</th>
-                  <th className="text-right px-3 py-2">Planned</th>
-                  <th className="text-right px-3 py-2">Actual</th>
-                  {kind === "stock" && <th className="text-right px-3 py-2">Available</th>}
+                  <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">Item</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">Qty</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">Unit</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">Planned</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">Factual price</th>
+                  {kind === "stock" && <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">Available</th>}
                 </tr>
               </thead>
               <tbody>
@@ -317,63 +312,90 @@ export function OrderModal({
                   const available = kind === "stock"
                     ? getStock(projectId, fromLocationId, toInventoryKey(item))
                     : 0;
+                  const requestedRemaining = requestedRemainingByItemId.get(line.procurementItemId) ?? 0;
+                  const remainingAfterThisOrder = Math.max(requestedRemaining - line.qty, 0);
+                  const showUnderOrderWarning = remainingAfterThisOrder > 0;
+                  const deliveryDateFragment = deliveryDeadline ? ` by ${deliveryDeadline.toLocaleDateString()}` : "";
+                  const actualPriceInvalid = line.qty > 0 && !isValidActualUnitPrice(line.actualUnitPrice);
+                  const showFeedback = showUnderOrderWarning || actualPriceInvalid;
 
                   return (
-                    <tr key={line.procurementItemId} className="border-b border-border/70 last:border-0">
-                      <td className="px-3 py-2">
-                        <p className="font-medium text-foreground">{item.name}</p>
-                        {item.spec && <p className="text-xs text-muted-foreground">{item.spec}</p>}
-                      </td>
-                      <td className="px-3 py-2">
-                        <Input
-                          type="number"
-                          min="0"
-                          value={line.qty}
-                          onChange={(event) => {
-                            const qty = Math.max(0, Number(event.target.value));
-                            setLines((prev) => prev.map((entry) => (
-                              entry.procurementItemId === line.procurementItemId
-                                ? { ...entry, qty }
-                                : entry
-                            )));
-                          }}
-                          className="h-8 text-right"
-                        />
-                      </td>
-                      <td className="px-3 py-2">
-                        <span className="text-sm text-foreground">{line.unit}</span>
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <span className="text-sm tabular-nums text-foreground">
-                          {line.plannedUnitPrice == null ? "—" : fmtCost(line.plannedUnitPrice)}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2">
-                        <Input
-                          type="number"
-                          min="0"
-                          value={line.actualUnitPrice ?? ""}
-                          onChange={(event) => {
-                            const value = event.target.value ? Number(event.target.value) : null;
-                            setLines((prev) => prev.map((entry) => (
-                              entry.procurementItemId === line.procurementItemId
-                                ? { ...entry, actualUnitPrice: value }
-                                : entry
-                            )));
-                          }}
-                          className="h-8 text-right"
-                        />
-                      </td>
-                      {kind === "stock" && (
-                        <td className={cn(
-                          "px-3 py-2 text-right text-xs",
-                          line.qty > available ? "text-destructive" : "text-muted-foreground",
-                        )}
-                        >
-                          {available} {line.unit}
+                    <Fragment key={line.procurementItemId}>
+                      <tr className={cn("align-middle", !showFeedback && "border-b border-border/70")}>
+                        <td className="px-3 py-2 align-middle">
+                          <p className="font-medium text-foreground truncate">{item.name}</p>
+                          {item.spec && <p className="text-xs text-muted-foreground truncate">{item.spec}</p>}
                         </td>
+                        <td className="px-3 py-2 align-middle">
+                          <Input
+                            type="number"
+                            min="0"
+                            value={line.qty}
+                            onChange={(event) => {
+                              const qty = Math.max(0, Number(event.target.value));
+                              setLines((prev) => prev.map((entry) => (
+                                entry.procurementItemId === line.procurementItemId
+                                  ? { ...entry, qty }
+                                : entry
+                              )));
+                            }}
+                            className="h-8 text-right"
+                          />
+                        </td>
+                        <td className="px-3 py-2 align-middle">
+                          <span className="text-sm text-foreground">{line.unit}</span>
+                        </td>
+                        <td className="px-3 py-2 text-right align-middle">
+                          <span className="text-sm tabular-nums text-foreground whitespace-nowrap">
+                            {line.plannedUnitPrice == null ? "—" : fmtCost(line.plannedUnitPrice)}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 align-middle">
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={line.actualUnitPrice ?? ""}
+                            onChange={(event) => {
+                              const value = event.target.value ? Number(event.target.value) : null;
+                              setLines((prev) => prev.map((entry) => (
+                                entry.procurementItemId === line.procurementItemId
+                                  ? { ...entry, actualUnitPrice: value }
+                                  : entry
+                              )));
+                            }}
+                            className={cn(
+                              "h-8 text-right",
+                              actualPriceInvalid && "border-destructive focus-visible:ring-destructive/40",
+                            )}
+                            aria-invalid={actualPriceInvalid}
+                          />
+                        </td>
+                        {kind === "stock" && (
+                          <td className={cn(
+                            "px-3 py-2 align-middle text-right text-xs",
+                            line.qty > available ? "text-destructive" : "text-muted-foreground",
+                          )}
+                          >
+                            {available} {line.unit}
+                          </td>
+                        )}
+                      </tr>
+                      {showFeedback && (
+                        <tr className="border-b border-border/70">
+                          <td className="px-3 pb-2 pt-0" />
+                          <td className="px-3 pb-2 pt-0 text-right text-[11px] leading-4 text-destructive">
+                            {showUnderOrderWarning ? `⚠️ ${remainingAfterThisOrder} more materials requested${deliveryDateFragment}` : ""}
+                          </td>
+                          <td className="px-3 pb-2 pt-0" />
+                          <td className="px-3 pb-2 pt-0" />
+                          <td className="px-3 pb-2 pt-0 text-right text-[11px] leading-4 text-destructive">
+                            {actualPriceInvalid ? "Actual price required" : ""}
+                          </td>
+                          {kind === "stock" && <td className="px-3 pb-2 pt-0" />}
+                        </tr>
                       )}
-                    </tr>
+                    </Fragment>
                   );
                 })}
               </tbody>
@@ -384,11 +406,11 @@ export function OrderModal({
         <DialogFooter className="px-5 py-4 border-t border-border">
           <div className="mr-auto text-sm text-muted-foreground">Total: {fmtCost(totalAmount)}</div>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
-          <Button type="button" variant="secondary" onClick={() => saveOrder("draft")} disabled={!hasValidLines}>
+          <Button type="button" variant="secondary" onClick={() => saveOrder("draft")} disabled={!hasOrderedLines}>
             <Save className="h-4 w-4 mr-1" />
             Save draft
           </Button>
-          <Button type="button" onClick={() => saveOrder("place")} disabled={!hasValidLines}>
+          <Button type="button" onClick={() => saveOrder("place")} disabled={!canPlaceOrder}>
             <Send className="h-4 w-4 mr-1" />
             Place order
           </Button>

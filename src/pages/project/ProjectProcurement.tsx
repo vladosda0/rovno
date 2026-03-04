@@ -645,7 +645,7 @@ export default function ProjectProcurement() {
         <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Amount</th>
         <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Unit</th>
         <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Planned</th>
-        <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Action</th>
+        <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Action</th>
       </tr>
     </thead>
   );
@@ -817,15 +817,17 @@ export default function ProjectProcurement() {
                                     <td className="px-2 py-2 text-foreground">{item.unit}</td>
                                     <td className="px-2 py-2 text-right tabular-nums text-foreground">{fmtCost(item.plannedUnitPrice ?? 0)}</td>
                                     <td className="px-2 py-2">
-                                      <Button
-                                        type="button"
-                                        size="sm"
-                                        className="h-7"
-                                        onClick={() => openCreateOrder([item.id])}
-                                        disabled={!canEdit}
-                                      >
-                                        Order
-                                      </Button>
+                                      <div className="flex justify-end">
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          className="h-7"
+                                          onClick={() => openCreateOrder([item.id])}
+                                          disabled={!canEdit}
+                                        >
+                                          Order
+                                        </Button>
+                                      </div>
                                     </td>
                                   </tr>
                                 );
@@ -887,15 +889,17 @@ export default function ProjectProcurement() {
                                 <td className="px-2 py-2 text-foreground">{item.unit}</td>
                                 <td className="px-2 py-2 text-right tabular-nums text-foreground">{fmtCost(item.plannedUnitPrice ?? 0)}</td>
                                 <td className="px-2 py-2">
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    className="h-7"
-                                    onClick={() => openCreateOrder([item.id])}
-                                    disabled={!canEdit}
-                                  >
-                                    Order
-                                  </Button>
+                                  <div className="flex justify-end">
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      className="h-7"
+                                      onClick={() => openCreateOrder([item.id])}
+                                      disabled={!canEdit}
+                                    >
+                                      Order
+                                    </Button>
+                                  </div>
                                 </td>
                               </tr>
                             );
