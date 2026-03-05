@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { addProcurementItem } from "@/data/procurement-store";
 import {
   computeLastReceivedAt,
+  computeProcurementHeaderKpis,
   computeTabChipTotals,
   collectItemLocationEventHistory,
   computeFulfilledQty,
@@ -421,5 +422,120 @@ describe("procurement fulfillment utils", () => {
     expect(history.usageEvents).toHaveLength(1);
     expect(history.receiptEvents[0]?.event.id).toBe("ev-history-receive");
     expect(history.usageEvents[0]?.event.id).toBe("ev-history-use");
+  });
+
+  it("computes procurement header KPIs for estimate-linked items only", () => {
+    const projectId = `header-kpi-${Date.now()}`;
+    const linked = addTestRequestLine(projectId, `req-linked-${Date.now()}`, 10, {
+      sourceEstimateV2LineId: "line-linked",
+      plannedUnitPrice: 100,
+      actualUnitPrice: 120,
+      createdFrom: "estimate",
+    });
+    const manual = addTestRequestLine(projectId, `req-manual-${Date.now()}`, 20, {
+      sourceEstimateV2LineId: null,
+      sourceEstimateItemId: null,
+      plannedUnitPrice: 900,
+      actualUnitPrice: 950,
+      createdFrom: "manual",
+    });
+
+    const now = new Date().toISOString();
+    const orders: OrderWithLines[] = [
+      {
+        id: "order-kpi",
+        projectId,
+        status: "placed",
+        kind: "supplier",
+        supplierName: "Supplier",
+        deliverToLocationId: "loc-site",
+        createdAt: now,
+        updatedAt: now,
+        lines: [
+          {
+            id: "line-linked",
+            orderId: "order-kpi",
+            procurementItemId: linked.id,
+            qty: 6,
+            receivedQty: 2,
+            unit: "pcs",
+            plannedUnitPrice: 100,
+            actualUnitPrice: 120,
+          },
+          {
+            id: "line-manual",
+            orderId: "order-kpi",
+            procurementItemId: manual.id,
+            qty: 10,
+            receivedQty: 4,
+            unit: "pcs",
+            plannedUnitPrice: 900,
+            actualUnitPrice: 950,
+          },
+        ],
+      },
+    ];
+
+    const kpis = computeProcurementHeaderKpis(projectId, [linked, manual], orders);
+    expect(kpis.hasLinkedItems).toBe(true);
+    expect(kpis.missingPlannedPriceCount).toBe(0);
+    expect(kpis.missingOrderPriceCount).toBe(0);
+    expect(kpis.planned).toBe(1000);
+    expect(kpis.committed).toBe(480);
+    expect(kpis.received).toBe(240);
+    expect(kpis.used).toBe(720);
+    expect(kpis.variance).toBe(280);
+  });
+
+  it("returns graceful KPI nulls when planned/order prices are missing", () => {
+    const projectId = `header-kpi-missing-${Date.now()}`;
+    const linkedNoPlan = addTestRequestLine(projectId, `req-linked-missing-plan-${Date.now()}`, 5, {
+      sourceEstimateV2LineId: "line-missing-plan",
+      plannedUnitPrice: null,
+      actualUnitPrice: null,
+      createdFrom: "estimate",
+    });
+    const linkedWithPlan = addTestRequestLine(projectId, `req-linked-missing-order-${Date.now()}`, 8, {
+      sourceEstimateV2LineId: "line-missing-order",
+      plannedUnitPrice: 200,
+      actualUnitPrice: null,
+      createdFrom: "estimate",
+    });
+
+    const now = new Date().toISOString();
+    const orders: OrderWithLines[] = [
+      {
+        id: "order-kpi-missing",
+        projectId,
+        status: "placed",
+        kind: "supplier",
+        supplierName: "Supplier",
+        deliverToLocationId: "loc-site",
+        createdAt: now,
+        updatedAt: now,
+        lines: [
+          {
+            id: "line-missing-order-price",
+            orderId: "order-kpi-missing",
+            procurementItemId: linkedWithPlan.id,
+            qty: 3,
+            receivedQty: 1,
+            unit: "pcs",
+            plannedUnitPrice: null,
+            actualUnitPrice: null,
+          },
+        ],
+      },
+    ];
+
+    const kpis = computeProcurementHeaderKpis(projectId, [linkedNoPlan, linkedWithPlan], orders);
+    expect(kpis.hasLinkedItems).toBe(true);
+    expect(kpis.missingPlannedPriceCount).toBe(1);
+    expect(kpis.missingOrderPriceCount).toBe(0);
+    expect(kpis.planned).toBeNull();
+    expect(kpis.committed).toBe(400);
+    expect(kpis.received).toBe(200);
+    expect(kpis.used).toBe(600);
+    expect(kpis.variance).toBeNull();
   });
 });

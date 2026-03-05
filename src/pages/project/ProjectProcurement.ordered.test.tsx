@@ -85,7 +85,7 @@ describe("ProjectProcurement Ordered tab", () => {
     seedPartialOrderedLine(projectId);
     renderProjectProcurement(projectId);
 
-    fireEvent.click(screen.getByRole("button", { name: /^Ordered:/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Ordered \(/i }));
 
     expect(screen.getByRole("button", { name: "Receive" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Received" })).not.toBeInTheDocument();
@@ -100,7 +100,7 @@ describe("ProjectProcurement Ordered tab", () => {
     expect(partialTooltipTexts.length).toBeGreaterThan(0);
     fireEvent.click(screen.getAllByRole("button", { name: "Learn more" })[0]);
 
-    expect(screen.getByRole("button", { name: /^In stock:/i })).toHaveClass("bg-success/15");
+    expect(screen.getByRole("button", { name: /^In stock \(/i })).toHaveClass("bg-success/15");
     expect(screen.queryByRole("button", { name: "Receive" })).not.toBeInTheDocument();
   });
 
@@ -109,7 +109,7 @@ describe("ProjectProcurement Ordered tab", () => {
     seedPartialOrderedLine(projectId);
     renderProjectProcurement(projectId);
 
-    fireEvent.click(screen.getByRole("button", { name: /^Ordered:/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Ordered \(/i }));
     fireEvent.click(screen.getByRole("button", { name: "Receive" }));
 
     const dialog = await screen.findByRole("dialog");

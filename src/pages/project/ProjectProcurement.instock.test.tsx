@@ -134,7 +134,7 @@ describe("ProjectProcurement In stock tab", () => {
     const beforeTaskCount = getTasks(projectId).length;
 
     renderProjectProcurement(projectId);
-    fireEvent.click(screen.getByRole("button", { name: /^In stock:/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^In stock \(/i }));
 
     const table = screen.getByRole("table");
     const tableScope = within(table);
@@ -172,27 +172,30 @@ describe("ProjectProcurement In stock tab", () => {
     expect(createdTask?.description).toContain(`/project/${projectId}/procurement/${item.id}`);
   });
 
-  it("supports partial Use and emits stock-used AI sidebar event", () => {
+  it("supports bulk partial Use from sticky bar and emits stock-used AI sidebar event", () => {
     const projectId = "project-1";
     const { item } = seedSupplierInStock(projectId, `Use stock ${Date.now()}`);
 
     renderProjectProcurement(projectId);
-    fireEvent.click(screen.getByRole("button", { name: /^In stock:/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^In stock \(/i }));
 
     const table = screen.getByRole("table");
     const row = within(table).getByText(item.name).closest("tr");
     expect(row).toBeTruthy();
     if (!row) return;
 
-    fireEvent.click(within(row).getByRole("button", { name: "Use" }));
+    fireEvent.click(within(row).getByRole("checkbox"));
+    expect(screen.getByText("1 selected")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Use (1)" }));
 
     const dialog = screen.getByRole("dialog");
-    fireEvent.change(within(dialog).getByLabelText("Quantity to use now"), { target: { value: "3" } });
+    fireEvent.change(within(dialog).getByLabelText(`Quantity to use now for ${item.name}`), { target: { value: "3" } });
     fireEvent.change(within(dialog).getByLabelText("Manual name"), { target: { value: "Crew lead" } });
     fireEvent.change(within(dialog).getByLabelText("Note"), { target: { value: "Installed on site" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Use" }));
 
     expect(within(table).getByText("5 pcs")).toBeInTheDocument();
+    expect(screen.queryByText("1 selected")).not.toBeInTheDocument();
 
     const stockUsedEvent = getEvents(projectId).find((event) => (
       event.type === "procurement_updated"
@@ -208,7 +211,7 @@ describe("ProjectProcurement In stock tab", () => {
     const { item, site, warehouse } = seedStockMoveIn(projectId, `Stock move ${Date.now()}`);
 
     renderProjectProcurement(projectId);
-    fireEvent.click(screen.getByRole("button", { name: /^In stock:/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^In stock \(/i }));
 
     const table = screen.getByRole("table");
     const row = within(table).getByText(item.name).closest("tr");

@@ -53,6 +53,17 @@ export interface ItemLocationEventHistory {
   usageEvents: ItemLocationEventEntry[];
 }
 
+export interface ProcurementHeaderKpis {
+  planned: number | null;
+  committed: number | null;
+  received: number | null;
+  used: number | null;
+  variance: number | null;
+  hasLinkedItems: boolean;
+  missingPlannedPriceCount: number;
+  missingOrderPriceCount: number;
+}
+
 function isAppliedOrder(order: OrderWithLines): boolean {
   return order.status === "placed" || order.status === "received";
 }
@@ -200,6 +211,19 @@ function isReceiptLikeEvent(event: OrderReceiveEvent): boolean {
   return event.deltaQty > 0 && (event.eventType === "receive" || event.eventType === "move_in");
 }
 
+function resolveLineUnitPrice(
+  line: Pick<OrderLine, "actualUnitPrice" | "plannedUnitPrice">,
+  item: Pick<ProcurementItemV2, "actualUnitPrice" | "plannedUnitPrice"> | undefined,
+): number | null {
+  const value = line.actualUnitPrice
+    ?? line.plannedUnitPrice
+    ?? item?.actualUnitPrice
+    ?? item?.plannedUnitPrice
+    ?? null;
+  if (value === null || !Number.isFinite(value)) return null;
+  return value;
+}
+
 export function computeLastReceivedAt(
   procurementItemId: string,
   locationId: string,
@@ -260,6 +284,71 @@ export function collectItemLocationEventHistory(
   usageEvents.sort(sortByNewest);
 
   return { receiptEvents, usageEvents };
+}
+
+export function computeProcurementHeaderKpis(
+  projectId: string,
+  items: ProcurementItemV2[],
+  orders: OrderWithLines[],
+): ProcurementHeaderKpis {
+  const linkedItems = items
+    .filter((item) => item.projectId === projectId)
+    .filter(isEstimateLinkedProcurementItem);
+  const hasLinkedItems = linkedItems.length > 0;
+  const linkedItemIdSet = new Set(linkedItems.map((item) => item.id));
+  const itemById = new Map(linkedItems.map((item) => [item.id, item]));
+
+  let plannedSum = 0;
+  let missingPlannedPriceCount = 0;
+  linkedItems.forEach((item) => {
+    if (item.plannedUnitPrice === null || !Number.isFinite(item.plannedUnitPrice)) {
+      missingPlannedPriceCount += 1;
+      return;
+    }
+    plannedSum += item.plannedUnitPrice * item.requiredQty;
+  });
+
+  let committedSum = 0;
+  let receivedSum = 0;
+  let missingOrderPriceCount = 0;
+
+  orders
+    .filter((order) => order.projectId === projectId && order.kind === "supplier" && isAppliedOrder(order))
+    .forEach((order) => {
+      order.lines.forEach((line) => {
+        if (!linkedItemIdSet.has(line.procurementItemId)) return;
+        const openQty = Math.max(line.qty - line.receivedQty, 0);
+        const receivedQty = Math.max(line.receivedQty, 0);
+        if (openQty <= 0 && receivedQty <= 0) return;
+
+        const item = itemById.get(line.procurementItemId);
+        const unitPrice = resolveLineUnitPrice(line, item);
+        if (unitPrice === null) {
+          missingOrderPriceCount += 1;
+          return;
+        }
+
+        committedSum += unitPrice * openQty;
+        receivedSum += unitPrice * receivedQty;
+      });
+    });
+
+  const planned = hasLinkedItems && missingPlannedPriceCount === 0 ? plannedSum : null;
+  const committed = hasLinkedItems && missingOrderPriceCount === 0 ? committedSum : null;
+  const received = hasLinkedItems && missingOrderPriceCount === 0 ? receivedSum : null;
+  const used = committed !== null && received !== null ? committed + received : null;
+  const variance = planned !== null && used !== null ? planned - used : null;
+
+  return {
+    planned,
+    committed,
+    received,
+    used,
+    variance,
+    hasLinkedItems,
+    missingPlannedPriceCount,
+    missingOrderPriceCount,
+  };
 }
 
 export function computeTabChipTotals(

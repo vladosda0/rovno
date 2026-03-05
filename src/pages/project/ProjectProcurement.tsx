@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
 import {
   Select,
   SelectContent,
@@ -48,8 +49,8 @@ import { consumeStockFromInventory, receiveOrder, updateOrder } from "@/data/ord
 import { addEvent, addTask, getCurrentUser, getTask, getUserById } from "@/data/store";
 import {
   collectItemLocationEventHistory,
+  computeProcurementHeaderKpis,
   computeLastReceivedAt,
-  computeFulfilledQty,
   computeInStockByLocation,
   computeRemainingRequestedQty,
   computeTabChipTotals,
@@ -211,13 +212,14 @@ export default function ProjectProcurement() {
   const [collapsedOrderIds, setCollapsedOrderIds] = useState<Set<string>>(new Set());
   const [selectedRequestedIds, setSelectedRequestedIds] = useState<Set<string>>(new Set());
   const [selectedOrderedLineKeys, setSelectedOrderedLineKeys] = useState<Set<string>>(new Set());
+  const [selectedInStockRowKeys, setSelectedInStockRowKeys] = useState<Set<string>>(new Set());
   const [receiveModalOpen, setReceiveModalOpen] = useState(false);
   const [receiveModalTargets, setReceiveModalTargets] = useState<OrderedReceivableTarget[]>([]);
   const [receiveModalQtyByKey, setReceiveModalQtyByKey] = useState<Record<string, number>>({});
   const [receiveModalLocationByKey, setReceiveModalLocationByKey] = useState<Record<string, string>>({});
   const [useFromStockOpen, setUseFromStockOpen] = useState(false);
-  const [useFromStockTarget, setUseFromStockTarget] = useState<InStockTableRow | null>(null);
-  const [useFromStockQty, setUseFromStockQty] = useState("");
+  const [useFromStockTargets, setUseFromStockTargets] = useState<InStockTableRow[]>([]);
+  const [useFromStockQtyByKey, setUseFromStockQtyByKey] = useState<Record<string, string>>({});
   const [useFromStockParticipantId, setUseFromStockParticipantId] = useState("none");
   const [useFromStockManualName, setUseFromStockManualName] = useState("");
   const [useFromStockNote, setUseFromStockNote] = useState("");
@@ -291,28 +293,39 @@ export default function ProjectProcurement() {
     return map;
   }, [items, orders]);
 
-  const fulfilledByItemId = useMemo(() => {
-    const map = new Map<string, number>();
-    items.forEach((item) => {
-      map.set(item.id, computeFulfilledQty(item.id, orders));
-    });
-    return map;
-  }, [items, orders]);
+  const headerKpis = useMemo(
+    () => computeProcurementHeaderKpis(pid, items, orders),
+    [pid, items, orders],
+  );
 
-  const plannedFulfilledTotal = useMemo(() => (
-    items.reduce((sum, item) => sum + (item.plannedUnitPrice ?? 0) * (fulfilledByItemId.get(item.id) ?? 0), 0)
-  ), [items, fulfilledByItemId]);
+  const usedBudgetMetric = headerKpis.used;
+  const budgetProgressPct = useMemo(() => {
+    if (usedBudgetMetric === null || normalizedBudget <= 0) return 0;
+    return Math.min((usedBudgetMetric / normalizedBudget) * 100, 100);
+  }, [usedBudgetMetric, normalizedBudget]);
 
-  const actualFulfilledTotal = useMemo(() => (
-    items.reduce((sum, item) => sum + (item.actualUnitPrice ?? 0) * (fulfilledByItemId.get(item.id) ?? 0), 0)
-  ), [items, fulfilledByItemId]);
-
-  const economy = actualFulfilledTotal - plannedFulfilledTotal;
+  const remainingBudgetMetric = useMemo(() => {
+    if (usedBudgetMetric === null) return null;
+    return normalizedBudget - usedBudgetMetric;
+  }, [normalizedBudget, usedBudgetMetric]);
 
   const chipTotals = useMemo(
     () => computeTabChipTotals(pid, items, orders, stockRows),
     [pid, items, orders, stockRows],
   );
+
+  const headerDataStateHint = useMemo(() => {
+    if (!headerKpis.hasLinkedItems) return "No estimate-linked items.";
+    if (headerKpis.missingPlannedPriceCount > 0) {
+      const suffix = headerKpis.missingPlannedPriceCount === 1 ? "item" : "items";
+      return `Missing planned price for ${headerKpis.missingPlannedPriceCount} ${suffix}.`;
+    }
+    if (headerKpis.missingOrderPriceCount > 0) {
+      const suffix = headerKpis.missingOrderPriceCount === 1 ? "line" : "lines";
+      return `Missing ordered price for ${headerKpis.missingOrderPriceCount} ${suffix}.`;
+    }
+    return null;
+  }, [headerKpis]);
 
   const itemById = useMemo(
     () => new Map(items.map((item) => [item.id, item])),
@@ -395,6 +408,12 @@ export default function ProjectProcurement() {
       setSelectedOrderedLineKeys(new Set());
     }
   }, [activeTab, selectedOrderedLineKeys.size]);
+
+  useEffect(() => {
+    if (activeTab !== "in_stock" && selectedInStockRowKeys.size > 0) {
+      setSelectedInStockRowKeys(new Set());
+    }
+  }, [activeTab, selectedInStockRowKeys.size]);
 
   useEffect(() => {
     setSelectedRequestedIds((prev) => {
@@ -528,6 +547,20 @@ export default function ProjectProcurement() {
       || row.locationName.toLowerCase().includes(q)
     ));
   }, [pid, items, orders, locations, search, itemById]);
+
+  const inStockRowByKey = useMemo(
+    () => new Map(inStockRows.map((row) => [row.key, row])),
+    [inStockRows],
+  );
+
+  useEffect(() => {
+    setSelectedInStockRowKeys((prev) => {
+      if (prev.size === 0) return prev;
+      const visibleKeys = new Set(inStockRows.map((row) => row.key));
+      const next = new Set(Array.from(prev).filter((key) => visibleKeys.has(key)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [inStockRows]);
 
   const inStockDetailHistory = useMemo(() => {
     if (!inStockDetailTarget) {
@@ -737,6 +770,15 @@ export default function ProjectProcurement() {
     });
   };
 
+  const toggleSelectedInStockRow = (rowKey: string, checked: boolean) => {
+    setSelectedInStockRowKeys((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(rowKey);
+      else next.delete(rowKey);
+      return next;
+    });
+  };
+
   const openReceiveItemsModal = useCallback((targets: OrderedReceivableTarget[]) => {
     if (targets.length === 0) return;
     const nextQtyByKey: Record<string, number> = {};
@@ -816,78 +858,118 @@ export default function ProjectProcurement() {
     setSelectedOrderedLineKeys(new Set());
   };
 
-  const openUseFromStockModal = (row: InStockTableRow) => {
-    setUseFromStockTarget(row);
-    setUseFromStockQty("");
+  const openUseFromStockModal = (targets: InStockTableRow[]) => {
+    if (targets.length === 0) return;
+    const qtyByKey = targets.reduce<Record<string, string>>((acc, target) => {
+      acc[target.key] = "";
+      return acc;
+    }, {});
+    setUseFromStockTargets(targets);
+    setUseFromStockQtyByKey(qtyByKey);
     setUseFromStockParticipantId("none");
     setUseFromStockManualName("");
     setUseFromStockNote("");
     setUseFromStockOpen(true);
   };
 
-  const submitUseFromStock = () => {
-    if (!useFromStockTarget) return;
+  const openUseModalForSelection = () => {
+    const targets = Array.from(selectedInStockRowKeys)
+      .map((key) => inStockRowByKey.get(key))
+      .filter((target): target is InStockTableRow => !!target);
+    openUseFromStockModal(targets);
+  };
 
-    const qty = Number(useFromStockQty);
-    if (!Number.isFinite(qty) || qty <= 0) {
-      toast({ title: "Quantity is required", description: "Enter quantity greater than zero", variant: "destructive" });
-      return;
-    }
-    if (qty > useFromStockTarget.qty) {
-      toast({ title: "Insufficient stock", description: "Quantity exceeds available stock", variant: "destructive" });
-      return;
-    }
+  const submitUseFromStock = () => {
+    if (useFromStockTargets.length === 0) return;
 
     const manualName = useFromStockManualName.trim() || null;
     const participantId = manualName ? null : (useFromStockParticipantId === "none" ? null : useFromStockParticipantId);
     const note = useFromStockNote.trim() || null;
+    const rowsToConsume: Array<{ target: InStockTableRow; qty: number }> = [];
 
-    const result = consumeStockFromInventory({
-      projectId: pid,
-      procurementItemId: useFromStockTarget.procurementItemId,
-      locationId: useFromStockTarget.locationId,
-      qty,
-      usedByParticipantId: participantId,
-      usedByName: manualName,
-      note,
-    });
-    if (!result.ok) {
-      toast({ title: "Use failed", description: result.error, variant: "destructive" });
+    for (const target of useFromStockTargets) {
+      const raw = (useFromStockQtyByKey[target.key] ?? "").trim();
+      if (!raw) continue;
+      const qty = Number(raw);
+      if (!Number.isFinite(qty) || qty <= 0) {
+        toast({
+          title: "Quantity is required",
+          description: `Enter quantity greater than zero for ${target.item.name}`,
+          variant: "destructive",
+        });
+        return;
+      }
+      if (qty > target.qty) {
+        toast({
+          title: "Insufficient stock",
+          description: `Quantity exceeds available stock for ${target.item.name}`,
+          variant: "destructive",
+        });
+        return;
+      }
+      rowsToConsume.push({ target, qty });
+    }
+
+    if (rowsToConsume.length === 0) {
+      toast({ title: "No quantities entered", description: "Set at least one quantity greater than zero", variant: "destructive" });
       return;
     }
 
     const usedByLabel = manualName || (participantId ? participantNameById.get(participantId) : "") || "—";
-    const summary = `Used ${qty} ${useFromStockTarget.item.unit} of ${useFromStockTarget.item.name} at ${useFromStockTarget.locationName}`;
     const currentUser = getCurrentUser();
-    addEvent({
-      id: `evt-stock-used-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      project_id: pid,
-      actor_id: currentUser.id,
-      type: "procurement_updated",
-      object_type: "procurement_item",
-      object_id: useFromStockTarget.procurementItemId,
-      timestamp: new Date().toISOString(),
-      payload: {
-        source: "ai",
-        sidebarKind: "stock_used",
-        sidebarTier: 1,
-        title: "Stock used",
-        summary,
-        details: {
-          usedBy: usedByLabel,
-          note,
-          remainingQty: result.remainingQty,
-        },
-      },
-    } satisfies Event);
+    for (const entry of rowsToConsume) {
+      const { target, qty } = entry;
+      const result = consumeStockFromInventory({
+        projectId: pid,
+        procurementItemId: target.procurementItemId,
+        locationId: target.locationId,
+        qty,
+        usedByParticipantId: participantId,
+        usedByName: manualName,
+        note,
+      });
+      if (!result.ok) {
+        toast({ title: "Use failed", description: result.error, variant: "destructive" });
+        return;
+      }
 
-    toast({ title: "Stock updated", description: summary });
+      const summary = `Used ${qty} ${target.item.unit} of ${target.item.name} at ${target.locationName}`;
+      addEvent({
+        id: `evt-stock-used-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        project_id: pid,
+        actor_id: currentUser.id,
+        type: "procurement_updated",
+        object_type: "procurement_item",
+        object_id: target.procurementItemId,
+        timestamp: new Date().toISOString(),
+        payload: {
+          source: "ai",
+          sidebarKind: "stock_used",
+          sidebarTier: 1,
+          title: "Stock used",
+          summary,
+          details: {
+            usedBy: usedByLabel,
+            note,
+            remainingQty: result.remainingQty,
+          },
+        },
+      } satisfies Event);
+    }
+
+    toast({
+      title: rowsToConsume.length > 1 ? "Stock updated" : "Stock item updated",
+      description: rowsToConsume.length > 1
+        ? `Used stock for ${rowsToConsume.length} items`
+        : `Used ${rowsToConsume[0]?.qty ?? 0} ${rowsToConsume[0]?.target.item.unit ?? ""}`,
+    });
     setUseFromStockOpen(false);
-    setUseFromStockTarget(null);
-    setUseFromStockQty("");
+    setUseFromStockTargets([]);
+    setUseFromStockQtyByKey({});
     setUseFromStockParticipantId("none");
     setUseFromStockManualName("");
     setUseFromStockNote("");
+    setSelectedInStockRowKeys(new Set());
   };
 
   const handleRequestMore = (row: InStockTableRow) => {
@@ -979,6 +1061,44 @@ export default function ProjectProcurement() {
     }, "immediate");
   };
 
+  const formatMetric = (value: number | null) => (value === null ? "—" : fmtCost(value));
+  const selectionCount = activeTab === "requested"
+    ? selectedRequestedIds.size
+    : activeTab === "ordered"
+      ? selectedOrderedLineKeys.size
+      : selectedInStockRowKeys.size;
+  const showStickySelectionBar = selectionCount > 0;
+
+  const selectionPrimaryLabel = activeTab === "requested"
+    ? `Create order (${selectionCount})`
+    : activeTab === "ordered"
+      ? `Items received (${selectionCount})`
+      : `Use (${selectionCount})`;
+
+  const runSelectionPrimaryAction = () => {
+    if (activeTab === "requested") {
+      openCreateOrder(Array.from(selectedRequestedIds));
+      return;
+    }
+    if (activeTab === "ordered") {
+      openReceiveModalForSelection();
+      return;
+    }
+    openUseModalForSelection();
+  };
+
+  const clearSelectionForActiveTab = () => {
+    if (activeTab === "requested") {
+      setSelectedRequestedIds(new Set());
+      return;
+    }
+    if (activeTab === "ordered") {
+      setSelectedOrderedLineKeys(new Set());
+      return;
+    }
+    setSelectedInStockRowKeys(new Set());
+  };
+
   if (items.length === 0) {
     return (
       <EmptyState
@@ -1022,6 +1142,7 @@ export default function ProjectProcurement() {
   const renderInStockTableHeader = () => (
     <thead className="bg-muted/30 border-b border-border">
       <tr>
+        <th className="w-10 text-left px-2 py-2 text-xs font-medium text-muted-foreground" />
         <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Name / Spec</th>
         <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Location</th>
         <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Qty available</th>
@@ -1032,44 +1153,69 @@ export default function ProjectProcurement() {
   );
 
   return (
-    <div className="space-y-sp-2">
-      <div className="glass-elevated rounded-card p-sp-2 space-y-3">
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <h2 className="text-h3 text-foreground">Procurement</h2>
-          {activeTab === "requested" && selectedRequestedIds.size > 0 && (
-            <Button
-              type="button"
-              size="sm"
-              className="h-8"
-              onClick={() => openCreateOrder(Array.from(selectedRequestedIds))}
-            >
-              Create order ({selectedRequestedIds.size})
-            </Button>
-          )}
-          {activeTab === "ordered" && selectedOrderedLineKeys.size > 0 && (
-            <Button
-              type="button"
-              size="sm"
-              className="h-8"
-              onClick={openReceiveModalForSelection}
-              disabled={!canEdit}
-            >
-              Items received ({selectedOrderedLineKeys.size})
-            </Button>
-          )}
+    <div className={cn("space-y-sp-2", showStickySelectionBar && "pb-24")}>
+      <div className="glass-elevated rounded-card p-sp-3 space-y-sp-3">
+        <h2 className="text-h3 text-foreground">Procurement</h2>
+
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-2">
+          {[
+            { key: "planned", label: "Planned", value: formatMetric(headerKpis.planned), hint: "Estimate-linked qty" },
+            { key: "committed", label: "Committed", value: formatMetric(headerKpis.committed), hint: "Open ordered value" },
+            { key: "received", label: "Received", value: formatMetric(headerKpis.received), hint: "Received value" },
+            { key: "variance", label: "Variance", value: formatMetric(headerKpis.variance), hint: "Planned - used" },
+          ].map((kpi) => (
+            <div key={kpi.key} className="rounded-lg border border-border bg-background/60 p-3 min-h-[96px] flex flex-col justify-between">
+              <p className="text-xs text-muted-foreground">{kpi.label}</p>
+              <p className="text-lg font-semibold text-foreground tabular-nums">{kpi.value}</p>
+              <p className="text-[11px] text-muted-foreground">{kpi.hint}</p>
+            </div>
+          ))}
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="relative flex-1 min-w-[220px] max-w-sm">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(220px,280px)_1fr] gap-3">
+          <div className="rounded-lg border border-border bg-background/60 p-3">
+            <label className="text-xs text-muted-foreground">Budget</label>
             <Input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search by name, spec, supplier..."
-              className="pl-8 h-9 text-sm"
+              type="text"
+              readOnly
+              value={fmtCost(normalizedBudget)}
+              className="h-9 mt-1"
             />
           </div>
 
+          <div className="rounded-lg border border-border bg-background/60 p-3 space-y-2">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs text-muted-foreground">Used</p>
+                <p className="text-base font-semibold text-foreground tabular-nums">
+                  {formatMetric(usedBudgetMetric)}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-muted-foreground">Remaining</p>
+                <p className={cn(
+                  "text-base font-semibold tabular-nums",
+                  remainingBudgetMetric !== null && remainingBudgetMetric < 0 ? "text-destructive" : "text-foreground",
+                )}
+                >
+                  {formatMetric(remainingBudgetMetric)}
+                </p>
+              </div>
+            </div>
+            <Progress value={budgetProgressPct} className="h-2 bg-muted/60 [&>div]:rounded-full" />
+            <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+              <span>Used = Committed + Received</span>
+              <span>{Math.round(budgetProgressPct)}%</span>
+            </div>
+            {headerDataStateHint && (
+              <p className="text-[11px] text-muted-foreground">{headerDataStateHint}</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="glass rounded-card p-2">
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div className="flex flex-wrap gap-2">
             {TABS.map((tab) => {
               const stat = tab === "requested"
@@ -1090,38 +1236,51 @@ export default function ProjectProcurement() {
                       : "border-border bg-background hover:bg-muted/30",
                   )}
                 >
-                  {TAB_META[tab].label}: {fmtCost(stat.total)} ({stat.count})
+                  {TAB_META[tab].label} ({stat.count})
                 </button>
               );
             })}
           </div>
-        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div>
-            <label className="text-xs text-muted-foreground">Budget</label>
+          <div className="relative w-full md:w-[320px]">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
-              type="text"
-              readOnly
-              value={fmtCost(normalizedBudget)}
-              className="h-9"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search by name, spec, supplier..."
+              className="pl-8 h-9 text-sm"
             />
-          </div>
-          <div className="rounded-lg border border-border p-3 md:col-span-2 flex items-center justify-between">
-            <div>
-              <p className="text-xs text-muted-foreground">Economy</p>
-              <p className={cn("text-sm font-medium", economy <= 0 ? "text-success" : "text-destructive")}> 
-                {fmtCost(economy)}
-              </p>
-            </div>
-            <div className="text-right text-xs text-muted-foreground">
-              <p>Planned: {fmtCost(plannedFulfilledTotal)}</p>
-              <p>Actual: {fmtCost(actualFulfilledTotal)}</p>
-              <p>Budget: {fmtCost(normalizedBudget)}</p>
-            </div>
           </div>
         </div>
       </div>
+
+      {showStickySelectionBar && (
+        <div className="fixed inset-x-0 bottom-3 z-40 px-sp-2 pointer-events-none">
+          <div className="mx-auto max-w-[1200px] pointer-events-auto glass-elevated rounded-card border border-border px-3 py-2 flex items-center justify-between gap-3">
+            <p className="text-sm text-foreground">{selectionCount} selected</p>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                className="h-8"
+                onClick={runSelectionPrimaryAction}
+                disabled={!canEdit}
+              >
+                {selectionPrimaryLabel}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-8"
+                onClick={clearSelectionForActiveTab}
+              >
+                Clear
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {activeTab === "requested" && (
         <div className="glass rounded-card p-2 space-y-2">
@@ -1463,6 +1622,13 @@ export default function ProjectProcurement() {
                 <tbody>
                   {inStockRows.map((row) => (
                     <tr key={row.key} className="border-b border-border/70 last:border-0 hover:bg-muted/20">
+                      <td className="px-2 py-2">
+                        <Checkbox
+                          checked={selectedInStockRowKeys.has(row.key)}
+                          onCheckedChange={(checked) => toggleSelectedInStockRow(row.key, !!checked)}
+                          disabled={!canEdit}
+                        />
+                      </td>
                       <td className="px-2 py-2 min-w-[240px]">
                         <button type="button" className="text-left hover:underline" onClick={() => openInStockDetail(row)}>
                           <p className="font-medium text-foreground truncate">{row.item.name}</p>
@@ -1481,7 +1647,7 @@ export default function ProjectProcurement() {
                             type="button"
                             size="sm"
                             className="h-7"
-                            onClick={() => openUseFromStockModal(row)}
+                            onClick={() => openUseFromStockModal([row])}
                             disabled={!canEdit}
                           >
                             Use
@@ -1512,51 +1678,69 @@ export default function ProjectProcurement() {
         onOpenChange={(nextOpen) => {
           setUseFromStockOpen(nextOpen);
           if (!nextOpen) {
-            setUseFromStockTarget(null);
-            setUseFromStockQty("");
+            setUseFromStockTargets([]);
+            setUseFromStockQtyByKey({});
             setUseFromStockParticipantId("none");
             setUseFromStockManualName("");
             setUseFromStockNote("");
           }
         }}
       >
-        <DialogContent className="w-[95vw] max-w-xl max-h-[90vh] p-0 gap-0 overflow-hidden">
+        <DialogContent className="w-[95vw] max-w-3xl max-h-[90vh] p-0 gap-0 overflow-hidden">
           <DialogHeader className="px-5 py-4 border-b border-border">
             <DialogTitle>Use from stock</DialogTitle>
           </DialogHeader>
 
-          {!useFromStockTarget ? (
+          {useFromStockTargets.length === 0 ? (
             <div className="px-5 py-4 text-sm text-muted-foreground">No stock item selected.</div>
           ) : (
             <div className="px-5 py-4 space-y-4">
-              <div className="rounded-lg border border-border p-3 space-y-1">
-                <p className="font-medium text-foreground">{useFromStockTarget.item.name}</p>
-                {useFromStockTarget.item.spec && (
-                  <p className="text-xs text-muted-foreground">{useFromStockTarget.item.spec}</p>
-                )}
-                <div className="pt-1">
-                  <ResourceTypeBadge type={useFromStockTarget.item.type} className="border-transparent" />
-                </div>
-                <p className="text-xs text-muted-foreground pt-1">
-                  Location: {useFromStockTarget.locationName}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Qty available: {useFromStockTarget.qty} {useFromStockTarget.item.unit}
-                </p>
-              </div>
-
-              <div>
-                <label htmlFor="use-from-stock-qty" className="text-xs text-muted-foreground">Quantity to use now</label>
-                <Input
-                  id="use-from-stock-qty"
-                  type="number"
-                  min="0"
-                  max={useFromStockTarget.qty}
-                  value={useFromStockQty}
-                  onChange={(event) => setUseFromStockQty(event.target.value)}
-                  placeholder={String(useFromStockTarget.qty)}
-                  className="h-9 mt-1"
-                />
+              <div className="rounded-lg border border-border overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/30 border-b border-border">
+                    <tr>
+                      <th className="text-left px-3 py-2">Item</th>
+                      <th className="text-left px-3 py-2">Location</th>
+                      <th className="text-right px-3 py-2">Available</th>
+                      <th className="text-right px-3 py-2">Quantity to use now</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {useFromStockTargets.map((target) => (
+                      <tr key={target.key} className="border-b border-border last:border-0">
+                        <td className="px-3 py-2 min-w-[220px]">
+                          <div className="flex items-start gap-2">
+                            <ResourceTypeBadge type={target.item.type} className="shrink-0 border-transparent" />
+                            <div className="min-w-0">
+                              <p className="font-medium text-foreground truncate">{target.item.name}</p>
+                              {target.item.spec && <p className="text-xs text-muted-foreground truncate">{target.item.spec}</p>}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 text-muted-foreground">{target.locationName}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{target.qty} {target.item.unit}</td>
+                        <td className="px-3 py-2 text-right">
+                          <Input
+                            type="number"
+                            min="0"
+                            max={target.qty}
+                            value={useFromStockQtyByKey[target.key] ?? ""}
+                            onChange={(event) => {
+                              const nextValue = event.target.value;
+                              setUseFromStockQtyByKey((prev) => ({
+                                ...prev,
+                                [target.key]: nextValue,
+                              }));
+                            }}
+                            placeholder={String(target.qty)}
+                            className="h-9 w-32 ml-auto"
+                            aria-label={`Quantity to use now for ${target.item.name}`}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1601,7 +1785,7 @@ export default function ProjectProcurement() {
 
           <DialogFooter className="px-5 py-4 border-t border-border">
             <Button type="button" variant="outline" onClick={() => setUseFromStockOpen(false)}>Cancel</Button>
-            <Button type="button" onClick={submitUseFromStock} disabled={!canEdit || !useFromStockTarget}>Use</Button>
+            <Button type="button" onClick={submitUseFromStock} disabled={!canEdit || useFromStockTargets.length === 0}>Use</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
