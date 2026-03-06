@@ -9,12 +9,12 @@ interface SettingsSectionProps {
 
 export function SettingsSection({ title, description, children, className }: SettingsSectionProps) {
   return (
-    <div className={cn("space-y-sp-2", className)}>
-      <div>
+    <section className={cn("rounded-card border border-border bg-card/70 p-sp-2 space-y-sp-2", className)}>
+      <div className="space-y-0.5">
         <h2 className="text-body font-semibold text-foreground">{title}</h2>
-        {description && <p className="text-caption text-muted-foreground mt-0.5">{description}</p>}
+        {description && <p className="text-caption text-muted-foreground">{description}</p>}
       </div>
       {children}
-    </div>
+    </section>
   );
 }

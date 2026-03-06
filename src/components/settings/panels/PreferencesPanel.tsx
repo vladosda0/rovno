@@ -121,7 +121,9 @@ export function PreferencesPanel() {
         </div>
       </SettingsSection>
 
-      <Button onClick={handleSave}>Save preferences</Button>
+      <div className="flex flex-wrap gap-sp-2 pt-sp-1">
+        <Button className="w-full sm:w-auto" onClick={handleSave}>Save preferences</Button>
+      </div>
     </div>
   );
 }

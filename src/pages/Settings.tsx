@@ -58,22 +58,22 @@ export default function Settings() {
   };
 
   return (
-    <div className="p-sp-3 max-w-5xl mx-auto">
+    <div className="mx-auto max-w-5xl px-sp-2 py-sp-3 sm:px-sp-3 lg:px-sp-4 lg:py-sp-4">
       {/* Header */}
-      <div className="mb-sp-3">
+      <div className="mb-sp-4 space-y-sp-1">
         <h1 className="text-h3 text-foreground flex items-center gap-2">
           <SettingsIcon className="h-5 w-5" />
           Settings
         </h1>
-        <p className="text-body-sm text-muted-foreground mt-1">
+        <p className="text-body-sm text-muted-foreground">
           Manage your account, preferences, and billing.
         </p>
       </div>
 
       {/* Two-column layout */}
-      <div className="flex gap-sp-3 items-start">
+      <div className="grid items-start gap-sp-3 lg:grid-cols-[14rem_minmax(0,1fr)] lg:gap-sp-4">
         {/* Left nav */}
-        <div className="w-56 shrink-0 sticky top-16">
+        <div className="w-full lg:sticky lg:top-16">
           <SettingsNav
             activeTab={activeTab}
             activeScope={activeScope}
@@ -83,20 +83,17 @@ export default function Settings() {
         </div>
 
         {/* Right panel */}
-        <div className="flex-1 min-w-0">
-          {renderPanel()}
+        <div className="min-w-0 w-full max-w-3xl justify-self-start space-y-sp-3">
+          <div className="glass rounded-panel p-sp-3 space-y-sp-3">
+            {renderPanel()}
+          </div>
 
           {/* Dev tools */}
           {import.meta.env.DEV && (
-            <div className="mt-sp-4 pt-sp-3 border-t border-border">
-              <div className="mb-sp-2">
-                <p className="text-caption font-medium text-muted-foreground flex items-center gap-1.5">
-                  🛠 Dev Tools
-                  <Badge variant="secondary" className="text-[9px]">DEV</Badge>
-                </p>
-                <p className="text-caption text-muted-foreground/60 mt-0.5">
-                  Local role simulation for demos and QA. Not shown in production.
-                </p>
+            <div className="rounded-card border border-border/60 bg-card/50 p-sp-2 space-y-sp-2">
+              <div className="flex items-center gap-1.5">
+                <p className="text-caption font-medium uppercase tracking-wide text-muted-foreground">Dev tools</p>
+                <Badge variant="secondary" className="text-[9px]">DEV</Badge>
               </div>
               <AuthSimulator />
             </div>

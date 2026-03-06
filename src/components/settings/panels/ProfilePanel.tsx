@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import { SettingsSection } from "@/components/settings/SettingsSection";
 import { Camera } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
@@ -60,7 +59,7 @@ export function ProfilePanel() {
     <div className="space-y-sp-3">
       <SettingsSection title="Profile" description="Your personal information and public identity.">
         {/* Avatar */}
-        <div className="flex items-center gap-sp-2">
+        <div className="flex flex-wrap items-center gap-sp-2">
           <div className="relative">
             <Avatar className="h-16 w-16">
               <AvatarFallback className="text-h3 bg-accent text-accent-foreground">{initials}</AvatarFallback>
@@ -74,8 +73,6 @@ export function ProfilePanel() {
             <p className="text-caption text-muted-foreground">Upload a photo (coming soon)</p>
           </div>
         </div>
-
-        <Separator />
 
         {/* Fields */}
         <div className="grid gap-sp-2 sm:grid-cols-2">
@@ -131,10 +128,10 @@ export function ProfilePanel() {
       </SettingsSection>
 
       {/* Actions */}
-      <div className="flex gap-2">
-        <Button onClick={handleSave} disabled={!isDirty}>Save changes</Button>
+      <div className="flex flex-wrap gap-sp-2 pt-sp-1">
+        <Button className="w-full sm:w-auto" onClick={handleSave} disabled={!isDirty}>Save changes</Button>
         {isDirty && (
-          <Button variant="ghost" onClick={handleDiscard}>Discard</Button>
+          <Button variant="ghost" className="w-full sm:w-auto" onClick={handleDiscard}>Discard</Button>
         )}
       </div>
     </div>

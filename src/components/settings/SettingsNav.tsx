@@ -63,47 +63,47 @@ export function SettingsNav({ activeTab, activeScope, onTabChange, onScopeChange
     : PROJECT_ITEMS;
 
   return (
-    <nav className="space-y-sp-2">
+    <nav className="glass rounded-panel p-sp-2 space-y-sp-2">
       {/* Scope switcher */}
-      <div className="flex gap-1 p-1 bg-muted rounded-lg">
+      <div className="space-y-1">
         {scopes.map((scope) => (
           <button
             key={scope.value}
             onClick={() => !scope.disabled && onScopeChange(scope.value)}
             disabled={scope.disabled}
             className={cn(
-              "flex-1 px-2 py-1.5 rounded-md text-caption font-medium transition-colors text-center",
+              "flex w-full items-center gap-2 rounded-md border border-transparent px-2.5 py-2 text-left text-body-sm font-medium transition-colors",
               activeScope === scope.value
-                ? "bg-background text-foreground shadow-sm"
+                ? "bg-accent/10 border-accent/20 text-accent"
                 : scope.disabled
                   ? "text-muted-foreground/50 cursor-not-allowed"
-                  : "text-muted-foreground hover:text-foreground",
+                  : "text-muted-foreground hover:bg-muted/70 hover:text-foreground",
             )}
           >
-            {scope.label}
-            {scope.disabled && <Badge variant="secondary" className="ml-1 text-[9px] px-1 py-0">Soon</Badge>}
+            <span className="flex-1 min-w-0">{scope.label}</span>
+            {scope.disabled && <Badge variant="secondary" className="ml-auto text-[9px] px-1 py-0">Soon</Badge>}
           </button>
         ))}
       </div>
 
       {/* Nav items */}
-      <div className="space-y-0.5">
+      <div className="space-y-1">
         {items.map((item) => (
           <button
             key={item.tab}
             onClick={() => !item.disabled && onTabChange(item.tab)}
             disabled={item.disabled}
             className={cn(
-              "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-body-sm transition-colors text-left",
+              "w-full flex items-center gap-2.5 rounded-md border border-transparent px-2.5 py-2 text-left text-body-sm transition-colors",
               activeTab === item.tab
-                ? "bg-accent/10 text-accent font-medium"
+                ? "bg-accent/10 border-accent/20 text-accent font-medium"
                 : item.disabled
                   ? "text-muted-foreground/40 cursor-not-allowed"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  : "text-muted-foreground hover:bg-muted/70 hover:text-foreground",
             )}
           >
             <item.icon className="h-4 w-4 shrink-0" />
-            <span>{item.label}</span>
+            <span className="flex-1 min-w-0">{item.label}</span>
             {item.disabled && <Badge variant="secondary" className="ml-auto text-[9px] px-1 py-0">Soon</Badge>}
           </button>
         ))}

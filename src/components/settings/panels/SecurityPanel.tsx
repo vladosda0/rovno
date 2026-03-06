@@ -1,7 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import { SettingsSection } from "@/components/settings/SettingsSection";
 import { Monitor, Smartphone, Globe } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
@@ -16,42 +15,40 @@ export function SecurityPanel() {
   return (
     <div className="space-y-sp-3">
       <SettingsSection title="Active sessions" description="Devices currently signed in to your account.">
-        <div className="space-y-2">
+        <div className="space-y-sp-2">
           {MOCK_SESSIONS.map((session) => (
-            <Card key={session.id} className="bg-card">
-              <CardContent className="p-sp-2 flex items-center gap-3">
-                <session.icon className="h-5 w-5 text-muted-foreground shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
+            <div key={session.id} className="rounded-panel bg-muted/40 p-1.5 px-sp-2">
+              <div className="flex items-start gap-2">
+                <session.icon className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0 space-y-0.5">
+                  <div className="flex flex-wrap items-center gap-2">
                     <p className="text-body-sm font-medium text-foreground">{session.device}</p>
                     {session.current && <Badge variant="secondary" className="text-[10px]">Current</Badge>}
                   </div>
                   <p className="text-caption text-muted-foreground">{session.location} · {session.lastActive}</p>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           ))}
         </div>
-        <Button variant="outline" onClick={() => toast({ title: "Signed out of other sessions" })}>
-          Sign out of other sessions
-        </Button>
+        <div className="flex flex-wrap gap-sp-2 pt-sp-1">
+          <Button variant="outline" className="w-full sm:w-auto" onClick={() => toast({ title: "Signed out of other sessions" })}>
+            Sign out of other sessions
+          </Button>
+        </div>
       </SettingsSection>
-
-      <Separator />
 
       <SettingsSection title="Two-factor authentication" description="Add an extra layer of security to your account.">
-        <Card className="bg-muted/30">
-          <CardContent className="p-sp-2 flex items-center justify-between">
-            <div>
+        <div className="rounded-panel bg-muted/40 p-1.5 px-sp-2">
+          <div className="space-y-0.5">
+            <div className="flex flex-wrap items-center gap-2">
               <p className="text-body-sm font-medium text-foreground">2FA / Passkeys</p>
-              <p className="text-caption text-muted-foreground">Not configured</p>
+              <Badge variant="secondary" className="text-[10px]">Coming soon</Badge>
             </div>
-            <Badge variant="secondary">Coming soon</Badge>
-          </CardContent>
-        </Card>
+            <p className="text-caption text-muted-foreground">Not configured</p>
+          </div>
+        </div>
       </SettingsSection>
-
-      <Separator />
 
       <SettingsSection title="Connected accounts" description="Third-party services linked to your account.">
         <Card className="bg-muted/30">

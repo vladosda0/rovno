@@ -49,10 +49,11 @@ export function AuthSimulator() {
   };
 
   return (
-    <div className="glass rounded-card p-sp-3 space-y-sp-2">
-      <div>
-        <h3 className="text-body font-semibold text-foreground">🛠 Auth Simulator</h3>
-        <p className="text-caption text-muted-foreground">Dev-only: switch between user roles to test RBAC behavior.</p>
+    <div className="rounded-card border border-border/60 bg-background/70 p-sp-2 space-y-sp-2">
+      <div className="space-y-0.5">
+        <p className="text-caption font-medium uppercase tracking-wide text-muted-foreground">Role simulation</p>
+        <h3 className="text-body-sm font-medium text-foreground">Auth Simulator</h3>
+        <p className="text-caption text-muted-foreground/80">Dev-only: switch between user roles to test RBAC behavior.</p>
       </div>
       <div className="space-y-1.5">
         <label className="text-body-sm font-medium text-foreground">Simulated role</label>
@@ -69,13 +70,13 @@ export function AuthSimulator() {
           </SelectContent>
         </Select>
       </div>
-      <Button onClick={handleApply} className="bg-accent text-accent-foreground hover:bg-accent/90">
+      <Button onClick={handleApply} variant="outline" className="w-full sm:w-auto">
         Apply Role
       </Button>
 
-      <div className="pt-2 border-t border-border space-y-1.5">
+      <div className="pt-sp-2 border-t border-border space-y-1.5">
         <h4 className="text-body-sm font-medium text-foreground">Estimate Regime Simulator</h4>
-        <p className="text-caption text-muted-foreground">Dev-only: switch regime for seeded demo projects regardless of role.</p>
+        <p className="text-caption text-muted-foreground/80">Dev-only: switch regime for seeded demo projects regardless of role.</p>
       </div>
 
       <div className="space-y-1.5">
@@ -111,6 +112,7 @@ export function AuthSimulator() {
       <Button
         onClick={handleApplyRegime}
         variant="outline"
+        className="w-full sm:w-auto"
         disabled={!regimeProjectId}
       >
         Apply Regime

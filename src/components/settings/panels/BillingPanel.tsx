@@ -4,7 +4,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Separator } from "@/components/ui/separator";
 import { SettingsSection } from "@/components/settings/SettingsSection";
 import { AlertTriangle, Coins, CreditCard, Sparkles } from "lucide-react";
 
@@ -27,12 +26,12 @@ export function BillingPanel() {
       <SettingsSection title="Billing & Credits" description="Manage your plan and AI credits.">
         {/* Plan card */}
         <Card>
-          <CardContent className="p-sp-2 flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-accent/10 flex items-center justify-center shrink-0">
+          <CardContent className="p-1.5 px-sp-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="h-9 w-9 rounded-panel bg-accent/10 flex items-center justify-center shrink-0">
               <Sparkles className="h-5 w-5 text-accent" />
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
+            <div className="flex-1 min-w-0 space-y-0.5">
+              <div className="flex items-center gap-1.5">
                 <p className="text-body font-semibold text-foreground">
                   {PLAN_LABELS[user.plan] || user.plan} plan
                 </p>
@@ -40,11 +39,9 @@ export function BillingPanel() {
               </div>
               <p className="text-caption text-muted-foreground">Your current subscription tier</p>
             </div>
-            <Button variant="outline" onClick={() => navigate("/pricing")}>Compare plans</Button>
+            <Button variant="outline" size="sm" className="w-full sm:w-auto sm:shrink-0" onClick={() => navigate("/pricing")}>Compare plans</Button>
           </CardContent>
         </Card>
-
-        <Separator />
 
         {/* Credits */}
         <div className="space-y-sp-2">
@@ -55,20 +52,20 @@ export function BillingPanel() {
 
           <div className="grid gap-sp-2 sm:grid-cols-2">
             <Card className="bg-muted/30">
-              <CardContent className="p-sp-2">
+              <CardContent className="p-1.5 px-sp-2 space-y-0.5">
                 <p className="text-caption text-muted-foreground">Free (daily)</p>
                 <p className="text-h3 font-bold text-foreground">{user.credits_free}</p>
               </CardContent>
             </Card>
             <Card className="bg-muted/30">
-              <CardContent className="p-sp-2">
+              <CardContent className="p-1.5 px-sp-2 space-y-0.5">
                 <p className="text-caption text-muted-foreground">Paid</p>
                 <p className="text-h3 font-bold text-foreground">{user.credits_paid}</p>
               </CardContent>
             </Card>
           </div>
 
-          <div className="space-y-1">
+          <div className="rounded-panel bg-muted/40 p-1.5 px-sp-2 space-y-1.5">
             <div className="flex justify-between text-caption text-muted-foreground">
               <span>Total: {total}</span>
               <span>{maxCredits} max</span>
@@ -78,7 +75,7 @@ export function BillingPanel() {
 
           {isEmpty && (
             <Card className="border-warning/30 bg-warning/5">
-              <CardContent className="p-sp-2 flex items-center gap-3">
+              <CardContent className="p-1.5 px-sp-2 flex items-center gap-2">
                 <AlertTriangle className="h-5 w-5 text-warning shrink-0" />
                 <div>
                   <p className="text-body-sm font-medium text-foreground">No credits remaining</p>
@@ -88,10 +85,12 @@ export function BillingPanel() {
             </Card>
           )}
 
-          <Button onClick={() => navigate("/pricing")}>
-            <CreditCard className="h-4 w-4 mr-1.5" />
-            Purchase credits
-          </Button>
+          <div className="flex flex-wrap gap-sp-2 pt-sp-1">
+            <Button className="w-full sm:w-auto" onClick={() => navigate("/pricing")}>
+              <CreditCard className="h-4 w-4 mr-1.5" />
+              Purchase credits
+            </Button>
+          </div>
         </div>
       </SettingsSection>
     </div>

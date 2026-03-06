@@ -4,7 +4,6 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { SettingsSection } from "@/components/settings/SettingsSection";
 import { toast } from "@/hooks/use-toast";
 
@@ -81,16 +80,14 @@ export function NotificationsPanel() {
         </div>
       </SettingsSection>
 
-      <Separator />
-
       <SettingsSection title="Event preferences" description="Choose which events trigger notifications.">
         <div className="space-y-sp-2">
           {groups.map((group, gi) => (
-            <div key={group.title} className="space-y-1.5">
+            <div key={group.title} className="rounded-card bg-background/60 p-sp-2 space-y-1.5">
               <p className="text-body-sm font-medium text-foreground">{group.title}</p>
               {group.items.map((item, ii) => (
-                <div key={item.key} className="flex items-center justify-between py-1">
-                  <span className="text-caption text-muted-foreground">{item.label}</span>
+                <div key={item.key} className="flex items-center justify-between gap-sp-2 py-1">
+                  <span className="min-w-0 flex-1 text-caption text-muted-foreground">{item.label}</span>
                   <Switch checked={item.enabled} onCheckedChange={() => toggleItem(gi, ii)} />
                 </div>
               ))}
@@ -99,11 +96,9 @@ export function NotificationsPanel() {
         </div>
       </SettingsSection>
 
-      <Separator />
-
       <SettingsSection title="Digest frequency" description="How often to receive email digests.">
         <Select value={digest} onValueChange={setDigest}>
-          <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-full sm:w-48"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="instant">Instant</SelectItem>
             <SelectItem value="daily">Daily</SelectItem>
@@ -112,7 +107,9 @@ export function NotificationsPanel() {
         </Select>
       </SettingsSection>
 
-      <Button onClick={() => toast({ title: "Notification preferences saved" })}>Save preferences</Button>
+      <div className="flex flex-wrap gap-sp-2 pt-sp-1">
+        <Button className="w-full sm:w-auto" onClick={() => toast({ title: "Notification preferences saved" })}>Save preferences</Button>
+      </div>
     </div>
   );
 }
