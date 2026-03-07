@@ -3,6 +3,7 @@ import type {
   Document, Media, Event, Notification, ContractorProposal, EstimateVersion, EstimateItem,
 } from "@/types/entities";
 import { moveEstimateItemToStage, deleteEstimateItemsForTask, deleteEstimateItemsBySourceId } from "@/data/estimate-store";
+import { getCachedWorkspaceUser } from "@/data/workspace-profile-cache";
 import {
   seedUser, seedProjects, seedMembers, seedStages, seedTasks,
   seedEstimates, seedProcurementItems, seedDocuments, seedMedia,
@@ -42,7 +43,7 @@ export function getCurrentUser(): User {
 }
 
 export function getUserById(id: string): User | undefined {
-  return allUsers.find((u) => u.id === id);
+  return getCachedWorkspaceUser(id) ?? allUsers.find((u) => u.id === id);
 }
 
 export function getProjects(): Project[] {

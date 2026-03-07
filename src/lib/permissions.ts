@@ -1,5 +1,8 @@
 import type { MemberRole, AIAccess } from "@/types/entities";
-import { getMembers, getCurrentUser } from "@/data/store";
+import {
+  useWorkspaceCurrentUser,
+  useWorkspaceProjectMembers,
+} from "@/hooks/use-workspace-source";
 
 export type Action =
   | "ai.generate"
@@ -28,8 +31,8 @@ export function can(role: MemberRole, action: Action, aiAccess?: AIAccess): bool
 }
 
 export function usePermission(projectId: string) {
-  const user = getCurrentUser();
-  const members = getMembers(projectId);
+  const user = useWorkspaceCurrentUser();
+  const members = useWorkspaceProjectMembers(projectId);
   const membership = members.find((m) => m.user_id === user.id);
   const role: MemberRole = membership?.role ?? "viewer";
   const aiAccess: AIAccess = membership?.ai_access ?? "none";

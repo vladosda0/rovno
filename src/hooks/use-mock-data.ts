@@ -2,6 +2,12 @@ import { useState, useEffect, useCallback } from "react";
 import * as store from "@/data/store";
 import { getProcurementItems, subscribeProcurement } from "@/data/procurement-store";
 import { getHRItems, getHRPayments, subscribeHR } from "@/data/hr-store";
+import {
+  useWorkspaceCurrentUser,
+  useWorkspaceProject,
+  useWorkspaceProjectMembers,
+  useWorkspaceProjects,
+} from "@/hooks/use-workspace-source";
 
 function useStoreSubscription<T>(getter: () => T): T {
   const [value, setValue] = useState(getter);
@@ -15,19 +21,17 @@ function useStoreSubscription<T>(getter: () => T): T {
 }
 
 export function useCurrentUser() {
-  return useStoreSubscription(store.getCurrentUser);
+  return useWorkspaceCurrentUser();
 }
 
 export function useProjects() {
-  return useStoreSubscription(store.getProjects);
+  return useWorkspaceProjects();
 }
 
 export function useProject(id: string) {
-  const getProject = useCallback(() => store.getProject(id), [id]);
-  const getMembers = useCallback(() => store.getMembers(id), [id]);
   const getStages = useCallback(() => store.getStages(id), [id]);
-  const project = useStoreSubscription(getProject);
-  const members = useStoreSubscription(getMembers);
+  const project = useWorkspaceProject(id);
+  const members = useWorkspaceProjectMembers(id);
   const stages = useStoreSubscription(getStages);
   return { project, members, stages };
 }

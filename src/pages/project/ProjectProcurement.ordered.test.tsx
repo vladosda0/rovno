@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { addProcurementItem } from "@/data/procurement-store";
 import {
@@ -14,14 +15,24 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import ProjectProcurement from "@/pages/project/ProjectProcurement";
 
 function renderProjectProcurement(projectId: string) {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+      },
+    },
+  });
+
   return render(
-    <TooltipProvider delayDuration={0}>
-      <MemoryRouter initialEntries={[`/project/${projectId}/procurement`]}>
-        <Routes>
-          <Route path="/project/:id/procurement" element={<ProjectProcurement />} />
-        </Routes>
-      </MemoryRouter>
-    </TooltipProvider>,
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider delayDuration={0}>
+        <MemoryRouter initialEntries={[`/project/${projectId}/procurement`]}>
+          <Routes>
+            <Route path="/project/:id/procurement" element={<ProjectProcurement />} />
+          </Routes>
+        </MemoryRouter>
+      </TooltipProvider>
+    </QueryClientProvider>,
   );
 }
 
