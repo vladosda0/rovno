@@ -3,6 +3,10 @@ import * as store from "@/data/store";
 import { getProcurementItems, subscribeProcurement } from "@/data/procurement-store";
 import { getHRItems, getHRPayments, subscribeHR } from "@/data/hr-store";
 import {
+  usePlanningProjectStages,
+  usePlanningProjectTasks,
+} from "@/hooks/use-planning-source";
+import {
   useWorkspaceCurrentUser,
   useWorkspaceProject,
   useWorkspaceProjectMembers,
@@ -29,16 +33,14 @@ export function useProjects() {
 }
 
 export function useProject(id: string) {
-  const getStages = useCallback(() => store.getStages(id), [id]);
   const project = useWorkspaceProject(id);
   const members = useWorkspaceProjectMembers(id);
-  const stages = useStoreSubscription(getStages);
+  const stages = usePlanningProjectStages(id);
   return { project, members, stages };
 }
 
 export function useTasks(projectId: string) {
-  const getter = useCallback(() => store.getTasks(projectId), [projectId]);
-  return useStoreSubscription(getter);
+  return usePlanningProjectTasks(projectId);
 }
 
 export function useEstimate(projectId: string) {
