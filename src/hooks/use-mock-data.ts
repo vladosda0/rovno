@@ -3,6 +3,10 @@ import * as store from "@/data/store";
 import { getProcurementItems, subscribeProcurement } from "@/data/procurement-store";
 import { getHRItems, getHRPayments, subscribeHR } from "@/data/hr-store";
 import {
+  useProjectDocuments,
+  useProjectMedia,
+} from "@/hooks/use-documents-media-source";
+import {
   usePlanningProjectStages,
   usePlanningProjectTasks,
 } from "@/hooks/use-planning-source";
@@ -98,13 +102,11 @@ export function useHRPayments(projectId: string) {
 }
 
 export function useDocuments(projectId: string) {
-  const getter = useCallback(() => store.getDocuments(projectId), [projectId]);
-  return useStoreSubscription(getter);
+  return useProjectDocuments(projectId);
 }
 
 export function useMedia(projectId: string) {
-  const getter = useCallback(() => store.getMedia(projectId), [projectId]);
-  return useStoreSubscription(getter);
+  return useProjectMedia(projectId);
 }
 
 export function useEvents(projectId: string) {
