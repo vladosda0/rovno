@@ -1,6 +1,10 @@
 <!-- Generated file. Read-only. Regenerate from rovno-db. -->
 <!-- Secondary summary view. Structured JSON and mirrored SQL are authoritative over this markdown. -->
 
+DO NOT EDIT.
+
+Generated from rovno-db/scripts/generate-backend-truth.mjs
+
 # Backend Truth
 
 This directory is fully generated from a curated subset of `rovno-db` migrations.
