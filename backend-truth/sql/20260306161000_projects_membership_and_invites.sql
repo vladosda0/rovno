@@ -32,7 +32,7 @@ create table public.project_members (
   credit_limit integer not null default 0 check (credit_limit >= 0),
   used_credits integer not null default 0 check (used_credits >= 0),
   joined_at timestamptz not null default now(),
-  constraint project_members_viewer_role_regime_check check (
+  constraint project_members_viewer_regime_check check (
     (role = 'viewer' and viewer_regime is not null)
     or (role <> 'viewer' and viewer_regime is null)
   ),
@@ -56,7 +56,7 @@ create table public.project_invites (
   accepted_profile_id uuid references public.profiles(id) on delete set null,
   created_at timestamptz not null default now(),
   accepted_at timestamptz,
-  constraint project_invites_viewer_role_regime_check check (
+  constraint project_invites_viewer_regime_check check (
     (role = 'viewer' and viewer_regime is not null)
     or (role <> 'viewer' and viewer_regime is null)
   ),

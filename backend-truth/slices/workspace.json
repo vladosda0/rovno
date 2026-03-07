@@ -943,7 +943,7 @@
         },
         {
           "type": "check",
-          "name": "project_members_viewer_role_regime_check",
+          "name": "project_members_viewer_regime_check",
           "columns": [],
           "expression": "(role = 'viewer' and viewer_regime is not null)\n    or (role <> 'viewer' and viewer_regime is null)",
           "usingIndex": null,
@@ -1206,7 +1206,7 @@
         },
         {
           "type": "check",
-          "name": "project_invites_viewer_role_regime_check",
+          "name": "project_invites_viewer_regime_check",
           "columns": [],
           "expression": "(role = 'viewer' and viewer_regime is not null)\n    or (role <> 'viewer' and viewer_regime is null)",
           "usingIndex": null,
@@ -1728,7 +1728,7 @@
           "roles": [
             "authenticated"
           ],
-          "using": "profiles.id = auth.uid()\n  or exists (\n    select 1\n    from public.projects p\n    where p.owner_profile_id = auth.uid()\n      and (\n        p.owner_profile_id = profiles.id\n        or exists (\n          select 1\n          from public.project_members pm_target\n          where pm_target.project_id = p.id\n            and pm_target.profile_id = profiles.id\n        )\n      )\n  )\n  or exists (\n    select 1\n    from public.project_members pm_self\n    join public.projects p\n      on p.id = pm_self.project_id\n    where pm_self.profile_id = auth.uid()\n      and p.owner_profile_id = profiles.id\n  )",
+          "using": "id = auth.uid()\n  or exists (\n    select 1\n    from public.projects p\n    where p.owner_profile_id = auth.uid()\n      and (\n        p.owner_profile_id = id\n        or exists (\n          select 1\n          from public.project_members pm_target\n          where pm_target.project_id = p.id\n            and pm_target.profile_id = id\n        )\n      )\n  )\n  or exists (\n    select 1\n    from public.project_members pm_self\n    join public.projects p\n      on p.id = pm_self.project_id\n    where pm_self.profile_id = auth.uid()\n      and p.owner_profile_id = id\n  )",
           "withCheck": null,
           "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
         },
@@ -1741,7 +1741,7 @@
             "authenticated"
           ],
           "using": null,
-          "withCheck": "profiles.id = auth.uid()",
+          "withCheck": "id = auth.uid()",
           "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
         },
         {
@@ -1752,8 +1752,8 @@
           "roles": [
             "authenticated"
           ],
-          "using": "profiles.id = auth.uid()",
-          "withCheck": "profiles.id = auth.uid()",
+          "using": "id = auth.uid()",
+          "withCheck": "id = auth.uid()",
           "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
         }
       ]

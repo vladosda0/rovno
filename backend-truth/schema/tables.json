@@ -933,7 +933,7 @@
         },
         {
           "type": "check",
-          "name": "project_members_viewer_role_regime_check",
+          "name": "project_members_viewer_regime_check",
           "columns": [],
           "expression": "(role = 'viewer' and viewer_regime is not null)\n    or (role <> 'viewer' and viewer_regime is null)",
           "usingIndex": null,
@@ -1196,7 +1196,7 @@
         },
         {
           "type": "check",
-          "name": "project_invites_viewer_role_regime_check",
+          "name": "project_invites_viewer_regime_check",
           "columns": [],
           "expression": "(role = 'viewer' and viewer_regime is not null)\n    or (role <> 'viewer' and viewer_regime is null)",
           "usingIndex": null,

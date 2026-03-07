@@ -22,7 +22,7 @@ export const manifest = {
     },
     {
       "path": "supabase/migrations/20260306161000_projects_membership_and_invites.sql",
-      "sha256": "30a24d7eca4c5bfa30d2085d24bb0c273191344df04f8c9319c6f9adbec261a0"
+      "sha256": "be19f6f62f40bae5e423a4ea69d67f66775c7102e252ae76431f992404becffe"
     },
     {
       "path": "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql",
@@ -62,7 +62,7 @@ export const manifest = {
     },
     {
       "path": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
-      "sha256": "8f4e1648f7988ed979b5fe290602048a4ab60d10b6172ac27f8ffbd74478504d"
+      "sha256": "76a722d8f372d66064cb79a153d32625ca62359e02858be875b61e207316a709"
     }
   ],
   "generated_artifacts": [
@@ -1055,7 +1055,7 @@ export const tables = {
         },
         {
           "type": "check",
-          "name": "project_members_viewer_role_regime_check",
+          "name": "project_members_viewer_regime_check",
           "columns": [],
           "expression": "(role = 'viewer' and viewer_regime is not null)\n    or (role <> 'viewer' and viewer_regime is null)",
           "usingIndex": null,
@@ -1318,7 +1318,7 @@ export const tables = {
         },
         {
           "type": "check",
-          "name": "project_invites_viewer_role_regime_check",
+          "name": "project_invites_viewer_regime_check",
           "columns": [],
           "expression": "(role = 'viewer' and viewer_regime is not null)\n    or (role <> 'viewer' and viewer_regime is null)",
           "usingIndex": null,
@@ -7313,7 +7313,7 @@ export const checks = {
       "schema": "public",
       "table": "project_members",
       "column": null,
-      "constraintName": "project_members_viewer_role_regime_check",
+      "constraintName": "project_members_viewer_regime_check",
       "kind": "expression",
       "allowedValues": null,
       "expression": "(role = 'viewer' and viewer_regime is not null)\n    or (role <> 'viewer' and viewer_regime is null)",
@@ -7391,7 +7391,7 @@ export const checks = {
       "schema": "public",
       "table": "project_invites",
       "column": null,
-      "constraintName": "project_invites_viewer_role_regime_check",
+      "constraintName": "project_invites_viewer_regime_check",
       "kind": "expression",
       "allowedValues": null,
       "expression": "(role = 'viewer' and viewer_regime is not null)\n    or (role <> 'viewer' and viewer_regime is null)",
@@ -8359,7 +8359,7 @@ export const rls = {
           "roles": [
             "authenticated"
           ],
-          "using": "profiles.id = auth.uid()\n  or exists (\n    select 1\n    from public.projects p\n    where p.owner_profile_id = auth.uid()\n      and (\n        p.owner_profile_id = profiles.id\n        or exists (\n          select 1\n          from public.project_members pm_target\n          where pm_target.project_id = p.id\n            and pm_target.profile_id = profiles.id\n        )\n      )\n  )\n  or exists (\n    select 1\n    from public.project_members pm_self\n    join public.projects p\n      on p.id = pm_self.project_id\n    where pm_self.profile_id = auth.uid()\n      and p.owner_profile_id = profiles.id\n  )",
+          "using": "id = auth.uid()\n  or exists (\n    select 1\n    from public.projects p\n    where p.owner_profile_id = auth.uid()\n      and (\n        p.owner_profile_id = id\n        or exists (\n          select 1\n          from public.project_members pm_target\n          where pm_target.project_id = p.id\n            and pm_target.profile_id = id\n        )\n      )\n  )\n  or exists (\n    select 1\n    from public.project_members pm_self\n    join public.projects p\n      on p.id = pm_self.project_id\n    where pm_self.profile_id = auth.uid()\n      and p.owner_profile_id = id\n  )",
           "withCheck": null,
           "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
         },
@@ -8372,7 +8372,7 @@ export const rls = {
             "authenticated"
           ],
           "using": null,
-          "withCheck": "profiles.id = auth.uid()",
+          "withCheck": "id = auth.uid()",
           "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
         },
         {
@@ -8383,8 +8383,8 @@ export const rls = {
           "roles": [
             "authenticated"
           ],
-          "using": "profiles.id = auth.uid()",
-          "withCheck": "profiles.id = auth.uid()",
+          "using": "id = auth.uid()",
+          "withCheck": "id = auth.uid()",
           "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
         }
       ]

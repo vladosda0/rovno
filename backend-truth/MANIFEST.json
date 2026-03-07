@@ -18,7 +18,7 @@
     },
     {
       "path": "supabase/migrations/20260306161000_projects_membership_and_invites.sql",
-      "sha256": "30a24d7eca4c5bfa30d2085d24bb0c273191344df04f8c9319c6f9adbec261a0"
+      "sha256": "be19f6f62f40bae5e423a4ea69d67f66775c7102e252ae76431f992404becffe"
     },
     {
       "path": "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql",
@@ -58,7 +58,7 @@
     },
     {
       "path": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
-      "sha256": "8f4e1648f7988ed979b5fe290602048a4ab60d10b6172ac27f8ffbd74478504d"
+      "sha256": "76a722d8f372d66064cb79a153d32625ca62359e02858be875b61e207316a709"
     }
   ],
   "generated_artifacts": [

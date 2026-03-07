@@ -126,18 +126,18 @@ create policy profiles_select on public.profiles
 for select
 to authenticated
 using (
-  profiles.id = auth.uid()
+  id = auth.uid()
   or exists (
     select 1
     from public.projects p
     where p.owner_profile_id = auth.uid()
       and (
-        p.owner_profile_id = profiles.id
+        p.owner_profile_id = id
         or exists (
           select 1
           from public.project_members pm_target
           where pm_target.project_id = p.id
-            and pm_target.profile_id = profiles.id
+            and pm_target.profile_id = id
         )
       )
   )
@@ -147,20 +147,20 @@ using (
     join public.projects p
       on p.id = pm_self.project_id
     where pm_self.profile_id = auth.uid()
-      and p.owner_profile_id = profiles.id
+      and p.owner_profile_id = id
   )
 );
 
 create policy profiles_insert on public.profiles
 for insert
 to authenticated
-with check (profiles.id = auth.uid());
+with check (id = auth.uid());
 
 create policy profiles_update on public.profiles
 for update
 to authenticated
-using (profiles.id = auth.uid())
-with check (profiles.id = auth.uid());
+using (id = auth.uid())
+with check (id = auth.uid());
 
 create policy profile_settings_select on public.profile_settings
 for select
