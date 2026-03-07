@@ -13,6 +13,7 @@ import {
 import { __unsafeResetInventoryForTests, ensureDefaultLocation } from "@/data/inventory-store";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import ProjectProcurement from "@/pages/project/ProjectProcurement";
+import { clearDemoSession, enterDemoSession, setAuthRole } from "@/lib/auth-state";
 
 function renderProjectProcurement(projectId: string) {
   const queryClient = new QueryClient({
@@ -89,6 +90,9 @@ describe("ProjectProcurement Ordered tab", () => {
     __unsafeResetOrdersForTests();
     __unsafeResetInventoryForTests();
     window.sessionStorage.clear();
+    clearDemoSession();
+    enterDemoSession("project-1");
+    setAuthRole("owner");
   });
 
   it("shows Receive action and partial warning tooltip without 'of X' text", async () => {

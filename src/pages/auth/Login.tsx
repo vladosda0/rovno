@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { toast } from "@/hooks/use-toast";
-import { setAuthRole, isOnboarded } from "@/lib/auth-state";
+import { clearDemoSession, isOnboarded, setAuthRole, setStoredAuthProfile } from "@/lib/auth-state";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -22,6 +22,11 @@ export default function Login() {
     setLoading(true);
     // Simulate login
     setTimeout(() => {
+      clearDemoSession();
+      setStoredAuthProfile({
+        email,
+        name: email.split("@")[0]?.replace(/[._-]+/g, " ").trim() || "Workspace User",
+      });
       setAuthRole("owner");
       toast({ title: "Welcome back!", description: "Signed in successfully." });
       navigate(isOnboarded() ? "/home" : "/onboarding");

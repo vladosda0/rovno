@@ -1,7 +1,8 @@
 import { Outlet, useLocation } from "react-router-dom";
-import { Suspense, lazy, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { PanelLeft } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
+import { subscribePhotoConsult } from "@/lib/photo-consult-store";
 
 const AISidebar = lazy(() =>
   import("@/components/AISidebar").then((module) => ({ default: module.AISidebar })),
@@ -14,6 +15,14 @@ export default function AppLayout() {
   const location = useLocation();
 
   const hideAi = HIDE_AI_ROUTES.some((r) => location.pathname.startsWith(r));
+
+  useEffect(() => {
+    return subscribePhotoConsult(({ context }) => {
+      if (context && !hideAi) {
+        setAiSidebarCollapsed(false);
+      }
+    });
+  }, [hideAi]);
 
   return (
     <div className="flex flex-col min-h-screen w-full">

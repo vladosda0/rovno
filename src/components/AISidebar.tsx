@@ -51,7 +51,7 @@ import type { Event } from "@/types/entities";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { getProfileAutomationLevelMode, isAuthenticated, setProfileAutomationLevelMode } from "@/lib/auth-state";
 import {
-  subscribePhotoConsult, closePhotoConsult, buildConsultPrompt,
+  subscribePhotoConsult, closePhotoConsult, buildConsultPrompt, getPhotoConsultContext,
   type PhotoConsultContext,
 } from "@/lib/photo-consult-store";
 import {
@@ -196,9 +196,49 @@ interface ProposalQueueState {
   executionErrorByItemId: Record<string, string>;
 }
 
+interface ScopedAISidebarState {
+  messages: AIMessage[];
+  workLogs: WorkLogEntry[];
+  proposalQueue: ProposalQueueState | null;
+  pendingGeneralProposalInput: string | null;
+  inputValue: string;
+  proposalExecutionLinks: Record<string, ProposalExecutionGroupMeta>;
+  photoConsult: PhotoConsultContext | null;
+  photoAnalysis: PhotoAnalysisResult | null;
+  suggestedActions: ProposalChange[];
+  selectedActions: number[];
+}
+
 interface AISidebarProps {
   collapsed: boolean;
   onCollapsedChange: (next: boolean) => void;
+}
+
+const scopedSidebarStateByKey = new Map<string, ScopedAISidebarState>();
+
+function getSidebarScopeKey(pathname: string): string {
+  if (pathname.startsWith("/project/")) {
+    return `project:${pathname.split("/")[2] ?? ""}`;
+  }
+  if (pathname === "/home") {
+    return "home";
+  }
+  return "global";
+}
+
+function createEmptyScopedSidebarState(): ScopedAISidebarState {
+  return {
+    messages: [],
+    workLogs: [],
+    proposalQueue: null,
+    pendingGeneralProposalInput: null,
+    inputValue: "",
+    proposalExecutionLinks: {},
+    photoConsult: null,
+    photoAnalysis: null,
+    suggestedActions: [],
+    selectedActions: [],
+  };
 }
 
 // Photo consult AI analysis mock result
@@ -345,6 +385,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const isProjectContext = location.pathname.startsWith("/project/");
   const isHomeContext = location.pathname === "/home";
   const projectId = isProjectContext ? location.pathname.split("/")[2] : "";
+  const scopeKey = useMemo(() => getSidebarScopeKey(location.pathname), [location.pathname]);
 
   const isGuest = !isAuthenticated();
   const user = useCurrentUser();
@@ -383,6 +424,9 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const composerTextareaRef = useRef<HTMLTextAreaElement>(null);
   const voiceTimersRef = useRef<number[]>([]);
   const regenerateTimersRef = useRef<number[]>([]);
+  const photoAnalysisTimerRef = useRef<number | null>(null);
+  const previousScopeKeyRef = useRef(scopeKey);
+  const latestScopedStateRef = useRef<ScopedAISidebarState>(createEmptyScopedSidebarState());
   const [highlightedEventIds, setHighlightedEventIds] = useState<Set<string>>(new Set());
   const [proposalExecutionLinks, setProposalExecutionLinks] = useState<Record<string, ProposalExecutionGroupMeta>>({});
   const [expandedProposalEventIds, setExpandedProposalEventIds] = useState<Set<string>>(new Set());
@@ -399,88 +443,12 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const [suggestedActions, setSuggestedActions] = useState<ProposalChange[]>([]);
   const [selectedActions, setSelectedActions] = useState<Set<number>>(new Set());
 
-  // Subscribe to photo consult events
-  useEffect(() => {
-    return subscribePhotoConsult((ctx) => {
-      if (ctx) {
-        setPhotoConsult(ctx);
-        setPhotoAnalysis(null);
-        setSuggestedActions([]);
-        setSelectedActions(new Set());
-        onCollapsedChange(false);
-
-        // Prefill the prompt
-        const prompt = buildConsultPrompt(ctx);
-        setInputValue(prompt);
-
-        // Auto-run analysis
-        setPhotoAnalysisLoading(true);
-        setTimeout(() => {
-          const analysis = mockPhotoAnalysis(ctx);
-          setPhotoAnalysis(analysis);
-          setPhotoAnalysisLoading(false);
-
-          const actions = buildSuggestedActions(ctx, analysis);
-          setSuggestedActions(actions);
-          // Select all by default
-          setSelectedActions(new Set(actions.map((_, i) => i)));
-        }, 2000);
-      } else {
-        setPhotoConsult(null);
-        setPhotoAnalysis(null);
-        setSuggestedActions([]);
-        setSelectedActions(new Set());
-      }
-    });
-  }, [onCollapsedChange]);
-
-  // Activity events
-  const allEvents = useEvents(projectId || "");
-  const events = useMemo(() => (isProjectContext ? allEvents : []), [isProjectContext, allEvents]);
-  const effectiveAutomationMode = useMemo<AutomationMode>(() => {
-    const projectMode = isProjectContext ? normalizeAutomationMode(project?.automation_level) : null;
-    if (projectMode) return projectMode;
-    const profileMode = normalizeAutomationMode(getProfileAutomationLevelMode());
-    return profileMode ?? "assisted";
-  }, [isProjectContext, project?.automation_level]);
-
-  useEffect(() => {
-    setMessages([]);
-    setWorkLogs(new Map());
-    setProposalQueue(null);
-    setPendingGeneralProposalInput(null);
-    setVoiceState("idle");
-    setRegeneratingMessageId(null);
-    voiceTimersRef.current.forEach((timerId) => {
-      window.clearTimeout(timerId);
-    });
-    voiceTimersRef.current = [];
-    regenerateTimersRef.current.forEach((timerId) => {
-      window.clearTimeout(timerId);
-    });
-    regenerateTimersRef.current = [];
-    if (location.pathname === "/home") {
-      setHomeProjectMode(GENERAL_MODE_VALUE);
+  const clearPhotoAnalysisTimer = useCallback(() => {
+    if (photoAnalysisTimerRef.current !== null) {
+      window.clearTimeout(photoAnalysisTimerRef.current);
+      photoAnalysisTimerRef.current = null;
     }
-    // Don't clear photo consult on navigation - it should persist
-  }, [location.pathname]);
-
-  useEffect(() => {
-    setAutomationMode(effectiveAutomationMode);
-  }, [effectiveAutomationMode]);
-
-  useEffect(() => {
-    initializedEventsRef.current = false;
-    knownEventIdsRef.current = new Set();
-    setHighlightedEventIds(new Set());
-    setProposalExecutionLinks({});
-    setExpandedProposalEventIds(new Set());
-    setExpandedDayKeys(new Set());
-  }, [projectId, isProjectContext]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, String(width));
-  }, [width]);
+  }, []);
 
   const clearVoiceTimers = useCallback(() => {
     voiceTimersRef.current.forEach((timerId) => {
@@ -496,12 +464,149 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     regenerateTimersRef.current = [];
   }, []);
 
+  const startPhotoConsult = useCallback((ctx: PhotoConsultContext) => {
+    clearPhotoAnalysisTimer();
+    setPhotoConsult(ctx);
+    setPhotoAnalysis(null);
+    setPhotoAnalysisLoading(true);
+    setSuggestedActions([]);
+    setSelectedActions(new Set());
+    setInputValue(buildConsultPrompt(ctx));
+
+    photoAnalysisTimerRef.current = window.setTimeout(() => {
+      const analysis = mockPhotoAnalysis(ctx);
+      const actions = buildSuggestedActions(ctx, analysis);
+      setPhotoAnalysis(analysis);
+      setPhotoAnalysisLoading(false);
+      setSuggestedActions(actions);
+      setSelectedActions(new Set(actions.map((_, index) => index)));
+      photoAnalysisTimerRef.current = null;
+    }, 2000);
+  }, [clearPhotoAnalysisTimer]);
+
+  useEffect(() => {
+    latestScopedStateRef.current = {
+      messages,
+      workLogs: Array.from(workLogs.values()),
+      proposalQueue,
+      pendingGeneralProposalInput,
+      inputValue,
+      proposalExecutionLinks,
+      photoConsult,
+      photoAnalysis,
+      suggestedActions,
+      selectedActions: Array.from(selectedActions),
+    };
+  }, [
+    inputValue,
+    messages,
+    pendingGeneralProposalInput,
+    photoAnalysis,
+    photoConsult,
+    proposalExecutionLinks,
+    proposalQueue,
+    selectedActions,
+    suggestedActions,
+    workLogs,
+  ]);
+
+  useEffect(() => {
+    const previousScopeKey = previousScopeKeyRef.current;
+    if (previousScopeKey !== scopeKey) {
+      scopedSidebarStateByKey.set(previousScopeKey, latestScopedStateRef.current);
+    }
+    previousScopeKeyRef.current = scopeKey;
+
+    clearVoiceTimers();
+    clearRegenerateTimers();
+    clearPhotoAnalysisTimer();
+
+    const nextState = scopedSidebarStateByKey.get(scopeKey) ?? createEmptyScopedSidebarState();
+    setMessages(nextState.messages);
+    setWorkLogs(new Map(nextState.workLogs.map((entry) => [entry.id, entry])));
+    setProposalQueue(nextState.proposalQueue);
+    setPendingGeneralProposalInput(nextState.pendingGeneralProposalInput);
+    setInputValue(nextState.inputValue);
+    setVoiceState("idle");
+    setRegeneratingMessageId(null);
+    if (scopeKey === "home") {
+      setHomeProjectMode(GENERAL_MODE_VALUE);
+    }
+    setProposalExecutionLinks(nextState.proposalExecutionLinks);
+    setPhotoConsult(nextState.photoConsult);
+    setPhotoAnalysis(nextState.photoAnalysis);
+    setPhotoAnalysisLoading(false);
+    setSuggestedActions(nextState.suggestedActions);
+    setSelectedActions(new Set(nextState.selectedActions));
+
+    const scopedPhotoConsult = projectId ? getPhotoConsultContext(projectId) : null;
+    if (!nextState.photoConsult && scopedPhotoConsult) {
+      startPhotoConsult(scopedPhotoConsult);
+    }
+  }, [
+    clearPhotoAnalysisTimer,
+    clearRegenerateTimers,
+    clearVoiceTimers,
+    projectId,
+    scopeKey,
+    startPhotoConsult,
+  ]);
+
+  useEffect(() => () => {
+    scopedSidebarStateByKey.set(previousScopeKeyRef.current, latestScopedStateRef.current);
+  }, []);
+
+  useEffect(() => {
+    return subscribePhotoConsult(({ projectId: consultProjectId, context }) => {
+      if (!projectId || consultProjectId !== projectId) return;
+      if (context) {
+        startPhotoConsult(context);
+        return;
+      }
+
+      clearPhotoAnalysisTimer();
+      setPhotoConsult(null);
+      setPhotoAnalysis(null);
+      setPhotoAnalysisLoading(false);
+      setSuggestedActions([]);
+      setSelectedActions(new Set());
+    });
+  }, [clearPhotoAnalysisTimer, projectId, startPhotoConsult]);
+
+  // Activity events
+  const allEvents = useEvents(projectId || "");
+  const events = useMemo(() => (isProjectContext ? allEvents : []), [isProjectContext, allEvents]);
+  const effectiveAutomationMode = useMemo<AutomationMode>(() => {
+    const projectMode = isProjectContext ? normalizeAutomationMode(project?.automation_level) : null;
+    if (projectMode) return projectMode;
+    const profileMode = normalizeAutomationMode(getProfileAutomationLevelMode());
+    return profileMode ?? "assisted";
+  }, [isProjectContext, project?.automation_level]);
+
+  useEffect(() => {
+    setAutomationMode(effectiveAutomationMode);
+  }, [effectiveAutomationMode]);
+
+  useEffect(() => {
+    initializedEventsRef.current = false;
+    knownEventIdsRef.current = new Set();
+    setHighlightedEventIds(new Set());
+    setExpandedProposalEventIds(new Set());
+    setExpandedStockUsedEventIds(new Set());
+    setExpandedDayKeys(new Set());
+  }, [projectId, isProjectContext]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, String(width));
+  }, [width]);
+
   useEffect(() => {
     return () => {
       clearVoiceTimers();
       clearRegenerateTimers();
+      clearPhotoAnalysisTimer();
     };
-  }, [clearRegenerateTimers, clearVoiceTimers]);
+  }, [clearPhotoAnalysisTimer, clearRegenerateTimers, clearVoiceTimers]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -537,6 +642,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
         : hasPhotoConsultActionWindow
           ? "photo_consult"
           : "none";
+  const showPhotoConsultCard = Boolean(photoConsult) && activeWindow !== "worklog" && activeWindow !== "proposal_queue";
   const isInputLocked = activeWindow !== "none";
   const showNearLimitIndicator = events.length >= 100;
   const automationLevel = AUTOMATION_MODE_TO_LEVEL[automationMode];
@@ -826,6 +932,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
 
     // Clear photo consult when sending (prompt was used)
     if (photoConsult) {
+      closePhotoConsult(photoConsult.photo.project_id);
       setPhotoConsult(null);
     }
 
@@ -1108,7 +1215,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     });
 
     toast({ title: "Changes applied", description: `${appliedCount} action${appliedCount !== 1 ? "s" : ""} committed.` });
-    closePhotoConsult();
+    closePhotoConsult(photoConsult.photo.project_id);
   }
 
   function handleConsultCancel() {
@@ -2076,7 +2183,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                     </div>
                   )}
 
-                  {activeWindow === "photo_consult" && photoConsult && (
+                  {showPhotoConsultCard && photoConsult && (
                     <div className="glass rounded-card p-2.5 space-y-2">
                       <div className="flex items-start gap-2">
                         <div className={`h-10 w-10 rounded-lg shrink-0 ${placeholderColors[0]} flex items-center justify-center`}>
@@ -2089,7 +2196,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                           </p>
                         </div>
                         <button
-                          onClick={() => closePhotoConsult()}
+                          onClick={() => closePhotoConsult(photoConsult.photo.project_id)}
                           className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors shrink-0"
                         >
                           <XIcon className="h-3.5 w-3.5" />

@@ -27,8 +27,8 @@ import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { useCurrentUser, useProjects } from "@/hooks/use-mock-data";
-import { isAuthenticated } from "@/lib/auth-state";
+import { seedProjects } from "@/data/seed";
+import { enterDemoSession, isAuthenticated } from "@/lib/auth-state";
 import { toast } from "@/hooks/use-toast";
 
 const THEME_KEY = "landing-theme";
@@ -877,8 +877,6 @@ function getPhotoActionClasses(kind: PhotoAction["kind"], isActive: boolean): st
 }
 
 export default function Landing() {
-  const projects = useProjects();
-  const currentUser = useCurrentUser();
   const isGuest = !isAuthenticated();
   const createProjectTo = isGuest ? "/auth/signup" : "/home";
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -944,10 +942,7 @@ export default function Landing() {
   const docClausePulseTimerRef = useRef<number | null>(null);
   const prepareCleanDocTimerRef = useRef<number | null>(null);
 
-  const demoProjects = useMemo(
-    () => projects.filter((project) => project.owner_id === currentUser.id).slice(0, 3),
-    [projects, currentUser.id],
-  );
+  const demoProjects = useMemo(() => seedProjects.slice(0, 3), []);
 
   const procurementView = useMemo(
     () =>
@@ -1710,6 +1705,7 @@ export default function Landing() {
                 <Link
                   key={project.id}
                   to={`/project/${project.id}/dashboard`}
+                  onClick={() => enterDemoSession(project.id)}
                   className="group overflow-hidden rounded-card border border-border bg-card/50 transition-all duration-150 hover:-translate-y-0.5 hover:scale-[1.01] hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 >
                   <div className="relative h-40 overflow-hidden rounded-t-card isolate bg-muted">

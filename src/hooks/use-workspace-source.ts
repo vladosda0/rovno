@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useSyncExternalStore } from "react";
 import {
   getWorkspaceSource,
   isSupabaseWorkspaceRequested,
@@ -8,11 +9,12 @@ import {
 } from "@/data/workspace-source";
 import type { Member, Project, User } from "@/types/entities";
 import * as store from "@/data/store";
+import { getAuthStateSnapshot, isDemoSessionActive, subscribeAuthState } from "@/lib/auth-state";
 
 const WORKSPACE_QUERY_STALE_TIME_MS = 60_000;
 
 type PendingWorkspaceMode = { kind: "pending-supabase" };
-type WorkspaceModeState = WorkspaceMode | PendingWorkspaceMode;
+export type WorkspaceModeState = WorkspaceMode | PendingWorkspaceMode;
 
 export const EMPTY_WORKSPACE_USER: User = {
   id: "",
@@ -35,7 +37,9 @@ export const workspaceQueryKeys = {
 };
 
 function useWorkspaceModeState(): WorkspaceModeState {
-  const supabaseRequested = isSupabaseWorkspaceRequested();
+  useSyncExternalStore(subscribeAuthState, getAuthStateSnapshot);
+  const demoSessionActive = isDemoSessionActive();
+  const supabaseRequested = !demoSessionActive && isSupabaseWorkspaceRequested();
   const modeQuery = useQuery({
     queryKey: workspaceQueryKeys.mode(),
     queryFn: resolveWorkspaceMode,
@@ -43,11 +47,19 @@ function useWorkspaceModeState(): WorkspaceModeState {
     staleTime: WORKSPACE_QUERY_STALE_TIME_MS,
   });
 
-  if (!supabaseRequested) {
+  if (demoSessionActive) {
     return { kind: "demo" };
   }
 
+  if (!supabaseRequested) {
+    return { kind: "local" };
+  }
+
   return modeQuery.data ?? { kind: "pending-supabase" };
+}
+
+export function useWorkspaceMode(): WorkspaceModeState {
+  return useWorkspaceModeState();
 }
 
 export function useWorkspaceCurrentUser(): User {
@@ -65,7 +77,7 @@ export function useWorkspaceCurrentUser(): User {
     staleTime: WORKSPACE_QUERY_STALE_TIME_MS,
   });
 
-  if (mode.kind === "demo") {
+  if (mode.kind === "demo" || mode.kind === "local") {
     return store.getCurrentUser();
   }
 
@@ -87,7 +99,7 @@ export function useWorkspaceProjects(): Project[] {
     staleTime: WORKSPACE_QUERY_STALE_TIME_MS,
   });
 
-  if (mode.kind === "demo") {
+  if (mode.kind === "demo" || mode.kind === "local") {
     return store.getProjects();
   }
 
@@ -109,7 +121,7 @@ export function useWorkspaceProject(projectId: string): Project | undefined {
     staleTime: WORKSPACE_QUERY_STALE_TIME_MS,
   });
 
-  if (mode.kind === "demo") {
+  if (mode.kind === "demo" || mode.kind === "local") {
     return store.getProject(projectId);
   }
 
@@ -131,7 +143,7 @@ export function useWorkspaceProjectMembers(projectId: string): Member[] {
     staleTime: WORKSPACE_QUERY_STALE_TIME_MS,
   });
 
-  if (mode.kind === "demo") {
+  if (mode.kind === "demo" || mode.kind === "local") {
     return store.getMembers(projectId);
   }
 
@@ -152,6 +164,10 @@ export function useWorkspaceProjectInvites(projectId: string): WorkspaceProjectI
     enabled: Boolean(supabaseMode && projectId),
     staleTime: WORKSPACE_QUERY_STALE_TIME_MS,
   });
+
+  if (mode.kind === "demo" || mode.kind === "local") {
+    return store.getProjectInvites(projectId);
+  }
 
   if (!supabaseMode) {
     return [];

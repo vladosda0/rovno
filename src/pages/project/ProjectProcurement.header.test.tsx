@@ -7,6 +7,7 @@ import ProjectProcurement from "@/pages/project/ProjectProcurement";
 import { addProcurementItem } from "@/data/procurement-store";
 import { __unsafeResetOrdersForTests } from "@/data/order-store";
 import { __unsafeResetInventoryForTests } from "@/data/inventory-store";
+import { clearDemoSession, enterDemoSession, setAuthRole } from "@/lib/auth-state";
 
 function renderProjectProcurement(projectId: string) {
   const queryClient = new QueryClient({
@@ -70,6 +71,9 @@ describe("ProjectProcurement header redesign", () => {
     __unsafeResetOrdersForTests();
     __unsafeResetInventoryForTests();
     window.sessionStorage.clear();
+    clearDemoSession();
+    enterDemoSession("project-1");
+    setAuthRole("owner");
   });
 
   it("renders KPI header + controls row with count-only tabs", () => {

@@ -17,15 +17,17 @@ export interface PlanningSource {
   getProjectTasks: (projectId: string) => Promise<Task[]>;
 }
 
-const demoPlanningSource: PlanningSource = {
-  mode: "demo",
-  async getProjectStages(projectId: string) {
-    return store.getStages(projectId);
-  },
-  async getProjectTasks(projectId: string) {
-    return store.getTasks(projectId);
-  },
-};
+function createBrowserPlanningSource(mode: "demo" | "local"): PlanningSource {
+  return {
+    mode,
+    async getProjectStages(projectId: string) {
+      return store.getStages(projectId);
+    },
+    async getProjectTasks(projectId: string) {
+      return store.getTasks(projectId);
+    },
+  };
+}
 
 export function mapProjectStageRowToStage(row: ProjectStageRow): Stage {
   return {
@@ -103,7 +105,7 @@ export async function getPlanningSource(
 ): Promise<PlanningSource> {
   const resolvedMode = mode ?? await resolveWorkspaceMode();
   if (resolvedMode.kind !== "supabase") {
-    return demoPlanningSource;
+    return createBrowserPlanningSource(resolvedMode.kind);
   }
 
   const supabase = await loadSupabaseClient();

@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { toast } from "@/hooks/use-toast";
-import { setAuthRole } from "@/lib/auth-state";
+import { clearDemoSession, setAuthRole, setStoredAuthProfile } from "@/lib/auth-state";
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -26,6 +26,11 @@ export default function Signup() {
     }
     setLoading(true);
     setTimeout(() => {
+      clearDemoSession();
+      setStoredAuthProfile({
+        email,
+        name,
+      });
       setAuthRole("owner");
       toast({ title: "Account created!", description: "Welcome to СтройАгент." });
       navigate("/onboarding");

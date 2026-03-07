@@ -8,7 +8,9 @@ import {
 } from "@/hooks/use-planning-source";
 import {
   useWorkspaceCurrentUser,
+  useWorkspaceMode,
   useWorkspaceProject,
+  useWorkspaceProjectInvites,
   useWorkspaceProjectMembers,
   useWorkspaceProjects,
 } from "@/hooks/use-workspace-source";
@@ -37,6 +39,10 @@ export function useProject(id: string) {
   const members = useWorkspaceProjectMembers(id);
   const stages = usePlanningProjectStages(id);
   return { project, members, stages };
+}
+
+export function useProjectInvites(projectId: string) {
+  return useWorkspaceProjectInvites(projectId);
 }
 
 export function useTasks(projectId: string) {
@@ -116,3 +122,4 @@ export function useNotifications() {
 }
 
 export { usePermission } from "@/lib/permissions";
+export { useWorkspaceMode };

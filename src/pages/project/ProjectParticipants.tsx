@@ -1,24 +1,38 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Users, Plus, MoreVertical, Shield, Eye, Wrench, Crown } from "lucide-react";
-import { useProject, useCurrentUser } from "@/hooks/use-mock-data";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Users, Plus, MoreVertical, Shield, Eye, Wrench, Crown, Mail } from "lucide-react";
+import { useCurrentUser, useProject, useProjectInvites, useWorkspaceMode } from "@/hooks/use-mock-data";
 import { usePermission } from "@/lib/permissions";
-import { addMember, addEvent, getCurrentUser, getUserById } from "@/data/store";
-import { allUsers } from "@/data/seed";
+import { addEvent, getUserById } from "@/data/store";
+import {
+  createWorkspaceProjectInvite,
+  updateWorkspaceProjectInvite,
+  updateWorkspaceProjectMemberRole,
+  type WorkspaceProjectInvite,
+} from "@/data/workspace-source";
+import { workspaceQueryKeys } from "@/hooks/use-workspace-source";
 import { EmptyState } from "@/components/EmptyState";
 import { ConfirmModal } from "@/components/ConfirmModal";
-import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "@/hooks/use-toast";
-import type { MemberRole, AIAccess } from "@/types/entities";
+import type { Member, MemberRole, AIAccess } from "@/types/entities";
 
 const roleIcons: Record<MemberRole, typeof Crown> = {
   owner: Crown,
@@ -40,12 +54,44 @@ const aiLabels: Record<AIAccess, string> = {
   project_pool: "Project pool",
 };
 
+type ViewerRegime = "contractor" | "client" | "build_myself";
+type RoleTarget =
+  | { kind: "member"; userId: string }
+  | { kind: "invite"; inviteId: string };
+
+function resolveViewerRegime(
+  role: MemberRole,
+  projectMode: "contractor" | "build_myself",
+): ViewerRegime | undefined {
+  if (role !== "viewer") return undefined;
+  return projectMode === "build_myself" ? "build_myself" : "client";
+}
+
+function inviteStatusLabel(status: WorkspaceProjectInvite["status"]) {
+  if (status === "pending") return "Pending";
+  if (status === "accepted") return "Accepted";
+  if (status === "expired") return "Expired";
+  return "Revoked";
+}
+
+function inviteStatusClassName(status: WorkspaceProjectInvite["status"]) {
+  if (status === "pending") return "bg-info/10 text-info";
+  if (status === "accepted") return "bg-success/10 text-success";
+  if (status === "expired") return "bg-warning/10 text-warning-foreground";
+  return "bg-muted text-muted-foreground";
+}
+
 export default function ProjectParticipants() {
   const { id } = useParams<{ id: string }>();
-  const { project, members } = useProject(id!);
-  const perm = usePermission(id!);
+  const projectId = id!;
+  const { project, members } = useProject(projectId);
+  const invites = useProjectInvites(projectId);
+  const perm = usePermission(projectId);
+  const workspaceMode = useWorkspaceMode();
+  const queryClient = useQueryClient();
   const currentUser = useCurrentUser();
-  const projectMode = project?.project_mode ?? "contractor";
+
+  const projectMode = project?.project_mode === "build_myself" ? "build_myself" : "contractor";
   const defaultViewerRegime = projectMode === "build_myself" ? "build_myself" : "client";
   const availableViewerRegimes = projectMode === "build_myself"
     ? (["build_myself", "contractor"] as const)
@@ -54,16 +100,13 @@ export default function ProjectParticipants() {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<MemberRole>("contractor");
-  const [inviteViewerRegime, setInviteViewerRegime] = useState<"contractor" | "client" | "build_myself">(defaultViewerRegime);
+  const [inviteViewerRegime, setInviteViewerRegime] = useState<ViewerRegime>(defaultViewerRegime);
   const [inviteAI, setInviteAI] = useState<AIAccess>("consult_only");
   const [inviteLimit, setInviteLimit] = useState("50");
 
   const [changeRoleOpen, setChangeRoleOpen] = useState(false);
-  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
+  const [roleTarget, setRoleTarget] = useState<RoleTarget | null>(null);
   const [newRole, setNewRole] = useState<MemberRole>("contractor");
-
-  const [removeOpen, setRemoveOpen] = useState(false);
-  const [removeMemberId, setRemoveMemberId] = useState<string | null>(null);
 
   useEffect(() => {
     if (projectMode === "build_myself" && inviteViewerRegime === "client") {
@@ -71,75 +114,226 @@ export default function ProjectParticipants() {
     }
   }, [inviteViewerRegime, projectMode]);
 
-  const canInvite = perm.can("member.invite");
+  const canInvite = perm.can("member.invite") && workspaceMode.kind !== "pending-supabase";
+  const workspaceKey = workspaceMode.kind === "supabase" ? workspaceMode.profileId : workspaceMode.kind;
+  const membersQueryKey = workspaceQueryKeys.projectMembers(workspaceKey, projectId);
+  const invitesQueryKey = workspaceQueryKeys.projectInvites(workspaceKey, projectId);
+
+  const memberEmailById = useMemo(
+    () =>
+      new Map(
+        members.map((member) => [member.user_id, getUserById(member.user_id)?.email?.toLowerCase() ?? ""]),
+      ),
+    [members],
+  );
+
+  const pendingInviteEmailSet = useMemo(
+    () => new Set(invites.filter((invite) => invite.status === "pending").map((invite) => invite.email.toLowerCase())),
+    [invites],
+  );
+
+  const createInviteMutation = useMutation({
+    mutationFn: async () => {
+      const trimmedEmail = inviteEmail.trim().toLowerCase();
+      return createWorkspaceProjectInvite(
+        workspaceMode.kind === "pending-supabase" ? { kind: "local" } : workspaceMode,
+        {
+          projectId,
+          email: trimmedEmail,
+          role: inviteRole,
+          aiAccess: inviteAI,
+          viewerRegime: inviteRole === "viewer" ? inviteViewerRegime : null,
+          creditLimit: parseInt(inviteLimit, 10) || 50,
+          invitedBy: currentUser.id,
+        },
+      );
+    },
+    onMutate: async () => {
+      if (workspaceMode.kind !== "supabase") return undefined;
+      await queryClient.cancelQueries({ queryKey: invitesQueryKey });
+      const previousInvites = queryClient.getQueryData<WorkspaceProjectInvite[]>(invitesQueryKey) ?? [];
+      const optimisticInvite: WorkspaceProjectInvite = {
+        id: `invite-optimistic-${Date.now()}`,
+        project_id: projectId,
+        email: inviteEmail.trim().toLowerCase(),
+        role: inviteRole,
+        ai_access: inviteAI,
+        viewer_regime: inviteRole === "viewer" ? inviteViewerRegime : null,
+        credit_limit: parseInt(inviteLimit, 10) || 50,
+        invited_by: currentUser.id,
+        status: "pending",
+        invite_token: `invite-token-optimistic-${Date.now()}`,
+        accepted_profile_id: null,
+        created_at: new Date().toISOString(),
+        accepted_at: null,
+      };
+      queryClient.setQueryData<WorkspaceProjectInvite[]>(invitesQueryKey, [optimisticInvite, ...previousInvites]);
+      return { previousInvites };
+    },
+    onSuccess: (createdInvite) => {
+      if (workspaceMode.kind !== "supabase") {
+        addEvent({
+          id: `evt-invite-${Date.now()}`,
+          project_id: projectId,
+          actor_id: currentUser.id,
+          type: "member_added",
+          object_type: "member",
+          object_id: createdInvite.id,
+          timestamp: new Date().toISOString(),
+          payload: { email: createdInvite.email, role: createdInvite.role, source: "invite" },
+        });
+      }
+
+      toast({
+        title: "Invitation sent",
+        description: `${createdInvite.email} invited as ${roleLabels[createdInvite.role]}.`,
+      });
+      setInviteOpen(false);
+      setInviteEmail("");
+      setInviteRole("contractor");
+      setInviteViewerRegime(defaultViewerRegime);
+      setInviteAI("consult_only");
+      setInviteLimit("50");
+    },
+    onError: (error, _variables, context) => {
+      if (workspaceMode.kind === "supabase" && context?.previousInvites) {
+        queryClient.setQueryData(invitesQueryKey, context.previousInvites);
+      }
+      toast({
+        title: "Invite failed",
+        description: error instanceof Error ? error.message : "Unable to invite participant.",
+        variant: "destructive",
+      });
+    },
+    onSettled: async () => {
+      if (workspaceMode.kind === "supabase") {
+        await queryClient.invalidateQueries({ queryKey: invitesQueryKey });
+      }
+    },
+  });
+
+  const memberRoleMutation = useMutation({
+    mutationFn: async (input: { userId: string; role: MemberRole }) => updateWorkspaceProjectMemberRole(
+      workspaceMode.kind === "pending-supabase" ? { kind: "local" } : workspaceMode,
+      {
+        projectId,
+        userId: input.userId,
+        role: input.role,
+        viewerRegime: resolveViewerRegime(input.role, projectMode),
+      },
+    ),
+    onMutate: async (input) => {
+      if (workspaceMode.kind !== "supabase") return undefined;
+      await queryClient.cancelQueries({ queryKey: membersQueryKey });
+      const previousMembers = queryClient.getQueryData<Member[]>(membersQueryKey) ?? [];
+      queryClient.setQueryData<Member[]>(membersQueryKey, previousMembers.map((member) =>
+        member.project_id === projectId && member.user_id === input.userId
+          ? { ...member, role: input.role, viewer_regime: resolveViewerRegime(input.role, projectMode) }
+          : member,
+      ));
+      return { previousMembers };
+    },
+    onSuccess: (member) => {
+      toast({ title: "Role updated", description: `${getUserById(member.user_id)?.name ?? "Member"} is now ${roleLabels[member.role]}.` });
+      setChangeRoleOpen(false);
+      setRoleTarget(null);
+    },
+    onError: (error, _variables, context) => {
+      if (workspaceMode.kind === "supabase" && context?.previousMembers) {
+        queryClient.setQueryData(membersQueryKey, context.previousMembers);
+      }
+      toast({
+        title: "Role update failed",
+        description: error instanceof Error ? error.message : "Unable to update member role.",
+        variant: "destructive",
+      });
+    },
+    onSettled: async () => {
+      if (workspaceMode.kind === "supabase") {
+        await queryClient.invalidateQueries({ queryKey: membersQueryKey });
+      }
+    },
+  });
+
+  const inviteRoleMutation = useMutation({
+    mutationFn: async (input: { inviteId: string; role: MemberRole }) => updateWorkspaceProjectInvite(
+      workspaceMode.kind === "pending-supabase" ? { kind: "local" } : workspaceMode,
+      {
+        id: input.inviteId,
+        projectId,
+        role: input.role,
+        viewerRegime: resolveViewerRegime(input.role, projectMode) ?? null,
+      },
+    ),
+    onMutate: async (input) => {
+      if (workspaceMode.kind !== "supabase") return undefined;
+      await queryClient.cancelQueries({ queryKey: invitesQueryKey });
+      const previousInvites = queryClient.getQueryData<WorkspaceProjectInvite[]>(invitesQueryKey) ?? [];
+      queryClient.setQueryData<WorkspaceProjectInvite[]>(invitesQueryKey, previousInvites.map((invite) =>
+        invite.id === input.inviteId
+          ? {
+              ...invite,
+              role: input.role,
+              viewer_regime: resolveViewerRegime(input.role, projectMode) ?? null,
+            }
+          : invite,
+      ));
+      return { previousInvites };
+    },
+    onSuccess: (invite) => {
+      toast({ title: "Role updated", description: `${invite.email} is now ${roleLabels[invite.role]}.` });
+      setChangeRoleOpen(false);
+      setRoleTarget(null);
+    },
+    onError: (error, _variables, context) => {
+      if (workspaceMode.kind === "supabase" && context?.previousInvites) {
+        queryClient.setQueryData(invitesQueryKey, context.previousInvites);
+      }
+      toast({
+        title: "Role update failed",
+        description: error instanceof Error ? error.message : "Unable to update invite role.",
+        variant: "destructive",
+      });
+    },
+    onSettled: async () => {
+      if (workspaceMode.kind === "supabase") {
+        await queryClient.invalidateQueries({ queryKey: invitesQueryKey });
+      }
+    },
+  });
 
   function handleInvite() {
-    if (!inviteEmail.trim()) return;
-
-    // Find or simulate user
-    const existingUser = allUsers.find((u) => u.email === inviteEmail.trim());
-    const userId = existingUser?.id ?? `user-invite-${Date.now()}`;
-
-    addMember({
-      project_id: id!,
-      user_id: userId,
-      role: inviteRole,
-      viewer_regime: inviteRole === "viewer" ? inviteViewerRegime : undefined,
-      ai_access: inviteAI,
-      credit_limit: parseInt(inviteLimit) || 50,
-      used_credits: 0,
-    });
-
-    addEvent({
-      id: `evt-invite-${Date.now()}`,
-      project_id: id!,
-      actor_id: currentUser.id,
-      type: "member_added",
-      object_type: "member",
-      object_id: userId,
-      timestamp: new Date().toISOString(),
-      payload: { name: existingUser?.name ?? inviteEmail, role: inviteRole },
-    });
-
-    if (inviteRole === "viewer") {
-      addEvent({
-        id: `evt-viewer-regime-${Date.now()}`,
-        project_id: id!,
-        actor_id: currentUser.id,
-        type: "estimate.viewer_regime_set",
-        object_type: "member",
-        object_id: userId,
-        timestamp: new Date().toISOString(),
-        payload: { regime: inviteViewerRegime },
-      });
+    const trimmedEmail = inviteEmail.trim().toLowerCase();
+    if (!trimmedEmail) return;
+    if (pendingInviteEmailSet.has(trimmedEmail)) {
+      toast({ title: "Already invited", description: "This email already has a pending invitation.", variant: "destructive" });
+      return;
+    }
+    const existingMember = Array.from(memberEmailById.values()).some((email) => email === trimmedEmail);
+    if (existingMember) {
+      toast({ title: "Already added", description: "This user is already a project participant.", variant: "destructive" });
+      return;
     }
 
-    toast({ title: "Member invited", description: `${existingUser?.name ?? inviteEmail} added as ${roleLabels[inviteRole]}.` });
-    setInviteOpen(false);
-    setInviteEmail("");
-    setInviteViewerRegime(defaultViewerRegime);
+    createInviteMutation.mutate();
   }
 
   function handleChangeRole() {
-    if (!selectedMemberId) return;
-    // In real app, update member role in store. For now, toast.
-    toast({ title: "Role updated", description: `Member role changed to ${roleLabels[newRole]}.` });
-    setChangeRoleOpen(false);
+    if (!roleTarget) return;
+    if (roleTarget.kind === "member") {
+      memberRoleMutation.mutate({ userId: roleTarget.userId, role: newRole });
+      return;
+    }
+
+    inviteRoleMutation.mutate({ inviteId: roleTarget.inviteId, role: newRole });
   }
 
-  function handleRemove() {
-    if (!removeMemberId) return;
-    // In real app, remove from store
-    toast({ title: "Member removed", description: "Member has been removed from the project." });
-    setRemoveOpen(false);
-  }
-
-  if (members.length === 0) {
+  if (members.length === 0 && invites.length === 0) {
     return (
       <EmptyState
         icon={Users}
         title="Participants"
-        description="No team members yet. Invite someone to get started."
+        description="No members or invites yet. Invite someone to get started."
         actionLabel={canInvite ? "Invite Member" : undefined}
         onAction={canInvite ? () => setInviteOpen(true) : undefined}
       />
@@ -151,71 +345,155 @@ export default function ProjectParticipants() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-h3 text-foreground">Participants</h2>
-          <p className="text-caption text-muted-foreground">{members.length} members</p>
+          <p className="text-caption text-muted-foreground">
+            {members.length} members · {invites.length} invitations
+          </p>
         </div>
         {canInvite && (
           <Button onClick={() => setInviteOpen(true)} className="bg-accent text-accent-foreground hover:bg-accent/90">
-            <Plus className="h-4 w-4 mr-1" /> Invite
+            <Plus className="mr-1 h-4 w-4" /> Invite
           </Button>
         )}
       </div>
 
-      <div className="glass rounded-card overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Member</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead>AI Access</TableHead>
-              <TableHead className="text-right">Credits</TableHead>
-              {canInvite && <TableHead className="w-10" />}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {members.map((member) => {
-              const memberUser = getUserById(member.user_id);
-              const RoleIcon = roleIcons[member.role];
-              const isPrivileged = member.role === "owner" || member.role === "co_owner";
-              const isSelf = member.user_id === currentUser.id;
+      <section className="space-y-2">
+        <div className="flex items-center gap-2">
+          <Users className="h-4 w-4 text-accent" />
+          <h3 className="text-body font-semibold text-foreground">Members</h3>
+        </div>
+        <div className="glass overflow-hidden rounded-card">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Member</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>AI Access</TableHead>
+                <TableHead className="text-right">Credits</TableHead>
+                {canInvite && <TableHead className="w-10" />}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {members.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={canInvite ? 5 : 4} className="text-center text-muted-foreground">
+                    No members yet.
+                  </TableCell>
+                </TableRow>
+              ) : members.map((member) => {
+                const memberUser = getUserById(member.user_id);
+                const RoleIcon = roleIcons[member.role];
+                const isPrivileged = member.role === "owner" || member.role === "co_owner";
+                const isSelf = member.user_id === currentUser.id;
 
-              return (
-                <TableRow key={member.user_id}>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <div className="h-7 w-7 rounded-full bg-accent/10 flex items-center justify-center text-caption font-semibold text-accent">
-                        {(memberUser?.name ?? "?").charAt(0)}
-                      </div>
-                      <div>
-                        <p className="text-body-sm font-medium text-foreground">
-                          {memberUser?.name ?? member.user_id}
-                          {isSelf && <span className="text-caption text-muted-foreground ml-1">(you)</span>}
-                        </p>
-                        <p className="text-caption text-muted-foreground">{memberUser?.email}</p>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1.5">
-                      <RoleIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="text-body-sm">{roleLabels[member.role]}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <span className={`text-caption font-medium px-2 py-0.5 rounded-pill ${
-                      member.ai_access === "project_pool" ? "bg-accent/10 text-accent"
-                        : member.ai_access === "consult_only" ? "bg-info/10 text-info"
-                        : "bg-muted text-muted-foreground"
-                    }`}>
-                      {aiLabels[member.ai_access]}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <span className="text-body-sm">{member.used_credits}</span>
-                    <span className="text-caption text-muted-foreground">/{member.credit_limit}</span>
-                  </TableCell>
-                  {canInvite && (
+                return (
+                  <TableRow key={member.user_id}>
                     <TableCell>
-                      {!isPrivileged && !isSelf && (
+                      <div className="flex items-center gap-2">
+                        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-accent/10 text-caption font-semibold text-accent">
+                          {(memberUser?.name ?? "?").charAt(0)}
+                        </div>
+                        <div>
+                          <p className="text-body-sm font-medium text-foreground">
+                            {memberUser?.name ?? member.user_id}
+                            {isSelf && <span className="ml-1 text-caption text-muted-foreground">(you)</span>}
+                          </p>
+                          <p className="text-caption text-muted-foreground">{memberUser?.email || "No email"}</p>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1.5">
+                        <RoleIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className="text-body-sm">{roleLabels[member.role]}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <span className={`rounded-pill px-2 py-0.5 text-caption font-medium ${
+                        member.ai_access === "project_pool"
+                          ? "bg-accent/10 text-accent"
+                          : member.ai_access === "consult_only"
+                            ? "bg-info/10 text-info"
+                            : "bg-muted text-muted-foreground"
+                      }`}>
+                        {aiLabels[member.ai_access]}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <span className="text-body-sm">{member.used_credits}</span>
+                      <span className="text-caption text-muted-foreground">/{member.credit_limit}</span>
+                    </TableCell>
+                    {canInvite && (
+                      <TableCell>
+                        {!isPrivileged && !isSelf && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-7 w-7">
+                                <MoreVertical className="h-3.5 w-3.5" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="glass-elevated rounded-card">
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setRoleTarget({ kind: "member", userId: member.user_id });
+                                  setNewRole(member.role);
+                                  setChangeRoleOpen(true);
+                                }}
+                              >
+                                <Shield className="mr-2 h-3.5 w-3.5" /> Change role
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                      </TableCell>
+                    )}
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+      </section>
+
+      <section className="space-y-2">
+        <div className="flex items-center gap-2">
+          <Mail className="h-4 w-4 text-accent" />
+          <h3 className="text-body font-semibold text-foreground">Invitations</h3>
+        </div>
+        <div className="glass overflow-hidden rounded-card">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Email</TableHead>
+                <TableHead>Invited by</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {invites.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center text-muted-foreground">
+                    No invitations yet.
+                  </TableCell>
+                </TableRow>
+              ) : invites.map((invite) => {
+                const inviter = getUserById(invite.invited_by);
+                const canEditInvite = canInvite && invite.status === "pending";
+                return (
+                  <TableRow key={invite.id}>
+                    <TableCell className="text-body-sm text-foreground">{invite.email}</TableCell>
+                    <TableCell className="text-body-sm text-muted-foreground">
+                      {inviter?.name ?? inviter?.email ?? invite.invited_by}
+                    </TableCell>
+                    <TableCell className="text-body-sm text-foreground">{roleLabels[invite.role]}</TableCell>
+                    <TableCell>
+                      <span className={`rounded-pill px-2 py-0.5 text-caption font-medium ${inviteStatusClassName(invite.status)}`}>
+                        {inviteStatusLabel(invite.status)}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      {canEditInvite ? (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon" className="h-7 w-7">
@@ -223,41 +501,35 @@ export default function ProjectParticipants() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="glass-elevated rounded-card">
-                            <DropdownMenuItem onClick={() => {
-                              setSelectedMemberId(member.user_id);
-                              setNewRole(member.role);
-                              setChangeRoleOpen(true);
-                            }}>
-                              <Shield className="h-3.5 w-3.5 mr-2" /> Change role
-                            </DropdownMenuItem>
                             <DropdownMenuItem
-                              className="text-destructive"
                               onClick={() => {
-                                setRemoveMemberId(member.user_id);
-                                setRemoveOpen(true);
+                                setRoleTarget({ kind: "invite", inviteId: invite.id });
+                                setNewRole(invite.role);
+                                setChangeRoleOpen(true);
                               }}
                             >
-                              Remove
+                              <Shield className="mr-2 h-3.5 w-3.5" /> Change role
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
+                      ) : (
+                        <span className="text-caption text-muted-foreground">No actions</span>
                       )}
                     </TableCell>
-                  )}
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </div>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+      </section>
 
-      {/* Invite Modal */}
       <ConfirmModal
         open={inviteOpen}
         onOpenChange={setInviteOpen}
         title="Invite Member"
-        description="Add a new team member to this project."
-        confirmLabel="Send Invite"
+        description="Send a project invitation with role, AI access, and credit limits."
+        confirmLabel={createInviteMutation.isPending ? "Sending..." : "Send Invite"}
         onConfirm={handleInvite}
         onCancel={() => setInviteOpen(false)}
       >
@@ -267,7 +539,7 @@ export default function ProjectParticipants() {
             <Input
               placeholder="member@example.com"
               value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
+              onChange={(event) => setInviteEmail(event.target.value)}
               className="mt-1"
             />
           </div>
@@ -275,8 +547,8 @@ export default function ProjectParticipants() {
             <label className="text-caption font-medium text-foreground">Role</label>
             <Select
               value={inviteRole}
-              onValueChange={(v) => {
-                const nextRole = v as MemberRole;
+              onValueChange={(value) => {
+                const nextRole = value as MemberRole;
                 setInviteRole(nextRole);
                 if (nextRole === "viewer" && projectMode === "build_myself") {
                   setInviteViewerRegime("build_myself");
@@ -296,7 +568,7 @@ export default function ProjectParticipants() {
               <label className="text-caption font-medium text-foreground">Regime</label>
               <Select
                 value={inviteViewerRegime}
-                onValueChange={(value) => setInviteViewerRegime(value as "contractor" | "client" | "build_myself")}
+                onValueChange={(value) => setInviteViewerRegime(value as ViewerRegime)}
               >
                 <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -311,7 +583,7 @@ export default function ProjectParticipants() {
           )}
           <div>
             <label className="text-caption font-medium text-foreground">AI Access</label>
-            <Select value={inviteAI} onValueChange={(v) => setInviteAI(v as AIAccess)}>
+            <Select value={inviteAI} onValueChange={(value) => setInviteAI(value as AIAccess)}>
               <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">No AI</SelectItem>
@@ -325,25 +597,24 @@ export default function ProjectParticipants() {
             <Input
               type="number"
               value={inviteLimit}
-              onChange={(e) => setInviteLimit(e.target.value)}
+              onChange={(event) => setInviteLimit(event.target.value)}
               className="mt-1"
             />
           </div>
         </div>
       </ConfirmModal>
 
-      {/* Change Role Modal */}
       <ConfirmModal
         open={changeRoleOpen}
         onOpenChange={setChangeRoleOpen}
         title="Change Role"
-        description="Update the member's role and permissions."
-        confirmLabel="Update"
+        description="Update the role for this member or pending invitation."
+        confirmLabel={memberRoleMutation.isPending || inviteRoleMutation.isPending ? "Updating..." : "Update"}
         onConfirm={handleChangeRole}
         onCancel={() => setChangeRoleOpen(false)}
       >
         <div className="py-2">
-          <Select value={newRole} onValueChange={(v) => setNewRole(v as MemberRole)}>
+          <Select value={newRole} onValueChange={(value) => setNewRole(value as MemberRole)}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="co_owner">Co-owner</SelectItem>
@@ -353,17 +624,6 @@ export default function ProjectParticipants() {
           </Select>
         </div>
       </ConfirmModal>
-
-      {/* Remove Member Modal */}
-      <ConfirmModal
-        open={removeOpen}
-        onOpenChange={setRemoveOpen}
-        title="Remove Member"
-        description="This will remove the member from the project. Their assigned tasks will need to be reassigned."
-        confirmLabel="Remove"
-        onConfirm={handleRemove}
-        onCancel={() => setRemoveOpen(false)}
-      />
     </div>
   );
 }

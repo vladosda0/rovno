@@ -1,4 +1,4 @@
-import type { Media, Task, ChecklistItem, Comment, Stage } from "@/types/entities";
+import type { Media, Task, Stage } from "@/types/entities";
 
 export interface PhotoConsultContext {
   photo: Media;
@@ -7,23 +7,36 @@ export interface PhotoConsultContext {
   siblingPhotos?: Media[]; // other photos in same task
 }
 
-type Listener = (ctx: PhotoConsultContext | null) => void;
+type Listener = (payload: { projectId: string; context: PhotoConsultContext | null }) => void;
 
-let current: PhotoConsultContext | null = null;
+const contextsByProjectId = new Map<string, PhotoConsultContext>();
 const listeners = new Set<Listener>();
 
 export function openPhotoConsult(ctx: PhotoConsultContext) {
-  current = ctx;
-  listeners.forEach((l) => l(current));
+  contextsByProjectId.set(ctx.photo.project_id, ctx);
+  listeners.forEach((listener) => listener({ projectId: ctx.photo.project_id, context: ctx }));
 }
 
-export function closePhotoConsult() {
-  current = null;
-  listeners.forEach((l) => l(current));
+export function closePhotoConsult(projectId?: string) {
+  if (projectId) {
+    contextsByProjectId.delete(projectId);
+    listeners.forEach((listener) => listener({ projectId, context: null }));
+    return;
+  }
+
+  Array.from(contextsByProjectId.keys()).forEach((key) => {
+    contextsByProjectId.delete(key);
+    listeners.forEach((listener) => listener({ projectId: key, context: null }));
+  });
 }
 
-export function getPhotoConsultContext(): PhotoConsultContext | null {
-  return current;
+export function getPhotoConsultContext(projectId?: string): PhotoConsultContext | null {
+  if (projectId) {
+    return contextsByProjectId.get(projectId) ?? null;
+  }
+
+  const firstContext = contextsByProjectId.values().next();
+  return firstContext.done ? null : firstContext.value;
 }
 
 export function subscribePhotoConsult(listener: Listener): () => void {

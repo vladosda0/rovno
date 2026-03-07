@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import * as store from "@/data/store";
 import { cacheWorkspaceUsers } from "@/data/workspace-profile-cache";
 import type { Member, Project, User } from "@/types/entities";
+import { isDemoSessionActive } from "@/lib/auth-state";
 import type { Database as WorkspaceDatabase } from "../../backend-truth/generated/supabase-types";
 
 export type WorkspaceProjectInvite = WorkspaceDatabase["public"]["Tables"]["project_invites"]["Row"];
@@ -12,6 +13,7 @@ type TypedSupabaseClient = SupabaseClient<WorkspaceDatabase>;
 
 export type WorkspaceMode =
   | { kind: "demo" }
+  | { kind: "local" }
   | { kind: "supabase"; profileId: string };
 
 export interface WorkspaceSource {
@@ -27,24 +29,26 @@ const SUPABASE_WORKSPACE_SOURCE = "supabase";
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-const demoWorkspaceSource: WorkspaceSource = {
-  mode: "demo",
-  async getCurrentUser() {
-    return store.getCurrentUser();
-  },
-  async getProjects() {
-    return store.getProjects();
-  },
-  async getProjectById(projectId: string) {
-    return store.getProject(projectId);
-  },
-  async getProjectMembers(projectId: string) {
-    return store.getMembers(projectId);
-  },
-  async getProjectInvites() {
-    return [];
-  },
-};
+function createBrowserWorkspaceSource(mode: store.BrowserWorkspaceKind): WorkspaceSource {
+  return {
+    mode,
+    async getCurrentUser() {
+      return store.getCurrentUserForMode(mode);
+    },
+    async getProjects() {
+      return store.getProjectsForMode(mode);
+    },
+    async getProjectById(projectId: string) {
+      return store.getProjectForMode(mode, projectId);
+    },
+    async getProjectMembers(projectId: string) {
+      return store.getMembersForMode(mode, projectId);
+    },
+    async getProjectInvites(projectId: string) {
+      return store.getProjectInvitesForMode(mode, projectId);
+    },
+  };
+}
 
 export function mapProfileRowToUser(row: ProfileRow): User {
   return {
@@ -99,13 +103,18 @@ export function selectWorkspaceMode(input: {
   requestedSource?: string;
   hasSupabaseConfig: boolean;
   sessionProfileId?: string | null;
+  demoSessionActive?: boolean;
 }): WorkspaceMode {
-  if (input.requestedSource !== SUPABASE_WORKSPACE_SOURCE) {
+  if (input.demoSessionActive) {
     return { kind: "demo" };
   }
 
+  if (input.requestedSource !== SUPABASE_WORKSPACE_SOURCE) {
+    return { kind: "local" };
+  }
+
   if (!input.hasSupabaseConfig || !input.sessionProfileId) {
-    return { kind: "demo" };
+    return { kind: "local" };
   }
 
   return { kind: "supabase", profileId: input.sessionProfileId };
@@ -117,13 +126,17 @@ async function loadSupabaseClient(): Promise<TypedSupabaseClient> {
 }
 
 export async function resolveWorkspaceMode(): Promise<WorkspaceMode> {
-  if (!isSupabaseWorkspaceRequested()) {
+  if (isDemoSessionActive()) {
     return { kind: "demo" };
+  }
+
+  if (!isSupabaseWorkspaceRequested()) {
+    return { kind: "local" };
   }
 
   const hasSupabaseConfig = Boolean(SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY);
   if (!hasSupabaseConfig) {
-    return { kind: "demo" };
+    return { kind: "local" };
   }
 
   try {
@@ -134,9 +147,10 @@ export async function resolveWorkspaceMode(): Promise<WorkspaceMode> {
       requestedSource: SUPABASE_WORKSPACE_SOURCE,
       hasSupabaseConfig,
       sessionProfileId: error ? null : data.session?.user?.id ?? null,
+      demoSessionActive: false,
     });
   } catch {
-    return { kind: "demo" };
+    return { kind: "local" };
   }
 }
 
@@ -242,7 +256,9 @@ function createSupabaseWorkspaceSource(
         throw error;
       }
 
-      return data ?? [];
+      const rows = data ?? [];
+      await loadVisibleProfiles(supabase, rows.flatMap((row) => [row.invited_by, row.accepted_profile_id ?? ""]));
+      return rows;
     },
   };
 }
@@ -251,10 +267,151 @@ export async function getWorkspaceSource(
   mode?: WorkspaceMode,
 ): Promise<WorkspaceSource> {
   const resolvedMode = mode ?? await resolveWorkspaceMode();
-  if (resolvedMode.kind !== "supabase") {
-    return demoWorkspaceSource;
+  if (resolvedMode.kind === "demo" || resolvedMode.kind === "local") {
+    return createBrowserWorkspaceSource(resolvedMode.kind);
   }
 
   const supabase = await loadSupabaseClient();
   return createSupabaseWorkspaceSource(supabase, resolvedMode.profileId);
+}
+
+export async function updateWorkspaceProjectMemberRole(
+  mode: WorkspaceMode,
+  input: {
+    projectId: string;
+    userId: string;
+    role: Member["role"];
+    viewerRegime?: Member["viewer_regime"];
+  },
+): Promise<Member> {
+  if (mode.kind !== "supabase") {
+    const updated = store.updateMember(input.projectId, input.userId, {
+      role: input.role,
+      viewer_regime: input.viewerRegime,
+    }, mode.kind);
+    if (!updated) {
+      throw new Error("Project member not found");
+    }
+    return updated;
+  }
+
+  const supabase = await loadSupabaseClient();
+  const { data, error } = await supabase
+    .from("project_members")
+    .update({
+      role: input.role,
+      viewer_regime: input.viewerRegime ?? null,
+    })
+    .eq("project_id", input.projectId)
+    .eq("profile_id", input.userId)
+    .select("*")
+    .single();
+
+  if (error || !data) {
+    throw error ?? new Error("Unable to update project member");
+  }
+
+  return mapProjectMemberRowToMember(data);
+}
+
+export async function createWorkspaceProjectInvite(
+  mode: WorkspaceMode,
+  input: {
+    projectId: string;
+    email: string;
+    role: WorkspaceProjectInvite["role"];
+    aiAccess: WorkspaceProjectInvite["ai_access"];
+    viewerRegime: WorkspaceProjectInvite["viewer_regime"];
+    creditLimit: number;
+    invitedBy: string;
+  },
+): Promise<WorkspaceProjectInvite> {
+  if (mode.kind !== "supabase") {
+    const invite: WorkspaceProjectInvite = {
+      id: `invite-${Date.now()}`,
+      project_id: input.projectId,
+      email: input.email.trim(),
+      role: input.role,
+      ai_access: input.aiAccess,
+      viewer_regime: input.viewerRegime ?? null,
+      credit_limit: input.creditLimit,
+      invited_by: input.invitedBy,
+      status: "pending",
+      invite_token: `invite-token-${Date.now()}`,
+      accepted_profile_id: null,
+      created_at: new Date().toISOString(),
+      accepted_at: null,
+    };
+    store.addProjectInvite(invite, mode.kind);
+    return invite;
+  }
+
+  const supabase = await loadSupabaseClient();
+  const { data, error } = await supabase
+    .from("project_invites")
+    .insert({
+      project_id: input.projectId,
+      email: input.email.trim(),
+      role: input.role,
+      ai_access: input.aiAccess,
+      viewer_regime: input.viewerRegime ?? null,
+      credit_limit: input.creditLimit,
+      invited_by: input.invitedBy,
+    })
+    .select("*")
+    .single();
+
+  if (error || !data) {
+    throw error ?? new Error("Unable to create project invite");
+  }
+
+  return data;
+}
+
+export async function updateWorkspaceProjectInvite(
+  mode: WorkspaceMode,
+  input: {
+    id: string;
+    projectId: string;
+    role?: WorkspaceProjectInvite["role"];
+    aiAccess?: WorkspaceProjectInvite["ai_access"];
+    viewerRegime?: WorkspaceProjectInvite["viewer_regime"];
+    creditLimit?: number;
+    status?: WorkspaceProjectInvite["status"];
+  },
+): Promise<WorkspaceProjectInvite> {
+  if (mode.kind !== "supabase") {
+    const updated = store.updateProjectInvite(input.id, {
+      role: input.role,
+      ai_access: input.aiAccess,
+      viewer_regime: input.viewerRegime,
+      credit_limit: input.creditLimit,
+      status: input.status,
+    }, mode.kind);
+    if (!updated) {
+      throw new Error("Project invite not found");
+    }
+    return updated;
+  }
+
+  const supabase = await loadSupabaseClient();
+  const { data, error } = await supabase
+    .from("project_invites")
+    .update({
+      role: input.role,
+      ai_access: input.aiAccess,
+      viewer_regime: input.viewerRegime ?? null,
+      credit_limit: input.creditLimit,
+      status: input.status,
+    })
+    .eq("id", input.id)
+    .eq("project_id", input.projectId)
+    .select("*")
+    .single();
+
+  if (error || !data) {
+    throw error ?? new Error("Unable to update project invite");
+  }
+
+  return data;
 }

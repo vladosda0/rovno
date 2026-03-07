@@ -1,32 +1,263 @@
 import type {
-  User, Project, Member, Stage, Task, Estimate, ProcurementItem,
-  Document, Media, Event, Notification, ContractorProposal, EstimateVersion, EstimateItem,
+  User,
+  Project,
+  Member,
+  Stage,
+  Task,
+  Estimate,
+  ProcurementItem,
+  Document,
+  Media,
+  Event,
+  Notification,
+  ContractorProposal,
+  EstimateVersion,
+  EstimateItem,
+  DocumentVersion,
+  ChecklistItem,
 } from "@/types/entities";
 import { moveEstimateItemToStage, deleteEstimateItemsForTask, deleteEstimateItemsBySourceId } from "@/data/estimate-store";
 import { getCachedWorkspaceUser } from "@/data/workspace-profile-cache";
 import {
-  seedUser, seedProjects, seedMembers, seedStages, seedTasks,
-  seedEstimates, seedProcurementItems, seedDocuments, seedMedia,
-  seedEvents, seedNotifications, allUsers,
+  getStoredAuthProfile,
+  isAuthenticated,
+  isDemoSessionActive,
+  type StoredAuthProfile,
+} from "@/lib/auth-state";
+import {
+  seedUser,
+  seedProjects,
+  seedMembers,
+  seedStages,
+  seedTasks,
+  seedEstimates,
+  seedProcurementItems,
+  seedDocuments,
+  seedMedia,
+  seedEvents,
+  seedNotifications,
+  allUsers,
 } from "@/data/seed";
+import type { Database as WorkspaceDatabase } from "../../backend-truth/generated/supabase-types";
 
-// --- In-memory state ---
-let user: User = { ...seedUser };
-let projects: Project[] = [...seedProjects];
-let members: Member[] = [...seedMembers];
-let stages: Stage[] = [...seedStages];
-let tasks: Task[] = [...seedTasks];
-let estimates: Estimate[] = [...seedEstimates];
-let procurementItems: ProcurementItem[] = [...seedProcurementItems];
-let documents: Document[] = [...seedDocuments];
-let media: Media[] = [...seedMedia];
-let events: Event[] = [...seedEvents];
-let notifications: Notification[] = [...seedNotifications];
-let contractorProposals: ContractorProposal[] = [];
+export type BrowserWorkspaceKind = "demo" | "local";
+export type WorkspaceProjectInvite = WorkspaceDatabase["public"]["Tables"]["project_invites"]["Row"];
 
-// --- Pub/Sub ---
+interface BrowserWorkspaceState {
+  user: User;
+  projects: Project[];
+  members: Member[];
+  stages: Stage[];
+  tasks: Task[];
+  estimates: Estimate[];
+  procurementItems: ProcurementItem[];
+  documents: Document[];
+  media: Media[];
+  events: Event[];
+  notifications: Notification[];
+  contractorProposals: ContractorProposal[];
+  invites: WorkspaceProjectInvite[];
+}
+
+const DEMO_STATE_KEY = "workspace-demo-state";
+
+function getResolvedTimezone(): string {
+  if (typeof Intl === "undefined") return "UTC";
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+}
+
+function createLocalUser(profile: StoredAuthProfile | null): User {
+  if (!profile || !isAuthenticated()) {
+    return {
+      id: "",
+      email: "",
+      name: "",
+      locale: "en",
+      timezone: getResolvedTimezone(),
+      plan: "free",
+      credits_free: 0,
+      credits_paid: 0,
+    };
+  }
+
+  return {
+    id: profile.id,
+    email: profile.email,
+    name: profile.name,
+    locale: profile.locale ?? "en",
+    timezone: profile.timezone ?? getResolvedTimezone(),
+    plan: profile.plan === "pro" || profile.plan === "business" ? profile.plan : "free",
+    credits_free: seedUser.credits_free,
+    credits_paid: 0,
+  };
+}
+
+function createSeededDemoState(): BrowserWorkspaceState {
+  return {
+    user: { ...seedUser },
+    projects: [...seedProjects],
+    members: [...seedMembers],
+    stages: [...seedStages],
+    tasks: [...seedTasks],
+    estimates: [...seedEstimates],
+    procurementItems: [...seedProcurementItems],
+    documents: [...seedDocuments],
+    media: [...seedMedia],
+    events: [...seedEvents],
+    notifications: [...seedNotifications],
+    contractorProposals: [],
+    invites: [],
+  };
+}
+
+function createEmptyLocalState(profile: StoredAuthProfile | null): BrowserWorkspaceState {
+  return {
+    user: createLocalUser(profile),
+    projects: [],
+    members: [],
+    stages: [],
+    tasks: [],
+    estimates: [],
+    procurementItems: [],
+    documents: [],
+    media: [],
+    events: [],
+    notifications: [],
+    contractorProposals: [],
+    invites: [],
+  };
+}
+
+function cloneWorkspaceState(state: BrowserWorkspaceState): BrowserWorkspaceState {
+  return {
+    user: { ...state.user },
+    projects: [...state.projects],
+    members: [...state.members],
+    stages: [...state.stages],
+    tasks: [...state.tasks],
+    estimates: [...state.estimates],
+    procurementItems: [...state.procurementItems],
+    documents: [...state.documents],
+    media: [...state.media],
+    events: [...state.events],
+    notifications: [...state.notifications],
+    contractorProposals: [...state.contractorProposals],
+    invites: [...state.invites],
+  };
+}
+
+function loadPersistedDemoState(): BrowserWorkspaceState | null {
+  try {
+    const raw = sessionStorage.getItem(DEMO_STATE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<BrowserWorkspaceState>;
+    return {
+      user: parsed.user ?? { ...seedUser },
+      projects: parsed.projects ?? [...seedProjects],
+      members: parsed.members ?? [...seedMembers],
+      stages: parsed.stages ?? [...seedStages],
+      tasks: parsed.tasks ?? [...seedTasks],
+      estimates: parsed.estimates ?? [...seedEstimates],
+      procurementItems: parsed.procurementItems ?? [...seedProcurementItems],
+      documents: parsed.documents ?? [...seedDocuments],
+      media: parsed.media ?? [...seedMedia],
+      events: parsed.events ?? [...seedEvents],
+      notifications: parsed.notifications ?? [...seedNotifications],
+      contractorProposals: parsed.contractorProposals ?? [],
+      invites: parsed.invites ?? [],
+    };
+  } catch {
+    return null;
+  }
+}
+
+function persistDemoState(state: BrowserWorkspaceState) {
+  try {
+    sessionStorage.setItem(DEMO_STATE_KEY, JSON.stringify(state));
+  } catch {
+    // Ignore storage write failures and keep the in-memory snapshot.
+  }
+}
+
+let demoState = loadPersistedDemoState() ?? createSeededDemoState();
+let localState = createEmptyLocalState(getStoredAuthProfile());
+let localProfileId = localState.user.id;
+
 type Listener = () => void;
 const listeners = new Set<Listener>();
+
+function getActiveBrowserWorkspaceKind(): BrowserWorkspaceKind {
+  return isDemoSessionActive() ? "demo" : "local";
+}
+
+function syncLocalWorkspaceUser() {
+  const profile = getStoredAuthProfile();
+  const nextProfileId = isAuthenticated() ? profile?.id ?? "" : "";
+  if (nextProfileId !== localProfileId) {
+    localState = createEmptyLocalState(profile);
+    localProfileId = nextProfileId;
+    return;
+  }
+
+  localState = {
+    ...localState,
+    user: createLocalUser(profile),
+  };
+}
+
+function getStateForMode(mode: BrowserWorkspaceKind = getActiveBrowserWorkspaceKind()): BrowserWorkspaceState {
+  if (mode === "local") {
+    syncLocalWorkspaceUser();
+    return localState;
+  }
+
+  return demoState;
+}
+
+function setStateForMode(mode: BrowserWorkspaceKind, state: BrowserWorkspaceState) {
+  if (mode === "demo") {
+    demoState = state;
+    persistDemoState(state);
+    return;
+  }
+
+  localState = state;
+  localProfileId = state.user.id;
+}
+
+function updateWorkspaceState(
+  mutator: (state: BrowserWorkspaceState) => void,
+  mode: BrowserWorkspaceKind = getActiveBrowserWorkspaceKind(),
+) {
+  const nextState = cloneWorkspaceState(getStateForMode(mode));
+  mutator(nextState);
+  setStateForMode(mode, nextState);
+  notify();
+}
+
+function addEventToState(state: BrowserWorkspaceState, event: Event) {
+  state.events = [...state.events, event];
+  const projectMembers = state.members.filter((member) => member.project_id === event.project_id);
+  const newNotifications: Notification[] = projectMembers
+    .filter((member) => member.user_id !== event.actor_id)
+    .map((member, index) => ({
+      id: `notif-auto-${Date.now()}-${index}`,
+      user_id: member.user_id,
+      project_id: event.project_id,
+      event_id: event.id,
+      is_read: false,
+    }));
+
+  state.notifications = [...state.notifications, ...newNotifications];
+}
+
+function getStateUserById(state: BrowserWorkspaceState, id: string): User | undefined {
+  if (state.user.id && state.user.id === id) {
+    return state.user;
+  }
+
+  return undefined;
+}
 
 export function subscribe(listener: Listener): () => void {
   listeners.add(listener);
@@ -34,118 +265,136 @@ export function subscribe(listener: Listener): () => void {
 }
 
 function notify() {
-  listeners.forEach((l) => l());
+  listeners.forEach((listener) => listener());
 }
 
-// --- Read accessors ---
+export function getCurrentUserForMode(mode: BrowserWorkspaceKind): User {
+  return getStateForMode(mode).user;
+}
+
+export function getProjectsForMode(mode: BrowserWorkspaceKind): Project[] {
+  return getStateForMode(mode).projects;
+}
+
+export function getProjectForMode(mode: BrowserWorkspaceKind, id: string): Project | undefined {
+  return getStateForMode(mode).projects.find((project) => project.id === id);
+}
+
+export function getMembersForMode(mode: BrowserWorkspaceKind, projectId: string): Member[] {
+  return getStateForMode(mode).members.filter((member) => member.project_id === projectId);
+}
+
+export function getProjectInvitesForMode(mode: BrowserWorkspaceKind, projectId: string): WorkspaceProjectInvite[] {
+  return getStateForMode(mode).invites
+    .filter((invite) => invite.project_id === projectId)
+    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+}
+
 export function getCurrentUser(): User {
-  return user;
+  return getStateForMode().user;
 }
 
 export function getUserById(id: string): User | undefined {
-  return getCachedWorkspaceUser(id) ?? allUsers.find((u) => u.id === id);
+  const activeUser = getStateUserById(getStateForMode(), id);
+  if (activeUser) return activeUser;
+  return getCachedWorkspaceUser(id) ?? allUsers.find((user) => user.id === id);
 }
 
 export function getProjects(): Project[] {
-  return projects;
+  return getStateForMode().projects;
 }
 
 export function getProject(id: string): Project | undefined {
-  return projects.find((p) => p.id === id);
+  return getStateForMode().projects.find((project) => project.id === id);
 }
 
 export function getMembers(projectId: string): Member[] {
-  return members.filter((m) => m.project_id === projectId);
+  return getMembersForMode(getActiveBrowserWorkspaceKind(), projectId);
 }
 
 export function getStages(projectId: string): Stage[] {
-  return stages.filter((s) => s.project_id === projectId).sort((a, b) => a.order - b.order);
+  return getStateForMode().stages
+    .filter((stage) => stage.project_id === projectId)
+    .sort((left, right) => left.order - right.order);
 }
 
 export function getTasks(projectId: string, filters?: { stage_id?: string; status?: string }): Task[] {
-  let result = tasks.filter((t) => t.project_id === projectId);
-  if (filters?.stage_id) result = result.filter((t) => t.stage_id === filters.stage_id);
-  if (filters?.status) result = result.filter((t) => t.status === filters.status);
+  let result = getStateForMode().tasks.filter((task) => task.project_id === projectId);
+  if (filters?.stage_id) result = result.filter((task) => task.stage_id === filters.stage_id);
+  if (filters?.status) result = result.filter((task) => task.status === filters.status);
   return result;
 }
 
 export function getAllTasks(): Task[] {
-  return tasks;
+  return getStateForMode().tasks;
 }
 
 export function getAllDocuments(): Document[] {
-  return documents;
+  return getStateForMode().documents;
 }
 
 export function getAllProcurementItems(): ProcurementItem[] {
-  return procurementItems;
+  return getStateForMode().procurementItems;
 }
 
 export function getEstimate(projectId: string): Estimate | undefined {
-  return estimates.find((e) => e.project_id === projectId);
+  return getStateForMode().estimates.find((estimate) => estimate.project_id === projectId);
 }
 
 export function getProcurementItems(projectId: string): ProcurementItem[] {
-  return procurementItems.filter((p) => p.project_id === projectId);
+  return getStateForMode().procurementItems.filter((item) => item.project_id === projectId);
 }
 
 export function getDocuments(projectId: string): Document[] {
-  return documents.filter((d) => d.project_id === projectId);
+  return getStateForMode().documents.filter((document) => document.project_id === projectId);
 }
 
 export function getMedia(projectId: string): Media[] {
-  return media.filter((m) => m.project_id === projectId);
+  return getStateForMode().media.filter((item) => item.project_id === projectId);
 }
 
 export function getEvents(projectId: string): Event[] {
-  return events
-    .filter((e) => e.project_id === projectId)
-    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  return getStateForMode().events
+    .filter((event) => event.project_id === projectId)
+    .sort((left, right) => new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime());
 }
 
 export function getNotifications(userId: string): Notification[] {
-  return notifications.filter((n) => n.user_id === userId);
+  return getStateForMode().notifications.filter((notification) => notification.user_id === userId);
 }
 
 export function getUnreadNotificationCount(userId: string): number {
-  return notifications.filter((n) => n.user_id === userId && !n.is_read).length;
+  return getStateForMode().notifications.filter((notification) => notification.user_id === userId && !notification.is_read).length;
 }
 
-// --- Write functions ---
+export function getProjectInvites(projectId: string): WorkspaceProjectInvite[] {
+  return getProjectInvitesForMode(getActiveBrowserWorkspaceKind(), projectId);
+}
+
 export function addEvent(event: Event) {
-  events = [...events, event];
-  // Generate notifications for project members (except actor)
-  const projectMembers = getMembers(event.project_id);
-  const newNotifs: Notification[] = projectMembers
-    .filter((m) => m.user_id !== event.actor_id)
-    .map((m, i) => ({
-      id: `notif-auto-${Date.now()}-${i}`,
-      user_id: m.user_id,
-      project_id: event.project_id,
-      event_id: event.id,
-      is_read: false,
-    }));
-  notifications = [...notifications, ...newNotifs];
-  notify();
+  updateWorkspaceState((state) => {
+    addEventToState(state, event);
+  });
 }
 
 export function updateTask(id: string, partial: Partial<Task>) {
-  tasks = tasks.map((t) => (t.id === id ? { ...t, ...partial } : t));
-  const task = tasks.find((t) => t.id === id);
-  if (task) {
+  updateWorkspaceState((state) => {
+    state.tasks = state.tasks.map((task) => (task.id === id ? { ...task, ...partial } : task));
+    const task = state.tasks.find((entry) => entry.id === id);
+    if (!task) return;
+
     const eventType = partial.status === "done" ? "task_completed" : "task_updated";
-    addEvent({
+    addEventToState(state, {
       id: `evt-auto-${Date.now()}`,
       project_id: task.project_id,
-      actor_id: user.id,
+      actor_id: state.user.id,
       type: eventType,
       object_type: "task",
       object_id: id,
       timestamp: new Date().toISOString(),
       payload: { title: task.title, ...partial },
     });
-  }
-  notify();
+  });
 }
 
 interface AddTaskOptions {
@@ -154,325 +403,422 @@ interface AddTaskOptions {
 }
 
 export function addTask(task: Task, options: AddTaskOptions = {}) {
-  tasks = [...tasks, task];
-  addEvent({
-    id: `evt-auto-${Date.now()}`,
-    project_id: task.project_id,
-    actor_id: options.actorId ?? user.id,
-    type: "task_created",
-    object_type: "task",
-    object_id: task.id,
-    timestamp: new Date().toISOString(),
-    payload: {
-      title: task.title,
-      ...(options.source ? { source: options.source } : {}),
-    },
+  updateWorkspaceState((state) => {
+    state.tasks = [...state.tasks, task];
+    addEventToState(state, {
+      id: `evt-auto-${Date.now()}`,
+      project_id: task.project_id,
+      actor_id: options.actorId ?? state.user.id,
+      type: "task_created",
+      object_type: "task",
+      object_id: task.id,
+      timestamp: new Date().toISOString(),
+      payload: {
+        title: task.title,
+        ...(options.source ? { source: options.source } : {}),
+      },
+    });
   });
-  notify();
 }
 
 export function markNotificationRead(id: string) {
-  notifications = notifications.map((n) => (n.id === id ? { ...n, is_read: true } : n));
-  notify();
+  updateWorkspaceState((state) => {
+    state.notifications = state.notifications.map((notification) =>
+      notification.id === id ? { ...notification, is_read: true } : notification,
+    );
+  });
 }
 
 export function updateProject(id: string, partial: Partial<Project>) {
-  projects = projects.map((p) => (p.id === id ? { ...p, ...partial } : p));
-  notify();
+  updateWorkspaceState((state) => {
+    state.projects = state.projects.map((project) => (project.id === id ? { ...project, ...partial } : project));
+  });
 }
 
 export function addProcurementItem(item: ProcurementItem) {
-  procurementItems = [...procurementItems, item];
-  notify();
+  updateWorkspaceState((state) => {
+    state.procurementItems = [...state.procurementItems, item];
+  });
 }
 
 export function updateProcurementItem(id: string, partial: Partial<ProcurementItem>) {
-  procurementItems = procurementItems.map((p) => (p.id === id ? { ...p, ...partial } : p));
-  notify();
+  updateWorkspaceState((state) => {
+    state.procurementItems = state.procurementItems.map((item) => (item.id === id ? { ...item, ...partial } : item));
+  });
 }
 
 export function deleteProcurementItem(id: string) {
-  procurementItems = procurementItems.filter((p) => p.id !== id);
-  notify();
+  updateWorkspaceState((state) => {
+    state.procurementItems = state.procurementItems.filter((item) => item.id !== id);
+  });
 }
 
 export function addDocument(doc: Document) {
-  documents = [...documents, doc];
-  notify();
+  updateWorkspaceState((state) => {
+    state.documents = [...state.documents, doc];
+  });
 }
 
 export function updateDocument(id: string, partial: Partial<Document>) {
-  documents = documents.map((d) => (d.id === id ? { ...d, ...partial } : d));
-  notify();
+  updateWorkspaceState((state) => {
+    state.documents = state.documents.map((document) => (document.id === id ? { ...document, ...partial } : document));
+  });
 }
 
-export function addDocumentVersion(docId: string, version: import("@/types/entities").DocumentVersion) {
-  documents = documents.map((d) =>
-    d.id === docId ? { ...d, versions: [...d.versions, version] } : d
-  );
-  notify();
+export function addDocumentVersion(docId: string, version: DocumentVersion) {
+  updateWorkspaceState((state) => {
+    state.documents = state.documents.map((document) =>
+      document.id === docId ? { ...document, versions: [...document.versions, version] } : document,
+    );
+  });
 }
 
 export function deleteDocument(id: string) {
-  documents = documents.filter((d) => d.id !== id);
-  notify();
+  updateWorkspaceState((state) => {
+    state.documents = state.documents.filter((document) => document.id !== id);
+  });
 }
 
 export function addMedia(item: Media) {
-  media = [...media, item];
-  notify();
+  updateWorkspaceState((state) => {
+    state.media = [...state.media, item];
+  });
 }
 
 export function updateMedia(id: string, partial: Partial<Media>) {
-  media = media.map((m) => (m.id === id ? { ...m, ...partial } : m));
-  notify();
+  updateWorkspaceState((state) => {
+    state.media = state.media.map((item) => (item.id === id ? { ...item, ...partial } : item));
+  });
 }
 
 export function deleteMedia(id: string) {
-  media = media.filter((m) => m.id !== id);
-  notify();
+  updateWorkspaceState((state) => {
+    state.media = state.media.filter((item) => item.id !== id);
+  });
 }
 
 export function updateEstimateItems(versionId: string, updatedItems: EstimateItem[]) {
-  estimates = estimates.map((e) => ({
-    ...e,
-    versions: e.versions.map((v) =>
-      v.id === versionId ? { ...v, items: updatedItems } : v
-    ),
-  }));
-  notify();
+  updateWorkspaceState((state) => {
+    state.estimates = state.estimates.map((estimate) => ({
+      ...estimate,
+      versions: estimate.versions.map((version) =>
+        version.id === versionId ? { ...version, items: updatedItems } : version,
+      ),
+    }));
+  });
 }
 
 export function addEstimateVersion(projectId: string, version: EstimateVersion) {
-  const existing = estimates.find((e) => e.project_id === projectId);
-  if (existing) {
-    estimates = estimates.map((e) =>
-      e.project_id === projectId ? { ...e, versions: [...e.versions, version] } : e
-    );
-  } else {
-    estimates = [...estimates, { project_id: projectId, versions: [version] }];
-  }
-  notify();
+  updateWorkspaceState((state) => {
+    const existing = state.estimates.find((estimate) => estimate.project_id === projectId);
+    if (existing) {
+      state.estimates = state.estimates.map((estimate) =>
+        estimate.project_id === projectId
+          ? { ...estimate, versions: [...estimate.versions, version] }
+          : estimate,
+      );
+      return;
+    }
+
+    state.estimates = [...state.estimates, { project_id: projectId, versions: [version] }];
+  });
 }
 
-export function updateEstimateVersionStatus(versionId: string, status: import("@/types/entities").EstimateVersionStatus) {
-  estimates = estimates.map((e) => ({
-    ...e,
-    versions: e.versions.map((v) =>
-      v.id === versionId ? { ...v, status } : v
-    ),
-  }));
-  notify();
+export function updateEstimateVersionStatus(versionId: string, status: EstimateVersion["status"]) {
+  updateWorkspaceState((state) => {
+    state.estimates = state.estimates.map((estimate) => ({
+      ...estimate,
+      versions: estimate.versions.map((version) => (version.id === versionId ? { ...version, status } : version)),
+    }));
+  });
 }
 
 export function deleteEstimateVersion(versionId: string) {
-  estimates = estimates.map((e) => ({
-    ...e,
-    versions: e.versions.filter((v) => v.id !== versionId),
-  }));
-  notify();
+  updateWorkspaceState((state) => {
+    state.estimates = state.estimates.map((estimate) => ({
+      ...estimate,
+      versions: estimate.versions.filter((version) => version.id !== versionId),
+    }));
+  });
 }
 
 export function updateEstimateItemPaid(versionId: string, itemId: string, paidCost: number) {
-  estimates = estimates.map((e) => ({
-    ...e,
-    versions: e.versions.map((v) =>
-      v.id === versionId
-        ? { ...v, items: v.items.map((i) => (i.id === itemId ? { ...i, paid_cost: paidCost } : i)) }
-        : v
-    ),
-  }));
-  notify();
+  updateWorkspaceState((state) => {
+    state.estimates = state.estimates.map((estimate) => ({
+      ...estimate,
+      versions: estimate.versions.map((version) =>
+        version.id === versionId
+          ? {
+              ...version,
+              items: version.items.map((item) => (item.id === itemId ? { ...item, paid_cost: paidCost } : item)),
+            }
+          : version,
+      ),
+    }));
+  });
 }
 
 export function getContractorProposals(projectId: string): ContractorProposal[] {
-  return contractorProposals.filter((p) => p.project_id === projectId);
+  return getStateForMode().contractorProposals.filter((proposal) => proposal.project_id === projectId);
 }
 
 export function addContractorProposal(proposal: ContractorProposal) {
-  contractorProposals = [...contractorProposals, proposal];
-  notify();
+  updateWorkspaceState((state) => {
+    state.contractorProposals = [...state.contractorProposals, proposal];
+  });
 }
 
 export function updateContractorProposalStatus(proposalId: string, status: "accepted" | "rejected") {
-  contractorProposals = contractorProposals.map((p) =>
-    p.id === proposalId ? { ...p, status } : p
-  );
-  notify();
+  updateWorkspaceState((state) => {
+    state.contractorProposals = state.contractorProposals.map((proposal) =>
+      proposal.id === proposalId ? { ...proposal, status } : proposal,
+    );
+  });
 }
 
 export function linkEstimateToTasks(versionId: string, links: { itemId: string; taskIds: string[] }[]) {
-  // Update tasks with linked estimate item IDs
-  for (const link of links) {
-    for (const taskId of link.taskIds) {
-      tasks = tasks.map((t) =>
-        t.id === taskId && !t.linked_estimate_item_ids.includes(link.itemId)
-          ? { ...t, linked_estimate_item_ids: [...t.linked_estimate_item_ids, link.itemId] }
-          : t
-      );
+  updateWorkspaceState((state) => {
+    for (const link of links) {
+      for (const taskId of link.taskIds) {
+        state.tasks = state.tasks.map((task) =>
+          task.id === taskId && !task.linked_estimate_item_ids.includes(link.itemId)
+            ? { ...task, linked_estimate_item_ids: [...task.linked_estimate_item_ids, link.itemId] }
+            : task,
+        );
+      }
     }
-  }
-  notify();
+  });
 }
 
 export function deductCredit() {
-  if (user.credits_free > 0) {
-    user = { ...user, credits_free: user.credits_free - 1 };
-  } else if (user.credits_paid > 0) {
-    user = { ...user, credits_paid: user.credits_paid - 1 };
-  }
-  notify();
+  updateWorkspaceState((state) => {
+    if (state.user.credits_free > 0) {
+      state.user = { ...state.user, credits_free: state.user.credits_free - 1 };
+      return;
+    }
+
+    if (state.user.credits_paid > 0) {
+      state.user = { ...state.user, credits_paid: state.user.credits_paid - 1 };
+    }
+  });
 }
 
 export function addProject(project: Project) {
-  projects = [...projects, project];
-  notify();
+  updateWorkspaceState((state) => {
+    state.projects = [...state.projects, project];
+  });
 }
 
 export function addMember(member: Member) {
-  members = [...members, member];
-  notify();
+  updateWorkspaceState((state) => {
+    state.members = [...state.members, member];
+  });
 }
 
-// --- Stage mutations ---
+export function updateMember(projectId: string, userId: string, partial: Partial<Member>, mode?: BrowserWorkspaceKind): Member | undefined {
+  let updated: Member | undefined;
+  updateWorkspaceState((state) => {
+    state.members = state.members.map((member) => {
+      if (member.project_id !== projectId || member.user_id !== userId) return member;
+      updated = { ...member, ...partial };
+      return updated;
+    });
+  }, mode);
+  return updated;
+}
+
+export function addProjectInvite(invite: WorkspaceProjectInvite, mode?: BrowserWorkspaceKind) {
+  updateWorkspaceState((state) => {
+    state.invites = [...state.invites, invite];
+  }, mode);
+}
+
+export function updateProjectInvite(id: string, partial: Partial<WorkspaceProjectInvite>, mode?: BrowserWorkspaceKind): WorkspaceProjectInvite | undefined {
+  let updated: WorkspaceProjectInvite | undefined;
+  updateWorkspaceState((state) => {
+    state.invites = state.invites.map((invite) => {
+      if (invite.id !== id) return invite;
+      updated = { ...invite, ...partial };
+      return updated;
+    });
+  }, mode);
+  return updated;
+}
+
+export function removeProjectInvite(id: string, mode?: BrowserWorkspaceKind) {
+  updateWorkspaceState((state) => {
+    state.invites = state.invites.filter((invite) => invite.id !== id);
+  }, mode);
+}
+
 export function addStage(stage: Stage) {
-  stages = [...stages, stage];
-  addEvent({
-    id: `evt-auto-${Date.now()}`,
-    project_id: stage.project_id,
-    actor_id: user.id,
-    type: "stage_created",
-    object_type: "stage",
-    object_id: stage.id,
-    timestamp: new Date().toISOString(),
-    payload: { title: stage.title },
+  updateWorkspaceState((state) => {
+    state.stages = [...state.stages, stage];
+    addEventToState(state, {
+      id: `evt-auto-${Date.now()}`,
+      project_id: stage.project_id,
+      actor_id: state.user.id,
+      type: "stage_created",
+      object_type: "stage",
+      object_id: stage.id,
+      timestamp: new Date().toISOString(),
+      payload: { title: stage.title },
+    });
   });
-  notify();
 }
 
 export function deleteStage(stageId: string) {
-  const stage = stages.find((s) => s.id === stageId);
-  if (!stage) return;
-  stages = stages.filter((s) => s.id !== stageId);
-  addEvent({
-    id: `evt-auto-${Date.now()}`,
-    project_id: stage.project_id,
-    actor_id: user.id,
-    type: "stage_deleted",
-    object_type: "stage",
-    object_id: stageId,
-    timestamp: new Date().toISOString(),
-    payload: { title: stage.title },
+  updateWorkspaceState((state) => {
+    const stage = state.stages.find((entry) => entry.id === stageId);
+    if (!stage) return;
+    state.stages = state.stages.filter((entry) => entry.id !== stageId);
+    addEventToState(state, {
+      id: `evt-auto-${Date.now()}`,
+      project_id: stage.project_id,
+      actor_id: state.user.id,
+      type: "stage_deleted",
+      object_type: "stage",
+      object_id: stageId,
+      timestamp: new Date().toISOString(),
+      payload: { title: stage.title },
+    });
   });
-  notify();
 }
 
 export function completeStage(stageId: string) {
-  const stage = stages.find((s) => s.id === stageId);
-  if (!stage) return;
-  stages = stages.map((s) => (s.id === stageId ? { ...s, status: "completed" as const } : s));
-  addEvent({
-    id: `evt-auto-${Date.now()}`,
-    project_id: stage.project_id,
-    actor_id: user.id,
-    type: "stage_completed",
-    object_type: "stage",
-    object_id: stageId,
-    timestamp: new Date().toISOString(),
-    payload: { title: stage.title },
+  updateWorkspaceState((state) => {
+    const stage = state.stages.find((entry) => entry.id === stageId);
+    if (!stage) return;
+    state.stages = state.stages.map((entry) =>
+      entry.id === stageId ? { ...entry, status: "completed" as const } : entry,
+    );
+    addEventToState(state, {
+      id: `evt-auto-${Date.now()}`,
+      project_id: stage.project_id,
+      actor_id: state.user.id,
+      type: "stage_completed",
+      object_type: "stage",
+      object_id: stageId,
+      timestamp: new Date().toISOString(),
+      payload: { title: stage.title },
+    });
   });
-  notify();
 }
 
 export function moveTask(taskId: string, newStageId: string) {
-  const task = tasks.find((t) => t.id === taskId);
-  if (!task || task.stage_id === newStageId) return;
-  const oldStageId = task.stage_id;
-  tasks = tasks.map((t) => (t.id === taskId ? { ...t, stage_id: newStageId } : t));
-  moveEstimateItemToStage(taskId, newStageId);
-  addEvent({
-    id: `evt-auto-${Date.now()}`,
-    project_id: task.project_id,
-    actor_id: user.id,
-    type: "task_moved",
-    object_type: "task",
-    object_id: taskId,
-    timestamp: new Date().toISOString(),
-    payload: { title: task.title, from_stage: oldStageId, to_stage: newStageId },
+  updateWorkspaceState((state) => {
+    const task = state.tasks.find((entry) => entry.id === taskId);
+    if (!task || task.stage_id === newStageId) return;
+    const oldStageId = task.stage_id;
+    state.tasks = state.tasks.map((entry) => (entry.id === taskId ? { ...entry, stage_id: newStageId } : entry));
+    moveEstimateItemToStage(taskId, newStageId);
+    addEventToState(state, {
+      id: `evt-auto-${Date.now()}`,
+      project_id: task.project_id,
+      actor_id: state.user.id,
+      type: "task_moved",
+      object_type: "task",
+      object_id: taskId,
+      timestamp: new Date().toISOString(),
+      payload: { title: task.title, from_stage: oldStageId, to_stage: newStageId },
+    });
   });
-  notify();
 }
 
 export function addComment(taskId: string, text: string) {
-  const task = tasks.find((t) => t.id === taskId);
-  if (!task) return;
-  const comment = { id: `com-${Date.now()}`, author_id: user.id, text, created_at: new Date().toISOString() };
-  tasks = tasks.map((t) => (t.id === taskId ? { ...t, comments: [...t.comments, comment] } : t));
-  addEvent({
-    id: `evt-auto-${Date.now()}`,
-    project_id: task.project_id,
-    actor_id: user.id,
-    type: "comment_added",
-    object_type: "task",
-    object_id: taskId,
-    timestamp: new Date().toISOString(),
-    payload: { title: task.title, text },
+  updateWorkspaceState((state) => {
+    const task = state.tasks.find((entry) => entry.id === taskId);
+    if (!task) return;
+    const comment = {
+      id: `com-${Date.now()}`,
+      author_id: state.user.id,
+      text,
+      created_at: new Date().toISOString(),
+    };
+    state.tasks = state.tasks.map((entry) =>
+      entry.id === taskId ? { ...entry, comments: [...entry.comments, comment] } : entry,
+    );
+    addEventToState(state, {
+      id: `evt-auto-${Date.now()}`,
+      project_id: task.project_id,
+      actor_id: state.user.id,
+      type: "comment_added",
+      object_type: "task",
+      object_id: taskId,
+      timestamp: new Date().toISOString(),
+      payload: { title: task.title, text },
+    });
   });
-  notify();
 }
 
-export function updateChecklist(taskId: string, checklist: import("@/types/entities").ChecklistItem[]) {
-  tasks = tasks.map((t) => (t.id === taskId ? { ...t, checklist } : t));
-  notify();
+export function updateChecklist(taskId: string, checklist: ChecklistItem[]) {
+  updateWorkspaceState((state) => {
+    state.tasks = state.tasks.map((task) => (task.id === taskId ? { ...task, checklist } : task));
+  });
 }
 
 export function getTask(id: string): Task | undefined {
-  return tasks.find((t) => t.id === id);
+  return getStateForMode().tasks.find((task) => task.id === id);
 }
 
 export function getStage(id: string): Stage | undefined {
-  return stages.find((s) => s.id === id);
+  return getStateForMode().stages.find((stage) => stage.id === id);
 }
 
 export function deleteTask(id: string) {
-  const task = tasks.find((t) => t.id === id);
-  if (!task) return;
-  // Delete linked estimate items
-  deleteEstimateItemsForTask(id, task.checklist.map((c) => c.id));
-  tasks = tasks.filter((t) => t.id !== id);
-  notify();
+  updateWorkspaceState((state) => {
+    const task = state.tasks.find((entry) => entry.id === id);
+    if (!task) return;
+    deleteEstimateItemsForTask(id, task.checklist.map((item) => item.id));
+    state.tasks = state.tasks.filter((entry) => entry.id !== id);
+  });
 }
 
 export function updateTaskDescription(id: string, description: string) {
-  tasks = tasks.map((t) => (t.id === id ? { ...t, description } : t));
-  notify();
+  updateWorkspaceState((state) => {
+    state.tasks = state.tasks.map((task) => (task.id === id ? { ...task, description } : task));
+  });
 }
 
 export function updateTaskDeadline(id: string, deadline: string | undefined) {
-  tasks = tasks.map((t) => (t.id === id ? { ...t, deadline } : t));
-  notify();
+  updateWorkspaceState((state) => {
+    state.tasks = state.tasks.map((task) => (task.id === id ? { ...task, deadline } : task));
+  });
 }
 
-export function addChecklistItem(taskId: string, item: import("@/types/entities").ChecklistItem) {
-  tasks = tasks.map((t) =>
-    t.id === taskId ? { ...t, checklist: [...t.checklist, item] } : t
-  );
-  notify();
+export function addChecklistItem(taskId: string, item: ChecklistItem) {
+  updateWorkspaceState((state) => {
+    state.tasks = state.tasks.map((task) =>
+      task.id === taskId ? { ...task, checklist: [...task.checklist, item] } : task,
+    );
+  });
 }
 
 export function updateChecklistItem(taskId: string, itemId: string, text: string) {
-  tasks = tasks.map((t) =>
-    t.id === taskId
-      ? { ...t, checklist: t.checklist.map((c) => (c.id === itemId ? { ...c, text } : c)) }
-      : t
-  );
-  notify();
+  updateWorkspaceState((state) => {
+    state.tasks = state.tasks.map((task) =>
+      task.id === taskId
+        ? {
+            ...task,
+            checklist: task.checklist.map((item) => (item.id === itemId ? { ...item, text } : item)),
+          }
+        : task,
+    );
+  });
 }
 
 export function deleteChecklistItem(taskId: string, itemId: string) {
-  deleteEstimateItemsBySourceId(itemId);
-  tasks = tasks.map((t) =>
-    t.id === taskId ? { ...t, checklist: t.checklist.filter((c) => c.id !== itemId) } : t
-  );
-  notify();
+  updateWorkspaceState((state) => {
+    deleteEstimateItemsBySourceId(itemId);
+    state.tasks = state.tasks.map((task) =>
+      task.id === taskId ? { ...task, checklist: task.checklist.filter((item) => item.id !== itemId) } : task,
+    );
+  });
+}
+
+export function __unsafeResetStoreForTests() {
+  demoState = loadPersistedDemoState() ?? createSeededDemoState();
+  localState = createEmptyLocalState(getStoredAuthProfile());
+  localProfileId = localState.user.id;
+  listeners.clear();
 }

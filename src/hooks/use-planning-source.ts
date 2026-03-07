@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import * as store from "@/data/store";
 import { getPlanningSource } from "@/data/planning-source";
 import {
@@ -9,6 +9,7 @@ import {
 } from "@/data/workspace-source";
 import { workspaceQueryKeys } from "@/hooks/use-workspace-source";
 import type { Stage, Task } from "@/types/entities";
+import { getAuthStateSnapshot, isDemoSessionActive, subscribeAuthState } from "@/lib/auth-state";
 
 const PLANNING_QUERY_STALE_TIME_MS = 60_000;
 const EMPTY_PLANNING_STAGES: Stage[] = [];
@@ -25,7 +26,9 @@ export const planningQueryKeys = {
 };
 
 function useWorkspaceModeState(): WorkspaceModeState {
-  const supabaseRequested = isSupabaseWorkspaceRequested();
+  useSyncExternalStore(subscribeAuthState, getAuthStateSnapshot);
+  const demoSessionActive = isDemoSessionActive();
+  const supabaseRequested = !demoSessionActive && isSupabaseWorkspaceRequested();
   const modeQuery = useQuery({
     queryKey: workspaceQueryKeys.mode(),
     queryFn: resolveWorkspaceMode,
@@ -33,8 +36,12 @@ function useWorkspaceModeState(): WorkspaceModeState {
     staleTime: PLANNING_QUERY_STALE_TIME_MS,
   });
 
-  if (!supabaseRequested) {
+  if (demoSessionActive) {
     return { kind: "demo" };
+  }
+
+  if (!supabaseRequested) {
+    return { kind: "local" };
   }
 
   return modeQuery.data ?? { kind: "pending-supabase" };
@@ -63,7 +70,7 @@ export function usePlanningProjectStages(projectId: string): Stage[] {
   const getStages = useCallback(() => store.getStages(projectId), [projectId]);
   const demoStages = useStoreValue(
     getStages,
-    mode.kind === "demo",
+    mode.kind === "demo" || mode.kind === "local",
     EMPTY_PLANNING_STAGES,
   );
   const stagesQuery = useQuery({
@@ -78,7 +85,7 @@ export function usePlanningProjectStages(projectId: string): Stage[] {
     staleTime: PLANNING_QUERY_STALE_TIME_MS,
   });
 
-  if (mode.kind === "demo") {
+  if (mode.kind === "demo" || mode.kind === "local") {
     return demoStages;
   }
 
@@ -91,7 +98,7 @@ export function usePlanningProjectTasks(projectId: string): Task[] {
   const getTasks = useCallback(() => store.getTasks(projectId), [projectId]);
   const demoTasks = useStoreValue(
     getTasks,
-    mode.kind === "demo",
+    mode.kind === "demo" || mode.kind === "local",
     EMPTY_PLANNING_TASKS,
   );
   const tasksQuery = useQuery({
@@ -106,7 +113,7 @@ export function usePlanningProjectTasks(projectId: string): Task[] {
     staleTime: PLANNING_QUERY_STALE_TIME_MS,
   });
 
-  if (mode.kind === "demo") {
+  if (mode.kind === "demo" || mode.kind === "local") {
     return demoTasks;
   }
 

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   approveVersion,
   addDependency,
@@ -19,7 +19,7 @@ import {
 import { getHRItems } from "@/data/hr-store";
 import { getProcurementItems } from "@/data/procurement-store";
 import { getEvents, getTask, updateChecklist, updateTask } from "@/data/store";
-import { setAuthRole } from "@/lib/auth-state";
+import { clearDemoSession, enterDemoSession, setAuthRole } from "@/lib/auth-state";
 import { toDayIndex } from "@/lib/estimate-v2/schedule";
 import type {
   EstimateV2Project,
@@ -136,6 +136,17 @@ function version(id: string, number: number, snap: EstimateV2Snapshot): Estimate
     updatedAt: "2025-01-01T00:00:00.000Z",
   };
 }
+
+beforeEach(() => {
+  clearDemoSession();
+  enterDemoSession("project-1");
+  setAuthRole("owner");
+});
+
+afterEach(() => {
+  clearDemoSession();
+  setAuthRole("owner");
+});
 
 describe("estimate-v2 store computeVersionDiff", () => {
   it("returns structured changes with human labels and numbering", () => {

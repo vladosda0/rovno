@@ -1,9 +1,9 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import ShareEstimate from "@/pages/share/ShareEstimate";
 import { createVersionSnapshot, setRegimeDev, submitVersion } from "@/data/estimate-v2-store";
-import { setAuthRole } from "@/lib/auth-state";
+import { clearDemoSession, enterDemoSession, setAuthRole } from "@/lib/auth-state";
 
 function renderSharePage(shareId: string) {
   return render(
@@ -25,8 +25,15 @@ function createSubmittedShareVersion(options?: Parameters<typeof submitVersion>[
   return created.shareId;
 }
 
+beforeEach(() => {
+  clearDemoSession();
+  enterDemoSession("project-1");
+  setAuthRole("owner");
+});
+
 describe("ShareEstimate approval access", () => {
   afterEach(() => {
+    clearDemoSession();
     setAuthRole("owner");
   });
 

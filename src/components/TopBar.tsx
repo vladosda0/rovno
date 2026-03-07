@@ -14,6 +14,7 @@ import { ProjectTabs } from "@/components/ProjectTabs";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { useCurrentUser, useProjects } from "@/hooks/use-mock-data";
+import { clearDemoSession, clearStoredAuthProfile, isAuthenticated, setAuthRole } from "@/lib/auth-state";
 
 interface MockCredits {
   dailyTotal: number;
@@ -69,7 +70,8 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
   const currentProject = projects.find((project) => project.id === projectId);
   const projectName = currentProject?.title ?? "Demo Project";
   const [credits, setCredits] = useState<MockCredits>(DEFAULT_CREDITS);
-  const initials = user.name.split(" ").map((word) => word[0]).join("").slice(0, 2).toUpperCase();
+  const displayName = user.name || user.email || (isAuthenticated() ? "Workspace" : "Guest");
+  const initials = displayName.split(" ").map((word) => word[0]).join("").slice(0, 2).toUpperCase();
 
   const dailyRemaining = Math.max(credits.dailyTotal - credits.dailyUsed, 0);
   const paidRemaining = Math.max(credits.paidTotal - credits.paidUsed, 0);
@@ -77,15 +79,17 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
   const maxCredits = credits.paidTotal + credits.dailyTotal;
   const paidRemainingPct = maxCredits > 0 ? Math.max((paidRemaining / maxCredits) * 100, 0) : 0;
   const dailyRemainingPct = maxCredits > 0 ? Math.max((dailyRemaining / maxCredits) * 100, 0) : 0;
-  const displayName = user.name || "Alex Petrov";
-
   const handleCreditsCardClick = () => {
     navigate("/settings?tab=billing");
   };
 
   const handleLogout = () => {
     setCredits(DEFAULT_CREDITS);
-    toast({ title: "Logged out (demo)" });
+    clearDemoSession();
+    clearStoredAuthProfile();
+    setAuthRole("guest");
+    toast({ title: "Logged out" });
+    navigate("/");
   };
 
   if (isInProject && projectId) {
@@ -319,27 +323,29 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
 
       <div className="flex-1" />
 
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
-            <Avatar className="h-7 w-7">
-              <AvatarFallback className="text-caption bg-accent text-accent-foreground">{initials}</AvatarFallback>
-            </Avatar>
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-48 glass-elevated rounded-card">
-          <DropdownMenuItem asChild>
-            <Link to="/home"><User className="mr-2 h-4 w-4" />Home</Link>
-          </DropdownMenuItem>
-          <DropdownMenuItem asChild>
-            <Link to="/settings"><Settings className="mr-2 h-4 w-4" />Settings</Link>
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem>
-            <LogOut className="mr-2 h-4 w-4" />Logout
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {!isHomePage && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
+              <Avatar className="h-7 w-7">
+                <AvatarFallback className="text-caption bg-accent text-accent-foreground">{initials}</AvatarFallback>
+              </Avatar>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48 glass-elevated rounded-card">
+            <DropdownMenuItem asChild>
+              <Link to="/home"><User className="mr-2 h-4 w-4" />Home</Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link to="/settings"><Settings className="mr-2 h-4 w-4" />Settings</Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={handleLogout}>
+              <LogOut className="mr-2 h-4 w-4" />Logout
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
     </header>
   );
 }

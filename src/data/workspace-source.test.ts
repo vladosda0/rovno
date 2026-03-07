@@ -125,11 +125,22 @@ describe("workspace-source helpers", () => {
     expect(activeProjects.map((project) => project.id)).toEqual(["project-active"]);
   });
 
-  it("falls back to demo mode when Supabase is requested without a session", () => {
+  it("falls back to local mode when Supabase is requested without a session", () => {
     const mode = selectWorkspaceMode({
       requestedSource: "supabase",
       hasSupabaseConfig: true,
       sessionProfileId: null,
+    });
+
+    expect(mode).toEqual({ kind: "local" });
+  });
+
+  it("prioritizes an explicit demo session over local or Supabase mode", () => {
+    const mode = selectWorkspaceMode({
+      requestedSource: "supabase",
+      hasSupabaseConfig: true,
+      sessionProfileId: "profile-1",
+      demoSessionActive: true,
     });
 
     expect(mode).toEqual({ kind: "demo" });
