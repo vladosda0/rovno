@@ -1,10 +1,21 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { addProcurementItem } from "@/data/procurement-store";
 import { __unsafeResetInventoryForTests } from "@/data/inventory-store";
 import { __unsafeResetOrdersForTests } from "@/data/order-store";
 import { fmtCost } from "@/lib/procurement-utils";
 import { OrderModal } from "@/components/procurement/OrderModal";
+
+function createQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+      },
+    },
+  });
+}
 
 function createTestItem(requiredQty = 10) {
   const projectId = `order-modal-project-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -46,13 +57,16 @@ function createTestItem(requiredQty = 10) {
 
 function renderOpenModal(requiredQty = 10) {
   const { projectId, itemId, itemName } = createTestItem(requiredQty);
+  const queryClient = createQueryClient();
   render(
-    <OrderModal
-      open
-      onOpenChange={vi.fn()}
-      projectId={projectId}
-      initialItemIds={[itemId]}
-    />,
+    <QueryClientProvider client={queryClient}>
+      <OrderModal
+        open
+        onOpenChange={vi.fn()}
+        projectId={projectId}
+        initialItemIds={[itemId]}
+      />
+    </QueryClientProvider>,
   );
   const row = screen.getByText(itemName).closest("tr");
   if (!row) {

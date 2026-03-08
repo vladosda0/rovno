@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
 import * as store from "@/data/store";
-import { getProcurementItems, subscribeProcurement } from "@/data/procurement-store";
 import {
   useActivityNotificationsBridge,
   useProjectEvents,
@@ -17,6 +16,7 @@ import {
   usePlanningProjectStages,
   usePlanningProjectTasks,
 } from "@/hooks/use-planning-source";
+import { useProjectProcurementItems } from "@/hooks/use-procurement-source";
 import {
   useWorkspaceCurrentUser,
   useWorkspaceMode,
@@ -76,14 +76,7 @@ export function useProcurement(projectId: string) {
 }
 
 export function useProcurementV2(projectId: string) {
-  const getter = useCallback(() => getProcurementItems(projectId), [projectId]);
-  const [value, setValue] = useState(getter);
-  useEffect(() => {
-    const update = () => setValue(getter());
-    const unsub1 = subscribeProcurement(update);
-    return unsub1;
-  }, [getter]);
-  return value;
+  return useProjectProcurementItems(projectId);
 }
 
 export function useHRItems(projectId: string) {

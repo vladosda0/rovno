@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
 import {
   getOrder,
@@ -6,55 +7,156 @@ import {
   listPlacedSupplierOrdersAllProjects,
   subscribeOrders,
 } from "@/data/order-store";
+import { getOrdersSource } from "@/data/orders-source";
+import { useWorkspaceMode } from "@/hooks/use-workspace-source";
 import type { OrderWithLines } from "@/types/entities";
 
-export function useOrders(projectId: string): OrderWithLines[] {
-  const getter = useCallback(() => listOrdersByProject(projectId), [projectId]);
-  const [value, setValue] = useState(getter);
+const ORDERS_QUERY_STALE_TIME_MS = 60_000;
+const EMPTY_ORDERS: OrderWithLines[] = [];
+
+const orderQueryKeys = {
+  projectOrders: (profileId: string, projectId: string) =>
+    ["orders", "project-orders", profileId, projectId] as const,
+  placedSupplierOrders: (profileId: string, projectId: string) =>
+    ["orders", "placed-supplier-orders", profileId, projectId] as const,
+  placedSupplierOrdersAllProjects: (profileId: string) =>
+    ["orders", "placed-supplier-orders-all-projects", profileId] as const,
+  orderById: (profileId: string, orderId: string) =>
+    ["orders", "order-by-id", profileId, orderId] as const,
+};
+
+function useStoreValue<T>(getter: () => T, enabled: boolean, fallback: T): T {
+  const [value, setValue] = useState<T>(() => enabled ? getter() : fallback);
 
   useEffect(() => {
+    if (!enabled) {
+      setValue(fallback);
+      return;
+    }
+
+    setValue(getter());
     const update = () => setValue(getter());
     return subscribeOrders(update);
-  }, [getter]);
+  }, [enabled, fallback, getter]);
 
-  return value;
+  return enabled ? value : fallback;
+}
+
+export function useOrders(projectId: string): OrderWithLines[] {
+  const mode = useWorkspaceMode();
+  const supabaseMode = mode.kind === "supabase" ? mode : null;
+  const getter = useCallback(() => listOrdersByProject(projectId), [projectId]);
+  const browserOrders = useStoreValue(
+    getter,
+    mode.kind === "demo" || mode.kind === "local",
+    EMPTY_ORDERS,
+  );
+  const ordersQuery = useQuery({
+    queryKey: supabaseMode
+      ? orderQueryKeys.projectOrders(supabaseMode.profileId, projectId)
+      : orderQueryKeys.projectOrders("browser", projectId),
+    queryFn: async () => {
+      const source = await getOrdersSource(supabaseMode ?? undefined);
+      return source.getProjectOrders(projectId);
+    },
+    enabled: Boolean(supabaseMode && projectId),
+    staleTime: ORDERS_QUERY_STALE_TIME_MS,
+  });
+
+  if (mode.kind === "demo" || mode.kind === "local") {
+    return browserOrders;
+  }
+
+  return ordersQuery.data ?? EMPTY_ORDERS;
 }
 
 export function usePlacedSupplierOrders(projectId: string): OrderWithLines[] {
+  const mode = useWorkspaceMode();
+  const supabaseMode = mode.kind === "supabase" ? mode : null;
   const getter = useCallback(() => listPlacedSupplierOrders(projectId), [projectId]);
-  const [value, setValue] = useState(getter);
+  const browserOrders = useStoreValue(
+    getter,
+    mode.kind === "demo" || mode.kind === "local",
+    EMPTY_ORDERS,
+  );
+  const ordersQuery = useQuery({
+    queryKey: supabaseMode
+      ? orderQueryKeys.placedSupplierOrders(supabaseMode.profileId, projectId)
+      : orderQueryKeys.placedSupplierOrders("browser", projectId),
+    queryFn: async () => {
+      const source = await getOrdersSource(supabaseMode ?? undefined);
+      return source.getPlacedSupplierOrders(projectId);
+    },
+    enabled: Boolean(supabaseMode && projectId),
+    staleTime: ORDERS_QUERY_STALE_TIME_MS,
+  });
 
-  useEffect(() => {
-    const update = () => setValue(getter());
-    return subscribeOrders(update);
-  }, [getter]);
+  if (mode.kind === "demo" || mode.kind === "local") {
+    return browserOrders;
+  }
 
-  return value;
+  return ordersQuery.data ?? EMPTY_ORDERS;
 }
 
 export function usePlacedSupplierOrdersAllProjects(): OrderWithLines[] {
+  const mode = useWorkspaceMode();
+  const supabaseMode = mode.kind === "supabase" ? mode : null;
   const getter = useCallback(() => listPlacedSupplierOrdersAllProjects(), []);
-  const [value, setValue] = useState(getter);
+  const browserOrders = useStoreValue(
+    getter,
+    mode.kind === "demo" || mode.kind === "local",
+    EMPTY_ORDERS,
+  );
+  const ordersQuery = useQuery({
+    queryKey: supabaseMode
+      ? orderQueryKeys.placedSupplierOrdersAllProjects(supabaseMode.profileId)
+      : orderQueryKeys.placedSupplierOrdersAllProjects("browser"),
+    queryFn: async () => {
+      const source = await getOrdersSource(supabaseMode ?? undefined);
+      return source.getPlacedSupplierOrdersAllProjects();
+    },
+    enabled: Boolean(supabaseMode),
+    staleTime: ORDERS_QUERY_STALE_TIME_MS,
+  });
 
-  useEffect(() => {
-    const update = () => setValue(getter());
-    return subscribeOrders(update);
-  }, [getter]);
+  if (mode.kind === "demo" || mode.kind === "local") {
+    return browserOrders;
+  }
 
-  return value;
+  return ordersQuery.data ?? EMPTY_ORDERS;
 }
 
 export function useOrder(orderId?: string | null): OrderWithLines | null {
+  const mode = useWorkspaceMode();
+  const supabaseMode = mode.kind === "supabase" ? mode : null;
   const getter = useCallback(() => {
     if (!orderId) return null;
     return getOrder(orderId) ?? null;
   }, [orderId]);
-  const [value, setValue] = useState(getter);
+  const browserOrder = useStoreValue(
+    getter,
+    mode.kind === "demo" || mode.kind === "local",
+    null,
+  );
+  const orderQuery = useQuery({
+    queryKey: supabaseMode && orderId
+      ? orderQueryKeys.orderById(supabaseMode.profileId, orderId)
+      : orderQueryKeys.orderById("browser", orderId ?? ""),
+    queryFn: async () => {
+      if (!orderId) {
+        return null;
+      }
 
-  useEffect(() => {
-    const update = () => setValue(getter());
-    return subscribeOrders(update);
-  }, [getter]);
+      const source = await getOrdersSource(supabaseMode ?? undefined);
+      return source.getOrderById(orderId);
+    },
+    enabled: Boolean(supabaseMode && orderId),
+    staleTime: ORDERS_QUERY_STALE_TIME_MS,
+  });
 
-  return value;
+  if (mode.kind === "demo" || mode.kind === "local") {
+    return browserOrder;
+  }
+
+  return orderQuery.data ?? null;
 }
