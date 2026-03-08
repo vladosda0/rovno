@@ -8,6 +8,7 @@ import {
   Clock, CheckCircle2, FolderOpen,
 } from "lucide-react";
 import { useProjects, useCurrentUser } from "@/hooks/use-mock-data";
+import { useProjectsRecentEventsMap } from "@/hooks/use-activity-source";
 import * as store from "@/data/store";
 
 function getStatusColor(progress: number): string {
@@ -40,6 +41,10 @@ export function OverviewTab() {
   const recentProjects = [...projects]
     .sort((a, b) => b.progress_pct - a.progress_pct)
     .slice(0, 5);
+  const recentActivityByProject = useProjectsRecentEventsMap(
+    projects.slice(0, 3).map((project) => project.id),
+    2,
+  );
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -212,7 +217,7 @@ export function OverviewTab() {
               <h3 className="mb-3 text-body font-semibold text-foreground sm:mb-4">Recent Activity</h3>
               <div className="space-y-1.5">
                 {projects.slice(0, 3).map((p) => {
-                  const events = store.getEvents(p.id).slice(0, 2);
+                  const events = recentActivityByProject[p.id] ?? [];
                   return events.map((evt) => (
                     <div key={evt.id} className="flex items-center gap-2 p-1.5 text-caption text-muted-foreground">
                       <span className="h-1.5 w-1.5 rounded-full bg-accent shrink-0" />

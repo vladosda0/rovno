@@ -1,5 +1,5 @@
-import { useCurrentUser } from "@/hooks/use-mock-data";
-import { getProject, getStages, getTasks, getEstimate, getEvents, getMembers } from "@/data/store";
+import { useCurrentUser, useEvents } from "@/hooks/use-mock-data";
+import { getProject, getStages, getTasks, getEstimate, getMembers } from "@/data/store";
 import { usePermission } from "@/lib/permissions";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useProcurementReadProjectSummary } from "@/hooks/use-procurement-read-model";
@@ -15,7 +15,7 @@ export function ContextInspector({ projectId }: ContextInspectorProps) {
   const tasks = getTasks(projectId);
   const estimate = getEstimate(projectId);
   const procurementSummary = useProcurementReadProjectSummary(projectId);
-  const events = getEvents(projectId).slice(0, 5);
+  const events = useEvents(projectId).slice(0, 5);
   const members = getMembers(projectId);
   const perm = usePermission(projectId);
 

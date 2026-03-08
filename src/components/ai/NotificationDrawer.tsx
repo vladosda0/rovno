@@ -1,5 +1,5 @@
-import { useNotifications } from "@/hooks/use-mock-data";
-import { getEvents, markNotificationRead } from "@/data/store";
+import { useActivityNotificationsBridge, useNotificationEventMap } from "@/hooks/use-activity-source";
+import { markNotificationRead } from "@/data/store";
 import { EventFeedItem } from "./EventFeedItem";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
@@ -11,15 +11,17 @@ interface NotificationDrawerProps {
 }
 
 export function NotificationDrawer({ open, onClose }: NotificationDrawerProps) {
-  const { notifications } = useNotifications();
+  const { notifications, bridges } = useActivityNotificationsBridge();
+  const eventMap = useNotificationEventMap(bridges);
 
   if (!open) return null;
 
-  const allEvents = notifications.map((n) => {
-    // Find matching event across all projects
-    const events = getEvents(n.project_id);
-    return { notification: n, event: events.find((e) => e.id === n.event_id) };
-  }).filter((x) => x.event);
+  const allEvents = notifications
+    .map((notification) => ({
+      notification,
+      event: eventMap[notification.id],
+    }))
+    .filter((entry) => entry.event);
 
   return (
     <div className="absolute inset-0 z-30 flex flex-col glass-elevated rounded-none">

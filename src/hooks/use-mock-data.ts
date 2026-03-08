@@ -3,6 +3,10 @@ import * as store from "@/data/store";
 import { getProcurementItems, subscribeProcurement } from "@/data/procurement-store";
 import { getHRItems, getHRPayments, subscribeHR } from "@/data/hr-store";
 import {
+  useActivityNotificationsBridge,
+  useProjectEvents,
+} from "@/hooks/use-activity-source";
+import {
   useProjectDocuments,
   useProjectMedia,
 } from "@/hooks/use-documents-media-source";
@@ -110,16 +114,11 @@ export function useMedia(projectId: string) {
 }
 
 export function useEvents(projectId: string) {
-  const getter = useCallback(() => store.getEvents(projectId), [projectId]);
-  return useStoreSubscription(getter);
+  return useProjectEvents(projectId);
 }
 
 export function useNotifications() {
-  const user = useCurrentUser();
-  const getter = useCallback(() => store.getNotifications(user.id), [user.id]);
-  const countGetter = useCallback(() => store.getUnreadNotificationCount(user.id), [user.id]);
-  const notifications = useStoreSubscription(getter);
-  const unreadCount = useStoreSubscription(countGetter);
+  const { notifications, unreadCount } = useActivityNotificationsBridge();
   return { notifications, unreadCount };
 }
 
