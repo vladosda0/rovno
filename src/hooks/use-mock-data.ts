@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import * as store from "@/data/store";
 import { getProcurementItems, subscribeProcurement } from "@/data/procurement-store";
-import { getHRItems, getHRPayments, subscribeHR } from "@/data/hr-store";
 import {
   useActivityNotificationsBridge,
   useProjectEvents,
@@ -10,6 +9,10 @@ import {
   useProjectDocuments,
   useProjectMedia,
 } from "@/hooks/use-documents-media-source";
+import {
+  useProjectHRItems,
+  useProjectHRPayments,
+} from "@/hooks/use-hr-source";
 import {
   usePlanningProjectStages,
   usePlanningProjectTasks,
@@ -84,25 +87,11 @@ export function useProcurementV2(projectId: string) {
 }
 
 export function useHRItems(projectId: string) {
-  const getter = useCallback(() => getHRItems(projectId), [projectId]);
-  const [value, setValue] = useState(getter);
-  useEffect(() => {
-    const update = () => setValue(getter());
-    const unsub = subscribeHR(update);
-    return unsub;
-  }, [getter]);
-  return value;
+  return useProjectHRItems(projectId);
 }
 
 export function useHRPayments(projectId: string) {
-  const getter = useCallback(() => getHRPayments(projectId), [projectId]);
-  const [value, setValue] = useState(getter);
-  useEffect(() => {
-    const update = () => setValue(getter());
-    const unsub = subscribeHR(update);
-    return unsub;
-  }, [getter]);
-  return value;
+  return useProjectHRPayments(projectId);
 }
 
 export function useDocuments(projectId: string) {
