@@ -19,7 +19,7 @@ import { computeLineTotals, computeProjectTotals } from "@/lib/estimate-v2/prici
 import { ApprovalStampCard } from "@/components/estimate-v2/ApprovalStampCard";
 import { ApprovalStampFormModal } from "@/components/estimate-v2/ApprovalStampFormModal";
 import type { ApprovalStamp } from "@/types/estimate-v2";
-import { isAuthenticated } from "@/lib/auth-state";
+import { useWorkspaceRuntimeAuth } from "@/hooks/use-workspace-source";
 
 function money(cents: number, currency: string): string {
   return new Intl.NumberFormat("ru-RU", {
@@ -39,6 +39,7 @@ export default function ShareEstimate() {
   const { toast } = useToast();
   const navigate = useNavigate();
   const shared = useEstimateV2Share(shareId);
+  const runtimeAuth = useWorkspaceRuntimeAuth();
 
   const [approvalModalOpen, setApprovalModalOpen] = useState(false);
 
@@ -123,10 +124,13 @@ export default function ShareEstimate() {
     && version.submitted
     && !version.archived
     && !version.approvalStamp;
-  const isGuest = !isAuthenticated();
   const approvalBlockedByPolicy = version?.shareApprovalPolicy === "disabled";
-  const canApprove = Boolean(approvalEligible && !isGuest && !approvalBlockedByPolicy);
-  const requiresRegistrationToApprove = Boolean(approvalEligible && isGuest && !approvalBlockedByPolicy);
+  const canApprove = Boolean(
+    approvalEligible && !runtimeAuth.authPending && !runtimeAuth.isGuest && !approvalBlockedByPolicy,
+  );
+  const requiresRegistrationToApprove = Boolean(
+    approvalEligible && !runtimeAuth.authPending && runtimeAuth.isGuest && !approvalBlockedByPolicy,
+  );
 
   if (!shared || !snapshot || !version) {
     return (

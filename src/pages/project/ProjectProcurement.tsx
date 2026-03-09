@@ -37,7 +37,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Calendar } from "@/components/ui/calendar";
 import { EmptyState } from "@/components/EmptyState";
 import { StatusBadge } from "@/components/StatusBadge";
-import { useProject, useProcurementV2 } from "@/hooks/use-mock-data";
+import { useCurrentUser, useProject, useProcurementV2 } from "@/hooks/use-mock-data";
 import { useOrders } from "@/hooks/use-order-data";
 import { useInventoryStock, useLocations } from "@/hooks/use-inventory-data";
 import { usePermission } from "@/lib/permissions";
@@ -46,7 +46,7 @@ import {
   updateProcurementItem,
 } from "@/data/procurement-store";
 import { consumeStockFromInventory, receiveOrder, updateOrder } from "@/data/order-store";
-import { addEvent, addTask, getCurrentUser, getTask, getUserById } from "@/data/store";
+import { addEvent, addTask, getTask, getUserById } from "@/data/store";
 import {
   collectItemLocationEventHistory,
   computeProcurementHeaderKpis,
@@ -204,6 +204,7 @@ export default function ProjectProcurement() {
   const { project, members, stages } = useProject(pid);
   const estimateState = useEstimateV2Project(pid);
   const perm = usePermission(pid);
+  const currentUser = useCurrentUser();
   const canEdit = perm.can("procurement.edit");
 
   const [search, setSearch] = useState(savedListState?.search ?? "");
@@ -363,8 +364,8 @@ export default function ProjectProcurement() {
   ), [members]);
 
   const ownerAssigneeId = useMemo(
-    () => project?.owner_id ?? members.find((member) => member.role === "owner")?.user_id ?? getCurrentUser().id,
-    [project?.owner_id, members],
+    () => project?.owner_id ?? members.find((member) => member.role === "owner")?.user_id ?? currentUser.id,
+    [currentUser.id, project?.owner_id, members],
   );
 
   const isItemSearchMatch = useCallback((item: ProcurementItemV2) => {
@@ -916,7 +917,6 @@ export default function ProjectProcurement() {
     }
 
     const usedByLabel = manualName || (participantId ? participantNameById.get(participantId) : "") || "—";
-    const currentUser = getCurrentUser();
     for (const entry of rowsToConsume) {
       const { target, qty } = entry;
       const result = consumeStockFromInventory({

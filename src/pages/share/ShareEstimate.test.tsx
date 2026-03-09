@@ -1,17 +1,30 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import ShareEstimate from "@/pages/share/ShareEstimate";
 import { createVersionSnapshot, setRegimeDev, submitVersion } from "@/data/estimate-v2-store";
 import { clearDemoSession, enterDemoSession, setAuthRole } from "@/lib/auth-state";
 
+function createQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+      },
+    },
+  });
+}
+
 function renderSharePage(shareId: string) {
   return render(
-    <MemoryRouter initialEntries={[`/share/estimate/${shareId}`]}>
-      <Routes>
-        <Route path="/share/estimate/:shareId" element={<ShareEstimate />} />
-      </Routes>
-    </MemoryRouter>,
+    <QueryClientProvider client={createQueryClient()}>
+      <MemoryRouter initialEntries={[`/share/estimate/${shareId}`]}>
+        <Routes>
+          <Route path="/share/estimate/:shareId" element={<ShareEstimate />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 

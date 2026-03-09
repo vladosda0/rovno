@@ -9,8 +9,9 @@ import {
   ArrowLeft, Star, Trash2, X, Camera, ExternalLink, Sparkles,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { useCurrentUser } from "@/hooks/use-mock-data";
 import {
-  updateMedia, deleteMedia, addEvent, getCurrentUser, getTask, getStage,
+  updateMedia, deleteMedia, addEvent, getTask, getStage,
   getMedia,
 } from "@/data/store";
 import { openPhotoConsult } from "@/lib/photo-consult-store";
@@ -42,7 +43,7 @@ export function PhotoViewer({ photo, open, onOpenChange, source, allPhotos = [] 
 
   if (!photo) return null;
 
-  const user = getCurrentUser();
+  const currentUser = useCurrentUser();
   const task = photo.task_id ? getTask(photo.task_id) : undefined;
   const stage = task?.stage_id ? getStage(task.stage_id) : undefined;
   const colorIdx = allPhotos.indexOf(photo);
@@ -60,7 +61,7 @@ export function PhotoViewer({ photo, open, onOpenChange, source, allPhotos = [] 
     addEvent({
       id: `evt-${Date.now()}`,
       project_id: photo.project_id,
-      actor_id: user.id,
+      actor_id: currentUser.id,
       type: "photo_deleted",
       object_type: "media",
       object_id: photo.id,

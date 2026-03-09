@@ -43,7 +43,6 @@ import {
   useProject,
   useTasks,
 } from "@/hooks/use-mock-data";
-import { getAuthRole } from "@/lib/auth-state";
 import {
   approveVersion,
   computeVersionDiff,
@@ -54,6 +53,7 @@ import {
   deleteLine,
   deleteStage,
   deleteWork,
+  type EstimateMutationActor,
   refreshVersionSnapshot,
   setProjectEstimateStatus,
   submitVersion,
@@ -92,7 +92,7 @@ import type {
   EstimateExecutionStatus,
   ResourceLineType,
 } from "@/types/estimate-v2";
-import type { UserPlan } from "@/types/entities";
+import type { MemberRole, UserPlan } from "@/types/entities";
 import { Checkbox } from "@/components/ui/checkbox";
 
 function money(cents: number, currency: string): string {
@@ -293,14 +293,17 @@ export default function ProjectEstimate() {
     scheduleBaseline,
   } = useEstimateV2Project(pid);
 
-  const authRole = getAuthRole();
   const currentMembership = members.find((member) => member.user_id === currentUser.id) ?? null;
-  const isOwner = authRole === "owner" && project?.owner_id === currentUser.id;
-  const canSubmitByRole = authRole === "owner" || authRole === "co_owner";
-  const canSubmitByMembership = currentMembership?.role === "owner" || currentMembership?.role === "co_owner";
+  const currentMembershipRole: MemberRole | null = currentMembership?.role ?? null;
+  const estimateMutationActor = useMemo<EstimateMutationActor>(() => ({
+    actorId: currentUser.id,
+    membershipRole: currentMembershipRole,
+  }), [currentMembershipRole, currentUser.id]);
+  const isOwner = currentMembershipRole === "owner" && project?.owner_id === currentUser.id;
+  const canSubmitByMembership = currentMembershipRole === "owner" || currentMembershipRole === "co_owner";
   const regime = estimateProject.regime;
   const canEditEstimate = isOwner && regime !== "client";
-  const canSubmitToClient = canSubmitByRole && canSubmitByMembership && regime !== "client";
+  const canSubmitToClient = canSubmitByMembership && regime !== "client";
 
   const [activeTab, setActiveTab] = useState("estimate");
   const [approvalModalOpen, setApprovalModalOpen] = useState(false);
@@ -323,6 +326,7 @@ export default function ProjectEstimate() {
     Record<string, { hasOverflow: boolean; isScrolled: boolean }>
   >({});
   const workTableScrollCleanupRef = useRef<Map<string, () => void>>(new Map());
+  const workTableRefCallbacksRef = useRef<Map<string, (node: HTMLTableElement | null) => void>>(new Map());
 
   useEffect(() => {
     if (!pendingLineTitleEditId) return;
@@ -336,6 +340,7 @@ export default function ProjectEstimate() {
     () => {
       workTableScrollCleanupRef.current.forEach((cleanup) => cleanup());
       workTableScrollCleanupRef.current.clear();
+      workTableRefCallbacksRef.current.clear();
     }
   ), []);
 
@@ -632,7 +637,10 @@ export default function ProjectEstimate() {
   ) => {
     if (!canEditEstimate) return;
     if (nextStatus === estimateProject.estimateStatus && !options?.skipSetup) return;
-    const result = setProjectEstimateStatus(pid, nextStatus, options);
+    const result = setProjectEstimateStatus(pid, nextStatus, {
+      ...estimateMutationActor,
+      ...options,
+    });
     if (!result.ok) {
       if (result.reason === "missing_work_dates") {
         setMissingDatesWorkIds(result.missingWorkIds ?? []);
@@ -705,10 +713,12 @@ export default function ProjectEstimate() {
     const previewOnly = !hasDirectRecipients && availableParticipantSlots === 0;
     const submitOptions = previewOnly
       ? {
+        ...estimateMutationActor,
         shareApprovalPolicy: "disabled" as const,
         shareApprovalDisabledReason: "no_participant_slot" as const,
       }
       : {
+        ...estimateMutationActor,
         shareApprovalPolicy: "registered" as const,
       };
 
@@ -939,7 +949,7 @@ export default function ProjectEstimate() {
       type: option.value,
       qtyMilli: 1_000,
       costUnitCents: 0,
-    });
+    }, estimateMutationActor);
     if (!created) return;
     setPendingLineTitleEditId(created.id);
   };
@@ -971,25 +981,57 @@ export default function ProjectEstimate() {
     const container = tableNode.parentElement as HTMLDivElement | null;
     if (!container) return;
 
-    const handleScrollOrResize = () => {
-      updateWorkTableScrollState(workId, container);
+    let frameId: number | null = null;
+    const scheduleMeasure = () => {
+      if (typeof window === "undefined") {
+        updateWorkTableScrollState(workId, container);
+        return;
+      }
+
+      if (frameId != null) {
+        window.cancelAnimationFrame(frameId);
+      }
+
+      frameId = window.requestAnimationFrame(() => {
+        frameId = null;
+        updateWorkTableScrollState(workId, container);
+      });
     };
 
-    handleScrollOrResize();
-    container.addEventListener("scroll", handleScrollOrResize, { passive: true });
+    scheduleMeasure();
+    container.addEventListener("scroll", scheduleMeasure, { passive: true });
     const resizeObserver = typeof ResizeObserver !== "undefined"
-      ? new ResizeObserver(handleScrollOrResize)
+      ? new ResizeObserver(scheduleMeasure)
       : null;
     resizeObserver?.observe(container);
     resizeObserver?.observe(tableNode);
 
     const cleanup = () => {
-      container.removeEventListener("scroll", handleScrollOrResize);
+      if (frameId != null && typeof window !== "undefined") {
+        window.cancelAnimationFrame(frameId);
+        frameId = null;
+      }
+      container.removeEventListener("scroll", scheduleMeasure);
       resizeObserver?.disconnect();
     };
 
     workTableScrollCleanupRef.current.set(workId, cleanup);
   }, [updateWorkTableScrollState]);
+
+  const getWorkTableRef = useCallback((workId: string) => {
+    const existing = workTableRefCallbacksRef.current.get(workId);
+    if (existing) return existing;
+
+    const callback = (node: HTMLTableElement | null) => {
+      registerWorkTable(workId, node);
+      if (node == null) {
+        workTableRefCallbacksRef.current.delete(workId);
+      }
+    };
+
+    workTableRefCallbacksRef.current.set(workId, callback);
+    return callback;
+  }, [registerWorkTable]);
 
   const openCustomUnitInput = (lineId: string, currentUnit: string) => {
     setCustomUnitInputLineIds((current) => {
@@ -1019,7 +1061,7 @@ export default function ProjectEstimate() {
       return;
     }
     if (nextUnit !== line.unit) {
-      updateLine(pid, line.id, { unit: nextUnit });
+      updateLine(pid, line.id, { unit: nextUnit }, estimateMutationActor);
     }
     closeCustomUnitInput(line.id);
   };
@@ -1572,13 +1614,13 @@ export default function ProjectEstimate() {
                           <span className="w-7 shrink-0 text-sm font-semibold text-muted-foreground tabular-nums">
                             {stageNumber}
                           </span>
-                          <InlineEditableText
-                            value={stage.title}
-                            readOnly={!canEditEstimate}
-                            onCommit={(nextValue) => updateStage(pid, stage.id, { title: nextValue || stage.title })}
-                            className="min-w-[220px] flex-1"
-                            displayClassName="text-body-sm font-semibold"
-                            inputClassName="text-body-sm font-semibold"
+                            <InlineEditableText
+                              value={stage.title}
+                              readOnly={!canEditEstimate}
+                              onCommit={(nextValue) => updateStage(pid, stage.id, { title: nextValue || stage.title }, estimateMutationActor)}
+                              className="min-w-[220px] flex-1"
+                              displayClassName="text-body-sm font-semibold"
+                              inputClassName="text-body-sm font-semibold"
                           />
                         </div>
 
@@ -1588,7 +1630,7 @@ export default function ProjectEstimate() {
                             {canEditEstimate ? (
                               <InlineEditableNumber
                                 value={stage.discountBps}
-                                onCommit={(nextValue) => updateStage(pid, stage.id, { discountBps: nextValue })}
+                                onCommit={(nextValue) => updateStage(pid, stage.id, { discountBps: nextValue }, estimateMutationActor)}
                                 formatDisplay={(value) => `${fromBpsToPercent(value)}%`}
                                 formatInput={(value) => fromBpsToPercent(value)}
                                 parseInput={(raw) => toBpsFromPercent(raw)}
@@ -1605,7 +1647,7 @@ export default function ProjectEstimate() {
                             </span>
                           </div>
                           {canEditEstimate && (
-                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => deleteStage(pid, stage.id)}>
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => deleteStage(pid, stage.id, estimateMutationActor)}>
                               <Trash2 className="h-4 w-4 text-destructive" />
                             </Button>
                           )}
@@ -1633,14 +1675,14 @@ export default function ProjectEstimate() {
                                     <InlineEditableText
                                       value={work.title}
                                       readOnly={!canEditEstimate}
-                                      onCommit={(nextValue) => updateWork(pid, work.id, { title: nextValue || work.title })}
+                                      onCommit={(nextValue) => updateWork(pid, work.id, { title: nextValue || work.title }, estimateMutationActor)}
                                       className="min-w-[220px] flex-1"
                                       displayClassName="text-sm font-medium"
                                       inputClassName="text-sm font-medium"
                                     />
                                   </div>
                                   {canEditEstimate && (
-                                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => deleteWork(pid, work.id)}>
+                                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => deleteWork(pid, work.id, estimateMutationActor)}>
                                       <Trash2 className="h-4 w-4 text-destructive" />
                                     </Button>
                                   )}
@@ -1648,7 +1690,7 @@ export default function ProjectEstimate() {
 
                                 <div className="relative pl-4">
                                   <Table
-                                    ref={(node) => registerWorkTable(work.id, node)}
+                                    ref={getWorkTableRef(work.id)}
                                     className="table-fixed min-w-[980px]"
                                   >
                                     <TableHeader>
@@ -1708,7 +1750,7 @@ export default function ProjectEstimate() {
                                                       {RESOURCE_TYPE_OPTIONS.map((option) => (
                                                         <DropdownMenuItem
                                                           key={option.value}
-                                                          onSelect={() => updateLine(pid, line.id, { type: option.value })}
+                                                          onSelect={() => updateLine(pid, line.id, { type: option.value }, estimateMutationActor)}
                                                         >
                                                           <ResourceTypeBadge type={option.value} className="border-transparent" />
                                                         </DropdownMenuItem>
@@ -1720,14 +1762,14 @@ export default function ProjectEstimate() {
                                                     <ResourceTypeBadge type={line.type} iconOnly />
                                                   </span>
                                                 )}
-                                                <InlineEditableText
-                                                  value={line.title}
-                                                  readOnly={!canEditEstimate}
-                                                  startInEditMode={pendingLineTitleEditId === line.id}
-                                                  onCommit={(nextValue) => updateLine(pid, line.id, { title: nextValue || line.title })}
-                                                  className="min-w-0 flex-1"
-                                                  displayClassName="whitespace-normal break-words leading-5 max-h-10 overflow-hidden font-medium"
-                                                />
+                                                  <InlineEditableText
+                                                    value={line.title}
+                                                    readOnly={!canEditEstimate}
+                                                    startInEditMode={pendingLineTitleEditId === line.id}
+                                                    onCommit={(nextValue) => updateLine(pid, line.id, { title: nextValue || line.title }, estimateMutationActor)}
+                                                    className="min-w-0 flex-1"
+                                                    displayClassName="whitespace-normal break-words leading-5 max-h-10 overflow-hidden font-medium"
+                                                  />
                                               </div>
                                             </TableCell>
 
@@ -1741,7 +1783,7 @@ export default function ProjectEstimate() {
                                                     participants={participantOptions}
                                                     editable={canEditEstimate}
                                                     clientView={regime === "client"}
-                                                    onCommit={(nextValue) => updateLine(pid, line.id, nextValue)}
+                                                    onCommit={(nextValue) => updateLine(pid, line.id, nextValue, estimateMutationActor)}
                                                   />
                                                 ) : (
                                                   <span className="text-xs text-muted-foreground">—</span>
@@ -1753,7 +1795,7 @@ export default function ProjectEstimate() {
                                               <InlineEditableNumber
                                                 value={line.qtyMilli}
                                                 readOnly={!canEditEstimate}
-                                                onCommit={(nextValue) => updateLine(pid, line.id, { qtyMilli: nextValue })}
+                                                onCommit={(nextValue) => updateLine(pid, line.id, { qtyMilli: nextValue }, estimateMutationActor)}
                                                 formatDisplay={(value) => qtyFromMilli(value)}
                                                 formatInput={(value) => qtyFromMilli(value)}
                                                 parseInput={(raw) => toQtyMilli(raw)}
@@ -1771,7 +1813,7 @@ export default function ProjectEstimate() {
                                                         return;
                                                       }
                                                       closeCustomUnitInput(line.id);
-                                                      updateLine(pid, line.id, { unit: nextValue });
+                                                      updateLine(pid, line.id, { unit: nextValue }, estimateMutationActor);
                                                     }}
                                                   >
                                                     <SelectTrigger className="h-7 border-transparent bg-transparent px-1 py-0 text-sm shadow-none focus:ring-1 focus:ring-ring/40">
@@ -1818,7 +1860,7 @@ export default function ProjectEstimate() {
                                                 <InlineEditableNumber
                                                   value={line.costUnitCents}
                                                   readOnly={!canEditEstimate}
-                                                  onCommit={(nextValue) => updateLine(pid, line.id, { costUnitCents: nextValue })}
+                                                  onCommit={(nextValue) => updateLine(pid, line.id, { costUnitCents: nextValue }, estimateMutationActor)}
                                                   formatDisplay={(value) => money(value, estimateProject.currency)}
                                                   formatInput={(value) => (value / 100).toString()}
                                                   parseInput={(raw) => toCentsFromMajor(raw)}
@@ -1837,7 +1879,7 @@ export default function ProjectEstimate() {
                                                 <InlineEditableNumber
                                                   value={line.markupBps}
                                                   readOnly={!canEditEstimate}
-                                                  onCommit={(nextValue) => updateLine(pid, line.id, { markupBps: nextValue })}
+                                                  onCommit={(nextValue) => updateLine(pid, line.id, { markupBps: nextValue }, estimateMutationActor)}
                                                   formatDisplay={(value) => fromBpsToPercent(value)}
                                                   formatInput={(value) => fromBpsToPercent(value)}
                                                   parseInput={(raw) => toBpsFromPercent(raw)}
@@ -1850,7 +1892,7 @@ export default function ProjectEstimate() {
                                                 {canEditEstimate ? (
                                                   <InlineEditableNumber
                                                     value={line.discountBpsOverride ?? 0}
-                                                    onCommit={(nextValue) => updateLine(pid, line.id, { discountBpsOverride: nextValue })}
+                                                    onCommit={(nextValue) => updateLine(pid, line.id, { discountBpsOverride: nextValue }, estimateMutationActor)}
                                                     formatDisplay={(value) => fromBpsToPercent(value)}
                                                     formatInput={(value) => fromBpsToPercent(value)}
                                                     parseInput={(raw) => toBpsFromPercent(raw)}
@@ -1876,7 +1918,7 @@ export default function ProjectEstimate() {
                                                   size="icon"
                                                   variant="ghost"
                                                   className="h-7 w-7"
-                                                  onClick={() => deleteLine(pid, line.id)}
+                                                  onClick={() => deleteLine(pid, line.id, estimateMutationActor)}
                                                 >
                                                   <Trash2 className="h-4 w-4 text-destructive" />
                                                 </Button>
@@ -1939,7 +1981,7 @@ export default function ProjectEstimate() {
                                   size="sm"
                                   variant="secondary"
                                   className="h-6 gap-1 px-2 text-xs"
-                                  onClick={() => createWork(pid, { stageId: stage.id, title: `Work ${stageWorks.length + 1}` })}
+                                  onClick={() => createWork(pid, { stageId: stage.id, title: `Work ${stageWorks.length + 1}` }, estimateMutationActor)}
                                 >
                                   <Plus className="h-3.5 w-3.5" />
                                   Add work
@@ -1963,7 +2005,7 @@ export default function ProjectEstimate() {
                   size="sm"
                   variant="secondary"
                   className="h-7 gap-1 px-2 text-xs"
-                  onClick={() => createStage(pid, { title: `Stage ${stages.length + 1}` })}
+                  onClick={() => createStage(pid, { title: `Stage ${stages.length + 1}` }, estimateMutationActor)}
                 >
                   <Plus className="h-3.5 w-3.5" />
                   Add stage
@@ -1979,6 +2021,7 @@ export default function ProjectEstimate() {
               works={works}
               dependencies={dependencies}
               isOwner={canEditEstimate}
+              mutationActor={estimateMutationActor}
             />
           </TabsContent>
 

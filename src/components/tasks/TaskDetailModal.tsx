@@ -9,12 +9,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { PhotoViewer } from "@/components/PhotoViewer";
 import {
-  getUserById, getCurrentUser, addComment,
+  getUserById, addComment,
   updateChecklist, deleteTask, updateTaskDescription,
   updateTaskDeadline, addChecklistItem, deleteChecklistItem,
   getMedia, updateTask, addMedia,
 } from "@/data/store";
 import { useToast } from "@/hooks/use-toast";
+import { useCurrentUser } from "@/hooks/use-mock-data";
 import {
   Send, CheckSquare, Trash2, Plus, X, Calendar, Camera, Image, Upload, Package,
 } from "lucide-react";
@@ -52,6 +53,7 @@ interface Props {
 
 export function TaskDetailModal({ task, open, onOpenChange, canEdit, onStatusChange, projectMedia }: Props) {
   const { toast } = useToast();
+  const currentUser = useCurrentUser();
   const [commentText, setCommentText] = useState("");
   const [descDraft, setDescDraft] = useState("");
   const [newCheckItem, setNewCheckItem] = useState("");
@@ -520,13 +522,12 @@ export function TaskDetailModal({ task, open, onOpenChange, canEdit, onStatusCha
             <AlertDialogAction
               className="bg-accent text-accent-foreground hover:bg-accent/90"
               onClick={() => {
-                const user = getCurrentUser();
                 const mediaId = `media-${Date.now()}`;
                 addMedia({
                   id: mediaId,
                   project_id: task.project_id,
                   task_id: task.id,
-                  uploader_id: user.id,
+                  uploader_id: currentUser.id,
                   caption: uploadCaption || "Photo",
                   is_final: false,
                   created_at: new Date().toISOString(),

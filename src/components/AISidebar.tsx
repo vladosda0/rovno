@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCurrentUser, useEvents, useProject, useProjects, useTasks } from "@/hooks/use-mock-data";
+import { useWorkspaceRuntimeAuth } from "@/hooks/use-workspace-source";
 import { usePermission } from "@/lib/permissions";
 import { generateProposalQueue, getTextResponse, reviseProposalWithEdits } from "@/lib/ai-engine";
 import { commitProposal } from "@/lib/commit-proposal";
@@ -49,14 +50,14 @@ import { toast } from "@/hooks/use-toast";
 import type { AIMessage, AIProposal, ProposalChange } from "@/types/ai";
 import type { Event } from "@/types/entities";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { getProfileAutomationLevelMode, isAuthenticated, setProfileAutomationLevelMode } from "@/lib/auth-state";
+import { getProfileAutomationLevelMode, setProfileAutomationLevelMode } from "@/lib/auth-state";
 import {
   subscribePhotoConsult, closePhotoConsult, buildConsultPrompt, getPhotoConsultContext,
   type PhotoConsultContext,
 } from "@/lib/photo-consult-store";
 import {
   addTask, addComment as addTaskComment, addEvent, addDocument, addDocumentVersion,
-  getCurrentUser, getStages, getUserById, updateProject, getDocuments, updateTask,
+  getStages, getUserById, updateProject, getDocuments, updateTask,
 } from "@/data/store";
 import { format, isToday, isYesterday } from "date-fns";
 
@@ -386,14 +387,19 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const isHomeContext = location.pathname === "/home";
   const projectId = isProjectContext ? location.pathname.split("/")[2] : "";
   const scopeKey = useMemo(() => getSidebarScopeKey(location.pathname), [location.pathname]);
+  const runtimeAuth = useWorkspaceRuntimeAuth();
 
-  const isGuest = !isAuthenticated();
+  const isGuest = !runtimeAuth.authPending && runtimeAuth.isGuest;
   const user = useCurrentUser();
   const projects = useProjects();
   const permResult = usePermission(projectId || "");
   const perm = isProjectContext && !isGuest ? permResult : null;
   const { project, members } = useProject(projectId || "");
   const tasks = useTasks(projectId || "");
+  const currentMembership = useMemo(
+    () => members.find((member) => member.user_id === user.id) ?? null,
+    [members, user.id],
+  );
 
   const [messages, setMessages] = useState<AIMessage[]>([]);
   const [workLogs, setWorkLogs] = useState<Map<string, WorkLogEntry>>(new Map());
@@ -737,6 +743,11 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
         const result = shouldSimulateFailure
           ? { success: false as const, error: "Temporary execution error. Retrying..." }
           : commitProposal(queueItem.proposal, {
+              actor: {
+                currentUser: user,
+                role: currentMembership?.role ?? null,
+                aiAccess: currentMembership?.ai_access ?? "none",
+              },
               eventSource: "ai",
               eventActorId: "ai",
               emitProposalEvent: true,
@@ -1171,7 +1182,6 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   // Photo consult: confirm suggested actions
   function handleConsultConfirm() {
     if (!photoConsult) return;
-    const currentUser = getCurrentUser();
     const stages = getStages(photoConsult.photo.project_id);
     const stage = stages[0];
     let appliedCount = 0;
@@ -1189,7 +1199,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
           title: action.label,
           description: `AI-identified issue from photo: ${photoConsult.photo.caption}`,
           status: "not_started",
-          assignee_id: currentUser.id,
+          assignee_id: user.id,
           checklist: [],
           comments: [],
           attachments: [],

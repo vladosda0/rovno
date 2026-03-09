@@ -28,7 +28,8 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { seedProjects } from "@/data/seed";
-import { enterDemoSession, isAuthenticated } from "@/lib/auth-state";
+import { enterDemoSession } from "@/lib/auth-state";
+import { useWorkspaceRuntimeAuth } from "@/hooks/use-workspace-source";
 import { toast } from "@/hooks/use-toast";
 
 const THEME_KEY = "landing-theme";
@@ -877,8 +878,8 @@ function getPhotoActionClasses(kind: PhotoAction["kind"], isActive: boolean): st
 }
 
 export default function Landing() {
-  const isGuest = !isAuthenticated();
-  const createProjectTo = isGuest ? "/auth/signup" : "/home";
+  const runtimeAuth = useWorkspaceRuntimeAuth();
+  const createProjectTo = runtimeAuth.canAccessWorkspace || runtimeAuth.authPending ? "/home" : "/auth/signup";
   const fileInputRef = useRef<HTMLInputElement>(null);
   const promptTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 

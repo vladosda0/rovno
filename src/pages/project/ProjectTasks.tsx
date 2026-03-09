@@ -1,8 +1,8 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { useParams, useLocation } from "react-router-dom";
-import { useProject, useTasks, usePermission, useMedia } from "@/hooks/use-mock-data";
+import { useCurrentUser, useProject, useTasks, usePermission, useMedia } from "@/hooks/use-mock-data";
 import {
-  getUserById, getCurrentUser, updateTask, addTask, addStage,
+  getUserById, updateTask, addTask, addStage,
   deleteStage as storeDeleteStage, completeStage as storeCompleteStage,
   addMedia, addEvent, addComment,
 } from "@/data/store";
@@ -18,7 +18,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { useToast } from "@/hooks/use-toast";
-import { getAuthRole } from "@/lib/auth-state";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import {
@@ -47,8 +46,7 @@ export default function ProjectTasks() {
   const { role, can: userCan } = usePermission(pid);
   const { project: estimateProject } = useEstimateV2Project(pid);
   const { toast } = useToast();
-  const authRole = getAuthRole();
-  const currentUser = getCurrentUser();
+  const currentUser = useCurrentUser();
   const isClientRegime = estimateProject.regime === "client";
   const canCreateTask = !isClientRegime && userCan("task.create");
   const canEditTask = !isClientRegime && userCan("task.edit");
@@ -330,7 +328,7 @@ export default function ProjectTasks() {
       <div className="flex items-center justify-between mb-sp-2 flex-wrap gap-2">
         <h2 className="text-lg font-semibold text-foreground">Tasks</h2>
         <div className="flex items-center gap-2">
-          {(authRole === "contractor" || role === "contractor") && (
+          {role === "contractor" && (
             <button
               onClick={() => setAssignedToMe(!assignedToMe)}
               className={`rounded-full px-3 py-1 text-caption font-medium transition-colors ${

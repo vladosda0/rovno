@@ -1,6 +1,7 @@
 import { Link, useLocation, useMatch, useNavigate } from "react-router-dom";
 import { ChevronDown, Hammer, LogOut, PanelLeft, Settings, User } from "lucide-react";
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,7 +15,12 @@ import { ProjectTabs } from "@/components/ProjectTabs";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { useCurrentUser, useProjects } from "@/hooks/use-mock-data";
-import { clearDemoSession, clearStoredAuthProfile, isAuthenticated, setAuthRole } from "@/lib/auth-state";
+import { useWorkspaceRuntimeAuth } from "@/hooks/use-workspace-source";
+import {
+  clearDemoSession,
+  clearStoredLocalAuthProfile,
+  setSimulatedAuthRole,
+} from "@/lib/auth-state";
 
 interface MockCredits {
   dailyTotal: number;
@@ -59,18 +65,20 @@ interface TopBarProps {
 
 export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const location = useLocation();
   const projectMatch = useMatch("/project/:id/*");
   const projectId = projectMatch?.params.id;
   const isInProject = Boolean(projectId);
   const isHomePage = location.pathname === "/home";
+  const runtimeAuth = useWorkspaceRuntimeAuth();
 
   const user = useCurrentUser();
   const projects = useProjects();
   const currentProject = projects.find((project) => project.id === projectId);
   const projectName = currentProject?.title ?? "Demo Project";
   const [credits, setCredits] = useState<MockCredits>(DEFAULT_CREDITS);
-  const displayName = user.name || user.email || (isAuthenticated() ? "Workspace" : "Guest");
+  const displayName = user.name || user.email || (runtimeAuth.isGuest ? "Guest" : "Workspace");
   const initials = displayName.split(" ").map((word) => word[0]).join("").slice(0, 2).toUpperCase();
 
   const dailyRemaining = Math.max(credits.dailyTotal - credits.dailyUsed, 0);
@@ -83,11 +91,29 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
     navigate("/settings?tab=billing");
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    if (runtimeAuth.runtimeKind === "supabase") {
+      try {
+        const { supabase } = await import("@/integrations/supabase/client");
+        const { error } = await supabase.auth.signOut();
+        if (error) {
+          throw error;
+        }
+      } catch (error) {
+        toast({
+          title: "Unable to log out",
+          description: error instanceof Error ? error.message : "Please try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     setCredits(DEFAULT_CREDITS);
     clearDemoSession();
-    clearStoredAuthProfile();
-    setAuthRole("guest");
+    clearStoredLocalAuthProfile();
+    setSimulatedAuthRole("guest");
+    queryClient.removeQueries({ queryKey: ["workspace"] });
     toast({ title: "Logged out" });
     navigate("/");
   };

@@ -6,7 +6,7 @@ import {
   updateEstimateItems, deductCredit,
   addProject, addMember, addStage,
 } from "@/data/store";
-import type { MemberRole, AIAccess } from "@/types/entities";
+import type { AIAccess, MemberRole, User } from "@/types/entities";
 
 export interface CommitResultItem {
   type: string;
@@ -27,6 +27,11 @@ export interface CommitResult {
 }
 
 export interface CommitProposalOptions {
+  actor?: {
+    currentUser: User;
+    role?: MemberRole | null;
+    aiAccess?: AIAccess;
+  };
   eventSource?: "ai" | "user";
   eventActorId?: string;
   emitProposalEvent?: boolean;
@@ -42,11 +47,11 @@ export function commitProposal(proposal: AIProposal, options: CommitProposalOpti
     return commitProjectProposal(proposal, options);
   }
 
-  const user = getCurrentUser();
+  const user = options.actor?.currentUser ?? getCurrentUser();
   const members = getMembers(proposal.project_id);
   const membership = members.find((m) => m.user_id === user.id);
-  const role: MemberRole = membership?.role ?? "viewer";
-  const aiAccess: AIAccess = membership?.ai_access ?? "none";
+  const role: MemberRole = options.actor?.role ?? membership?.role ?? "viewer";
+  const aiAccess: AIAccess = options.actor?.aiAccess ?? membership?.ai_access ?? "none";
 
   if (!can(role, "ai.generate", aiAccess)) {
     return { success: false, error: "You don't have permission to use AI generation.", eventIds: [], created: [], updated: [] };
@@ -225,7 +230,7 @@ export function commitProposal(proposal: AIProposal, options: CommitProposalOpti
 }
 
 function commitProjectProposal(proposal: AIProposal, options: CommitProposalOptions): CommitResult {
-  const user = getCurrentUser();
+  const user = options.actor?.currentUser ?? getCurrentUser();
   const totalCredits = user.credits_free + user.credits_paid;
   if (totalCredits <= 0) {
     return { success: false, error: "No credits remaining.", eventIds: [], created: [], updated: [] };

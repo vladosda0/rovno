@@ -20,11 +20,11 @@ import { PreviewCard } from "@/components/ai/PreviewCard";
 import { ActionBar } from "@/components/ai/ActionBar";
 import { EmptyState } from "@/components/EmptyState";
 import { toast } from "@/hooks/use-toast";
-import { useDocuments, useProject } from "@/hooks/use-mock-data";
+import { useCurrentUser, useDocuments, useProject } from "@/hooks/use-mock-data";
 import { usePermission, isOwnerOrCoOwner } from "@/lib/permissions";
 import {
   addDocument, updateDocument, addDocumentVersion, deleteDocument,
-  addEvent, getCurrentUser,
+  addEvent,
 } from "@/data/store";
 import type { Document as DocType, DocumentVersion } from "@/types/entities";
 import type { ProposalChange } from "@/types/ai";
@@ -43,7 +43,7 @@ export default function ProjectDocuments() {
   const documents = useDocuments(pid);
   const { project } = useProject(pid);
   const perm = usePermission(pid);
-  const user = getCurrentUser();
+  const user = useCurrentUser();
   const isOwner = isOwnerOrCoOwner(perm.role);
   const isContractor = perm.role === "contractor";
 

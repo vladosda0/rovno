@@ -661,6 +661,24 @@ describe("estimate-v2 execution foundation", () => {
     expect(submitVersion(projectId, blockedVersion.versionId)).toBe(false);
   });
 
+  it("accepts explicit runtime actor context for owner/co-owner estimate actions", () => {
+    const projectId = "project-1";
+    setRegimeDev(projectId, "contractor");
+    setAuthRole("guest");
+
+    const statusResult = setProjectEstimateStatus(projectId, "paused", {
+      actorId: "user-1",
+      membershipRole: "owner",
+    });
+    expect(statusResult.ok).toBe(true);
+
+    const submittedVersion = createVersionSnapshot(projectId, "user-1");
+    expect(submitVersion(projectId, submittedVersion.versionId, {
+      actorId: "user-1",
+      membershipRole: "co_owner",
+    })).toBe(true);
+  });
+
   it("refreshes pending version snapshot without changing number or share link", () => {
     const projectId = "project-2";
     setAuthRole("owner");

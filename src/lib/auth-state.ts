@@ -49,9 +49,9 @@ export function subscribeAuthState(listener: Listener): () => void {
 }
 
 export function getAuthStateSnapshot(): string {
-  const profile = getStoredAuthProfile();
+  const profile = getStoredLocalAuthProfile();
   return [
-    getAuthRole(),
+    getSimulatedAuthRole(),
     profile?.id ?? "",
     profile?.email ?? "",
     profile?.name ?? "",
@@ -61,7 +61,9 @@ export function getAuthStateSnapshot(): string {
   ].join("|");
 }
 
-export function getAuthRole(): AuthRole {
+// Local/demo compatibility auth is preserved for browser-only flows and tests.
+// Supabase-backed runtime auth must not use these helpers as authority.
+export function getSimulatedAuthRole(): AuthRole {
   const stored = localStorage.getItem(STORAGE_KEY);
   if (
     stored === "guest"
@@ -77,13 +79,13 @@ export function getAuthRole(): AuthRole {
   return "owner"; // default: logged-in owner
 }
 
-export function setAuthRole(role: AuthRole) {
+export function setSimulatedAuthRole(role: AuthRole) {
   localStorage.setItem(STORAGE_KEY, role);
   notifyListeners();
 }
 
-export function isAuthenticated(): boolean {
-  return getAuthRole() !== "guest";
+export function isSimulatedAuthenticated(): boolean {
+  return getSimulatedAuthRole() !== "guest";
 }
 
 export function isOnboarded(): boolean {
@@ -107,7 +109,7 @@ export function setProfileAutomationLevelMode(mode: string): void {
   notifyListeners();
 }
 
-export function getStoredAuthProfile(): StoredAuthProfile | null {
+export function getStoredLocalAuthProfile(): StoredAuthProfile | null {
   const profile = readJson<StoredAuthProfile>(localStorage, AUTH_PROFILE_KEY);
   if (!profile?.id || !profile.email) return null;
   return {
@@ -120,7 +122,7 @@ export function getStoredAuthProfile(): StoredAuthProfile | null {
   };
 }
 
-export function setStoredAuthProfile(profile: Omit<StoredAuthProfile, "id"> & { id?: string }) {
+export function setStoredLocalAuthProfile(profile: Omit<StoredAuthProfile, "id"> & { id?: string }) {
   const nextProfile: StoredAuthProfile = {
     id: profile.id ?? buildProfileId(profile.email),
     email: profile.email.trim(),
@@ -134,9 +136,33 @@ export function setStoredAuthProfile(profile: Omit<StoredAuthProfile, "id"> & { 
   return nextProfile;
 }
 
-export function clearStoredAuthProfile() {
+export function clearStoredLocalAuthProfile() {
   localStorage.removeItem(AUTH_PROFILE_KEY);
   notifyListeners();
+}
+
+export function getAuthRole(): AuthRole {
+  return getSimulatedAuthRole();
+}
+
+export function setAuthRole(role: AuthRole) {
+  setSimulatedAuthRole(role);
+}
+
+export function isAuthenticated(): boolean {
+  return isSimulatedAuthenticated();
+}
+
+export function getStoredAuthProfile(): StoredAuthProfile | null {
+  return getStoredLocalAuthProfile();
+}
+
+export function setStoredAuthProfile(profile: Omit<StoredAuthProfile, "id"> & { id?: string }) {
+  return setStoredLocalAuthProfile(profile);
+}
+
+export function clearStoredAuthProfile() {
+  clearStoredLocalAuthProfile();
 }
 
 export function isDemoSessionActive(): boolean {

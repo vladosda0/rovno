@@ -1,7 +1,8 @@
-import { Outlet, useLocation } from "react-router-dom";
+import { Outlet, Navigate, useLocation } from "react-router-dom";
 import { Suspense, lazy, useEffect, useState } from "react";
 import { PanelLeft } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
+import { useWorkspaceRuntimeAuth } from "@/hooks/use-workspace-source";
 import { subscribePhotoConsult } from "@/lib/photo-consult-store";
 
 const AISidebar = lazy(() =>
@@ -13,16 +14,33 @@ const HIDE_AI_ROUTES = ["/settings"];
 export default function AppLayout() {
   const [aiSidebarCollapsed, setAiSidebarCollapsed] = useState(true);
   const location = useLocation();
+  const runtimeAuth = useWorkspaceRuntimeAuth();
 
   const hideAi = HIDE_AI_ROUTES.some((r) => location.pathname.startsWith(r));
 
   useEffect(() => {
+    if (runtimeAuth.authPending || !runtimeAuth.canAccessWorkspace) {
+      return undefined;
+    }
+
     return subscribePhotoConsult(({ context }) => {
       if (context && !hideAi) {
         setAiSidebarCollapsed(false);
       }
     });
-  }, [hideAi]);
+  }, [hideAi, runtimeAuth.authPending, runtimeAuth.canAccessWorkspace]);
+
+  if (runtimeAuth.authPending) {
+    return (
+      <div className="flex min-h-[calc(100svh-48px)] items-center justify-center text-sm text-muted-foreground">
+        Loading...
+      </div>
+    );
+  }
+
+  if (!runtimeAuth.canAccessWorkspace) {
+    return <Navigate to="/auth/login" replace />;
+  }
 
   return (
     <div className="flex flex-col min-h-screen w-full">

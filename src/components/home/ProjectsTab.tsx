@@ -16,7 +16,7 @@ import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
   AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel,
 } from "@/components/ui/alert-dialog";
-import { useProjects } from "@/hooks/use-mock-data";
+import { useCurrentUser, useProjects } from "@/hooks/use-mock-data";
 import { PreviewCard } from "@/components/ai/PreviewCard";
 import { ActionBar } from "@/components/ai/ActionBar";
 import { SuggestionChips } from "@/components/ai/SuggestionChips";
@@ -24,7 +24,7 @@ import { generateProjectProposal } from "@/lib/ai-engine";
 import { commitProposal } from "@/lib/commit-proposal";
 import { toast } from "@/hooks/use-toast";
 import type { AIProposal } from "@/types/ai";
-import { addProject, addStage, addMember, addEvent, getCurrentUser } from "@/data/store";
+import { addProject, addStage, addMember, addEvent } from "@/data/store";
 
 function getStatusText(progress: number): string {
   if (progress >= 100) return "Done";
@@ -53,6 +53,7 @@ interface FolderItem {
 
 export function ProjectsTab() {
   const projects = useProjects();
+  const currentUser = useCurrentUser();
   const navigate = useNavigate();
 
   const [search, setSearch] = useState("");
@@ -93,7 +94,11 @@ export function ProjectsTab() {
 
   function handleConfirm() {
     if (!proposal) return;
-    const result = commitProposal(proposal);
+    const result = commitProposal(proposal, {
+      actor: {
+        currentUser,
+      },
+    });
     if (result.success) {
       toast({ title: "Project created", description: `${result.count} items set up.` });
       setProposal(null);
@@ -108,10 +113,9 @@ export function ProjectsTab() {
     const title = manualTitle.trim() || "Untitled Project";
     const id = `project-manual-${Date.now()}`;
     const stageId = `stage-manual-${Date.now()}-0`;
-    const user = getCurrentUser();
     addProject({
       id,
-      owner_id: user.id,
+      owner_id: currentUser.id,
       title,
       type: manualType,
       project_mode: manualProjectMode,
@@ -119,13 +123,13 @@ export function ProjectsTab() {
       current_stage_id: stageId,
       progress_pct: 0,
     });
-    addMember({ project_id: id, user_id: user.id, role: "owner", ai_access: "project_pool", credit_limit: 500, used_credits: 0 });
+    addMember({ project_id: id, user_id: currentUser.id, role: "owner", ai_access: "project_pool", credit_limit: 500, used_credits: 0 });
     addStage({ id: stageId, project_id: id, title: "Stage 1", description: "", order: 1, status: "open" });
-    addEvent({ id: `evt-manual-${Date.now()}`, project_id: id, actor_id: user.id, type: "project_created", object_type: "project", object_id: id, timestamp: new Date().toISOString(), payload: { title } });
+    addEvent({ id: `evt-manual-${Date.now()}`, project_id: id, actor_id: currentUser.id, type: "project_created", object_type: "project", object_id: id, timestamp: new Date().toISOString(), payload: { title } });
     addEvent({
       id: `evt-project-mode-${Date.now()}`,
       project_id: id,
-      actor_id: user.id,
+      actor_id: currentUser.id,
       type: "estimate.project_mode_set",
       object_type: "estimate_v2_project",
       object_id: id,

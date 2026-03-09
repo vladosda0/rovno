@@ -99,6 +99,10 @@ export function isSupabaseWorkspaceRequested(): boolean {
   return import.meta.env.VITE_WORKSPACE_SOURCE === SUPABASE_WORKSPACE_SOURCE;
 }
 
+export function hasSupabaseWorkspaceConfig(): boolean {
+  return Boolean(SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY);
+}
+
 export function selectWorkspaceMode(input: {
   requestedSource?: string;
   hasSupabaseConfig: boolean;
@@ -134,7 +138,7 @@ export async function resolveWorkspaceMode(): Promise<WorkspaceMode> {
     return { kind: "local" };
   }
 
-  const hasSupabaseConfig = Boolean(SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY);
+  const hasSupabaseConfig = hasSupabaseWorkspaceConfig();
   if (!hasSupabaseConfig) {
     return { kind: "local" };
   }

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import * as store from "@/data/store";
 import { getPlanningSource } from "@/data/planning-source";
 import {
+  hasSupabaseWorkspaceConfig,
   isSupabaseWorkspaceRequested,
   resolveWorkspaceMode,
   type WorkspaceMode,
@@ -28,7 +29,7 @@ export const planningQueryKeys = {
 function useWorkspaceModeState(): WorkspaceModeState {
   useSyncExternalStore(subscribeAuthState, getAuthStateSnapshot);
   const demoSessionActive = isDemoSessionActive();
-  const supabaseRequested = !demoSessionActive && isSupabaseWorkspaceRequested();
+  const supabaseRequested = !demoSessionActive && isSupabaseWorkspaceRequested() && hasSupabaseWorkspaceConfig();
   const modeQuery = useQuery({
     queryKey: workspaceQueryKeys.mode(),
     queryFn: resolveWorkspaceMode,

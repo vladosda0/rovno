@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useSyncExternalStore } from "react";
 import {
   getWorkspaceSource,
+  hasSupabaseWorkspaceConfig,
   isSupabaseWorkspaceRequested,
   resolveWorkspaceMode,
   type WorkspaceMode,
@@ -9,12 +10,25 @@ import {
 } from "@/data/workspace-source";
 import type { Member, Project, User } from "@/types/entities";
 import * as store from "@/data/store";
-import { getAuthStateSnapshot, isDemoSessionActive, subscribeAuthState } from "@/lib/auth-state";
+import {
+  getAuthStateSnapshot,
+  isDemoSessionActive,
+  isSimulatedAuthenticated,
+  subscribeAuthState,
+} from "@/lib/auth-state";
 
 const WORKSPACE_QUERY_STALE_TIME_MS = 60_000;
 
 type PendingWorkspaceMode = { kind: "pending-supabase" };
 export type WorkspaceModeState = WorkspaceMode | PendingWorkspaceMode;
+export type WorkspaceRuntimeKind = "demo" | "local" | "supabase";
+
+export interface WorkspaceRuntimeAuthState {
+  authPending: boolean;
+  canAccessWorkspace: boolean;
+  isGuest: boolean;
+  runtimeKind: WorkspaceRuntimeKind;
+}
 
 export const EMPTY_WORKSPACE_USER: User = {
   id: "",
@@ -36,14 +50,65 @@ export const workspaceQueryKeys = {
   projectInvites: (profileId: string, projectId: string) => ["workspace", "project-invites", profileId, projectId] as const,
 };
 
+export function selectWorkspaceRuntimeAuthState(input: {
+  hasSupabaseConfig: boolean;
+  localCompatibilityAuthenticated: boolean;
+  mode: WorkspaceModeState;
+  supabaseRequested: boolean;
+}): WorkspaceRuntimeAuthState {
+  if (input.mode.kind === "demo") {
+    return {
+      authPending: false,
+      canAccessWorkspace: true,
+      isGuest: !input.localCompatibilityAuthenticated,
+      runtimeKind: "demo",
+    };
+  }
+
+  if (!input.supabaseRequested || !input.hasSupabaseConfig) {
+    return {
+      authPending: false,
+      canAccessWorkspace: true,
+      isGuest: !input.localCompatibilityAuthenticated,
+      runtimeKind: "local",
+    };
+  }
+
+  if (input.mode.kind === "pending-supabase") {
+    return {
+      authPending: true,
+      canAccessWorkspace: false,
+      isGuest: false,
+      runtimeKind: "supabase",
+    };
+  }
+
+  if (input.mode.kind === "supabase") {
+    return {
+      authPending: false,
+      canAccessWorkspace: true,
+      isGuest: false,
+      runtimeKind: "supabase",
+    };
+  }
+
+  return {
+    authPending: false,
+    canAccessWorkspace: false,
+    isGuest: true,
+    runtimeKind: "supabase",
+  };
+}
+
 function useWorkspaceModeState(): WorkspaceModeState {
   useSyncExternalStore(subscribeAuthState, getAuthStateSnapshot);
   const demoSessionActive = isDemoSessionActive();
   const supabaseRequested = !demoSessionActive && isSupabaseWorkspaceRequested();
+  const supabaseEnabled = supabaseRequested && hasSupabaseWorkspaceConfig();
   const modeQuery = useQuery({
     queryKey: workspaceQueryKeys.mode(),
     queryFn: resolveWorkspaceMode,
-    enabled: supabaseRequested,
+    enabled: supabaseEnabled,
     staleTime: WORKSPACE_QUERY_STALE_TIME_MS,
   });
 
@@ -51,7 +116,7 @@ function useWorkspaceModeState(): WorkspaceModeState {
     return { kind: "demo" };
   }
 
-  if (!supabaseRequested) {
+  if (!supabaseEnabled) {
     return { kind: "local" };
   }
 
@@ -62,8 +127,25 @@ export function useWorkspaceMode(): WorkspaceModeState {
   return useWorkspaceModeState();
 }
 
+export function useWorkspaceRuntimeAuth(): WorkspaceRuntimeAuthState {
+  const mode = useWorkspaceModeState();
+
+  return selectWorkspaceRuntimeAuthState({
+    hasSupabaseConfig: hasSupabaseWorkspaceConfig(),
+    localCompatibilityAuthenticated: isSimulatedAuthenticated(),
+    mode,
+    supabaseRequested: isSupabaseWorkspaceRequested(),
+  });
+}
+
 export function useWorkspaceCurrentUser(): User {
   const mode = useWorkspaceModeState();
+  const runtimeAuth = selectWorkspaceRuntimeAuthState({
+    hasSupabaseConfig: hasSupabaseWorkspaceConfig(),
+    localCompatibilityAuthenticated: isSimulatedAuthenticated(),
+    mode,
+    supabaseRequested: isSupabaseWorkspaceRequested(),
+  });
   const supabaseMode = mode.kind === "supabase" ? mode : null;
   const userQuery = useQuery({
     queryKey: supabaseMode
@@ -77,7 +159,7 @@ export function useWorkspaceCurrentUser(): User {
     staleTime: WORKSPACE_QUERY_STALE_TIME_MS,
   });
 
-  if (mode.kind === "demo" || mode.kind === "local") {
+  if (runtimeAuth.runtimeKind === "demo" || runtimeAuth.runtimeKind === "local") {
     return store.getCurrentUser();
   }
 

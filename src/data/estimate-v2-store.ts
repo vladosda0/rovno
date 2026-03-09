@@ -29,7 +29,7 @@ import {
 } from "@/lib/estimate-v2/schedule";
 import { syncProcurementFromEstimateV2 } from "@/lib/estimate-v2/procurement-sync";
 import { syncHRFromEstimateV2 } from "@/data/hr-store";
-import type { ChecklistItem, ChecklistItemType, Task, TaskStatus } from "@/types/entities";
+import type { ChecklistItem, ChecklistItemType, MemberRole, Task, TaskStatus } from "@/types/entities";
 import type {
   ApprovalStamp,
   EstimateExecutionStatus,
@@ -77,12 +77,17 @@ interface ApproveVersionOptions {
   actorId?: string;
 }
 
-interface SubmitVersionOptions {
+export interface EstimateMutationActor {
+  actorId?: string;
+  membershipRole?: MemberRole | null;
+}
+
+interface SubmitVersionOptions extends EstimateMutationActor {
   shareApprovalPolicy?: EstimateV2VersionShareApprovalPolicy;
   shareApprovalDisabledReason?: EstimateV2VersionShareApprovalDisabledReason;
 }
 
-interface SetProjectEstimateStatusOptions {
+interface SetProjectEstimateStatusOptions extends EstimateMutationActor {
   skipSetup?: boolean;
 }
 
@@ -279,16 +284,23 @@ function syncExternalDomainsFromEstimate(projectId: string, state: EstimateV2Pro
   syncHRFromEstimateV2(projectId, syncState);
 }
 
-function isOwnerActionAllowed(projectId: string): boolean {
+function isOwnerActionAllowed(projectId: string, actor?: EstimateMutationActor): boolean {
   const project = getProject(projectId);
-  const user = getCurrentUser();
-  if (!project || project.owner_id !== user.id) return false;
+  const actorId = actor?.actorId ?? getCurrentUser().id;
+  if (!project || project.owner_id !== actorId) return false;
 
-  const role = getAuthRole();
-  return role === "owner";
+  if (actor?.membershipRole != null) {
+    return actor.membershipRole === "owner";
+  }
+
+  return getAuthRole() === "owner";
 }
 
-function isSubmissionActionAllowed(projectId: string): boolean {
+function isSubmissionActionAllowed(projectId: string, actor?: EstimateMutationActor): boolean {
+  if (actor?.membershipRole != null) {
+    return actor.membershipRole === "owner" || actor.membershipRole === "co_owner";
+  }
+
   const authRole = getAuthRole();
   if (authRole !== "owner" && authRole !== "co_owner") return false;
   const user = getCurrentUser();
@@ -301,8 +313,8 @@ function normalizeProjectMode(value: string | null | undefined): ProjectMode {
   return value === "build_myself" ? "build_myself" : "contractor";
 }
 
-function canEditEstimateState(projectId: string, state: EstimateV2ProjectState): boolean {
-  if (!isOwnerActionAllowed(projectId)) return false;
+function canEditEstimateState(projectId: string, state: EstimateV2ProjectState, actor?: EstimateMutationActor): boolean {
+  if (!isOwnerActionAllowed(projectId, actor)) return false;
   if (state.project.regime === "client") return false;
   return true;
 }
@@ -317,12 +329,12 @@ function emitEstimateEvent(
     | "estimate.dependency_removed"
     | "estimate.project_mode_set",
   payload: Record<string, unknown>,
+  actorId?: string,
 ) {
-  const actor = getCurrentUser();
   addEvent({
     id: id("evt-estimate-v2"),
     project_id: projectId,
-    actor_id: actor.id,
+    actor_id: actorId ?? getCurrentUser().id,
     type,
     object_type: "estimate_v2_project",
     object_id: projectId,
@@ -409,8 +421,11 @@ function syncTaskFromWork(work: EstimateV2Work): boolean {
   return true;
 }
 
-function materializeTasksForAllWorks(projectId: string, state: EstimateV2ProjectState): { created: number; updated: number } {
-  const user = getCurrentUser();
+function materializeTasksForAllWorks(
+  projectId: string,
+  state: EstimateV2ProjectState,
+  actorId: string = getCurrentUser().id,
+): { created: number; updated: number } {
   const now = nowIso();
   let created = 0;
   let updated = 0;
@@ -429,7 +444,7 @@ function materializeTasksForAllWorks(projectId: string, state: EstimateV2Project
         title: work.title,
         description: "Auto-created from Estimate v2 work",
         status: "not_started",
-        assignee_id: user.id,
+        assignee_id: actorId,
         checklist: [],
         comments: [],
         attachments: [],
@@ -439,7 +454,7 @@ function materializeTasksForAllWorks(projectId: string, state: EstimateV2Project
         startDate: work.plannedStart ?? undefined,
         deadline: work.plannedEnd ?? undefined,
       };
-      runWithCrossSyncGuard(() => addTask(newTask, { actorId: user.id, source: "estimate_v2_materialize" }));
+      runWithCrossSyncGuard(() => addTask(newTask, { actorId, source: "estimate_v2_materialize" }));
       linkedTask = getTask(taskId);
       created += 1;
     }
@@ -926,9 +941,13 @@ export function getEstimateV2ProjectState(projectId: string): EstimateV2ProjectV
   return cloneState(state);
 }
 
-export function createStage(projectId: string, input: { title: string; discountBps?: number }): EstimateV2Stage | null {
+export function createStage(
+  projectId: string,
+  input: { title: string; discountBps?: number },
+  actor?: EstimateMutationActor,
+): EstimateV2Stage | null {
   const state = ensureProjectState(projectId);
-  if (!canEditEstimateState(projectId, state)) return null;
+  if (!canEditEstimateState(projectId, state, actor)) return null;
   const now = nowIso();
   const stage: EstimateV2Stage = {
     id: id("stage-v2"),
@@ -945,9 +964,14 @@ export function createStage(projectId: string, input: { title: string; discountB
   return { ...stage };
 }
 
-export function updateStage(projectId: string, stageId: string, partial: Partial<EstimateV2Stage>) {
+export function updateStage(
+  projectId: string,
+  stageId: string,
+  partial: Partial<EstimateV2Stage>,
+  actor?: EstimateMutationActor,
+) {
   const state = ensureProjectState(projectId);
-  if (!canEditEstimateState(projectId, state)) return;
+  if (!canEditEstimateState(projectId, state, actor)) return;
   const now = nowIso();
   state.stages = state.stages.map((stage) => (
     stage.id === stageId
@@ -962,9 +986,9 @@ export function updateStage(projectId: string, stageId: string, partial: Partial
   notify();
 }
 
-export function deleteStage(projectId: string, stageId: string) {
+export function deleteStage(projectId: string, stageId: string, actor?: EstimateMutationActor) {
   const state = ensureProjectState(projectId);
-  if (!canEditEstimateState(projectId, state)) return;
+  if (!canEditEstimateState(projectId, state, actor)) return;
   const workIdsToDelete = new Set(state.works.filter((work) => work.stageId === stageId).map((work) => work.id));
 
   state.stages = state.stages.filter((stage) => stage.id !== stageId);
@@ -976,9 +1000,13 @@ export function deleteStage(projectId: string, stageId: string) {
   notify();
 }
 
-export function createWork(projectId: string, input: { stageId: string; title: string; discountBps?: number }): EstimateV2Work | null {
+export function createWork(
+  projectId: string,
+  input: { stageId: string; title: string; discountBps?: number },
+  actor?: EstimateMutationActor,
+): EstimateV2Work | null {
   const state = ensureProjectState(projectId);
-  if (!canEditEstimateState(projectId, state)) return null;
+  if (!canEditEstimateState(projectId, state, actor)) return null;
   const now = nowIso();
   const nextOrder = state.works
     .filter((work) => work.stageId === input.stageId)
@@ -1005,9 +1033,14 @@ export function createWork(projectId: string, input: { stageId: string; title: s
   return { ...work };
 }
 
-export function updateWork(projectId: string, workId: string, partial: Partial<EstimateV2Work>) {
+export function updateWork(
+  projectId: string,
+  workId: string,
+  partial: Partial<EstimateV2Work>,
+  actor?: EstimateMutationActor,
+) {
   const state = ensureProjectState(projectId);
-  if (!canEditEstimateState(projectId, state)) return;
+  if (!canEditEstimateState(projectId, state, actor)) return;
   const now = nowIso();
   const previousWork = state.works.find((work) => work.id === workId) ?? null;
   let changedWork: EstimateV2Work | null = null;
@@ -1040,10 +1073,10 @@ export function updateWorkDates(
   workId: string,
   plannedStart: string,
   plannedEnd: string,
-  _options: { source: "gantt" },
+  options: { source: "gantt" } & EstimateMutationActor,
 ): { ok: true; shiftedWorkIds: string[] } | { ok: false; reason: "forbidden" | "invalid_work" | "invalid_date" } {
   const state = ensureProjectState(projectId);
-  if (!canEditEstimateState(projectId, state)) return { ok: false, reason: "forbidden" };
+  if (!canEditEstimateState(projectId, state, options)) return { ok: false, reason: "forbidden" };
   const target = state.works.find((work) => work.id === workId);
   if (!target) return { ok: false, reason: "invalid_work" };
 
@@ -1086,9 +1119,9 @@ export function updateWorkDates(
   };
 }
 
-export function deleteWork(projectId: string, workId: string) {
+export function deleteWork(projectId: string, workId: string, actor?: EstimateMutationActor) {
   const state = ensureProjectState(projectId);
-  if (!canEditEstimateState(projectId, state)) return;
+  if (!canEditEstimateState(projectId, state, actor)) return;
   state.works = state.works.filter((work) => work.id !== workId);
   state.lines = state.lines.filter((line) => line.workId !== workId);
   state.dependencies = state.dependencies.filter((dep) => dep.fromWorkId !== workId && dep.toWorkId !== workId);
@@ -1110,9 +1143,10 @@ export function createLine(
     markupBps?: number;
     discountBpsOverride?: number | null;
   },
+  actor?: EstimateMutationActor,
 ): EstimateV2ResourceLine | null {
   const state = ensureProjectState(projectId);
-  if (!canEditEstimateState(projectId, state)) return null;
+  if (!canEditEstimateState(projectId, state, actor)) return null;
   const now = nowIso();
   const line: EstimateV2ResourceLine = {
     id: id("line-v2"),
@@ -1144,9 +1178,14 @@ export function createLine(
   return { ...line };
 }
 
-export function updateLine(projectId: string, lineId: string, partial: Partial<EstimateV2ResourceLine>) {
+export function updateLine(
+  projectId: string,
+  lineId: string,
+  partial: Partial<EstimateV2ResourceLine>,
+  actor?: EstimateMutationActor,
+) {
   const state = ensureProjectState(projectId);
-  if (!canEditEstimateState(projectId, state)) return;
+  if (!canEditEstimateState(projectId, state, actor)) return;
   const now = nowIso();
   const previous = state.lines.find((line) => line.id === lineId) ?? null;
   state.lines = state.lines.map((line) => (
@@ -1172,9 +1211,9 @@ export function updateLine(projectId: string, lineId: string, partial: Partial<E
   notify();
 }
 
-export function deleteLine(projectId: string, lineId: string) {
+export function deleteLine(projectId: string, lineId: string, actor?: EstimateMutationActor) {
   const state = ensureProjectState(projectId);
-  if (!canEditEstimateState(projectId, state)) return;
+  if (!canEditEstimateState(projectId, state, actor)) return;
   const existing = state.lines.find((line) => line.id === lineId) ?? null;
   state.lines = state.lines.filter((line) => line.id !== lineId);
   if (existing) {
@@ -1192,7 +1231,7 @@ export function setProjectEstimateStatus(
   options: SetProjectEstimateStatusOptions = {},
 ): SetProjectEstimateStatusResult {
   const state = ensureProjectState(projectId);
-  if (!isOwnerActionAllowed(projectId) || state.project.regime === "client") {
+  if (!isOwnerActionAllowed(projectId, options) || state.project.regime === "client") {
     return {
       ok: false,
       reason: "forbidden",
@@ -1229,7 +1268,7 @@ export function setProjectEstimateStatus(
       autoScheduled = true;
     }
 
-    materializeTasksForAllWorks(projectId, state);
+    materializeTasksForAllWorks(projectId, state, options.actorId);
     state.scheduleBaseline = captureScheduleBaseline(state, now);
     baselineCaptured = true;
   }
@@ -1275,7 +1314,7 @@ export function setProjectEstimateStatus(
     emitEstimateEvent(projectId, "estimate.status_changed", {
       previousStatus,
       nextStatus: status,
-    });
+    }, options.actorId);
   }
 
   return {
@@ -1362,11 +1401,12 @@ export function addDependency(
   toWorkId: string,
   lagDays: number,
   comment?: string,
+  actor?: EstimateMutationActor,
 ):
   | { ok: true; dependency: EstimateV2Dependency; shiftedWorkIds: string[] }
   | { ok: false; reason: "forbidden" | "self_dependency" | "invalid_work" | "cycle"; cyclePath?: string[] } {
   const state = ensureProjectState(projectId);
-  if (!canEditEstimateState(projectId, state)) {
+  if (!canEditEstimateState(projectId, state, actor)) {
     return { ok: false, reason: "forbidden" };
   }
 
@@ -1434,7 +1474,7 @@ export function addDependency(
     toWorkId,
     lagDays: dependency.lagDays,
     ...(normalizedComment ? { comment: normalizedComment } : {}),
-  });
+  }, actor?.actorId);
 
   return {
     ok: true,
@@ -1443,9 +1483,9 @@ export function addDependency(
   };
 }
 
-export function removeDependency(projectId: string, dependencyId: string) {
+export function removeDependency(projectId: string, dependencyId: string, actor?: EstimateMutationActor) {
   const state = ensureProjectState(projectId);
-  if (!canEditEstimateState(projectId, state)) return;
+  if (!canEditEstimateState(projectId, state, actor)) return;
   const now = nowIso();
   const existing = state.dependencies.find((dep) => dep.id === dependencyId) ?? null;
   state.dependencies = state.dependencies.filter((dep) => dep.id !== dependencyId);
@@ -1456,12 +1496,13 @@ export function removeDependency(projectId: string, dependencyId: string) {
     dependencyId,
     fromWorkId: existing.fromWorkId,
     toWorkId: existing.toWorkId,
-  });
+  }, actor?.actorId);
 }
 
 export function createDependency(
   projectId: string,
   input: { fromWorkId: string; toWorkId: string; lagDays?: number; comment?: string },
+  actor?: EstimateMutationActor,
 ): EstimateV2Dependency | null {
   const result = addDependency(
     projectId,
@@ -1469,6 +1510,7 @@ export function createDependency(
     input.toWorkId,
     input.lagDays ?? 0,
     input.comment,
+    actor,
   );
   if (!result.ok) {
     return null;
@@ -1476,8 +1518,8 @@ export function createDependency(
   return result.dependency;
 }
 
-export function deleteDependency(projectId: string, dependencyId: string) {
-  removeDependency(projectId, dependencyId);
+export function deleteDependency(projectId: string, dependencyId: string, actor?: EstimateMutationActor) {
+  removeDependency(projectId, dependencyId, actor);
 }
 
 export function createVersionSnapshot(
@@ -1539,9 +1581,9 @@ function resolveShareApprovalPolicy(
 
 export function submitVersion(projectId: string, versionId: string, options: SubmitVersionOptions = {}): boolean {
   const state = ensureProjectState(projectId);
-  if (!isSubmissionActionAllowed(projectId) || state.project.regime === "client") return false;
+  if (!isSubmissionActionAllowed(projectId, options) || state.project.regime === "client") return false;
   const now = nowIso();
-  const actor = getCurrentUser();
+  const actorId = options.actorId ?? getCurrentUser().id;
   const approvalPolicy = resolveShareApprovalPolicy(options);
 
   let submittedVersion: EstimateV2Version | null = null;
@@ -1573,7 +1615,7 @@ export function submitVersion(projectId: string, versionId: string, options: Sub
   addEvent({
     id: id("evt-estimate-v2-submitted"),
     project_id: projectId,
-    actor_id: actor.id,
+    actor_id: actorId,
     type: "estimate.version_submitted",
     object_type: "estimate_version",
     object_id: submittedVersion.id,
@@ -1581,7 +1623,7 @@ export function submitVersion(projectId: string, versionId: string, options: Sub
     payload: {
       projectId,
       versionId: submittedVersion.id,
-      actor: actor.id,
+      actor: actorId,
       versionNumber: submittedVersion.number,
     },
   });
@@ -1598,7 +1640,10 @@ export function refreshVersionSnapshot(
   options: SubmitVersionOptions = {},
 ): boolean {
   const state = ensureProjectState(projectId);
-  if (!isSubmissionActionAllowed(projectId) || state.project.regime === "client") return false;
+  if (!isSubmissionActionAllowed(projectId, {
+    actorId,
+    membershipRole: options.membershipRole,
+  }) || state.project.regime === "client") return false;
   const target = state.versions.find((version) => version.id === versionId);
   if (!target || !target.submitted || target.archived || target.status !== "proposed") return false;
   const now = nowIso();

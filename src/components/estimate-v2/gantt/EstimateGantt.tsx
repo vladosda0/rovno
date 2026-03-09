@@ -12,6 +12,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import {
   addDependency,
+  type EstimateMutationActor,
   removeDependency,
   updateWorkDates,
 } from "@/data/estimate-v2-store";
@@ -48,6 +49,7 @@ interface EstimateGanttProps {
   works: EstimateV2Work[];
   dependencies: EstimateV2Dependency[];
   isOwner: boolean;
+  mutationActor: EstimateMutationActor;
 }
 
 interface RowDescriptor {
@@ -95,6 +97,7 @@ export function EstimateGantt({
   works,
   dependencies,
   isOwner,
+  mutationActor,
 }: EstimateGanttProps) {
   const { toast } = useToast();
 
@@ -337,7 +340,7 @@ export function EstimateGantt({
       drag.workId,
       updated.plannedStart,
       updated.plannedEnd,
-      { source: "gantt" },
+      { source: "gantt", ...mutationActor },
     );
 
     if (!result.ok) {
@@ -357,7 +360,7 @@ export function EstimateGantt({
         description: `${result.shiftedWorkIds.length} dependent work(s) were shifted.`,
       });
     }
-  }, [baseWorksById, handlePointerCancel, handlePointerMove, handlePointerUp, projectId, toast]);
+  }, [baseWorksById, handlePointerCancel, handlePointerMove, handlePointerUp, mutationActor, projectId, toast]);
 
   useEffect(() => {
     finalizeDragRef.current = finalizeDrag;
@@ -403,7 +406,7 @@ export function EstimateGantt({
   }, [clientXToDayIndex, handlePointerCancel, handlePointerMove, handlePointerUp, isOwner]);
 
   const handleAddDependency = useCallback((fromWorkId: string, toWorkId: string, lagDays: number, comment?: string) => {
-    const result = addDependency(projectId, fromWorkId, toWorkId, lagDays, comment);
+    const result = addDependency(projectId, fromWorkId, toWorkId, lagDays, comment, mutationActor);
     if (!result.ok) {
       if (result.reason === "cycle") {
         toast({
@@ -431,11 +434,11 @@ export function EstimateGantt({
     }
 
     toast({ title: "Dependency added" });
-  }, [projectId, toast]);
+  }, [mutationActor, projectId, toast]);
 
   const handleRemoveDependency = useCallback((dependencyId: string) => {
-    removeDependency(projectId, dependencyId);
-  }, [projectId]);
+    removeDependency(projectId, dependencyId, mutationActor);
+  }, [mutationActor, projectId]);
 
   return (
     <div className="rounded-card border border-border bg-card">

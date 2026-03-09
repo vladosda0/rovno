@@ -19,9 +19,9 @@ import type {
 import { moveEstimateItemToStage, deleteEstimateItemsForTask, deleteEstimateItemsBySourceId } from "@/data/estimate-store";
 import { getCachedWorkspaceUser } from "@/data/workspace-profile-cache";
 import {
-  getStoredAuthProfile,
-  isAuthenticated,
+  getStoredLocalAuthProfile,
   isDemoSessionActive,
+  isSimulatedAuthenticated,
   type StoredAuthProfile,
 } from "@/lib/auth-state";
 import {
@@ -66,8 +66,8 @@ function getResolvedTimezone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 }
 
-function createLocalUser(profile: StoredAuthProfile | null): User {
-  if (!profile || !isAuthenticated()) {
+function createLocalCompatibilityUser(profile: StoredAuthProfile | null): User {
+  if (!profile || !isSimulatedAuthenticated()) {
     return {
       id: "",
       email: "",
@@ -112,7 +112,7 @@ function createSeededDemoState(): BrowserWorkspaceState {
 
 function createEmptyLocalState(profile: StoredAuthProfile | null): BrowserWorkspaceState {
   return {
-    user: createLocalUser(profile),
+    user: createLocalCompatibilityUser(profile),
     projects: [],
     members: [],
     stages: [],
@@ -180,7 +180,7 @@ function persistDemoState(state: BrowserWorkspaceState) {
 }
 
 let demoState = loadPersistedDemoState() ?? createSeededDemoState();
-let localState = createEmptyLocalState(getStoredAuthProfile());
+let localState = createEmptyLocalState(getStoredLocalAuthProfile());
 let localProfileId = localState.user.id;
 
 type Listener = () => void;
@@ -191,8 +191,8 @@ function getActiveBrowserWorkspaceKind(): BrowserWorkspaceKind {
 }
 
 function syncLocalWorkspaceUser() {
-  const profile = getStoredAuthProfile();
-  const nextProfileId = isAuthenticated() ? profile?.id ?? "" : "";
+  const profile = getStoredLocalAuthProfile();
+  const nextProfileId = isSimulatedAuthenticated() ? profile?.id ?? "" : "";
   if (nextProfileId !== localProfileId) {
     localState = createEmptyLocalState(profile);
     localProfileId = nextProfileId;
@@ -201,7 +201,7 @@ function syncLocalWorkspaceUser() {
 
   localState = {
     ...localState,
-    user: createLocalUser(profile),
+    user: createLocalCompatibilityUser(profile),
   };
 }
 
@@ -818,7 +818,7 @@ export function deleteChecklistItem(taskId: string, itemId: string) {
 
 export function __unsafeResetStoreForTests() {
   demoState = loadPersistedDemoState() ?? createSeededDemoState();
-  localState = createEmptyLocalState(getStoredAuthProfile());
+  localState = createEmptyLocalState(getStoredLocalAuthProfile());
   localProfileId = localState.user.id;
   listeners.clear();
 }

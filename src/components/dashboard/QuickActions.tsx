@@ -7,10 +7,10 @@ import {
   addMedia,
   addMember,
   addEvent,
-  getCurrentUser,
   getUserById,
 } from "@/data/store";
 import { createEstimateItemForTask } from "@/data/estimate-store";
+import { useCurrentUser } from "@/hooks/use-mock-data";
 import { useToast } from "@/hooks/use-toast";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { Button } from "@/components/ui/button";
@@ -103,7 +103,7 @@ export function QuickActions({
 }: Props) {
   const { toast } = useToast();
   const navigate = useNavigate();
-  const currentUser = getCurrentUser();
+  const currentUser = useCurrentUser();
 
   const [openModal, setOpenModal] = useState<ModalKey | null>(null);
   const [discardModal, setDiscardModal] = useState<ModalKey | null>(null);

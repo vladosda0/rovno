@@ -12,9 +12,9 @@ import {
 import { PhotoViewer } from "@/components/PhotoViewer";
 import { EmptyState } from "@/components/EmptyState";
 import { toast } from "@/hooks/use-toast";
-import { useMedia, useTasks } from "@/hooks/use-mock-data";
+import { useCurrentUser, useMedia, useTasks } from "@/hooks/use-mock-data";
 import { usePermission } from "@/lib/permissions";
-import { addMedia, addEvent, getCurrentUser } from "@/data/store";
+import { addMedia, addEvent } from "@/data/store";
 import type { Media as MediaType } from "@/types/entities";
 
 export default function ProjectGallery() {
@@ -23,7 +23,7 @@ export default function ProjectGallery() {
   const photos = useMedia(pid);
   const tasks = useTasks(pid);
   const perm = usePermission(pid);
-  const user = getCurrentUser();
+  const user = useCurrentUser();
 
   const [filter, setFilter] = useState<"all" | "final" | "progress">("all");
   const [uploadOpen, setUploadOpen] = useState(false);

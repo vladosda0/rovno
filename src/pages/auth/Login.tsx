@@ -1,36 +1,73 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { toast } from "@/hooks/use-toast";
-import { clearDemoSession, isOnboarded, setAuthRole, setStoredAuthProfile } from "@/lib/auth-state";
+import {
+  clearDemoSession,
+  isOnboarded,
+  setSimulatedAuthRole,
+  setStoredLocalAuthProfile,
+} from "@/lib/auth-state";
+import { hasSupabaseWorkspaceConfig, isSupabaseWorkspaceRequested } from "@/data/workspace-source";
 
 export default function Login() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const supabaseRuntimeEnabled = isSupabaseWorkspaceRequested() && hasSupabaseWorkspaceConfig();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
       toast({ title: "Validation error", description: "Email and password are required.", variant: "destructive" });
       return;
     }
+
+    const trimmedEmail = email.trim();
     setLoading(true);
-    // Simulate login
-    setTimeout(() => {
-      clearDemoSession();
-      setStoredAuthProfile({
-        email,
-        name: email.split("@")[0]?.replace(/[._-]+/g, " ").trim() || "Workspace User",
+    clearDemoSession();
+
+    try {
+      if (supabaseRuntimeEnabled) {
+        const { supabase } = await import("@/integrations/supabase/client");
+        const { error } = await supabase.auth.signInWithPassword({
+          email: trimmedEmail,
+          password,
+        });
+
+        if (error) {
+          throw error;
+        }
+
+        queryClient.removeQueries({ queryKey: ["workspace"] });
+        toast({ title: "Welcome back!", description: "Signed in successfully." });
+        navigate(isOnboarded() ? "/home" : "/onboarding");
+        return;
+      }
+
+      await new Promise((resolve) => window.setTimeout(resolve, 500));
+      setStoredLocalAuthProfile({
+        email: trimmedEmail,
+        name: trimmedEmail.split("@")[0]?.replace(/[._-]+/g, " ").trim() || "Workspace User",
       });
-      setAuthRole("owner");
+      setSimulatedAuthRole("owner");
       toast({ title: "Welcome back!", description: "Signed in successfully." });
       navigate(isOnboarded() ? "/home" : "/onboarding");
-    }, 500);
+    } catch (error) {
+      toast({
+        title: "Unable to sign in",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
