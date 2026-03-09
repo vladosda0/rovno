@@ -38,12 +38,12 @@ export function PhotoViewer({ photo, open, onOpenChange, source, allPhotos = [] 
   const navigate = useNavigate();
   const { id: projectId } = useParams<{ id: string }>();
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const currentUser = useCurrentUser();
 
   const close = useCallback(() => onOpenChange(false), [onOpenChange]);
 
   if (!photo) return null;
 
-  const currentUser = useCurrentUser();
   const task = photo.task_id ? getTask(photo.task_id) : undefined;
   const stage = task?.stage_id ? getStage(task.stage_id) : undefined;
   const colorIdx = allPhotos.indexOf(photo);
