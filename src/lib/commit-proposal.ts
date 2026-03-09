@@ -4,9 +4,10 @@ import {
   getCurrentUser, getMembers, getProject, getStages,
   addTask, addEvent, addProcurementItem, addDocument,
   updateEstimateItems, deductCredit,
-  addProject, addMember, addStage,
+  addStage, updateProject,
 } from "@/data/store";
-import type { AIAccess, MemberRole, User } from "@/types/entities";
+import { createWorkspaceProject, type WorkspaceMode } from "@/data/workspace-source";
+import type { AIAccess, MemberRole, Project, User } from "@/types/entities";
 
 export interface CommitResultItem {
   type: string;
@@ -24,6 +25,7 @@ export interface CommitResult {
   created: CommitResultItem[];
   updated: CommitResultItem[];
   projectId?: string;
+  createdProject?: Project;
 }
 
 export interface CommitProposalOptions {
@@ -32,6 +34,8 @@ export interface CommitProposalOptions {
     role?: MemberRole | null;
     aiAccess?: AIAccess;
   };
+  workspaceMode: WorkspaceMode;
+  defaultProjectMode?: Project["project_mode"];
   eventSource?: "ai" | "user";
   eventActorId?: string;
   emitProposalEvent?: boolean;
@@ -41,7 +45,7 @@ function buildPayloadWithSource(payload: Record<string, unknown>, source?: "ai" 
   return source ? { ...payload, source } : payload;
 }
 
-export function commitProposal(proposal: AIProposal, options: CommitProposalOptions = {}): CommitResult {
+export async function commitProposal(proposal: AIProposal, options: CommitProposalOptions): Promise<CommitResult> {
   // Handle create_project specially — no existing project context needed
   if (proposal.type === "create_project") {
     return commitProjectProposal(proposal, options);
@@ -229,7 +233,7 @@ export function commitProposal(proposal: AIProposal, options: CommitProposalOpti
   return { success: true, count, eventIds, created, updated };
 }
 
-function commitProjectProposal(proposal: AIProposal, options: CommitProposalOptions): CommitResult {
+async function commitProjectProposal(proposal: AIProposal, options: CommitProposalOptions): Promise<CommitResult> {
   const user = options.actor?.currentUser ?? getCurrentUser();
   const totalCredits = user.credits_free + user.credits_paid;
   if (totalCredits <= 0) {
@@ -239,59 +243,91 @@ function commitProjectProposal(proposal: AIProposal, options: CommitProposalOpti
   const projectChange = proposal.changes.find((c) => c.entity_type === "project");
   const stageChanges = proposal.changes.filter((c) => c.entity_type === "stage");
   const eventActorId = options.eventActorId ?? (options.eventSource === "ai" ? "ai" : user.id);
+  const title = projectChange?.label ?? "New Project";
 
-  const projectId = `project-ai-${Date.now()}`;
-  const firstStageId = `stage-ai-${Date.now()}-0`;
+  let createdProject: Project;
+  try {
+    createdProject = await createWorkspaceProject(
+      options.workspaceMode,
+      {
+        title,
+        type: projectChange?.after ?? "residential",
+        projectMode: options.defaultProjectMode ?? "contractor",
+        ownerId: user.id,
+      },
+      {
+        bootstrapLocalProject: false,
+      },
+    );
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unable to create project.",
+      eventIds: [],
+      created: [],
+      updated: [],
+    };
+  }
 
-  addProject({
-    id: projectId,
-    owner_id: user.id,
-    title: projectChange?.label ?? "New Project",
-    type: projectChange?.after ?? "residential",
-    automation_level: "full",
-    current_stage_id: firstStageId,
-    progress_pct: 0,
-  });
-
-  addMember({
-    project_id: projectId,
-    user_id: user.id,
-    role: "owner",
-    ai_access: "project_pool",
-    credit_limit: 500,
-    used_credits: 0,
-  });
+  const projectId = createdProject.id;
 
   const created: CommitResultItem[] = [
-    { type: "project", id: projectId, label: projectChange?.label ?? "New Project", route: `/project/${projectId}/dashboard` },
+    { type: "project", id: projectId, label: title, route: `/project/${projectId}/dashboard` },
   ];
 
-  stageChanges.forEach((sc, i) => {
-    const stageId = i === 0 ? firstStageId : `stage-ai-${Date.now()}-${i}`;
-    addStage({
-      id: stageId,
-      project_id: projectId,
-      title: sc.label,
-      description: "",
-      order: i + 1,
-      status: "open",
-    });
-    created.push({ type: "stage", id: stageId, label: sc.label, route: `/project/${projectId}/tasks` });
-  });
+  const eventIds: string[] = [];
 
-  const evtId = `evt-proj-${Date.now()}`;
-  addEvent({
-    id: evtId,
-    project_id: projectId,
-    actor_id: eventActorId,
-    type: "project_created",
-    object_type: "project",
-    object_id: projectId,
-    timestamp: new Date().toISOString(),
-    payload: buildPayloadWithSource({ title: projectChange?.label, stages: stageChanges.length }, options.eventSource),
-  });
+  if (options.workspaceMode.kind !== "supabase") {
+    let firstStageId = "";
+    stageChanges.forEach((sc, i) => {
+      const stageId = `stage-ai-${Date.now()}-${i}`;
+      if (i === 0) {
+        firstStageId = stageId;
+      }
+      addStage({
+        id: stageId,
+        project_id: projectId,
+        title: sc.label,
+        description: "",
+        order: i + 1,
+        status: "open",
+      });
+      created.push({ type: "stage", id: stageId, label: sc.label, route: `/project/${projectId}/tasks` });
+    });
+
+    updateProject(projectId, {
+      automation_level: "full",
+      current_stage_id: firstStageId,
+    });
+    createdProject = {
+      ...createdProject,
+      automation_level: "full",
+      current_stage_id: firstStageId,
+    };
+
+    const evtId = `evt-proj-${Date.now()}`;
+    addEvent({
+      id: evtId,
+      project_id: projectId,
+      actor_id: eventActorId,
+      type: "project_created",
+      object_type: "project",
+      object_id: projectId,
+      timestamp: new Date().toISOString(),
+      payload: buildPayloadWithSource({ title, stages: stageChanges.length }, options.eventSource),
+    });
+    eventIds.push(evtId);
+  }
 
   deductCredit();
 
-  return { success: true, count: created.length, eventIds: [evtId], created, updated: [], projectId };
+  return {
+    success: true,
+    count: created.length,
+    eventIds,
+    created,
+    updated: [],
+    projectId,
+    createdProject,
+  };
 }

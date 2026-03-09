@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   Bot,
@@ -41,14 +42,14 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useCurrentUser, useEvents, useProject, useProjects, useTasks } from "@/hooks/use-mock-data";
-import { useWorkspaceRuntimeAuth } from "@/hooks/use-workspace-source";
+import { useCurrentUser, useEvents, useProject, useProjects, useTasks, useWorkspaceMode } from "@/hooks/use-mock-data";
+import { useWorkspaceRuntimeAuth, workspaceQueryKeys } from "@/hooks/use-workspace-source";
 import { usePermission } from "@/lib/permissions";
 import { generateProposalQueue, getTextResponse, reviseProposalWithEdits } from "@/lib/ai-engine";
 import { commitProposal } from "@/lib/commit-proposal";
 import { toast } from "@/hooks/use-toast";
 import type { AIMessage, AIProposal, ProposalChange } from "@/types/ai";
-import type { Event } from "@/types/entities";
+import type { Event, Member, Project } from "@/types/entities";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { getProfileAutomationLevelMode, setProfileAutomationLevelMode } from "@/lib/auth-state";
 import {
@@ -382,12 +383,14 @@ function buildProposalSummaryLines(childEvents: Event[]): string[] {
 export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const isMobile = useIsMobile();
   const isProjectContext = location.pathname.startsWith("/project/");
   const isHomeContext = location.pathname === "/home";
   const projectId = isProjectContext ? location.pathname.split("/")[2] : "";
   const scopeKey = useMemo(() => getSidebarScopeKey(location.pathname), [location.pathname]);
   const runtimeAuth = useWorkspaceRuntimeAuth();
+  const workspaceMode = useWorkspaceMode();
 
   const isGuest = !runtimeAuth.authPending && runtimeAuth.isGuest;
   const user = useCurrentUser();
@@ -655,6 +658,10 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const allowDirectEdit = automationLevel >= 3;
   const defaultDirectEditForNewProposal = automationLevel === 4;
   const selectedAutomationOption = AUTOMATION_OPTIONS.find((option) => option.mode === automationMode) ?? AUTOMATION_OPTIONS[1];
+  const resolvedWorkspaceMode = useMemo(
+    () => (workspaceMode.kind === "pending-supabase" ? { kind: "local" } : workspaceMode),
+    [workspaceMode],
+  );
 
   const resizeComposer = useCallback(() => {
     const textarea = composerTextareaRef.current;
@@ -696,6 +703,33 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
       },
     });
   }
+
+  const seedCreatedProjectCaches = useCallback((createdProject: Project) => {
+    if (workspaceMode.kind !== "supabase") {
+      return;
+    }
+
+    const projectsQueryKey = workspaceQueryKeys.projects(workspaceMode.profileId);
+    const projectQueryKey = workspaceQueryKeys.project(workspaceMode.profileId, createdProject.id);
+    const membersQueryKey = workspaceQueryKeys.projectMembers(workspaceMode.profileId, createdProject.id);
+    const ownerMember: Member = {
+      project_id: createdProject.id,
+      user_id: user.id,
+      role: "owner",
+      ai_access: "project_pool",
+      credit_limit: 0,
+      used_credits: 0,
+    };
+
+    queryClient.setQueryData<Project[]>(projectsQueryKey, (existing = []) => [
+      createdProject,
+      ...existing.filter((project) => project.id !== createdProject.id),
+    ]);
+    queryClient.setQueryData(projectQueryKey, createdProject);
+    queryClient.setQueryData<Member[]>(membersQueryKey, [ownerMember]);
+    void queryClient.invalidateQueries({ queryKey: projectsQueryKey });
+    void queryClient.invalidateQueries({ queryKey: membersQueryKey });
+  }, [queryClient, user.id, workspaceMode]);
 
   const runQueueExecution = useCallback(async (queueSnapshot: ProposalQueueState) => {
     const confirmedItems = queueSnapshot.items.filter((item) => item.decision === "confirmed");
@@ -742,12 +776,14 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
         const shouldSimulateFailure = Math.random() < 0.15;
         const result = shouldSimulateFailure
           ? { success: false as const, error: "Temporary execution error. Retrying..." }
-          : commitProposal(queueItem.proposal, {
+          : await commitProposal(queueItem.proposal, {
               actor: {
                 currentUser: user,
                 role: currentMembership?.role ?? null,
                 aiAccess: currentMembership?.ai_access ?? "none",
               },
+              workspaceMode: resolvedWorkspaceMode,
+              defaultProjectMode: "contractor",
               eventSource: "ai",
               eventActorId: "ai",
               emitProposalEvent: true,
@@ -755,6 +791,9 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
 
         if (result.success) {
           success = true;
+          if (result.createdProject) {
+            seedCreatedProjectCaches(result.createdProject);
+          }
           const proposalEventId = result.eventIds.find((eventId) => eventId.startsWith("evt-proposal-"));
           if (proposalEventId) {
             const childEventIds = result.eventIds.filter((eventId) => eventId !== proposalEventId);
@@ -823,7 +862,14 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     setWorkLogs(new Map());
     setProposalQueue(null);
     executingQueueRef.current = false;
-  }, [projectId]);
+  }, [
+    currentMembership?.ai_access,
+    currentMembership?.role,
+    projectId,
+    resolvedWorkspaceMode,
+    seedCreatedProjectCaches,
+    user,
+  ]);
 
   const beginQueueExecution = useCallback((queueSnapshot: ProposalQueueState) => {
     if (executingQueueRef.current) return;

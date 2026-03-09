@@ -1,22 +1,22 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
-import { Badge } from "@/components/ui/badge";
 import {
   Plus, Sparkles, FolderPlus, Paperclip, Search, SortAsc,
-  Folder, ChevronRight,
+  Folder,
 } from "lucide-react";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel,
+  AlertDialogDescription, AlertDialogFooter,
 } from "@/components/ui/alert-dialog";
-import { useCurrentUser, useProjects } from "@/hooks/use-mock-data";
+import { useCurrentUser, useProjects, useWorkspaceMode } from "@/hooks/use-mock-data";
 import { PreviewCard } from "@/components/ai/PreviewCard";
 import { ActionBar } from "@/components/ai/ActionBar";
 import { SuggestionChips } from "@/components/ai/SuggestionChips";
@@ -24,7 +24,9 @@ import { generateProjectProposal } from "@/lib/ai-engine";
 import { commitProposal } from "@/lib/commit-proposal";
 import { toast } from "@/hooks/use-toast";
 import type { AIProposal } from "@/types/ai";
-import { addProject, addStage, addMember, addEvent } from "@/data/store";
+import { createWorkspaceProject } from "@/data/workspace-source";
+import { workspaceQueryKeys } from "@/hooks/use-workspace-source";
+import type { Member, Project } from "@/types/entities";
 
 function getStatusText(progress: number): string {
   if (progress >= 100) return "Done";
@@ -54,7 +56,10 @@ interface FolderItem {
 export function ProjectsTab() {
   const projects = useProjects();
   const currentUser = useCurrentUser();
+  const workspaceMode = useWorkspaceMode();
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const resolvedWorkspaceMode = workspaceMode.kind === "pending-supabase" ? { kind: "local" } : workspaceMode;
 
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortKey>("activity");
@@ -70,7 +75,7 @@ export function ProjectsTab() {
   // Manual creation
   const [manualOpen, setManualOpen] = useState(false);
   const [manualTitle, setManualTitle] = useState("");
-  const [manualType, setManualType] = useState("residential");
+  const [manualType, setManualType] = useState<Project["type"]>("residential");
   const [manualProjectMode, setManualProjectMode] = useState<"build_myself" | "contractor">("contractor");
 
   const filteredProjects = projects
@@ -92,14 +97,46 @@ export function ProjectsTab() {
     setProposal(generateProjectProposal(input));
   }
 
-  function handleConfirm() {
+  function seedCreatedProjectCaches(createdProject: Project) {
+    if (workspaceMode.kind !== "supabase") {
+      return;
+    }
+
+    const projectsQueryKey = workspaceQueryKeys.projects(workspaceMode.profileId);
+    const projectQueryKey = workspaceQueryKeys.project(workspaceMode.profileId, createdProject.id);
+    const membersQueryKey = workspaceQueryKeys.projectMembers(workspaceMode.profileId, createdProject.id);
+    const ownerMember: Member = {
+      project_id: createdProject.id,
+      user_id: currentUser.id,
+      role: "owner",
+      ai_access: "project_pool",
+      credit_limit: 0,
+      used_credits: 0,
+    };
+
+    queryClient.setQueryData<Project[]>(projectsQueryKey, (existing = []) => [
+      createdProject,
+      ...existing.filter((project) => project.id !== createdProject.id),
+    ]);
+    queryClient.setQueryData(projectQueryKey, createdProject);
+    queryClient.setQueryData<Member[]>(membersQueryKey, [ownerMember]);
+    void queryClient.invalidateQueries({ queryKey: projectsQueryKey });
+    void queryClient.invalidateQueries({ queryKey: membersQueryKey });
+  }
+
+  async function handleConfirm() {
     if (!proposal) return;
-    const result = commitProposal(proposal, {
+    const result = await commitProposal(proposal, {
       actor: {
         currentUser,
       },
+      workspaceMode: resolvedWorkspaceMode,
+      defaultProjectMode: "contractor",
     });
     if (result.success) {
+      if (result.createdProject) {
+        seedCreatedProjectCaches(result.createdProject);
+      }
       toast({ title: "Project created", description: `${result.count} items set up.` });
       setProposal(null);
       setDescription("");
@@ -109,38 +146,45 @@ export function ProjectsTab() {
     }
   }
 
-  function handleManualCreate() {
-    const title = manualTitle.trim() || "Untitled Project";
-    const id = `project-manual-${Date.now()}`;
-    const stageId = `stage-manual-${Date.now()}-0`;
-    addProject({
-      id,
-      owner_id: currentUser.id,
-      title,
-      type: manualType,
-      project_mode: manualProjectMode,
-      automation_level: "manual",
-      current_stage_id: stageId,
-      progress_pct: 0,
-    });
-    addMember({ project_id: id, user_id: currentUser.id, role: "owner", ai_access: "project_pool", credit_limit: 500, used_credits: 0 });
-    addStage({ id: stageId, project_id: id, title: "Stage 1", description: "", order: 1, status: "open" });
-    addEvent({ id: `evt-manual-${Date.now()}`, project_id: id, actor_id: currentUser.id, type: "project_created", object_type: "project", object_id: id, timestamp: new Date().toISOString(), payload: { title } });
-    addEvent({
-      id: `evt-project-mode-${Date.now()}`,
-      project_id: id,
-      actor_id: currentUser.id,
-      type: "estimate.project_mode_set",
-      object_type: "estimate_v2_project",
-      object_id: id,
-      timestamp: new Date().toISOString(),
-      payload: { projectMode: manualProjectMode },
-    });
-    toast({ title: "Project created", description: title });
-    setManualOpen(false);
+  function resetManualForm() {
     setManualTitle("");
+    setManualType("residential");
     setManualProjectMode("contractor");
-    navigate(`/project/${id}/dashboard`);
+  }
+
+  const createProjectMutation = useMutation({
+    mutationFn: async () => {
+      const title = manualTitle.trim() || "Untitled Project";
+      return createWorkspaceProject(
+        resolvedWorkspaceMode,
+        {
+          title,
+          type: manualType,
+          projectMode: manualProjectMode,
+          ownerId: currentUser.id,
+        },
+      );
+    },
+    onSuccess: (createdProject) => {
+      seedCreatedProjectCaches(createdProject);
+
+      toast({ title: "Project created", description: createdProject.title });
+      setManualOpen(false);
+      resetManualForm();
+      navigate(`/project/${createdProject.id}/dashboard`);
+    },
+    onError: (error) => {
+      toast({
+        title: "Project create failed",
+        description: error instanceof Error ? error.message : "Unable to create project.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  function handleManualCreate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    createProjectMutation.mutate();
   }
 
   function handleCreateFolder() {
@@ -272,13 +316,21 @@ export function ProjectsTab() {
       </div>
 
       {/* Manual Create Modal */}
-      <AlertDialog open={manualOpen} onOpenChange={setManualOpen}>
+      <AlertDialog
+        open={manualOpen}
+        onOpenChange={(open) => {
+          if (createProjectMutation.isPending && !open) {
+            return;
+          }
+          setManualOpen(open);
+        }}
+      >
         <AlertDialogContent className="glass-modal rounded-modal">
           <AlertDialogHeader>
             <AlertDialogTitle>Create project manually</AlertDialogTitle>
             <AlertDialogDescription>Enter a name and type for your new project.</AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="space-y-3 py-2">
+          <form className="space-y-3 py-2" onSubmit={handleManualCreate}>
             <div className="space-y-1">
               <label className="text-body-sm font-medium text-foreground">Project name</label>
               <Input value={manualTitle} onChange={(e) => setManualTitle(e.target.value)} placeholder="e.g. Bathroom renovation" autoFocus />
@@ -302,11 +354,24 @@ export function ProjectsTab() {
                 <option value="contractor">I'm a contractor working for a client</option>
               </select>
             </div>
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleManualCreate} className="bg-accent text-accent-foreground hover:bg-accent/90">Create</AlertDialogAction>
-          </AlertDialogFooter>
+            <AlertDialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setManualOpen(false)}
+                disabled={createProjectMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                className="bg-accent text-accent-foreground hover:bg-accent/90"
+                disabled={createProjectMutation.isPending}
+              >
+                {createProjectMutation.isPending ? "Creating..." : "Create"}
+              </Button>
+            </AlertDialogFooter>
+          </form>
         </AlertDialogContent>
       </AlertDialog>
     </div>

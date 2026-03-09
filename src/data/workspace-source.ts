@@ -279,6 +279,97 @@ export async function getWorkspaceSource(
   return createSupabaseWorkspaceSource(supabase, resolvedMode.profileId);
 }
 
+export async function createWorkspaceProject(
+  mode: WorkspaceMode,
+  input: {
+    title: string;
+    type: Project["type"];
+    projectMode: Project["project_mode"];
+    ownerId: string;
+  },
+  options: {
+    bootstrapLocalProject?: boolean;
+  } = {},
+): Promise<Project> {
+  if (mode.kind !== "supabase") {
+    const timestamp = Date.now();
+    const projectId = `project-manual-${timestamp}`;
+    const shouldBootstrapLocalProject = options.bootstrapLocalProject !== false;
+    const stageId = shouldBootstrapLocalProject ? `stage-manual-${timestamp}-0` : "";
+    const project: Project = {
+      id: projectId,
+      owner_id: input.ownerId,
+      title: input.title,
+      type: input.type,
+      project_mode: input.projectMode,
+      automation_level: "manual",
+      current_stage_id: stageId,
+      progress_pct: 0,
+    };
+
+    store.addProject(project);
+    store.addMember({
+      project_id: projectId,
+      user_id: input.ownerId,
+      role: "owner",
+      ai_access: "project_pool",
+      credit_limit: 500,
+      used_credits: 0,
+    });
+
+    if (shouldBootstrapLocalProject) {
+      store.addStage({
+        id: stageId,
+        project_id: projectId,
+        title: "Stage 1",
+        description: "",
+        order: 1,
+        status: "open",
+      });
+      store.addEvent({
+        id: `evt-manual-${timestamp}`,
+        project_id: projectId,
+        actor_id: input.ownerId,
+        type: "project_created",
+        object_type: "project",
+        object_id: projectId,
+        timestamp: new Date().toISOString(),
+        payload: { title: input.title },
+      });
+      store.addEvent({
+        id: `evt-project-mode-${timestamp}`,
+        project_id: projectId,
+        actor_id: input.ownerId,
+        type: "estimate.project_mode_set",
+        object_type: "estimate_v2_project",
+        object_id: projectId,
+        timestamp: new Date().toISOString(),
+        payload: { projectMode: input.projectMode },
+      });
+    }
+
+    return project;
+  }
+
+  const supabase = await loadSupabaseClient();
+  const { data, error } = await supabase
+    .from("projects")
+    .insert({
+      owner_profile_id: input.ownerId,
+      title: input.title,
+      project_type: input.type,
+      project_mode: input.projectMode,
+    })
+    .select("*")
+    .single();
+
+  if (error || !data) {
+    throw error ?? new Error("Unable to create workspace project");
+  }
+
+  return mapProjectRowToProject(data);
+}
+
 export async function updateWorkspaceProjectMemberRole(
   mode: WorkspaceMode,
   input: {
