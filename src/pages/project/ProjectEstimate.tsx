@@ -4,7 +4,6 @@ import { AlertTriangle, ChevronDown, ChevronRight, Download, Info, Plus, Trash2,
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import {
   DropdownMenu,
@@ -31,6 +30,7 @@ import {
 import { EmptyState } from "@/components/EmptyState";
 import { useToast } from "@/hooks/use-toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { AssigneeCell } from "@/components/estimate-v2/AssigneeCell";
 import { InlineEditableNumber } from "@/components/estimate-v2/InlineEditableNumber";
 import { InlineEditableText } from "@/components/estimate-v2/InlineEditableText";
@@ -57,6 +57,7 @@ import {
   refreshVersionSnapshot,
   setProjectEstimateStatus,
   submitVersion,
+  updateEstimateV2Project,
   updateLine,
   updateStage,
   updateWork,
@@ -179,10 +180,10 @@ function estimateStatusLabel(status: EstimateExecutionStatus): string {
 }
 
 function estimateStatusClassName(status: EstimateExecutionStatus): string {
-  if (status === "planning") return "bg-muted text-muted-foreground";
-  if (status === "in_work") return "bg-info/15 text-info";
-  if (status === "paused") return "bg-warning/15 text-warning-foreground";
-  return "bg-success/15 text-success";
+  if (status === "planning") return "border-foreground/15 bg-foreground/5 text-foreground";
+  if (status === "in_work") return "border-info/25 bg-info/10 text-info";
+  if (status === "paused") return "border-warning/25 bg-warning/15 text-warning-foreground";
+  return "border-success/25 bg-success/12 text-success";
 }
 
 function durationDays(startDay: number | null, endDay: number | null): number | null {
@@ -249,14 +250,16 @@ const RESOURCE_TYPE_OPTIONS: Array<{ value: ResourceLineType; label: string }> =
   { value: "other", label: "Other" },
 ];
 
-const RESOURCE_CREATE_OPTIONS: Array<{ label: string; value: ResourceLineType; defaultTitle: string }> = [
-  { label: "Material", value: "material", defaultTitle: "Material" },
-  { label: "Tool", value: "tool", defaultTitle: "Tool" },
-  { label: "HR", value: "labor", defaultTitle: "Labor" },
-  { label: "Overheads", value: "other", defaultTitle: "Overheads" },
-  { label: "Subcontractor", value: "subcontractor", defaultTitle: "Subcontractor" },
-  { label: "Other", value: "other", defaultTitle: "Other" },
+const RESOURCE_CREATE_OPTIONS: Array<{ label: string; value: ResourceLineType }> = [
+  { label: "Material", value: "material" },
+  { label: "Tool", value: "tool" },
+  { label: "HR", value: "labor" },
+  { label: "Overheads", value: "other" },
+  { label: "Subcontractor", value: "subcontractor" },
+  { label: "Other", value: "other" },
 ];
+
+const FOOTER_HELPER_TOOLTIP = "Review total cost, client total and VAT for the full estimate.";
 
 const PLAN_PARTICIPANT_CAP: Record<UserPlan, number> = {
   free: 1,
@@ -315,7 +318,13 @@ export default function ProjectEstimate() {
   const [missingDatesWorkIds, setMissingDatesWorkIds] = useState<string[]>([]);
   const [incompleteTaskBlocks, setIncompleteTaskBlocks] = useState<Array<{ taskId: string | null; title: string }>>([]);
   const [collapsedStageIds, setCollapsedStageIds] = useState<Set<string>>(new Set());
+  const estimateHasSavedContent = lines.length > 0 || versions.length > 0;
+  const [estimateEditorStarted, setEstimateEditorStarted] = useState(estimateHasSavedContent);
+  const previousProjectIdRef = useRef(pid);
+  const [pendingStageTitleEditId, setPendingStageTitleEditId] = useState<string | null>(null);
+  const [pendingWorkTitleEditId, setPendingWorkTitleEditId] = useState<string | null>(null);
   const [pendingLineTitleEditId, setPendingLineTitleEditId] = useState<string | null>(null);
+  const [detailedCostOverviewOpen, setDetailedCostOverviewOpen] = useState(false);
   const [financialResourcesExpanded, setFinancialResourcesExpanded] = useState(false);
   const [customUnitDraftByLineId, setCustomUnitDraftByLineId] = useState<Record<string, string>>({});
   const [customUnitInputLineIds, setCustomUnitInputLineIds] = useState<Set<string>>(new Set());
@@ -323,13 +332,62 @@ export default function ProjectEstimate() {
     Record<string, { hasOverflow: boolean; isScrolled: boolean }>
   >({});
   const workTableScrollCleanupRef = useRef<Map<string, () => void>>(new Map());
+  const suppressResourceCreateAutoFocusRef = useRef(false);
+
+  useEffect(() => {
+    if (!estimateHasSavedContent) return;
+    setEstimateEditorStarted(true);
+  }, [estimateHasSavedContent]);
+
+  useEffect(() => {
+    if (previousProjectIdRef.current === pid) return;
+    previousProjectIdRef.current = pid;
+    setEstimateEditorStarted(estimateHasSavedContent);
+  }, [estimateHasSavedContent, pid]);
+
+  useEffect(() => {
+    if (!pendingStageTitleEditId) return;
+    let firstFrame = 0;
+    let secondFrame = 0;
+    firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        setPendingStageTitleEditId(null);
+      });
+    });
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      window.cancelAnimationFrame(secondFrame);
+    };
+  }, [pendingStageTitleEditId]);
+
+  useEffect(() => {
+    if (!pendingWorkTitleEditId) return;
+    let firstFrame = 0;
+    let secondFrame = 0;
+    firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        setPendingWorkTitleEditId(null);
+      });
+    });
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      window.cancelAnimationFrame(secondFrame);
+    };
+  }, [pendingWorkTitleEditId]);
 
   useEffect(() => {
     if (!pendingLineTitleEditId) return;
-    const timeoutId = window.setTimeout(() => {
-      setPendingLineTitleEditId(null);
-    }, 0);
-    return () => window.clearTimeout(timeoutId);
+    let firstFrame = 0;
+    let secondFrame = 0;
+    firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        setPendingLineTitleEditId(null);
+      });
+    });
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      window.cancelAnimationFrame(secondFrame);
+    };
   }, [pendingLineTitleEditId]);
 
   useEffect(() => (
@@ -615,6 +673,7 @@ export default function ProjectEstimate() {
     isOwner: canSubmitToClient,
     hasProposedVersion: Boolean(latestProposed),
   });
+  const showEstimateWorkspace = estimateEditorStarted || estimateHasSavedContent;
   const reviewExpandedByDefault = regime === "client" && !isOwner;
   const approvedVersionWithStamp = latestApproved?.approvalStamp ? latestApproved : null;
   const latestVersionNumber = useMemo(
@@ -625,6 +684,30 @@ export default function ProjectEstimate() {
     latestApproved
     && (!latestProposed || latestApproved.number >= latestProposed.number),
   );
+  const financialBreakdownTypeRows = [
+    { label: "Material cost", amountCents: totals.breakdownByType.material },
+    { label: "Tool cost", amountCents: totals.breakdownByType.tool },
+    { label: "Labor cost", amountCents: totals.breakdownByType.labor },
+    { label: "Subcontractor cost", amountCents: totals.breakdownByType.subcontractor },
+    { label: "Other cost", amountCents: totals.breakdownByType.other },
+  ];
+  const financialBreakdownSummaryRows = [
+    { label: "Markup", amountCents: totals.markupTotalCents },
+    { label: "Subtotal (ex VAT)", amountCents: totals.subtotalBeforeDiscountCents },
+    { label: "Discount", amountCents: totals.discountTotalCents },
+    { label: "VAT amount", amountCents: totals.taxAmountCents },
+    { label: "Total (inc VAT)", amountCents: totals.totalCents, emphasized: true },
+  ];
+  const planVsActualRows = (["material", "tool", "labor", "subcontractor", "other"] as const).map((type) => ({
+    label: labelForType(type),
+    planned: money(combinedPlanFact.planned.plannedCostByTypeCents[type], estimateProject.currency),
+    actual: hasActualFinancialData ? money(combinedPlanFact.fact.spentByTypeCents[type], estimateProject.currency) : "—",
+  }));
+
+  useEffect(() => {
+    if (estimateProject.estimateStatus === "in_work") return;
+    setDetailedCostOverviewOpen(false);
+  }, [estimateProject.estimateStatus]);
 
   const handleEstimateStatusChange = (
     nextStatus: EstimateExecutionStatus,
@@ -666,6 +749,7 @@ export default function ProjectEstimate() {
   };
 
   const handleTabChange = (nextTab: string) => {
+    if (!showEstimateWorkspace && nextTab !== "estimate") return;
     if (nextTab === "work_log") {
       if (estimateProject.estimateStatus !== "in_work") return;
       navigate(`/project/${pid}/tasks`);
@@ -927,21 +1011,44 @@ export default function ProjectEstimate() {
     });
   };
 
+  const handleStartEstimate = () => {
+    setEstimateEditorStarted(true);
+    setActiveTab("estimate");
+  };
+
+  const handleCreateStage = () => {
+    const created = createStage(pid, { title: "Add stage" });
+    if (!created) return;
+    setPendingStageTitleEditId(created.id);
+  };
+
+  const handleCreateWork = (stageId: string) => {
+    const created = createWork(pid, { stageId, title: "Add work" });
+    if (!created) return;
+    setPendingWorkTitleEditId(created.id);
+  };
+
   const handleCreateResourceLine = (
     stageId: string,
     workId: string,
-    option: { value: ResourceLineType; defaultTitle: string },
+    option: { value: ResourceLineType },
   ) => {
+    suppressResourceCreateAutoFocusRef.current = true;
     const created = createLine(pid, {
       stageId,
       workId,
-      title: option.defaultTitle,
+      title: "Add resource",
       type: option.value,
       qtyMilli: 1_000,
       costUnitCents: 0,
     });
-    if (!created) return;
-    setPendingLineTitleEditId(created.id);
+    if (!created) {
+      suppressResourceCreateAutoFocusRef.current = false;
+      return;
+    }
+    window.requestAnimationFrame(() => {
+      setPendingLineTitleEditId(created.id);
+    });
   };
 
   const updateWorkTableScrollState = useCallback((workId: string, container: HTMLDivElement) => {
@@ -1031,84 +1138,93 @@ export default function ProjectEstimate() {
   return (
     <div className="space-y-sp-2 p-sp-2">
       <div className="rounded-card border border-border bg-card p-sp-2 space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="space-y-1">
-            <h2 className="text-lg font-semibold text-foreground">{project.title}</h2>
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-caption text-muted-foreground">Estimate</p>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span>
-                    <Badge
-                      variant="secondary"
-                      className={latestVersionApproved ? "bg-success/15 text-success" : "bg-warning/15 text-warning-foreground"}
-                    >
-                      v{latestVersionNumber}
-                    </Badge>
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>
-                  Share link with client for approval of the latest estimate version.
-                </TooltipContent>
-              </Tooltip>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Select
-                value={estimateProject.estimateStatus}
-                onValueChange={(value) => handleEstimateStatusChange(value as EstimateExecutionStatus)}
-                disabled={!canEditEstimate}
-              >
-                <SelectTrigger className={`h-9 w-[180px] border-0 text-sm font-medium ${estimateStatusClassName(estimateProject.estimateStatus)}`}>
-                  <SelectValue placeholder={estimateStatusLabel(estimateProject.estimateStatus)} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="planning">Planning</SelectItem>
-                  <SelectItem value="in_work">In work</SelectItem>
-                  <SelectItem value="paused">Paused</SelectItem>
-                  <SelectItem value="finished">Finished</SelectItem>
-                </SelectContent>
-              </Select>
-              {!canEditEstimate && <span className="text-caption text-muted-foreground">Owner only</span>}
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" size="sm" onClick={handleExportCsv}>
-              <Download className="mr-1 h-4 w-4" /> Export CSV
-            </Button>
+        <div className="flex flex-wrap items-start justify-between gap-3 lg:flex-nowrap">
+          <div className="min-w-0 flex-1 space-y-2">
+            <h2 className="truncate text-xl font-semibold text-foreground">{project.title}</h2>
+            {showEstimateWorkspace && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Status</span>
+                <Select
+                  value={estimateProject.estimateStatus}
+                  onValueChange={(value) => handleEstimateStatusChange(value as EstimateExecutionStatus)}
+                  disabled={!canEditEstimate}
+                >
+                  <SelectTrigger className={`h-8 w-auto min-w-[116px] rounded-md border px-3 text-xs font-semibold shadow-none ${estimateStatusClassName(estimateProject.estimateStatus)}`}>
+                    <SelectValue placeholder={estimateStatusLabel(estimateProject.estimateStatus)} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="planning">Planning</SelectItem>
+                    <SelectItem value="in_work">In work</SelectItem>
+                    <SelectItem value="paused">Paused</SelectItem>
+                    <SelectItem value="finished">Finished</SelectItem>
+                  </SelectContent>
+                </Select>
 
-            {ctaState.showSubmit && (
-              <Button
-                size="sm"
-                className="bg-accent text-accent-foreground hover:bg-accent/90"
-                onClick={handleSubmitToClient}
-                disabled={submitState.submitDisabled}
-                title={submitState.submitDisabledReason ?? undefined}
-              >
-                Submit to client
-              </Button>
-            )}
-
-            {ctaState.showApprove && (
-              <Button
-                size="sm"
-                onClick={() => setApprovalModalOpen(true)}
-                disabled={ctaState.approveDisabled}
-                title={ctaState.approveDisabledReason ?? undefined}
-              >
-                Approve
-              </Button>
-            )}
-
-            {ctaState.showApprove && ctaState.approveDisabledReason && (
-              <span className="text-caption text-muted-foreground">{ctaState.approveDisabledReason}</span>
-            )}
-            {ctaState.showSubmit && submitState.submitDisabledReason && (
-              <span className="text-caption text-muted-foreground">{submitState.submitDisabledReason}</span>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
+                      <Badge
+                        variant="secondary"
+                        className={latestVersionApproved ? "border border-success/20 bg-success/10 text-success" : "border border-warning/20 bg-warning/10 text-warning-foreground"}
+                      >
+                        Estimate v{latestVersionNumber}
+                      </Badge>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Share link with client for approval of the latest estimate version.
+                  </TooltipContent>
+                </Tooltip>
+              </div>
             )}
           </div>
+
+          {showEstimateWorkspace && (
+            <div className="flex w-full min-w-0 flex-col items-start gap-1 lg:w-auto lg:items-end">
+              <div className="flex w-full flex-wrap items-center gap-2 lg:justify-end">
+                <Button variant="outline" size="sm" onClick={handleExportCsv}>
+                  <Download className="mr-1 h-4 w-4" /> Export CSV
+                </Button>
+
+                {ctaState.showSubmit && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-accent/30 text-accent hover:bg-accent/10"
+                    onClick={handleSubmitToClient}
+                    disabled={submitState.submitDisabled}
+                    title={submitState.submitDisabledReason ?? undefined}
+                  >
+                    Submit to client
+                  </Button>
+                )}
+
+                {ctaState.showApprove && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-accent/30 text-accent hover:bg-accent/10"
+                    onClick={() => setApprovalModalOpen(true)}
+                    disabled={ctaState.approveDisabled}
+                    title={ctaState.approveDisabledReason ?? undefined}
+                  >
+                    Approve
+                  </Button>
+                )}
+              </div>
+
+              {(!canEditEstimate || (ctaState.showApprove && ctaState.approveDisabledReason) || (ctaState.showSubmit && submitState.submitDisabledReason)) && (
+                <div className="flex flex-wrap gap-x-3 gap-y-1 text-caption text-muted-foreground lg:justify-end">
+                  {!canEditEstimate && <span>Owner only</span>}
+                  {ctaState.showApprove && ctaState.approveDisabledReason && <span>{ctaState.approveDisabledReason}</span>}
+                  {ctaState.showSubmit && submitState.submitDisabledReason && <span>{submitState.submitDisabledReason}</span>}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
-        {isInWork ? (
+        {showEstimateWorkspace && (isInWork ? (
           <div className="rounded-lg border border-border p-3">
             {regime === "client" ? (
               <div className="space-y-3">
@@ -1274,128 +1390,100 @@ export default function ProjectEstimate() {
                   </div>
                 </div>
 
-                <div className="space-y-2 border-t border-border/60 pt-3">
-                  {(["material", "tool", "labor", "subcontractor", "other"] as const).map((type) => {
-                    const planned = combinedPlanFact.planned.plannedCostByTypeCents[type];
-                    const actual = combinedPlanFact.fact.spentByTypeCents[type];
-                    const progress = hasActualFinancialData && planned > 0
-                      ? Math.min(100, (actual / planned) * 100)
-                      : 0;
-                    const overrun = hasActualFinancialData ? Math.max(actual - planned, 0) : 0;
-                    return (
-                      <div key={type} className="space-y-1">
-                        <div className="flex items-center justify-between gap-2 text-caption">
-                          <span className="text-muted-foreground">{labelForType(type)}</span>
-                          <span className="tabular-nums text-foreground">
-                            {hasActualFinancialData ? money(actual, estimateProject.currency) : "—"}
-                            {" / "}
-                            {money(planned, estimateProject.currency)}
+                <div className="border-t border-border/60 pt-3">
+                  <Collapsible open={detailedCostOverviewOpen} onOpenChange={setDetailedCostOverviewOpen}>
+                    <div className="rounded-lg border border-border/70">
+                      <CollapsibleTrigger asChild>
+                        <button
+                          type="button"
+                          className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-muted/20"
+                        >
+                          <span className="inline-flex items-center gap-2 text-sm font-semibold text-foreground">
+                            {detailedCostOverviewOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                            Detailed cost overview
                           </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Progress value={progress} className="h-1.5 flex-1 bg-muted/60" />
-                          {overrun > 0 && (
-                            <span className="shrink-0 text-[11px] font-medium tabular-nums text-warning-foreground">
-                              +{money(overrun, estimateProject.currency)}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                          <span className="text-caption tabular-nums text-muted-foreground">
+                            {money(totals.totalCents, estimateProject.currency)}
+                          </span>
+                        </button>
+                      </CollapsibleTrigger>
 
-                <div className="space-y-2 border-t border-border/60 pt-3">
-                  <details className="rounded-md border border-border/60">
-                    <summary className="cursor-pointer px-2 py-1.5 text-caption font-medium text-muted-foreground">
-                      Details: Financial breakdown
-                    </summary>
-                    <div className="space-y-1 border-t border-border/50 p-2 text-caption">
-                      <button
-                        type="button"
-                        className="flex w-full items-center justify-between rounded-md border border-border/70 px-2 py-1 text-left hover:bg-muted/30"
-                        onClick={() => setFinancialResourcesExpanded((current) => !current)}
-                      >
-                        <span className="inline-flex items-center gap-1 text-muted-foreground">
-                          {financialResourcesExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                          Resources
-                        </span>
-                        <span className="font-medium tabular-nums text-foreground">{money(resourcesTotalCents, estimateProject.currency)}</span>
-                      </button>
-                      {financialResourcesExpanded && (
-                        <div className="space-y-1 pl-5">
-                          <div className="flex items-center justify-between rounded-md border border-border/60 px-2 py-1">
-                            <span className="text-muted-foreground">Material cost</span>
-                            <span className="tabular-nums text-foreground">{money(totals.breakdownByType.material, estimateProject.currency)}</span>
+                      <CollapsibleContent className="border-t border-border/60 px-3 py-3">
+                        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+                          <div className="space-y-2 rounded-md border border-border/60 bg-background/30 p-3">
+                            <p className="text-sm font-semibold text-foreground">Financial breakdown</p>
+                            <div className="space-y-2">
+                              <button
+                                type="button"
+                                className="flex w-full items-center justify-between gap-3 rounded-md border border-border/60 px-3 py-2 text-left text-sm hover:bg-muted/30"
+                                onClick={() => setFinancialResourcesExpanded((current) => !current)}
+                              >
+                                <span className="inline-flex items-center gap-1 text-muted-foreground">
+                                  {financialResourcesExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                                  Resources
+                                </span>
+                                <span className="font-medium tabular-nums text-foreground">{money(resourcesTotalCents, estimateProject.currency)}</span>
+                              </button>
+                              {financialResourcesExpanded && (
+                                <div className="space-y-2 pl-3">
+                                  {financialBreakdownTypeRows.map((row) => (
+                                    <div key={row.label} className="flex items-center justify-between gap-3 rounded-md border border-border/60 px-3 py-2 text-sm">
+                                      <span className="text-muted-foreground">{row.label}</span>
+                                      <span className="font-medium tabular-nums text-foreground">
+                                        {money(row.amountCents, estimateProject.currency)}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              {financialBreakdownSummaryRows.map((row) => (
+                                <div
+                                  key={row.label}
+                                  className={`flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm ${
+                                    row.emphasized ? "border-border/70 bg-muted/30" : "border-border/60"
+                                  }`}
+                                >
+                                  <span className={row.emphasized ? "font-medium text-foreground" : "text-muted-foreground"}>
+                                    {row.label}
+                                  </span>
+                                  <span className={`${row.emphasized ? "font-semibold" : "font-medium"} tabular-nums text-foreground`}>
+                                    {money(row.amountCents, estimateProject.currency)}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
                           </div>
-                          <div className="flex items-center justify-between rounded-md border border-border/60 px-2 py-1">
-                            <span className="text-muted-foreground">Tool cost</span>
-                            <span className="tabular-nums text-foreground">{money(totals.breakdownByType.tool, estimateProject.currency)}</span>
-                          </div>
-                          <div className="flex items-center justify-between rounded-md border border-border/60 px-2 py-1">
-                            <span className="text-muted-foreground">Labor cost</span>
-                            <span className="tabular-nums text-foreground">{money(totals.breakdownByType.labor, estimateProject.currency)}</span>
-                          </div>
-                          <div className="flex items-center justify-between rounded-md border border-border/60 px-2 py-1">
-                            <span className="text-muted-foreground">Subcontractor cost</span>
-                            <span className="tabular-nums text-foreground">{money(totals.breakdownByType.subcontractor, estimateProject.currency)}</span>
-                          </div>
-                          <div className="flex items-center justify-between rounded-md border border-border/60 px-2 py-1">
-                            <span className="text-muted-foreground">Other cost</span>
-                            <span className="tabular-nums text-foreground">{money(totals.breakdownByType.other, estimateProject.currency)}</span>
+
+                          <div className="space-y-2 rounded-md border border-border/60 bg-background/30 p-3">
+                            <p className="text-sm font-semibold text-foreground">Plan vs actual</p>
+                            <div className="grid grid-cols-[minmax(0,1fr)_minmax(112px,auto)_minmax(112px,auto)] gap-3 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                              <span>Category</span>
+                              <span className="text-right">Planned</span>
+                              <span className="text-right">Actual</span>
+                            </div>
+                            <div className="space-y-2">
+                              {planVsActualRows.map((row) => (
+                                <div key={row.label} className="grid grid-cols-[minmax(0,1fr)_minmax(112px,auto)_minmax(112px,auto)] items-center gap-3 rounded-md border border-border/60 px-3 py-2 text-sm">
+                                  <span className="text-muted-foreground">{row.label}</span>
+                                  <span className="text-right font-medium tabular-nums text-foreground">{row.planned}</span>
+                                  <span className="text-right font-medium tabular-nums text-foreground">{row.actual}</span>
+                                </div>
+                              ))}
+                              <div className="grid grid-cols-[minmax(0,1fr)_minmax(112px,auto)_minmax(112px,auto)] items-center gap-3 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-sm">
+                                <span className="font-medium text-foreground">Total</span>
+                                <span className="text-right font-semibold tabular-nums text-foreground">
+                                  {money(combinedPlanFact.planned.plannedBudgetCents, estimateProject.currency)}
+                                </span>
+                                <span className="text-right font-semibold tabular-nums text-foreground">
+                                  {hasActualFinancialData ? money(combinedPlanFact.fact.spentCents, estimateProject.currency) : "—"}
+                                </span>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      )}
-                      <div className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
-                        <span className="text-muted-foreground">Markup</span>
-                        <span className="tabular-nums text-foreground">{money(totals.markupTotalCents, estimateProject.currency)}</span>
-                      </div>
-                      <div className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
-                        <span className="text-muted-foreground">Subtotal (ex VAT)</span>
-                        <span className="tabular-nums text-foreground">{money(totals.subtotalBeforeDiscountCents, estimateProject.currency)}</span>
-                      </div>
-                      <div className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
-                        <span className="text-muted-foreground">Discount</span>
-                        <span className="tabular-nums text-foreground">{money(totals.discountTotalCents, estimateProject.currency)}</span>
-                      </div>
-                      <div className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
-                        <span className="text-muted-foreground">VAT amount</span>
-                        <span className="tabular-nums text-foreground">{money(totals.taxAmountCents, estimateProject.currency)}</span>
-                      </div>
-                      <div className="flex items-center justify-between rounded-md border border-border/70 bg-muted/30 px-2 py-1">
-                        <span className="font-medium text-foreground">Total (inc VAT)</span>
-                        <span className="font-semibold tabular-nums text-foreground">{money(totals.totalCents, estimateProject.currency)}</span>
-                      </div>
+                      </CollapsibleContent>
                     </div>
-                  </details>
-
-                  <details className="rounded-md border border-border/60">
-                    <summary className="cursor-pointer px-2 py-1.5 text-caption font-medium text-muted-foreground">
-                      Details: Plan vs actual table
-                    </summary>
-                    <div className="overflow-x-auto border-t border-border/50 p-2 pt-1">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Category</TableHead>
-                            <TableHead className="text-right">Planned</TableHead>
-                            <TableHead className="text-right">Actual</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {(["material", "tool", "labor", "subcontractor", "other"] as const).map((type) => (
-                            <TableRow key={type}>
-                              <TableCell>{labelForType(type)}</TableCell>
-                              <TableCell className="text-right">{money(combinedPlanFact.planned.plannedCostByTypeCents[type], estimateProject.currency)}</TableCell>
-                              <TableCell className="text-right">
-                                {hasActualFinancialData ? money(combinedPlanFact.fact.spentByTypeCents[type], estimateProject.currency) : "—"}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </details>
+                  </Collapsible>
                 </div>
               </div>
             )}
@@ -1504,9 +1592,9 @@ export default function ProjectEstimate() {
               )}
             </div>
           </div>
-        )}
+        ))}
 
-        <VersionBanner
+        {showEstimateWorkspace && <VersionBanner
           hasPending={pendingProposed && Boolean(latestProposed)}
           isOpenByDefault={reviewExpandedByDefault}
           title="New version submitted"
@@ -1518,27 +1606,39 @@ export default function ProjectEstimate() {
         >
           <p className="mb-2 text-caption font-medium text-foreground">Changed items</p>
           <VersionDiffList changes={diff.changes} regime={regime} currency={estimateProject.currency} />
-        </VersionBanner>
+        </VersionBanner>}
 
         <Tabs value={activeTab} onValueChange={handleTabChange}>
           <TabsList className="h-auto w-full justify-start gap-1 bg-transparent p-0">
             <TabsTrigger value="estimate">Estimate</TabsTrigger>
-            <TabsTrigger value="work_schedule">Work schedule</TabsTrigger>
+            <TabsTrigger value="work_schedule" disabled={!showEstimateWorkspace}>Work schedule</TabsTrigger>
             <Tooltip>
               <TooltipTrigger asChild>
                 <span>
-                  <TabsTrigger value="work_log" disabled={estimateProject.estimateStatus !== "in_work"}>
+                  <TabsTrigger value="work_log" disabled={!showEstimateWorkspace || estimateProject.estimateStatus !== "in_work"}>
                     Work log
                   </TabsTrigger>
                 </span>
               </TooltipTrigger>
-              {estimateProject.estimateStatus !== "in_work" && (
-                <TooltipContent>Available after moving project to In work</TooltipContent>
+              {(!showEstimateWorkspace || estimateProject.estimateStatus !== "in_work") && (
+                <TooltipContent>
+                  {!showEstimateWorkspace ? "Create an estimate first" : "Available after moving project to In work"}
+                </TooltipContent>
               )}
             </Tooltip>
           </TabsList>
 
           <TabsContent value="estimate" className="mt-3 space-y-3">
+            {!showEstimateWorkspace ? (
+              <EmptyState
+                icon={AlertTriangle}
+                title="No estimate created yet"
+                description="Create the estimate when you are ready to start building stages, works and resources."
+                actionLabel={canEditEstimate ? "Create estimate" : undefined}
+                onAction={canEditEstimate ? handleStartEstimate : undefined}
+              />
+            ) : (
+              <>
             {approvedVersionWithStamp && approvedVersionWithStamp.approvalStamp && (
               <ApprovalStampCard
                 stamp={approvedVersionWithStamp.approvalStamp}
@@ -1547,7 +1647,12 @@ export default function ProjectEstimate() {
             )}
 
             {sortedStages.length === 0 ? (
-              <EmptyState icon={AlertTriangle} title="No stages" description="Add your first stage to start Estimate v2." />
+              <div className="rounded-md border border-dashed border-border/70 bg-background/40 p-4">
+                <p className="text-sm font-medium text-foreground">No stages yet</p>
+                <p className="mt-1 text-caption text-muted-foreground">
+                  Start with a stage. Works appear after a stage is added, and resources appear after a work is added.
+                </p>
+              </div>
             ) : (
               <div className="space-y-3">
                 {sortedStages.map((stage) => {
@@ -1575,6 +1680,7 @@ export default function ProjectEstimate() {
                           <InlineEditableText
                             value={stage.title}
                             readOnly={!canEditEstimate}
+                            startInEditMode={pendingStageTitleEditId === stage.id}
                             onCommit={(nextValue) => updateStage(pid, stage.id, { title: nextValue || stage.title })}
                             className="min-w-[220px] flex-1"
                             displayClassName="text-body-sm font-semibold"
@@ -1633,6 +1739,7 @@ export default function ProjectEstimate() {
                                     <InlineEditableText
                                       value={work.title}
                                       readOnly={!canEditEstimate}
+                                      startInEditMode={pendingWorkTitleEditId === work.id}
                                       onCommit={(nextValue) => updateWork(pid, work.id, { title: nextValue || work.title })}
                                       className="min-w-[220px] flex-1"
                                       displayClassName="text-sm font-medium"
@@ -1888,7 +1995,7 @@ export default function ProjectEstimate() {
 
                                       {canEditEstimate && (
                                         <TableRow className="border-b-0 hover:bg-transparent">
-                                          <TableCell colSpan={tableColumnCount} className="py-1">
+                                          <TableCell className="sticky left-0 z-20 w-[360px] border-r border-border bg-card py-1 pr-2 shadow-[6px_0_10px_-10px_hsl(var(--foreground)/0.35)]">
                                             <div className="flex h-8 items-center rounded-md border border-dashed border-border/70 bg-background/40 px-2">
                                               <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
@@ -1902,7 +2009,14 @@ export default function ProjectEstimate() {
                                                     Add resource
                                                   </Button>
                                                 </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="start">
+                                                <DropdownMenuContent
+                                                  align="start"
+                                                  onCloseAutoFocus={(event) => {
+                                                    if (!suppressResourceCreateAutoFocusRef.current) return;
+                                                    event.preventDefault();
+                                                    suppressResourceCreateAutoFocusRef.current = false;
+                                                  }}
+                                                >
                                                   {RESOURCE_CREATE_OPTIONS.map((option) => (
                                                     <DropdownMenuItem
                                                       key={`${work.id}-${option.label}`}
@@ -1919,6 +2033,7 @@ export default function ProjectEstimate() {
                                               </DropdownMenu>
                                             </div>
                                           </TableCell>
+                                          <TableCell colSpan={tableColumnCount - 1} className="py-1" />
                                         </TableRow>
                                       )}
                                     </TableBody>
@@ -1939,7 +2054,7 @@ export default function ProjectEstimate() {
                                   size="sm"
                                   variant="secondary"
                                   className="h-6 gap-1 px-2 text-xs"
-                                  onClick={() => createWork(pid, { stageId: stage.id, title: `Work ${stageWorks.length + 1}` })}
+                                  onClick={() => handleCreateWork(stage.id)}
                                 >
                                   <Plus className="h-3.5 w-3.5" />
                                   Add work
@@ -1963,12 +2078,73 @@ export default function ProjectEstimate() {
                   size="sm"
                   variant="secondary"
                   className="h-7 gap-1 px-2 text-xs"
-                  onClick={() => createStage(pid, { title: `Stage ${stages.length + 1}` })}
+                  onClick={handleCreateStage}
                 >
                   <Plus className="h-3.5 w-3.5" />
                   Add stage
                 </Button>
               </div>
+            )}
+            <div className="rounded-lg border border-border p-3">
+              <div className={`grid items-center gap-x-4 gap-y-2 ${regime === "client" ? "md:grid-cols-[minmax(0,1fr)_max-content]" : "md:grid-cols-[minmax(0,1fr)_max-content_max-content]"}`}>
+                <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-foreground">
+                  <span className="truncate">Total across all stages</span>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button type="button" className="shrink-0 text-muted-foreground hover:text-foreground">
+                        <Info className="h-3.5 w-3.5" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>{FOOTER_HELPER_TOOLTIP}</TooltipContent>
+                  </Tooltip>
+                </div>
+
+                {regime !== "client" && (
+                  <div className="flex items-center justify-between gap-2 whitespace-nowrap text-sm md:min-w-[170px] md:justify-end">
+                    <span className="text-muted-foreground">Total cost</span>
+                    <span className="font-semibold tabular-nums text-foreground">
+                      {money(totals.costTotalCents, estimateProject.currency)}
+                    </span>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between gap-2 whitespace-nowrap text-sm md:min-w-[190px] md:justify-end">
+                  <span className="text-muted-foreground">Total for client</span>
+                  <span className="font-semibold tabular-nums text-foreground">
+                    {money(totals.totalCents, estimateProject.currency)}
+                  </span>
+                </div>
+              </div>
+
+              <div className={`mt-2 grid items-center gap-x-4 gap-y-2 ${regime === "client" ? "md:grid-cols-[minmax(0,1fr)_max-content]" : "md:grid-cols-[minmax(0,1fr)_max-content_max-content]"}`}>
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <span className="text-muted-foreground">VAT</span>
+                  {canEditEstimate ? (
+                    <InlineEditableNumber
+                      value={estimateProject.taxBps}
+                      onCommit={(nextValue) => updateEstimateV2Project(pid, { taxBps: nextValue })}
+                      formatDisplay={(value) => `${fromBpsToPercent(value)}%`}
+                      formatInput={(value) => fromBpsToPercent(value)}
+                      parseInput={(raw) => toBpsFromPercent(raw)}
+                      className="w-14"
+                      displayClassName="font-semibold"
+                      inputClassName="font-semibold"
+                    />
+                  ) : (
+                    <span className="font-semibold tabular-nums text-foreground">
+                      {fromBpsToPercent(estimateProject.taxBps)}%
+                    </span>
+                  )}
+                  <span className="tabular-nums text-muted-foreground">
+                    {money(totals.taxAmountCents, estimateProject.currency)}
+                  </span>
+                </div>
+
+                {regime !== "client" && <div aria-hidden="true" className="hidden md:block" />}
+                <div aria-hidden="true" className="hidden md:block" />
+              </div>
+            </div>
+              </>
             )}
           </TabsContent>
 
