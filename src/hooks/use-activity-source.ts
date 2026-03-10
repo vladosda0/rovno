@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import * as store from "@/data/store";
 import {
   buildNotificationEventMap,
@@ -68,6 +68,21 @@ function createProjectEventsMap(
       return [projectId, typeof perProjectLimit === "number" ? events.slice(0, perProjectLimit) : events];
     }),
   );
+}
+
+function areStringArraysEqual(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function useStableStringArray(values: string[]): string[] {
+  const valueRef = useRef(values);
+
+  // Keep array identity stable when only the reference changes.
+  if (!areStringArraysEqual(valueRef.current, values)) {
+    valueRef.current = values;
+  }
+
+  return valueRef.current;
 }
 
 export function useProjectEvents(projectId: string): Event[] {
@@ -147,9 +162,9 @@ export function useNotificationEventMap(
 ): Record<string, Event> {
   const mode = useWorkspaceMode();
   const supabaseMode = mode.kind === "supabase" ? mode : null;
-  const projectIds = Array.from(new Set(
+  const projectIds = useStableStringArray(Array.from(new Set(
     bridges.flatMap((bridge) => bridge.projectId ? [bridge.projectId] : []),
-  ));
+  )));
   const getProjectEvents = useCallback(
     () => createProjectEventsMap(projectIds),
     [projectIds],
@@ -190,7 +205,7 @@ export function useProjectsRecentEventsMap(
 ): Record<string, Event[]> {
   const mode = useWorkspaceMode();
   const supabaseMode = mode.kind === "supabase" ? mode : null;
-  const normalizedProjectIds = projectIds.filter(Boolean);
+  const normalizedProjectIds = useStableStringArray(projectIds.filter(Boolean));
   const getRecentEvents = useCallback(
     () => createProjectEventsMap(normalizedProjectIds, perProjectLimit),
     [normalizedProjectIds, perProjectLimit],

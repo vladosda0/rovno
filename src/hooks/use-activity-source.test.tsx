@@ -89,6 +89,20 @@ function NotificationResolutionProbe() {
   return <span data-testid="resolved-links">{resolved}</span>;
 }
 
+function NotificationEventMapProbe({
+  bridges,
+}: {
+  bridges: activitySource.ActivityNotificationBridge[];
+}) {
+  const eventMap = useNotificationEventMap(bridges);
+  const resolved = Object.entries(eventMap)
+    .map(([notificationId, resolvedEvent]) => `${notificationId}:${resolvedEvent.id}`)
+    .sort()
+    .join("|");
+
+  return <span data-testid="resolved-links">{resolved}</span>;
+}
+
 function RecentEventsProbe({
   projectIds,
   perProjectLimit,
@@ -163,6 +177,49 @@ describe("use-activity-source hooks", () => {
     expect(screen.getByTestId("unread-count")).toHaveTextContent("0");
     expect(getEventsSpy).toHaveBeenCalledWith("project-1");
     expect(getNotificationsSpy).toHaveBeenCalledWith("profile-1");
+  });
+
+  it("keeps recent project events stable across equivalent browser-mode rerenders", async () => {
+    const queryClient = createQueryClient();
+    const subscribeSpy = vi.spyOn(store, "subscribe").mockImplementation(() => () => {});
+    const getEventsSpy = vi.spyOn(store, "getEvents").mockImplementation((projectId: string) => [
+      event({ id: `evt-${projectId}`, project_id: projectId }),
+      event({
+        id: `evt-${projectId}-older`,
+        project_id: projectId,
+        timestamp: "2026-02-28T09:00:00.000Z",
+      }),
+    ]);
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const { rerender } = render(
+      <QueryClientProvider client={queryClient}>
+        <RecentEventsProbe projectIds={["project-1", "project-2"]} perProjectLimit={1} />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("recent-project-1")).toHaveTextContent("evt-project-1");
+    });
+
+    expect(screen.getByTestId("recent-project-2")).toHaveTextContent("evt-project-2");
+    expect(getEventsSpy).toHaveBeenCalledTimes(4);
+    expect(subscribeSpy).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      rerender(
+        <QueryClientProvider client={queryClient}>
+          <RecentEventsProbe projectIds={["project-1", "project-2"]} perProjectLimit={1} />
+        </QueryClientProvider>,
+      );
+      await Promise.resolve();
+    });
+
+    expect(getEventsSpy).toHaveBeenCalledTimes(4);
+    expect(subscribeSpy).toHaveBeenCalledTimes(1);
+    expect(
+      errorSpy.mock.calls.map((args) => args.map(String).join(" ")).join(" "),
+    ).not.toContain("Maximum update depth exceeded");
   });
 
   it("returns empty activity state while Supabase queries are loading, then the mapped results", async () => {
@@ -304,6 +361,60 @@ describe("use-activity-source hooks", () => {
         "notif-direct:evt-direct|notif-fallback:evt-fallback",
       );
     });
+  });
+
+  it("keeps notification event subscriptions stable across equivalent browser-mode rerenders", async () => {
+    const queryClient = createQueryClient();
+    const subscribeSpy = vi.spyOn(store, "subscribe").mockImplementation(() => () => {});
+    const getEventsSpy = vi.spyOn(store, "getEvents").mockImplementation((projectId: string) => [
+      event({ id: `evt-${projectId}`, project_id: projectId }),
+    ]);
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const bridges = [
+      bridge({
+        notificationId: "notif-1",
+        projectId: "project-1",
+        compatibilityEventId: "evt-project-1",
+        directEventId: "evt-project-1",
+      }),
+      bridge({
+        notificationId: "notif-2",
+        projectId: "project-2",
+        compatibilityEventId: "evt-project-2",
+        directEventId: "evt-project-2",
+      }),
+    ];
+
+    const { rerender } = render(
+      <QueryClientProvider client={queryClient}>
+        <NotificationEventMapProbe bridges={bridges.map((entry) => ({ ...entry }))} />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("resolved-links")).toHaveTextContent(
+        "notif-1:evt-project-1|notif-2:evt-project-2",
+      );
+    });
+
+    expect(getEventsSpy).toHaveBeenCalledTimes(4);
+    expect(subscribeSpy).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      rerender(
+        <QueryClientProvider client={queryClient}>
+          <NotificationEventMapProbe bridges={bridges.map((entry) => ({ ...entry }))} />
+        </QueryClientProvider>,
+      );
+      await Promise.resolve();
+    });
+
+    expect(getEventsSpy).toHaveBeenCalledTimes(4);
+    expect(subscribeSpy).toHaveBeenCalledTimes(1);
+    expect(
+      errorSpy.mock.calls.map((args) => args.map(String).join(" ")).join(" "),
+    ).not.toContain("Maximum update depth exceeded");
   });
 
   it("returns a recent-events map capped per project", async () => {
