@@ -1,4 +1,6 @@
 import "@testing-library/jest-dom";
+import { afterEach } from "vitest";
+import { __unsafeResetRuntimeAuthForTests } from "@/hooks/use-runtime-auth";
 
 Object.defineProperty(window, "matchMedia", {
   writable: true,
@@ -12,4 +14,8 @@ Object.defineProperty(window, "matchMedia", {
     removeEventListener: () => {},
     dispatchEvent: () => {},
   }),
+});
+
+afterEach(() => {
+  __unsafeResetRuntimeAuthForTests();
 });

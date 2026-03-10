@@ -9,7 +9,7 @@ import {
   usePlacedSupplierOrders,
   usePlacedSupplierOrdersAllProjects,
 } from "@/hooks/use-order-data";
-import { workspaceQueryKeys } from "@/hooks/use-workspace-source";
+import { authenticateRuntimeAuth } from "@/test/runtime-auth";
 import type { OrderWithLines } from "@/types/entities";
 
 function createQueryClient() {
@@ -139,10 +139,7 @@ describe("order read hooks", () => {
       getPlacedSupplierOrdersAllProjects: vi.fn(() => placedAllOrdersPromise),
     };
 
-    queryClient.setQueryData(workspaceQueryKeys.mode(), {
-      kind: "supabase",
-      profileId: "profile-1",
-    });
+    authenticateRuntimeAuth();
     vi.spyOn(ordersSource, "getOrdersSource").mockResolvedValue(source);
 
     render(

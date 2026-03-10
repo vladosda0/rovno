@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import * as inventoryStore from "@/data/inventory-store";
 import * as inventorySource from "@/data/inventory-source";
 import { useInventoryStock, useLocations } from "@/hooks/use-inventory-data";
-import { workspaceQueryKeys } from "@/hooks/use-workspace-source";
+import { authenticateRuntimeAuth } from "@/test/runtime-auth";
 import type { InventoryLocation } from "@/types/entities";
 
 function createQueryClient() {
@@ -107,10 +107,7 @@ describe("inventory read hooks", () => {
       getProjectLocations: vi.fn(() => locationsPromise),
     };
 
-    queryClient.setQueryData(workspaceQueryKeys.mode(), {
-      kind: "supabase",
-      profileId: "profile-1",
-    });
+    authenticateRuntimeAuth();
     vi.spyOn(inventorySource, "getInventorySource").mockResolvedValue(source);
 
     render(

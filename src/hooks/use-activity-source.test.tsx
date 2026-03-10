@@ -9,7 +9,7 @@ import {
   useProjectEvents,
   useProjectsRecentEventsMap,
 } from "@/hooks/use-activity-source";
-import { workspaceQueryKeys } from "@/hooks/use-workspace-source";
+import { authenticateRuntimeAuth } from "@/test/runtime-auth";
 import type { Event, Notification } from "@/types/entities";
 
 function createQueryClient() {
@@ -241,10 +241,7 @@ describe("use-activity-source hooks", () => {
       getCurrentUserUnreadNotificationCount: vi.fn(() => Promise.resolve(0)),
     };
 
-    queryClient.setQueryData(workspaceQueryKeys.mode(), {
-      kind: "supabase",
-      profileId: "profile-1",
-    });
+    authenticateRuntimeAuth();
     vi.spyOn(activitySource, "getActivitySource").mockResolvedValue(source);
     const getEventsSpy = vi.spyOn(store, "getEvents");
     const getNotificationsSpy = vi.spyOn(store, "getNotifications");
@@ -344,10 +341,7 @@ describe("use-activity-source hooks", () => {
       getCurrentUserUnreadNotificationCount: vi.fn(async () => 3),
     };
 
-    queryClient.setQueryData(workspaceQueryKeys.mode(), {
-      kind: "supabase",
-      profileId: "profile-1",
-    });
+    authenticateRuntimeAuth();
     vi.spyOn(activitySource, "getActivitySource").mockResolvedValue(source);
 
     render(
@@ -445,10 +439,7 @@ describe("use-activity-source hooks", () => {
       getCurrentUserUnreadNotificationCount: vi.fn(async () => 0),
     };
 
-    queryClient.setQueryData(workspaceQueryKeys.mode(), {
-      kind: "supabase",
-      profileId: "profile-1",
-    });
+    authenticateRuntimeAuth();
     vi.spyOn(activitySource, "getActivitySource").mockResolvedValue(source);
 
     render(

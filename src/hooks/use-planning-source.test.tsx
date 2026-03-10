@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import * as planningSource from "@/data/planning-source";
 import * as store from "@/data/store";
 import { usePlanningProjectStages, usePlanningProjectTasks } from "@/hooks/use-planning-source";
-import { workspaceQueryKeys } from "@/hooks/use-workspace-source";
+import { authenticateRuntimeAuth } from "@/test/runtime-auth";
 import type { Stage, Task } from "@/types/entities";
 
 function createQueryClient() {
@@ -128,10 +128,7 @@ describe("usePlanningProjectStages/usePlanningProjectTasks", () => {
       getProjectTasks: vi.fn(() => tasksPromise),
     };
 
-    queryClient.setQueryData(workspaceQueryKeys.mode(), {
-      kind: "supabase",
-      profileId: "profile-1",
-    });
+    authenticateRuntimeAuth();
     vi.spyOn(planningSource, "getPlanningSource").mockResolvedValue(source);
 
     render(

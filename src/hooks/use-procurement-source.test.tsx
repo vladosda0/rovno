@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import * as procurementStore from "@/data/procurement-store";
 import * as procurementSource from "@/data/procurement-source";
 import { useProjectProcurementItems } from "@/hooks/use-procurement-source";
-import { workspaceQueryKeys } from "@/hooks/use-workspace-source";
+import { authenticateRuntimeAuth } from "@/test/runtime-auth";
 import type { ProcurementItemV2 } from "@/types/entities";
 
 function createQueryClient() {
@@ -118,10 +118,7 @@ describe("useProjectProcurementItems", () => {
       getProjectProcurementItems: vi.fn(() => itemsPromise),
     };
 
-    queryClient.setQueryData(workspaceQueryKeys.mode(), {
-      kind: "supabase",
-      profileId: "profile-1",
-    });
+    authenticateRuntimeAuth();
     vi.spyOn(procurementSource, "getProcurementSource").mockResolvedValue(source);
 
     render(

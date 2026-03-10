@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import * as documentsMediaSource from "@/data/documents-media-source";
 import * as store from "@/data/store";
 import { useProjectDocuments, useProjectMedia } from "@/hooks/use-documents-media-source";
-import { workspaceQueryKeys } from "@/hooks/use-workspace-source";
+import { authenticateRuntimeAuth } from "@/test/runtime-auth";
 import type { Document, Media } from "@/types/entities";
 
 function createQueryClient() {
@@ -126,10 +126,7 @@ describe("useProjectDocuments/useProjectMedia", () => {
       getProjectMedia: vi.fn(() => mediaPromise),
     };
 
-    queryClient.setQueryData(workspaceQueryKeys.mode(), {
-      kind: "supabase",
-      profileId: "profile-1",
-    });
+    authenticateRuntimeAuth();
     vi.spyOn(documentsMediaSource, "getDocumentsMediaSource").mockResolvedValue(source);
 
     render(

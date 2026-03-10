@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import * as hrStore from "@/data/hr-store";
 import * as hrSource from "@/data/hr-source";
 import { useProjectHRItems, useProjectHRPayments } from "@/hooks/use-hr-source";
-import { workspaceQueryKeys } from "@/hooks/use-workspace-source";
+import { authenticateRuntimeAuth } from "@/test/runtime-auth";
 import type { HRPayment, HRPlannedItem } from "@/types/hr";
 
 function createQueryClient() {
@@ -134,10 +134,7 @@ describe("useProjectHRItems/useProjectHRPayments", () => {
       getProjectHRPayments: vi.fn(() => paymentsPromise),
     };
 
-    queryClient.setQueryData(workspaceQueryKeys.mode(), {
-      kind: "supabase",
-      profileId: "profile-1",
-    });
+    authenticateRuntimeAuth();
     vi.spyOn(hrSource, "getHRSource").mockResolvedValue(source);
 
     render(

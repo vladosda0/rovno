@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import * as store from "@/data/store";
 import { usePermission } from "@/lib/permissions";
 import { workspaceQueryKeys } from "@/hooks/use-workspace-source";
+import { authenticateRuntimeAuth } from "@/test/runtime-auth";
 import type { Member, User } from "@/types/entities";
 
 function createQueryClient() {
@@ -68,10 +69,7 @@ describe("usePermission", () => {
     const user = currentUser();
     const membersKey = workspaceQueryKeys.projectMembers(user.id, "project-1");
 
-    queryClient.setQueryData(workspaceQueryKeys.mode(), {
-      kind: "supabase",
-      profileId: user.id,
-    });
+    authenticateRuntimeAuth(user.id);
     queryClient.setQueryData(workspaceQueryKeys.currentUser(user.id), user);
     queryClient.setQueryData(membersKey, [
       member({ role: "contractor", ai_access: "consult_only" }),
