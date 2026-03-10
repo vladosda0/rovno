@@ -1,6 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import * as store from "@/data/store";
 import {
   filterActiveProjectRows,
+  getWorkspaceSource,
   mapProfileRowToUser,
   mapProjectMemberRowToMember,
   mapProjectRowToProject,
@@ -59,6 +61,10 @@ function memberRow(overrides: Partial<Parameters<typeof mapProjectMemberRowToMem
 }
 
 describe("workspace-source helpers", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("maps profile rows to the frontend User contract with explicit fallbacks", () => {
     const user = mapProfileRowToUser(profileRow({
       email: null,
@@ -144,5 +150,48 @@ describe("workspace-source helpers", () => {
     });
 
     expect(mode).toEqual({ kind: "demo" });
+  });
+
+  it("creates manual browser-backed projects through the legacy store adapters", async () => {
+    const currentUser = {
+      id: "profile-1",
+      email: "owner@example.com",
+      name: "Owner User",
+      locale: "en",
+      timezone: "UTC",
+      plan: "free" as const,
+      credits_free: 0,
+      credits_paid: 0,
+    };
+    const addProjectSpy = vi.spyOn(store, "addProject").mockImplementation(() => undefined);
+    const addMemberSpy = vi.spyOn(store, "addMember").mockImplementation(() => undefined);
+    vi.spyOn(store, "getCurrentUserForMode").mockReturnValue(currentUser);
+
+    const source = await getWorkspaceSource({ kind: "local" });
+    const createdProject = await source.createProject({
+      title: "  Manual Project  ",
+      type: "residential",
+      projectMode: "contractor",
+    });
+
+    expect(createdProject).toEqual({
+      id: expect.stringMatching(/^project-manual-/),
+      owner_id: "profile-1",
+      title: "Manual Project",
+      type: "residential",
+      project_mode: "contractor",
+      automation_level: "manual",
+      current_stage_id: "",
+      progress_pct: 0,
+    });
+    expect(addProjectSpy).toHaveBeenCalledWith(createdProject);
+    expect(addMemberSpy).toHaveBeenCalledWith({
+      project_id: createdProject.id,
+      user_id: "profile-1",
+      role: "owner",
+      ai_access: "project_pool",
+      credit_limit: 500,
+      used_credits: 0,
+    });
   });
 });

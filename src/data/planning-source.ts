@@ -9,12 +9,78 @@ import type { Database as PlanningDatabase } from "../../backend-truth/generated
 
 type ProjectStageRow = PlanningDatabase["public"]["Tables"]["project_stages"]["Row"];
 type TaskRow = PlanningDatabase["public"]["Tables"]["tasks"]["Row"];
+type ProjectStageInsert = PlanningDatabase["public"]["Tables"]["project_stages"]["Insert"];
+type TaskInsert = PlanningDatabase["public"]["Tables"]["tasks"]["Insert"];
+type TaskUpdateRow = PlanningDatabase["public"]["Tables"]["tasks"]["Update"];
 type TypedSupabaseClient = SupabaseClient<PlanningDatabase>;
+
+const PROJECT_STAGE_SELECT = "id, project_id, title, description, sort_order, status";
+const TASK_SELECT = "id, project_id, stage_id, title, description, status, assignee_profile_id, created_at, start_at, due_at";
+
+export interface CreateProjectStageInput {
+  projectId: string;
+  title: string;
+  description?: string;
+  order: number;
+  status?: Stage["status"];
+}
+
+export interface CreateProjectTaskInput {
+  projectId: string;
+  stageId: string;
+  title: string;
+  description?: string;
+  status?: Task["status"];
+  assigneeId?: string;
+  createdBy: string;
+  deadline?: string;
+}
+
+export interface UpdateProjectTaskInput {
+  stageId?: string;
+  title?: string;
+  description?: string;
+  status?: Task["status"];
+  assigneeId?: string | null;
+  deadline?: string | null;
+  startDate?: string | null;
+}
 
 export interface PlanningSource {
   mode: WorkspaceMode["kind"];
   getProjectStages: (projectId: string) => Promise<Stage[]>;
   getProjectTasks: (projectId: string) => Promise<Task[]>;
+  createProjectStage: (input: CreateProjectStageInput) => Promise<Stage>;
+  createProjectTask: (input: CreateProjectTaskInput) => Promise<Task>;
+  updateProjectTask: (taskId: string, patch: UpdateProjectTaskInput) => Promise<Task>;
+}
+
+function mapTaskPatchToTaskUpdateRow(patch: UpdateProjectTaskInput): TaskUpdateRow {
+  const update: TaskUpdateRow = {};
+
+  if (patch.stageId !== undefined) {
+    update.stage_id = patch.stageId;
+  }
+  if (patch.title !== undefined) {
+    update.title = patch.title;
+  }
+  if (patch.description !== undefined) {
+    update.description = patch.description;
+  }
+  if (patch.status !== undefined) {
+    update.status = patch.status;
+  }
+  if (patch.assigneeId !== undefined) {
+    update.assignee_profile_id = patch.assigneeId || null;
+  }
+  if (patch.deadline !== undefined) {
+    update.due_at = patch.deadline;
+  }
+  if (patch.startDate !== undefined) {
+    update.start_at = patch.startDate;
+  }
+
+  return update;
 }
 
 function createBrowserPlanningSource(mode: "demo" | "local"): PlanningSource {
@@ -25,6 +91,76 @@ function createBrowserPlanningSource(mode: "demo" | "local"): PlanningSource {
     },
     async getProjectTasks(projectId: string) {
       return store.getTasks(projectId);
+    },
+
+    async createProjectStage(input: CreateProjectStageInput) {
+      const stage: Stage = {
+        id: `stage-${Date.now()}`,
+        project_id: input.projectId,
+        title: input.title,
+        description: input.description ?? "",
+        order: input.order,
+        status: input.status ?? "open",
+      };
+
+      store.addStage(stage);
+      return stage;
+    },
+
+    async createProjectTask(input: CreateProjectTaskInput) {
+      const task: Task = {
+        id: `task-${Date.now()}`,
+        project_id: input.projectId,
+        stage_id: input.stageId,
+        title: input.title,
+        description: input.description ?? "",
+        status: input.status ?? "not_started",
+        assignee_id: input.assigneeId ?? "",
+        checklist: [],
+        comments: [],
+        attachments: [],
+        photos: [],
+        linked_estimate_item_ids: [],
+        created_at: new Date().toISOString(),
+        deadline: input.deadline ?? undefined,
+      };
+
+      store.addTask(task);
+      return task;
+    },
+
+    async updateProjectTask(taskId: string, patch: UpdateProjectTaskInput) {
+      const update: Partial<Task> = {};
+
+      if (patch.stageId !== undefined) {
+        update.stage_id = patch.stageId;
+      }
+      if (patch.title !== undefined) {
+        update.title = patch.title;
+      }
+      if (patch.description !== undefined) {
+        update.description = patch.description;
+      }
+      if (patch.status !== undefined) {
+        update.status = patch.status;
+      }
+      if (patch.assigneeId !== undefined) {
+        update.assignee_id = patch.assigneeId ?? "";
+      }
+      if (patch.deadline !== undefined) {
+        update.deadline = patch.deadline ?? undefined;
+      }
+      if (patch.startDate !== undefined) {
+        update.startDate = patch.startDate ?? undefined;
+      }
+
+      store.updateTask(taskId, update);
+      const task = store.getTask(taskId);
+      if (!task) {
+        throw new Error(`Task not found: ${taskId}`);
+      }
+
+      return task;
     },
   };
 }
@@ -73,7 +209,7 @@ function createSupabasePlanningSource(
     async getProjectStages(projectId: string) {
       const { data, error } = await supabase
         .from("project_stages")
-        .select("id, project_id, title, description, sort_order, status")
+        .select(PROJECT_STAGE_SELECT)
         .eq("project_id", projectId)
         .order("sort_order", { ascending: true });
 
@@ -87,7 +223,7 @@ function createSupabasePlanningSource(
     async getProjectTasks(projectId: string) {
       const { data, error } = await supabase
         .from("tasks")
-        .select("id, project_id, stage_id, title, description, status, assignee_profile_id, created_at, start_at, due_at")
+        .select(TASK_SELECT)
         .eq("project_id", projectId)
         .order("created_at", { ascending: true });
 
@@ -96,6 +232,68 @@ function createSupabasePlanningSource(
       }
 
       return (data ?? []).map(mapTaskRowToTask);
+    },
+
+    async createProjectStage(input: CreateProjectStageInput) {
+      const insert: ProjectStageInsert = {
+        project_id: input.projectId,
+        title: input.title,
+        description: input.description ?? "",
+        sort_order: input.order,
+        status: input.status ?? "open",
+      };
+
+      const { data, error } = await supabase
+        .from("project_stages")
+        .insert(insert)
+        .select(PROJECT_STAGE_SELECT)
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      return mapProjectStageRowToStage(data);
+    },
+
+    async createProjectTask(input: CreateProjectTaskInput) {
+      const insert: TaskInsert = {
+        project_id: input.projectId,
+        stage_id: input.stageId,
+        title: input.title,
+        description: input.description ?? "",
+        status: input.status ?? "not_started",
+        assignee_profile_id: input.assigneeId || null,
+        created_by: input.createdBy,
+        due_at: input.deadline ?? null,
+      };
+
+      const { data, error } = await supabase
+        .from("tasks")
+        .insert(insert)
+        .select(TASK_SELECT)
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      return mapTaskRowToTask(data);
+    },
+
+    async updateProjectTask(taskId: string, patch: UpdateProjectTaskInput) {
+      const { data, error } = await supabase
+        .from("tasks")
+        .update(mapTaskPatchToTaskUpdateRow(patch))
+        .eq("id", taskId)
+        .select(TASK_SELECT)
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      return mapTaskRowToTask(data);
     },
   };
 }

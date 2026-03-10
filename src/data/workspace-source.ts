@@ -9,6 +9,8 @@ export type WorkspaceProjectInvite = WorkspaceDatabase["public"]["Tables"]["proj
 type ProfileRow = WorkspaceDatabase["public"]["Tables"]["profiles"]["Row"];
 type ProjectRow = WorkspaceDatabase["public"]["Tables"]["projects"]["Row"];
 type ProjectMemberRow = WorkspaceDatabase["public"]["Tables"]["project_members"]["Row"];
+type ProjectInsert = WorkspaceDatabase["public"]["Tables"]["projects"]["Insert"];
+type ProjectMemberInsert = WorkspaceDatabase["public"]["Tables"]["project_members"]["Insert"];
 type TypedSupabaseClient = SupabaseClient<WorkspaceDatabase>;
 
 export type WorkspaceMode =
@@ -23,11 +25,59 @@ export interface WorkspaceSource {
   getProjectById: (projectId: string) => Promise<Project | undefined>;
   getProjectMembers: (projectId: string) => Promise<Member[]>;
   getProjectInvites: (projectId: string) => Promise<WorkspaceProjectInvite[]>;
+  createProject: (input: CreateWorkspaceProjectInput) => Promise<Project>;
+}
+
+export interface CreateWorkspaceProjectInput {
+  title: string;
+  type: string;
+  projectMode: NonNullable<Project["project_mode"]>;
 }
 
 const SUPABASE_WORKSPACE_SOURCE = "supabase";
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+async function ensureOwnerProjectMember(
+  supabase: TypedSupabaseClient,
+  input: {
+    projectId: string;
+    profileId: string;
+  },
+): Promise<void> {
+  const { data, error } = await supabase
+    .from("project_members")
+    .select("*")
+    .eq("project_id", input.projectId)
+    .eq("profile_id", input.profileId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  if (data) {
+    return;
+  }
+
+  const insert: ProjectMemberInsert = {
+    project_id: input.projectId,
+    profile_id: input.profileId,
+    role: "owner",
+    ai_access: "project_pool",
+    viewer_regime: null,
+    credit_limit: 500,
+    used_credits: 0,
+  };
+
+  const { error: insertError } = await supabase
+    .from("project_members")
+    .insert(insert);
+
+  if (insertError) {
+    throw insertError;
+  }
+}
 
 function createBrowserWorkspaceSource(mode: store.BrowserWorkspaceKind): WorkspaceSource {
   return {
@@ -46,6 +96,31 @@ function createBrowserWorkspaceSource(mode: store.BrowserWorkspaceKind): Workspa
     },
     async getProjectInvites(projectId: string) {
       return store.getProjectInvitesForMode(mode, projectId);
+    },
+    async createProject(input: CreateWorkspaceProjectInput) {
+      const user = store.getCurrentUserForMode(mode);
+      const project: Project = {
+        id: `project-manual-${Date.now()}`,
+        owner_id: user.id,
+        title: input.title.trim() || "Untitled Project",
+        type: input.type,
+        project_mode: input.projectMode,
+        automation_level: "manual",
+        current_stage_id: "",
+        progress_pct: 0,
+      };
+
+      store.addProject(project);
+      store.addMember({
+        project_id: project.id,
+        user_id: user.id,
+        role: "owner",
+        ai_access: "project_pool",
+        credit_limit: 500,
+        used_credits: 0,
+      });
+
+      return project;
     },
   };
 }
@@ -259,6 +334,34 @@ function createSupabaseWorkspaceSource(
       const rows = data ?? [];
       await loadVisibleProfiles(supabase, rows.flatMap((row) => [row.invited_by, row.accepted_profile_id ?? ""]));
       return rows;
+    },
+
+    async createProject(input: CreateWorkspaceProjectInput) {
+      const insert: ProjectInsert = {
+        owner_profile_id: profileId,
+        title: input.title.trim() || "Untitled Project",
+        project_type: input.type,
+        project_mode: input.projectMode,
+        automation_level: "manual",
+        progress_pct: 0,
+      };
+
+      const { data, error } = await supabase
+        .from("projects")
+        .insert(insert)
+        .select("*")
+        .single();
+
+      if (error || !data) {
+        throw error ?? new Error("Unable to create project");
+      }
+
+      await ensureOwnerProjectMember(supabase, {
+        projectId: data.id,
+        profileId,
+      });
+
+      return mapProjectRowToProject(data);
     },
   };
 }

@@ -1,11 +1,13 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { useParams, useLocation } from "react-router-dom";
-import { useProject, useTasks, usePermission, useMedia } from "@/hooks/use-mock-data";
+import { useProject, useTasks, usePermission, useMedia, useWorkspaceMode } from "@/hooks/use-mock-data";
 import {
-  getUserById, getCurrentUser, updateTask, addTask, addStage,
+  getUserById, getCurrentUser, updateTask, addTask,
   deleteStage as storeDeleteStage, completeStage as storeCompleteStage,
   addMedia, addEvent, addComment,
 } from "@/data/store";
+import { getPlanningSource } from "@/data/planning-source";
 import { allUsers } from "@/data/seed";
 import { EmptyState } from "@/components/EmptyState";
 import { ConfirmModal } from "@/components/ConfirmModal";
@@ -25,7 +27,8 @@ import {
   ListTodo, Plus, CheckCircle2, Circle, Clock,
   AlertTriangle, Trash2, Check, User, Calendar as CalendarIcon, GripVertical, Camera,
 } from "lucide-react";
-import type { Task, Stage, TaskStatus } from "@/types/entities";
+import { planningQueryKeys } from "@/hooks/use-planning-source";
+import type { TaskStatus } from "@/types/entities";
 import { createEstimateItemForTask } from "@/data/estimate-store";
 import { useEstimateV2Project } from "@/hooks/use-estimate-v2-data";
 
@@ -46,6 +49,8 @@ export default function ProjectTasks() {
   const media = useMedia(pid);
   const { role, can: userCan } = usePermission(pid);
   const { project: estimateProject } = useEstimateV2Project(pid);
+  const workspaceMode = useWorkspaceMode();
+  const queryClient = useQueryClient();
   const { toast } = useToast();
   const authRole = getAuthRole();
   const currentUser = getCurrentUser();
@@ -120,6 +125,18 @@ export default function ProjectTasks() {
   if (assignedToMe) filteredTasks = filteredTasks.filter((t) => t.assignee_id === currentUser.id);
 
   const getColumnTasks = (status: TaskStatus) => filteredTasks.filter((t) => t.status === status);
+  const invalidateProjectStages = useCallback(async () => {
+    if (workspaceMode.kind !== "supabase") return;
+    await queryClient.invalidateQueries({
+      queryKey: planningQueryKeys.projectStages(workspaceMode.profileId, pid),
+    });
+  }, [workspaceMode, queryClient, pid]);
+  const invalidateProjectTasks = useCallback(async () => {
+    if (workspaceMode.kind !== "supabase") return;
+    await queryClient.invalidateQueries({
+      queryKey: planningQueryKeys.projectTasks(workspaceMode.profileId, pid),
+    });
+  }, [workspaceMode, queryClient, pid]);
 
   // --- Central status change handler (intercepts Done / Blocked) ---
   const handleStatusChange = useCallback((taskId: string, newStatus: TaskStatus) => {
@@ -140,9 +157,23 @@ export default function ProjectTasks() {
       setBlockedReason("");
       return;
     }
-    updateTask(taskId, { status: newStatus });
-    toast({ title: "Status updated", description: statusMeta[newStatus].label });
-  }, [canEditTask, tasks, toast]);
+    void (async () => {
+      try {
+        const source = await getPlanningSource(
+          workspaceMode.kind === "pending-supabase" ? undefined : workspaceMode,
+        );
+        await source.updateProjectTask(taskId, { status: newStatus });
+        await invalidateProjectTasks();
+        toast({ title: "Status updated", description: statusMeta[newStatus].label });
+      } catch (error) {
+        toast({
+          title: "Status update failed",
+          description: error instanceof Error ? error.message : "Unable to update task status.",
+          variant: "destructive",
+        });
+      }
+    })();
+  }, [canEditTask, tasks, toast, workspaceMode, invalidateProjectTasks]);
 
   // Confirm Done
   const handleConfirmDone = useCallback(() => {
@@ -214,75 +245,116 @@ export default function ProjectTasks() {
 
   const handleCreateTask = useCallback(() => {
     if (!taskTitle.trim()) return;
-    const task: Task = {
-      id: `task-${Date.now()}`,
-      project_id: pid,
-      stage_id: taskStageId || stages[0]?.id || "",
-      title: taskTitle.trim(),
-      description: taskDesc.trim(),
-      status: taskStatus,
-      assignee_id: taskAssignee || currentUser.id,
-      checklist: [],
-      comments: [],
-      attachments: [],
-      photos: [],
-      linked_estimate_item_ids: [],
-      created_at: new Date().toISOString(),
-      deadline: taskDeadline?.toISOString(),
-    };
-    addTask(task);
-    createEstimateItemForTask(task);
-    setTaskModalOpen(false);
-    toast({ title: "Task created", description: task.title });
-  }, [pid, taskTitle, taskDesc, taskStatus, taskAssignee, taskStageId, taskDeadline, stages, currentUser, toast]);
+    void (async () => {
+      try {
+        const source = await getPlanningSource(
+          workspaceMode.kind === "pending-supabase" ? undefined : workspaceMode,
+        );
+        const createdTask = await source.createProjectTask({
+          projectId: pid,
+          stageId: taskStageId || stages[0]?.id || "",
+          title: taskTitle.trim(),
+          description: taskDesc.trim(),
+          status: taskStatus,
+          assigneeId: taskAssignee || currentUser.id,
+          createdBy: workspaceMode.kind === "supabase" ? workspaceMode.profileId : currentUser.id,
+          deadline: taskDeadline?.toISOString(),
+        });
+        createEstimateItemForTask(createdTask);
+        await invalidateProjectTasks();
+        setTaskModalOpen(false);
+        toast({ title: "Task created", description: createdTask.title });
+      } catch (error) {
+        toast({
+          title: "Task creation failed",
+          description: error instanceof Error ? error.message : "Unable to create task.",
+          variant: "destructive",
+        });
+      }
+    })();
+  }, [
+    pid,
+    taskTitle,
+    taskDesc,
+    taskStatus,
+    taskAssignee,
+    taskStageId,
+    taskDeadline,
+    stages,
+    currentUser,
+    toast,
+    workspaceMode,
+    invalidateProjectTasks,
+  ]);
 
   const handleCreateStage = useCallback(() => {
     if (!newStageTitle.trim()) return;
-    const stageId = `stage-${Date.now()}`;
-    const newStage: Stage = {
-      id: stageId,
-      project_id: pid,
-      title: newStageTitle.trim(),
-      description: newStageDesc.trim(),
-      order: stages.length + 1,
-      status: "open",
-    };
-    addStage(newStage);
+    void (async () => {
+      try {
+        const source = await getPlanningSource(
+          workspaceMode.kind === "pending-supabase" ? undefined : workspaceMode,
+        );
+        const createdStage = await source.createProjectStage({
+          projectId: pid,
+          title: newStageTitle.trim(),
+          description: newStageDesc.trim(),
+          order: stages.length + 1,
+          status: "open",
+        });
 
-    if (createWithAI && newStageDesc.trim()) {
-      const aiTasks = [
-        `Prepare ${newStageTitle.trim()} workspace`,
-        `Execute main ${newStageTitle.trim()} work`,
-        `QA check for ${newStageTitle.trim()}`,
-      ];
-      aiTasks.forEach((title, i) => {
-        const aiTask = {
-          id: `task-ai-${Date.now()}-${i}`,
-          project_id: pid,
-          stage_id: stageId,
-          title,
-          description: `Auto-generated from: ${newStageDesc.trim()}`,
-          status: "not_started" as const,
-          assignee_id: currentUser.id,
-          checklist: [],
-          comments: [],
-          attachments: [],
-          photos: [],
-          linked_estimate_item_ids: [],
-          created_at: new Date().toISOString(),
-        };
-        addTask(aiTask);
-        createEstimateItemForTask(aiTask);
-      });
-    }
+        if (createWithAI && newStageDesc.trim()) {
+          const aiTasks = [
+            `Prepare ${newStageTitle.trim()} workspace`,
+            `Execute main ${newStageTitle.trim()} work`,
+            `QA check for ${newStageTitle.trim()}`,
+          ];
+          aiTasks.forEach((title, i) => {
+            const aiTask = {
+              id: `task-ai-${Date.now()}-${i}`,
+              project_id: pid,
+              stage_id: createdStage.id,
+              title,
+              description: `Auto-generated from: ${newStageDesc.trim()}`,
+              status: "not_started" as const,
+              assignee_id: currentUser.id,
+              checklist: [],
+              comments: [],
+              attachments: [],
+              photos: [],
+              linked_estimate_item_ids: [],
+              created_at: new Date().toISOString(),
+            };
+            addTask(aiTask);
+            createEstimateItemForTask(aiTask);
+          });
+        }
 
-    setStageModalOpen(false);
-    setNewStageTitle("");
-    setNewStageDesc("");
-    setCreateWithAI(false);
-    setActiveTab(stageId);
-    toast({ title: "Stage created", description: newStage.title });
-  }, [pid, newStageTitle, newStageDesc, createWithAI, stages, currentUser, toast]);
+        await invalidateProjectStages();
+        setStageModalOpen(false);
+        setNewStageTitle("");
+        setNewStageDesc("");
+        setCreateWithAI(false);
+        setActiveTab(createdStage.id);
+        toast({ title: "Stage created", description: createdStage.title });
+      } catch (error) {
+        toast({
+          title: "Stage creation failed",
+          description: error instanceof Error ? error.message : "Unable to create stage.",
+          variant: "destructive",
+        });
+      }
+    })();
+  }, [
+    pid,
+    newStageTitle,
+    newStageDesc,
+    createWithAI,
+    stages,
+    currentUser,
+    toast,
+    workspaceMode,
+    invalidateProjectStages,
+  ]);
 
   const handleDeleteStage = useCallback(() => {
     if (!deleteStageId) return;
