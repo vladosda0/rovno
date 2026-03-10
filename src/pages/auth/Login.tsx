@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { toast } from "@/hooks/use-toast";
-import { clearDemoSession, isOnboarded, setAuthRole, setStoredAuthProfile } from "@/lib/auth-state";
+import { supabase } from "@/integrations/supabase/client";
+import { clearDemoSession, isOnboarded } from "@/lib/auth-state";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -13,24 +14,40 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
       toast({ title: "Validation error", description: "Email and password are required.", variant: "destructive" });
       return;
     }
+
     setLoading(true);
-    // Simulate login
-    setTimeout(() => {
-      clearDemoSession();
-      setStoredAuthProfile({
-        email,
-        name: email.split("@")[0]?.replace(/[._-]+/g, " ").trim() || "Workspace User",
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
       });
-      setAuthRole("owner");
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data.session?.user) {
+        throw new Error("Unable to start an authenticated session.");
+      }
+
+      clearDemoSession();
       toast({ title: "Welcome back!", description: "Signed in successfully." });
       navigate(isOnboarded() ? "/home" : "/onboarding");
-    }, 500);
+    } catch (error) {
+      toast({
+        title: "Sign in failed",
+        description: error instanceof Error ? error.message : "Unable to sign in.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

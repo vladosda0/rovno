@@ -14,7 +14,9 @@ import { ProjectTabs } from "@/components/ProjectTabs";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { useCurrentUser, useProjects } from "@/hooks/use-mock-data";
-import { clearDemoSession, clearStoredAuthProfile, isAuthenticated, setAuthRole } from "@/lib/auth-state";
+import { supabase } from "@/integrations/supabase/client";
+import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
+import { clearDemoSession, clearStoredAuthProfile, setAuthRole } from "@/lib/auth-state";
 
 interface MockCredits {
   dailyTotal: number;
@@ -64,13 +66,14 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
   const projectId = projectMatch?.params.id;
   const isInProject = Boolean(projectId);
   const isHomePage = location.pathname === "/home";
+  const runtimeAuth = useRuntimeAuth();
 
   const user = useCurrentUser();
   const projects = useProjects();
   const currentProject = projects.find((project) => project.id === projectId);
-  const projectName = currentProject?.title ?? "Demo Project";
+  const projectName = currentProject?.title ?? "Project";
   const [credits, setCredits] = useState<MockCredits>(DEFAULT_CREDITS);
-  const displayName = user.name || user.email || (isAuthenticated() ? "Workspace" : "Guest");
+  const displayName = user.name || user.email || (runtimeAuth.status === "authenticated" ? "Workspace" : "Guest");
   const initials = displayName.split(" ").map((word) => word[0]).join("").slice(0, 2).toUpperCase();
 
   const dailyRemaining = Math.max(credits.dailyTotal - credits.dailyUsed, 0);
@@ -83,13 +86,26 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
     navigate("/settings?tab=billing");
   };
 
-  const handleLogout = () => {
-    setCredits(DEFAULT_CREDITS);
-    clearDemoSession();
-    clearStoredAuthProfile();
-    setAuthRole("guest");
-    toast({ title: "Logged out" });
-    navigate("/");
+  const handleLogout = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        throw error;
+      }
+
+      setCredits(DEFAULT_CREDITS);
+      clearDemoSession();
+      clearStoredAuthProfile();
+      setAuthRole("guest");
+      toast({ title: "Logged out" });
+      navigate("/");
+    } catch (error) {
+      toast({
+        title: "Logout failed",
+        description: error instanceof Error ? error.message : "Unable to log out.",
+        variant: "destructive",
+      });
+    }
   };
 
   if (isInProject && projectId) {

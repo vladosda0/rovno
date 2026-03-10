@@ -1,7 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import * as store from "@/data/store";
 import {
-  resolveWorkspaceMode,
+  resolveRuntimeWorkspaceMode,
+  type RuntimeWorkspaceMode,
   type WorkspaceMode,
 } from "@/data/workspace-source";
 import type { Stage, Task } from "@/types/entities";
@@ -299,9 +300,13 @@ function createSupabasePlanningSource(
 }
 
 export async function getPlanningSource(
-  mode?: WorkspaceMode,
+  mode?: RuntimeWorkspaceMode,
 ): Promise<PlanningSource> {
-  const resolvedMode = mode ?? await resolveWorkspaceMode();
+  const resolvedMode = mode ?? await resolveRuntimeWorkspaceMode();
+  if (resolvedMode.kind === "guest") {
+    throw new Error("An authenticated Supabase session is required.");
+  }
+
   if (resolvedMode.kind !== "supabase") {
     return createBrowserPlanningSource(resolvedMode.kind);
   }

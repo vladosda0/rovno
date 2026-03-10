@@ -17,6 +17,7 @@ export type WorkspaceMode =
   | { kind: "demo" }
   | { kind: "local" }
   | { kind: "supabase"; profileId: string };
+export type RuntimeWorkspaceMode = WorkspaceMode | { kind: "guest" };
 
 export interface WorkspaceSource {
   mode: WorkspaceMode["kind"];
@@ -37,6 +38,12 @@ export interface CreateWorkspaceProjectInput {
 const SUPABASE_WORKSPACE_SOURCE = "supabase";
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+function isBrowserWorkspaceMode(
+  mode: WorkspaceMode | RuntimeWorkspaceMode,
+): mode is Extract<WorkspaceMode, { kind: "demo" | "local" }> {
+  return mode.kind === "demo" || mode.kind === "local";
+}
 
 async function ensureOwnerProjectMember(
   supabase: TypedSupabaseClient,
@@ -174,6 +181,10 @@ export function isSupabaseWorkspaceRequested(): boolean {
   return import.meta.env.VITE_WORKSPACE_SOURCE === SUPABASE_WORKSPACE_SOURCE;
 }
 
+export function hasSupabaseWorkspaceConfig(): boolean {
+  return Boolean(SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY);
+}
+
 export function selectWorkspaceMode(input: {
   requestedSource?: string;
   hasSupabaseConfig: boolean;
@@ -190,6 +201,27 @@ export function selectWorkspaceMode(input: {
 
   if (!input.hasSupabaseConfig || !input.sessionProfileId) {
     return { kind: "local" };
+  }
+
+  return { kind: "supabase", profileId: input.sessionProfileId };
+}
+
+export function selectRuntimeWorkspaceMode(input: {
+  requestedSource?: string;
+  hasSupabaseConfig: boolean;
+  sessionProfileId?: string | null;
+  demoSessionActive?: boolean;
+}): RuntimeWorkspaceMode {
+  if (input.demoSessionActive) {
+    return { kind: "demo" };
+  }
+
+  if (input.requestedSource !== SUPABASE_WORKSPACE_SOURCE) {
+    return { kind: "local" };
+  }
+
+  if (!input.hasSupabaseConfig || !input.sessionProfileId) {
+    return { kind: "guest" };
   }
 
   return { kind: "supabase", profileId: input.sessionProfileId };
@@ -226,6 +258,34 @@ export async function resolveWorkspaceMode(): Promise<WorkspaceMode> {
     });
   } catch {
     return { kind: "local" };
+  }
+}
+
+export async function resolveRuntimeWorkspaceMode(): Promise<RuntimeWorkspaceMode> {
+  if (isDemoSessionActive()) {
+    return { kind: "demo" };
+  }
+
+  if (!isSupabaseWorkspaceRequested()) {
+    return { kind: "local" };
+  }
+
+  if (!hasSupabaseWorkspaceConfig()) {
+    return { kind: "guest" };
+  }
+
+  try {
+    const supabase = await loadSupabaseClient();
+    const { data, error } = await supabase.auth.getSession();
+
+    return selectRuntimeWorkspaceMode({
+      requestedSource: SUPABASE_WORKSPACE_SOURCE,
+      hasSupabaseConfig: true,
+      sessionProfileId: error ? null : data.session?.user?.id ?? null,
+      demoSessionActive: false,
+    });
+  } catch {
+    return { kind: "guest" };
   }
 }
 
@@ -367,10 +427,14 @@ function createSupabaseWorkspaceSource(
 }
 
 export async function getWorkspaceSource(
-  mode?: WorkspaceMode,
+  mode?: WorkspaceMode | RuntimeWorkspaceMode,
 ): Promise<WorkspaceSource> {
   const resolvedMode = mode ?? await resolveWorkspaceMode();
-  if (resolvedMode.kind === "demo" || resolvedMode.kind === "local") {
+  if (resolvedMode.kind === "guest") {
+    throw new Error("An authenticated Supabase session is required.");
+  }
+
+  if (isBrowserWorkspaceMode(resolvedMode)) {
     return createBrowserWorkspaceSource(resolvedMode.kind);
   }
 
@@ -379,7 +443,7 @@ export async function getWorkspaceSource(
 }
 
 export async function updateWorkspaceProjectMemberRole(
-  mode: WorkspaceMode,
+  mode: WorkspaceMode | RuntimeWorkspaceMode,
   input: {
     projectId: string;
     userId: string;
@@ -387,7 +451,11 @@ export async function updateWorkspaceProjectMemberRole(
     viewerRegime?: Member["viewer_regime"];
   },
 ): Promise<Member> {
-  if (mode.kind !== "supabase") {
+  if (mode.kind === "guest") {
+    throw new Error("An authenticated Supabase session is required.");
+  }
+
+  if (isBrowserWorkspaceMode(mode)) {
     const updated = store.updateMember(input.projectId, input.userId, {
       role: input.role,
       viewer_regime: input.viewerRegime,
@@ -418,7 +486,7 @@ export async function updateWorkspaceProjectMemberRole(
 }
 
 export async function createWorkspaceProjectInvite(
-  mode: WorkspaceMode,
+  mode: WorkspaceMode | RuntimeWorkspaceMode,
   input: {
     projectId: string;
     email: string;
@@ -429,7 +497,11 @@ export async function createWorkspaceProjectInvite(
     invitedBy: string;
   },
 ): Promise<WorkspaceProjectInvite> {
-  if (mode.kind !== "supabase") {
+  if (mode.kind === "guest") {
+    throw new Error("An authenticated Supabase session is required.");
+  }
+
+  if (isBrowserWorkspaceMode(mode)) {
     const invite: WorkspaceProjectInvite = {
       id: `invite-${Date.now()}`,
       project_id: input.projectId,
@@ -472,7 +544,7 @@ export async function createWorkspaceProjectInvite(
 }
 
 export async function updateWorkspaceProjectInvite(
-  mode: WorkspaceMode,
+  mode: WorkspaceMode | RuntimeWorkspaceMode,
   input: {
     id: string;
     projectId: string;
@@ -483,7 +555,11 @@ export async function updateWorkspaceProjectInvite(
     status?: WorkspaceProjectInvite["status"];
   },
 ): Promise<WorkspaceProjectInvite> {
-  if (mode.kind !== "supabase") {
+  if (mode.kind === "guest") {
+    throw new Error("An authenticated Supabase session is required.");
+  }
+
+  if (isBrowserWorkspaceMode(mode)) {
     const updated = store.updateProjectInvite(input.id, {
       role: input.role,
       ai_access: input.aiAccess,

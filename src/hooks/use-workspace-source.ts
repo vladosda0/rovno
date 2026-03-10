@@ -2,19 +2,21 @@ import { useQuery } from "@tanstack/react-query";
 import { useSyncExternalStore } from "react";
 import {
   getWorkspaceSource,
+  hasSupabaseWorkspaceConfig,
   isSupabaseWorkspaceRequested,
-  resolveWorkspaceMode,
   type WorkspaceMode,
   type WorkspaceProjectInvite,
 } from "@/data/workspace-source";
 import type { Member, Project, User } from "@/types/entities";
 import * as store from "@/data/store";
-import { getAuthStateSnapshot, isDemoSessionActive, subscribeAuthState } from "@/lib/auth-state";
+import { isDemoSessionActive, subscribeAuthState } from "@/lib/auth-state";
+import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
 
 const WORKSPACE_QUERY_STALE_TIME_MS = 60_000;
 
 type PendingWorkspaceMode = { kind: "pending-supabase" };
-export type WorkspaceModeState = WorkspaceMode | PendingWorkspaceMode;
+type GuestWorkspaceMode = { kind: "guest" };
+export type WorkspaceModeState = WorkspaceMode | PendingWorkspaceMode | GuestWorkspaceMode;
 
 export const EMPTY_WORKSPACE_USER: User = {
   id: "",
@@ -36,26 +38,41 @@ export const workspaceQueryKeys = {
   projectInvites: (profileId: string, projectId: string) => ["workspace", "project-invites", profileId, projectId] as const,
 };
 
-function useWorkspaceModeState(): WorkspaceModeState {
-  useSyncExternalStore(subscribeAuthState, getAuthStateSnapshot);
-  const demoSessionActive = isDemoSessionActive();
-  const supabaseRequested = !demoSessionActive && isSupabaseWorkspaceRequested();
-  const modeQuery = useQuery({
-    queryKey: workspaceQueryKeys.mode(),
-    queryFn: resolveWorkspaceMode,
-    enabled: supabaseRequested,
-    staleTime: WORKSPACE_QUERY_STALE_TIME_MS,
-  });
+function getDemoSessionSnapshot(): string {
+  return isDemoSessionActive() ? "demo" : "standard";
+}
 
-  if (demoSessionActive) {
+function useWorkspaceModeState(): WorkspaceModeState {
+  useSyncExternalStore(subscribeAuthState, getDemoSessionSnapshot);
+  const runtimeAuth = useRuntimeAuth();
+  const demoSessionActive = isDemoSessionActive();
+  const demoRuntimeActive = demoSessionActive && runtimeAuth.status !== "authenticated";
+
+  if (demoRuntimeActive) {
+    if (isSupabaseWorkspaceRequested() && runtimeAuth.status === "loading") {
+      return { kind: "pending-supabase" };
+    }
+
     return { kind: "demo" };
   }
 
-  if (!supabaseRequested) {
+  if (!isSupabaseWorkspaceRequested()) {
     return { kind: "local" };
   }
 
-  return modeQuery.data ?? { kind: "pending-supabase" };
+  if (!hasSupabaseWorkspaceConfig()) {
+    return { kind: "guest" };
+  }
+
+  if (runtimeAuth.status === "loading") {
+    return { kind: "pending-supabase" };
+  }
+
+  if (runtimeAuth.status !== "authenticated" || !runtimeAuth.profileId) {
+    return { kind: "guest" };
+  }
+
+  return { kind: "supabase", profileId: runtimeAuth.profileId };
 }
 
 export function useWorkspaceMode(): WorkspaceModeState {
@@ -106,7 +123,10 @@ export function useWorkspaceProjects(): Project[] {
   return projectsQuery.data ?? [];
 }
 
-export function useWorkspaceProject(projectId: string): Project | undefined {
+export function useWorkspaceProjectState(projectId: string): {
+  project: Project | undefined;
+  isLoading: boolean;
+} {
   const mode = useWorkspaceModeState();
   const supabaseMode = mode.kind === "supabase" ? mode : null;
   const projectQuery = useQuery({
@@ -122,10 +142,27 @@ export function useWorkspaceProject(projectId: string): Project | undefined {
   });
 
   if (mode.kind === "demo" || mode.kind === "local") {
-    return store.getProject(projectId);
+    return {
+      project: store.getProject(projectId),
+      isLoading: false,
+    };
   }
 
-  return projectQuery.data;
+  if (mode.kind === "pending-supabase") {
+    return {
+      project: undefined,
+      isLoading: true,
+    };
+  }
+
+  return {
+    project: projectQuery.data,
+    isLoading: projectQuery.isPending,
+  };
+}
+
+export function useWorkspaceProject(projectId: string): Project | undefined {
+  return useWorkspaceProjectState(projectId).project;
 }
 
 export function useWorkspaceProjectMembers(projectId: string): Member[] {

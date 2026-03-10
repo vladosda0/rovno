@@ -1,22 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useState } from "react";
 import * as store from "@/data/store";
 import { getPlanningSource } from "@/data/planning-source";
-import {
-  isSupabaseWorkspaceRequested,
-  resolveWorkspaceMode,
-  type WorkspaceMode,
-} from "@/data/workspace-source";
-import { workspaceQueryKeys } from "@/hooks/use-workspace-source";
+import { useWorkspaceMode } from "@/hooks/use-workspace-source";
 import type { Stage, Task } from "@/types/entities";
-import { getAuthStateSnapshot, isDemoSessionActive, subscribeAuthState } from "@/lib/auth-state";
 
 const PLANNING_QUERY_STALE_TIME_MS = 60_000;
 const EMPTY_PLANNING_STAGES: Stage[] = [];
 const EMPTY_PLANNING_TASKS: Task[] = [];
-
-type PendingWorkspaceMode = { kind: "pending-supabase" };
-type WorkspaceModeState = WorkspaceMode | PendingWorkspaceMode;
 
 export const planningQueryKeys = {
   projectStages: (profileId: string, projectId: string) =>
@@ -24,28 +15,6 @@ export const planningQueryKeys = {
   projectTasks: (profileId: string, projectId: string) =>
     ["planning", "project-tasks", profileId, projectId] as const,
 };
-
-function useWorkspaceModeState(): WorkspaceModeState {
-  useSyncExternalStore(subscribeAuthState, getAuthStateSnapshot);
-  const demoSessionActive = isDemoSessionActive();
-  const supabaseRequested = !demoSessionActive && isSupabaseWorkspaceRequested();
-  const modeQuery = useQuery({
-    queryKey: workspaceQueryKeys.mode(),
-    queryFn: resolveWorkspaceMode,
-    enabled: supabaseRequested,
-    staleTime: PLANNING_QUERY_STALE_TIME_MS,
-  });
-
-  if (demoSessionActive) {
-    return { kind: "demo" };
-  }
-
-  if (!supabaseRequested) {
-    return { kind: "local" };
-  }
-
-  return modeQuery.data ?? { kind: "pending-supabase" };
-}
 
 function useStoreValue<T>(getter: () => T, enabled: boolean, fallback: T): T {
   const [value, setValue] = useState<T>(() => enabled ? getter() : fallback);
@@ -65,7 +34,7 @@ function useStoreValue<T>(getter: () => T, enabled: boolean, fallback: T): T {
 }
 
 export function usePlanningProjectStages(projectId: string): Stage[] {
-  const mode = useWorkspaceModeState();
+  const mode = useWorkspaceMode();
   const supabaseMode = mode.kind === "supabase" ? mode : null;
   const getStages = useCallback(() => store.getStages(projectId), [projectId]);
   const demoStages = useStoreValue(
@@ -93,7 +62,7 @@ export function usePlanningProjectStages(projectId: string): Stage[] {
 }
 
 export function usePlanningProjectTasks(projectId: string): Task[] {
-  const mode = useWorkspaceModeState();
+  const mode = useWorkspaceMode();
   const supabaseMode = mode.kind === "supabase" ? mode : null;
   const getTasks = useCallback(() => store.getTasks(projectId), [projectId]);
   const demoTasks = useStoreValue(

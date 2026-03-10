@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { toast } from "@/hooks/use-toast";
-import { clearDemoSession, setAuthRole, setStoredAuthProfile } from "@/lib/auth-state";
+import { supabase } from "@/integrations/supabase/client";
+import { clearDemoSession } from "@/lib/auth-state";
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -14,7 +15,7 @@ export default function Signup() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !email || !password) {
       toast({ title: "Validation error", description: "All fields are required.", variant: "destructive" });
@@ -25,16 +26,39 @@ export default function Signup() {
       return;
     }
     setLoading(true);
-    setTimeout(() => {
-      clearDemoSession();
-      setStoredAuthProfile({
-        email,
-        name,
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+        options: {
+          data: {
+            full_name: name.trim(),
+          },
+        },
       });
-      setAuthRole("owner");
-      toast({ title: "Account created!", description: "Welcome to СтройАгент." });
-      navigate("/onboarding");
-    }, 500);
+
+      if (error) {
+        throw error;
+      }
+
+      clearDemoSession();
+      if (data.session?.user) {
+        toast({ title: "Account created!", description: "Welcome to СтройАгент." });
+        navigate("/onboarding");
+        return;
+      }
+
+      toast({ title: "Account created!", description: "Check your email to confirm your account." });
+      navigate("/auth/login");
+    } catch (error) {
+      toast({
+        title: "Sign up failed",
+        description: error instanceof Error ? error.message : "Unable to create your account.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
