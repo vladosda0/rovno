@@ -86,7 +86,11 @@ interface SubmitVersionOptions {
 
 interface SetProjectEstimateStatusOptions {
   skipSetup?: boolean;
+  ownerProfileId?: string;
+  projectOwnerProfileId?: string;
 }
+
+interface TransitionEstimateV2ProjectToInWorkOptions extends SetProjectEstimateStatusOptions {}
 
 type SetProjectEstimateStatusFailureReason = "forbidden" | "missing_work_dates" | "incomplete_tasks";
 
@@ -304,10 +308,19 @@ function syncExternalDomainsFromEstimate(projectId: string, state: EstimateV2Pro
   syncHRFromEstimateV2(projectId, syncState);
 }
 
-function isOwnerActionAllowed(projectId: string): boolean {
+function isOwnerActionAllowed(
+  projectId: string,
+  ownerProfileId?: string,
+  projectOwnerProfileId?: string,
+): boolean {
+  if (ownerProfileId && projectOwnerProfileId) {
+    const role = getAuthRole();
+    return role === "owner" && ownerProfileId === projectOwnerProfileId;
+  }
+
   const project = getProject(projectId);
-  const user = getCurrentUser();
-  if (!project || project.owner_id !== user.id) return false;
+  const actingProfileId = ownerProfileId ?? getCurrentUser().id;
+  if (!project || project.owner_id !== actingProfileId) return false;
 
   const role = getAuthRole();
   return role === "owner";
@@ -825,8 +838,13 @@ function applySupabaseInWorkTransitionSuccess(
   };
 }
 
-async function isSupabaseOwnerActionAllowed(projectId: string): Promise<boolean> {
-  const mode = await resolveRuntimeWorkspaceMode();
+async function isSupabaseOwnerActionAllowed(
+  projectId: string,
+  ownerProfileId?: string,
+): Promise<boolean> {
+  const mode = ownerProfileId
+    ? { kind: "supabase", profileId: ownerProfileId } as const
+    : await resolveRuntimeWorkspaceMode();
   if (mode.kind !== "supabase") {
     return false;
   }
@@ -1317,7 +1335,10 @@ export function setProjectEstimateStatus(
   options: SetProjectEstimateStatusOptions = {},
 ): SetProjectEstimateStatusResult {
   const state = ensureProjectState(projectId);
-  if (!isOwnerActionAllowed(projectId) || state.project.regime === "client") {
+  if (
+    !isOwnerActionAllowed(projectId, options.ownerProfileId, options.projectOwnerProfileId)
+    || state.project.regime === "client"
+  ) {
     return {
       ok: false,
       reason: "forbidden",
@@ -1412,7 +1433,7 @@ export function setProjectEstimateStatus(
 
 export async function transitionEstimateV2ProjectToInWork(
   projectId: string,
-  options: SetProjectEstimateStatusOptions = {},
+  options: TransitionEstimateV2ProjectToInWorkOptions = {},
 ): Promise<TransitionEstimateV2ToInWorkResult> {
   const state = ensureProjectState(projectId);
   if (state.project.estimateStatus === "in_work") {
@@ -1431,7 +1452,7 @@ export async function transitionEstimateV2ProjectToInWork(
   }
 
   try {
-    const allowed = await isSupabaseOwnerActionAllowed(projectId);
+    const allowed = await isSupabaseOwnerActionAllowed(projectId, options.ownerProfileId);
     if (!allowed) {
       return {
         ok: false,

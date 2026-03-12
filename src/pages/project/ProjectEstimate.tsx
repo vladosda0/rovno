@@ -730,7 +730,10 @@ export default function ProjectEstimate() {
       && estimateProject.estimateStatus === "planning"
       && nextStatus === "in_work"
     ) {
-      const result = await transitionEstimateV2ProjectToInWork(pid, options);
+      const result = await transitionEstimateV2ProjectToInWork(pid, {
+        ...options,
+        ownerProfileId: workspaceMode.profileId,
+      });
       if (!result.ok) {
         if (result.reason === "missing_work_dates") {
           setMissingDatesWorkIds(result.missingWorkIds ?? []);
@@ -780,7 +783,17 @@ export default function ProjectEstimate() {
       return;
     }
 
-    const result = setProjectEstimateStatus(pid, nextStatus, options);
+    const result = setProjectEstimateStatus(
+      pid,
+      nextStatus,
+      workspaceMode.kind === "supabase"
+        ? {
+          ...options,
+          ownerProfileId: workspaceMode.profileId,
+          projectOwnerProfileId: project?.owner_id,
+        }
+        : options,
+    );
     if (!result.ok) {
       if (result.reason === "missing_work_dates") {
         setMissingDatesWorkIds(result.missingWorkIds ?? []);

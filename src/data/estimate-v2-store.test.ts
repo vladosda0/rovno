@@ -18,7 +18,7 @@ import {
 } from "@/data/estimate-v2-store";
 import { getHRItems } from "@/data/hr-store";
 import { getProcurementItems } from "@/data/procurement-store";
-import { getEvents, getTask, updateChecklist, updateTask } from "@/data/store";
+import { getEvents, getProject, getTask, updateChecklist, updateProject, updateTask } from "@/data/store";
 import { clearDemoSession, enterDemoSession, setAuthRole } from "@/lib/auth-state";
 import { toDayIndex } from "@/lib/estimate-v2/schedule";
 import type {
@@ -343,6 +343,45 @@ describe("estimate-v2 execution foundation", () => {
     expect(allowed.ok).toBe(true);
     const finishedState = getEstimateV2ProjectState(projectId);
     expect(finishedState.project.estimateStatus).toBe("finished");
+  });
+
+  it("allows non-hero status changes with explicit owner profile id and keeps finished validation", () => {
+    const projectId = "project-3";
+    const originalOwnerId = getProject(projectId)?.owner_id ?? null;
+    expect(originalOwnerId).toBeTruthy();
+    if (!originalOwnerId) return;
+
+    updateProject(projectId, { owner_id: "local-owner-mismatch" });
+
+    try {
+      const enteredInWork = setProjectEstimateStatus(projectId, "in_work", {
+        skipSetup: true,
+        ownerProfileId: "profile-owner-1",
+        projectOwnerProfileId: "profile-owner-1",
+      });
+      expect(enteredInWork.ok).toBe(true);
+
+      const paused = setProjectEstimateStatus(projectId, "paused", {
+        ownerProfileId: "profile-owner-1",
+        projectOwnerProfileId: "profile-owner-1",
+      });
+      expect(paused.ok).toBe(true);
+
+      const state = getEstimateV2ProjectState(projectId);
+      state.works.forEach((work) => {
+        if (!work.taskId) return;
+        updateTask(work.taskId, { status: "not_started" });
+      });
+
+      const blocked = setProjectEstimateStatus(projectId, "finished", {
+        ownerProfileId: "profile-owner-1",
+        projectOwnerProfileId: "profile-owner-1",
+      });
+      expect(blocked.ok).toBe(false);
+      expect(blocked.reason).toBe("incomplete_tasks");
+    } finally {
+      updateProject(projectId, { owner_id: originalOwnerId });
+    }
   });
 
   it("keeps task/work and resource/checklist sync in both directions", () => {

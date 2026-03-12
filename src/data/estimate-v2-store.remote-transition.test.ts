@@ -141,4 +141,40 @@ describe("estimate-v2 remote hero transition", () => {
     );
     expect(getTasks(projectId).length).toBe(taskCountBefore);
   });
+
+  it("uses the provided owner profile id instead of falling back to guest runtime auth", async () => {
+    const projectId = "project-2";
+    const before = getEstimateV2ProjectState(projectId);
+    const taskIdByLocalWorkId = Object.fromEntries(
+      before.works.map((work, index) => [work.id, `task-remote-owner-${index}`]),
+    );
+
+    resolveRuntimeWorkspaceModeMock.mockResolvedValue({
+      kind: "guest",
+    });
+    persistEstimateV2HeroTransitionMock.mockResolvedValue({
+      fingerprint: "fingerprint-owner-1",
+      profileId: "profile-1",
+      ids: {
+        estimateId: "estimate-owner-1",
+        versionId: "version-owner-1",
+        eventId: "event-owner-1",
+        stageIdByLocalStageId: {},
+        workIdByLocalWorkId: {},
+        lineIdByLocalLineId: {},
+        taskIdByLocalWorkId,
+        checklistItemIdByLocalLineId: {},
+        procurementItemIdByLocalLineId: {},
+        hrItemIdByLocalLineId: {},
+      },
+    });
+
+    const result = await transitionEstimateV2ProjectToInWork(projectId, {
+      skipSetup: true,
+      ownerProfileId: "profile-1",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(persistEstimateV2HeroTransitionMock).toHaveBeenCalledOnce();
+  });
 });
