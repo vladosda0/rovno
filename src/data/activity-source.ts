@@ -5,6 +5,7 @@ import type { Event, Notification } from "@/types/entities";
 import type { Database as ActivityDatabase, Json } from "../../backend-truth/generated/supabase-types";
 
 type ActivityEventRow = ActivityDatabase["public"]["Tables"]["activity_events"]["Row"];
+type ActivityEventInsert = ActivityDatabase["public"]["Tables"]["activity_events"]["Insert"];
 type NotificationRow = ActivityDatabase["public"]["Tables"]["notifications"]["Row"];
 type TypedSupabaseClient = SupabaseClient<ActivityDatabase>;
 
@@ -36,6 +37,34 @@ export interface ActivitySource {
   getCurrentUserUnreadNotificationCount: () => Promise<number>;
 }
 
+export interface HeroTransitionEventPayload {
+  source: "estimate_v2.hero_transition";
+  fingerprint: string;
+  previousStatus: "planning";
+  nextStatus: "in_work";
+  autoScheduled: boolean;
+  ids: {
+    estimateId: string;
+    versionId: string;
+    eventId: string;
+    stageIdByLocalStageId: Record<string, string>;
+    workIdByLocalWorkId: Record<string, string>;
+    lineIdByLocalLineId: Record<string, string>;
+    taskIdByLocalWorkId: Record<string, string>;
+    checklistItemIdByLocalLineId: Record<string, string>;
+    procurementItemIdByLocalLineId: Record<string, string>;
+    hrItemIdByLocalLineId: Record<string, string>;
+  };
+}
+
+export interface HeroTransitionEventInsertInput {
+  id: string;
+  projectId: string;
+  actorProfileId: string;
+  entityId: string;
+  payload: HeroTransitionEventPayload;
+}
+
 function toPayloadRecord(value: Json): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return {};
@@ -56,6 +85,80 @@ function readString(
   }
 
   return undefined;
+}
+
+function isStringRecord(
+  value: unknown,
+): value is Record<string, string> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  return Object.values(value).every((entry) => typeof entry === "string");
+}
+
+function readHeroTransitionPayload(value: Json): HeroTransitionEventPayload | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  const fingerprint = record.fingerprint;
+  if (record.source !== "estimate_v2.hero_transition" || typeof fingerprint !== "string") {
+    return null;
+  }
+
+  const ids = record.ids;
+  if (!ids || typeof ids !== "object" || Array.isArray(ids)) {
+    return null;
+  }
+
+  const idsRecord = ids as Record<string, unknown>;
+  const estimateId = idsRecord.estimateId;
+  const versionId = idsRecord.versionId;
+  const eventId = idsRecord.eventId;
+  const stageIdByLocalStageId = idsRecord.stageIdByLocalStageId;
+  const workIdByLocalWorkId = idsRecord.workIdByLocalWorkId;
+  const lineIdByLocalLineId = idsRecord.lineIdByLocalLineId;
+  const taskIdByLocalWorkId = idsRecord.taskIdByLocalWorkId;
+  const checklistItemIdByLocalLineId = idsRecord.checklistItemIdByLocalLineId;
+  const procurementItemIdByLocalLineId = idsRecord.procurementItemIdByLocalLineId;
+  const hrItemIdByLocalLineId = idsRecord.hrItemIdByLocalLineId;
+
+  if (
+    typeof estimateId !== "string"
+    || typeof versionId !== "string"
+    || typeof eventId !== "string"
+    || !isStringRecord(stageIdByLocalStageId)
+    || !isStringRecord(workIdByLocalWorkId)
+    || !isStringRecord(lineIdByLocalLineId)
+    || !isStringRecord(taskIdByLocalWorkId)
+    || !isStringRecord(checklistItemIdByLocalLineId)
+    || !isStringRecord(procurementItemIdByLocalLineId)
+    || !isStringRecord(hrItemIdByLocalLineId)
+  ) {
+    return null;
+  }
+
+  return {
+    source: "estimate_v2.hero_transition",
+    fingerprint,
+    previousStatus: "planning",
+    nextStatus: "in_work",
+    autoScheduled: record.autoScheduled === true,
+    ids: {
+      estimateId,
+      versionId,
+      eventId,
+      stageIdByLocalStageId,
+      workIdByLocalWorkId,
+      lineIdByLocalLineId,
+      taskIdByLocalWorkId,
+      checklistItemIdByLocalLineId,
+      procurementItemIdByLocalLineId,
+      hrItemIdByLocalLineId,
+    },
+  };
 }
 
 export function mapActivityEventRowToEvent(row: ActivityEventRow): Event {
@@ -208,6 +311,68 @@ function createBrowserActivitySource(mode: "demo" | "local"): ActivitySource {
 async function loadSupabaseClient(): Promise<TypedSupabaseClient> {
   const { supabase } = await import("@/integrations/supabase/client");
   return supabase as unknown as TypedSupabaseClient;
+}
+
+export async function getLatestHeroTransitionEvent(
+  supabase: TypedSupabaseClient,
+  projectId: string,
+): Promise<{ id: string; payload: HeroTransitionEventPayload } | null> {
+  const { data, error } = await supabase
+    .from("activity_events")
+    .select("id, payload")
+    .eq("project_id", projectId)
+    .eq("action_type", "estimate.status_changed")
+    .order("created_at", { ascending: false })
+    .limit(20);
+
+  if (error) {
+    throw error;
+  }
+
+  for (const row of data ?? []) {
+    const payload = readHeroTransitionPayload(row.payload);
+    if (payload) {
+      return {
+        id: row.id,
+        payload,
+      };
+    }
+  }
+
+  return null;
+}
+
+export async function insertHeroTransitionEvent(
+  supabase: TypedSupabaseClient,
+  input: HeroTransitionEventInsertInput,
+): Promise<void> {
+  const insert: ActivityEventInsert = {
+    id: input.id,
+    project_id: input.projectId,
+    actor_profile_id: input.actorProfileId,
+    entity_type: "project_estimate",
+    entity_id: input.entityId,
+    action_type: "estimate.status_changed",
+    payload: input.payload as unknown as Json,
+  };
+
+  const { error } = await supabase
+    .from("activity_events")
+    .insert(insert);
+
+  if (!error) {
+    return;
+  }
+
+  const { data: existing, error: existingError } = await supabase
+    .from("activity_events")
+    .select("id")
+    .eq("id", input.id)
+    .maybeSingle();
+
+  if (existingError || !existing) {
+    throw error;
+  }
 }
 
 function createSupabaseActivitySource(

@@ -7,6 +7,7 @@ import type { ProcurementItemV2 } from "@/types/entities";
 import type { Database as ProcurementDatabase } from "../../backend-truth/generated/supabase-types";
 
 type ProcurementItemRow = ProcurementDatabase["public"]["Tables"]["procurement_items"]["Row"];
+type ProcurementItemInsert = ProcurementDatabase["public"]["Tables"]["procurement_items"]["Insert"];
 type OrderRow = ProcurementDatabase["public"]["Tables"]["orders"]["Row"];
 type OrderLineRow = ProcurementDatabase["public"]["Tables"]["order_lines"]["Row"];
 type InventoryMovementRow = ProcurementDatabase["public"]["Tables"]["inventory_movements"]["Row"];
@@ -22,6 +23,22 @@ interface ShapeProcurementItemsInput {
 export interface ProcurementSource {
   mode: WorkspaceMode["kind"];
   getProjectProcurementItems: (projectId: string) => Promise<ProcurementItemV2[]>;
+}
+
+export interface HeroProcurementItemUpsertInput {
+  id: string;
+  projectId: string;
+  estimateResourceLineId?: string | null;
+  taskId?: string | null;
+  title: string;
+  description?: string | null;
+  category?: string | null;
+  quantity: number;
+  unit?: string | null;
+  plannedUnitPriceCents?: number | null;
+  plannedTotalPriceCents?: number | null;
+  status?: ProcurementItemRow["status"];
+  createdBy: string;
 }
 
 function createBrowserProcurementSource(mode: "demo" | "local"): ProcurementSource {
@@ -133,6 +150,37 @@ export function shapeProcurementItemsWithOrderContext(
 async function loadSupabaseClient(): Promise<TypedSupabaseClient> {
   const { supabase } = await import("@/integrations/supabase/client");
   return supabase as unknown as TypedSupabaseClient;
+}
+
+export async function upsertHeroProcurementItems(
+  supabase: TypedSupabaseClient,
+  inputs: HeroProcurementItemUpsertInput[],
+): Promise<void> {
+  if (inputs.length === 0) return;
+
+  const rows: ProcurementItemInsert[] = inputs.map((input) => ({
+    id: input.id,
+    project_id: input.projectId,
+    estimate_resource_line_id: input.estimateResourceLineId ?? null,
+    task_id: input.taskId ?? null,
+    title: input.title,
+    description: input.description ?? null,
+    category: input.category ?? null,
+    quantity: input.quantity,
+    unit: input.unit ?? null,
+    planned_unit_price_cents: input.plannedUnitPriceCents ?? null,
+    planned_total_price_cents: input.plannedTotalPriceCents ?? null,
+    status: input.status ?? "requested",
+    created_by: input.createdBy,
+  }));
+
+  const { error } = await supabase
+    .from("procurement_items")
+    .upsert(rows, { onConflict: "id" });
+
+  if (error) {
+    throw error;
+  }
 }
 
 function createSupabaseProcurementSource(

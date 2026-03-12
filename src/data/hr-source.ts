@@ -9,6 +9,7 @@ import type { HRPayment, HRPlannedItem } from "@/types/hr";
 import type { Database as HRDatabase } from "../../backend-truth/generated/supabase-types";
 
 type HRItemRow = HRDatabase["public"]["Tables"]["hr_items"]["Row"];
+type HRItemInsert = HRDatabase["public"]["Tables"]["hr_items"]["Insert"];
 type HRItemAssigneeRow = HRDatabase["public"]["Tables"]["hr_item_assignees"]["Row"];
 type HRPaymentRow = HRDatabase["public"]["Tables"]["hr_payments"]["Row"];
 type TypedSupabaseClient = SupabaseClient<HRDatabase>;
@@ -17,6 +18,23 @@ export interface HRSource {
   mode: WorkspaceMode["kind"];
   getProjectHRItems: (projectId: string) => Promise<HRPlannedItem[]>;
   getProjectHRPayments: (projectId: string) => Promise<HRPayment[]>;
+}
+
+export interface HeroHRItemUpsertInput {
+  id: string;
+  projectId: string;
+  projectStageId?: string | null;
+  estimateWorkId?: string | null;
+  taskId?: string | null;
+  title: string;
+  description?: string | null;
+  compensationType?: HRItemRow["compensation_type"];
+  plannedCostCents?: number | null;
+  actualCostCents?: number | null;
+  status?: HRItemRow["status"];
+  startAt?: string | null;
+  endAt?: string | null;
+  createdBy: string;
 }
 
 function createBrowserHRSource(mode: "demo" | "local"): HRSource {
@@ -97,6 +115,38 @@ export function shapeHRItemsWithAssignees(input: {
 async function loadSupabaseClient(): Promise<TypedSupabaseClient> {
   const { supabase } = await import("@/integrations/supabase/client");
   return supabase as unknown as TypedSupabaseClient;
+}
+
+export async function upsertHeroHRItems(
+  supabase: TypedSupabaseClient,
+  inputs: HeroHRItemUpsertInput[],
+): Promise<void> {
+  if (inputs.length === 0) return;
+
+  const rows: HRItemInsert[] = inputs.map((input) => ({
+    id: input.id,
+    project_id: input.projectId,
+    project_stage_id: input.projectStageId ?? null,
+    estimate_work_id: input.estimateWorkId ?? null,
+    task_id: input.taskId ?? null,
+    title: input.title,
+    description: input.description ?? null,
+    compensation_type: input.compensationType ?? "fixed",
+    planned_cost_cents: input.plannedCostCents ?? null,
+    actual_cost_cents: input.actualCostCents ?? null,
+    status: input.status ?? "planned",
+    start_at: input.startAt ?? null,
+    end_at: input.endAt ?? null,
+    created_by: input.createdBy,
+  }));
+
+  const { error } = await supabase
+    .from("hr_items")
+    .upsert(rows, { onConflict: "id" });
+
+  if (error) {
+    throw error;
+  }
 }
 
 function createSupabaseHRSource(

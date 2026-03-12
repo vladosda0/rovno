@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AlertTriangle, ChevronDown, ChevronRight, Download, Info, Plus, Trash2, User } from "lucide-react";
@@ -42,6 +43,7 @@ import {
   useProcurementV2,
   useProject,
   useTasks,
+  useWorkspaceMode,
 } from "@/hooks/use-mock-data";
 import { getAuthRole } from "@/lib/auth-state";
 import {
@@ -56,6 +58,7 @@ import {
   deleteWork,
   refreshVersionSnapshot,
   setProjectEstimateStatus,
+  transitionEstimateV2ProjectToInWork,
   submitVersion,
   updateEstimateV2Project,
   updateLine,
@@ -74,6 +77,10 @@ import {
 } from "@/lib/estimate-v2/rollups";
 import { fromDayIndex, toDayIndex } from "@/lib/estimate-v2/schedule";
 import { useOrders } from "@/hooks/use-order-data";
+import { activityQueryKeys } from "@/hooks/use-activity-source";
+import { hrQueryKeys } from "@/hooks/use-hr-source";
+import { planningQueryKeys } from "@/hooks/use-planning-source";
+import { procurementQueryKeys } from "@/hooks/use-procurement-source";
 import { ApprovalStampCard } from "@/components/estimate-v2/ApprovalStampCard";
 import { ApprovalStampFormModal } from "@/components/estimate-v2/ApprovalStampFormModal";
 import { VersionBanner } from "@/components/estimate-v2/VersionBanner";
@@ -277,8 +284,10 @@ export default function ProjectEstimate() {
   const { id: projectId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const pid = projectId!;
+  const queryClient = useQueryClient();
   const { toast } = useToast();
   const currentUser = useCurrentUser();
+  const workspaceMode = useWorkspaceMode();
   const { project, members } = useProject(pid);
   const tasks = useTasks(pid);
   const procurementItems = useProcurementV2(pid);
@@ -709,12 +718,68 @@ export default function ProjectEstimate() {
     setDetailedCostOverviewOpen(false);
   }, [estimateProject.estimateStatus]);
 
-  const handleEstimateStatusChange = (
+  const handleEstimateStatusChange = async (
     nextStatus: EstimateExecutionStatus,
     options?: { skipSetup?: boolean },
   ) => {
     if (!canEditEstimate) return;
     if (nextStatus === estimateProject.estimateStatus && !options?.skipSetup) return;
+
+    if (
+      workspaceMode.kind === "supabase"
+      && estimateProject.estimateStatus === "planning"
+      && nextStatus === "in_work"
+    ) {
+      const result = await transitionEstimateV2ProjectToInWork(pid, options);
+      if (!result.ok) {
+        if (result.reason === "missing_work_dates") {
+          setMissingDatesWorkIds(result.missingWorkIds ?? []);
+          return;
+        }
+
+        if (result.reason === "transition_failed" || result.reason === "transition_blocked") {
+          toast({
+            title: result.blocking ? "Transition blocked" : "Status update failed",
+            description: result.errorMessage ?? "The transition did not complete and must be retried.",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        toast({ title: "Only project owner can change status", variant: "destructive" });
+        return;
+      }
+
+      setMissingDatesWorkIds([]);
+      setIncompleteTaskBlocks([]);
+
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: planningQueryKeys.projectStages(workspaceMode.profileId, pid),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: planningQueryKeys.projectTasks(workspaceMode.profileId, pid),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: procurementQueryKeys.projectItems(workspaceMode.profileId, pid),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: hrQueryKeys.projectItems(workspaceMode.profileId, pid),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: activityQueryKeys.projectEvents(workspaceMode.profileId, pid),
+        }),
+      ]);
+
+      if (result.autoScheduled) {
+        toast({ title: "Status updated", description: "Missing work dates were auto-scheduled." });
+        return;
+      }
+
+      toast({ title: "Status updated" });
+      return;
+    }
+
     const result = setProjectEstimateStatus(pid, nextStatus, options);
     if (!result.ok) {
       if (result.reason === "missing_work_dates") {
@@ -739,8 +804,8 @@ export default function ProjectEstimate() {
     toast({ title: "Status updated" });
   };
 
-  const handleSkipSetup = () => {
-    handleEstimateStatusChange("in_work", { skipSetup: true });
+  const handleSkipSetup = async () => {
+    await handleEstimateStatusChange("in_work", { skipSetup: true });
   };
 
   const handleGoToWorkLog = () => {

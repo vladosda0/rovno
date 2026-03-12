@@ -1,5 +1,7 @@
 import { getAuthRole } from "@/lib/auth-state";
 import { getStageEstimateItems } from "@/data/estimate-store";
+import { persistEstimateV2HeroTransition, EstimateV2HeroTransitionError } from "@/data/estimate-v2-hero-transition";
+import { getWorkspaceSource, resolveRuntimeWorkspaceMode } from "@/data/workspace-source";
 import {
   addComment,
   addEvent,
@@ -100,6 +102,29 @@ export interface SetProjectEstimateStatusResult {
   incompleteTasks?: StatusFailureTask[];
   autoScheduled?: boolean;
   baselineCaptured?: boolean;
+}
+
+type TransitionEstimateV2ToInWorkFailureReason =
+  | "forbidden"
+  | "missing_work_dates"
+  | "transition_failed"
+  | "transition_blocked";
+
+export interface TransitionEstimateV2ToInWorkResult {
+  ok: boolean;
+  reason?: TransitionEstimateV2ToInWorkFailureReason;
+  missingWorkIds?: string[];
+  autoScheduled?: boolean;
+  baselineCaptured?: boolean;
+  errorMessage?: string;
+  blocking?: boolean;
+}
+
+interface InWorkTransitionDraft {
+  works: EstimateV2Work[];
+  baseline: ScheduleBaseline;
+  appliedAt: string;
+  autoScheduled: boolean;
 }
 
 type Listener = () => void;
@@ -715,6 +740,106 @@ function captureScheduleBaseline(state: EstimateV2ProjectState, capturedAt: stri
   };
 }
 
+function buildPlanningToInWorkDraft(
+  projectId: string,
+  state: EstimateV2ProjectState,
+  options: SetProjectEstimateStatusOptions,
+): { ok: true; draft: InWorkTransitionDraft } | { ok: false; missingWorkIds: string[] } {
+  const appliedAt = nowIso();
+  const draftWorks = state.works.map((work) => ({ ...work }));
+  const missingWorks = sortWorksByStageAndOrder({
+    ...state,
+    works: draftWorks,
+  }).filter((work) => !work.plannedStart || !work.plannedEnd);
+
+  if (missingWorks.length > 0 && !options.skipSetup) {
+    return {
+      ok: false,
+      missingWorkIds: missingWorks.map((work) => work.id),
+    };
+  }
+
+  let autoScheduled = false;
+  let nextWorks = draftWorks;
+  if (missingWorks.length > 0 && options.skipSetup) {
+    const stageOrderById = new Map(state.stages.map((stage) => [stage.id, stage.order]));
+    const anchor = projectScheduleAnchor(projectId);
+    let scheduled = autoScheduleSequential(nextWorks, anchor, stageOrderById);
+    const cycleValidation = validateNoCycles(state.dependencies);
+    if (cycleValidation.valid) {
+      const constrainedById = applyFSConstraints(
+        Object.fromEntries(scheduled.map((work) => [work.id, work])),
+        state.dependencies,
+      );
+      scheduled = scheduled.map((work) => constrainedById[work.id] ?? work);
+    }
+    nextWorks = nextWorks.map((work) => scheduled.find((entry) => entry.id === work.id) ?? work);
+    autoScheduled = true;
+  }
+
+  const draftState: EstimateV2ProjectState = {
+    project: { ...state.project },
+    stages: state.stages.map((stage) => ({ ...stage })),
+    works: nextWorks,
+    lines: state.lines.map((line) => ({ ...line })),
+    dependencies: state.dependencies.map((dependency) => ({ ...dependency })),
+    versions: state.versions,
+    scheduleBaseline: state.scheduleBaseline,
+  };
+
+  return {
+    ok: true,
+    draft: {
+      works: nextWorks,
+      baseline: captureScheduleBaseline(draftState, appliedAt),
+      appliedAt,
+      autoScheduled,
+    },
+  };
+}
+
+function applySupabaseInWorkTransitionSuccess(
+  state: EstimateV2ProjectState,
+  draft: InWorkTransitionDraft,
+  taskIdByWorkId: Record<string, string>,
+) {
+  const draftWorkById = new Map(draft.works.map((work) => [work.id, work]));
+  state.works = state.works.map((work) => {
+    const nextDraft = draftWorkById.get(work.id);
+    if (!nextDraft) return work;
+    return {
+      ...work,
+      plannedStart: nextDraft.plannedStart,
+      plannedEnd: nextDraft.plannedEnd,
+      taskId: taskIdByWorkId[work.id] ?? work.taskId,
+      status: "not_started",
+      updatedAt: draft.appliedAt,
+    };
+  });
+
+  state.scheduleBaseline = draft.baseline;
+  state.project = {
+    ...state.project,
+    estimateStatus: "in_work",
+    updatedAt: draft.appliedAt,
+  };
+}
+
+async function isSupabaseOwnerActionAllowed(projectId: string): Promise<boolean> {
+  const mode = await resolveRuntimeWorkspaceMode();
+  if (mode.kind !== "supabase") {
+    return false;
+  }
+
+  const workspaceSource = await getWorkspaceSource(mode);
+  const project = await workspaceSource.getProjectById(projectId);
+  if (!project) {
+    return false;
+  }
+
+  return project.owner_id === mode.profileId;
+}
+
 function applyWorkToTaskSync(state: EstimateV2ProjectState, workIds: string[]) {
   const changedWorkIds = new Set(workIds);
   state.works.forEach((work) => {
@@ -1283,6 +1408,112 @@ export function setProjectEstimateStatus(
     autoScheduled,
     baselineCaptured,
   };
+}
+
+export async function transitionEstimateV2ProjectToInWork(
+  projectId: string,
+  options: SetProjectEstimateStatusOptions = {},
+): Promise<TransitionEstimateV2ToInWorkResult> {
+  const state = ensureProjectState(projectId);
+  if (state.project.estimateStatus === "in_work") {
+    return {
+      ok: true,
+      autoScheduled: false,
+      baselineCaptured: Boolean(state.scheduleBaseline),
+    };
+  }
+
+  if (state.project.regime === "client") {
+    return {
+      ok: false,
+      reason: "forbidden",
+    };
+  }
+
+  try {
+    const allowed = await isSupabaseOwnerActionAllowed(projectId);
+    if (!allowed) {
+      return {
+        ok: false,
+        reason: "forbidden",
+      };
+    }
+  } catch {
+    return {
+      ok: false,
+      reason: "transition_failed",
+      errorMessage: "Unable to verify the authenticated project owner before starting the transition.",
+    };
+  }
+
+  const draftResult = buildPlanningToInWorkDraft(projectId, state, options);
+  if (!draftResult.ok) {
+    return {
+      ok: false,
+      reason: "missing_work_dates",
+      missingWorkIds: draftResult.missingWorkIds,
+    };
+  }
+
+  try {
+    const persisted = await persistEstimateV2HeroTransition({
+      projectId,
+      projectTitle: state.project.title,
+      autoScheduled: draftResult.draft.autoScheduled,
+      stages: state.stages.map((stage) => ({
+        localStageId: stage.id,
+        title: stage.title,
+        order: stage.order,
+        discountBps: stage.discountBps,
+      })),
+      works: draftResult.draft.works.map((work) => ({
+        localWorkId: work.id,
+        localStageId: work.stageId,
+        title: work.title,
+        order: work.order,
+        plannedStart: work.plannedStart,
+        plannedEnd: work.plannedEnd,
+      })),
+      lines: state.lines.map((line) => ({
+        localLineId: line.id,
+        localStageId: line.stageId,
+        localWorkId: line.workId,
+        title: line.title,
+        type: line.type,
+        unit: line.unit,
+        qtyMilli: line.qtyMilli,
+        costUnitCents: line.costUnitCents,
+      })),
+    });
+
+    applySupabaseInWorkTransitionSuccess(
+      state,
+      draftResult.draft,
+      persisted.ids.taskIdByLocalWorkId,
+    );
+    notify();
+
+    return {
+      ok: true,
+      autoScheduled: draftResult.draft.autoScheduled,
+      baselineCaptured: true,
+    };
+  } catch (error) {
+    if (error instanceof EstimateV2HeroTransitionError) {
+      return {
+        ok: false,
+        reason: error.blocking ? "transition_blocked" : "transition_failed",
+        errorMessage: error.message,
+        blocking: error.blocking,
+      };
+    }
+
+    return {
+      ok: false,
+      reason: "transition_failed",
+      errorMessage: "The transition did not complete and must be retried.",
+    };
+  }
 }
 
 export function updateEstimateV2Project(projectId: string, partial: Partial<EstimateV2Project>) {
@@ -1908,4 +2139,14 @@ export function computeVersionDiff(
     changedLineIds: lineChanges.map((change) => change.id),
     changes: changes.sort(structuredSort),
   };
+}
+
+export function __unsafeResetEstimateV2ForTests() {
+  statesByProjectId.clear();
+  if (mainStoreUnsubscribe) {
+    mainStoreUnsubscribe();
+    mainStoreUnsubscribe = null;
+  }
+  listeners.clear();
+  crossSyncInProgress = false;
 }
