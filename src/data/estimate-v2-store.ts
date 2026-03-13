@@ -90,7 +90,7 @@ interface SetProjectEstimateStatusOptions {
   projectOwnerProfileId?: string;
 }
 
-interface TransitionEstimateV2ProjectToInWorkOptions extends SetProjectEstimateStatusOptions {}
+type TransitionEstimateV2ProjectToInWorkOptions = SetProjectEstimateStatusOptions;
 
 type SetProjectEstimateStatusFailureReason = "forbidden" | "missing_work_dates" | "incomplete_tasks";
 
