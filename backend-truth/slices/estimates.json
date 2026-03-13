@@ -1,0 +1,1290 @@
+{
+  "_meta": {
+    "generated": true,
+    "readOnly": true,
+    "generator": "backend-truth-generator",
+    "version": "1.1.0"
+  },
+  "name": "estimates",
+  "title": "Estimates Contract",
+  "kind": "derived_contract_bundle",
+  "sourceMigrations": [
+    "supabase/migrations/20260306162500_estimates_core.sql",
+    "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
+    "supabase/migrations/20260306164000_hr_domain.sql",
+    "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
+    "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+  ],
+  "tables": [
+    {
+      "schema": "public",
+      "name": "project_estimates",
+      "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql",
+      "columns": [
+        {
+          "name": "id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "gen_random_uuid()",
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "project_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "projects",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "cascade"
+          }
+        },
+        {
+          "name": "title",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "description",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "status",
+          "sqlType": "text",
+          "tsType": "\"draft\" | \"approved\" | \"archived\"",
+          "nullable": false,
+          "defaultSql": "'draft'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "created_by",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "profiles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "restrict"
+          }
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "updated_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "status"
+          ],
+          "expression": "status in ('draft', 'approved', 'archived')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_project_estimates_project_id",
+          "unique": false,
+          "expressions": [
+            "project_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "set_project_estimates_updated_at",
+          "activation": "before update",
+          "functionSchema": "public",
+          "functionName": "set_updated_at",
+          "functionSignature": "public.set_updated_at()",
+          "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "estimate_versions",
+      "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql",
+      "columns": [
+        {
+          "name": "id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "gen_random_uuid()",
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "estimate_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "project_estimates",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "cascade"
+          }
+        },
+        {
+          "name": "version_number",
+          "sqlType": "integer",
+          "tsType": "number",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "is_current",
+          "sqlType": "boolean",
+          "tsType": "boolean",
+          "nullable": false,
+          "defaultSql": "false",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "created_by",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "profiles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "restrict"
+          }
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "unique",
+          "name": null,
+          "columns": [
+            "estimate_id",
+            "version_number"
+          ],
+          "expression": null,
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_estimate_versions_estimate_id",
+          "unique": false,
+          "expressions": [
+            "estimate_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        },
+        {
+          "name": "idx_estimate_versions_current_per_estimate",
+          "unique": true,
+          "expressions": [
+            "estimate_id"
+          ],
+          "where": "is_current = true",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        }
+      ],
+      "triggers": []
+    },
+    {
+      "schema": "public",
+      "name": "estimate_works",
+      "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql",
+      "columns": [
+        {
+          "name": "id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "gen_random_uuid()",
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "estimate_version_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "estimate_versions",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "cascade"
+          }
+        },
+        {
+          "name": "project_stage_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "project_stages",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set"
+          }
+        },
+        {
+          "name": "title",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "description",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "sort_order",
+          "sqlType": "integer",
+          "tsType": "number",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "planned_cost_cents",
+          "sqlType": "bigint",
+          "tsType": "number",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "sort_order"
+          ],
+          "expression": "sort_order > 0",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "planned_cost_cents"
+          ],
+          "expression": "planned_cost_cents is null or planned_cost_cents >= 0",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_estimate_works_estimate_version_id",
+          "unique": false,
+          "expressions": [
+            "estimate_version_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        },
+        {
+          "name": "idx_estimate_works_project_stage_id",
+          "unique": false,
+          "expressions": [
+            "project_stage_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        }
+      ],
+      "triggers": []
+    },
+    {
+      "schema": "public",
+      "name": "estimate_resource_lines",
+      "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql",
+      "columns": [
+        {
+          "name": "id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "gen_random_uuid()",
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "estimate_work_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "estimate_works",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "cascade"
+          }
+        },
+        {
+          "name": "resource_type",
+          "sqlType": "text",
+          "tsType": "\"material\" | \"labor\" | \"equipment\" | \"other\"",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "title",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "quantity",
+          "sqlType": "numeric(14,3)",
+          "tsType": "number",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "unit",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "unit_price_cents",
+          "sqlType": "bigint",
+          "tsType": "number",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "total_price_cents",
+          "sqlType": "bigint",
+          "tsType": "number",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "resource_type"
+          ],
+          "expression": "resource_type in ('material', 'labor', 'equipment', 'other')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "quantity"
+          ],
+          "expression": "quantity >= 0",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "unit_price_cents"
+          ],
+          "expression": "unit_price_cents is null or unit_price_cents >= 0",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "total_price_cents"
+          ],
+          "expression": "total_price_cents is null or total_price_cents >= 0",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_estimate_resource_lines_estimate_work_id",
+          "unique": false,
+          "expressions": [
+            "estimate_work_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        }
+      ],
+      "triggers": []
+    },
+    {
+      "schema": "public",
+      "name": "estimate_dependencies",
+      "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql",
+      "columns": [
+        {
+          "name": "id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "gen_random_uuid()",
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "estimate_version_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "estimate_versions",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "cascade"
+          }
+        },
+        {
+          "name": "from_work_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "estimate_works",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "cascade"
+          }
+        },
+        {
+          "name": "to_work_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "estimate_works",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "cascade"
+          }
+        },
+        {
+          "name": "dependency_type",
+          "sqlType": "text",
+          "tsType": "\"finish_to_start\" | \"start_to_start\" | \"finish_to_finish\" | \"start_to_finish\"",
+          "nullable": false,
+          "defaultSql": "'finish_to_start'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "dependency_type"
+          ],
+          "expression": "dependency_type in ('finish_to_start', 'start_to_start', 'finish_to_finish', 'start_to_finish')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_estimate_dependencies_estimate_version_id",
+          "unique": false,
+          "expressions": [
+            "estimate_version_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        },
+        {
+          "name": "idx_estimate_dependencies_from_work_id",
+          "unique": false,
+          "expressions": [
+            "from_work_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        },
+        {
+          "name": "idx_estimate_dependencies_to_work_id",
+          "unique": false,
+          "expressions": [
+            "to_work_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        }
+      ],
+      "triggers": []
+    }
+  ],
+  "relations": [
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "project_estimates",
+      "fromColumns": [
+        "project_id"
+      ],
+      "toSchema": "public",
+      "toTable": "projects",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "project_estimates",
+      "fromColumns": [
+        "created_by"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "restrict"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "estimate_versions",
+      "fromColumns": [
+        "estimate_id"
+      ],
+      "toSchema": "public",
+      "toTable": "project_estimates",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "estimate_versions",
+      "fromColumns": [
+        "created_by"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "restrict"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "estimate_works",
+      "fromColumns": [
+        "estimate_version_id"
+      ],
+      "toSchema": "public",
+      "toTable": "estimate_versions",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "estimate_works",
+      "fromColumns": [
+        "project_stage_id"
+      ],
+      "toSchema": "public",
+      "toTable": "project_stages",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "estimate_resource_lines",
+      "fromColumns": [
+        "estimate_work_id"
+      ],
+      "toSchema": "public",
+      "toTable": "estimate_works",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "estimate_dependencies",
+      "fromColumns": [
+        "estimate_version_id"
+      ],
+      "toSchema": "public",
+      "toTable": "estimate_versions",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "estimate_dependencies",
+      "fromColumns": [
+        "from_work_id"
+      ],
+      "toSchema": "public",
+      "toTable": "estimate_works",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "estimate_dependencies",
+      "fromColumns": [
+        "to_work_id"
+      ],
+      "toSchema": "public",
+      "toTable": "estimate_works",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "procurement_items",
+      "fromColumns": [
+        "estimate_resource_line_id"
+      ],
+      "toSchema": "public",
+      "toTable": "estimate_resource_lines",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "task_checklist_items",
+      "fromColumns": [
+        "estimate_resource_line_id"
+      ],
+      "toSchema": "public",
+      "toTable": "estimate_resource_lines",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "task_checklist_items",
+      "fromColumns": [
+        "estimate_work_id"
+      ],
+      "toSchema": "public",
+      "toTable": "estimate_works",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "hr_items",
+      "fromColumns": [
+        "estimate_work_id"
+      ],
+      "toSchema": "public",
+      "toTable": "estimate_works",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set"
+    }
+  ],
+  "functions": [
+    {
+      "schema": "public",
+      "name": "get_shared_estimate_version",
+      "key": "public.get_shared_estimate_version",
+      "signature": "public.get_shared_estimate_version(text)",
+      "args": [
+        {
+          "name": "p_share_token",
+          "type": "text"
+        }
+      ],
+      "returnType": "public.estimate_versions",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": false,
+      "searchPath": null,
+      "sourceMigration": "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
+      "authenticatedExecute": true,
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "approve_estimate_version_by_share_token",
+      "key": "public.approve_estimate_version_by_share_token",
+      "signature": "public.approve_estimate_version_by_share_token(text, jsonb)",
+      "args": [
+        {
+          "name": "p_share_token",
+          "type": "text"
+        },
+        {
+          "name": "p_payload",
+          "type": "jsonb"
+        }
+      ],
+      "returnType": "uuid",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": false,
+      "searchPath": null,
+      "sourceMigration": "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
+      "authenticatedExecute": true,
+      "triggerUsages": []
+    }
+  ],
+  "rls": [
+    {
+      "schema": "public",
+      "table": "project_estimates",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "delete",
+        "insert",
+        "select",
+        "update"
+      ],
+      "policies": [
+        {
+          "name": "project_estimates_select",
+          "schema": "public",
+          "table": "project_estimates",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "public.can_access_project(project_id)",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        },
+        {
+          "name": "project_estimates_insert",
+          "schema": "public",
+          "table": "project_estimates",
+          "command": "insert",
+          "roles": [
+            "authenticated"
+          ],
+          "using": null,
+          "withCheck": "public.can_write_project_content(project_id)\n  and created_by = auth.uid()",
+          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        },
+        {
+          "name": "project_estimates_update",
+          "schema": "public",
+          "table": "project_estimates",
+          "command": "update",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "public.can_write_project_content(project_id)",
+          "withCheck": "public.can_write_project_content(project_id)",
+          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        },
+        {
+          "name": "project_estimates_delete",
+          "schema": "public",
+          "table": "project_estimates",
+          "command": "delete",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "public.can_write_project_content(project_id)",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "table": "estimate_versions",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "delete",
+        "insert",
+        "select",
+        "update"
+      ],
+      "policies": [
+        {
+          "name": "estimate_versions_select",
+          "schema": "public",
+          "table": "estimate_versions",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n    select 1\n    from public.project_estimates pe\n    where pe.id = estimate_id\n      and public.can_access_project(pe.project_id)\n  )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        },
+        {
+          "name": "estimate_versions_insert",
+          "schema": "public",
+          "table": "estimate_versions",
+          "command": "insert",
+          "roles": [
+            "authenticated"
+          ],
+          "using": null,
+          "withCheck": "created_by = auth.uid()\n  and exists (\n    select 1\n    from public.project_estimates pe\n    where pe.id = estimate_id\n      and public.can_write_project_content(pe.project_id)\n  )",
+          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        },
+        {
+          "name": "estimate_versions_update",
+          "schema": "public",
+          "table": "estimate_versions",
+          "command": "update",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n    select 1\n    from public.project_estimates pe\n    where pe.id = estimate_id\n      and public.can_write_project_content(pe.project_id)\n  )",
+          "withCheck": "exists (\n    select 1\n    from public.project_estimates pe\n    where pe.id = estimate_id\n      and public.can_write_project_content(pe.project_id)\n  )",
+          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        },
+        {
+          "name": "estimate_versions_delete",
+          "schema": "public",
+          "table": "estimate_versions",
+          "command": "delete",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n    select 1\n    from public.project_estimates pe\n    where pe.id = estimate_id\n      and public.can_write_project_content(pe.project_id)\n  )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "table": "estimate_works",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "delete",
+        "insert",
+        "select",
+        "update"
+      ],
+      "policies": [
+        {
+          "name": "estimate_works_select",
+          "schema": "public",
+          "table": "estimate_works",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n    select 1\n    from public.estimate_versions ev\n    join public.project_estimates pe\n      on pe.id = ev.estimate_id\n    where ev.id = estimate_version_id\n      and public.can_access_project(pe.project_id)\n  )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        },
+        {
+          "name": "estimate_works_insert",
+          "schema": "public",
+          "table": "estimate_works",
+          "command": "insert",
+          "roles": [
+            "authenticated"
+          ],
+          "using": null,
+          "withCheck": "exists (\n    select 1\n    from public.estimate_versions ev\n    join public.project_estimates pe\n      on pe.id = ev.estimate_id\n    where ev.id = estimate_version_id\n      and public.can_write_project_content(pe.project_id)\n  )",
+          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        },
+        {
+          "name": "estimate_works_update",
+          "schema": "public",
+          "table": "estimate_works",
+          "command": "update",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n    select 1\n    from public.estimate_versions ev\n    join public.project_estimates pe\n      on pe.id = ev.estimate_id\n    where ev.id = estimate_version_id\n      and public.can_write_project_content(pe.project_id)\n  )",
+          "withCheck": "exists (\n    select 1\n    from public.estimate_versions ev\n    join public.project_estimates pe\n      on pe.id = ev.estimate_id\n    where ev.id = estimate_version_id\n      and public.can_write_project_content(pe.project_id)\n  )",
+          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        },
+        {
+          "name": "estimate_works_delete",
+          "schema": "public",
+          "table": "estimate_works",
+          "command": "delete",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n    select 1\n    from public.estimate_versions ev\n    join public.project_estimates pe\n      on pe.id = ev.estimate_id\n    where ev.id = estimate_version_id\n      and public.can_write_project_content(pe.project_id)\n  )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "table": "estimate_resource_lines",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "delete",
+        "insert",
+        "select",
+        "update"
+      ],
+      "policies": [
+        {
+          "name": "estimate_resource_lines_select",
+          "schema": "public",
+          "table": "estimate_resource_lines",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n    select 1\n    from public.estimate_works ew\n    join public.estimate_versions ev\n      on ev.id = ew.estimate_version_id\n    join public.project_estimates pe\n      on pe.id = ev.estimate_id\n    where ew.id = estimate_work_id\n      and public.can_access_project(pe.project_id)\n  )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        },
+        {
+          "name": "estimate_resource_lines_insert",
+          "schema": "public",
+          "table": "estimate_resource_lines",
+          "command": "insert",
+          "roles": [
+            "authenticated"
+          ],
+          "using": null,
+          "withCheck": "exists (\n    select 1\n    from public.estimate_works ew\n    join public.estimate_versions ev\n      on ev.id = ew.estimate_version_id\n    join public.project_estimates pe\n      on pe.id = ev.estimate_id\n    where ew.id = estimate_work_id\n      and public.can_write_project_content(pe.project_id)\n  )",
+          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        },
+        {
+          "name": "estimate_resource_lines_update",
+          "schema": "public",
+          "table": "estimate_resource_lines",
+          "command": "update",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n    select 1\n    from public.estimate_works ew\n    join public.estimate_versions ev\n      on ev.id = ew.estimate_version_id\n    join public.project_estimates pe\n      on pe.id = ev.estimate_id\n    where ew.id = estimate_work_id\n      and public.can_write_project_content(pe.project_id)\n  )",
+          "withCheck": "exists (\n    select 1\n    from public.estimate_works ew\n    join public.estimate_versions ev\n      on ev.id = ew.estimate_version_id\n    join public.project_estimates pe\n      on pe.id = ev.estimate_id\n    where ew.id = estimate_work_id\n      and public.can_write_project_content(pe.project_id)\n  )",
+          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        },
+        {
+          "name": "estimate_resource_lines_delete",
+          "schema": "public",
+          "table": "estimate_resource_lines",
+          "command": "delete",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n    select 1\n    from public.estimate_works ew\n    join public.estimate_versions ev\n      on ev.id = ew.estimate_version_id\n    join public.project_estimates pe\n      on pe.id = ev.estimate_id\n    where ew.id = estimate_work_id\n      and public.can_write_project_content(pe.project_id)\n  )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "table": "estimate_dependencies",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "delete",
+        "insert",
+        "select",
+        "update"
+      ],
+      "policies": [
+        {
+          "name": "estimate_dependencies_select",
+          "schema": "public",
+          "table": "estimate_dependencies",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n    select 1\n    from public.estimate_versions ev\n    join public.project_estimates pe\n      on pe.id = ev.estimate_id\n    where ev.id = estimate_version_id\n      and public.can_access_project(pe.project_id)\n  )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        },
+        {
+          "name": "estimate_dependencies_insert",
+          "schema": "public",
+          "table": "estimate_dependencies",
+          "command": "insert",
+          "roles": [
+            "authenticated"
+          ],
+          "using": null,
+          "withCheck": "exists (\n    select 1\n    from public.estimate_versions ev\n    join public.project_estimates pe\n      on pe.id = ev.estimate_id\n    where ev.id = estimate_version_id\n      and public.can_write_project_content(pe.project_id)\n  )",
+          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        },
+        {
+          "name": "estimate_dependencies_update",
+          "schema": "public",
+          "table": "estimate_dependencies",
+          "command": "update",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n    select 1\n    from public.estimate_versions ev\n    join public.project_estimates pe\n      on pe.id = ev.estimate_id\n    where ev.id = estimate_version_id\n      and public.can_write_project_content(pe.project_id)\n  )",
+          "withCheck": "exists (\n    select 1\n    from public.estimate_versions ev\n    join public.project_estimates pe\n      on pe.id = ev.estimate_id\n    where ev.id = estimate_version_id\n      and public.can_write_project_content(pe.project_id)\n  )",
+          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        },
+        {
+          "name": "estimate_dependencies_delete",
+          "schema": "public",
+          "table": "estimate_dependencies",
+          "command": "delete",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n    select 1\n    from public.estimate_versions ev\n    join public.project_estimates pe\n      on pe.id = ev.estimate_id\n    where ev.id = estimate_version_id\n      and public.can_write_project_content(pe.project_id)\n  )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        }
+      ]
+    }
+  ]
+}

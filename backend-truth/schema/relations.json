@@ -1,0 +1,1242 @@
+{
+  "_meta": {
+    "generated": true,
+    "readOnly": true,
+    "generator": "backend-truth-generator",
+    "version": "1.1.0"
+  },
+  "relations": [
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306160500_core_profiles_and_preferences.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "profiles",
+      "fromColumns": [
+        "id"
+      ],
+      "toSchema": "auth",
+      "toTable": "users",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306160500_core_profiles_and_preferences.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "profile_settings",
+      "fromColumns": [
+        "profile_id"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306160500_core_profiles_and_preferences.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "notification_preferences",
+      "fromColumns": [
+        "profile_id"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "projects",
+      "fromColumns": [
+        "owner_profile_id"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "restrict"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "project_members",
+      "fromColumns": [
+        "project_id"
+      ],
+      "toSchema": "public",
+      "toTable": "projects",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "project_members",
+      "fromColumns": [
+        "profile_id"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "project_invites",
+      "fromColumns": [
+        "project_id"
+      ],
+      "toSchema": "public",
+      "toTable": "projects",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "project_invites",
+      "fromColumns": [
+        "invited_by"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "restrict"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "project_invites",
+      "fromColumns": [
+        "accepted_profile_id"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "project_stages",
+      "fromColumns": [
+        "project_id"
+      ],
+      "toSchema": "public",
+      "toTable": "projects",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": "projects_current_stage_id_fkey",
+      "sourceMigration": "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql",
+      "sourceKind": "alter_table",
+      "fromSchema": "public",
+      "fromTable": "projects",
+      "fromColumns": [
+        "current_stage_id"
+      ],
+      "toSchema": "public",
+      "toTable": "project_stages",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "tasks",
+      "fromColumns": [
+        "project_id"
+      ],
+      "toSchema": "public",
+      "toTable": "projects",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "tasks",
+      "fromColumns": [
+        "stage_id"
+      ],
+      "toSchema": "public",
+      "toTable": "project_stages",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "restrict"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "tasks",
+      "fromColumns": [
+        "assignee_profile_id"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "tasks",
+      "fromColumns": [
+        "created_by"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "restrict"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "task_comments",
+      "fromColumns": [
+        "task_id"
+      ],
+      "toSchema": "public",
+      "toTable": "tasks",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "task_comments",
+      "fromColumns": [
+        "author_profile_id"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "restrict"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306162000_storage_documents_and_media.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "storage_objects",
+      "fromColumns": [
+        "uploaded_by"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306162000_storage_documents_and_media.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "documents",
+      "fromColumns": [
+        "project_id"
+      ],
+      "toSchema": "public",
+      "toTable": "projects",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306162000_storage_documents_and_media.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "documents",
+      "fromColumns": [
+        "created_by"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "restrict"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306162000_storage_documents_and_media.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "document_versions",
+      "fromColumns": [
+        "document_id"
+      ],
+      "toSchema": "public",
+      "toTable": "documents",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306162000_storage_documents_and_media.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "document_versions",
+      "fromColumns": [
+        "storage_object_id"
+      ],
+      "toSchema": "public",
+      "toTable": "storage_objects",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306162000_storage_documents_and_media.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "document_versions",
+      "fromColumns": [
+        "created_by"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "restrict"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306162000_storage_documents_and_media.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "project_media",
+      "fromColumns": [
+        "project_id"
+      ],
+      "toSchema": "public",
+      "toTable": "projects",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306162000_storage_documents_and_media.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "project_media",
+      "fromColumns": [
+        "storage_object_id"
+      ],
+      "toSchema": "public",
+      "toTable": "storage_objects",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306162000_storage_documents_and_media.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "project_media",
+      "fromColumns": [
+        "uploaded_by"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "project_estimates",
+      "fromColumns": [
+        "project_id"
+      ],
+      "toSchema": "public",
+      "toTable": "projects",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "project_estimates",
+      "fromColumns": [
+        "created_by"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "restrict"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "estimate_versions",
+      "fromColumns": [
+        "estimate_id"
+      ],
+      "toSchema": "public",
+      "toTable": "project_estimates",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "estimate_versions",
+      "fromColumns": [
+        "created_by"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "restrict"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "estimate_works",
+      "fromColumns": [
+        "estimate_version_id"
+      ],
+      "toSchema": "public",
+      "toTable": "estimate_versions",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "estimate_works",
+      "fromColumns": [
+        "project_stage_id"
+      ],
+      "toSchema": "public",
+      "toTable": "project_stages",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "estimate_resource_lines",
+      "fromColumns": [
+        "estimate_work_id"
+      ],
+      "toSchema": "public",
+      "toTable": "estimate_works",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "estimate_dependencies",
+      "fromColumns": [
+        "estimate_version_id"
+      ],
+      "toSchema": "public",
+      "toTable": "estimate_versions",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "estimate_dependencies",
+      "fromColumns": [
+        "from_work_id"
+      ],
+      "toSchema": "public",
+      "toTable": "estimate_works",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "estimate_dependencies",
+      "fromColumns": [
+        "to_work_id"
+      ],
+      "toSchema": "public",
+      "toTable": "estimate_works",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306163000_inventory_foundation.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "inventory_items",
+      "fromColumns": [
+        "project_id"
+      ],
+      "toSchema": "public",
+      "toTable": "projects",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306163000_inventory_foundation.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "inventory_locations",
+      "fromColumns": [
+        "project_id"
+      ],
+      "toSchema": "public",
+      "toTable": "projects",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306163000_inventory_foundation.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "inventory_balances",
+      "fromColumns": [
+        "project_id"
+      ],
+      "toSchema": "public",
+      "toTable": "projects",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306163000_inventory_foundation.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "inventory_balances",
+      "fromColumns": [
+        "inventory_item_id"
+      ],
+      "toSchema": "public",
+      "toTable": "inventory_items",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306163000_inventory_foundation.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "inventory_balances",
+      "fromColumns": [
+        "inventory_location_id"
+      ],
+      "toSchema": "public",
+      "toTable": "inventory_locations",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "procurement_items",
+      "fromColumns": [
+        "project_id"
+      ],
+      "toSchema": "public",
+      "toTable": "projects",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "procurement_items",
+      "fromColumns": [
+        "estimate_resource_line_id"
+      ],
+      "toSchema": "public",
+      "toTable": "estimate_resource_lines",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "procurement_items",
+      "fromColumns": [
+        "task_id"
+      ],
+      "toSchema": "public",
+      "toTable": "tasks",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "procurement_items",
+      "fromColumns": [
+        "created_by"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "restrict"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "orders",
+      "fromColumns": [
+        "project_id"
+      ],
+      "toSchema": "public",
+      "toTable": "projects",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "orders",
+      "fromColumns": [
+        "created_by"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "restrict"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "order_lines",
+      "fromColumns": [
+        "order_id"
+      ],
+      "toSchema": "public",
+      "toTable": "orders",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "order_lines",
+      "fromColumns": [
+        "procurement_item_id"
+      ],
+      "toSchema": "public",
+      "toTable": "procurement_items",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "inventory_movements",
+      "fromColumns": [
+        "project_id"
+      ],
+      "toSchema": "public",
+      "toTable": "projects",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "inventory_movements",
+      "fromColumns": [
+        "inventory_item_id"
+      ],
+      "toSchema": "public",
+      "toTable": "inventory_items",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "inventory_movements",
+      "fromColumns": [
+        "inventory_location_id"
+      ],
+      "toSchema": "public",
+      "toTable": "inventory_locations",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "inventory_movements",
+      "fromColumns": [
+        "order_line_id"
+      ],
+      "toSchema": "public",
+      "toTable": "order_lines",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "inventory_movements",
+      "fromColumns": [
+        "procurement_item_id"
+      ],
+      "toSchema": "public",
+      "toTable": "procurement_items",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "inventory_movements",
+      "fromColumns": [
+        "created_by"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "task_checklist_items",
+      "fromColumns": [
+        "task_id"
+      ],
+      "toSchema": "public",
+      "toTable": "tasks",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "task_checklist_items",
+      "fromColumns": [
+        "procurement_item_id"
+      ],
+      "toSchema": "public",
+      "toTable": "procurement_items",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "task_checklist_items",
+      "fromColumns": [
+        "estimate_resource_line_id"
+      ],
+      "toSchema": "public",
+      "toTable": "estimate_resource_lines",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "task_checklist_items",
+      "fromColumns": [
+        "estimate_work_id"
+      ],
+      "toSchema": "public",
+      "toTable": "estimate_works",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "hr_items",
+      "fromColumns": [
+        "project_id"
+      ],
+      "toSchema": "public",
+      "toTable": "projects",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "hr_items",
+      "fromColumns": [
+        "project_stage_id"
+      ],
+      "toSchema": "public",
+      "toTable": "project_stages",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "hr_items",
+      "fromColumns": [
+        "estimate_work_id"
+      ],
+      "toSchema": "public",
+      "toTable": "estimate_works",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "hr_items",
+      "fromColumns": [
+        "task_id"
+      ],
+      "toSchema": "public",
+      "toTable": "tasks",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "hr_items",
+      "fromColumns": [
+        "created_by"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "restrict"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "hr_item_assignees",
+      "fromColumns": [
+        "hr_item_id"
+      ],
+      "toSchema": "public",
+      "toTable": "hr_items",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "hr_item_assignees",
+      "fromColumns": [
+        "profile_id"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "hr_payments",
+      "fromColumns": [
+        "project_id"
+      ],
+      "toSchema": "public",
+      "toTable": "projects",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "hr_payments",
+      "fromColumns": [
+        "hr_item_id"
+      ],
+      "toSchema": "public",
+      "toTable": "hr_items",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "hr_payments",
+      "fromColumns": [
+        "paid_to_profile_id"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "hr_payments",
+      "fromColumns": [
+        "created_by"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306164500_activity_and_notifications.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "activity_events",
+      "fromColumns": [
+        "project_id"
+      ],
+      "toSchema": "public",
+      "toTable": "projects",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306164500_activity_and_notifications.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "activity_events",
+      "fromColumns": [
+        "actor_profile_id"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306164500_activity_and_notifications.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "notifications",
+      "fromColumns": [
+        "profile_id"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306164500_activity_and_notifications.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "notifications",
+      "fromColumns": [
+        "project_id"
+      ],
+      "toSchema": "public",
+      "toTable": "projects",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306165000_billing_launch_tables.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "billing_customers",
+      "fromColumns": [
+        "profile_id"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306165000_billing_launch_tables.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "subscriptions",
+      "fromColumns": [
+        "profile_id"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260306165000_billing_launch_tables.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "subscriptions",
+      "fromColumns": [
+        "billing_customer_id"
+      ],
+      "toSchema": "public",
+      "toTable": "billing_customers",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    }
+  ]
+}
