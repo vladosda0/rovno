@@ -1,0 +1,124 @@
+{
+  "_meta": {
+    "generated": true,
+    "readOnly": true,
+    "generator": "backend-truth-generator",
+    "version": "1.1.0"
+  },
+  "generator_id": "backend-truth-generator",
+  "generator_version": "1.1.0",
+  "source_migrations": [
+    {
+      "path": "supabase/migrations/20260306160000_extensions_and_base_helpers.sql",
+      "sha256": "01f7c09393237a2b9b5c1aade6fffb807a8ad58bbfa1aad8aa8f269a397bcdce"
+    },
+    {
+      "path": "supabase/migrations/20260306160500_core_profiles_and_preferences.sql",
+      "sha256": "c30b9716917b4c8d2c9fb8a37749c8e0b1cd1d1c5ad52b698b26a00efa686f3f"
+    },
+    {
+      "path": "supabase/migrations/20260306161000_projects_membership_and_invites.sql",
+      "sha256": "be19f6f62f40bae5e423a4ea69d67f66775c7102e252ae76431f992404becffe"
+    },
+    {
+      "path": "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql",
+      "sha256": "b13855ada229f033285d21dd1e501e118fa4b898c7948aceb93f6e013be64275"
+    },
+    {
+      "path": "supabase/migrations/20260306162000_storage_documents_and_media.sql",
+      "sha256": "b231a4a5ce1beadee79123d84b6110c619aea5cf32e56f2aae8793fe574b33ab"
+    },
+    {
+      "path": "supabase/migrations/20260306162500_estimates_core.sql",
+      "sha256": "a54249811bb06157b3662833041a09c076d3b113bdf97cdfce0af2e00b73717b"
+    },
+    {
+      "path": "supabase/migrations/20260306163000_inventory_foundation.sql",
+      "sha256": "440951362b8e16b9575df4f08c5f37ac4d74b48648cd1bef84fd20e0e8ecb013"
+    },
+    {
+      "path": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
+      "sha256": "04e57794e7166321f4b749e3483caca0f34cf3b714786c19578fce6ff5f3fa90"
+    },
+    {
+      "path": "supabase/migrations/20260306164000_hr_domain.sql",
+      "sha256": "9b208f823b3da8fa0fabd084afd0baea51b33587217c868489a331bd4688d886"
+    },
+    {
+      "path": "supabase/migrations/20260306164500_activity_and_notifications.sql",
+      "sha256": "b8e90808950234a7643da5448394148652e1c15e4a123d84b8dcc68686a524ab"
+    },
+    {
+      "path": "supabase/migrations/20260306165000_billing_launch_tables.sql",
+      "sha256": "a94ce576ca6d6362fcef480d083fe59711592ee45a4ec748741fe11ebbbcc775"
+    },
+    {
+      "path": "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
+      "sha256": "955d7648bdaaa34a5c6a7fefd8c2d725eb8c71c5d2c34f442d4f622e5b434c2e"
+    },
+    {
+      "path": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
+      "sha256": "76a722d8f372d66064cb79a153d32625ca62359e02858be875b61e207316a709"
+    },
+    {
+      "path": "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql",
+      "sha256": "de59e4ba500a66353032b137b84d9fd5ec337012dd21f74ed45cc0b5f1362528"
+    }
+  ],
+  "generated_artifacts": [
+    "README.md",
+    "MANIFEST.json",
+    "schema/tables.json",
+    "schema/relations.json",
+    "schema/enums-and-checks.json",
+    "schema/rpc-functions.json",
+    "schema/rls-summary.json",
+    "schema/source-trace.json",
+    "slices/workspace.json",
+    "slices/planning.json",
+    "slices/documents-media.json",
+    "slices/estimates.json",
+    "slices/procurement-inventory.json",
+    "slices/hr.json",
+    "slices/activity-billing.json",
+    "contracts/workspace-contract.md",
+    "contracts/planning-contract.md",
+    "contracts/documents-contract.md",
+    "contracts/estimates-contract.md",
+    "contracts/procurement-contract.md",
+    "contracts/hr-contract.md",
+    "contracts/activity-billing-contract.md",
+    "sql/20260306160000_extensions_and_base_helpers.sql",
+    "sql/20260306160500_core_profiles_and_preferences.sql",
+    "sql/20260306161000_projects_membership_and_invites.sql",
+    "sql/20260306161500_project_planning_tasks_and_comments.sql",
+    "sql/20260306162000_storage_documents_and_media.sql",
+    "sql/20260306162500_estimates_core.sql",
+    "sql/20260306163000_inventory_foundation.sql",
+    "sql/20260306163500_procurement_orders_and_inventory_movements.sql",
+    "sql/20260306164000_hr_domain.sql",
+    "sql/20260306164500_activity_and_notifications.sql",
+    "sql/20260306165000_billing_launch_tables.sql",
+    "sql/20260306165500_auth_bootstrap_and_domain_rpc.sql",
+    "sql/20260306170000_grants_rls_enablement_and_policies.sql",
+    "sql/20260313180000_projects_owner_only_rls_hotfix.sql",
+    "generated/db-public-schema.ts",
+    "generated/supabase-types.ts"
+  ],
+  "external_schema_references": [
+    {
+      "kind": "table",
+      "schema": "auth",
+      "name": "users",
+      "referencedBy": "public.profiles",
+      "sourceMigration": "supabase/migrations/20260306160500_core_profiles_and_preferences.sql"
+    }
+  ],
+  "platform_dependencies": [
+    {
+      "kind": "extension",
+      "name": "pgcrypto",
+      "sourceMigration": "supabase/migrations/20260306160000_extensions_and_base_helpers.sql"
+    }
+  ]
+}

@@ -1,0 +1,1987 @@
+{
+  "_meta": {
+    "generated": true,
+    "readOnly": true,
+    "generator": "backend-truth-generator",
+    "version": "1.1.0"
+  },
+  "tables": [
+    {
+      "key": "public.profiles",
+      "schema": "public",
+      "table": "profiles",
+      "sourceMigration": "supabase/migrations/20260306160500_core_profiles_and_preferences.sql"
+    },
+    {
+      "key": "public.profile_settings",
+      "schema": "public",
+      "table": "profile_settings",
+      "sourceMigration": "supabase/migrations/20260306160500_core_profiles_and_preferences.sql"
+    },
+    {
+      "key": "public.notification_preferences",
+      "schema": "public",
+      "table": "notification_preferences",
+      "sourceMigration": "supabase/migrations/20260306160500_core_profiles_and_preferences.sql"
+    },
+    {
+      "key": "public.projects",
+      "schema": "public",
+      "table": "projects",
+      "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql"
+    },
+    {
+      "key": "public.project_members",
+      "schema": "public",
+      "table": "project_members",
+      "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql"
+    },
+    {
+      "key": "public.project_invites",
+      "schema": "public",
+      "table": "project_invites",
+      "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql"
+    },
+    {
+      "key": "public.project_stages",
+      "schema": "public",
+      "table": "project_stages",
+      "sourceMigration": "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql"
+    },
+    {
+      "key": "public.tasks",
+      "schema": "public",
+      "table": "tasks",
+      "sourceMigration": "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql"
+    },
+    {
+      "key": "public.task_comments",
+      "schema": "public",
+      "table": "task_comments",
+      "sourceMigration": "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql"
+    },
+    {
+      "key": "public.storage_objects",
+      "schema": "public",
+      "table": "storage_objects",
+      "sourceMigration": "supabase/migrations/20260306162000_storage_documents_and_media.sql"
+    },
+    {
+      "key": "public.documents",
+      "schema": "public",
+      "table": "documents",
+      "sourceMigration": "supabase/migrations/20260306162000_storage_documents_and_media.sql"
+    },
+    {
+      "key": "public.document_versions",
+      "schema": "public",
+      "table": "document_versions",
+      "sourceMigration": "supabase/migrations/20260306162000_storage_documents_and_media.sql"
+    },
+    {
+      "key": "public.project_media",
+      "schema": "public",
+      "table": "project_media",
+      "sourceMigration": "supabase/migrations/20260306162000_storage_documents_and_media.sql"
+    },
+    {
+      "key": "public.project_estimates",
+      "schema": "public",
+      "table": "project_estimates",
+      "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+    },
+    {
+      "key": "public.estimate_versions",
+      "schema": "public",
+      "table": "estimate_versions",
+      "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+    },
+    {
+      "key": "public.estimate_works",
+      "schema": "public",
+      "table": "estimate_works",
+      "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+    },
+    {
+      "key": "public.estimate_resource_lines",
+      "schema": "public",
+      "table": "estimate_resource_lines",
+      "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+    },
+    {
+      "key": "public.estimate_dependencies",
+      "schema": "public",
+      "table": "estimate_dependencies",
+      "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+    },
+    {
+      "key": "public.inventory_items",
+      "schema": "public",
+      "table": "inventory_items",
+      "sourceMigration": "supabase/migrations/20260306163000_inventory_foundation.sql"
+    },
+    {
+      "key": "public.inventory_locations",
+      "schema": "public",
+      "table": "inventory_locations",
+      "sourceMigration": "supabase/migrations/20260306163000_inventory_foundation.sql"
+    },
+    {
+      "key": "public.inventory_balances",
+      "schema": "public",
+      "table": "inventory_balances",
+      "sourceMigration": "supabase/migrations/20260306163000_inventory_foundation.sql"
+    },
+    {
+      "key": "public.procurement_items",
+      "schema": "public",
+      "table": "procurement_items",
+      "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+    },
+    {
+      "key": "public.orders",
+      "schema": "public",
+      "table": "orders",
+      "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+    },
+    {
+      "key": "public.order_lines",
+      "schema": "public",
+      "table": "order_lines",
+      "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+    },
+    {
+      "key": "public.inventory_movements",
+      "schema": "public",
+      "table": "inventory_movements",
+      "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+    },
+    {
+      "key": "public.task_checklist_items",
+      "schema": "public",
+      "table": "task_checklist_items",
+      "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+    },
+    {
+      "key": "public.hr_items",
+      "schema": "public",
+      "table": "hr_items",
+      "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql"
+    },
+    {
+      "key": "public.hr_item_assignees",
+      "schema": "public",
+      "table": "hr_item_assignees",
+      "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql"
+    },
+    {
+      "key": "public.hr_payments",
+      "schema": "public",
+      "table": "hr_payments",
+      "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql"
+    },
+    {
+      "key": "public.activity_events",
+      "schema": "public",
+      "table": "activity_events",
+      "sourceMigration": "supabase/migrations/20260306164500_activity_and_notifications.sql"
+    },
+    {
+      "key": "public.notifications",
+      "schema": "public",
+      "table": "notifications",
+      "sourceMigration": "supabase/migrations/20260306164500_activity_and_notifications.sql"
+    },
+    {
+      "key": "public.billing_customers",
+      "schema": "public",
+      "table": "billing_customers",
+      "sourceMigration": "supabase/migrations/20260306165000_billing_launch_tables.sql"
+    },
+    {
+      "key": "public.subscriptions",
+      "schema": "public",
+      "table": "subscriptions",
+      "sourceMigration": "supabase/migrations/20260306165000_billing_launch_tables.sql"
+    }
+  ],
+  "functions": [
+    {
+      "key": "public.set_updated_at",
+      "schema": "public",
+      "name": "set_updated_at",
+      "signature": "public.set_updated_at()",
+      "sourceMigration": "supabase/migrations/20260306160000_extensions_and_base_helpers.sql"
+    },
+    {
+      "key": "public.guard_project_owner_change",
+      "schema": "public",
+      "name": "guard_project_owner_change",
+      "signature": "public.guard_project_owner_change()",
+      "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql"
+    },
+    {
+      "key": "public.handle_project_owner_membership",
+      "schema": "public",
+      "name": "handle_project_owner_membership",
+      "signature": "public.handle_project_owner_membership()",
+      "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql"
+    },
+    {
+      "key": "public.enforce_project_member_owner_role",
+      "schema": "public",
+      "name": "enforce_project_member_owner_role",
+      "signature": "public.enforce_project_member_owner_role()",
+      "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql"
+    },
+    {
+      "key": "public.apply_inventory_balance_delta",
+      "schema": "public",
+      "name": "apply_inventory_balance_delta",
+      "signature": "public.apply_inventory_balance_delta(uuid, uuid, uuid, numeric)",
+      "sourceMigration": "supabase/migrations/20260306163000_inventory_foundation.sql"
+    },
+    {
+      "key": "public.sync_inventory_balances",
+      "schema": "public",
+      "name": "sync_inventory_balances",
+      "signature": "public.sync_inventory_balances()",
+      "sourceMigration": "supabase/migrations/20260306163000_inventory_foundation.sql"
+    },
+    {
+      "key": "public.handle_profile_defaults",
+      "schema": "public",
+      "name": "handle_profile_defaults",
+      "signature": "public.handle_profile_defaults()",
+      "sourceMigration": "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql"
+    },
+    {
+      "key": "public.handle_auth_user_created",
+      "schema": "public",
+      "name": "handle_auth_user_created",
+      "signature": "public.handle_auth_user_created()",
+      "sourceMigration": "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql"
+    },
+    {
+      "key": "public.current_profile_id",
+      "schema": "public",
+      "name": "current_profile_id",
+      "signature": "public.current_profile_id()",
+      "sourceMigration": "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql"
+    },
+    {
+      "key": "public.project_role",
+      "schema": "public",
+      "name": "project_role",
+      "signature": "public.project_role(uuid)",
+      "sourceMigration": "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql"
+    },
+    {
+      "key": "public.is_project_member",
+      "schema": "public",
+      "name": "is_project_member",
+      "signature": "public.is_project_member(uuid)",
+      "sourceMigration": "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql"
+    },
+    {
+      "key": "public.has_project_role",
+      "schema": "public",
+      "name": "has_project_role",
+      "signature": "public.has_project_role(uuid, text[])",
+      "sourceMigration": "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql"
+    },
+    {
+      "key": "public.can_access_project",
+      "schema": "public",
+      "name": "can_access_project",
+      "signature": "public.can_access_project(uuid)",
+      "sourceMigration": "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql"
+    },
+    {
+      "key": "public.can_manage_project",
+      "schema": "public",
+      "name": "can_manage_project",
+      "signature": "public.can_manage_project(uuid)",
+      "sourceMigration": "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql"
+    },
+    {
+      "key": "public.can_write_project_content",
+      "schema": "public",
+      "name": "can_write_project_content",
+      "signature": "public.can_write_project_content(uuid)",
+      "sourceMigration": "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql"
+    },
+    {
+      "key": "public.can_see_profile",
+      "schema": "public",
+      "name": "can_see_profile",
+      "signature": "public.can_see_profile(uuid)",
+      "sourceMigration": "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql"
+    },
+    {
+      "key": "public.can_access_storage_object",
+      "schema": "public",
+      "name": "can_access_storage_object",
+      "signature": "public.can_access_storage_object(uuid)",
+      "sourceMigration": "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql"
+    },
+    {
+      "key": "public.accept_project_invite",
+      "schema": "public",
+      "name": "accept_project_invite",
+      "signature": "public.accept_project_invite(text)",
+      "sourceMigration": "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql"
+    },
+    {
+      "key": "public.get_shared_estimate_version",
+      "schema": "public",
+      "name": "get_shared_estimate_version",
+      "signature": "public.get_shared_estimate_version(text)",
+      "sourceMigration": "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql"
+    },
+    {
+      "key": "public.approve_estimate_version_by_share_token",
+      "schema": "public",
+      "name": "approve_estimate_version_by_share_token",
+      "signature": "public.approve_estimate_version_by_share_token(text, jsonb)",
+      "sourceMigration": "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql"
+    }
+  ],
+  "policies": [
+    {
+      "key": "public.profiles.profiles_select",
+      "schema": "public",
+      "table": "profiles",
+      "name": "profiles_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.profiles.profiles_insert",
+      "schema": "public",
+      "table": "profiles",
+      "name": "profiles_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.profiles.profiles_update",
+      "schema": "public",
+      "table": "profiles",
+      "name": "profiles_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.profile_settings.profile_settings_select",
+      "schema": "public",
+      "table": "profile_settings",
+      "name": "profile_settings_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.profile_settings.profile_settings_insert",
+      "schema": "public",
+      "table": "profile_settings",
+      "name": "profile_settings_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.profile_settings.profile_settings_update",
+      "schema": "public",
+      "table": "profile_settings",
+      "name": "profile_settings_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.notification_preferences.notification_preferences_select",
+      "schema": "public",
+      "table": "notification_preferences",
+      "name": "notification_preferences_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.notification_preferences.notification_preferences_insert",
+      "schema": "public",
+      "table": "notification_preferences",
+      "name": "notification_preferences_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.notification_preferences.notification_preferences_update",
+      "schema": "public",
+      "table": "notification_preferences",
+      "name": "notification_preferences_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.projects.projects_insert",
+      "schema": "public",
+      "table": "projects",
+      "name": "projects_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.projects.projects_select",
+      "schema": "public",
+      "table": "projects",
+      "name": "projects_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql"
+    },
+    {
+      "key": "public.projects.projects_update",
+      "schema": "public",
+      "table": "projects",
+      "name": "projects_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql"
+    },
+    {
+      "key": "public.projects.projects_delete",
+      "schema": "public",
+      "table": "projects",
+      "name": "projects_delete",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql"
+    },
+    {
+      "key": "public.project_members.project_members_select",
+      "schema": "public",
+      "table": "project_members",
+      "name": "project_members_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.project_members.project_members_insert",
+      "schema": "public",
+      "table": "project_members",
+      "name": "project_members_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.project_members.project_members_update",
+      "schema": "public",
+      "table": "project_members",
+      "name": "project_members_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.project_members.project_members_delete",
+      "schema": "public",
+      "table": "project_members",
+      "name": "project_members_delete",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.project_invites.project_invites_select",
+      "schema": "public",
+      "table": "project_invites",
+      "name": "project_invites_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.project_invites.project_invites_insert",
+      "schema": "public",
+      "table": "project_invites",
+      "name": "project_invites_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.project_invites.project_invites_update",
+      "schema": "public",
+      "table": "project_invites",
+      "name": "project_invites_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.project_invites.project_invites_delete",
+      "schema": "public",
+      "table": "project_invites",
+      "name": "project_invites_delete",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.project_stages.project_stages_select",
+      "schema": "public",
+      "table": "project_stages",
+      "name": "project_stages_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.project_stages.project_stages_insert",
+      "schema": "public",
+      "table": "project_stages",
+      "name": "project_stages_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.project_stages.project_stages_update",
+      "schema": "public",
+      "table": "project_stages",
+      "name": "project_stages_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.project_stages.project_stages_delete",
+      "schema": "public",
+      "table": "project_stages",
+      "name": "project_stages_delete",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.tasks.tasks_select",
+      "schema": "public",
+      "table": "tasks",
+      "name": "tasks_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.tasks.tasks_insert",
+      "schema": "public",
+      "table": "tasks",
+      "name": "tasks_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.tasks.tasks_update",
+      "schema": "public",
+      "table": "tasks",
+      "name": "tasks_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.tasks.tasks_delete",
+      "schema": "public",
+      "table": "tasks",
+      "name": "tasks_delete",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.task_comments.task_comments_select",
+      "schema": "public",
+      "table": "task_comments",
+      "name": "task_comments_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.task_comments.task_comments_insert",
+      "schema": "public",
+      "table": "task_comments",
+      "name": "task_comments_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.task_comments.task_comments_update",
+      "schema": "public",
+      "table": "task_comments",
+      "name": "task_comments_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.task_comments.task_comments_delete",
+      "schema": "public",
+      "table": "task_comments",
+      "name": "task_comments_delete",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.storage_objects.storage_objects_select",
+      "schema": "public",
+      "table": "storage_objects",
+      "name": "storage_objects_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.documents.documents_select",
+      "schema": "public",
+      "table": "documents",
+      "name": "documents_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.documents.documents_insert",
+      "schema": "public",
+      "table": "documents",
+      "name": "documents_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.documents.documents_update",
+      "schema": "public",
+      "table": "documents",
+      "name": "documents_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.documents.documents_delete",
+      "schema": "public",
+      "table": "documents",
+      "name": "documents_delete",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.document_versions.document_versions_select",
+      "schema": "public",
+      "table": "document_versions",
+      "name": "document_versions_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.document_versions.document_versions_insert",
+      "schema": "public",
+      "table": "document_versions",
+      "name": "document_versions_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.document_versions.document_versions_update",
+      "schema": "public",
+      "table": "document_versions",
+      "name": "document_versions_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.document_versions.document_versions_delete",
+      "schema": "public",
+      "table": "document_versions",
+      "name": "document_versions_delete",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.project_media.project_media_select",
+      "schema": "public",
+      "table": "project_media",
+      "name": "project_media_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.project_media.project_media_insert",
+      "schema": "public",
+      "table": "project_media",
+      "name": "project_media_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.project_media.project_media_update",
+      "schema": "public",
+      "table": "project_media",
+      "name": "project_media_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.project_media.project_media_delete",
+      "schema": "public",
+      "table": "project_media",
+      "name": "project_media_delete",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.project_estimates.project_estimates_select",
+      "schema": "public",
+      "table": "project_estimates",
+      "name": "project_estimates_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.project_estimates.project_estimates_insert",
+      "schema": "public",
+      "table": "project_estimates",
+      "name": "project_estimates_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.project_estimates.project_estimates_update",
+      "schema": "public",
+      "table": "project_estimates",
+      "name": "project_estimates_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.project_estimates.project_estimates_delete",
+      "schema": "public",
+      "table": "project_estimates",
+      "name": "project_estimates_delete",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.estimate_versions.estimate_versions_select",
+      "schema": "public",
+      "table": "estimate_versions",
+      "name": "estimate_versions_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.estimate_versions.estimate_versions_insert",
+      "schema": "public",
+      "table": "estimate_versions",
+      "name": "estimate_versions_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.estimate_versions.estimate_versions_update",
+      "schema": "public",
+      "table": "estimate_versions",
+      "name": "estimate_versions_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.estimate_versions.estimate_versions_delete",
+      "schema": "public",
+      "table": "estimate_versions",
+      "name": "estimate_versions_delete",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.estimate_works.estimate_works_select",
+      "schema": "public",
+      "table": "estimate_works",
+      "name": "estimate_works_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.estimate_works.estimate_works_insert",
+      "schema": "public",
+      "table": "estimate_works",
+      "name": "estimate_works_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.estimate_works.estimate_works_update",
+      "schema": "public",
+      "table": "estimate_works",
+      "name": "estimate_works_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.estimate_works.estimate_works_delete",
+      "schema": "public",
+      "table": "estimate_works",
+      "name": "estimate_works_delete",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.estimate_resource_lines.estimate_resource_lines_select",
+      "schema": "public",
+      "table": "estimate_resource_lines",
+      "name": "estimate_resource_lines_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.estimate_resource_lines.estimate_resource_lines_insert",
+      "schema": "public",
+      "table": "estimate_resource_lines",
+      "name": "estimate_resource_lines_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.estimate_resource_lines.estimate_resource_lines_update",
+      "schema": "public",
+      "table": "estimate_resource_lines",
+      "name": "estimate_resource_lines_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.estimate_resource_lines.estimate_resource_lines_delete",
+      "schema": "public",
+      "table": "estimate_resource_lines",
+      "name": "estimate_resource_lines_delete",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.estimate_dependencies.estimate_dependencies_select",
+      "schema": "public",
+      "table": "estimate_dependencies",
+      "name": "estimate_dependencies_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.estimate_dependencies.estimate_dependencies_insert",
+      "schema": "public",
+      "table": "estimate_dependencies",
+      "name": "estimate_dependencies_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.estimate_dependencies.estimate_dependencies_update",
+      "schema": "public",
+      "table": "estimate_dependencies",
+      "name": "estimate_dependencies_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.estimate_dependencies.estimate_dependencies_delete",
+      "schema": "public",
+      "table": "estimate_dependencies",
+      "name": "estimate_dependencies_delete",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.inventory_items.inventory_items_select",
+      "schema": "public",
+      "table": "inventory_items",
+      "name": "inventory_items_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.inventory_items.inventory_items_insert",
+      "schema": "public",
+      "table": "inventory_items",
+      "name": "inventory_items_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.inventory_items.inventory_items_update",
+      "schema": "public",
+      "table": "inventory_items",
+      "name": "inventory_items_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.inventory_items.inventory_items_delete",
+      "schema": "public",
+      "table": "inventory_items",
+      "name": "inventory_items_delete",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.inventory_locations.inventory_locations_select",
+      "schema": "public",
+      "table": "inventory_locations",
+      "name": "inventory_locations_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.inventory_locations.inventory_locations_insert",
+      "schema": "public",
+      "table": "inventory_locations",
+      "name": "inventory_locations_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.inventory_locations.inventory_locations_update",
+      "schema": "public",
+      "table": "inventory_locations",
+      "name": "inventory_locations_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.inventory_locations.inventory_locations_delete",
+      "schema": "public",
+      "table": "inventory_locations",
+      "name": "inventory_locations_delete",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.inventory_balances.inventory_balances_select",
+      "schema": "public",
+      "table": "inventory_balances",
+      "name": "inventory_balances_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.procurement_items.procurement_items_select",
+      "schema": "public",
+      "table": "procurement_items",
+      "name": "procurement_items_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.procurement_items.procurement_items_insert",
+      "schema": "public",
+      "table": "procurement_items",
+      "name": "procurement_items_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.procurement_items.procurement_items_update",
+      "schema": "public",
+      "table": "procurement_items",
+      "name": "procurement_items_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.procurement_items.procurement_items_delete",
+      "schema": "public",
+      "table": "procurement_items",
+      "name": "procurement_items_delete",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.orders.orders_select",
+      "schema": "public",
+      "table": "orders",
+      "name": "orders_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.orders.orders_insert",
+      "schema": "public",
+      "table": "orders",
+      "name": "orders_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.orders.orders_update",
+      "schema": "public",
+      "table": "orders",
+      "name": "orders_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.orders.orders_delete",
+      "schema": "public",
+      "table": "orders",
+      "name": "orders_delete",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.order_lines.order_lines_select",
+      "schema": "public",
+      "table": "order_lines",
+      "name": "order_lines_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.order_lines.order_lines_insert",
+      "schema": "public",
+      "table": "order_lines",
+      "name": "order_lines_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.order_lines.order_lines_update",
+      "schema": "public",
+      "table": "order_lines",
+      "name": "order_lines_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.order_lines.order_lines_delete",
+      "schema": "public",
+      "table": "order_lines",
+      "name": "order_lines_delete",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.inventory_movements.inventory_movements_select",
+      "schema": "public",
+      "table": "inventory_movements",
+      "name": "inventory_movements_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.inventory_movements.inventory_movements_insert",
+      "schema": "public",
+      "table": "inventory_movements",
+      "name": "inventory_movements_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.inventory_movements.inventory_movements_update",
+      "schema": "public",
+      "table": "inventory_movements",
+      "name": "inventory_movements_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.inventory_movements.inventory_movements_delete",
+      "schema": "public",
+      "table": "inventory_movements",
+      "name": "inventory_movements_delete",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.task_checklist_items.task_checklist_items_select",
+      "schema": "public",
+      "table": "task_checklist_items",
+      "name": "task_checklist_items_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.task_checklist_items.task_checklist_items_insert",
+      "schema": "public",
+      "table": "task_checklist_items",
+      "name": "task_checklist_items_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.task_checklist_items.task_checklist_items_update",
+      "schema": "public",
+      "table": "task_checklist_items",
+      "name": "task_checklist_items_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.task_checklist_items.task_checklist_items_delete",
+      "schema": "public",
+      "table": "task_checklist_items",
+      "name": "task_checklist_items_delete",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.hr_items.hr_items_select",
+      "schema": "public",
+      "table": "hr_items",
+      "name": "hr_items_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.hr_items.hr_items_insert",
+      "schema": "public",
+      "table": "hr_items",
+      "name": "hr_items_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.hr_items.hr_items_update",
+      "schema": "public",
+      "table": "hr_items",
+      "name": "hr_items_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.hr_items.hr_items_delete",
+      "schema": "public",
+      "table": "hr_items",
+      "name": "hr_items_delete",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.hr_item_assignees.hr_item_assignees_select",
+      "schema": "public",
+      "table": "hr_item_assignees",
+      "name": "hr_item_assignees_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.hr_item_assignees.hr_item_assignees_insert",
+      "schema": "public",
+      "table": "hr_item_assignees",
+      "name": "hr_item_assignees_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.hr_item_assignees.hr_item_assignees_update",
+      "schema": "public",
+      "table": "hr_item_assignees",
+      "name": "hr_item_assignees_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.hr_item_assignees.hr_item_assignees_delete",
+      "schema": "public",
+      "table": "hr_item_assignees",
+      "name": "hr_item_assignees_delete",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.hr_payments.hr_payments_select",
+      "schema": "public",
+      "table": "hr_payments",
+      "name": "hr_payments_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.hr_payments.hr_payments_insert",
+      "schema": "public",
+      "table": "hr_payments",
+      "name": "hr_payments_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.hr_payments.hr_payments_update",
+      "schema": "public",
+      "table": "hr_payments",
+      "name": "hr_payments_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.hr_payments.hr_payments_delete",
+      "schema": "public",
+      "table": "hr_payments",
+      "name": "hr_payments_delete",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.activity_events.activity_events_select",
+      "schema": "public",
+      "table": "activity_events",
+      "name": "activity_events_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.activity_events.activity_events_insert",
+      "schema": "public",
+      "table": "activity_events",
+      "name": "activity_events_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.notifications.notifications_select",
+      "schema": "public",
+      "table": "notifications",
+      "name": "notifications_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.notifications.notifications_update",
+      "schema": "public",
+      "table": "notifications",
+      "name": "notifications_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.billing_customers.billing_customers_select",
+      "schema": "public",
+      "table": "billing_customers",
+      "name": "billing_customers_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.subscriptions.subscriptions_select",
+      "schema": "public",
+      "table": "subscriptions",
+      "name": "subscriptions_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    }
+  ],
+  "slices": [
+    {
+      "name": "workspace",
+      "title": "Workspace Contract",
+      "kind": "derived_contract_bundle",
+      "sourceMigrations": [
+        "supabase/migrations/20260306160500_core_profiles_and_preferences.sql",
+        "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
+        "supabase/migrations/20260306161000_projects_membership_and_invites.sql",
+        "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql",
+        "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
+        "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql"
+      ],
+      "tables": [
+        "public.profiles",
+        "public.profile_settings",
+        "public.notification_preferences",
+        "public.projects",
+        "public.project_members",
+        "public.project_invites"
+      ],
+      "functions": [
+        "public.guard_project_owner_change",
+        "public.handle_project_owner_membership",
+        "public.enforce_project_member_owner_role",
+        "public.handle_profile_defaults",
+        "public.handle_auth_user_created",
+        "public.current_profile_id",
+        "public.project_role",
+        "public.is_project_member",
+        "public.has_project_role",
+        "public.can_access_project",
+        "public.can_manage_project",
+        "public.can_write_project_content",
+        "public.can_see_profile",
+        "public.accept_project_invite"
+      ],
+      "policies": [
+        "public.profiles.profiles_select",
+        "public.profiles.profiles_insert",
+        "public.profiles.profiles_update",
+        "public.profile_settings.profile_settings_select",
+        "public.profile_settings.profile_settings_insert",
+        "public.profile_settings.profile_settings_update",
+        "public.notification_preferences.notification_preferences_select",
+        "public.notification_preferences.notification_preferences_insert",
+        "public.notification_preferences.notification_preferences_update",
+        "public.projects.projects_insert",
+        "public.projects.projects_select",
+        "public.projects.projects_update",
+        "public.projects.projects_delete",
+        "public.project_members.project_members_select",
+        "public.project_members.project_members_insert",
+        "public.project_members.project_members_update",
+        "public.project_members.project_members_delete",
+        "public.project_invites.project_invites_select",
+        "public.project_invites.project_invites_insert",
+        "public.project_invites.project_invites_update",
+        "public.project_invites.project_invites_delete"
+      ],
+      "relations": [
+        {
+          "from": "public.profiles",
+          "to": "auth.users",
+          "sourceMigration": "supabase/migrations/20260306160500_core_profiles_and_preferences.sql"
+        },
+        {
+          "from": "public.profile_settings",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260306160500_core_profiles_and_preferences.sql"
+        },
+        {
+          "from": "public.notification_preferences",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260306160500_core_profiles_and_preferences.sql"
+        },
+        {
+          "from": "public.projects",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql"
+        },
+        {
+          "from": "public.project_members",
+          "to": "public.projects",
+          "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql"
+        },
+        {
+          "from": "public.project_members",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql"
+        },
+        {
+          "from": "public.project_invites",
+          "to": "public.projects",
+          "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql"
+        },
+        {
+          "from": "public.project_invites",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql"
+        },
+        {
+          "from": "public.project_invites",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql"
+        },
+        {
+          "from": "public.projects",
+          "to": "public.project_stages",
+          "sourceMigration": "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql"
+        }
+      ]
+    },
+    {
+      "name": "planning",
+      "title": "Planning Contract",
+      "kind": "derived_contract_bundle",
+      "sourceMigrations": [
+        "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql",
+        "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
+        "supabase/migrations/20260306162500_estimates_core.sql",
+        "supabase/migrations/20260306164000_hr_domain.sql",
+        "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+      ],
+      "tables": [
+        "public.project_stages",
+        "public.tasks",
+        "public.task_comments",
+        "public.task_checklist_items"
+      ],
+      "functions": [],
+      "policies": [
+        "public.project_stages.project_stages_select",
+        "public.project_stages.project_stages_insert",
+        "public.project_stages.project_stages_update",
+        "public.project_stages.project_stages_delete",
+        "public.tasks.tasks_select",
+        "public.tasks.tasks_insert",
+        "public.tasks.tasks_update",
+        "public.tasks.tasks_delete",
+        "public.task_comments.task_comments_select",
+        "public.task_comments.task_comments_insert",
+        "public.task_comments.task_comments_update",
+        "public.task_comments.task_comments_delete",
+        "public.task_checklist_items.task_checklist_items_select",
+        "public.task_checklist_items.task_checklist_items_insert",
+        "public.task_checklist_items.task_checklist_items_update",
+        "public.task_checklist_items.task_checklist_items_delete"
+      ],
+      "relations": [
+        {
+          "from": "public.project_stages",
+          "to": "public.projects",
+          "sourceMigration": "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql"
+        },
+        {
+          "from": "public.projects",
+          "to": "public.project_stages",
+          "sourceMigration": "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql"
+        },
+        {
+          "from": "public.tasks",
+          "to": "public.projects",
+          "sourceMigration": "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql"
+        },
+        {
+          "from": "public.tasks",
+          "to": "public.project_stages",
+          "sourceMigration": "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql"
+        },
+        {
+          "from": "public.tasks",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql"
+        },
+        {
+          "from": "public.tasks",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql"
+        },
+        {
+          "from": "public.task_comments",
+          "to": "public.tasks",
+          "sourceMigration": "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql"
+        },
+        {
+          "from": "public.task_comments",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql"
+        },
+        {
+          "from": "public.estimate_works",
+          "to": "public.project_stages",
+          "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        },
+        {
+          "from": "public.procurement_items",
+          "to": "public.tasks",
+          "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+        },
+        {
+          "from": "public.task_checklist_items",
+          "to": "public.tasks",
+          "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+        },
+        {
+          "from": "public.task_checklist_items",
+          "to": "public.procurement_items",
+          "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+        },
+        {
+          "from": "public.task_checklist_items",
+          "to": "public.estimate_resource_lines",
+          "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+        },
+        {
+          "from": "public.task_checklist_items",
+          "to": "public.estimate_works",
+          "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+        },
+        {
+          "from": "public.hr_items",
+          "to": "public.project_stages",
+          "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql"
+        },
+        {
+          "from": "public.hr_items",
+          "to": "public.tasks",
+          "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql"
+        }
+      ]
+    },
+    {
+      "name": "documents-media",
+      "title": "Documents Contract",
+      "kind": "derived_contract_bundle",
+      "sourceMigrations": [
+        "supabase/migrations/20260306162000_storage_documents_and_media.sql",
+        "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
+        "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+      ],
+      "tables": [
+        "public.storage_objects",
+        "public.documents",
+        "public.document_versions",
+        "public.project_media"
+      ],
+      "functions": [
+        "public.can_access_storage_object"
+      ],
+      "policies": [
+        "public.storage_objects.storage_objects_select",
+        "public.documents.documents_select",
+        "public.documents.documents_insert",
+        "public.documents.documents_update",
+        "public.documents.documents_delete",
+        "public.document_versions.document_versions_select",
+        "public.document_versions.document_versions_insert",
+        "public.document_versions.document_versions_update",
+        "public.document_versions.document_versions_delete",
+        "public.project_media.project_media_select",
+        "public.project_media.project_media_insert",
+        "public.project_media.project_media_update",
+        "public.project_media.project_media_delete"
+      ],
+      "relations": [
+        {
+          "from": "public.storage_objects",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260306162000_storage_documents_and_media.sql"
+        },
+        {
+          "from": "public.documents",
+          "to": "public.projects",
+          "sourceMigration": "supabase/migrations/20260306162000_storage_documents_and_media.sql"
+        },
+        {
+          "from": "public.documents",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260306162000_storage_documents_and_media.sql"
+        },
+        {
+          "from": "public.document_versions",
+          "to": "public.documents",
+          "sourceMigration": "supabase/migrations/20260306162000_storage_documents_and_media.sql"
+        },
+        {
+          "from": "public.document_versions",
+          "to": "public.storage_objects",
+          "sourceMigration": "supabase/migrations/20260306162000_storage_documents_and_media.sql"
+        },
+        {
+          "from": "public.document_versions",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260306162000_storage_documents_and_media.sql"
+        },
+        {
+          "from": "public.project_media",
+          "to": "public.projects",
+          "sourceMigration": "supabase/migrations/20260306162000_storage_documents_and_media.sql"
+        },
+        {
+          "from": "public.project_media",
+          "to": "public.storage_objects",
+          "sourceMigration": "supabase/migrations/20260306162000_storage_documents_and_media.sql"
+        },
+        {
+          "from": "public.project_media",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260306162000_storage_documents_and_media.sql"
+        }
+      ]
+    },
+    {
+      "name": "estimates",
+      "title": "Estimates Contract",
+      "kind": "derived_contract_bundle",
+      "sourceMigrations": [
+        "supabase/migrations/20260306162500_estimates_core.sql",
+        "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
+        "supabase/migrations/20260306164000_hr_domain.sql",
+        "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
+        "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+      ],
+      "tables": [
+        "public.project_estimates",
+        "public.estimate_versions",
+        "public.estimate_works",
+        "public.estimate_resource_lines",
+        "public.estimate_dependencies"
+      ],
+      "functions": [
+        "public.get_shared_estimate_version",
+        "public.approve_estimate_version_by_share_token"
+      ],
+      "policies": [
+        "public.project_estimates.project_estimates_select",
+        "public.project_estimates.project_estimates_insert",
+        "public.project_estimates.project_estimates_update",
+        "public.project_estimates.project_estimates_delete",
+        "public.estimate_versions.estimate_versions_select",
+        "public.estimate_versions.estimate_versions_insert",
+        "public.estimate_versions.estimate_versions_update",
+        "public.estimate_versions.estimate_versions_delete",
+        "public.estimate_works.estimate_works_select",
+        "public.estimate_works.estimate_works_insert",
+        "public.estimate_works.estimate_works_update",
+        "public.estimate_works.estimate_works_delete",
+        "public.estimate_resource_lines.estimate_resource_lines_select",
+        "public.estimate_resource_lines.estimate_resource_lines_insert",
+        "public.estimate_resource_lines.estimate_resource_lines_update",
+        "public.estimate_resource_lines.estimate_resource_lines_delete",
+        "public.estimate_dependencies.estimate_dependencies_select",
+        "public.estimate_dependencies.estimate_dependencies_insert",
+        "public.estimate_dependencies.estimate_dependencies_update",
+        "public.estimate_dependencies.estimate_dependencies_delete"
+      ],
+      "relations": [
+        {
+          "from": "public.project_estimates",
+          "to": "public.projects",
+          "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        },
+        {
+          "from": "public.project_estimates",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        },
+        {
+          "from": "public.estimate_versions",
+          "to": "public.project_estimates",
+          "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        },
+        {
+          "from": "public.estimate_versions",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        },
+        {
+          "from": "public.estimate_works",
+          "to": "public.estimate_versions",
+          "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        },
+        {
+          "from": "public.estimate_works",
+          "to": "public.project_stages",
+          "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        },
+        {
+          "from": "public.estimate_resource_lines",
+          "to": "public.estimate_works",
+          "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        },
+        {
+          "from": "public.estimate_dependencies",
+          "to": "public.estimate_versions",
+          "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        },
+        {
+          "from": "public.estimate_dependencies",
+          "to": "public.estimate_works",
+          "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        },
+        {
+          "from": "public.estimate_dependencies",
+          "to": "public.estimate_works",
+          "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        },
+        {
+          "from": "public.procurement_items",
+          "to": "public.estimate_resource_lines",
+          "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+        },
+        {
+          "from": "public.task_checklist_items",
+          "to": "public.estimate_resource_lines",
+          "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+        },
+        {
+          "from": "public.task_checklist_items",
+          "to": "public.estimate_works",
+          "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+        },
+        {
+          "from": "public.hr_items",
+          "to": "public.estimate_works",
+          "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql"
+        }
+      ]
+    },
+    {
+      "name": "procurement-inventory",
+      "title": "Procurement Inventory Contract",
+      "kind": "derived_contract_bundle",
+      "sourceMigrations": [
+        "supabase/migrations/20260306163000_inventory_foundation.sql",
+        "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
+        "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+      ],
+      "tables": [
+        "public.inventory_items",
+        "public.inventory_locations",
+        "public.inventory_balances",
+        "public.procurement_items",
+        "public.orders",
+        "public.order_lines",
+        "public.inventory_movements"
+      ],
+      "functions": [
+        "public.apply_inventory_balance_delta",
+        "public.sync_inventory_balances"
+      ],
+      "policies": [
+        "public.inventory_items.inventory_items_select",
+        "public.inventory_items.inventory_items_insert",
+        "public.inventory_items.inventory_items_update",
+        "public.inventory_items.inventory_items_delete",
+        "public.inventory_locations.inventory_locations_select",
+        "public.inventory_locations.inventory_locations_insert",
+        "public.inventory_locations.inventory_locations_update",
+        "public.inventory_locations.inventory_locations_delete",
+        "public.inventory_balances.inventory_balances_select",
+        "public.procurement_items.procurement_items_select",
+        "public.procurement_items.procurement_items_insert",
+        "public.procurement_items.procurement_items_update",
+        "public.procurement_items.procurement_items_delete",
+        "public.orders.orders_select",
+        "public.orders.orders_insert",
+        "public.orders.orders_update",
+        "public.orders.orders_delete",
+        "public.order_lines.order_lines_select",
+        "public.order_lines.order_lines_insert",
+        "public.order_lines.order_lines_update",
+        "public.order_lines.order_lines_delete",
+        "public.inventory_movements.inventory_movements_select",
+        "public.inventory_movements.inventory_movements_insert",
+        "public.inventory_movements.inventory_movements_update",
+        "public.inventory_movements.inventory_movements_delete"
+      ],
+      "relations": [
+        {
+          "from": "public.inventory_items",
+          "to": "public.projects",
+          "sourceMigration": "supabase/migrations/20260306163000_inventory_foundation.sql"
+        },
+        {
+          "from": "public.inventory_locations",
+          "to": "public.projects",
+          "sourceMigration": "supabase/migrations/20260306163000_inventory_foundation.sql"
+        },
+        {
+          "from": "public.inventory_balances",
+          "to": "public.projects",
+          "sourceMigration": "supabase/migrations/20260306163000_inventory_foundation.sql"
+        },
+        {
+          "from": "public.inventory_balances",
+          "to": "public.inventory_items",
+          "sourceMigration": "supabase/migrations/20260306163000_inventory_foundation.sql"
+        },
+        {
+          "from": "public.inventory_balances",
+          "to": "public.inventory_locations",
+          "sourceMigration": "supabase/migrations/20260306163000_inventory_foundation.sql"
+        },
+        {
+          "from": "public.procurement_items",
+          "to": "public.projects",
+          "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+        },
+        {
+          "from": "public.procurement_items",
+          "to": "public.estimate_resource_lines",
+          "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+        },
+        {
+          "from": "public.procurement_items",
+          "to": "public.tasks",
+          "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+        },
+        {
+          "from": "public.procurement_items",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+        },
+        {
+          "from": "public.orders",
+          "to": "public.projects",
+          "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+        },
+        {
+          "from": "public.orders",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+        },
+        {
+          "from": "public.order_lines",
+          "to": "public.orders",
+          "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+        },
+        {
+          "from": "public.order_lines",
+          "to": "public.procurement_items",
+          "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+        },
+        {
+          "from": "public.inventory_movements",
+          "to": "public.projects",
+          "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+        },
+        {
+          "from": "public.inventory_movements",
+          "to": "public.inventory_items",
+          "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+        },
+        {
+          "from": "public.inventory_movements",
+          "to": "public.inventory_locations",
+          "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+        },
+        {
+          "from": "public.inventory_movements",
+          "to": "public.order_lines",
+          "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+        },
+        {
+          "from": "public.inventory_movements",
+          "to": "public.procurement_items",
+          "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+        },
+        {
+          "from": "public.inventory_movements",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+        },
+        {
+          "from": "public.task_checklist_items",
+          "to": "public.procurement_items",
+          "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+        }
+      ]
+    },
+    {
+      "name": "hr",
+      "title": "HR Contract",
+      "kind": "derived_contract_bundle",
+      "sourceMigrations": [
+        "supabase/migrations/20260306164000_hr_domain.sql",
+        "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+      ],
+      "tables": [
+        "public.hr_items",
+        "public.hr_item_assignees",
+        "public.hr_payments"
+      ],
+      "functions": [],
+      "policies": [
+        "public.hr_items.hr_items_select",
+        "public.hr_items.hr_items_insert",
+        "public.hr_items.hr_items_update",
+        "public.hr_items.hr_items_delete",
+        "public.hr_item_assignees.hr_item_assignees_select",
+        "public.hr_item_assignees.hr_item_assignees_insert",
+        "public.hr_item_assignees.hr_item_assignees_update",
+        "public.hr_item_assignees.hr_item_assignees_delete",
+        "public.hr_payments.hr_payments_select",
+        "public.hr_payments.hr_payments_insert",
+        "public.hr_payments.hr_payments_update",
+        "public.hr_payments.hr_payments_delete"
+      ],
+      "relations": [
+        {
+          "from": "public.hr_items",
+          "to": "public.projects",
+          "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql"
+        },
+        {
+          "from": "public.hr_items",
+          "to": "public.project_stages",
+          "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql"
+        },
+        {
+          "from": "public.hr_items",
+          "to": "public.estimate_works",
+          "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql"
+        },
+        {
+          "from": "public.hr_items",
+          "to": "public.tasks",
+          "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql"
+        },
+        {
+          "from": "public.hr_items",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql"
+        },
+        {
+          "from": "public.hr_item_assignees",
+          "to": "public.hr_items",
+          "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql"
+        },
+        {
+          "from": "public.hr_item_assignees",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql"
+        },
+        {
+          "from": "public.hr_payments",
+          "to": "public.projects",
+          "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql"
+        },
+        {
+          "from": "public.hr_payments",
+          "to": "public.hr_items",
+          "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql"
+        },
+        {
+          "from": "public.hr_payments",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql"
+        },
+        {
+          "from": "public.hr_payments",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql"
+        }
+      ]
+    },
+    {
+      "name": "activity-billing",
+      "title": "Activity Billing Contract",
+      "kind": "derived_contract_bundle",
+      "sourceMigrations": [
+        "supabase/migrations/20260306164500_activity_and_notifications.sql",
+        "supabase/migrations/20260306165000_billing_launch_tables.sql",
+        "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+      ],
+      "tables": [
+        "public.activity_events",
+        "public.notifications",
+        "public.billing_customers",
+        "public.subscriptions"
+      ],
+      "functions": [],
+      "policies": [
+        "public.activity_events.activity_events_select",
+        "public.activity_events.activity_events_insert",
+        "public.notifications.notifications_select",
+        "public.notifications.notifications_update",
+        "public.billing_customers.billing_customers_select",
+        "public.subscriptions.subscriptions_select"
+      ],
+      "relations": [
+        {
+          "from": "public.activity_events",
+          "to": "public.projects",
+          "sourceMigration": "supabase/migrations/20260306164500_activity_and_notifications.sql"
+        },
+        {
+          "from": "public.activity_events",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260306164500_activity_and_notifications.sql"
+        },
+        {
+          "from": "public.notifications",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260306164500_activity_and_notifications.sql"
+        },
+        {
+          "from": "public.notifications",
+          "to": "public.projects",
+          "sourceMigration": "supabase/migrations/20260306164500_activity_and_notifications.sql"
+        },
+        {
+          "from": "public.billing_customers",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260306165000_billing_launch_tables.sql"
+        },
+        {
+          "from": "public.subscriptions",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260306165000_billing_launch_tables.sql"
+        },
+        {
+          "from": "public.subscriptions",
+          "to": "public.billing_customers",
+          "sourceMigration": "supabase/migrations/20260306165000_billing_launch_tables.sql"
+        }
+      ]
+    }
+  ]
+}

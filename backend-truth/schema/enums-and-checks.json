@@ -1,0 +1,791 @@
+{
+  "_meta": {
+    "generated": true,
+    "readOnly": true,
+    "generator": "backend-truth-generator",
+    "version": "1.1.0"
+  },
+  "checks": [
+    {
+      "schema": "public",
+      "table": "profiles",
+      "column": "locale",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "ru",
+        "en",
+        "de",
+        "fr"
+      ],
+      "expression": "locale in ('ru', 'en', 'de', 'fr')",
+      "sourceMigration": "supabase/migrations/20260306160500_core_profiles_and_preferences.sql"
+    },
+    {
+      "schema": "public",
+      "table": "profiles",
+      "column": "plan",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "free",
+        "pro",
+        "business"
+      ],
+      "expression": "plan in ('free', 'pro', 'business')",
+      "sourceMigration": "supabase/migrations/20260306160500_core_profiles_and_preferences.sql"
+    },
+    {
+      "schema": "public",
+      "table": "profiles",
+      "column": "credits_free",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "credits_free >= 0",
+      "sourceMigration": "supabase/migrations/20260306160500_core_profiles_and_preferences.sql"
+    },
+    {
+      "schema": "public",
+      "table": "profiles",
+      "column": "credits_paid",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "credits_paid >= 0",
+      "sourceMigration": "supabase/migrations/20260306160500_core_profiles_and_preferences.sql"
+    },
+    {
+      "schema": "public",
+      "table": "profile_settings",
+      "column": "currency",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "RUB",
+        "USD",
+        "EUR",
+        "GBP"
+      ],
+      "expression": "currency in ('RUB', 'USD', 'EUR', 'GBP')",
+      "sourceMigration": "supabase/migrations/20260306160500_core_profiles_and_preferences.sql"
+    },
+    {
+      "schema": "public",
+      "table": "profile_settings",
+      "column": "units",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "metric",
+        "imperial"
+      ],
+      "expression": "units in ('metric', 'imperial')",
+      "sourceMigration": "supabase/migrations/20260306160500_core_profiles_and_preferences.sql"
+    },
+    {
+      "schema": "public",
+      "table": "profile_settings",
+      "column": "date_format",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "dd.MM.yyyy",
+        "MM/dd/yyyy",
+        "yyyy-MM-dd"
+      ],
+      "expression": "date_format in ('dd.MM.yyyy', 'MM/dd/yyyy', 'yyyy-MM-dd')",
+      "sourceMigration": "supabase/migrations/20260306160500_core_profiles_and_preferences.sql"
+    },
+    {
+      "schema": "public",
+      "table": "profile_settings",
+      "column": "week_start",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "monday",
+        "sunday"
+      ],
+      "expression": "week_start in ('monday', 'sunday')",
+      "sourceMigration": "supabase/migrations/20260306160500_core_profiles_and_preferences.sql"
+    },
+    {
+      "schema": "public",
+      "table": "profile_settings",
+      "column": "ai_output_language",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "ru",
+        "en",
+        "auto"
+      ],
+      "expression": "ai_output_language in ('ru', 'en', 'auto')",
+      "sourceMigration": "supabase/migrations/20260306160500_core_profiles_and_preferences.sql"
+    },
+    {
+      "schema": "public",
+      "table": "profile_settings",
+      "column": "automation_level",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "manual",
+        "assisted",
+        "full",
+        "observer"
+      ],
+      "expression": "automation_level in ('manual', 'assisted', 'full', 'observer')",
+      "sourceMigration": "supabase/migrations/20260306160500_core_profiles_and_preferences.sql"
+    },
+    {
+      "schema": "public",
+      "table": "notification_preferences",
+      "column": "digest_frequency",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "instant",
+        "daily",
+        "weekly"
+      ],
+      "expression": "digest_frequency in ('instant', 'daily', 'weekly')",
+      "sourceMigration": "supabase/migrations/20260306160500_core_profiles_and_preferences.sql"
+    },
+    {
+      "schema": "public",
+      "table": "projects",
+      "column": "project_mode",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "build_myself",
+        "contractor"
+      ],
+      "expression": "project_mode in ('build_myself', 'contractor')",
+      "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql"
+    },
+    {
+      "schema": "public",
+      "table": "projects",
+      "column": "automation_level",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "manual",
+        "assisted",
+        "full",
+        "observer"
+      ],
+      "expression": "automation_level in ('manual', 'assisted', 'full', 'observer')",
+      "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql"
+    },
+    {
+      "schema": "public",
+      "table": "projects",
+      "column": "progress_pct",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "progress_pct between 0 and 100",
+      "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql"
+    },
+    {
+      "schema": "public",
+      "table": "project_members",
+      "column": "role",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "owner",
+        "co_owner",
+        "contractor",
+        "viewer"
+      ],
+      "expression": "role in ('owner', 'co_owner', 'contractor', 'viewer')",
+      "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql"
+    },
+    {
+      "schema": "public",
+      "table": "project_members",
+      "column": "ai_access",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "none",
+        "consult_only",
+        "project_pool"
+      ],
+      "expression": "ai_access in ('none', 'consult_only', 'project_pool')",
+      "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql"
+    },
+    {
+      "schema": "public",
+      "table": "project_members",
+      "column": "viewer_regime",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "contractor",
+        "client",
+        "build_myself"
+      ],
+      "expression": "viewer_regime in ('contractor', 'client', 'build_myself')",
+      "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql"
+    },
+    {
+      "schema": "public",
+      "table": "project_members",
+      "column": "credit_limit",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "credit_limit >= 0",
+      "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql"
+    },
+    {
+      "schema": "public",
+      "table": "project_members",
+      "column": "used_credits",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "used_credits >= 0",
+      "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql"
+    },
+    {
+      "schema": "public",
+      "table": "project_members",
+      "column": null,
+      "constraintName": "project_members_viewer_regime_check",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "(role = 'viewer' and viewer_regime is not null)\n    or (role <> 'viewer' and viewer_regime is null)",
+      "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql"
+    },
+    {
+      "schema": "public",
+      "table": "project_invites",
+      "column": "role",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "owner",
+        "co_owner",
+        "contractor",
+        "viewer"
+      ],
+      "expression": "role in ('owner', 'co_owner', 'contractor', 'viewer')",
+      "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql"
+    },
+    {
+      "schema": "public",
+      "table": "project_invites",
+      "column": "ai_access",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "none",
+        "consult_only",
+        "project_pool"
+      ],
+      "expression": "ai_access in ('none', 'consult_only', 'project_pool')",
+      "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql"
+    },
+    {
+      "schema": "public",
+      "table": "project_invites",
+      "column": "viewer_regime",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "contractor",
+        "client",
+        "build_myself"
+      ],
+      "expression": "viewer_regime in ('contractor', 'client', 'build_myself')",
+      "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql"
+    },
+    {
+      "schema": "public",
+      "table": "project_invites",
+      "column": "credit_limit",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "credit_limit >= 0",
+      "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql"
+    },
+    {
+      "schema": "public",
+      "table": "project_invites",
+      "column": "status",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "pending",
+        "accepted",
+        "revoked",
+        "expired"
+      ],
+      "expression": "status in ('pending', 'accepted', 'revoked', 'expired')",
+      "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql"
+    },
+    {
+      "schema": "public",
+      "table": "project_invites",
+      "column": null,
+      "constraintName": "project_invites_viewer_regime_check",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "(role = 'viewer' and viewer_regime is not null)\n    or (role <> 'viewer' and viewer_regime is null)",
+      "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql"
+    },
+    {
+      "schema": "public",
+      "table": "project_stages",
+      "column": "sort_order",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "sort_order > 0",
+      "sourceMigration": "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql"
+    },
+    {
+      "schema": "public",
+      "table": "project_stages",
+      "column": "status",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "open",
+        "completed",
+        "archived"
+      ],
+      "expression": "status in ('open', 'completed', 'archived')",
+      "sourceMigration": "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql"
+    },
+    {
+      "schema": "public",
+      "table": "project_stages",
+      "column": "discount_bps",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "discount_bps >= 0",
+      "sourceMigration": "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql"
+    },
+    {
+      "schema": "public",
+      "table": "tasks",
+      "column": "status",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "not_started",
+        "in_progress",
+        "done",
+        "blocked"
+      ],
+      "expression": "status in ('not_started', 'in_progress', 'done', 'blocked')",
+      "sourceMigration": "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql"
+    },
+    {
+      "schema": "public",
+      "table": "storage_objects",
+      "column": "size_bytes",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "size_bytes is null or size_bytes >= 0",
+      "sourceMigration": "supabase/migrations/20260306162000_storage_documents_and_media.sql"
+    },
+    {
+      "schema": "public",
+      "table": "documents",
+      "column": "origin",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "project_creation",
+        "uploaded",
+        "manual",
+        "ai_generated"
+      ],
+      "expression": "origin in ('project_creation', 'uploaded', 'manual', 'ai_generated')",
+      "sourceMigration": "supabase/migrations/20260306162000_storage_documents_and_media.sql"
+    },
+    {
+      "schema": "public",
+      "table": "document_versions",
+      "column": "version_number",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "version_number > 0",
+      "sourceMigration": "supabase/migrations/20260306162000_storage_documents_and_media.sql"
+    },
+    {
+      "schema": "public",
+      "table": "project_estimates",
+      "column": "status",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "draft",
+        "approved",
+        "archived"
+      ],
+      "expression": "status in ('draft', 'approved', 'archived')",
+      "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+    },
+    {
+      "schema": "public",
+      "table": "estimate_works",
+      "column": "sort_order",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "sort_order > 0",
+      "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+    },
+    {
+      "schema": "public",
+      "table": "estimate_works",
+      "column": "planned_cost_cents",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "planned_cost_cents is null or planned_cost_cents >= 0",
+      "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+    },
+    {
+      "schema": "public",
+      "table": "estimate_resource_lines",
+      "column": "resource_type",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "material",
+        "labor",
+        "equipment",
+        "other"
+      ],
+      "expression": "resource_type in ('material', 'labor', 'equipment', 'other')",
+      "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+    },
+    {
+      "schema": "public",
+      "table": "estimate_resource_lines",
+      "column": "quantity",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "quantity >= 0",
+      "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+    },
+    {
+      "schema": "public",
+      "table": "estimate_resource_lines",
+      "column": "unit_price_cents",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "unit_price_cents is null or unit_price_cents >= 0",
+      "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+    },
+    {
+      "schema": "public",
+      "table": "estimate_resource_lines",
+      "column": "total_price_cents",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "total_price_cents is null or total_price_cents >= 0",
+      "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+    },
+    {
+      "schema": "public",
+      "table": "estimate_dependencies",
+      "column": "dependency_type",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "finish_to_start",
+        "start_to_start",
+        "finish_to_finish",
+        "start_to_finish"
+      ],
+      "expression": "dependency_type in ('finish_to_start', 'start_to_start', 'finish_to_finish', 'start_to_finish')",
+      "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+    },
+    {
+      "schema": "public",
+      "table": "inventory_balances",
+      "column": "quantity",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "quantity >= 0",
+      "sourceMigration": "supabase/migrations/20260306163000_inventory_foundation.sql"
+    },
+    {
+      "schema": "public",
+      "table": "procurement_items",
+      "column": "quantity",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "quantity >= 0",
+      "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+    },
+    {
+      "schema": "public",
+      "table": "procurement_items",
+      "column": "planned_unit_price_cents",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "planned_unit_price_cents is null or planned_unit_price_cents >= 0",
+      "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+    },
+    {
+      "schema": "public",
+      "table": "procurement_items",
+      "column": "planned_total_price_cents",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "planned_total_price_cents is null or planned_total_price_cents >= 0",
+      "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+    },
+    {
+      "schema": "public",
+      "table": "procurement_items",
+      "column": "status",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "requested",
+        "ordered",
+        "partially_received",
+        "received",
+        "cancelled"
+      ],
+      "expression": "status in ('requested', 'ordered', 'partially_received', 'received', 'cancelled')",
+      "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+    },
+    {
+      "schema": "public",
+      "table": "orders",
+      "column": "status",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "draft",
+        "placed",
+        "partially_received",
+        "received",
+        "cancelled"
+      ],
+      "expression": "status in ('draft', 'placed', 'partially_received', 'received', 'cancelled')",
+      "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+    },
+    {
+      "schema": "public",
+      "table": "order_lines",
+      "column": "quantity",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "quantity >= 0",
+      "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+    },
+    {
+      "schema": "public",
+      "table": "order_lines",
+      "column": "unit_price_cents",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "unit_price_cents is null or unit_price_cents >= 0",
+      "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+    },
+    {
+      "schema": "public",
+      "table": "order_lines",
+      "column": "total_price_cents",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "total_price_cents is null or total_price_cents >= 0",
+      "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+    },
+    {
+      "schema": "public",
+      "table": "inventory_movements",
+      "column": "movement_type",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "receipt",
+        "issue",
+        "transfer",
+        "adjustment"
+      ],
+      "expression": "movement_type in ('receipt', 'issue', 'transfer', 'adjustment')",
+      "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+    },
+    {
+      "schema": "public",
+      "table": "task_checklist_items",
+      "column": "sort_order",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "sort_order > 0",
+      "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+    },
+    {
+      "schema": "public",
+      "table": "hr_items",
+      "column": "compensation_type",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "hourly",
+        "daily",
+        "fixed"
+      ],
+      "expression": "compensation_type in ('hourly', 'daily', 'fixed')",
+      "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql"
+    },
+    {
+      "schema": "public",
+      "table": "hr_items",
+      "column": "planned_cost_cents",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "planned_cost_cents is null or planned_cost_cents >= 0",
+      "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql"
+    },
+    {
+      "schema": "public",
+      "table": "hr_items",
+      "column": "actual_cost_cents",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "actual_cost_cents is null or actual_cost_cents >= 0",
+      "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql"
+    },
+    {
+      "schema": "public",
+      "table": "hr_items",
+      "column": "status",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "planned",
+        "in_progress",
+        "completed",
+        "cancelled"
+      ],
+      "expression": "status in ('planned', 'in_progress', 'completed', 'cancelled')",
+      "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql"
+    },
+    {
+      "schema": "public",
+      "table": "hr_payments",
+      "column": "amount_cents",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "amount_cents >= 0",
+      "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql"
+    },
+    {
+      "schema": "public",
+      "table": "hr_payments",
+      "column": "status",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "planned",
+        "paid",
+        "cancelled"
+      ],
+      "expression": "status in ('planned', 'paid', 'cancelled')",
+      "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql"
+    },
+    {
+      "schema": "public",
+      "table": "billing_customers",
+      "column": "provider",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "stripe"
+      ],
+      "expression": "provider in ('stripe')",
+      "sourceMigration": "supabase/migrations/20260306165000_billing_launch_tables.sql"
+    },
+    {
+      "schema": "public",
+      "table": "subscriptions",
+      "column": "provider",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "stripe"
+      ],
+      "expression": "provider in ('stripe')",
+      "sourceMigration": "supabase/migrations/20260306165000_billing_launch_tables.sql"
+    },
+    {
+      "schema": "public",
+      "table": "subscriptions",
+      "column": "status",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "trialing",
+        "active",
+        "past_due",
+        "paused",
+        "canceled",
+        "incomplete",
+        "incomplete_expired"
+      ],
+      "expression": "status in ('trialing', 'active', 'past_due', 'paused', 'canceled', 'incomplete', 'incomplete_expired')",
+      "sourceMigration": "supabase/migrations/20260306165000_billing_launch_tables.sql"
+    },
+    {
+      "schema": "public",
+      "table": "subscriptions",
+      "column": "currency",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "RUB",
+        "USD",
+        "EUR",
+        "GBP"
+      ],
+      "expression": "currency in ('RUB', 'USD', 'EUR', 'GBP')",
+      "sourceMigration": "supabase/migrations/20260306165000_billing_launch_tables.sql"
+    },
+    {
+      "schema": "public",
+      "table": "subscriptions",
+      "column": "amount_cents",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "amount_cents is null or amount_cents >= 0",
+      "sourceMigration": "supabase/migrations/20260306165000_billing_launch_tables.sql"
+    }
+  ]
+}
