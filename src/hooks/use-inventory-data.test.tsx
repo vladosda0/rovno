@@ -84,27 +84,25 @@ describe("inventory read hooks", () => {
     expect(screen.getByTestId("stock-qtys")).toHaveTextContent("7");
   });
 
-  it("keeps stock local while loading Supabase locations", async () => {
+  it("reads both locations and stock from the Supabase inventory source", async () => {
     vi.stubEnv("VITE_WORKSPACE_SOURCE", "supabase");
 
     const queryClient = createQueryClient();
-    let currentStockRows = [{ projectId: "project-1", locationId: "location-1", inventoryKey: "cable|m", qty: 2 }];
     let resolveLocations: (value: InventoryLocation[]) => void;
+    let resolveStockRows: (value: inventoryStore.InventoryStockRow[]) => void;
     const locationsPromise = new Promise<InventoryLocation[]>((resolve) => {
       resolveLocations = resolve;
     });
-    const listeners = new Set<() => void>();
-    const listLocationsSpy = vi.spyOn(inventoryStore, "listLocations");
-    vi.spyOn(inventoryStore, "listStockByProject").mockImplementation(() => currentStockRows);
-    vi.spyOn(inventoryStore, "subscribeInventory").mockImplementation((callback) => {
-      listeners.add(callback);
-      return () => {
-        listeners.delete(callback);
-      };
+    const stockRowsPromise = new Promise<inventoryStore.InventoryStockRow[]>((resolve) => {
+      resolveStockRows = resolve;
     });
+    const listLocationsSpy = vi.spyOn(inventoryStore, "listLocations");
+    const listStockSpy = vi.spyOn(inventoryStore, "listStockByProject");
     const source = {
       mode: "supabase" as const,
       getProjectLocations: vi.fn(() => locationsPromise),
+      createProjectLocation: vi.fn(),
+      getProjectStock: vi.fn(() => stockRowsPromise),
     };
 
     authenticateRuntimeAuth();
@@ -117,20 +115,13 @@ describe("inventory read hooks", () => {
     );
 
     expect(screen.getByTestId("locations-count")).toHaveTextContent("0");
-    expect(screen.getByTestId("stock-count")).toHaveTextContent("1");
+    expect(screen.getByTestId("stock-count")).toHaveTextContent("0");
     expect(listLocationsSpy).not.toHaveBeenCalled();
-
-    act(() => {
-      currentStockRows = [{ projectId: "project-1", locationId: "location-1", inventoryKey: "cable|m", qty: 5 }];
-      listeners.forEach((listener) => listener());
-    });
-
-    await waitFor(() => {
-      expect(screen.getByTestId("stock-qtys")).toHaveTextContent("5");
-    });
+    expect(listStockSpy).not.toHaveBeenCalled();
 
     await act(async () => {
       resolveLocations!([location({ name: "Warehouse", isDefault: false })]);
+      resolveStockRows!([{ projectId: "project-1", locationId: "location-1", inventoryKey: "cable|m", qty: 5 }]);
       await Promise.resolve();
     });
 
@@ -138,6 +129,8 @@ describe("inventory read hooks", () => {
       expect(screen.getByTestId("locations-count")).toHaveTextContent("1");
     });
     expect(screen.getByTestId("location-names")).toHaveTextContent("Warehouse");
+    expect(screen.getByTestId("stock-qtys")).toHaveTextContent("5");
     expect(source.getProjectLocations).toHaveBeenCalledWith("project-1");
+    expect(source.getProjectStock).toHaveBeenCalledWith("project-1");
   });
 });

@@ -137,6 +137,9 @@ describe("order read hooks", () => {
       getOrderById: vi.fn(() => orderByIdPromise),
       getPlacedSupplierOrders: vi.fn(() => placedProjectOrdersPromise),
       getPlacedSupplierOrdersAllProjects: vi.fn(() => placedAllOrdersPromise),
+      createDraftSupplierOrder: vi.fn(),
+      placeSupplierOrder: vi.fn(),
+      receiveSupplierOrder: vi.fn(),
     };
 
     authenticateRuntimeAuth();

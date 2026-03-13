@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -45,7 +46,8 @@ import {
   archiveProcurementItem,
   updateProcurementItem,
 } from "@/data/procurement-store";
-import { consumeStockFromInventory, receiveOrder, updateOrder } from "@/data/order-store";
+import { getOrdersSource } from "@/data/orders-source";
+import { consumeStockFromInventory, updateOrder } from "@/data/order-store";
 import { addEvent, addTask, getCurrentUser, getTask, getUserById } from "@/data/store";
 import {
   collectItemLocationEventHistory,
@@ -65,6 +67,10 @@ import { ItemTypePicker } from "@/components/procurement/ItemTypePicker";
 import { LocationPicker } from "@/components/procurement/LocationPicker";
 import { ResourceTypeBadge } from "@/components/estimate-v2/ResourceTypeBadge";
 import { useEstimateV2Project } from "@/hooks/use-estimate-v2-data";
+import { inventoryQueryKeys } from "@/hooks/use-inventory-data";
+import { orderQueryKeys } from "@/hooks/use-order-data";
+import { procurementQueryKeys } from "@/hooks/use-procurement-source";
+import { useWorkspaceMode } from "@/hooks/use-workspace-source";
 import { relinkProcurementItemToEstimateV2Line } from "@/lib/estimate-v2/procurement-sync";
 import { computeProjectTotals } from "@/lib/estimate-v2/pricing";
 import type {
@@ -192,8 +198,12 @@ type InStockTableRow = {
 export default function ProjectProcurement() {
   const { id: projectId, itemId, orderId } = useParams<{ id: string; itemId?: string; orderId?: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { toast } = useToast();
   const pid = projectId!;
+  const workspaceMode = useWorkspaceMode();
+  const supabaseMode = workspaceMode.kind === "supabase" ? workspaceMode : null;
+  const isSupabaseMode = workspaceMode.kind === "supabase";
 
   const savedListState = useMemo(() => readListState(pid), [pid]);
 
@@ -205,6 +215,7 @@ export default function ProjectProcurement() {
   const estimateState = useEstimateV2Project(pid);
   const perm = usePermission(pid);
   const canEdit = perm.can("procurement.edit");
+  const canUseFromStock = canEdit && !isSupabaseMode;
 
   const [search, setSearch] = useState(savedListState?.search ?? "");
   const [activeTab, setActiveTab] = useState<ProcurementTab>(savedListState?.activeTab ?? "requested");
@@ -801,7 +812,7 @@ export default function ProjectProcurement() {
     openReceiveItemsModal(targets);
   };
 
-  const submitReceiveItems = () => {
+  const submitReceiveItems = async () => {
     const payloadByOrderAndLocation = new Map<string, { orderId: string; locationId: string; lines: Array<{ lineId: string; qty: number }> }>();
     let hasMissingLocation = false;
 
@@ -839,26 +850,68 @@ export default function ProjectProcurement() {
       return;
     }
 
-    for (const payload of payloadByOrderAndLocation.values()) {
-      const result = receiveOrder(payload.orderId, {
-        locationId: payload.locationId,
-        lines: payload.lines,
-      });
-      if (!result.ok) {
-        toast({ title: "Receive failed", description: result.error, variant: "destructive" });
-        return;
+    try {
+      const source = await getOrdersSource(supabaseMode ?? undefined);
+      for (const payload of payloadByOrderAndLocation.values()) {
+        await source.receiveSupplierOrder(payload.orderId, {
+          locationId: payload.locationId,
+          lines: payload.lines,
+        });
       }
-    }
 
-    toast({ title: payloadByOrderAndLocation.size > 1 ? "Items received" : "Item received" });
-    setReceiveModalOpen(false);
-    setReceiveModalTargets([]);
-    setReceiveModalQtyByKey({});
-    setReceiveModalLocationByKey({});
-    setSelectedOrderedLineKeys(new Set());
+      if (supabaseMode) {
+        const orderDetailInvalidations = Array.from(payloadByOrderAndLocation.values()).map((payload) => (
+          queryClient.invalidateQueries({
+            queryKey: orderQueryKeys.orderById(supabaseMode.profileId, payload.orderId),
+          })
+        ));
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: orderQueryKeys.projectOrders(supabaseMode.profileId, pid),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: orderQueryKeys.placedSupplierOrders(supabaseMode.profileId, pid),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: orderQueryKeys.placedSupplierOrdersAllProjects(supabaseMode.profileId),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: procurementQueryKeys.projectItems(supabaseMode.profileId, pid),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: inventoryQueryKeys.projectLocations(supabaseMode.profileId, pid),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: inventoryQueryKeys.projectStock(supabaseMode.profileId, pid),
+          }),
+          ...orderDetailInvalidations,
+        ]);
+      }
+
+      toast({ title: payloadByOrderAndLocation.size > 1 ? "Items received" : "Item received" });
+      setReceiveModalOpen(false);
+      setReceiveModalTargets([]);
+      setReceiveModalQtyByKey({});
+      setReceiveModalLocationByKey({});
+      setSelectedOrderedLineKeys(new Set());
+    } catch (error) {
+      toast({
+        title: "Receive failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const openUseFromStockModal = (targets: InStockTableRow[]) => {
+    if (isSupabaseMode) {
+      toast({
+        title: "Use from stock is disabled",
+        description: "This launch slice does not persist stock usage in Supabase mode.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (targets.length === 0) return;
     const qtyByKey = targets.reduce<Record<string, string>>((acc, target) => {
       acc[target.key] = "";
@@ -880,6 +933,14 @@ export default function ProjectProcurement() {
   };
 
   const submitUseFromStock = () => {
+    if (isSupabaseMode) {
+      toast({
+        title: "Use from stock is disabled",
+        description: "This launch slice does not persist stock usage in Supabase mode.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (useFromStockTargets.length === 0) return;
 
     const manualName = useFromStockManualName.trim() || null;
@@ -1084,6 +1145,14 @@ export default function ProjectProcurement() {
       openReceiveModalForSelection();
       return;
     }
+    if (isSupabaseMode) {
+      toast({
+        title: "Use from stock is disabled",
+        description: "This launch slice only persists supplier order receive flows in Supabase mode.",
+        variant: "destructive",
+      });
+      return;
+    }
     openUseModalForSelection();
   };
 
@@ -1264,7 +1333,7 @@ export default function ProjectProcurement() {
                 size="sm"
                 className="h-8"
                 onClick={runSelectionPrimaryAction}
-                disabled={!canEdit}
+                disabled={!canEdit || (isSupabaseMode && activeTab === "in_stock")}
               >
                 {selectionPrimaryLabel}
               </Button>
@@ -1535,24 +1604,30 @@ export default function ProjectProcurement() {
                                   {formatDate(item.requiredByDate)}
                                 </td>
                                 <td className="px-2 py-2">
-                                  <Popover>
-                                    <PopoverTrigger asChild>
-                                      <button type="button" className="text-xs text-accent hover:underline">
-                                        {order.deliveryDeadline ? formatDate(order.deliveryDeadline) : "-"}
-                                      </button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0" align="start">
-                                      <Calendar
-                                        mode="single"
-                                        selected={selectedDeliveryDate}
-                                        onSelect={(nextDate) => {
-                                          if (!nextDate) return;
-                                          updateOrder(order.id, { deliveryDeadline: nextDate.toISOString() });
-                                        }}
-                                        initialFocus
-                                      />
-                                    </PopoverContent>
-                                  </Popover>
+                                  {isSupabaseMode ? (
+                                    <span className="text-xs text-muted-foreground">
+                                      {order.deliveryDeadline ? formatDate(order.deliveryDeadline) : "-"}
+                                    </span>
+                                  ) : (
+                                    <Popover>
+                                      <PopoverTrigger asChild>
+                                        <button type="button" className="text-xs text-accent hover:underline">
+                                          {order.deliveryDeadline ? formatDate(order.deliveryDeadline) : "-"}
+                                        </button>
+                                      </PopoverTrigger>
+                                      <PopoverContent className="w-auto p-0" align="start">
+                                        <Calendar
+                                          mode="single"
+                                          selected={selectedDeliveryDate}
+                                          onSelect={(nextDate) => {
+                                            if (!nextDate) return;
+                                            updateOrder(order.id, { deliveryDeadline: nextDate.toISOString() });
+                                          }}
+                                          initialFocus
+                                        />
+                                      </PopoverContent>
+                                    </Popover>
+                                  )}
                                 </td>
                                 <td className="px-2 py-2 text-right">
                                   <div className="flex items-center justify-end gap-1">
@@ -1626,7 +1701,7 @@ export default function ProjectProcurement() {
                         <Checkbox
                           checked={selectedInStockRowKeys.has(row.key)}
                           onCheckedChange={(checked) => toggleSelectedInStockRow(row.key, !!checked)}
-                          disabled={!canEdit}
+                          disabled={!canUseFromStock}
                         />
                       </td>
                       <td className="px-2 py-2 min-w-[240px]">
@@ -1648,7 +1723,7 @@ export default function ProjectProcurement() {
                             size="sm"
                             className="h-7"
                             onClick={() => openUseFromStockModal([row])}
-                            disabled={!canEdit}
+                            disabled={!canUseFromStock}
                           >
                             Use
                           </Button>
@@ -1785,7 +1860,7 @@ export default function ProjectProcurement() {
 
           <DialogFooter className="px-5 py-4 border-t border-border">
             <Button type="button" variant="outline" onClick={() => setUseFromStockOpen(false)}>Cancel</Button>
-            <Button type="button" onClick={submitUseFromStock} disabled={!canEdit || useFromStockTargets.length === 0}>Use</Button>
+            <Button type="button" onClick={submitUseFromStock} disabled={!canUseFromStock || useFromStockTargets.length === 0}>Use</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

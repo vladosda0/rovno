@@ -1,10 +1,13 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Check, ChevronsUpDown, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { createLocation } from "@/data/inventory-store";
-import { useLocations } from "@/hooks/use-inventory-data";
+import { getInventorySource } from "@/data/inventory-source";
+import { inventoryQueryKeys, useLocations } from "@/hooks/use-inventory-data";
+import { useToast } from "@/hooks/use-toast";
+import { useWorkspaceMode } from "@/hooks/use-workspace-source";
 import { cn } from "@/lib/utils";
 
 interface LocationPickerProps {
@@ -14,6 +17,7 @@ interface LocationPickerProps {
   placeholder?: string;
   className?: string;
   allowCreate?: boolean;
+  disabled?: boolean;
 }
 
 export function LocationPicker({
@@ -23,8 +27,13 @@ export function LocationPicker({
   placeholder = "Select location",
   className,
   allowCreate = true,
+  disabled = false,
 }: LocationPickerProps) {
   const locations = useLocations(projectId);
+  const workspaceMode = useWorkspaceMode();
+  const supabaseMode = workspaceMode.kind === "supabase" ? workspaceMode : null;
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newAddress, setNewAddress] = useState("");
@@ -34,20 +43,41 @@ export function LocationPicker({
     [locations, value],
   );
 
-  const createAndSelect = () => {
+  const createAndSelect = async () => {
     const name = newName.trim();
     if (!name) return;
-    const created = createLocation(projectId, { name, address: newAddress });
-    onChange(created.id);
-    setNewName("");
-    setNewAddress("");
-    setOpen(false);
+    try {
+      const source = await getInventorySource(supabaseMode ?? undefined);
+      const created = await source.createProjectLocation(projectId, { name, address: newAddress });
+      if (supabaseMode) {
+        await queryClient.invalidateQueries({
+          queryKey: inventoryQueryKeys.projectLocations(supabaseMode.profileId, projectId),
+        });
+      }
+      onChange(created.id);
+      setNewName("");
+      setNewAddress("");
+      setOpen(false);
+    } catch (error) {
+      toast({
+        title: "Unable to create location",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!disabled) {
+          setOpen(nextOpen);
+        }
+      }}
+    >
       <PopoverTrigger asChild>
-        <Button type="button" variant="outline" className={cn("w-full justify-between", className)}>
+        <Button type="button" variant="outline" className={cn("w-full justify-between", className)} disabled={disabled}>
           <span className="truncate text-left">{selected ? selected.name : placeholder}</span>
           <ChevronsUpDown className="ml-2 h-4 w-4 opacity-60" />
         </Button>
@@ -85,20 +115,24 @@ export function LocationPicker({
               onChange={(event) => setNewName(event.target.value)}
               placeholder="Location name"
               className="h-8"
+              disabled={disabled}
             />
             <Input
               value={newAddress}
               onChange={(event) => setNewAddress(event.target.value)}
               placeholder="Address (optional)"
               className="h-8"
+              disabled={disabled}
             />
             <Button
               type="button"
               size="sm"
               variant="secondary"
               className="w-full"
-              onClick={createAndSelect}
-              disabled={!newName.trim()}
+              onClick={() => {
+                void createAndSelect();
+              }}
+              disabled={disabled || !newName.trim()}
             >
               <Plus className="h-3.5 w-3.5 mr-1" />
               Add location

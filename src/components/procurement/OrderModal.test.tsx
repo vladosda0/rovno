@@ -1,10 +1,14 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import * as inventorySource from "@/data/inventory-source";
+import * as ordersSource from "@/data/orders-source";
 import { addProcurementItem } from "@/data/procurement-store";
+import * as procurementSource from "@/data/procurement-source";
 import { __unsafeResetInventoryForTests } from "@/data/inventory-store";
 import { __unsafeResetOrdersForTests } from "@/data/order-store";
 import { fmtCost } from "@/lib/procurement-utils";
+import { authenticateRuntimeAuth } from "@/test/runtime-auth";
 import { OrderModal } from "@/components/procurement/OrderModal";
 
 function createQueryClient() {
@@ -82,6 +86,11 @@ describe("OrderModal", () => {
     __unsafeResetInventoryForTests();
   });
 
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
   it("shows Delivery date and removes Due date from the form", () => {
     renderOpenModal();
     expect(screen.getByText("Delivery date")).toBeInTheDocument();
@@ -119,5 +128,53 @@ describe("OrderModal", () => {
 
     fireEvent.change(qtyInput, { target: { value: "10" } });
     expect(screen.queryByText(/more materials requested/)).not.toBeInTheDocument();
+  });
+
+  it("disables stock mode and unsupported supplier fields in Supabase mode", async () => {
+    vi.stubEnv("VITE_WORKSPACE_SOURCE", "supabase");
+
+    const { projectId, itemId } = createTestItem();
+    const queryClient = createQueryClient();
+    authenticateRuntimeAuth();
+    vi.spyOn(procurementSource, "getProcurementSource").mockResolvedValue({
+      mode: "supabase",
+      getProjectProcurementItems: vi.fn().mockResolvedValue([]),
+    });
+    vi.spyOn(ordersSource, "getOrdersSource").mockResolvedValue({
+      mode: "supabase",
+      getProjectOrders: vi.fn().mockResolvedValue([]),
+      getOrderById: vi.fn().mockResolvedValue(null),
+      getPlacedSupplierOrders: vi.fn().mockResolvedValue([]),
+      getPlacedSupplierOrdersAllProjects: vi.fn().mockResolvedValue([]),
+      createDraftSupplierOrder: vi.fn(),
+      placeSupplierOrder: vi.fn(),
+      receiveSupplierOrder: vi.fn(),
+    });
+    vi.spyOn(inventorySource, "getInventorySource").mockResolvedValue({
+      mode: "supabase",
+      getProjectLocations: vi.fn().mockResolvedValue([]),
+      createProjectLocation: vi.fn(),
+      getProjectStock: vi.fn().mockResolvedValue([]),
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <OrderModal
+          open
+          onOpenChange={vi.fn()}
+          projectId={projectId}
+          initialItemIds={[itemId]}
+        />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Stock allocation stays local-only for now and is disabled in Supabase mode.")).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole("button", { name: "Stock" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Choose at receive time" })).toBeDisabled();
+    expect(screen.getByLabelText("Invoice attachment")).toBeDisabled();
+    expect(screen.getByPlaceholderText("Optional note")).toBeDisabled();
   });
 });

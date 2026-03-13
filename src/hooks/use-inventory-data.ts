@@ -14,10 +14,13 @@ import type { InventoryLocation } from "@/types/entities";
 
 const INVENTORY_QUERY_STALE_TIME_MS = 60_000;
 const EMPTY_LOCATIONS: InventoryLocation[] = [];
+const EMPTY_STOCK_ROWS: InventoryStockRow[] = [];
 
-const inventoryQueryKeys = {
+export const inventoryQueryKeys = {
   projectLocations: (profileId: string, projectId: string) =>
     ["inventory", "project-locations", profileId, projectId] as const,
+  projectStock: (profileId: string, projectId: string) =>
+    ["inventory", "project-stock", profileId, projectId] as const,
 };
 
 function useStoreValue<T>(getter: () => T, enabled: boolean, fallback: T): T {
@@ -66,15 +69,31 @@ export function useLocations(projectId: string): InventoryLocation[] {
 }
 
 export function useInventoryStock(projectId: string): InventoryStockRow[] {
+  const mode = useWorkspaceMode();
+  const supabaseMode = mode.kind === "supabase" ? mode : null;
   const getter = useCallback(() => listStockByProject(projectId), [projectId]);
-  const [value, setValue] = useState(getter);
+  const browserStock = useStoreValue(
+    getter,
+    mode.kind === "demo" || mode.kind === "local",
+    EMPTY_STOCK_ROWS,
+  );
+  const stockQuery = useQuery({
+    queryKey: supabaseMode
+      ? inventoryQueryKeys.projectStock(supabaseMode.profileId, projectId)
+      : inventoryQueryKeys.projectStock("browser", projectId),
+    queryFn: async () => {
+      const source = await getInventorySource(supabaseMode ?? undefined);
+      return source.getProjectStock(projectId);
+    },
+    enabled: Boolean(supabaseMode && projectId),
+    staleTime: INVENTORY_QUERY_STALE_TIME_MS,
+  });
 
-  useEffect(() => {
-    const update = () => setValue(getter());
-    return subscribeInventory(update);
-  }, [getter]);
+  if (mode.kind === "demo" || mode.kind === "local") {
+    return browserStock;
+  }
 
-  return value;
+  return stockQuery.data ?? EMPTY_STOCK_ROWS;
 }
 
 export function useAllInventoryStock(): InventoryStockRow[] {

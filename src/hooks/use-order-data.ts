@@ -14,7 +14,7 @@ import type { OrderWithLines } from "@/types/entities";
 const ORDERS_QUERY_STALE_TIME_MS = 60_000;
 const EMPTY_ORDERS: OrderWithLines[] = [];
 
-const orderQueryKeys = {
+export const orderQueryKeys = {
   projectOrders: (profileId: string, projectId: string) =>
     ["orders", "project-orders", profileId, projectId] as const,
   placedSupplierOrders: (profileId: string, projectId: string) =>

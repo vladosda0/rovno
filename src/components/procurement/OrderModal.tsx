@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { CalendarIcon, Save, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -6,9 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { createDraftOrder, placeOrder } from "@/data/order-store";
-import { getStock, ensureDefaultLocation } from "@/data/inventory-store";
+import { getOrdersSource } from "@/data/orders-source";
+import { getStock } from "@/data/inventory-store";
 import { useProcurementV2 } from "@/hooks/use-mock-data";
-import { useOrders } from "@/hooks/use-order-data";
+import { useLocations } from "@/hooks/use-inventory-data";
+import { inventoryQueryKeys } from "@/hooks/use-inventory-data";
+import { orderQueryKeys, useOrders } from "@/hooks/use-order-data";
+import { procurementQueryKeys } from "@/hooks/use-procurement-source";
 import { computeRemainingRequestedQty, toInventoryKey } from "@/lib/procurement-fulfillment";
 import { fmtCost } from "@/lib/procurement-utils";
 import { cn } from "@/lib/utils";
@@ -16,6 +21,7 @@ import { useToast } from "@/hooks/use-toast";
 import { LocationPicker } from "@/components/procurement/LocationPicker";
 import type { DraftOrderLineInput } from "@/data/order-store";
 import type { OrderKind } from "@/types/entities";
+import { useWorkspaceMode } from "@/hooks/use-workspace-source";
 
 interface OrderModalProps {
   open: boolean;
@@ -46,6 +52,11 @@ export function OrderModal({
 }: OrderModalProps) {
   const items = useProcurementV2(projectId);
   const orders = useOrders(projectId);
+  const locations = useLocations(projectId);
+  const workspaceMode = useWorkspaceMode();
+  const supabaseMode = workspaceMode.kind === "supabase" ? workspaceMode : null;
+  const isSupabaseMode = workspaceMode.kind === "supabase";
+  const queryClient = useQueryClient();
   const { toast } = useToast();
 
   const [kind, setKind] = useState<OrderKind>("supplier");
@@ -62,11 +73,13 @@ export function OrderModal({
     () => new Map(items.map((item) => [item.id, item])),
     [items],
   );
+  const defaultLocationId = useMemo(
+    () => locations.find((location) => location.isDefault)?.id ?? locations[0]?.id ?? "",
+    [locations],
+  );
 
   useEffect(() => {
     if (!open) return;
-
-    const defaultLocation = ensureDefaultLocation(projectId);
     const nextItemIds = initialItemIds.length > 0
       ? initialItemIds
       : items.map((item) => item.id);
@@ -89,14 +102,14 @@ export function OrderModal({
 
     setKind("supplier");
     setSupplierName("");
-    setDeliverToLocationId(defaultLocation.id);
-    setFromLocationId(defaultLocation.id);
-    setToLocationId(defaultLocation.id);
+    setDeliverToLocationId(isSupabaseMode ? "" : defaultLocationId);
+    setFromLocationId(defaultLocationId);
+    setToLocationId(defaultLocationId);
     setDeliveryDeadline(undefined);
     setInvoiceAttachment(null);
     setNote("");
     setLines(nextLines);
-  }, [open, initialItemIds, itemById, items, orders, projectId]);
+  }, [open, initialItemIds, itemById, items, orders, defaultLocationId, isSupabaseMode]);
 
   const requestedRemainingByItemId = useMemo(() => (
     new Map(lines.map((line) => [line.procurementItemId, computeRemainingRequestedQty(line.procurementItemId, orders)]))
@@ -107,16 +120,15 @@ export function OrderModal({
   const allOrderedLinesHaveValidActualPrices = orderedLines.every((line) => isValidActualUnitPrice(line.actualUnitPrice));
   const canPlaceOrder = hasOrderedLines && allOrderedLinesHaveValidActualPrices;
 
-  const saveOrder = (action: "draft" | "place") => {
-    const payloadLines: DraftOrderLineInput[] = lines
-      .filter((line) => line.qty > 0)
-      .map((line) => ({
-        procurementItemId: line.procurementItemId,
-        qty: line.qty,
-        unit: line.unit,
-        plannedUnitPrice: line.plannedUnitPrice,
-        actualUnitPrice: line.actualUnitPrice,
-      }));
+  const saveOrder = async (action: "draft" | "place") => {
+    const positiveLines = lines.filter((line) => line.qty > 0);
+    const payloadLines: DraftOrderLineInput[] = positiveLines.map((line) => ({
+      procurementItemId: line.procurementItemId,
+      qty: line.qty,
+      unit: line.unit,
+      plannedUnitPrice: line.plannedUnitPrice,
+      actualUnitPrice: line.actualUnitPrice,
+    }));
 
     if (payloadLines.length === 0) {
       toast({ title: "No lines selected", description: "Add at least one line with quantity", variant: "destructive" });
@@ -148,44 +160,116 @@ export function OrderModal({
       }
     }
 
-    const created = createDraftOrder({
-      projectId,
-      kind,
-      supplierName: kind === "supplier" ? (supplierName || null) : null,
-      deliverToLocationId,
-      fromLocationId: kind === "stock" ? fromLocationId : null,
-      toLocationId: kind === "stock" ? toLocationId : null,
-      dueDate: null,
-      deliveryDeadline: deliveryDeadline?.toISOString() ?? null,
-      invoiceAttachment: invoiceAttachment
-        ? {
-          id: `invoice-${Date.now()}`,
-          name: invoiceAttachment.name,
-          url: invoiceAttachment.url,
-          type: "file",
-          isLocal: true,
-          createdAt: new Date().toISOString(),
-        }
-        : null,
-      note: note || null,
-      lines: payloadLines,
-    });
+    if (kind === "stock") {
+      const created = createDraftOrder({
+        projectId,
+        kind,
+        supplierName: null,
+        deliverToLocationId,
+        fromLocationId,
+        toLocationId,
+        dueDate: null,
+        deliveryDeadline: deliveryDeadline?.toISOString() ?? null,
+        invoiceAttachment: invoiceAttachment
+          ? {
+            id: `invoice-${Date.now()}`,
+            name: invoiceAttachment.name,
+            url: invoiceAttachment.url,
+            type: "file",
+            isLocal: true,
+            createdAt: new Date().toISOString(),
+          }
+          : null,
+        note: note || null,
+        lines: payloadLines,
+      });
 
-    if (action === "place") {
-      const placed = placeOrder(created.id);
-      if (!placed.ok) {
-        toast({ title: "Unable to place order", description: placed.error, variant: "destructive" });
+      if (action === "place") {
+        const placed = placeOrder(created.id);
+        if (!placed.ok) {
+          toast({ title: "Unable to place order", description: placed.error, variant: "destructive" });
+          return;
+        }
+        toast({ title: "Stock allocation completed" });
+        onCompleted?.(created.id);
+        onOpenChange(false);
         return;
       }
-      toast({ title: kind === "supplier" ? "Order placed" : "Stock allocation completed" });
+
+      toast({ title: "Draft saved" });
       onCompleted?.(created.id);
       onOpenChange(false);
       return;
     }
 
-    toast({ title: "Draft saved" });
-    onCompleted?.(created.id);
-    onOpenChange(false);
+    try {
+      const source = await getOrdersSource(supabaseMode ?? undefined);
+      const created = await source.createDraftSupplierOrder({
+        projectId,
+        supplierName: supplierName || null,
+        deliverToLocationId,
+        deliveryDeadline: deliveryDeadline?.toISOString() ?? null,
+        invoiceAttachment: invoiceAttachment
+          ? {
+            id: `invoice-${Date.now()}`,
+            name: invoiceAttachment.name,
+            url: invoiceAttachment.url,
+            type: "file",
+            isLocal: true,
+            createdAt: new Date().toISOString(),
+          }
+          : null,
+        note: note || null,
+        lines: positiveLines.map((line) => ({
+          procurementItemId: line.procurementItemId,
+          title: itemById.get(line.procurementItemId)?.name ?? "Untitled item",
+          qty: line.qty,
+          unit: line.unit,
+          plannedUnitPrice: line.plannedUnitPrice,
+          actualUnitPrice: line.actualUnitPrice,
+        })),
+      });
+
+      let finalOrderId = created.id;
+      if (action === "place") {
+        const placed = await source.placeSupplierOrder(created.id);
+        finalOrderId = placed.id;
+      }
+
+      if (supabaseMode) {
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: orderQueryKeys.projectOrders(supabaseMode.profileId, projectId),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: orderQueryKeys.placedSupplierOrders(supabaseMode.profileId, projectId),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: orderQueryKeys.placedSupplierOrdersAllProjects(supabaseMode.profileId),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: orderQueryKeys.orderById(supabaseMode.profileId, finalOrderId),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: procurementQueryKeys.projectItems(supabaseMode.profileId, projectId),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: inventoryQueryKeys.projectLocations(supabaseMode.profileId, projectId),
+          }),
+        ]);
+      }
+
+      toast({ title: action === "place" ? "Order placed" : "Draft saved" });
+      onCompleted?.(finalOrderId);
+      onOpenChange(false);
+    } catch (error) {
+      const description = error instanceof Error ? error.message : "Please try again.";
+      toast({
+        title: action === "place" ? "Unable to place order" : "Unable to save draft",
+        description,
+        variant: "destructive",
+      });
+    }
   };
 
   const totalAmount = allOrderedLinesHaveValidActualPrices
@@ -215,11 +299,17 @@ export function OrderModal({
               size="sm"
               variant={kind === "stock" ? "default" : "outline"}
               onClick={() => setKind("stock")}
+              disabled={isSupabaseMode}
               className={cn(kind === "stock" && "bg-accent text-accent-foreground hover:bg-accent/90")}
             >
               Stock
             </Button>
           </div>
+          {isSupabaseMode && (
+            <p className="text-xs text-muted-foreground">
+              Stock allocation stays local-only for now and is disabled in Supabase mode.
+            </p>
+          )}
 
           {kind === "supplier" ? (
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -229,7 +319,17 @@ export function OrderModal({
               </div>
               <div className="space-y-1">
                 <label className="text-xs text-muted-foreground">Deliver to</label>
-                <LocationPicker projectId={projectId} value={deliverToLocationId} onChange={setDeliverToLocationId} className="h-9" />
+                <LocationPicker
+                  projectId={projectId}
+                  value={deliverToLocationId}
+                  onChange={setDeliverToLocationId}
+                  className="h-9"
+                  placeholder={isSupabaseMode ? "Choose at receive time" : "Select location"}
+                  disabled={isSupabaseMode}
+                />
+                {isSupabaseMode && (
+                  <p className="text-[11px] text-muted-foreground">Receive location is saved when the order is received.</p>
+                )}
               </div>
             </div>
           ) : (
@@ -265,6 +365,8 @@ export function OrderModal({
             <Input
               type="file"
               className="h-9"
+              aria-label="Invoice attachment"
+              disabled={isSupabaseMode}
               onChange={(event) => {
                 const file = event.target.files?.[0];
                 if (!file) {
@@ -278,11 +380,23 @@ export function OrderModal({
                 event.currentTarget.value = "";
               }}
             />
+            {isSupabaseMode && (
+              <p className="text-[11px] text-muted-foreground">Invoice uploads are not persisted in this Supabase slice yet.</p>
+            )}
           </div>
 
           <div className="space-y-1">
             <label className="text-xs text-muted-foreground">Note</label>
-            <Input value={note} onChange={(event) => setNote(event.target.value)} className="h-9" placeholder="Optional note" />
+            <Input
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              className="h-9"
+              placeholder="Optional note"
+              disabled={isSupabaseMode}
+            />
+            {isSupabaseMode && (
+              <p className="text-[11px] text-muted-foreground">Order notes are not persisted in this Supabase slice yet.</p>
+            )}
           </div>
 
           <div className="rounded-lg border border-border overflow-x-auto">

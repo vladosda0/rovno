@@ -6,6 +6,7 @@ import { useOrder } from "@/hooks/use-order-data";
 import { useProcurementV2 } from "@/hooks/use-mock-data";
 import { useLocations } from "@/hooks/use-inventory-data";
 import { useToast } from "@/hooks/use-toast";
+import { useWorkspaceMode } from "@/hooks/use-workspace-source";
 import { fmtCost } from "@/lib/procurement-utils";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ReceiveOrderModal } from "@/components/procurement/ReceiveOrderModal";
@@ -35,6 +36,8 @@ export function OrderDetailModal({
   const order = useOrder(orderId);
   const items = useProcurementV2(projectId);
   const locations = useLocations(projectId);
+  const workspaceMode = useWorkspaceMode();
+  const isSupabaseMode = workspaceMode.kind === "supabase";
   const [receiveOpen, setReceiveOpen] = useState(false);
   const { toast } = useToast();
 
@@ -215,13 +218,19 @@ export function OrderDetailModal({
 
           <DialogFooter className="px-5 py-4 border-t border-border">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
-            {order?.status === "draft" && (
+            {order?.status === "draft" && !isSupabaseMode && (
               <Button type="button" variant="destructive" onClick={onCancelDraft}>Cancel draft</Button>
             )}
-            {order?.status === "placed" && (
+            {order?.status === "draft" && isSupabaseMode && order.kind === "supplier" && (
+              <Button type="button" variant="destructive" disabled>Cancel draft</Button>
+            )}
+            {order?.status === "placed" && !isSupabaseMode && (
               <Button type="button" variant="destructive" onClick={onVoidOrder}>Void order</Button>
             )}
-            {order?.kind === "stock" && order?.status === "received" && (
+            {order?.status === "placed" && isSupabaseMode && order.kind === "supplier" && (
+              <Button type="button" variant="destructive" disabled>Void order</Button>
+            )}
+            {order?.kind === "stock" && order?.status === "received" && !isSupabaseMode && (
               <Button type="button" variant="destructive" onClick={onVoidOrder}>Void allocation</Button>
             )}
             {order?.kind === "supplier" && order.status === "placed" && (

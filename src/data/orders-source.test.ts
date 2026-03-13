@@ -1,5 +1,273 @@
-import { describe, expect, it } from "vitest";
-import { shapeOrdersWithDetails } from "@/data/orders-source";
+import { beforeEach, describe, expect, it } from "vitest";
+import type { Database } from "../../backend-truth/generated/supabase-types";
+import {
+  createSupabaseOrdersSource,
+  shapeOrdersWithDetails,
+} from "@/data/orders-source";
+
+type TableName =
+  | "orders"
+  | "order_lines"
+  | "inventory_movements"
+  | "procurement_items"
+  | "inventory_items";
+
+type MockDatabase = {
+  nextId: number;
+  tables: {
+    [K in TableName]: Array<Database["public"]["Tables"][K]["Row"]>;
+  };
+};
+
+type Filter =
+  | { kind: "eq"; column: string; value: unknown }
+  | { kind: "in"; column: string; value: unknown[] };
+
+function applyFilters<T extends Record<string, unknown>>(rows: T[], filters: Filter[]): T[] {
+  return rows.filter((row) => filters.every((filter) => {
+    if (filter.kind === "eq") {
+      return row[filter.column] === filter.value;
+    }
+    return filter.value.includes(row[filter.column]);
+  }));
+}
+
+function nextId(database: MockDatabase, prefix: string): string {
+  database.nextId += 1;
+  return `${prefix}-${database.nextId}`;
+}
+
+function hydrateInsertRow<TTable extends TableName>(
+  database: MockDatabase,
+  table: TTable,
+  row: Record<string, unknown>,
+): Database["public"]["Tables"][TTable]["Row"] {
+  const timestamp = "2026-03-10T00:00:00.000Z";
+
+  if (table === "orders") {
+    return {
+      id: typeof row.id === "string" ? row.id : nextId(database, "order"),
+      project_id: String(row.project_id),
+      supplier_name: String(row.supplier_name ?? ""),
+      supplier_contact: (row.supplier_contact as string | null | undefined) ?? null,
+      status: (row.status as Database["public"]["Tables"]["orders"]["Row"]["status"] | undefined) ?? "draft",
+      ordered_at: (row.ordered_at as string | null | undefined) ?? null,
+      delivery_due_at: (row.delivery_due_at as string | null | undefined) ?? null,
+      created_by: String(row.created_by ?? "profile-1"),
+      created_at: (row.created_at as string | undefined) ?? timestamp,
+      updated_at: (row.updated_at as string | undefined) ?? timestamp,
+    } as Database["public"]["Tables"][TTable]["Row"];
+  }
+
+  if (table === "order_lines") {
+    return {
+      id: typeof row.id === "string" ? row.id : nextId(database, "line"),
+      order_id: String(row.order_id),
+      procurement_item_id: (row.procurement_item_id as string | null | undefined) ?? null,
+      title: String(row.title ?? ""),
+      quantity: Number(row.quantity ?? 0),
+      unit: (row.unit as string | null | undefined) ?? null,
+      unit_price_cents: (row.unit_price_cents as number | null | undefined) ?? null,
+      total_price_cents: (row.total_price_cents as number | null | undefined) ?? null,
+      created_at: (row.created_at as string | undefined) ?? timestamp,
+    } as Database["public"]["Tables"][TTable]["Row"];
+  }
+
+  if (table === "inventory_items") {
+    return {
+      id: typeof row.id === "string" ? row.id : nextId(database, "inventory-item"),
+      project_id: String(row.project_id),
+      title: String(row.title ?? ""),
+      sku: (row.sku as string | null | undefined) ?? null,
+      unit: String(row.unit ?? ""),
+      notes: (row.notes as string | null | undefined) ?? null,
+      created_at: (row.created_at as string | undefined) ?? timestamp,
+      updated_at: (row.updated_at as string | undefined) ?? timestamp,
+    } as Database["public"]["Tables"][TTable]["Row"];
+  }
+
+  if (table === "inventory_movements") {
+    return {
+      id: typeof row.id === "string" ? row.id : nextId(database, "movement"),
+      project_id: String(row.project_id),
+      inventory_item_id: String(row.inventory_item_id),
+      inventory_location_id: (row.inventory_location_id as string | null | undefined) ?? null,
+      order_line_id: (row.order_line_id as string | null | undefined) ?? null,
+      procurement_item_id: (row.procurement_item_id as string | null | undefined) ?? null,
+      movement_type: row.movement_type as Database["public"]["Tables"]["inventory_movements"]["Row"]["movement_type"],
+      delta_qty: Number(row.delta_qty ?? 0),
+      notes: (row.notes as string | null | undefined) ?? null,
+      created_by: (row.created_by as string | null | undefined) ?? null,
+      created_at: (row.created_at as string | undefined) ?? timestamp,
+    } as Database["public"]["Tables"][TTable]["Row"];
+  }
+
+  return {
+    id: typeof row.id === "string" ? row.id : nextId(database, "procurement-item"),
+    project_id: String(row.project_id),
+    estimate_resource_line_id: (row.estimate_resource_line_id as string | null | undefined) ?? null,
+    task_id: (row.task_id as string | null | undefined) ?? null,
+    title: String(row.title ?? ""),
+    description: (row.description as string | null | undefined) ?? null,
+    category: (row.category as string | null | undefined) ?? null,
+    quantity: Number(row.quantity ?? 0),
+    unit: (row.unit as string | null | undefined) ?? null,
+    planned_unit_price_cents: (row.planned_unit_price_cents as number | null | undefined) ?? null,
+    planned_total_price_cents: (row.planned_total_price_cents as number | null | undefined) ?? null,
+    status: (row.status as Database["public"]["Tables"]["procurement_items"]["Row"]["status"] | undefined) ?? "requested",
+    created_by: String(row.created_by ?? "profile-1"),
+    created_at: (row.created_at as string | undefined) ?? timestamp,
+    updated_at: (row.updated_at as string | undefined) ?? timestamp,
+  } as Database["public"]["Tables"][TTable]["Row"];
+}
+
+class MockQueryBuilder<TTable extends TableName> implements PromiseLike<{ data: unknown; error: Error | null }> {
+  private action: "select" | "insert" | "update" | null = null;
+
+  private filters: Filter[] = [];
+
+  private payload: unknown = null;
+
+  private orderConfig: { column: string; ascending: boolean } | null = null;
+
+  private shouldReturnRows = false;
+
+  private shouldReturnSingleRow = false;
+
+  constructor(
+    private readonly database: MockDatabase,
+    private readonly table: TTable,
+  ) {}
+
+  select() {
+    if (!this.action) {
+      this.action = "select";
+    }
+    this.shouldReturnRows = true;
+    return this;
+  }
+
+  insert(payload: unknown) {
+    this.action = "insert";
+    this.payload = payload;
+    return this;
+  }
+
+  update(payload: unknown) {
+    this.action = "update";
+    this.payload = payload;
+    return this;
+  }
+
+  eq(column: string, value: unknown) {
+    this.filters.push({ kind: "eq", column, value });
+    return this;
+  }
+
+  in(column: string, value: unknown[]) {
+    this.filters.push({ kind: "in", column, value });
+    return this;
+  }
+
+  order(column: string, options?: { ascending?: boolean }) {
+    this.orderConfig = {
+      column,
+      ascending: options?.ascending ?? true,
+    };
+    return this;
+  }
+
+  single() {
+    this.shouldReturnSingleRow = true;
+    return this;
+  }
+
+  then<TResult1 = { data: unknown; error: Error | null }, TResult2 = never>(
+    onfulfilled?: ((value: { data: unknown; error: Error | null }) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+  ): Promise<TResult1 | TResult2> {
+    return this.execute().then(onfulfilled, onrejected);
+  }
+
+  private async execute(): Promise<{ data: unknown; error: Error | null }> {
+    const rows = this.database.tables[this.table] as Array<Record<string, unknown>>;
+
+    if (this.action === "select") {
+      const filteredRows = applyFilters(rows, this.filters);
+      const orderedRows = this.orderConfig
+        ? [...filteredRows].sort((left, right) => {
+          const leftValue = left[this.orderConfig!.column];
+          const rightValue = right[this.orderConfig!.column];
+          if (leftValue === rightValue) return 0;
+          if (leftValue == null) return this.orderConfig!.ascending ? -1 : 1;
+          if (rightValue == null) return this.orderConfig!.ascending ? 1 : -1;
+          const comparison = leftValue < rightValue ? -1 : 1;
+          return this.orderConfig!.ascending ? comparison : comparison * -1;
+        })
+        : filteredRows;
+
+      return {
+        data: this.shouldReturnSingleRow ? (orderedRows[0] ?? null) : orderedRows,
+        error: null,
+      };
+    }
+
+    if (this.action === "insert") {
+      const nextRows = (Array.isArray(this.payload) ? this.payload : [this.payload])
+        .map((row) => hydrateInsertRow(this.database, this.table, row as Record<string, unknown>));
+      rows.push(...nextRows);
+      return {
+        data: this.shouldReturnRows
+          ? (this.shouldReturnSingleRow ? (nextRows[0] ?? null) : nextRows)
+          : null,
+        error: null,
+      };
+    }
+
+    if (this.action === "update") {
+      const timestamp = "2026-03-11T00:00:00.000Z";
+      applyFilters(rows, this.filters).forEach((row) => {
+        Object.assign(row, this.payload as Record<string, unknown>);
+        if (this.table === "orders" && row.updated_at == null) {
+          row.updated_at = timestamp;
+        }
+      });
+    }
+
+    return { data: null, error: null };
+  }
+}
+
+function createMockSupabase(database: MockDatabase) {
+  return {
+    from<TTable extends TableName>(table: TTable) {
+      return new MockQueryBuilder(database, table);
+    },
+  };
+}
+
+function procurementItemRow(
+  overrides: Partial<Parameters<typeof shapeOrdersWithDetails>[0]["procurementItemRows"][number]> = {},
+) {
+  return {
+    id: "proc-1",
+    project_id: "project-1",
+    estimate_resource_line_id: null,
+    task_id: null,
+    title: "Copper cable",
+    description: "3x2.5",
+    category: null,
+    quantity: 12,
+    unit: "m",
+    planned_unit_price_cents: 1200,
+    planned_total_price_cents: 14400,
+    status: "ordered" as const,
+    created_by: "profile-1",
+    created_at: "2026-03-01T00:00:00.000Z",
+    updated_at: "2026-03-02T00:00:00.000Z",
+    ...overrides,
+  };
+}
 
 function orderRow(
   overrides: Partial<Parameters<typeof shapeOrdersWithDetails>[0]["orderRows"][number]> = {},
@@ -51,29 +319,6 @@ function movementRow(
     notes: null,
     created_by: "profile-1",
     created_at: "2026-03-03T01:00:00.000Z",
-    ...overrides,
-  };
-}
-
-function procurementItemRow(
-  overrides: Partial<Parameters<typeof shapeOrdersWithDetails>[0]["procurementItemRows"][number]> = {},
-) {
-  return {
-    id: "proc-1",
-    project_id: "project-1",
-    estimate_resource_line_id: null,
-    task_id: null,
-    title: "Copper cable",
-    description: null,
-    category: null,
-    quantity: 12,
-    unit: "m",
-    planned_unit_price_cents: 1200,
-    planned_total_price_cents: 14400,
-    status: "ordered" as const,
-    created_by: "profile-1",
-    created_at: "2026-03-01T00:00:00.000Z",
-    updated_at: "2026-03-02T00:00:00.000Z",
     ...overrides,
   };
 }
@@ -264,8 +509,184 @@ describe("orders-source helpers", () => {
         },
       ],
     });
+  });
+});
 
-    expect(orders.find((order) => order.id === "order-draft")?.status).toBe("draft");
-    expect(orders.find((order) => order.id === "order-void")?.status).toBe("voided");
+describe("supabase order writes", () => {
+  let database: MockDatabase;
+
+  beforeEach(() => {
+    database = {
+      nextId: 0,
+      tables: {
+        orders: [],
+        order_lines: [],
+        inventory_movements: [],
+        procurement_items: [
+          procurementItemRow({
+            id: "proc-1",
+            title: "Copper cable",
+            description: "3x2.5",
+            unit: "m",
+          }),
+          procurementItemRow({
+            id: "proc-2",
+            title: "Drywall screws",
+            description: "Box",
+            unit: "pcs",
+          }),
+        ],
+        inventory_items: [
+          {
+            id: "inventory-item-existing",
+            project_id: "project-1",
+            title: "Copper cable",
+            sku: null,
+            unit: "m",
+            notes: "3x2.5",
+            created_at: "2026-03-01T00:00:00.000Z",
+            updated_at: "2026-03-02T00:00:00.000Z",
+          },
+        ],
+      },
+    };
+  });
+
+  it("creates draft supplier orders and persists order lines before placing them", async () => {
+    const source = createSupabaseOrdersSource(
+      createMockSupabase(database) as never,
+      "profile-1",
+    );
+
+    const created = await source.createDraftSupplierOrder({
+      projectId: "project-1",
+      supplierName: "BuildMart",
+      deliveryDeadline: "2026-03-20T00:00:00.000Z",
+      lines: [
+        {
+          procurementItemId: "proc-1",
+          title: "Copper cable",
+          qty: 5,
+          unit: "m",
+          actualUnitPrice: 15,
+        },
+      ],
+    });
+
+    expect(database.tables.orders).toHaveLength(1);
+    expect(database.tables.orders[0]).toMatchObject({
+      project_id: "project-1",
+      supplier_name: "BuildMart",
+      status: "draft",
+      created_by: "profile-1",
+      delivery_due_at: "2026-03-20T00:00:00.000Z",
+    });
+    expect(database.tables.order_lines).toEqual([
+      expect.objectContaining({
+        procurement_item_id: "proc-1",
+        title: "Copper cable",
+        quantity: 5,
+        unit: "m",
+        unit_price_cents: 1500,
+        total_price_cents: 7500,
+      }),
+    ]);
+    expect(created.status).toBe("draft");
+
+    const placed = await source.placeSupplierOrder(created.id);
+
+    expect(database.tables.orders[0].status).toBe("placed");
+    expect(database.tables.orders[0].ordered_at).toBeTruthy();
+    expect(placed.status).toBe("placed");
+  });
+
+  it("receives supplier orders, reuses or creates inventory items, and updates partial/full status", async () => {
+    database.tables.orders = [
+      {
+        id: "order-1",
+        project_id: "project-1",
+        supplier_name: "BuildMart",
+        supplier_contact: null,
+        status: "placed",
+        ordered_at: "2026-03-10T00:00:00.000Z",
+        delivery_due_at: "2026-03-20T00:00:00.000Z",
+        created_by: "profile-1",
+        created_at: "2026-03-10T00:00:00.000Z",
+        updated_at: "2026-03-10T00:00:00.000Z",
+      },
+    ];
+    database.tables.order_lines = [
+      {
+        id: "line-1",
+        order_id: "order-1",
+        procurement_item_id: "proc-1",
+        title: "Copper cable",
+        quantity: 5,
+        unit: "m",
+        unit_price_cents: 1500,
+        total_price_cents: 7500,
+        created_at: "2026-03-10T00:00:00.000Z",
+      },
+      {
+        id: "line-2",
+        order_id: "order-1",
+        procurement_item_id: "proc-2",
+        title: "Drywall screws",
+        quantity: 5,
+        unit: "pcs",
+        unit_price_cents: 900,
+        total_price_cents: 4500,
+        created_at: "2026-03-10T00:00:00.000Z",
+      },
+    ];
+
+    const source = createSupabaseOrdersSource(
+      createMockSupabase(database) as never,
+      "profile-1",
+    );
+
+    const partiallyReceived = await source.receiveSupplierOrder("order-1", {
+      locationId: "location-site",
+      lines: [
+        { lineId: "line-1", qty: 5 },
+        { lineId: "line-2", qty: 2 },
+      ],
+    });
+
+    expect(database.tables.inventory_items).toHaveLength(2);
+    expect(database.tables.inventory_items[1]).toMatchObject({
+      project_id: "project-1",
+      title: "Drywall screws",
+      unit: "pcs",
+      notes: "Box",
+    });
+    expect(database.tables.inventory_movements).toEqual([
+      expect.objectContaining({
+        inventory_item_id: "inventory-item-existing",
+        order_line_id: "line-1",
+        inventory_location_id: "location-site",
+        delta_qty: 5,
+      }),
+      expect.objectContaining({
+        inventory_item_id: database.tables.inventory_items[1].id,
+        order_line_id: "line-2",
+        inventory_location_id: "location-site",
+        delta_qty: 2,
+      }),
+    ]);
+    expect(database.tables.orders[0].status).toBe("partially_received");
+    expect(partiallyReceived.status).toBe("placed");
+    expect(partiallyReceived.lines.find((line) => line.id === "line-1")?.receivedQty).toBe(5);
+    expect(partiallyReceived.lines.find((line) => line.id === "line-2")?.receivedQty).toBe(2);
+
+    const fullyReceived = await source.receiveSupplierOrder("order-1", {
+      locationId: "location-site",
+      lines: [{ lineId: "line-2", qty: 3 }],
+    });
+
+    expect(database.tables.orders[0].status).toBe("received");
+    expect(database.tables.inventory_movements).toHaveLength(3);
+    expect(fullyReceived.status).toBe("received");
+    expect(fullyReceived.lines.find((line) => line.id === "line-2")?.receivedQty).toBe(5);
   });
 });

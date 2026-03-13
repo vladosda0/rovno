@@ -1,12 +1,15 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { receiveOrder } from "@/data/order-store";
-import { ensureDefaultLocation } from "@/data/inventory-store";
+import { getOrdersSource } from "@/data/orders-source";
 import { useProcurementV2 } from "@/hooks/use-mock-data";
-import { useOrder } from "@/hooks/use-order-data";
+import { inventoryQueryKeys, useLocations } from "@/hooks/use-inventory-data";
+import { orderQueryKeys, useOrder } from "@/hooks/use-order-data";
+import { procurementQueryKeys } from "@/hooks/use-procurement-source";
 import { useToast } from "@/hooks/use-toast";
+import { useWorkspaceMode } from "@/hooks/use-workspace-source";
 import { LocationPicker } from "@/components/procurement/LocationPicker";
 
 interface ReceiveOrderModalProps {
@@ -26,7 +29,15 @@ export function ReceiveOrderModal({
 }: ReceiveOrderModalProps) {
   const order = useOrder(orderId);
   const items = useProcurementV2(projectId);
+  const locations = useLocations(projectId);
+  const workspaceMode = useWorkspaceMode();
+  const supabaseMode = workspaceMode.kind === "supabase" ? workspaceMode : null;
+  const queryClient = useQueryClient();
   const itemById = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
+  const defaultLocationId = useMemo(
+    () => locations.find((location) => location.isDefault)?.id ?? locations[0]?.id ?? "",
+    [locations],
+  );
   const { toast } = useToast();
 
   const [locationId, setLocationId] = useState("");
@@ -34,16 +45,22 @@ export function ReceiveOrderModal({
 
   useEffect(() => {
     if (!open || !order) return;
-    const fallback = ensureDefaultLocation(projectId).id;
-    setLocationId(order.deliverToLocationId ?? fallback);
     const nextLineQty: Record<string, number> = {};
     order.lines.forEach((line) => {
       nextLineQty[line.id] = Math.max(0, line.qty - line.receivedQty);
     });
     setLineQty(nextLineQty);
-  }, [open, order, projectId]);
+    setLocationId(order.deliverToLocationId ?? defaultLocationId);
+  }, [open, order?.id, order, defaultLocationId]);
 
-  const submit = () => {
+  useEffect(() => {
+    if (!open || !order || locationId) return;
+    const fallbackLocationId = order.deliverToLocationId ?? defaultLocationId;
+    if (!fallbackLocationId) return;
+    setLocationId(fallbackLocationId);
+  }, [open, order, locationId, defaultLocationId]);
+
+  const submit = async () => {
     if (!order) return;
     if (order.status !== "placed") {
       toast({ title: "Order is not receivable", variant: "destructive" });
@@ -58,15 +75,50 @@ export function ReceiveOrderModal({
       return;
     }
 
-    const result = receiveOrder(order.id, { locationId, lines });
-    if (!result.ok) {
-      toast({ title: "Receive failed", description: result.error, variant: "destructive" });
+    if (!locationId) {
+      toast({ title: "Location is required", description: "Select a receive location", variant: "destructive" });
       return;
     }
 
-    toast({ title: "Order received" });
-    onCompleted?.();
-    onOpenChange(false);
+    try {
+      const source = await getOrdersSource(supabaseMode ?? undefined);
+      await source.receiveSupplierOrder(order.id, { locationId, lines });
+      if (supabaseMode) {
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: orderQueryKeys.projectOrders(supabaseMode.profileId, projectId),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: orderQueryKeys.placedSupplierOrders(supabaseMode.profileId, projectId),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: orderQueryKeys.placedSupplierOrdersAllProjects(supabaseMode.profileId),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: orderQueryKeys.orderById(supabaseMode.profileId, order.id),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: procurementQueryKeys.projectItems(supabaseMode.profileId, projectId),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: inventoryQueryKeys.projectLocations(supabaseMode.profileId, projectId),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: inventoryQueryKeys.projectStock(supabaseMode.profileId, projectId),
+          }),
+        ]);
+      }
+
+      toast({ title: "Order received" });
+      onCompleted?.();
+      onOpenChange(false);
+    } catch (error) {
+      toast({
+        title: "Receive failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
