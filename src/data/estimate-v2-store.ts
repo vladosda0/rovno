@@ -1,6 +1,8 @@
 import { getAuthRole } from "@/lib/auth-state";
 import { getStageEstimateItems } from "@/data/estimate-store";
 import { persistEstimateV2HeroTransition, EstimateV2HeroTransitionError } from "@/data/estimate-v2-hero-transition";
+import { loadCurrentEstimateDraft, saveCurrentEstimateDraft } from "@/data/estimate-source";
+import { getPlanningSource } from "@/data/planning-source";
 import { getWorkspaceSource, resolveRuntimeWorkspaceMode } from "@/data/workspace-source";
 import {
   addComment,
@@ -31,7 +33,7 @@ import {
 } from "@/lib/estimate-v2/schedule";
 import { syncProcurementFromEstimateV2 } from "@/lib/estimate-v2/procurement-sync";
 import { syncHRFromEstimateV2 } from "@/data/hr-store";
-import type { ChecklistItem, ChecklistItemType, Task, TaskStatus } from "@/types/entities";
+import type { ChecklistItem, ChecklistItemType, MemberRole, Task, TaskStatus } from "@/types/entities";
 import type {
   ApprovalStamp,
   EstimateExecutionStatus,
@@ -75,6 +77,18 @@ export interface EstimateV2ProjectView {
   scheduleBaseline: ScheduleBaseline | null;
 }
 
+export interface EstimateV2ProjectAccessContext {
+  mode: "demo" | "local" | "supabase";
+  profileId?: string;
+  projectOwnerProfileId?: string;
+  membershipRole?: MemberRole | null;
+}
+
+interface EstimateV2WorkspaceCache {
+  savedAt: string;
+  state: EstimateV2ProjectView;
+}
+
 interface ApproveVersionOptions {
   actorId?: string;
 }
@@ -88,6 +102,7 @@ interface SetProjectEstimateStatusOptions {
   skipSetup?: boolean;
   ownerProfileId?: string;
   projectOwnerProfileId?: string;
+  projectTasks?: Task[];
 }
 
 type TransitionEstimateV2ProjectToInWorkOptions = SetProjectEstimateStatusOptions;
@@ -135,6 +150,7 @@ type Listener = () => void;
 
 const listeners = new Set<Listener>();
 const statesByProjectId = new Map<string, EstimateV2ProjectState>();
+const accessContextByProjectId = new Map<string, EstimateV2ProjectAccessContext>();
 const DEMO_PROJECT_IDS = new Set(["project-1", "project-2", "project-3"]);
 const RESOURCE_TYPE_ORDER: Record<ResourceLineType, number> = {
   material: 0,
@@ -143,9 +159,14 @@ const RESOURCE_TYPE_ORDER: Record<ResourceLineType, number> = {
   subcontractor: 3,
   other: 4,
 };
+const ESTIMATE_V2_REMOTE_SYNC_DEBOUNCE_MS = 300;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 let crossSyncInProgress = false;
 let mainStoreUnsubscribe: (() => void) | null = null;
+const remoteHydrationPromises = new Map<string, Promise<void>>();
+const remoteDraftSyncTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const remoteDraftSyncErrorSignatureByProjectId = new Map<string, string>();
 
 function notify() {
   listeners.forEach((listener) => listener());
@@ -157,6 +178,51 @@ function nowIso(): string {
 
 function id(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function deterministicHex(seed: string): string {
+  let hashA = 0x811c9dc5;
+  let hashB = 0x811c9dc5;
+  let hashC = 0x811c9dc5;
+  let hashD = 0x811c9dc5;
+
+  for (let i = 0; i < seed.length; i += 1) {
+    const code = seed.charCodeAt(i);
+    hashA ^= code;
+    hashA = Math.imul(hashA, 0x01000193);
+    hashB ^= code + 17;
+    hashB = Math.imul(hashB, 0x01000193);
+    hashC ^= code + 31;
+    hashC = Math.imul(hashC, 0x01000193);
+    hashD ^= code + 47;
+    hashD = Math.imul(hashD, 0x01000193);
+  }
+
+  return [hashA, hashB, hashC, hashD]
+    .map((value) => (value >>> 0).toString(16).padStart(8, "0"))
+    .join("");
+}
+
+function deterministicUuid(seed: string): string {
+  const hex = deterministicHex(`${seed}:a`) + deterministicHex(`${seed}:b`);
+  const chars = hex.slice(0, 32).split("");
+  chars[12] = "5";
+  const variant = parseInt(chars[16], 16);
+  chars[16] = ["8", "9", "a", "b"][variant % 4];
+  const normalized = chars.join("");
+
+  return [
+    normalized.slice(0, 8),
+    normalized.slice(8, 12),
+    normalized.slice(12, 16),
+    normalized.slice(16, 20),
+    normalized.slice(20, 32),
+  ].join("-");
+}
+
+function ensureWorkspaceUuid(projectId: string, namespace: string, value: string): string {
+  if (UUID_RE.test(value)) return value;
+  return deterministicUuid(`${projectId}:${namespace}:${value}`);
 }
 
 function runWithCrossSyncGuard<T>(fn: () => T): T {
@@ -298,6 +364,166 @@ function getSnapshotFromState(state: EstimateV2ProjectState): EstimateV2Snapshot
   };
 }
 
+function workspaceCacheKey(projectId: string, profileId: string): string {
+  return `estimate-v2-workspace:${projectId}:${profileId}`;
+}
+
+function loadWorkspaceEstimateCache(projectId: string, profileId: string): EstimateV2WorkspaceCache | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(workspaceCacheKey(projectId, profileId));
+    if (!raw) return null;
+    return JSON.parse(raw) as EstimateV2WorkspaceCache;
+  } catch {
+    return null;
+  }
+}
+
+function saveWorkspaceEstimateCache(
+  projectId: string,
+  profileId: string,
+  state: EstimateV2ProjectState,
+): void {
+  if (typeof window === "undefined") return;
+  try {
+    const normalized = normalizeStateForWorkspace(projectId, state);
+    const payload: EstimateV2WorkspaceCache = {
+      savedAt: nowIso(),
+      state: cloneState(normalized),
+    };
+    window.localStorage.setItem(workspaceCacheKey(projectId, profileId), JSON.stringify(payload));
+  } catch {
+    // Ignore browser storage failures and keep the in-memory estimate state alive.
+  }
+}
+
+function normalizeSnapshotForWorkspace(projectId: string, snapshot: EstimateV2Snapshot): EstimateV2Snapshot {
+  const stageIdById = new Map(snapshot.stages.map((stage) => [
+    stage.id,
+    ensureWorkspaceUuid(projectId, "stage", stage.id),
+  ]));
+  const workIdById = new Map(snapshot.works.map((work) => [
+    work.id,
+    ensureWorkspaceUuid(projectId, "work", work.id),
+  ]));
+  const lineIdById = new Map(snapshot.lines.map((line) => [
+    line.id,
+    ensureWorkspaceUuid(projectId, "line", line.id),
+  ]));
+  const dependencyIdById = new Map(snapshot.dependencies.map((dependency) => [
+    dependency.id,
+    ensureWorkspaceUuid(projectId, "dependency", dependency.id),
+  ]));
+
+  return {
+    project: {
+      ...snapshot.project,
+      id: ensureWorkspaceUuid(projectId, "estimate", snapshot.project.id || projectId),
+    },
+    stages: snapshot.stages.map((stage) => ({
+      ...stage,
+      id: stageIdById.get(stage.id) ?? stage.id,
+    })),
+    works: snapshot.works.map((work) => ({
+      ...work,
+      id: workIdById.get(work.id) ?? work.id,
+      stageId: stageIdById.get(work.stageId) ?? ensureWorkspaceUuid(projectId, "stage", work.stageId),
+    })),
+    lines: snapshot.lines.map((line) => ({
+      ...line,
+      id: lineIdById.get(line.id) ?? line.id,
+      stageId: stageIdById.get(line.stageId) ?? ensureWorkspaceUuid(projectId, "stage", line.stageId),
+      workId: workIdById.get(line.workId) ?? ensureWorkspaceUuid(projectId, "work", line.workId),
+    })),
+    dependencies: snapshot.dependencies.map((dependency) => ({
+      ...dependency,
+      id: dependencyIdById.get(dependency.id) ?? dependency.id,
+      fromWorkId: workIdById.get(dependency.fromWorkId) ?? ensureWorkspaceUuid(projectId, "work", dependency.fromWorkId),
+      toWorkId: workIdById.get(dependency.toWorkId) ?? ensureWorkspaceUuid(projectId, "work", dependency.toWorkId),
+    })),
+  };
+}
+
+function normalizeStateForWorkspace(projectId: string, state: EstimateV2ProjectState): EstimateV2ProjectState {
+  const normalizedSnapshot = normalizeSnapshotForWorkspace(projectId, getSnapshotFromState(state));
+  const normalizedWorkIdById = new Map(normalizedSnapshot.works.map((work) => [work.id, work.id]));
+  const normalizedState: EstimateV2ProjectState = {
+    project: normalizedSnapshot.project,
+    stages: normalizedSnapshot.stages,
+    works: normalizedSnapshot.works,
+    lines: normalizedSnapshot.lines,
+    dependencies: normalizedSnapshot.dependencies,
+    versions: state.versions.map((version) => ({
+      ...version,
+      snapshot: normalizeSnapshotForWorkspace(projectId, version.snapshot),
+      approvalStamp: version.approvalStamp ? { ...version.approvalStamp } : null,
+    })),
+    scheduleBaseline: state.scheduleBaseline
+      ? {
+        ...state.scheduleBaseline,
+        works: state.scheduleBaseline.works.map((work) => ({
+          ...work,
+          workId: normalizedWorkIdById.get(ensureWorkspaceUuid(projectId, "work", work.workId))
+            ?? ensureWorkspaceUuid(projectId, "work", work.workId),
+        })),
+      }
+      : null,
+  };
+
+  return normalizedState;
+}
+
+function queueProjectDraftSync(projectId: string) {
+  const context = accessContextByProjectId.get(projectId);
+  const state = statesByProjectId.get(projectId);
+  if (!context || !state || context.mode !== "supabase" || !context.profileId) {
+    return;
+  }
+
+  saveWorkspaceEstimateCache(projectId, context.profileId, state);
+
+  const existingTimer = remoteDraftSyncTimers.get(projectId);
+  if (existingTimer) {
+    clearTimeout(existingTimer);
+  }
+
+  const timer = setTimeout(() => {
+    remoteDraftSyncTimers.delete(projectId);
+    void (async () => {
+      const latestState = statesByProjectId.get(projectId);
+      const latestContext = accessContextByProjectId.get(projectId);
+      if (!latestState || latestContext?.mode !== "supabase" || !latestContext.profileId) {
+        return;
+      }
+
+      try {
+        const normalized = normalizeStateForWorkspace(projectId, latestState);
+        saveWorkspaceEstimateCache(projectId, latestContext.profileId, normalized);
+        await saveCurrentEstimateDraft(projectId, getSnapshotFromState(normalized), {
+          profileId: latestContext.profileId,
+        });
+        remoteDraftSyncErrorSignatureByProjectId.delete(projectId);
+      } catch (error) {
+        const signature = error instanceof Error
+          ? `${error.name}:${error.message}`
+          : String(error);
+        if (remoteDraftSyncErrorSignatureByProjectId.get(projectId) === signature) {
+          return;
+        }
+        remoteDraftSyncErrorSignatureByProjectId.set(projectId, signature);
+        console.error("Failed to sync estimate v2 draft", error);
+      }
+    })();
+  }, ESTIMATE_V2_REMOTE_SYNC_DEBOUNCE_MS);
+
+  remoteDraftSyncTimers.set(projectId, timer);
+}
+
+function commitProjectStateChange(projectId: string) {
+  queueProjectDraftSync(projectId);
+  notify();
+}
+
 function syncExternalDomainsFromEstimate(projectId: string, state: EstimateV2ProjectState) {
   const syncState = {
     project: state.project,
@@ -308,11 +534,47 @@ function syncExternalDomainsFromEstimate(projectId: string, state: EstimateV2Pro
   syncHRFromEstimateV2(projectId, syncState);
 }
 
+function createEntityId(projectId: string, prefix: string): string {
+  const context = accessContextByProjectId.get(projectId);
+  if (context?.mode === "supabase" && typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return id(prefix);
+}
+
+export function registerEstimateV2ProjectAccessContext(
+  projectId: string,
+  context: EstimateV2ProjectAccessContext,
+) {
+  accessContextByProjectId.set(projectId, context);
+  const state = statesByProjectId.get(projectId);
+  if (state && context.mode === "supabase" && context.profileId) {
+    saveWorkspaceEstimateCache(projectId, context.profileId, state);
+  }
+}
+
+export function clearEstimateV2ProjectAccessContext(projectId: string) {
+  accessContextByProjectId.delete(projectId);
+  remoteDraftSyncErrorSignatureByProjectId.delete(projectId);
+  const timer = remoteDraftSyncTimers.get(projectId);
+  if (timer) {
+    clearTimeout(timer);
+    remoteDraftSyncTimers.delete(projectId);
+  }
+}
+
 function isOwnerActionAllowed(
   projectId: string,
   ownerProfileId?: string,
   projectOwnerProfileId?: string,
 ): boolean {
+  const accessContext = accessContextByProjectId.get(projectId);
+  if (accessContext?.mode === "supabase") {
+    const actingProfileId = ownerProfileId ?? accessContext.profileId ?? null;
+    const ownerId = projectOwnerProfileId ?? accessContext.projectOwnerProfileId ?? null;
+    return Boolean(actingProfileId && ownerId && actingProfileId === ownerId);
+  }
+
   if (ownerProfileId && projectOwnerProfileId) {
     const role = getAuthRole();
     return role === "owner" && ownerProfileId === projectOwnerProfileId;
@@ -327,6 +589,14 @@ function isOwnerActionAllowed(
 }
 
 function isSubmissionActionAllowed(projectId: string): boolean {
+  const accessContext = accessContextByProjectId.get(projectId);
+  if (accessContext?.mode === "supabase") {
+    return Boolean(
+      accessContext.profileId
+      && (accessContext.membershipRole === "owner" || accessContext.membershipRole === "co_owner"),
+    );
+  }
+
   const authRole = getAuthRole();
   if (authRole !== "owner" && authRole !== "co_owner") return false;
   const user = getCurrentUser();
@@ -519,6 +789,7 @@ function syncFromMainTaskStore() {
   if (crossSyncInProgress) return;
   const now = nowIso();
   let hasChanges = false;
+  const changedProjectIds = new Set<string>();
 
   statesByProjectId.forEach((state, projectId) => {
     const tasksById = new Map(getTasks(projectId).map((task) => [task.id, task]));
@@ -594,10 +865,14 @@ function syncFromMainTaskStore() {
       syncExternalDomainsFromEstimate(projectId, state);
       state.project.updatedAt = now;
       hasChanges = true;
+      changedProjectIds.add(projectId);
     }
   });
 
-  if (hasChanges) notify();
+  if (hasChanges) {
+    changedProjectIds.forEach((projectId) => queueProjectDraftSync(projectId));
+    notify();
+  }
 }
 
 function ensureMainStoreSubscription() {
@@ -605,6 +880,236 @@ function ensureMainStoreSubscription() {
   mainStoreUnsubscribe = subscribeMainStore(() => {
     syncFromMainTaskStore();
   });
+}
+
+function inferLineTypeFromRemote(
+  resourceType: "material" | "labor" | "equipment" | "other",
+  cachedType?: ResourceLineType,
+): ResourceLineType {
+  if (resourceType === "material") return "material";
+  if (resourceType === "equipment") return "tool";
+  if (resourceType === "labor") {
+    return cachedType === "subcontractor" ? "subcontractor" : "labor";
+  }
+  return cachedType ?? "other";
+}
+
+function buildTaskInfoByWorkId(tasks: Task[]): Map<string, {
+  taskId: string;
+  status: EstimateV2WorkStatus;
+  plannedStart: string | null;
+  plannedEnd: string | null;
+}> {
+  const taskInfoByWorkId = new Map<string, {
+    taskId: string;
+    status: EstimateV2WorkStatus;
+    plannedStart: string | null;
+    plannedEnd: string | null;
+  }>();
+
+  tasks.forEach((task) => {
+    const linkedWorkIds = Array.from(new Set(
+      task.checklist
+        .map((item) => item.estimateV2WorkId)
+        .filter((value): value is string => Boolean(value)),
+    ));
+
+    linkedWorkIds.forEach((workId) => {
+      if (taskInfoByWorkId.has(workId)) return;
+      taskInfoByWorkId.set(workId, {
+        taskId: task.id,
+        status: mapTaskStatusToWorkStatus(task.status),
+        plannedStart: task.startDate ?? null,
+        plannedEnd: task.deadline ?? null,
+      });
+    });
+  });
+
+  return taskInfoByWorkId;
+}
+
+export async function hydrateEstimateV2ProjectFromWorkspace(
+  projectId: string,
+  input: { profileId: string },
+): Promise<void> {
+  const cacheKey = `${projectId}:${input.profileId}`;
+  const pending = remoteHydrationPromises.get(cacheKey);
+  if (pending) {
+    return pending;
+  }
+
+  const hydration = (async () => {
+    const currentState = ensureProjectState(projectId);
+    const [workspaceSource, planningSource, draft] = await Promise.all([
+      getWorkspaceSource({ kind: "supabase", profileId: input.profileId }),
+      getPlanningSource({ kind: "supabase", profileId: input.profileId }),
+      loadCurrentEstimateDraft(projectId),
+    ]);
+    const [workspaceProject, tasks] = await Promise.all([
+      workspaceSource.getProjectById(projectId),
+      planningSource.getProjectTasks(projectId),
+    ]);
+
+    const cached = loadWorkspaceEstimateCache(projectId, input.profileId)?.state ?? null;
+    const remoteHasStructure = draft.stages.length > 0
+      || draft.works.length > 0
+      || draft.lines.length > 0
+      || draft.dependencies.length > 0;
+
+    if (!remoteHasStructure && cached) {
+      const cachedState: EstimateV2ProjectState = {
+        project: {
+          ...cached.project,
+          title: workspaceProject?.title ?? cached.project.title,
+          projectMode: normalizeProjectMode(workspaceProject?.project_mode ?? cached.project.projectMode),
+        },
+        stages: cached.stages.map((stage) => ({ ...stage })),
+        works: cached.works.map((work) => ({ ...work })),
+        lines: cached.lines.map((line) => ({ ...line })),
+        dependencies: cached.dependencies.map((dependency) => ({ ...dependency })),
+        versions: cached.versions.map((version) => ({
+          ...version,
+          approvalStamp: version.approvalStamp ? { ...version.approvalStamp } : null,
+          snapshot: cloneSnapshot(version.snapshot),
+        })),
+        scheduleBaseline: cached.scheduleBaseline
+          ? {
+            ...cached.scheduleBaseline,
+            works: cached.scheduleBaseline.works.map((work) => ({ ...work })),
+          }
+          : null,
+      };
+      statesByProjectId.set(projectId, cachedState);
+      ensureMainStoreSubscription();
+      notify();
+      return;
+    }
+
+    const cachedStagesById = new Map((cached?.stages ?? []).map((stage) => [stage.id, stage]));
+    const cachedWorksById = new Map((cached?.works ?? []).map((work) => [work.id, work]));
+    const cachedLinesById = new Map((cached?.lines ?? []).map((line) => [line.id, line]));
+    const cachedDependenciesById = new Map((cached?.dependencies ?? []).map((dependency) => [dependency.id, dependency]));
+    const taskInfoByWorkId = buildTaskInfoByWorkId(tasks);
+
+    const stages = draft.stages
+      .map((stage) => {
+        const cachedStage = cachedStagesById.get(stage.id);
+        return {
+          id: stage.id,
+          projectId,
+          title: stage.title,
+          order: stage.sort_order,
+          discountBps: stage.discount_bps,
+          createdAt: cachedStage?.createdAt ?? stage.created_at,
+          updatedAt: stage.updated_at,
+        } satisfies EstimateV2Stage;
+      })
+      .sort((left, right) => left.order - right.order);
+
+    const works = draft.works
+      .map((work) => {
+        const cachedWork = cachedWorksById.get(work.id);
+        const taskInfo = taskInfoByWorkId.get(work.id);
+        return {
+          id: work.id,
+          projectId,
+          stageId: work.project_stage_id ?? cachedWork?.stageId ?? stages[0]?.id ?? "",
+          title: work.title,
+          order: work.sort_order,
+          discountBps: cachedWork?.discountBps ?? 0,
+          plannedStart: taskInfo?.plannedStart ?? cachedWork?.plannedStart ?? null,
+          plannedEnd: taskInfo?.plannedEnd ?? cachedWork?.plannedEnd ?? null,
+          taskId: taskInfo?.taskId ?? cachedWork?.taskId ?? null,
+          status: taskInfo?.status ?? cachedWork?.status ?? "not_started",
+          createdAt: cachedWork?.createdAt ?? work.created_at,
+          updatedAt: cachedWork?.updatedAt ?? work.created_at,
+        } satisfies EstimateV2Work;
+      })
+      .sort((left, right) => left.order - right.order);
+
+    const stageIdByWorkId = new Map(works.map((work) => [work.id, work.stageId]));
+    const lines = draft.lines.map((line) => {
+      const cachedLine = cachedLinesById.get(line.id);
+      return {
+        id: line.id,
+        projectId,
+        stageId: stageIdByWorkId.get(line.estimate_work_id) ?? cachedLine?.stageId ?? "",
+        workId: line.estimate_work_id,
+        title: line.title,
+        type: inferLineTypeFromRemote(line.resource_type, cachedLine?.type),
+        unit: line.unit ?? cachedLine?.unit ?? "unit",
+        qtyMilli: Math.max(1, Math.round(line.quantity * 1_000)),
+        costUnitCents: Math.max(0, Math.round(line.unit_price_cents ?? 0)),
+        markupBps: cachedLine?.markupBps ?? currentState.project.markupBps,
+        discountBpsOverride: cachedLine?.discountBpsOverride ?? null,
+        assigneeId: cachedLine?.assigneeId ?? null,
+        assigneeName: cachedLine?.assigneeName ?? null,
+        assigneeEmail: cachedLine?.assigneeEmail ?? null,
+        receivedCents: cachedLine?.receivedCents ?? 0,
+        pnlPlaceholderCents: cachedLine?.pnlPlaceholderCents ?? 0,
+        createdAt: cachedLine?.createdAt ?? line.created_at,
+        updatedAt: cachedLine?.updatedAt ?? line.created_at,
+      } satisfies EstimateV2ResourceLine;
+    });
+
+    const dependencies = draft.dependencies.map((dependency) => {
+      const cachedDependency = cachedDependenciesById.get(dependency.id);
+      return {
+        id: dependency.id,
+        projectId,
+        kind: "FS",
+        fromWorkId: dependency.from_work_id,
+        toWorkId: dependency.to_work_id,
+        lagDays: cachedDependency?.lagDays ?? 0,
+        createdAt: cachedDependency?.createdAt ?? dependency.created_at,
+        updatedAt: cachedDependency?.updatedAt ?? dependency.created_at,
+      } satisfies EstimateV2Dependency;
+    });
+
+    const derivedProjectMode = normalizeProjectMode(workspaceProject?.project_mode ?? currentState.project.projectMode);
+    const cachedProject = cached?.project ?? null;
+    const nextProject: EstimateV2Project = {
+      ...currentState.project,
+      ...cachedProject,
+      id: draft.estimate?.id ?? cachedProject?.id ?? currentState.project.id,
+      projectId,
+      title: workspaceProject?.title ?? draft.estimate?.title ?? cachedProject?.title ?? currentState.project.title,
+      projectMode: derivedProjectMode,
+      regime: derivedProjectMode === "build_myself" && cachedProject?.regime === "client"
+        ? "build_myself"
+        : (cachedProject?.regime ?? (derivedProjectMode === "build_myself" ? "build_myself" : "contractor")),
+      updatedAt: cachedProject?.updatedAt ?? draft.estimate?.updated_at ?? currentState.project.updatedAt,
+    };
+
+    const nextState: EstimateV2ProjectState = {
+      project: nextProject,
+      stages,
+      works,
+      lines,
+      dependencies,
+      versions: cached?.versions.map((version) => ({
+        ...version,
+        approvalStamp: version.approvalStamp ? { ...version.approvalStamp } : null,
+        snapshot: cloneSnapshot(version.snapshot),
+      })) ?? [],
+      scheduleBaseline: cached?.scheduleBaseline
+        ? {
+          ...cached.scheduleBaseline,
+          works: cached.scheduleBaseline.works.map((work) => ({ ...work })),
+        }
+        : null,
+    };
+
+    statesByProjectId.set(projectId, nextState);
+    ensureMainStoreSubscription();
+    saveWorkspaceEstimateCache(projectId, input.profileId, nextState);
+    notify();
+  })().finally(() => {
+    remoteHydrationPromises.delete(cacheKey);
+  });
+
+  remoteHydrationPromises.set(cacheKey, hydration);
+  return hydration;
 }
 
 function ensureProjectState(projectId: string): EstimateV2ProjectState {
@@ -753,6 +1258,14 @@ function captureScheduleBaseline(state: EstimateV2ProjectState, capturedAt: stri
   };
 }
 
+function needsInWorkTaskMaterialization(state: EstimateV2ProjectState): boolean {
+  return state.works.some((work) => !work.taskId);
+}
+
+function needsInWorkBaselineCapture(state: EstimateV2ProjectState): boolean {
+  return !state.scheduleBaseline;
+}
+
 function buildPlanningToInWorkDraft(
   projectId: string,
   state: EstimateV2ProjectState,
@@ -842,6 +1355,17 @@ async function isSupabaseOwnerActionAllowed(
   projectId: string,
   ownerProfileId?: string,
 ): Promise<boolean> {
+  const accessContext = accessContextByProjectId.get(projectId);
+  if (accessContext?.mode === "supabase") {
+    const actingProfileId = ownerProfileId ?? accessContext.profileId ?? null;
+    const ownerId = accessContext.projectOwnerProfileId ?? null;
+    return Boolean(actingProfileId && ownerId && actingProfileId === ownerId);
+  }
+
+  if (accessContext?.mode === "demo" || accessContext?.mode === "local") {
+    return false;
+  }
+
   const mode = ownerProfileId
     ? { kind: "supabase", profileId: ownerProfileId } as const
     : await resolveRuntimeWorkspaceMode();
@@ -1074,7 +1598,7 @@ export function createStage(projectId: string, input: { title: string; discountB
   if (!canEditEstimateState(projectId, state)) return null;
   const now = nowIso();
   const stage: EstimateV2Stage = {
-    id: id("stage-v2"),
+    id: createEntityId(projectId, "stage-v2"),
     projectId,
     title: input.title.trim() || "New stage",
     order: (state.stages[state.stages.length - 1]?.order ?? 0) + 1,
@@ -1084,7 +1608,7 @@ export function createStage(projectId: string, input: { title: string; discountB
   };
   state.stages.push(stage);
   state.project.updatedAt = now;
-  notify();
+  commitProjectStateChange(projectId);
   return { ...stage };
 }
 
@@ -1102,7 +1626,7 @@ export function updateStage(projectId: string, stageId: string, partial: Partial
       : stage
   ));
   state.project.updatedAt = now;
-  notify();
+  commitProjectStateChange(projectId);
 }
 
 export function deleteStage(projectId: string, stageId: string) {
@@ -1116,7 +1640,7 @@ export function deleteStage(projectId: string, stageId: string) {
   state.dependencies = state.dependencies.filter((dep) => !workIdsToDelete.has(dep.fromWorkId) && !workIdsToDelete.has(dep.toWorkId));
   syncExternalDomainsFromEstimate(projectId, state);
   state.project.updatedAt = nowIso();
-  notify();
+  commitProjectStateChange(projectId);
 }
 
 export function createWork(projectId: string, input: { stageId: string; title: string; discountBps?: number }): EstimateV2Work | null {
@@ -1128,7 +1652,7 @@ export function createWork(projectId: string, input: { stageId: string; title: s
     .reduce((max, work) => Math.max(max, work.order), 0) + 1;
 
   const work: EstimateV2Work = {
-    id: id("work-v2"),
+    id: createEntityId(projectId, "work-v2"),
     projectId,
     stageId: input.stageId,
     title: input.title.trim() || "New work",
@@ -1144,7 +1668,7 @@ export function createWork(projectId: string, input: { stageId: string; title: s
 
   state.works.push(work);
   state.project.updatedAt = now;
-  notify();
+  commitProjectStateChange(projectId);
   return { ...work };
 }
 
@@ -1175,7 +1699,7 @@ export function updateWork(projectId: string, workId: string, partial: Partial<E
     syncExternalDomainsFromEstimate(projectId, state);
   }
   state.project.updatedAt = now;
-  notify();
+  commitProjectStateChange(projectId);
 }
 
 export function updateWorkDates(
@@ -1222,7 +1746,7 @@ export function updateWorkDates(
 
   syncExternalDomainsFromEstimate(projectId, state);
   state.project.updatedAt = now;
-  notify();
+  commitProjectStateChange(projectId);
   return {
     ok: true,
     shiftedWorkIds: changedWorkIds.filter((id) => id !== workId),
@@ -1237,7 +1761,7 @@ export function deleteWork(projectId: string, workId: string) {
   state.dependencies = state.dependencies.filter((dep) => dep.fromWorkId !== workId && dep.toWorkId !== workId);
   syncExternalDomainsFromEstimate(projectId, state);
   state.project.updatedAt = nowIso();
-  notify();
+  commitProjectStateChange(projectId);
 }
 
 export function createLine(
@@ -1258,7 +1782,7 @@ export function createLine(
   if (!canEditEstimateState(projectId, state)) return null;
   const now = nowIso();
   const line: EstimateV2ResourceLine = {
-    id: id("line-v2"),
+    id: createEntityId(projectId, "line-v2"),
     projectId,
     stageId: input.stageId,
     workId: input.workId,
@@ -1283,7 +1807,7 @@ export function createLine(
   if (parentWork) syncChecklistForWork(state, parentWork);
   syncExternalDomainsFromEstimate(projectId, state);
   state.project.updatedAt = now;
-  notify();
+  commitProjectStateChange(projectId);
   return { ...line };
 }
 
@@ -1312,7 +1836,7 @@ export function updateLine(projectId: string, lineId: string, partial: Partial<E
   }
   syncExternalDomainsFromEstimate(projectId, state);
   state.project.updatedAt = now;
-  notify();
+  commitProjectStateChange(projectId);
 }
 
 export function deleteLine(projectId: string, lineId: string) {
@@ -1326,7 +1850,7 @@ export function deleteLine(projectId: string, lineId: string) {
   }
   syncExternalDomainsFromEstimate(projectId, state);
   state.project.updatedAt = nowIso();
-  notify();
+  commitProjectStateChange(projectId);
 }
 
 export function setProjectEstimateStatus(
@@ -1348,8 +1872,10 @@ export function setProjectEstimateStatus(
   const previousStatus = state.project.estimateStatus;
   let autoScheduled = false;
   let baselineCaptured = false;
+  const shouldInitializeInWork = status === "in_work"
+    && (needsInWorkTaskMaterialization(state) || needsInWorkBaselineCapture(state));
 
-  if (previousStatus === "planning" && status === "in_work") {
+  if (shouldInitializeInWork) {
     const missingWorks = sortWorksByStageAndOrder(state).filter((work) => !work.plannedStart || !work.plannedEnd);
     if (missingWorks.length > 0 && !options.skipSetup) {
       return {
@@ -1375,22 +1901,23 @@ export function setProjectEstimateStatus(
       autoScheduled = true;
     }
 
-    materializeTasksForAllWorks(projectId, state);
-    state.scheduleBaseline = captureScheduleBaseline(state, now);
-    baselineCaptured = true;
+    if (needsInWorkTaskMaterialization(state)) {
+      materializeTasksForAllWorks(projectId, state);
+    }
+    if (needsInWorkBaselineCapture(state)) {
+      state.scheduleBaseline = captureScheduleBaseline(state, now);
+      baselineCaptured = true;
+    }
   }
 
   if (status === "finished") {
-    const incompleteTasks: StatusFailureTask[] = [];
-    state.works.forEach((work) => {
-      const linkedTask = work.taskId ? getTask(work.taskId) : undefined;
-      if (!linkedTask || linkedTask.status !== "done") {
-        incompleteTasks.push({
-          taskId: linkedTask?.id ?? null,
-          title: linkedTask?.title ?? work.title,
-        });
-      }
-    });
+    const tasksToValidate = options.projectTasks ?? getTasks(projectId);
+    const incompleteTasks = tasksToValidate
+      .filter((task) => task.status !== "done")
+      .map((task) => ({
+        taskId: task.id,
+        title: task.title,
+      }));
     if (incompleteTasks.length > 0) {
       return {
         ok: false,
@@ -1415,7 +1942,7 @@ export function setProjectEstimateStatus(
     }));
   }
 
-  notify();
+  commitProjectStateChange(projectId);
 
   if (previousStatus !== status) {
     emitEstimateEvent(projectId, "estimate.status_changed", {
@@ -1467,6 +1994,18 @@ export async function transitionEstimateV2ProjectToInWork(
     };
   }
 
+  if (!needsInWorkTaskMaterialization(state)) {
+    const result = setProjectEstimateStatus(projectId, "in_work", options);
+    if (!result.ok) {
+      return result;
+    }
+    return {
+      ok: true,
+      autoScheduled: result.autoScheduled ?? false,
+      baselineCaptured: result.baselineCaptured ?? false,
+    };
+  }
+
   const draftResult = buildPlanningToInWorkDraft(projectId, state, options);
   if (!draftResult.ok) {
     return {
@@ -1480,6 +2019,7 @@ export async function transitionEstimateV2ProjectToInWork(
     const persisted = await persistEstimateV2HeroTransition({
       projectId,
       projectTitle: state.project.title,
+      previousStatus: state.project.estimateStatus === "paused" ? "paused" : "planning",
       autoScheduled: draftResult.draft.autoScheduled,
       stages: state.stages.map((stage) => ({
         localStageId: stage.id,
@@ -1512,7 +2052,7 @@ export async function transitionEstimateV2ProjectToInWork(
       draftResult.draft,
       persisted.ids.taskIdByLocalWorkId,
     );
-    notify();
+    commitProjectStateChange(projectId);
 
     return {
       ok: true,
@@ -1523,9 +2063,9 @@ export async function transitionEstimateV2ProjectToInWork(
     if (error instanceof EstimateV2HeroTransitionError) {
       return {
         ok: false,
-        reason: error.blocking ? "transition_blocked" : "transition_failed",
+        reason: "transition_failed",
         errorMessage: error.message,
-        blocking: error.blocking,
+        blocking: false,
       };
     }
 
@@ -1577,7 +2117,7 @@ export function updateEstimateV2Project(projectId: string, partial: Partial<Esti
     });
   }
 
-  notify();
+  commitProjectStateChange(projectId);
 }
 
 export function setRegime(projectId: string, regime: Regime): boolean {
@@ -1590,7 +2130,7 @@ export function setRegime(projectId: string, regime: Regime): boolean {
     regime,
     updatedAt: nowIso(),
   };
-  notify();
+  commitProjectStateChange(projectId);
   return true;
 }
 
@@ -1604,7 +2144,7 @@ export function setRegimeDev(projectId: string, regime: Regime): boolean {
     regime,
     updatedAt: nowIso(),
   };
-  notify();
+  commitProjectStateChange(projectId);
   return true;
 }
 
@@ -1633,7 +2173,7 @@ export function addDependency(
 
   const now = nowIso();
   const dependency: EstimateV2Dependency = {
-    id: id("dep-v2"),
+    id: createEntityId(projectId, "dep-v2"),
     projectId,
     kind: "FS",
     fromWorkId,
@@ -1665,7 +2205,7 @@ export function addDependency(
   }
 
   state.project.updatedAt = now;
-  notify();
+  commitProjectStateChange(projectId);
 
   const fromWorkTitle = worksById[fromWorkId]?.title ?? fromWorkId;
   const toWorkTitle = worksById[toWorkId]?.title ?? toWorkId;
@@ -1703,7 +2243,7 @@ export function removeDependency(projectId: string, dependencyId: string) {
   state.dependencies = state.dependencies.filter((dep) => dep.id !== dependencyId);
   if (!existing) return;
   state.project.updatedAt = now;
-  notify();
+  commitProjectStateChange(projectId);
   emitEstimateEvent(projectId, "estimate.dependency_removed", {
     dependencyId,
     fromWorkId: existing.fromWorkId,
@@ -1761,7 +2301,7 @@ export function createVersionSnapshot(
 
   state.versions.push(version);
   state.project.updatedAt = now;
-  notify();
+  commitProjectStateChange(projectId);
 
   return {
     versionId: version.id,
@@ -1839,7 +2379,7 @@ export function submitVersion(projectId: string, versionId: string, options: Sub
   });
 
   state.project.updatedAt = now;
-  notify();
+  commitProjectStateChange(projectId);
   return true;
 }
 
@@ -1902,7 +2442,7 @@ export function refreshVersionSnapshot(
   });
 
   state.project.updatedAt = now;
-  notify();
+  commitProjectStateChange(projectId);
   return true;
 }
 
@@ -1964,7 +2504,7 @@ export function approveVersion(
   });
 
   state.project.updatedAt = now;
-  notify();
+  commitProjectStateChange(projectId);
   return true;
 }
 
@@ -2164,10 +2704,15 @@ export function computeVersionDiff(
 
 export function __unsafeResetEstimateV2ForTests() {
   statesByProjectId.clear();
+  accessContextByProjectId.clear();
   if (mainStoreUnsubscribe) {
     mainStoreUnsubscribe();
     mainStoreUnsubscribe = null;
   }
+  remoteHydrationPromises.clear();
+  remoteDraftSyncTimers.forEach((timer) => clearTimeout(timer));
+  remoteDraftSyncTimers.clear();
+  remoteDraftSyncErrorSignatureByProjectId.clear();
   listeners.clear();
   crossSyncInProgress = false;
 }

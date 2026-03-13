@@ -1,10 +1,11 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AlertTriangle, ChevronDown, ChevronRight, Download, Info, Plus, Trash2, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import {
   DropdownMenu,
@@ -37,17 +38,21 @@ import { InlineEditableNumber } from "@/components/estimate-v2/InlineEditableNum
 import { InlineEditableText } from "@/components/estimate-v2/InlineEditableText";
 import { ResourceTypeBadge } from "@/components/estimate-v2/ResourceTypeBadge";
 import {
-  useCurrentUser,
   useHRItems,
   useHRPayments,
   useProcurementV2,
-  useProject,
   useTasks,
-  useWorkspaceMode,
 } from "@/hooks/use-mock-data";
+import {
+  useWorkspaceCurrentUserState,
+  useWorkspaceMode,
+  useWorkspaceProjectMembersState,
+  useWorkspaceProjectState,
+} from "@/hooks/use-workspace-source";
 import { getAuthRole } from "@/lib/auth-state";
 import {
   approveVersion,
+  clearEstimateV2ProjectAccessContext,
   computeVersionDiff,
   createLine,
   createStage,
@@ -56,6 +61,7 @@ import {
   deleteLine,
   deleteStage,
   deleteWork,
+  registerEstimateV2ProjectAccessContext,
   refreshVersionSnapshot,
   setProjectEstimateStatus,
   transitionEstimateV2ProjectToInWork,
@@ -66,6 +72,7 @@ import {
   updateWork,
 } from "@/data/estimate-v2-store";
 import { useEstimateV2Project } from "@/hooks/use-estimate-v2-data";
+import { getPlanningSource } from "@/data/planning-source";
 import { addEvent, getUserById } from "@/data/store";
 import { computeLineTotals, computeProjectTotals, computeStageTotals } from "@/lib/estimate-v2/pricing";
 import { resolveProjectEstimateCtaState } from "@/lib/estimate-v2/project-estimate-cta";
@@ -100,7 +107,7 @@ import type {
   EstimateExecutionStatus,
   ResourceLineType,
 } from "@/types/estimate-v2";
-import type { UserPlan } from "@/types/entities";
+import type { Task, UserPlan } from "@/types/entities";
 import { Checkbox } from "@/components/ui/checkbox";
 
 function money(cents: number, currency: string): string {
@@ -280,15 +287,93 @@ interface ClientRecipient {
   email: string;
 }
 
+function ProjectEstimateSkeleton() {
+  return (
+    <div className="space-y-sp-2 p-sp-2">
+      <div className="rounded-card border border-border bg-card p-sp-2 space-y-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 flex-1 space-y-2">
+            <Skeleton className="h-7 w-56 max-w-full" />
+            <div className="flex gap-2">
+              <Skeleton className="h-8 w-28" />
+              <Skeleton className="h-8 w-24" />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Skeleton className="h-9 w-28" />
+            <Skeleton className="h-9 w-32" />
+          </div>
+        </div>
+        <div className="grid gap-3 lg:grid-cols-2">
+          <Skeleton className="h-40 rounded-card" />
+          <Skeleton className="h-40 rounded-card" />
+        </div>
+        <Skeleton className="h-12 rounded-card" />
+        <Skeleton className="h-56 rounded-card" />
+      </div>
+    </div>
+  );
+}
+
+function WorkTableFrame({ className, children }: { className?: string; children: ReactNode }) {
+  const tableRef = useRef<HTMLTableElement | null>(null);
+  const [scrollState, setScrollState] = useState({
+    hasOverflow: false,
+    isScrolled: false,
+  });
+
+  useEffect(() => {
+    const tableNode = tableRef.current;
+    const container = tableNode?.parentElement as HTMLDivElement | null;
+    if (!tableNode || !container) return undefined;
+
+    const updateScrollState = () => {
+      const hasOverflow = container.scrollWidth > container.clientWidth + 1;
+      const isScrolled = container.scrollLeft > 0;
+      setScrollState((current) => {
+        if (current.hasOverflow === hasOverflow && current.isScrolled === isScrolled) {
+          return current;
+        }
+        return { hasOverflow, isScrolled };
+      });
+    };
+
+    updateScrollState();
+    container.addEventListener("scroll", updateScrollState, { passive: true });
+    const resizeObserver = typeof ResizeObserver !== "undefined"
+      ? new ResizeObserver(updateScrollState)
+      : null;
+    resizeObserver?.observe(container);
+    resizeObserver?.observe(tableNode);
+
+    return () => {
+      container.removeEventListener("scroll", updateScrollState);
+      resizeObserver?.disconnect();
+    };
+  }, []);
+
+  return (
+    <div className="relative pl-4">
+      <Table ref={tableRef} className={className}>
+        {children}
+      </Table>
+      {scrollState.hasOverflow && !scrollState.isScrolled && (
+        <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-card via-card/80 to-transparent" />
+      )}
+    </div>
+  );
+}
+
 export default function ProjectEstimate() {
   const { id: projectId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const pid = projectId!;
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const currentUser = useCurrentUser();
   const workspaceMode = useWorkspaceMode();
-  const { project, members } = useProject(pid);
+  const { user: currentUser, isLoading: isCurrentUserLoading } = useWorkspaceCurrentUserState();
+  const { project, isLoading: isProjectLoading } = useWorkspaceProjectState(pid);
+  const { members, isLoading: isMembersLoading } = useWorkspaceProjectMembersState(pid);
   const tasks = useTasks(pid);
   const procurementItems = useProcurementV2(pid);
   const orders = useOrders(pid);
@@ -303,12 +388,17 @@ export default function ProjectEstimate() {
     dependencies,
     versions,
     scheduleBaseline,
+    isLoading: isEstimateLoading,
   } = useEstimateV2Project(pid);
 
   const authRole = getAuthRole();
   const currentMembership = members.find((member) => member.user_id === currentUser.id) ?? null;
-  const isOwner = authRole === "owner" && project?.owner_id === currentUser.id;
-  const canSubmitByRole = authRole === "owner" || authRole === "co_owner";
+  const isSupabaseWorkspace = workspaceMode.kind === "supabase";
+  const isOwner = project?.owner_id === currentUser.id
+    && (isSupabaseWorkspace ? true : authRole === "owner");
+  const canSubmitByRole = isSupabaseWorkspace
+    ? currentMembership?.role === "owner" || currentMembership?.role === "co_owner"
+    : authRole === "owner" || authRole === "co_owner";
   const canSubmitByMembership = currentMembership?.role === "owner" || currentMembership?.role === "co_owner";
   const regime = estimateProject.regime;
   const canEditEstimate = isOwner && regime !== "client";
@@ -326,8 +416,9 @@ export default function ProjectEstimate() {
   } | null>(null);
   const [missingDatesWorkIds, setMissingDatesWorkIds] = useState<string[]>([]);
   const [incompleteTaskBlocks, setIncompleteTaskBlocks] = useState<Array<{ taskId: string | null; title: string }>>([]);
+  const [bulkFinishedTasks, setBulkFinishedTasks] = useState<Task[] | null>(null);
   const [collapsedStageIds, setCollapsedStageIds] = useState<Set<string>>(new Set());
-  const estimateHasSavedContent = lines.length > 0 || versions.length > 0;
+  const estimateHasSavedContent = stages.length > 0 || works.length > 0 || lines.length > 0 || versions.length > 0;
   const [estimateEditorStarted, setEstimateEditorStarted] = useState(estimateHasSavedContent);
   const previousProjectIdRef = useRef(pid);
   const [pendingStageTitleEditId, setPendingStageTitleEditId] = useState<string | null>(null);
@@ -337,10 +428,6 @@ export default function ProjectEstimate() {
   const [financialResourcesExpanded, setFinancialResourcesExpanded] = useState(false);
   const [customUnitDraftByLineId, setCustomUnitDraftByLineId] = useState<Record<string, string>>({});
   const [customUnitInputLineIds, setCustomUnitInputLineIds] = useState<Set<string>>(new Set());
-  const [workTableScrollStateById, setWorkTableScrollStateById] = useState<
-    Record<string, { hasOverflow: boolean; isScrolled: boolean }>
-  >({});
-  const workTableScrollCleanupRef = useRef<Map<string, () => void>>(new Map());
   const suppressResourceCreateAutoFocusRef = useRef(false);
 
   useEffect(() => {
@@ -399,12 +486,43 @@ export default function ProjectEstimate() {
     };
   }, [pendingLineTitleEditId]);
 
-  useEffect(() => (
-    () => {
-      workTableScrollCleanupRef.current.forEach((cleanup) => cleanup());
-      workTableScrollCleanupRef.current.clear();
+  useEffect(() => {
+    if (!pid) return undefined;
+
+    if (workspaceMode.kind === "supabase" && project?.owner_id && currentUser.id) {
+      registerEstimateV2ProjectAccessContext(pid, {
+        mode: "supabase",
+        profileId: workspaceMode.profileId,
+        projectOwnerProfileId: project.owner_id,
+        membershipRole: currentMembership?.role ?? null,
+      });
+      return () => {
+        clearEstimateV2ProjectAccessContext(pid);
+      };
     }
-  ), []);
+
+    if (workspaceMode.kind === "demo" || workspaceMode.kind === "local") {
+      registerEstimateV2ProjectAccessContext(pid, {
+        mode: workspaceMode.kind,
+        profileId: currentUser.id || undefined,
+        projectOwnerProfileId: project?.owner_id,
+        membershipRole: currentMembership?.role ?? null,
+      });
+      return () => {
+        clearEstimateV2ProjectAccessContext(pid);
+      };
+    }
+
+    clearEstimateV2ProjectAccessContext(pid);
+    return undefined;
+  }, [
+    currentMembership?.role,
+    currentUser.id,
+    pid,
+    project?.owner_id,
+    workspaceMode.kind,
+    workspaceMode.kind === "supabase" ? workspaceMode.profileId : null,
+  ]);
 
   const sortedStages = useMemo(
     () => [...stages].sort((a, b) => a.order - b.order),
@@ -720,14 +838,13 @@ export default function ProjectEstimate() {
 
   const handleEstimateStatusChange = async (
     nextStatus: EstimateExecutionStatus,
-    options?: { skipSetup?: boolean },
+    options?: { skipSetup?: boolean; projectTasks?: Task[] },
   ) => {
     if (!canEditEstimate) return;
     if (nextStatus === estimateProject.estimateStatus && !options?.skipSetup) return;
 
     if (
       workspaceMode.kind === "supabase"
-      && estimateProject.estimateStatus === "planning"
       && nextStatus === "in_work"
     ) {
       const result = await transitionEstimateV2ProjectToInWork(pid, {
@@ -825,6 +942,50 @@ export default function ProjectEstimate() {
     setIncompleteTaskBlocks([]);
     navigate(`/project/${pid}/tasks`);
   };
+
+  const handleMarkAllTasksDone = useCallback(async () => {
+    if (!canEditEstimate) return;
+
+    const incompleteTasks = tasks.filter((task) => task.status !== "done");
+    if (incompleteTasks.length === 0) {
+      setIncompleteTaskBlocks([]);
+      setBulkFinishedTasks(tasks);
+      return;
+    }
+
+    try {
+      const source = await getPlanningSource(
+        workspaceMode.kind === "pending-supabase" ? undefined : workspaceMode,
+      );
+      const updatedTasks = await Promise.all(
+        incompleteTasks.map((task) => source.updateProjectTask(task.id, { status: "done" })),
+      );
+      const updatedTaskById = new Map(updatedTasks.map((task) => [task.id, task]));
+      const nextTasks = tasks.map((task) => updatedTaskById.get(task.id) ?? task);
+
+      if (workspaceMode.kind === "supabase") {
+        await queryClient.invalidateQueries({
+          queryKey: planningQueryKeys.projectTasks(workspaceMode.profileId, pid),
+        });
+      }
+
+      setIncompleteTaskBlocks([]);
+      setBulkFinishedTasks(nextTasks);
+      toast({ title: "All project tasks marked done" });
+    } catch (error) {
+      toast({
+        title: "Unable to mark all tasks done",
+        description: error instanceof Error ? error.message : "Retry the action.",
+        variant: "destructive",
+      });
+    }
+  }, [canEditEstimate, pid, queryClient, tasks, toast, workspaceMode]);
+
+  const handleConfirmFinishAfterBulkDone = useCallback(async () => {
+    if (!bulkFinishedTasks) return;
+    await handleEstimateStatusChange("finished", { projectTasks: bulkFinishedTasks });
+    setBulkFinishedTasks(null);
+  }, [bulkFinishedTasks, handleEstimateStatusChange]);
 
   const handleTabChange = (nextTab: string) => {
     if (!showEstimateWorkspace && nextTab !== "estimate") return;
@@ -1129,53 +1290,6 @@ export default function ProjectEstimate() {
     });
   };
 
-  const updateWorkTableScrollState = useCallback((workId: string, container: HTMLDivElement) => {
-    const hasOverflow = container.scrollWidth > container.clientWidth + 1;
-    const isScrolled = container.scrollLeft > 0;
-    setWorkTableScrollStateById((current) => {
-      const prev = current[workId];
-      if (prev && prev.hasOverflow === hasOverflow && prev.isScrolled === isScrolled) return current;
-      return {
-        ...current,
-        [workId]: { hasOverflow, isScrolled },
-      };
-    });
-  }, []);
-
-  const registerWorkTable = useCallback((workId: string, tableNode: HTMLTableElement | null) => {
-    const existingCleanup = workTableScrollCleanupRef.current.get(workId);
-    if (existingCleanup) {
-      existingCleanup();
-      workTableScrollCleanupRef.current.delete(workId);
-    }
-
-    if (!tableNode) {
-      return;
-    }
-
-    const container = tableNode.parentElement as HTMLDivElement | null;
-    if (!container) return;
-
-    const handleScrollOrResize = () => {
-      updateWorkTableScrollState(workId, container);
-    };
-
-    handleScrollOrResize();
-    container.addEventListener("scroll", handleScrollOrResize, { passive: true });
-    const resizeObserver = typeof ResizeObserver !== "undefined"
-      ? new ResizeObserver(handleScrollOrResize)
-      : null;
-    resizeObserver?.observe(container);
-    resizeObserver?.observe(tableNode);
-
-    const cleanup = () => {
-      container.removeEventListener("scroll", handleScrollOrResize);
-      resizeObserver?.disconnect();
-    };
-
-    workTableScrollCleanupRef.current.set(workId, cleanup);
-  }, [updateWorkTableScrollState]);
-
   const openCustomUnitInput = (lineId: string, currentUnit: string) => {
     setCustomUnitInputLineIds((current) => {
       const next = new Set(current);
@@ -1208,6 +1322,16 @@ export default function ProjectEstimate() {
     }
     closeCustomUnitInput(line.id);
   };
+
+  const isEstimatePageLoading = workspaceMode.kind === "pending-supabase"
+    || isProjectLoading
+    || isCurrentUserLoading
+    || isMembersLoading
+    || isEstimateLoading;
+
+  if (isEstimatePageLoading) {
+    return <ProjectEstimateSkeleton />;
+  }
 
   if (!project) {
     return <EmptyState icon={AlertTriangle} title="Not found" description="Project not found." />;
@@ -1831,11 +1955,7 @@ export default function ProjectEstimate() {
                                   )}
                                 </div>
 
-                                <div className="relative pl-4">
-                                  <Table
-                                    ref={(node) => registerWorkTable(work.id, node)}
-                                    className="table-fixed min-w-[980px]"
-                                  >
+                                <WorkTableFrame className="table-fixed min-w-[980px]">
                                     <TableHeader>
                                       <TableRow>
                                         <TableHead className="sticky left-0 z-30 h-9 w-[360px] border-r border-border bg-card py-1 pr-2 shadow-[6px_0_10px_-10px_hsl(var(--foreground)/0.45)]">
@@ -2115,11 +2235,7 @@ export default function ProjectEstimate() {
                                         </TableRow>
                                       )}
                                     </TableBody>
-                                  </Table>
-                                  {workTableScrollStateById[work.id]?.hasOverflow && !workTableScrollStateById[work.id]?.isScrolled && (
-                                    <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-card via-card/80 to-transparent" />
-                                  )}
-                                </div>
+                                </WorkTableFrame>
                               </div>
                             );
                           })}
@@ -2270,12 +2386,14 @@ export default function ProjectEstimate() {
             if (!open) setIncompleteTaskBlocks([]);
           }}
           title="Cannot mark as Finished"
-          description="All linked tasks must be Done before project status can move to Finished."
-          confirmLabel="Close"
-          cancelLabel="Cancel"
+          description="All project tasks must be Done before project status can move to Finished."
+          confirmLabel="Mark all tasks done"
+          cancelLabel="Close"
           tertiaryLabel="Go to Work log"
           onTertiary={handleGoToWorkLog}
-          onConfirm={() => setIncompleteTaskBlocks([])}
+          onConfirm={() => {
+            void handleMarkAllTasksDone();
+          }}
           onCancel={() => setIncompleteTaskBlocks([])}
         >
           <div className="max-h-48 overflow-auto rounded-md border border-border p-2">
@@ -2288,6 +2406,21 @@ export default function ProjectEstimate() {
             </ul>
           </div>
         </ConfirmModal>
+
+        <ConfirmModal
+          open={Boolean(bulkFinishedTasks)}
+          onOpenChange={(open) => {
+            if (!open) setBulkFinishedTasks(null);
+          }}
+          title="All tasks are Done"
+          description="Do you want to mark the estimate as Finished now?"
+          confirmLabel="Mark estimate Finished"
+          cancelLabel="Not now"
+          onConfirm={() => {
+            void handleConfirmFinishAfterBulkDone();
+          }}
+          onCancel={() => setBulkFinishedTasks(null)}
+        />
 
         <ConfirmModal
           open={recipientPickerOpen}

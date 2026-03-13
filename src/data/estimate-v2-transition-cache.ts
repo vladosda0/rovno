@@ -117,6 +117,12 @@ export function saveEstimateV2HeroTransitionCompleted(input: {
   return record;
 }
 
+export function clearEstimateV2HeroTransitionCache(projectId: string) {
+  const storage = safeLocalStorage();
+  if (!storage) return;
+  storage.removeItem(cacheKey(projectId));
+}
+
 export function loadEstimateV2HeroTransitionBlocked(
   projectId: string,
 ): EstimateV2HeroTransitionBlockedRecord | null {
@@ -146,4 +152,9 @@ export function clearEstimateV2HeroTransitionBlocked(projectId: string) {
   const storage = safeSessionStorage();
   if (!storage) return;
   storage.removeItem(blockedKey(projectId));
+}
+
+export function clearEstimateV2HeroTransitionRecoveryState(projectId: string) {
+  clearEstimateV2HeroTransitionCache(projectId);
+  clearEstimateV2HeroTransitionBlocked(projectId);
 }

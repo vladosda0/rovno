@@ -1,51 +1,47 @@
 import { Outlet, Navigate, useParams, useLocation } from "react-router-dom";
 import { AlertTriangle } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
-import { isDemoSessionActive } from "@/lib/auth-state";
-import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useWorkspaceMode, useWorkspaceProjectState } from "@/hooks/use-workspace-source";
+
+function ProjectLayoutSkeleton() {
+  return (
+    <div className="flex-1 p-sp-3">
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <Skeleton className="h-8 w-52" />
+          <Skeleton className="h-4 w-72 max-w-full" />
+        </div>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <Skeleton className="h-36 rounded-card" />
+          <Skeleton className="h-36 rounded-card" />
+          <Skeleton className="h-36 rounded-card" />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function ProjectLayout() {
   const { id } = useParams();
   const location = useLocation();
-  const runtimeAuth = useRuntimeAuth();
   const workspaceMode = useWorkspaceMode();
-  const demoSessionActive = isDemoSessionActive();
-  const demoRuntimeActive = demoSessionActive && runtimeAuth.status !== "authenticated";
   const { project, isLoading: isProjectLoading } = useWorkspaceProjectState(id ?? "");
-
-  if (runtimeAuth.status === "loading") {
-    return (
-      <div className="flex min-h-[40vh] items-center justify-center text-sm text-muted-foreground">
-        Loading project...
-      </div>
-    );
-  }
-
-  if (!demoRuntimeActive && runtimeAuth.status === "guest") {
-    return <Navigate to="/auth/login" replace />;
-  }
 
   // Redirect /project/:id to /project/:id/dashboard
   if (location.pathname === `/project/${id}`) {
     return <Navigate to={`/project/${id}/dashboard`} replace />;
   }
 
-  if (!demoRuntimeActive && workspaceMode.kind === "pending-supabase") {
-    return (
-      <div className="flex min-h-[40vh] items-center justify-center text-sm text-muted-foreground">
-        Loading project...
-      </div>
-    );
+  if (workspaceMode.kind === "guest") {
+    return <Navigate to="/auth/login" replace />;
   }
 
-  if (
-    !demoRuntimeActive
-    && runtimeAuth.status === "authenticated"
-    && workspaceMode.kind === "supabase"
-    && !isProjectLoading
-    && !project
-  ) {
+  if (workspaceMode.kind === "pending-supabase" || (workspaceMode.kind === "supabase" && isProjectLoading)) {
+    return <ProjectLayoutSkeleton />;
+  }
+
+  if (workspaceMode.kind === "supabase" && !project) {
     return (
       <div className="flex-1 p-sp-3">
         <EmptyState

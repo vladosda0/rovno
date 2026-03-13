@@ -394,6 +394,38 @@ export async function upsertTaskChecklistItems(
   }
 }
 
+export async function deleteHeroTaskChecklistItems(
+  supabase: TypedSupabaseClient,
+  ids: string[],
+): Promise<void> {
+  if (ids.length === 0) return;
+
+  const { error } = await supabase
+    .from("task_checklist_items")
+    .delete()
+    .in("id", ids);
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function deleteHeroTasks(
+  supabase: TypedSupabaseClient,
+  ids: string[],
+): Promise<void> {
+  if (ids.length === 0) return;
+
+  const { error } = await supabase
+    .from("tasks")
+    .delete()
+    .in("id", ids);
+
+  if (error) {
+    throw error;
+  }
+}
+
 function createSupabasePlanningSource(
   supabase: TypedSupabaseClient,
 ): PlanningSource {

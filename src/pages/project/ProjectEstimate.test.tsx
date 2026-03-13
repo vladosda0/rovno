@@ -1,10 +1,10 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import ProjectEstimate from "@/pages/project/ProjectEstimate";
-import { __unsafeResetStoreForTests, addMember, addProject } from "@/data/store";
+import { __unsafeResetStoreForTests, addMember, addProject, addTask } from "@/data/store";
 import {
   createLine,
   createStage,
@@ -20,6 +20,83 @@ import {
   setAuthRole,
   setStoredAuthProfile,
 } from "@/lib/auth-state";
+
+vi.mock("@/components/ui/select", async () => {
+  const React = await import("react");
+
+  interface SelectContextValue {
+    value?: string;
+    onValueChange?: (value: string) => void;
+    disabled?: boolean;
+  }
+
+  const SelectContext = React.createContext<SelectContextValue | null>(null);
+
+  function Select({
+    value,
+    onValueChange,
+    disabled,
+    children,
+  }: {
+    value?: string;
+    onValueChange?: (value: string) => void;
+    disabled?: boolean;
+    children: React.ReactNode;
+  }) {
+    return (
+      <SelectContext.Provider value={{ value, onValueChange, disabled }}>
+        <div>{children}</div>
+      </SelectContext.Provider>
+    );
+  }
+
+  function SelectTrigger({ children, className }: { children: React.ReactNode; className?: string }) {
+    const context = React.useContext(SelectContext);
+    return (
+      <button
+        type="button"
+        role="combobox"
+        aria-expanded="false"
+        disabled={context?.disabled}
+        className={className}
+      >
+        {children}
+      </button>
+    );
+  }
+
+  function SelectValue({ placeholder }: { placeholder?: string }) {
+    const context = React.useContext(SelectContext);
+    return <span>{context?.value ?? placeholder ?? ""}</span>;
+  }
+
+  function SelectContent({ children }: { children: React.ReactNode }) {
+    return <div>{children}</div>;
+  }
+
+  function SelectItem({ value, children }: { value: string; children: React.ReactNode }) {
+    const context = React.useContext(SelectContext);
+    return (
+      <button
+        type="button"
+        role="option"
+        aria-selected={context?.value === value}
+        disabled={context?.disabled}
+        onClick={() => context?.onValueChange?.(value)}
+      >
+        {children}
+      </button>
+    );
+  }
+
+  return {
+    Select,
+    SelectTrigger,
+    SelectValue,
+    SelectContent,
+    SelectItem,
+  };
+});
 
 function createQueryClient() {
   return new QueryClient({
@@ -42,6 +119,35 @@ async function flushUi() {
   await new Promise<void>((resolve) => {
     window.requestAnimationFrame(() => resolve());
   });
+}
+
+async function changeEstimateStatus(nextStatus: string) {
+  const [trigger] = screen.getAllByRole("combobox");
+  if (!trigger) {
+    throw new Error("Estimate status trigger not found");
+  }
+  trigger.focus();
+  trigger.dispatchEvent(new window.PointerEvent("pointerdown", {
+    bubbles: true,
+    cancelable: true,
+    button: 0,
+    ctrlKey: false,
+    pointerType: "mouse",
+  }));
+  await flushUi();
+  if (trigger.getAttribute("aria-expanded") !== "true") {
+    fireEvent.keyDown(trigger, { key: "ArrowDown", code: "ArrowDown", keyCode: 40 });
+    await flushUi();
+  }
+  if (trigger.getAttribute("aria-expanded") !== "true") {
+    fireEvent.keyDown(trigger, { key: "Enter", code: "Enter", keyCode: 13 });
+    await flushUi();
+  }
+  const option = await screen.findByRole("option", { name: nextStatus }).catch(async () => (
+    await screen.findByText(nextStatus)
+  ));
+  fireEvent.click(option);
+  await flushUi();
 }
 
 function renderProjectEstimate(projectId: string) {
@@ -133,12 +239,39 @@ function seedEstimateLine(projectId: string) {
 
 describe("ProjectEstimate", () => {
   beforeEach(() => {
+    class MockPointerEvent extends MouseEvent {
+      pointerType: string;
+
+      isPrimary: boolean;
+
+      constructor(type: string, params: MouseEventInit & { pointerType?: string; isPrimary?: boolean } = {}) {
+        super(type, params);
+        this.pointerType = params.pointerType ?? "mouse";
+        this.isPrimary = params.isPrimary ?? true;
+      }
+    }
+
     Object.defineProperty(window, "PointerEvent", {
       configurable: true,
       writable: true,
-      value: MouseEvent,
+      value: MockPointerEvent,
     });
     Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      writable: true,
+      value: () => {},
+    });
+    Object.defineProperty(HTMLElement.prototype, "hasPointerCapture", {
+      configurable: true,
+      writable: true,
+      value: () => false,
+    });
+    Object.defineProperty(HTMLElement.prototype, "setPointerCapture", {
+      configurable: true,
+      writable: true,
+      value: () => {},
+    });
+    Object.defineProperty(HTMLElement.prototype, "releasePointerCapture", {
       configurable: true,
       writable: true,
       value: () => {},
@@ -249,6 +382,85 @@ describe("ProjectEstimate", () => {
     expect(screen.getByRole("button", { name: "Framing" })).toBeInTheDocument();
   });
 
+  it("opens the estimate workspace when a saved stage already exists", async () => {
+    const projectId = "project-estimate-stage-only";
+    setupLocalProject(projectId);
+    const stage = createStage(projectId, { title: "Shell" });
+    expect(stage).not.toBeNull();
+
+    await act(async () => {
+      renderProjectEstimate(projectId);
+      await flushUi();
+    });
+
+    expect(screen.queryByText("No estimate created yet")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Shell" })).toBeInTheDocument();
+  });
+
+  it("adds a second work to an existing stage without crashing the page", async () => {
+    const projectId = "project-estimate-second-work";
+    setupLocalProject(projectId);
+    const stage = createStage(projectId, { title: "Shell" });
+    expect(stage).not.toBeNull();
+    if (!stage) return;
+
+    const firstWork = createWork(projectId, { stageId: stage.id, title: "Framing" });
+    expect(firstWork).not.toBeNull();
+
+    await act(async () => {
+      renderProjectEstimate(projectId);
+      await flushUi();
+    });
+
+    expect(screen.getByRole("button", { name: "Framing" })).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Add work" }));
+      await flushUi();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Framing" })).toBeInTheDocument();
+      expect(screen.getByDisplayValue("Add work")).toBeInTheDocument();
+      expect(screen.getAllByRole("button", { name: "Add resource" })).toHaveLength(2);
+    });
+  });
+
+  it("shows missing work dates as the only in-work blocker and lets the user skip setup", async () => {
+    const projectId = "project-estimate-missing-dates";
+    setupLocalProject(projectId);
+    const stage = createStage(projectId, { title: "Shell" });
+    expect(stage).not.toBeNull();
+    if (!stage) return;
+
+    const work = createWork(projectId, { stageId: stage.id, title: "Framing" });
+    expect(work).not.toBeNull();
+
+    await act(async () => {
+      renderProjectEstimate(projectId);
+      await flushUi();
+    });
+
+    await act(async () => {
+      await changeEstimateStatus("In work");
+    });
+
+    expect(screen.getByText("Missing work dates")).toBeInTheDocument();
+    const missingDatesDialog = screen.getByRole("alertdialog", { name: "Missing work dates" });
+    expect(within(missingDatesDialog).getByText("Framing")).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Skip setup" }));
+      await flushUi();
+    });
+
+    await waitFor(() => {
+      expect(getEstimateV2ProjectState(projectId).project.estimateStatus).toBe("in_work");
+    });
+    expect(getEstimateV2ProjectState(projectId).works[0]?.plannedStart).toBeTruthy();
+    expect(getEstimateV2ProjectState(projectId).works[0]?.plannedEnd).toBeTruthy();
+  });
+
   it("keeps the detailed cost overview collapsed by default in work mode", async () => {
     const projectId = "project-estimate-in-work-ui";
     setupLocalProject(projectId);
@@ -284,6 +496,111 @@ describe("ProjectEstimate", () => {
     expect(within(planPanel).getByText("Planned")).toBeInTheDocument();
     expect(within(planPanel).getByText("Actual")).toBeInTheDocument();
     expect(within(planPanel).queryByRole("columnheader")).not.toBeInTheDocument();
+  });
+
+  it("marks all project tasks done from the finish blocker and then finishes the estimate after confirmation", async () => {
+    const projectId = "project-estimate-finish-bulk-done";
+    setupLocalProject(projectId);
+    const seeded = seedEstimateLine(projectId);
+    expect(seeded).not.toBeNull();
+    if (!seeded) return;
+
+    const statusResult = setProjectEstimateStatus(projectId, "in_work", { skipSetup: true });
+    expect(statusResult.ok).toBe(true);
+
+    addTask({
+      id: "manual-finish-task",
+      project_id: projectId,
+      stage_id: seeded.stage.id,
+      title: "Manual inspection",
+      description: "",
+      status: "not_started",
+      assignee_id: "",
+      checklist: [],
+      comments: [],
+      attachments: [],
+      photos: [],
+      linked_estimate_item_ids: [],
+      created_at: "2026-03-01T00:00:00.000Z",
+    });
+
+    await act(async () => {
+      renderProjectEstimate(projectId);
+      await flushUi();
+    });
+
+    await act(async () => {
+      await changeEstimateStatus("Finished");
+    });
+
+    expect(screen.getByText("Cannot mark as Finished")).toBeInTheDocument();
+    expect(screen.getByText("Manual inspection")).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Mark all tasks done" }));
+      await flushUi();
+    });
+
+    expect(screen.getByText("All tasks are Done")).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Mark estimate Finished" }));
+      await flushUi();
+    });
+
+    await waitFor(() => {
+      expect(getEstimateV2ProjectState(projectId).project.estimateStatus).toBe("finished");
+    });
+  });
+
+  it("keeps the estimate in work when the follow-up finish confirmation is cancelled", async () => {
+    const projectId = "project-estimate-finish-bulk-cancel";
+    setupLocalProject(projectId);
+    const seeded = seedEstimateLine(projectId);
+    expect(seeded).not.toBeNull();
+    if (!seeded) return;
+
+    const statusResult = setProjectEstimateStatus(projectId, "in_work", { skipSetup: true });
+    expect(statusResult.ok).toBe(true);
+
+    addTask({
+      id: "manual-finish-task-cancel",
+      project_id: projectId,
+      stage_id: seeded.stage.id,
+      title: "Client handoff",
+      description: "",
+      status: "not_started",
+      assignee_id: "",
+      checklist: [],
+      comments: [],
+      attachments: [],
+      photos: [],
+      linked_estimate_item_ids: [],
+      created_at: "2026-03-01T00:00:00.000Z",
+    });
+
+    await act(async () => {
+      renderProjectEstimate(projectId);
+      await flushUi();
+    });
+
+    await act(async () => {
+      await changeEstimateStatus("Finished");
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Mark all tasks done" }));
+      await flushUi();
+    });
+
+    expect(screen.getByText("All tasks are Done")).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Not now" }));
+      await flushUi();
+    });
+
+    expect(getEstimateV2ProjectState(projectId).project.estimateStatus).toBe("in_work");
   });
 
   it("updates the footer VAT summary totals", async () => {

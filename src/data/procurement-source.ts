@@ -183,6 +183,22 @@ export async function upsertHeroProcurementItems(
   }
 }
 
+export async function deleteHeroProcurementItems(
+  supabase: TypedSupabaseClient,
+  ids: string[],
+): Promise<void> {
+  if (ids.length === 0) return;
+
+  const { error } = await supabase
+    .from("procurement_items")
+    .delete()
+    .in("id", ids);
+
+  if (error) {
+    throw error;
+  }
+}
+
 function createSupabaseProcurementSource(
   supabase: TypedSupabaseClient,
 ): ProcurementSource {

@@ -40,7 +40,7 @@ export interface ActivitySource {
 export interface HeroTransitionEventPayload {
   source: "estimate_v2.hero_transition";
   fingerprint: string;
-  previousStatus: "planning";
+  previousStatus: "planning" | "paused";
   nextStatus: "in_work";
   autoScheduled: boolean;
   ids: {
@@ -143,7 +143,7 @@ function readHeroTransitionPayload(value: Json): HeroTransitionEventPayload | nu
   return {
     source: "estimate_v2.hero_transition",
     fingerprint,
-    previousStatus: "planning",
+    previousStatus: record.previousStatus === "paused" ? "paused" : "planning",
     nextStatus: "in_work",
     autoScheduled: record.autoScheduled === true,
     ids: {

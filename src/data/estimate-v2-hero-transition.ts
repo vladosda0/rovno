@@ -5,9 +5,10 @@ import {
   type HeroTransitionEventPayload,
 } from "@/data/activity-source";
 import {
+  clearEstimateV2HeroTransitionBlocked,
+  clearEstimateV2HeroTransitionRecoveryState,
   loadEstimateV2HeroTransitionBlocked,
   loadEstimateV2HeroTransitionCache,
-  saveEstimateV2HeroTransitionBlocked,
   saveEstimateV2HeroTransitionCompleted,
   saveEstimateV2HeroTransitionPending,
   type EstimateV2HeroTransitionIds,
@@ -15,16 +16,19 @@ import {
 import {
   ensureEstimateCurrentVersion,
   ensureProjectEstimateRoot,
+  loadCurrentEstimateDraft,
   upsertEstimateResourceLines,
   upsertEstimateWorks,
 } from "@/data/estimate-source";
 import {
+  deleteHeroTaskChecklistItems,
+  deleteHeroTasks,
   ensureProjectStages,
   upsertHeroTasks,
   upsertTaskChecklistItems,
 } from "@/data/planning-source";
-import { upsertHeroProcurementItems } from "@/data/procurement-source";
-import { upsertHeroHRItems } from "@/data/hr-source";
+import { deleteHeroProcurementItems, upsertHeroProcurementItems } from "@/data/procurement-source";
+import { deleteHeroHRItems, upsertHeroHRItems } from "@/data/hr-source";
 import { resolveRuntimeWorkspaceMode } from "@/data/workspace-source";
 import type { ResourceLineType } from "@/types/estimate-v2";
 
@@ -35,6 +39,8 @@ const RESOURCE_TYPE_ORDER: Record<ResourceLineType, number> = {
   subcontractor: 3,
   other: 4,
 };
+const PARTIAL_REMOTE_TRANSITION_MESSAGE = "Estimate changed after a partial remote transition. Reload the page before trying again.";
+const REMOTE_EVENT_MISMATCH_MESSAGE = "Remote hero-transition rows already exist for another estimate snapshot. Rovno will not create a second set.";
 
 type HeroTransitionErrorCode =
   | "AUTH_REQUIRED"
@@ -96,6 +102,7 @@ export interface EstimateV2HeroTransitionLineInput {
 export interface EstimateV2HeroTransitionInput {
   projectId: string;
   projectTitle: string;
+  previousStatus: "planning" | "paused";
   autoScheduled: boolean;
   stages: EstimateV2HeroTransitionStageInput[];
   works: EstimateV2HeroTransitionWorkInput[];
@@ -111,6 +118,7 @@ export interface EstimateV2HeroTransitionResult {
 interface NormalizedTransitionPlan {
   projectId: string;
   projectTitle: string;
+  previousStatus: "planning" | "paused";
   autoScheduled: boolean;
   stages: EstimateV2HeroTransitionStageInput[];
   works: EstimateV2HeroTransitionWorkInput[];
@@ -223,6 +231,7 @@ function normalizePlan(input: EstimateV2HeroTransitionInput): NormalizedTransiti
   return {
     projectId: input.projectId,
     projectTitle: input.projectTitle,
+    previousStatus: input.previousStatus,
     autoScheduled: input.autoScheduled,
     stages,
     works,
@@ -280,26 +289,223 @@ function buildIds(plan: NormalizedTransitionPlan, fingerprint: string): Estimate
 
 function createTransitionPayload(
   fingerprint: string,
+  previousStatus: "planning" | "paused",
   autoScheduled: boolean,
   ids: EstimateV2HeroTransitionIds,
 ): HeroTransitionEventPayload {
   return {
     source: "estimate_v2.hero_transition",
     fingerprint,
-    previousStatus: "planning",
+    previousStatus,
     nextStatus: "in_work",
     autoScheduled,
     ids,
   };
 }
 
-function blockTransition(projectId: string, fingerprint: string, message: string): never {
-  saveEstimateV2HeroTransitionBlocked({
-    projectId,
-    fingerprint,
-    reason: message,
+function isRecoverableBlockedReason(reason: string): boolean {
+  return reason.includes(PARTIAL_REMOTE_TRANSITION_MESSAGE)
+    || reason.includes(REMOTE_EVENT_MISMATCH_MESSAGE)
+    || reason.includes("Remote estimate snapshot rows already exist")
+    || reason.includes("Remote estimate version rows already exist");
+}
+
+function resolveIdsFromExistingDraft(
+  plan: NormalizedTransitionPlan,
+  ids: EstimateV2HeroTransitionIds,
+  draft: Awaited<ReturnType<typeof loadCurrentEstimateDraft>>,
+): EstimateV2HeroTransitionIds {
+  const nextIds: EstimateV2HeroTransitionIds = {
+    ...ids,
+    estimateId: draft.estimate?.id ?? ids.estimateId,
+    versionId: draft.currentVersion?.id ?? ids.versionId,
+    stageIdByLocalStageId: { ...ids.stageIdByLocalStageId },
+    workIdByLocalWorkId: { ...ids.workIdByLocalWorkId },
+    lineIdByLocalLineId: { ...ids.lineIdByLocalLineId },
+    taskIdByLocalWorkId: { ...ids.taskIdByLocalWorkId },
+    checklistItemIdByLocalLineId: { ...ids.checklistItemIdByLocalLineId },
+    procurementItemIdByLocalLineId: { ...ids.procurementItemIdByLocalLineId },
+    hrItemIdByLocalLineId: { ...ids.hrItemIdByLocalLineId },
+  };
+
+  const remoteStageIds = new Set(draft.stages.map((stage) => stage.id));
+  plan.stages.forEach((stage) => {
+    if (remoteStageIds.has(stage.localStageId)) {
+      nextIds.stageIdByLocalStageId[stage.localStageId] = stage.localStageId;
+    }
   });
-  throw new EstimateV2HeroTransitionError("UNSAFE_REMOTE_ROWS", message, { blocking: true });
+
+  const remoteWorkIds = new Set(draft.works.map((work) => work.id));
+  plan.works.forEach((work) => {
+    if (remoteWorkIds.has(work.localWorkId)) {
+      nextIds.workIdByLocalWorkId[work.localWorkId] = work.localWorkId;
+    }
+  });
+
+  const remoteLineIds = new Set(draft.lines.map((line) => line.id));
+  plan.lines.forEach((line) => {
+    if (remoteLineIds.has(line.localLineId)) {
+      nextIds.lineIdByLocalLineId[line.localLineId] = line.localLineId;
+    }
+  });
+
+  return nextIds;
+}
+
+function mergeDownstreamIds(
+  plan: NormalizedTransitionPlan,
+  ids: EstimateV2HeroTransitionIds,
+  source: EstimateV2HeroTransitionIds | null,
+): EstimateV2HeroTransitionIds {
+  if (!source) return ids;
+
+  const nextIds: EstimateV2HeroTransitionIds = {
+    ...ids,
+    eventId: source.eventId || ids.eventId,
+    stageIdByLocalStageId: { ...ids.stageIdByLocalStageId },
+    workIdByLocalWorkId: { ...ids.workIdByLocalWorkId },
+    lineIdByLocalLineId: { ...ids.lineIdByLocalLineId },
+    taskIdByLocalWorkId: { ...ids.taskIdByLocalWorkId },
+    checklistItemIdByLocalLineId: { ...ids.checklistItemIdByLocalLineId },
+    procurementItemIdByLocalLineId: { ...ids.procurementItemIdByLocalLineId },
+    hrItemIdByLocalLineId: { ...ids.hrItemIdByLocalLineId },
+  };
+
+  plan.works.forEach((work) => {
+    const taskId = source.taskIdByLocalWorkId[work.localWorkId];
+    if (taskId) {
+      nextIds.taskIdByLocalWorkId[work.localWorkId] = taskId;
+    }
+  });
+
+  plan.lines.forEach((line) => {
+    const checklistItemId = source.checklistItemIdByLocalLineId[line.localLineId];
+    if (checklistItemId) {
+      nextIds.checklistItemIdByLocalLineId[line.localLineId] = checklistItemId;
+    }
+
+    if (line.type === "material" || line.type === "tool") {
+      const procurementItemId = source.procurementItemIdByLocalLineId[line.localLineId];
+      if (procurementItemId) {
+        nextIds.procurementItemIdByLocalLineId[line.localLineId] = procurementItemId;
+      }
+    }
+
+    if (line.type === "labor" || line.type === "subcontractor") {
+      const hrItemId = source.hrItemIdByLocalLineId[line.localLineId];
+      if (hrItemId) {
+        nextIds.hrItemIdByLocalLineId[line.localLineId] = hrItemId;
+      }
+    }
+  });
+
+  return nextIds;
+}
+
+function draftContainsCurrentPlan(
+  plan: NormalizedTransitionPlan,
+  draft: Awaited<ReturnType<typeof loadCurrentEstimateDraft>>,
+): boolean {
+  if (!draft.estimate || !draft.currentVersion) {
+    return false;
+  }
+
+  const stageIds = new Set(draft.stages.map((stage) => stage.id));
+  const workIds = new Set(draft.works.map((work) => work.id));
+  const lineIds = new Set(draft.lines.map((line) => line.id));
+
+  return plan.stages.every((stage) => stageIds.has(stage.localStageId))
+    && plan.works.every((work) => workIds.has(work.localWorkId))
+    && plan.lines.every((line) => lineIds.has(line.localLineId));
+}
+
+function downstreamIdsCoverCurrentPlan(
+  plan: NormalizedTransitionPlan,
+  ids: EstimateV2HeroTransitionIds | null,
+): boolean {
+  if (!ids) return false;
+
+  return plan.works.every((work) => Boolean(ids.taskIdByLocalWorkId[work.localWorkId]))
+    && plan.lines.every((line) => Boolean(ids.checklistItemIdByLocalLineId[line.localLineId]))
+    && plan.lines
+      .filter((line) => line.type === "material" || line.type === "tool")
+      .every((line) => Boolean(ids.procurementItemIdByLocalLineId[line.localLineId]))
+    && plan.lines
+      .filter((line) => line.type === "labor" || line.type === "subcontractor")
+      .every((line) => Boolean(ids.hrItemIdByLocalLineId[line.localLineId]));
+}
+
+function uniqueIds(ids: Array<string | undefined>): string[] {
+  return Array.from(new Set(ids.filter((value): value is string => Boolean(value))));
+}
+
+function collectStaleDownstreamIds(
+  plan: NormalizedTransitionPlan,
+  staleIds: EstimateV2HeroTransitionIds | null,
+): {
+  checklistItemIds: string[];
+  procurementItemIds: string[];
+  hrItemIds: string[];
+  taskIds: string[];
+} {
+  if (!staleIds) {
+    return {
+      checklistItemIds: [],
+      procurementItemIds: [],
+      hrItemIds: [],
+      taskIds: [],
+    };
+  }
+
+  const currentWorkIds = new Set(plan.works.map((work) => work.localWorkId));
+  const currentLineIds = new Set(plan.lines.map((line) => line.localLineId));
+  const currentProcurementLineIds = new Set(
+    plan.lines
+      .filter((line) => line.type === "material" || line.type === "tool")
+      .map((line) => line.localLineId),
+  );
+  const currentHrLineIds = new Set(
+    plan.lines
+      .filter((line) => line.type === "labor" || line.type === "subcontractor")
+      .map((line) => line.localLineId),
+  );
+
+  return {
+    checklistItemIds: uniqueIds(
+      Object.entries(staleIds.checklistItemIdByLocalLineId)
+        .filter(([localLineId]) => !currentLineIds.has(localLineId))
+        .map(([, checklistItemId]) => checklistItemId),
+    ),
+    procurementItemIds: uniqueIds(
+      Object.entries(staleIds.procurementItemIdByLocalLineId)
+        .filter(([localLineId]) => !currentProcurementLineIds.has(localLineId))
+        .map(([, procurementItemId]) => procurementItemId),
+    ),
+    hrItemIds: uniqueIds(
+      Object.entries(staleIds.hrItemIdByLocalLineId)
+        .filter(([localLineId]) => !currentHrLineIds.has(localLineId))
+        .map(([, hrItemId]) => hrItemId),
+    ),
+    taskIds: uniqueIds(
+      Object.entries(staleIds.taskIdByLocalWorkId)
+        .filter(([localWorkId]) => !currentWorkIds.has(localWorkId))
+        .map(([, taskId]) => taskId),
+    ),
+  };
+}
+
+async function cleanupStaleDownstreamRows(
+  staleIds: {
+    checklistItemIds: string[];
+    procurementItemIds: string[];
+    hrItemIds: string[];
+    taskIds: string[];
+  },
+): Promise<void> {
+  await deleteHeroTaskChecklistItems(supabase, staleIds.checklistItemIds);
+  await deleteHeroProcurementItems(supabase, staleIds.procurementItemIds);
+  await deleteHeroHRItems(supabase, staleIds.hrItemIds);
+  await deleteHeroTasks(supabase, staleIds.taskIds);
 }
 
 export async function persistEstimateV2HeroTransition(
@@ -316,20 +522,17 @@ export async function persistEstimateV2HeroTransition(
   const plan = normalizePlan(input);
   const fingerprint = buildFingerprint(plan);
   const blocked = loadEstimateV2HeroTransitionBlocked(plan.projectId);
-  if (blocked) {
-    throw new EstimateV2HeroTransitionError("UNSAFE_REMOTE_ROWS", blocked.reason, { blocking: true });
+  if (blocked && isRecoverableBlockedReason(blocked.reason)) {
+    clearEstimateV2HeroTransitionBlocked(plan.projectId);
   }
 
-  const cache = loadEstimateV2HeroTransitionCache(plan.projectId);
-  if (cache && cache.fingerprint !== fingerprint) {
-    blockTransition(
-      plan.projectId,
-      fingerprint,
-      "Estimate changed after a partial remote transition. Reload the page before trying again.",
-    );
+  let cache = loadEstimateV2HeroTransitionCache(plan.projectId);
+  if (cache?.status === "completed" && cache.fingerprint !== fingerprint) {
+    clearEstimateV2HeroTransitionRecoveryState(plan.projectId);
+    cache = null;
   }
 
-  if (cache?.status === "completed") {
+  if (cache?.status === "completed" && cache.fingerprint === fingerprint) {
     return {
       fingerprint,
       ids: cache.ids,
@@ -337,26 +540,67 @@ export async function persistEstimateV2HeroTransition(
     };
   }
 
+  const pendingCache = cache?.status === "pending" ? cache : null;
   const latestEvent = await getLatestHeroTransitionEvent(supabase, plan.projectId);
-  if (latestEvent && latestEvent.payload.fingerprint !== fingerprint) {
-    blockTransition(
-      plan.projectId,
-      fingerprint,
-      "Remote hero-transition rows already exist for another estimate snapshot. Rovno will not create a second set.",
-    );
-  }
-
-  let ids = cache?.ids ?? buildIds(plan, fingerprint);
+  const latestEventIds = latestEvent?.payload.ids ?? null;
   if (latestEvent?.payload.fingerprint === fingerprint) {
-    ids = latestEvent.payload.ids;
     saveEstimateV2HeroTransitionCompleted({
       projectId: plan.projectId,
       fingerprint,
-      ids,
+      ids: latestEvent.payload.ids,
     });
     return {
       fingerprint,
-      ids,
+      ids: latestEvent.payload.ids,
+      profileId: mode.profileId,
+    };
+  }
+
+  const existingDraft = await loadCurrentEstimateDraft(plan.projectId);
+  let ids = resolveIdsFromExistingDraft(plan, buildIds(plan, fingerprint), existingDraft);
+  ids = mergeDownstreamIds(plan, ids, latestEventIds);
+  ids = mergeDownstreamIds(plan, ids, pendingCache?.ids ?? null);
+
+  const staleDownstreamIds = pendingCache && pendingCache.fingerprint !== fingerprint
+    ? collectStaleDownstreamIds(plan, pendingCache.ids)
+    : {
+      checklistItemIds: [],
+      procurementItemIds: [],
+      hrItemIds: [],
+      taskIds: [],
+    };
+
+  if (latestEventIds && draftContainsCurrentPlan(plan, existingDraft) && downstreamIdsCoverCurrentPlan(plan, latestEventIds)) {
+    if (
+      staleDownstreamIds.checklistItemIds.length > 0
+      || staleDownstreamIds.procurementItemIds.length > 0
+      || staleDownstreamIds.hrItemIds.length > 0
+      || staleDownstreamIds.taskIds.length > 0
+    ) {
+      try {
+        await cleanupStaleDownstreamRows(staleDownstreamIds);
+      } catch (error) {
+        throw new EstimateV2HeroTransitionError(
+          "TASK_WRITE_FAILED",
+          "Transition recovery did not finish saving to Supabase. Retry the transition.",
+          { cause: error },
+        );
+      }
+    }
+
+    const completedIds = mergeDownstreamIds(
+      plan,
+      resolveIdsFromExistingDraft(plan, buildIds(plan, fingerprint), existingDraft),
+      latestEventIds,
+    );
+    saveEstimateV2HeroTransitionCompleted({
+      projectId: plan.projectId,
+      fingerprint,
+      ids: completedIds,
+    });
+    return {
+      fingerprint,
+      ids: completedIds,
       profileId: mode.profileId,
     };
   }
@@ -408,10 +652,9 @@ export async function persistEstimateV2HeroTransition(
     });
 
     if (!rootResult.ok) {
-      blockTransition(
-        plan.projectId,
-        fingerprint,
-        "Remote estimate snapshot rows already exist but cannot be matched safely. Rovno will not create a second set.",
+      throw new EstimateV2HeroTransitionError(
+        "ESTIMATE_SNAPSHOT_FAILED",
+        "Estimate snapshot could not be reconciled to Supabase. Retry the transition.",
       );
     }
 
@@ -422,10 +665,9 @@ export async function persistEstimateV2HeroTransition(
     });
 
     if (!versionResult.ok) {
-      blockTransition(
-        plan.projectId,
-        fingerprint,
-        "Remote estimate version rows already exist but cannot be matched safely. Rovno will not create a second set.",
+      throw new EstimateV2HeroTransitionError(
+        "ESTIMATE_SNAPSHOT_FAILED",
+        "Estimate snapshot could not be reconciled to Supabase. Retry the transition.",
       );
     }
 
@@ -476,6 +718,8 @@ export async function persistEstimateV2HeroTransition(
   }
 
   try {
+    await cleanupStaleDownstreamRows(staleDownstreamIds);
+
     await upsertHeroTasks(
       supabase,
       plan.works.map((work) => ({
@@ -591,7 +835,7 @@ export async function persistEstimateV2HeroTransition(
       projectId: plan.projectId,
       actorProfileId: mode.profileId,
       entityId: ids.estimateId,
-      payload: createTransitionPayload(fingerprint, plan.autoScheduled, ids),
+      payload: createTransitionPayload(fingerprint, plan.previousStatus, plan.autoScheduled, ids),
     });
   } catch (error) {
     throw new EstimateV2HeroTransitionError(

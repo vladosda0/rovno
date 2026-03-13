@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  __unsafeResetEstimateV2ForTests,
   approveVersion,
   addDependency,
   computeVersionDiff,
@@ -18,7 +19,7 @@ import {
 } from "@/data/estimate-v2-store";
 import { getHRItems } from "@/data/hr-store";
 import { getProcurementItems } from "@/data/procurement-store";
-import { getEvents, getProject, getTask, updateChecklist, updateProject, updateTask } from "@/data/store";
+import { __unsafeResetStoreForTests, addTask, getEvents, getProject, getTask, getTasks, updateChecklist, updateProject, updateTask } from "@/data/store";
 import { clearDemoSession, enterDemoSession, setAuthRole } from "@/lib/auth-state";
 import { toDayIndex } from "@/lib/estimate-v2/schedule";
 import type {
@@ -333,16 +334,67 @@ describe("estimate-v2 execution foundation", () => {
     expect(blocked.reason).toBe("incomplete_tasks");
     expect((blocked.incompleteTasks ?? []).length).toBeGreaterThan(0);
 
-    const state = getEstimateV2ProjectState(projectId);
-    state.works.forEach((work) => {
-      if (!work.taskId) return;
-      updateTask(work.taskId, { status: "done" });
+    getTasks(projectId).forEach((task) => {
+      updateTask(task.id, { status: "done" });
     });
 
     const allowed = setProjectEstimateStatus(projectId, "finished");
     expect(allowed.ok).toBe(true);
     const finishedState = getEstimateV2ProjectState(projectId);
     expect(finishedState.project.estimateStatus).toBe("finished");
+  });
+
+  it("materializes tasks and baseline on paused -> in_work when first activation was skipped earlier", () => {
+    const projectId = "project-2";
+    __unsafeResetStoreForTests();
+    __unsafeResetEstimateV2ForTests();
+    clearDemoSession();
+    enterDemoSession(projectId);
+    setAuthRole("owner");
+
+    const paused = setProjectEstimateStatus(projectId, "paused");
+    expect(paused.ok).toBe(true);
+
+    const transitioned = setProjectEstimateStatus(projectId, "in_work", { skipSetup: true });
+    expect(transitioned.ok).toBe(true);
+    expect(transitioned.autoScheduled).toBe(true);
+    expect(transitioned.baselineCaptured).toBe(true);
+
+    const state = getEstimateV2ProjectState(projectId);
+    expect(state.project.estimateStatus).toBe("in_work");
+    expect(state.scheduleBaseline).not.toBeNull();
+    expect(state.works.every((work) => Boolean(work.taskId))).toBe(true);
+  });
+
+  it("blocks finished status until all project tasks are done, including non-estimate tasks", () => {
+    const projectId = "project-3";
+    setAuthRole("owner");
+
+    setProjectEstimateStatus(projectId, "in_work", { skipSetup: true });
+    addTask({
+      id: "manual-project-task",
+      project_id: projectId,
+      stage_id: getEstimateV2ProjectState(projectId).stages[0]?.id ?? "",
+      title: "Manual inspection",
+      description: "",
+      status: "not_started",
+      assignee_id: "",
+      checklist: [],
+      comments: [],
+      attachments: [],
+      photos: [],
+      linked_estimate_item_ids: [],
+      created_at: "2026-03-01T00:00:00.000Z",
+    });
+
+    const blocked = setProjectEstimateStatus(projectId, "finished");
+    expect(blocked.ok).toBe(false);
+    expect(blocked.reason).toBe("incomplete_tasks");
+    expect(blocked.incompleteTasks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ taskId: "manual-project-task", title: "Manual inspection" }),
+      ]),
+    );
   });
 
   it("allows non-hero status changes with explicit owner profile id and keeps finished validation", () => {

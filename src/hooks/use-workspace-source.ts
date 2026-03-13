@@ -46,13 +46,8 @@ function useWorkspaceModeState(): WorkspaceModeState {
   useSyncExternalStore(subscribeAuthState, getDemoSessionSnapshot);
   const runtimeAuth = useRuntimeAuth();
   const demoSessionActive = isDemoSessionActive();
-  const demoRuntimeActive = demoSessionActive && runtimeAuth.status !== "authenticated";
 
-  if (demoRuntimeActive) {
-    if (isSupabaseWorkspaceRequested() && runtimeAuth.status === "loading") {
-      return { kind: "pending-supabase" };
-    }
-
+  if (demoSessionActive) {
     return { kind: "demo" };
   }
 
@@ -79,7 +74,10 @@ export function useWorkspaceMode(): WorkspaceModeState {
   return useWorkspaceModeState();
 }
 
-export function useWorkspaceCurrentUser(): User {
+export function useWorkspaceCurrentUserState(): {
+  user: User;
+  isLoading: boolean;
+} {
   const mode = useWorkspaceModeState();
   const supabaseMode = mode.kind === "supabase" ? mode : null;
   const userQuery = useQuery({
@@ -95,10 +93,27 @@ export function useWorkspaceCurrentUser(): User {
   });
 
   if (mode.kind === "demo" || mode.kind === "local") {
-    return store.getCurrentUser();
+    return {
+      user: store.getCurrentUser(),
+      isLoading: false,
+    };
   }
 
-  return userQuery.data ?? EMPTY_WORKSPACE_USER;
+  if (mode.kind === "pending-supabase") {
+    return {
+      user: EMPTY_WORKSPACE_USER,
+      isLoading: true,
+    };
+  }
+
+  return {
+    user: userQuery.data ?? EMPTY_WORKSPACE_USER,
+    isLoading: userQuery.isPending,
+  };
+}
+
+export function useWorkspaceCurrentUser(): User {
+  return useWorkspaceCurrentUserState().user;
 }
 
 export function useWorkspaceProjects(): Project[] {
@@ -165,7 +180,10 @@ export function useWorkspaceProject(projectId: string): Project | undefined {
   return useWorkspaceProjectState(projectId).project;
 }
 
-export function useWorkspaceProjectMembers(projectId: string): Member[] {
+export function useWorkspaceProjectMembersState(projectId: string): {
+  members: Member[];
+  isLoading: boolean;
+} {
   const mode = useWorkspaceModeState();
   const supabaseMode = mode.kind === "supabase" ? mode : null;
   const membersQuery = useQuery({
@@ -181,10 +199,27 @@ export function useWorkspaceProjectMembers(projectId: string): Member[] {
   });
 
   if (mode.kind === "demo" || mode.kind === "local") {
-    return store.getMembers(projectId);
+    return {
+      members: store.getMembers(projectId),
+      isLoading: false,
+    };
   }
 
-  return membersQuery.data ?? [];
+  if (mode.kind === "pending-supabase") {
+    return {
+      members: [],
+      isLoading: true,
+    };
+  }
+
+  return {
+    members: membersQuery.data ?? [],
+    isLoading: membersQuery.isPending,
+  };
+}
+
+export function useWorkspaceProjectMembers(projectId: string): Member[] {
+  return useWorkspaceProjectMembersState(projectId).members;
 }
 
 export function useWorkspaceProjectInvites(projectId: string): WorkspaceProjectInvite[] {

@@ -43,6 +43,7 @@ vi.mock("@/data/workspace-source", async () => {
 import {
   __unsafeResetEstimateV2ForTests,
   getEstimateV2ProjectState,
+  setProjectEstimateStatus,
   transitionEstimateV2ProjectToInWork,
 } from "@/data/estimate-v2-store";
 import { __unsafeResetStoreForTests, getTasks } from "@/data/store";
@@ -100,6 +101,17 @@ describe("estimate-v2 remote hero transition", () => {
     expect(after.scheduleBaseline).toBeNull();
     expect(after.works.map((work) => work.taskId)).toEqual(before.works.map((work) => work.taskId));
     expect(getTasks(projectId).length).toBe(taskCountBefore);
+  });
+
+  it("keeps missing work dates as the only intentional transition blocker before skip setup", async () => {
+    const projectId = "project-2";
+
+    const result = await transitionEstimateV2ProjectToInWork(projectId);
+
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe("missing_work_dates");
+    expect((result.missingWorkIds ?? []).length).toBeGreaterThan(0);
+    expect(persistEstimateV2HeroTransitionMock).not.toHaveBeenCalled();
   });
 
   it("applies only estimate-v2 local success state after remote persistence succeeds", async () => {
@@ -176,5 +188,75 @@ describe("estimate-v2 remote hero transition", () => {
 
     expect(result.ok).toBe(true);
     expect(persistEstimateV2HeroTransitionMock).toHaveBeenCalledOnce();
+  });
+
+  it("does not call the remote hero transition path while runtime workspace stays in demo mode", async () => {
+    const projectId = "project-2";
+    resolveRuntimeWorkspaceModeMock.mockResolvedValue({
+      kind: "demo",
+    });
+
+    const result = await transitionEstimateV2ProjectToInWork(projectId, { skipSetup: true });
+
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe("forbidden");
+    expect(persistEstimateV2HeroTransitionMock).not.toHaveBeenCalled();
+  });
+
+  it("still runs the remote activation path on paused -> in_work when tasks were never materialized", async () => {
+    const projectId = "project-2";
+    const paused = setProjectEstimateStatus(projectId, "paused");
+    expect(paused.ok).toBe(true);
+
+    const before = getEstimateV2ProjectState(projectId);
+    const taskIdByLocalWorkId = Object.fromEntries(
+      before.works.map((work, index) => [work.id, `task-remote-paused-${index}`]),
+    );
+
+    persistEstimateV2HeroTransitionMock.mockResolvedValue({
+      fingerprint: "fingerprint-paused-1",
+      profileId: "profile-1",
+      ids: {
+        estimateId: "estimate-paused-1",
+        versionId: "version-paused-1",
+        eventId: "event-paused-1",
+        stageIdByLocalStageId: {},
+        workIdByLocalWorkId: {},
+        lineIdByLocalLineId: {},
+        taskIdByLocalWorkId,
+        checklistItemIdByLocalLineId: {},
+        procurementItemIdByLocalLineId: {},
+        hrItemIdByLocalLineId: {},
+      },
+    });
+
+    const result = await transitionEstimateV2ProjectToInWork(projectId, { skipSetup: true });
+    const after = getEstimateV2ProjectState(projectId);
+
+    expect(result.ok).toBe(true);
+    expect(after.project.estimateStatus).toBe("in_work");
+    expect(after.scheduleBaseline).not.toBeNull();
+    expect(after.works.map((work) => work.taskId)).toEqual(
+      before.works.map((work) => taskIdByLocalWorkId[work.id]),
+    );
+    expect(persistEstimateV2HeroTransitionMock).toHaveBeenCalledOnce();
+  });
+
+  it("downgrades old blocking hero-transition errors to a retryable transition failure", async () => {
+    const projectId = "project-2";
+
+    persistEstimateV2HeroTransitionMock.mockRejectedValue(
+      new MockEstimateV2HeroTransitionError(
+        "UNSAFE_REMOTE_ROWS",
+        "Estimate changed after a partial remote transition. Reload the page before trying again.",
+        { blocking: true },
+      ),
+    );
+
+    const result = await transitionEstimateV2ProjectToInWork(projectId, { skipSetup: true });
+
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe("transition_failed");
+    expect(result.blocking).toBe(false);
   });
 });
