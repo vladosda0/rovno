@@ -1375,6 +1375,7 @@
         "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
         "supabase/migrations/20260306162500_estimates_core.sql",
         "supabase/migrations/20260306164000_hr_domain.sql",
+        "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
       ],
       "tables": [
@@ -1482,6 +1483,11 @@
           "from": "public.hr_items",
           "to": "public.tasks",
           "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql"
+        },
+        {
+          "from": "public.tasks",
+          "to": "public.estimate_works",
+          "sourceMigration": "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql"
         }
       ]
     },
@@ -1574,6 +1580,7 @@
         "supabase/migrations/20260306162500_estimates_core.sql",
         "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
         "supabase/migrations/20260306164000_hr_domain.sql",
+        "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
         "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
       ],
@@ -1680,6 +1687,11 @@
           "from": "public.hr_items",
           "to": "public.estimate_works",
           "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql"
+        },
+        {
+          "from": "public.tasks",
+          "to": "public.estimate_works",
+          "sourceMigration": "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql"
         }
       ]
     },
