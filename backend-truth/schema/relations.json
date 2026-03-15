@@ -148,7 +148,7 @@
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -228,7 +228,7 @@
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -292,7 +292,7 @@
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -356,7 +356,7 @@
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -420,7 +420,7 @@
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -516,7 +516,7 @@
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -692,7 +692,7 @@
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -708,7 +708,7 @@
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -788,7 +788,7 @@
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -836,7 +836,7 @@
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -852,7 +852,7 @@
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -868,7 +868,7 @@
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -884,7 +884,7 @@
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -916,7 +916,7 @@
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -932,7 +932,7 @@
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -948,7 +948,7 @@
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -980,7 +980,7 @@
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -996,7 +996,7 @@
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -1012,7 +1012,7 @@
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -1092,7 +1092,7 @@
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -1108,7 +1108,7 @@
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -1124,7 +1124,7 @@
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -1156,7 +1156,7 @@
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -1237,6 +1237,22 @@
         "id"
       ],
       "onDelete": "cascade"
+    },
+    {
+      "name": "tasks_estimate_work_id_fkey",
+      "sourceMigration": "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
+      "sourceKind": "alter_table",
+      "fromSchema": "public",
+      "fromTable": "tasks",
+      "fromColumns": [
+        "estimate_work_id"
+      ],
+      "toSchema": "public",
+      "toTable": "estimate_works",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
     }
   ]
 }

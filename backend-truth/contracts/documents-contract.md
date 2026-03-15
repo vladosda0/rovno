@@ -98,15 +98,15 @@ Indexes:
 
 | From | To | On Delete | Source |
 | --- | --- | --- | --- |
-| `public.storage_objects(uploaded_by)` | `public.profiles(id)` | `set` | `supabase/migrations/20260306162000_storage_documents_and_media.sql` |
+| `public.storage_objects(uploaded_by)` | `public.profiles(id)` | `set null` | `supabase/migrations/20260306162000_storage_documents_and_media.sql` |
 | `public.documents(project_id)` | `public.projects(id)` | `cascade` | `supabase/migrations/20260306162000_storage_documents_and_media.sql` |
 | `public.documents(created_by)` | `public.profiles(id)` | `restrict` | `supabase/migrations/20260306162000_storage_documents_and_media.sql` |
 | `public.document_versions(document_id)` | `public.documents(id)` | `cascade` | `supabase/migrations/20260306162000_storage_documents_and_media.sql` |
-| `public.document_versions(storage_object_id)` | `public.storage_objects(id)` | `set` | `supabase/migrations/20260306162000_storage_documents_and_media.sql` |
+| `public.document_versions(storage_object_id)` | `public.storage_objects(id)` | `set null` | `supabase/migrations/20260306162000_storage_documents_and_media.sql` |
 | `public.document_versions(created_by)` | `public.profiles(id)` | `restrict` | `supabase/migrations/20260306162000_storage_documents_and_media.sql` |
 | `public.project_media(project_id)` | `public.projects(id)` | `cascade` | `supabase/migrations/20260306162000_storage_documents_and_media.sql` |
 | `public.project_media(storage_object_id)` | `public.storage_objects(id)` | `cascade` | `supabase/migrations/20260306162000_storage_documents_and_media.sql` |
-| `public.project_media(uploaded_by)` | `public.profiles(id)` | `set` | `supabase/migrations/20260306162000_storage_documents_and_media.sql` |
+| `public.project_media(uploaded_by)` | `public.profiles(id)` | `set null` | `supabase/migrations/20260306162000_storage_documents_and_media.sql` |
 
 ## Functions
 

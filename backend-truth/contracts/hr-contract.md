@@ -95,16 +95,16 @@ Indexes:
 | From | To | On Delete | Source |
 | --- | --- | --- | --- |
 | `public.hr_items(project_id)` | `public.projects(id)` | `cascade` | `supabase/migrations/20260306164000_hr_domain.sql` |
-| `public.hr_items(project_stage_id)` | `public.project_stages(id)` | `set` | `supabase/migrations/20260306164000_hr_domain.sql` |
-| `public.hr_items(estimate_work_id)` | `public.estimate_works(id)` | `set` | `supabase/migrations/20260306164000_hr_domain.sql` |
-| `public.hr_items(task_id)` | `public.tasks(id)` | `set` | `supabase/migrations/20260306164000_hr_domain.sql` |
+| `public.hr_items(project_stage_id)` | `public.project_stages(id)` | `set null` | `supabase/migrations/20260306164000_hr_domain.sql` |
+| `public.hr_items(estimate_work_id)` | `public.estimate_works(id)` | `set null` | `supabase/migrations/20260306164000_hr_domain.sql` |
+| `public.hr_items(task_id)` | `public.tasks(id)` | `set null` | `supabase/migrations/20260306164000_hr_domain.sql` |
 | `public.hr_items(created_by)` | `public.profiles(id)` | `restrict` | `supabase/migrations/20260306164000_hr_domain.sql` |
 | `public.hr_item_assignees(hr_item_id)` | `public.hr_items(id)` | `cascade` | `supabase/migrations/20260306164000_hr_domain.sql` |
 | `public.hr_item_assignees(profile_id)` | `public.profiles(id)` | `cascade` | `supabase/migrations/20260306164000_hr_domain.sql` |
 | `public.hr_payments(project_id)` | `public.projects(id)` | `cascade` | `supabase/migrations/20260306164000_hr_domain.sql` |
-| `public.hr_payments(hr_item_id)` | `public.hr_items(id)` | `set` | `supabase/migrations/20260306164000_hr_domain.sql` |
-| `public.hr_payments(paid_to_profile_id)` | `public.profiles(id)` | `set` | `supabase/migrations/20260306164000_hr_domain.sql` |
-| `public.hr_payments(created_by)` | `public.profiles(id)` | `set` | `supabase/migrations/20260306164000_hr_domain.sql` |
+| `public.hr_payments(hr_item_id)` | `public.hr_items(id)` | `set null` | `supabase/migrations/20260306164000_hr_domain.sql` |
+| `public.hr_payments(paid_to_profile_id)` | `public.profiles(id)` | `set null` | `supabase/migrations/20260306164000_hr_domain.sql` |
+| `public.hr_payments(created_by)` | `public.profiles(id)` | `set null` | `supabase/migrations/20260306164000_hr_domain.sql` |
 
 ## Functions
 

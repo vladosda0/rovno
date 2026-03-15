@@ -12,6 +12,7 @@
     "supabase/migrations/20260306162500_estimates_core.sql",
     "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
     "supabase/migrations/20260306164000_hr_domain.sql",
+    "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
     "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
     "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
   ],
@@ -315,7 +316,7 @@
             "toColumns": [
               "id"
             ],
-            "onDelete": "set"
+            "onDelete": "set null"
           }
         },
         {
@@ -803,7 +804,7 @@
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -883,7 +884,7 @@
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -899,7 +900,7 @@
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -915,7 +916,7 @@
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -931,7 +932,23 @@
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
+    },
+    {
+      "name": "tasks_estimate_work_id_fkey",
+      "sourceMigration": "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
+      "sourceKind": "alter_table",
+      "fromSchema": "public",
+      "fromTable": "tasks",
+      "fromColumns": [
+        "estimate_work_id"
+      ],
+      "toSchema": "public",
+      "toTable": "estimate_works",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
     }
   ],
   "functions": [

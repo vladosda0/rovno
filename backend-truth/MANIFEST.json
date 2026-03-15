@@ -63,6 +63,10 @@
     {
       "path": "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql",
       "sha256": "de59e4ba500a66353032b137b84d9fd5ec337012dd21f74ed45cc0b5f1362528"
+    },
+    {
+      "path": "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
+      "sha256": "d2b74460b8da19d1a8c7f13c7482373b72b51a289218e2512ddef9d456874ad8"
     }
   ],
   "generated_artifacts": [
@@ -102,6 +106,7 @@
     "sql/20260306165500_auth_bootstrap_and_domain_rpc.sql",
     "sql/20260306170000_grants_rls_enablement_and_policies.sql",
     "sql/20260313180000_projects_owner_only_rls_hotfix.sql",
+    "sql/20260313183000_tasks_estimate_work_lineage.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],

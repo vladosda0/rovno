@@ -1130,7 +1130,7 @@
             "toColumns": [
               "id"
             ],
-            "onDelete": "set"
+            "onDelete": "set null"
           }
         },
         {
@@ -1405,7 +1405,7 @@
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": "projects_current_stage_id_fkey",
