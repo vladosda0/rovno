@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { addProcurementItem } from "@/data/procurement-store";
 import {
   computeLastReceivedAt,
   computeProcurementHeaderKpis,
@@ -13,13 +12,13 @@ import {
 } from "@/lib/procurement-fulfillment";
 import type { InventoryLocation, OrderWithLines, ProcurementItemV2 } from "@/types/entities";
 
-function addTestRequestLine(
+function buildTestRequestLine(
   projectId: string,
   id: string,
   requiredQty = 10,
   overrides: Partial<ProcurementItemV2> = {},
 ) {
-  return addProcurementItem({
+  return {
     id,
     projectId,
     stageId: null,
@@ -49,8 +48,10 @@ function addTestRequestLine(
     createdFrom: "manual",
     linkedTaskIds: [],
     archived: false,
+    createdAt: "2026-03-01T00:00:00.000Z",
+    updatedAt: "2026-03-01T00:00:00.000Z",
     ...overrides,
-  });
+  } satisfies ProcurementItemV2;
 }
 
 describe("procurement fulfillment utils", () => {
@@ -71,7 +72,7 @@ describe("procurement fulfillment utils", () => {
 
   it("computes remaining qty with split supplier + stock fulfillments", () => {
     const projectId = `test-project-${Date.now()}`;
-    const item = addTestRequestLine(projectId, `req-${Date.now()}`, 10);
+    const item = buildTestRequestLine(projectId, `req-${Date.now()}`, 10);
 
     const orders: OrderWithLines[] = [
       {
@@ -142,14 +143,14 @@ describe("procurement fulfillment utils", () => {
       },
     ];
 
-    expect(computeRemainingRequestedQty(item.id, orders)).toBe(3);
+    expect(computeRemainingRequestedQty(item, orders)).toBe(3);
     expect(computeOrderedOpenQty(item.id, orders)).toBe(2);
     expect(computeFulfilledQty(item.id, orders)).toBe(7);
   });
 
   it("clamps requested remaining to zero when ordered quantity exceeds requested", () => {
     const projectId = `remaining-clamp-${Date.now()}`;
-    const item = addTestRequestLine(projectId, `req-over-${Date.now()}`, 5);
+    const item = buildTestRequestLine(projectId, `req-over-${Date.now()}`, 5);
     const orders: OrderWithLines[] = [
       {
         id: "o-over",
@@ -175,17 +176,17 @@ describe("procurement fulfillment utils", () => {
       },
     ];
 
-    expect(computeRemainingRequestedQty(item.id, orders)).toBe(0);
+    expect(computeRemainingRequestedQty(item, orders)).toBe(0);
   });
 
   it("excludes non-estimate-linked items from requested chip totals", () => {
     const projectId = `chip-filter-${Date.now()}`;
-    const linked = addTestRequestLine(projectId, `linked-${Date.now()}`, 4, {
+    const linked = buildTestRequestLine(projectId, `linked-${Date.now()}`, 4, {
       sourceEstimateV2LineId: "line-linked",
       createdFrom: "estimate",
       plannedUnitPrice: 250,
     });
-    const manual = addTestRequestLine(projectId, `manual-${Date.now()}`, 6, {
+    const manual = buildTestRequestLine(projectId, `manual-${Date.now()}`, 6, {
       sourceEstimateV2LineId: null,
       sourceEstimateItemId: null,
       createdFrom: "manual",
@@ -198,9 +199,48 @@ describe("procurement fulfillment utils", () => {
     expect(totals.requested.total).toBe(1_000);
   });
 
+  it("computes requested totals from the provided item array without relying on the local procurement store", () => {
+    const projectId = `supabase-requested-${Date.now()}`;
+    const requested = buildTestRequestLine(projectId, `requested-${Date.now()}`, 8, {
+      sourceEstimateV2LineId: "line-requested",
+      createdFrom: "estimate",
+      plannedUnitPrice: 300,
+    });
+
+    const orders: OrderWithLines[] = [
+      {
+        id: "order-requested",
+        projectId,
+        status: "placed",
+        kind: "supplier",
+        supplierName: "Supplier A",
+        deliverToLocationId: "loc-site",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        lines: [
+          {
+            id: "line-requested",
+            orderId: "order-requested",
+            procurementItemId: requested.id,
+            qty: 3,
+            receivedQty: 0,
+            unit: requested.unit,
+            plannedUnitPrice: requested.plannedUnitPrice ?? 0,
+            actualUnitPrice: requested.actualUnitPrice ?? 0,
+          },
+        ],
+      },
+    ];
+
+    const totals = computeTabChipTotals(projectId, [requested], orders, []);
+
+    expect(totals.requested.count).toBe(1);
+    expect(totals.requested.total).toBe(1_500);
+  });
+
   it("builds in-stock groups only from location placements", () => {
     const projectId = `stock-project-${Date.now()}`;
-    const item = addTestRequestLine(projectId, `req-stock-${Date.now()}`, 10);
+    const item = buildTestRequestLine(projectId, `req-stock-${Date.now()}`, 10);
 
     const orders: OrderWithLines[] = [
       {
@@ -307,7 +347,7 @@ describe("procurement fulfillment utils", () => {
 
   it("computes last received date from positive receipt events only", () => {
     const projectId = `last-received-${Date.now()}`;
-    const item = addTestRequestLine(projectId, `req-last-${Date.now()}`, 10);
+    const item = buildTestRequestLine(projectId, `req-last-${Date.now()}`, 10);
     const older = "2026-01-10T10:00:00.000Z";
     const newer = "2026-02-15T12:00:00.000Z";
     const usage = "2026-03-01T09:00:00.000Z";
@@ -371,7 +411,7 @@ describe("procurement fulfillment utils", () => {
 
   it("separates receipt and usage event history by item+location", () => {
     const projectId = `event-history-${Date.now()}`;
-    const item = addTestRequestLine(projectId, `req-history-${Date.now()}`, 8);
+    const item = buildTestRequestLine(projectId, `req-history-${Date.now()}`, 8);
     const now = new Date().toISOString();
     const orders: OrderWithLines[] = [
       {
@@ -426,13 +466,13 @@ describe("procurement fulfillment utils", () => {
 
   it("computes procurement header KPIs for estimate-linked items only", () => {
     const projectId = `header-kpi-${Date.now()}`;
-    const linked = addTestRequestLine(projectId, `req-linked-${Date.now()}`, 10, {
+    const linked = buildTestRequestLine(projectId, `req-linked-${Date.now()}`, 10, {
       sourceEstimateV2LineId: "line-linked",
       plannedUnitPrice: 100,
       actualUnitPrice: 120,
       createdFrom: "estimate",
     });
-    const manual = addTestRequestLine(projectId, `req-manual-${Date.now()}`, 20, {
+    const manual = buildTestRequestLine(projectId, `req-manual-${Date.now()}`, 20, {
       sourceEstimateV2LineId: null,
       sourceEstimateItemId: null,
       plannedUnitPrice: 900,
@@ -489,13 +529,13 @@ describe("procurement fulfillment utils", () => {
 
   it("returns graceful KPI nulls when planned/order prices are missing", () => {
     const projectId = `header-kpi-missing-${Date.now()}`;
-    const linkedNoPlan = addTestRequestLine(projectId, `req-linked-missing-plan-${Date.now()}`, 5, {
+    const linkedNoPlan = buildTestRequestLine(projectId, `req-linked-missing-plan-${Date.now()}`, 5, {
       sourceEstimateV2LineId: "line-missing-plan",
       plannedUnitPrice: null,
       actualUnitPrice: null,
       createdFrom: "estimate",
     });
-    const linkedWithPlan = addTestRequestLine(projectId, `req-linked-missing-order-${Date.now()}`, 8, {
+    const linkedWithPlan = buildTestRequestLine(projectId, `req-linked-missing-order-${Date.now()}`, 8, {
       sourceEstimateV2LineId: "line-missing-order",
       plannedUnitPrice: 200,
       actualUnitPrice: null,

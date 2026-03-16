@@ -1,4 +1,3 @@
-import { getProcurementItemById } from "@/data/procurement-store";
 import { normalizeName } from "@/lib/procurement-utils";
 import type {
   InventoryLocation,
@@ -86,14 +85,16 @@ export function toInventoryKey(item: Pick<ProcurementItemV2, "name" | "spec" | "
   ].join("|");
 }
 
-export function computeRemainingRequestedQty(requestId: string, orders: OrderWithLines[]): number {
-  const item = getProcurementItemById(requestId);
+export function computeRemainingRequestedQty(
+  item: Pick<ProcurementItemV2, "id" | "requiredQty"> | undefined,
+  orders: OrderWithLines[],
+): number {
   if (!item) return 0;
 
   const fulfilledFromOrders = orders
     .filter(isAppliedOrder)
     .flatMap((order) => order.lines)
-    .filter((line) => line.procurementItemId === requestId)
+    .filter((line) => line.procurementItemId === item.id)
     .reduce((sum, line) => sum + line.qty, 0);
 
   return Math.max(item.requiredQty - fulfilledFromOrders, 0);
@@ -360,7 +361,7 @@ export function computeTabChipTotals(
   const requestedItems = items
     .filter((item) => item.projectId === projectId)
     .filter(isEstimateLinkedProcurementItem)
-    .map((item) => ({ item, remaining: computeRemainingRequestedQty(item.id, orders) }))
+    .map((item) => ({ item, remaining: computeRemainingRequestedQty(item, orders) }))
     .filter(({ remaining }) => remaining > 0);
 
   const requested: TabChipStat = {

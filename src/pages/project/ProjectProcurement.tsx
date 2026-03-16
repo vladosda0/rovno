@@ -299,7 +299,7 @@ export default function ProjectProcurement() {
   const remainingByItemId = useMemo(() => {
     const map = new Map<string, number>();
     items.forEach((item) => {
-      map.set(item.id, computeRemainingRequestedQty(item.id, orders));
+      map.set(item.id, computeRemainingRequestedQty(item, orders));
     });
     return map;
   }, [items, orders]);

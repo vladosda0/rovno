@@ -114,7 +114,7 @@ export function getProcurementReadSnapshot(): ProcurementReadSnapshot {
     });
 
     const rows = projectItems.map((item) => {
-      const remainingQty = computeRemainingRequestedQty(item.id, projectOrders);
+      const remainingQty = computeRemainingRequestedQty(item, projectOrders);
       const orderedOpenQty = computeOrderedOpenQty(item.id, projectOrders);
       const inStockQty = inStockByItemId.get(item.id) ?? 0;
       const status = classifyStatus(remainingQty, orderedOpenQty, inStockQty);

@@ -123,7 +123,7 @@ export function computeFactFromDataSources(input: {
     .forEach((item) => {
       if (item.orphaned) return;
       const plannedUnit = toCents(item.plannedUnitPrice ?? 0);
-      const remaining = computeRemainingRequestedQty(item.id, input.orders);
+      const remaining = computeRemainingRequestedQty(item, input.orders);
       const orderedOpen = computeOrderedOpenQty(item.id, input.orders);
       toBePaidPlannedCents += Math.max(0, Math.round(plannedUnit * (remaining + orderedOpen)));
     });

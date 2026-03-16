@@ -276,6 +276,204 @@ describe("persistEstimateV2HeroTransition", () => {
     expect(result.ids.lineIdByLocalLineId["line-existing"]).toBe("line-existing");
   });
 
+  it("creates task, checklist, procurement, and HR descendants with estimate lineage on first generation", async () => {
+    ensureProjectStagesMock.mockResolvedValue({
+      "stage-launch": "stage-remote-launch",
+    });
+
+    const result = await persistEstimateV2HeroTransition({
+      projectId: "project-1",
+      projectTitle: "Project 1",
+      previousStatus: "planning",
+      autoScheduled: false,
+      stages: [
+        {
+          localStageId: "stage-launch",
+          title: "Launch stage",
+          order: 1,
+          discountBps: 0,
+        },
+      ],
+      works: [
+        {
+          localWorkId: "work-launch",
+          localStageId: "stage-launch",
+          title: "Install base",
+          order: 1,
+          plannedStart: "2026-03-10T00:00:00.000Z",
+          plannedEnd: "2026-03-12T00:00:00.000Z",
+        },
+      ],
+      lines: [
+        {
+          localLineId: "line-material",
+          localStageId: "stage-launch",
+          localWorkId: "work-launch",
+          title: "Wire mesh",
+          type: "material",
+          unit: "roll",
+          qtyMilli: 2000,
+          costUnitCents: 1500,
+        },
+        {
+          localLineId: "line-tool",
+          localStageId: "stage-launch",
+          localWorkId: "work-launch",
+          title: "Laser level",
+          type: "tool",
+          unit: "day",
+          qtyMilli: 1000,
+          costUnitCents: 3200,
+        },
+        {
+          localLineId: "line-labor",
+          localStageId: "stage-launch",
+          localWorkId: "work-launch",
+          title: "Crew hours",
+          type: "labor",
+          unit: "shift",
+          qtyMilli: 3000,
+          costUnitCents: 4200,
+        },
+        {
+          localLineId: "line-subcontractor",
+          localStageId: "stage-launch",
+          localWorkId: "work-launch",
+          title: "Scaffold team",
+          type: "subcontractor",
+          unit: "job",
+          qtyMilli: 1000,
+          costUnitCents: 18500,
+        },
+        {
+          localLineId: "line-other",
+          localStageId: "stage-launch",
+          localWorkId: "work-launch",
+          title: "Waste bags",
+          type: "other",
+          unit: "pack",
+          qtyMilli: 1000,
+          costUnitCents: 500,
+        },
+      ],
+    });
+
+    const taskId = result.ids.taskIdByLocalWorkId["work-launch"];
+    const stageId = result.ids.stageIdByLocalStageId["stage-launch"];
+    const workId = result.ids.workIdByLocalWorkId["work-launch"];
+    const checklistRows = upsertTaskChecklistItemsMock.mock.calls[0]?.[1];
+    const procurementRows = upsertHeroProcurementItemsMock.mock.calls[0]?.[1];
+    const hrRows = upsertHeroHRItemsMock.mock.calls[0]?.[1];
+
+    expect(upsertHeroTasksMock).toHaveBeenCalledWith(
+      {},
+      [
+        expect.objectContaining({
+          id: taskId,
+          projectId: "project-1",
+          stageId,
+          title: "Install base",
+        }),
+      ],
+    );
+
+    expect(checklistRows).toEqual([
+      expect.objectContaining({
+        id: result.ids.checklistItemIdByLocalLineId["line-material"],
+        taskId,
+        title: "Wire mesh",
+        procurementItemId: null,
+        estimateResourceLineId: result.ids.lineIdByLocalLineId["line-material"],
+        estimateWorkId: workId,
+        sortOrder: 1,
+      }),
+      expect.objectContaining({
+        id: result.ids.checklistItemIdByLocalLineId["line-tool"],
+        taskId,
+        title: "Laser level",
+        procurementItemId: null,
+        estimateResourceLineId: result.ids.lineIdByLocalLineId["line-tool"],
+        estimateWorkId: workId,
+        sortOrder: 2,
+      }),
+      expect.objectContaining({
+        id: result.ids.checklistItemIdByLocalLineId["line-labor"],
+        taskId,
+        title: "Crew hours",
+        procurementItemId: null,
+        estimateResourceLineId: result.ids.lineIdByLocalLineId["line-labor"],
+        estimateWorkId: workId,
+        sortOrder: 3,
+      }),
+      expect.objectContaining({
+        id: result.ids.checklistItemIdByLocalLineId["line-subcontractor"],
+        taskId,
+        title: "Scaffold team",
+        procurementItemId: null,
+        estimateResourceLineId: result.ids.lineIdByLocalLineId["line-subcontractor"],
+        estimateWorkId: workId,
+        sortOrder: 4,
+      }),
+      expect.objectContaining({
+        id: result.ids.checklistItemIdByLocalLineId["line-other"],
+        taskId,
+        title: "Waste bags",
+        procurementItemId: null,
+        estimateResourceLineId: result.ids.lineIdByLocalLineId["line-other"],
+        estimateWorkId: workId,
+        sortOrder: 5,
+      }),
+    ]);
+
+    expect(procurementRows).toEqual([
+      expect.objectContaining({
+        id: result.ids.procurementItemIdByLocalLineId["line-material"],
+        projectId: "project-1",
+        estimateResourceLineId: result.ids.lineIdByLocalLineId["line-material"],
+        taskId,
+        title: "Wire mesh",
+        quantity: 2,
+        unit: "roll",
+        plannedUnitPriceCents: 1500,
+        plannedTotalPriceCents: 3000,
+        status: "requested",
+      }),
+      expect.objectContaining({
+        id: result.ids.procurementItemIdByLocalLineId["line-tool"],
+        projectId: "project-1",
+        estimateResourceLineId: result.ids.lineIdByLocalLineId["line-tool"],
+        taskId,
+        title: "Laser level",
+        quantity: 1,
+        unit: "day",
+        plannedUnitPriceCents: 3200,
+        plannedTotalPriceCents: 3200,
+        status: "requested",
+      }),
+    ]);
+
+    expect(hrRows).toEqual([
+      expect.objectContaining({
+        id: result.ids.hrItemIdByLocalLineId["line-labor"],
+        projectId: "project-1",
+        projectStageId: stageId,
+        estimateWorkId: workId,
+        taskId,
+        title: "Crew hours",
+        plannedCostCents: 12600,
+      }),
+      expect.objectContaining({
+        id: result.ids.hrItemIdByLocalLineId["line-subcontractor"],
+        projectId: "project-1",
+        projectStageId: stageId,
+        estimateWorkId: workId,
+        taskId,
+        title: "Scaffold team",
+        plannedCostCents: 18500,
+      }),
+    ]);
+  });
+
   it("clears the stale partial-transition blocker and retries without requiring a reload", async () => {
     saveEstimateV2HeroTransitionBlocked({
       projectId: "project-1",

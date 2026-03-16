@@ -88,7 +88,7 @@ export function OrderModal({
       .map((itemId) => {
         const item = itemById.get(itemId);
         if (!item) return null;
-        const remaining = computeRemainingRequestedQty(item.id, orders);
+        const remaining = computeRemainingRequestedQty(item, orders);
         if (remaining <= 0) return null;
         return {
           procurementItemId: item.id,
@@ -112,8 +112,8 @@ export function OrderModal({
   }, [open, initialItemIds, itemById, items, orders, defaultLocationId, isSupabaseMode]);
 
   const requestedRemainingByItemId = useMemo(() => (
-    new Map(lines.map((line) => [line.procurementItemId, computeRemainingRequestedQty(line.procurementItemId, orders)]))
-  ), [lines, orders]);
+    new Map(lines.map((line) => [line.procurementItemId, computeRemainingRequestedQty(itemById.get(line.procurementItemId), orders)]))
+  ), [lines, itemById, orders]);
 
   const orderedLines = useMemo(() => lines.filter((line) => line.qty > 0), [lines]);
   const hasOrderedLines = orderedLines.length > 0;
