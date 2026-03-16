@@ -368,6 +368,22 @@ export async function upsertHeroTasks(
   }
 }
 
+export async function loadHeroTasksForProject(
+  supabase: TypedSupabaseClient,
+  projectId: string,
+): Promise<TaskRow[]> {
+  const { data, error } = await supabase
+    .from("tasks")
+    .select("id, project_id, stage_id, title, description, status, assignee_profile_id, created_by, start_at, due_at, completed_at, created_at, updated_at")
+    .eq("project_id", projectId);
+
+  if (error) {
+    throw error;
+  }
+
+  return data ?? [];
+}
+
 export async function upsertTaskChecklistItems(
   supabase: TypedSupabaseClient,
   inputs: HeroTaskChecklistItemUpsertInput[],
@@ -392,6 +408,26 @@ export async function upsertTaskChecklistItems(
   if (error) {
     throw error;
   }
+}
+
+export async function loadHeroTaskChecklistItemsByEstimateWorkIds(
+  supabase: TypedSupabaseClient,
+  estimateWorkIds: string[],
+): Promise<TaskChecklistItemRow[]> {
+  if (estimateWorkIds.length === 0) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from("task_checklist_items")
+    .select("id, task_id, title, is_done, procurement_item_id, estimate_resource_line_id, estimate_work_id, sort_order, created_at, updated_at")
+    .in("estimate_work_id", estimateWorkIds);
+
+  if (error) {
+    throw error;
+  }
+
+  return data ?? [];
 }
 
 export async function deleteHeroTaskChecklistItems(

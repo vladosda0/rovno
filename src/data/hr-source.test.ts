@@ -1,7 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
-  existingHRRows: [] as Array<{ id: string; created_by: string }>,
+  existingHRRows: [] as Array<{
+    id: string;
+    estimate_work_id: string | null;
+    task_id: string | null;
+    title: string;
+    description: string | null;
+    compensation_type: "hourly" | "daily" | "fixed";
+    planned_cost_cents: number | null;
+    actual_cost_cents: number | null;
+    status: "planned" | "in_progress" | "completed" | "cancelled";
+    start_at: string | null;
+    end_at: string | null;
+    created_by: string;
+  }>,
   assigneeRowsByItemId: {} as Record<string, Array<{ id: string; profile_id: string }>>,
   bulkAssigneeRows: [] as Array<{ hr_item_id: string; profile_id: string }>,
   upsertHRItemsMock: vi.fn(),
@@ -20,6 +33,20 @@ vi.mock("@/integrations/supabase/client", () => ({
             if (selection === "id, created_by") {
               return {
                 in(_field: string, _ids: string[]) {
+                  return Promise.resolve({
+                    data: state.existingHRRows.map((row) => ({
+                      id: row.id,
+                      created_by: row.created_by,
+                    })),
+                    error: null,
+                  });
+                },
+              };
+            }
+
+            if (selection === "id, estimate_work_id, task_id, title, description, compensation_type, planned_cost_cents, actual_cost_cents, status, start_at, end_at, created_by") {
+              return {
+                eq(_field: string, _projectId: string) {
                   return Promise.resolve({
                     data: state.existingHRRows,
                     error: null,
@@ -302,8 +329,34 @@ describe("hr-source helpers", () => {
       },
     });
     state.existingHRRows = [
-      { id: "hr-item-1", created_by: "creator-1" },
-      { id: "hr-item-2", created_by: "creator-2" },
+      {
+        id: "hr-item-1",
+        estimate_work_id: "work-1",
+        task_id: "task-1",
+        title: "Crew hours",
+        description: null,
+        compensation_type: "fixed",
+        planned_cost_cents: 300000,
+        actual_cost_cents: null,
+        status: "planned",
+        start_at: "2026-03-10T00:00:00.000Z",
+        end_at: "2026-03-11T00:00:00.000Z",
+        created_by: "creator-1",
+      },
+      {
+        id: "hr-item-2",
+        estimate_work_id: "work-1",
+        task_id: "task-1",
+        title: "Scaffold team",
+        description: null,
+        compensation_type: "fixed",
+        planned_cost_cents: 90000,
+        actual_cost_cents: null,
+        status: "planned",
+        start_at: "2026-03-10T00:00:00.000Z",
+        end_at: "2026-03-11T00:00:00.000Z",
+        created_by: "creator-2",
+      },
     ];
     state.bulkAssigneeRows = [];
     state.assigneeRowsByItemId = {

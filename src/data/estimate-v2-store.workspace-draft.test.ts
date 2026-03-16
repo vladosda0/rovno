@@ -5,11 +5,15 @@ const {
   saveCurrentEstimateDraftMock,
   getWorkspaceSourceMock,
   getPlanningSourceMock,
+  persistEstimateV2HeroTransitionMock,
+  syncProjectHRFromEstimateMock,
 } = vi.hoisted(() => ({
   loadCurrentEstimateDraftMock: vi.fn(),
   saveCurrentEstimateDraftMock: vi.fn(),
   getWorkspaceSourceMock: vi.fn(),
   getPlanningSourceMock: vi.fn(),
+  persistEstimateV2HeroTransitionMock: vi.fn(),
+  syncProjectHRFromEstimateMock: vi.fn(),
 }));
 
 vi.mock("@/data/estimate-source", async () => {
@@ -37,6 +41,22 @@ vi.mock("@/data/planning-source", async () => {
   };
 });
 
+vi.mock("@/data/estimate-v2-hero-transition", () => ({
+  persistEstimateV2HeroTransition: persistEstimateV2HeroTransitionMock,
+  EstimateV2HeroTransitionError: class EstimateV2HeroTransitionError extends Error {
+    code = "TASK_WRITE_FAILED";
+    blocking = false;
+  },
+}));
+
+vi.mock("@/data/hr-source", async () => {
+  const actual = await vi.importActual<typeof import("@/data/hr-source")>("@/data/hr-source");
+  return {
+    ...actual,
+    syncProjectHRFromEstimate: syncProjectHRFromEstimateMock,
+  };
+});
+
 import {
   __unsafeResetEstimateV2ForTests,
   createWork,
@@ -44,6 +64,7 @@ import {
   getEstimateV2ProjectState,
   hydrateEstimateV2ProjectFromWorkspace,
   registerEstimateV2ProjectAccessContext,
+  transitionEstimateV2ProjectToInWork,
 } from "@/data/estimate-v2-store";
 import { __unsafeResetStoreForTests } from "@/data/store";
 
@@ -70,6 +91,23 @@ describe("estimate-v2 workspace drafts", () => {
     getPlanningSourceMock.mockResolvedValue({
       getProjectTasks: vi.fn().mockResolvedValue([]),
     });
+    persistEstimateV2HeroTransitionMock.mockResolvedValue({
+      fingerprint: "fingerprint-1",
+      profileId: "profile-1",
+      ids: {
+        estimateId: "estimate-1",
+        versionId: "version-1",
+        eventId: "event-1",
+        stageIdByLocalStageId: {},
+        workIdByLocalWorkId: {},
+        lineIdByLocalLineId: {},
+        taskIdByLocalWorkId: {},
+        checklistItemIdByLocalLineId: {},
+        procurementItemIdByLocalLineId: {},
+        hrItemIdByLocalLineId: {},
+      },
+    });
+    syncProjectHRFromEstimateMock.mockResolvedValue(undefined);
     saveCurrentEstimateDraftMock.mockResolvedValue(undefined);
     loadCurrentEstimateDraftMock.mockResolvedValue({
       estimate: null,
@@ -318,6 +356,65 @@ describe("estimate-v2 workspace drafts", () => {
       expect(consoleErrorSpy).not.toHaveBeenCalled();
     } finally {
       consoleErrorSpy.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  it("defers the background draft sync until the hero transition finishes", async () => {
+    vi.useFakeTimers();
+    const projectId = "project-remote-1";
+    let resolvePersist: ((value: unknown) => void) | null = null;
+
+    persistEstimateV2HeroTransitionMock.mockImplementation(() => (
+      new Promise((resolve) => {
+        resolvePersist = resolve;
+      })
+    ));
+
+    try {
+      await hydrateEstimateV2ProjectFromWorkspace(projectId, { profileId: "profile-1" });
+      registerEstimateV2ProjectAccessContext(projectId, {
+        mode: "supabase",
+        profileId: "profile-1",
+        projectOwnerProfileId: "profile-1",
+        membershipRole: "owner",
+      });
+
+      const stage = createStage(projectId, { title: "Shell" });
+      expect(stage).not.toBeNull();
+      const work = createWork(projectId, { stageId: stage?.id ?? "", title: "Framing" });
+      expect(work).not.toBeNull();
+
+      const transitionPromise = transitionEstimateV2ProjectToInWork(projectId, { skipSetup: true });
+
+      await vi.advanceTimersByTimeAsync(350);
+      expect(saveCurrentEstimateDraftMock).not.toHaveBeenCalled();
+
+      resolvePersist?.({
+        fingerprint: "fingerprint-transition",
+        profileId: "profile-1",
+        ids: {
+          estimateId: "estimate-transition",
+          versionId: "version-transition",
+          eventId: "event-transition",
+          stageIdByLocalStageId: {},
+          workIdByLocalWorkId: {},
+          lineIdByLocalLineId: {},
+          taskIdByLocalWorkId: work
+            ? { [work.id]: "task-transition" }
+            : {},
+          checklistItemIdByLocalLineId: {},
+          procurementItemIdByLocalLineId: {},
+          hrItemIdByLocalLineId: {},
+        },
+      });
+
+      await transitionPromise;
+      await vi.advanceTimersByTimeAsync(350);
+
+      expect(saveCurrentEstimateDraftMock).toHaveBeenCalledTimes(1);
+      expect(syncProjectHRFromEstimateMock).toHaveBeenCalledTimes(1);
+    } finally {
       vi.useRealTimers();
     }
   });

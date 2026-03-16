@@ -58,6 +58,15 @@ export interface CurrentEstimateDraft {
   dependencies: EstimateDependencyRow[];
 }
 
+export interface EstimateDraftResolvedIds {
+  estimateId: string;
+  versionId: string;
+  stageIdByLocalStageId: Record<string, string>;
+  workIdByLocalWorkId: Record<string, string>;
+  lineIdByLocalLineId: Record<string, string>;
+  dependencyIdByLocalDependencyId: Record<string, string>;
+}
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function deterministicHex(seed: string): string {
@@ -118,6 +127,17 @@ function mapLineTypeToRemote(type: ResourceLineType): "material" | "labor" | "eq
   if (type === "tool") return "equipment";
   if (type === "labor" || type === "subcontractor") return "labor";
   return "other";
+}
+
+function assertUniqueExistingMatch<T>(
+  matches: T[],
+  message: string,
+): T | null {
+  if (matches.length > 1) {
+    throw new Error(message);
+  }
+
+  return matches[0] ?? null;
 }
 
 async function loadSupabaseClient(): Promise<TypedSupabaseClient> {
@@ -363,6 +383,97 @@ export async function loadCurrentEstimateDraft(projectId: string): Promise<Curre
   };
 }
 
+export function resolveEstimateDraftRemoteIds(input: {
+  projectId: string;
+  snapshot: Pick<EstimateV2Snapshot, "project" | "stages" | "works" | "lines" | "dependencies">;
+  existingDraft: CurrentEstimateDraft;
+}): EstimateDraftResolvedIds {
+  const { projectId, snapshot, existingDraft } = input;
+  const estimateId = existingDraft.estimate?.id
+    ?? ensureRemoteUuid(projectId, "estimate", snapshot.project.id || projectId);
+  const versionId = existingDraft.currentVersion?.id
+    ?? ensureRemoteUuid(projectId, "estimate-version", `${projectId}:current`);
+
+  const stageIdByLocalStageId: Record<string, string> = {};
+  snapshot.stages.forEach((stage) => {
+    const directMatch = existingDraft.stages.find((row) => row.id === stage.id) ?? null;
+    const naturalMatch = assertUniqueExistingMatch(
+      existingDraft.stages.filter((row) => row.title === stage.title && row.sort_order === stage.order),
+      `Ambiguous remote stage mapping for "${stage.title}"`,
+    );
+    stageIdByLocalStageId[stage.id] = directMatch?.id
+      ?? naturalMatch?.id
+      ?? ensureRemoteUuid(projectId, "stage", stage.id);
+  });
+
+  const workIdByLocalWorkId: Record<string, string> = {};
+  snapshot.works.forEach((work) => {
+    const resolvedStageId = stageIdByLocalStageId[work.stageId] ?? null;
+    const directMatch = existingDraft.works.find((row) => row.id === work.id) ?? null;
+    const naturalMatch = assertUniqueExistingMatch(
+      existingDraft.works.filter((row) => (
+        row.title === work.title
+        && row.sort_order === work.order
+        && (row.project_stage_id ?? null) === resolvedStageId
+      )),
+      `Ambiguous remote work mapping for "${work.title}"`,
+    );
+    workIdByLocalWorkId[work.id] = directMatch?.id
+      ?? naturalMatch?.id
+      ?? ensureRemoteUuid(projectId, "work", work.id);
+  });
+
+  const lineIdByLocalLineId: Record<string, string> = {};
+  snapshot.lines.forEach((line) => {
+    const resolvedWorkId = workIdByLocalWorkId[line.workId]
+      ?? ensureRemoteUuid(projectId, "work", line.workId);
+    const directMatch = existingDraft.lines.find((row) => row.id === line.id) ?? null;
+    const naturalMatch = assertUniqueExistingMatch(
+      existingDraft.lines.filter((row) => (
+        row.estimate_work_id === resolvedWorkId
+        && row.title === line.title
+        && row.resource_type === mapLineTypeToRemote(line.type)
+        && row.quantity === quantityFromQtyMilli(line.qtyMilli)
+        && (row.unit ?? null) === (line.unit || null)
+        && (row.unit_price_cents ?? 0) === line.costUnitCents
+        && (row.total_price_cents ?? 0) === totalPriceCents(line.costUnitCents, line.qtyMilli)
+      )),
+      `Ambiguous remote estimate line mapping for "${line.title}"`,
+    );
+    lineIdByLocalLineId[line.id] = directMatch?.id
+      ?? naturalMatch?.id
+      ?? ensureRemoteUuid(projectId, "line", line.id);
+  });
+
+  const dependencyIdByLocalDependencyId: Record<string, string> = {};
+  snapshot.dependencies.forEach((dependency) => {
+    const resolvedFromWorkId = workIdByLocalWorkId[dependency.fromWorkId]
+      ?? ensureRemoteUuid(projectId, "work", dependency.fromWorkId);
+    const resolvedToWorkId = workIdByLocalWorkId[dependency.toWorkId]
+      ?? ensureRemoteUuid(projectId, "work", dependency.toWorkId);
+    const directMatch = existingDraft.dependencies.find((row) => row.id === dependency.id) ?? null;
+    const naturalMatch = assertUniqueExistingMatch(
+      existingDraft.dependencies.filter((row) => (
+        row.from_work_id === resolvedFromWorkId
+        && row.to_work_id === resolvedToWorkId
+      )),
+      "Ambiguous remote dependency mapping",
+    );
+    dependencyIdByLocalDependencyId[dependency.id] = directMatch?.id
+      ?? naturalMatch?.id
+      ?? ensureRemoteUuid(projectId, "dependency", dependency.id);
+  });
+
+  return {
+    estimateId,
+    versionId,
+    stageIdByLocalStageId,
+    workIdByLocalWorkId,
+    lineIdByLocalLineId,
+    dependencyIdByLocalDependencyId,
+  };
+}
+
 export async function saveCurrentEstimateDraft(
   projectId: string,
   snapshot: EstimateV2Snapshot,
@@ -370,14 +481,15 @@ export async function saveCurrentEstimateDraft(
 ): Promise<void> {
   const supabase = await loadSupabaseClient();
   const existingDraft = await loadCurrentEstimateDraft(projectId);
-  const estimateId = existingDraft.estimate?.id
-    ?? ensureRemoteUuid(projectId, "estimate", snapshot.project.id || projectId);
-  const versionId = existingDraft.currentVersion?.id
-    ?? ensureRemoteUuid(projectId, "estimate-version", `${projectId}:current`);
+  const resolvedIds = resolveEstimateDraftRemoteIds({
+    projectId,
+    snapshot,
+    existingDraft,
+  });
 
   const estimateResult = await ensureProjectEstimateRoot(supabase, {
     projectId,
-    estimateId,
+    estimateId: resolvedIds.estimateId,
     title: snapshot.project.title,
     createdBy: actor.profileId,
   });
@@ -387,7 +499,7 @@ export async function saveCurrentEstimateDraft(
 
   const versionResult = await ensureEstimateCurrentVersion(supabase, {
     estimateId: estimateResult.row.id,
-    versionId,
+    versionId: resolvedIds.versionId,
     createdBy: actor.profileId,
   });
   if (!versionResult.ok) {
@@ -407,22 +519,10 @@ export async function saveCurrentEstimateDraft(
     throw rootUpdateError;
   }
 
-  const stageIdByLocalId = new Map(snapshot.stages.map((stage) => [
-    stage.id,
-    ensureRemoteUuid(projectId, "stage", stage.id),
-  ]));
-  const workIdByLocalId = new Map(snapshot.works.map((work) => [
-    work.id,
-    ensureRemoteUuid(projectId, "work", work.id),
-  ]));
-  const lineIdByLocalId = new Map(snapshot.lines.map((line) => [
-    line.id,
-    ensureRemoteUuid(projectId, "line", line.id),
-  ]));
-  const dependencyIdByLocalId = new Map(snapshot.dependencies.map((dependency) => [
-    dependency.id,
-    ensureRemoteUuid(projectId, "dependency", dependency.id),
-  ]));
+  const stageIdByLocalId = new Map(Object.entries(resolvedIds.stageIdByLocalStageId));
+  const workIdByLocalId = new Map(Object.entries(resolvedIds.workIdByLocalWorkId));
+  const lineIdByLocalId = new Map(Object.entries(resolvedIds.lineIdByLocalLineId));
+  const dependencyIdByLocalId = new Map(Object.entries(resolvedIds.dependencyIdByLocalDependencyId));
 
   const stageRows: ProjectStageInsert[] = snapshot.stages.map((stage) => ({
     id: stageIdByLocalId.get(stage.id),

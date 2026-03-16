@@ -342,6 +342,35 @@ export async function getLatestHeroTransitionEvent(
   return null;
 }
 
+export async function getHeroTransitionEventById(
+  supabase: TypedSupabaseClient,
+  eventId: string,
+): Promise<{ id: string; payload: HeroTransitionEventPayload } | null> {
+  const { data, error } = await supabase
+    .from("activity_events")
+    .select("id, payload")
+    .eq("id", eventId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  const payload = readHeroTransitionPayload(data.payload);
+  if (!payload) {
+    return null;
+  }
+
+  return {
+    id: data.id,
+    payload,
+  };
+}
+
 export async function insertHeroTransitionEvent(
   supabase: TypedSupabaseClient,
   input: HeroTransitionEventInsertInput,

@@ -41,6 +41,21 @@ export interface HeroProcurementItemUpsertInput {
   createdBy: string;
 }
 
+export interface HeroProcurementLineageRow {
+  id: string;
+  estimateResourceLineId: string;
+  taskId: string | null;
+  title: string;
+  description: string | null;
+  category: string | null;
+  quantity: number;
+  unit: string | null;
+  plannedUnitPriceCents: number | null;
+  plannedTotalPriceCents: number | null;
+  status: ProcurementItemRow["status"];
+  createdBy: string;
+}
+
 function createBrowserProcurementSource(mode: "demo" | "local"): ProcurementSource {
   return {
     mode,
@@ -181,6 +196,68 @@ export async function upsertHeroProcurementItems(
   if (error) {
     throw error;
   }
+}
+
+export async function loadHeroProcurementItemsByEstimateLineId(
+  supabase: TypedSupabaseClient,
+  input: {
+    projectId: string;
+    estimateResourceLineIds: string[];
+  },
+): Promise<Map<string, HeroProcurementLineageRow>> {
+  const estimateResourceLineIds = Array.from(new Set(input.estimateResourceLineIds.filter(Boolean)));
+  if (estimateResourceLineIds.length === 0) {
+    return new Map();
+  }
+
+  const { data, error } = await supabase
+    .from("procurement_items")
+    .select("id, estimate_resource_line_id, task_id, title, description, category, quantity, unit, planned_unit_price_cents, planned_total_price_cents, status, created_by")
+    .eq("project_id", input.projectId)
+    .in("estimate_resource_line_id", estimateResourceLineIds);
+
+  if (error) {
+    throw error;
+  }
+
+  const rowsByEstimateLineId = new Map<string, ProcurementItemRow[]>();
+  (data ?? []).forEach((row) => {
+    if (!row.estimate_resource_line_id) {
+      return;
+    }
+    const rows = rowsByEstimateLineId.get(row.estimate_resource_line_id) ?? [];
+    rows.push(row);
+    rowsByEstimateLineId.set(row.estimate_resource_line_id, rows);
+  });
+
+  const result = new Map<string, HeroProcurementLineageRow>();
+  rowsByEstimateLineId.forEach((rows, estimateResourceLineId) => {
+    if (rows.length > 1) {
+      throw new Error(`Ambiguous remote procurement mapping for estimate line "${estimateResourceLineId}"`);
+    }
+
+    const row = rows[0];
+    if (!row) {
+      return;
+    }
+
+    result.set(estimateResourceLineId, {
+      id: row.id,
+      estimateResourceLineId,
+      taskId: row.task_id ?? null,
+      title: row.title,
+      description: row.description ?? null,
+      category: row.category ?? null,
+      quantity: row.quantity,
+      unit: row.unit ?? null,
+      plannedUnitPriceCents: row.planned_unit_price_cents ?? null,
+      plannedTotalPriceCents: row.planned_total_price_cents ?? null,
+      status: row.status,
+      createdBy: row.created_by,
+    });
+  });
+
+  return result;
 }
 
 export async function deleteHeroProcurementItems(

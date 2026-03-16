@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   resolveRuntimeWorkspaceModeMock,
+  getHeroTransitionEventByIdMock,
   getLatestHeroTransitionEventMock,
   insertHeroTransitionEventMock,
   ensureProjectEstimateRootMock,
@@ -12,14 +13,19 @@ const {
   ensureProjectStagesMock,
   deleteHeroTaskChecklistItemsMock,
   deleteHeroTasksMock,
+  loadHeroTasksForProjectMock,
   upsertHeroTasksMock,
+  loadHeroTaskChecklistItemsByEstimateWorkIdsMock,
   upsertTaskChecklistItemsMock,
   deleteHeroProcurementItemsMock,
+  loadHeroProcurementItemsByEstimateLineIdMock,
   upsertHeroProcurementItemsMock,
   deleteHeroHRItemsMock,
+  resolveExistingHeroHRItemsByLineageMock,
   upsertHeroHRItemsMock,
 } = vi.hoisted(() => ({
   resolveRuntimeWorkspaceModeMock: vi.fn(),
+  getHeroTransitionEventByIdMock: vi.fn(),
   getLatestHeroTransitionEventMock: vi.fn(),
   insertHeroTransitionEventMock: vi.fn(),
   ensureProjectEstimateRootMock: vi.fn(),
@@ -30,11 +36,15 @@ const {
   ensureProjectStagesMock: vi.fn(),
   deleteHeroTaskChecklistItemsMock: vi.fn(),
   deleteHeroTasksMock: vi.fn(),
+  loadHeroTasksForProjectMock: vi.fn(),
   upsertHeroTasksMock: vi.fn(),
+  loadHeroTaskChecklistItemsByEstimateWorkIdsMock: vi.fn(),
   upsertTaskChecklistItemsMock: vi.fn(),
   deleteHeroProcurementItemsMock: vi.fn(),
+  loadHeroProcurementItemsByEstimateLineIdMock: vi.fn(),
   upsertHeroProcurementItemsMock: vi.fn(),
   deleteHeroHRItemsMock: vi.fn(),
+  resolveExistingHeroHRItemsByLineageMock: vi.fn(),
   upsertHeroHRItemsMock: vi.fn(),
 }));
 
@@ -47,33 +57,42 @@ vi.mock("@/data/workspace-source", () => ({
 }));
 
 vi.mock("@/data/activity-source", () => ({
+  getHeroTransitionEventById: getHeroTransitionEventByIdMock,
   getLatestHeroTransitionEvent: getLatestHeroTransitionEventMock,
   insertHeroTransitionEvent: insertHeroTransitionEventMock,
 }));
 
-vi.mock("@/data/estimate-source", () => ({
-  ensureProjectEstimateRoot: ensureProjectEstimateRootMock,
-  ensureEstimateCurrentVersion: ensureEstimateCurrentVersionMock,
-  loadCurrentEstimateDraft: loadCurrentEstimateDraftMock,
-  upsertEstimateWorks: upsertEstimateWorksMock,
-  upsertEstimateResourceLines: upsertEstimateResourceLinesMock,
-}));
+vi.mock("@/data/estimate-source", async () => {
+  const actual = await vi.importActual<typeof import("@/data/estimate-source")>("@/data/estimate-source");
+  return {
+    ...actual,
+    ensureProjectEstimateRoot: ensureProjectEstimateRootMock,
+    ensureEstimateCurrentVersion: ensureEstimateCurrentVersionMock,
+    loadCurrentEstimateDraft: loadCurrentEstimateDraftMock,
+    upsertEstimateWorks: upsertEstimateWorksMock,
+    upsertEstimateResourceLines: upsertEstimateResourceLinesMock,
+  };
+});
 
 vi.mock("@/data/planning-source", () => ({
   deleteHeroTaskChecklistItems: deleteHeroTaskChecklistItemsMock,
   deleteHeroTasks: deleteHeroTasksMock,
   ensureProjectStages: ensureProjectStagesMock,
+  loadHeroTasksForProject: loadHeroTasksForProjectMock,
   upsertHeroTasks: upsertHeroTasksMock,
+  loadHeroTaskChecklistItemsByEstimateWorkIds: loadHeroTaskChecklistItemsByEstimateWorkIdsMock,
   upsertTaskChecklistItems: upsertTaskChecklistItemsMock,
 }));
 
 vi.mock("@/data/procurement-source", () => ({
   deleteHeroProcurementItems: deleteHeroProcurementItemsMock,
+  loadHeroProcurementItemsByEstimateLineId: loadHeroProcurementItemsByEstimateLineIdMock,
   upsertHeroProcurementItems: upsertHeroProcurementItemsMock,
 }));
 
 vi.mock("@/data/hr-source", () => ({
   deleteHeroHRItems: deleteHeroHRItemsMock,
+  resolveExistingHeroHRItemsByLineage: resolveExistingHeroHRItemsByLineageMock,
   upsertHeroHRItems: upsertHeroHRItemsMock,
 }));
 
@@ -95,6 +114,7 @@ describe("persistEstimateV2HeroTransition", () => {
       kind: "supabase",
       profileId: "profile-1",
     });
+    getHeroTransitionEventByIdMock.mockResolvedValue(null);
     getLatestHeroTransitionEventMock.mockResolvedValue(null);
     ensureProjectStagesMock.mockResolvedValue({
       "stage-existing": "stage-existing",
@@ -174,11 +194,15 @@ describe("persistEstimateV2HeroTransition", () => {
     upsertEstimateResourceLinesMock.mockResolvedValue(undefined);
     deleteHeroTaskChecklistItemsMock.mockResolvedValue(undefined);
     deleteHeroTasksMock.mockResolvedValue(undefined);
+    loadHeroTasksForProjectMock.mockResolvedValue([]);
     upsertHeroTasksMock.mockResolvedValue(undefined);
+    loadHeroTaskChecklistItemsByEstimateWorkIdsMock.mockResolvedValue([]);
     upsertTaskChecklistItemsMock.mockResolvedValue(undefined);
     deleteHeroProcurementItemsMock.mockResolvedValue(undefined);
+    loadHeroProcurementItemsByEstimateLineIdMock.mockResolvedValue(new Map());
     upsertHeroProcurementItemsMock.mockResolvedValue(undefined);
     deleteHeroHRItemsMock.mockResolvedValue(undefined);
+    resolveExistingHeroHRItemsByLineageMock.mockResolvedValue(new Map());
     upsertHeroHRItemsMock.mockResolvedValue(undefined);
     insertHeroTransitionEventMock.mockResolvedValue(undefined);
   });
@@ -647,8 +671,235 @@ describe("persistEstimateV2HeroTransition", () => {
     );
   });
 
-  it("short-circuits to success when an older remote event already covers the current draft", async () => {
-    getLatestHeroTransitionEventMock.mockResolvedValue({
+  it("resumes procurement when tasks and checklist rows already exist from a partial retry", async () => {
+    loadHeroTasksForProjectMock.mockResolvedValue([
+      {
+        id: "task-existing",
+        project_id: "project-1",
+        stage_id: "stage-existing",
+        title: "Framing",
+        description: "Auto-created from Estimate v2 work",
+        status: "in_progress",
+        assignee_profile_id: "profile-2",
+        created_by: "profile-1",
+        start_at: "2026-03-10T00:00:00.000Z",
+        due_at: "2026-03-11T00:00:00.000Z",
+        completed_at: null,
+        created_at: "2026-03-01T00:00:00.000Z",
+        updated_at: "2026-03-01T00:00:00.000Z",
+      },
+    ]);
+    loadHeroTaskChecklistItemsByEstimateWorkIdsMock.mockResolvedValue([
+      {
+        id: "check-existing",
+        task_id: "task-existing",
+        title: "Concrete",
+        is_done: false,
+        procurement_item_id: null,
+        estimate_resource_line_id: "line-existing",
+        estimate_work_id: "work-existing",
+        sort_order: 1,
+        created_at: "2026-03-01T00:00:00.000Z",
+        updated_at: "2026-03-01T00:00:00.000Z",
+      },
+    ]);
+
+    const result = await persistEstimateV2HeroTransition({
+      projectId: "project-1",
+      projectTitle: "Project 1",
+      previousStatus: "planning",
+      autoScheduled: false,
+      stages: [
+        {
+          localStageId: "stage-existing",
+          title: "Shell",
+          order: 1,
+          discountBps: 0,
+        },
+      ],
+      works: [
+        {
+          localWorkId: "work-existing",
+          localStageId: "stage-existing",
+          title: "Framing",
+          order: 1,
+          plannedStart: "2026-03-10T00:00:00.000Z",
+          plannedEnd: "2026-03-11T00:00:00.000Z",
+        },
+      ],
+      lines: [
+        {
+          localLineId: "line-existing",
+          localStageId: "stage-existing",
+          localWorkId: "work-existing",
+          title: "Concrete",
+          type: "material",
+          unit: "bag",
+          qtyMilli: 1000,
+          costUnitCents: 12500,
+        },
+      ],
+    });
+
+    expect(result.ids.taskIdByLocalWorkId["work-existing"]).toBe("task-existing");
+    expect(result.ids.checklistItemIdByLocalLineId["line-existing"]).toBe("check-existing");
+    expect(upsertHeroProcurementItemsMock).toHaveBeenCalledWith(
+      {},
+      [
+        expect.objectContaining({
+          taskId: "task-existing",
+          estimateResourceLineId: "line-existing",
+          title: "Concrete",
+        }),
+      ],
+    );
+  });
+
+  it("resumes HR when tasks and checklist rows already exist from a partial retry", async () => {
+    loadCurrentEstimateDraftMock.mockResolvedValue({
+      estimate: {
+        id: "estimate-existing",
+        project_id: "project-1",
+        title: "Project 1",
+        description: null,
+        status: "draft",
+        created_by: "profile-1",
+        created_at: "2026-03-01T00:00:00.000Z",
+        updated_at: "2026-03-01T00:00:00.000Z",
+      },
+      currentVersion: {
+        id: "version-existing",
+        estimate_id: "estimate-existing",
+        version_number: 1,
+        is_current: true,
+        created_by: "profile-1",
+        created_at: "2026-03-01T00:00:00.000Z",
+      },
+      stages: [
+        {
+          id: "stage-existing",
+          project_id: "project-1",
+          title: "Shell",
+          description: "",
+          sort_order: 1,
+          status: "open",
+          discount_bps: 0,
+          created_at: "2026-03-01T00:00:00.000Z",
+          updated_at: "2026-03-01T00:00:00.000Z",
+        },
+      ],
+      works: [
+        {
+          id: "work-existing",
+          estimate_version_id: "version-existing",
+          project_stage_id: "stage-existing",
+          title: "Framing",
+          description: null,
+          sort_order: 1,
+          planned_cost_cents: 4200,
+          created_at: "2026-03-01T00:00:00.000Z",
+        },
+      ],
+      lines: [
+        {
+          id: "line-labor-existing",
+          estimate_work_id: "work-existing",
+          resource_type: "labor",
+          title: "Crew",
+          quantity: 1,
+          unit: "shift",
+          unit_price_cents: 4200,
+          total_price_cents: 4200,
+          created_at: "2026-03-01T00:00:00.000Z",
+        },
+      ],
+      dependencies: [],
+    });
+    loadHeroTasksForProjectMock.mockResolvedValue([
+      {
+        id: "task-existing",
+        project_id: "project-1",
+        stage_id: "stage-existing",
+        title: "Framing",
+        description: "Auto-created from Estimate v2 work",
+        status: "not_started",
+        assignee_profile_id: "profile-1",
+        created_by: "profile-1",
+        start_at: "2026-03-10T00:00:00.000Z",
+        due_at: "2026-03-11T00:00:00.000Z",
+        completed_at: null,
+        created_at: "2026-03-01T00:00:00.000Z",
+        updated_at: "2026-03-01T00:00:00.000Z",
+      },
+    ]);
+    loadHeroTaskChecklistItemsByEstimateWorkIdsMock.mockResolvedValue([
+      {
+        id: "check-labor-existing",
+        task_id: "task-existing",
+        title: "Crew",
+        is_done: false,
+        procurement_item_id: null,
+        estimate_resource_line_id: "line-labor-existing",
+        estimate_work_id: "work-existing",
+        sort_order: 1,
+        created_at: "2026-03-01T00:00:00.000Z",
+        updated_at: "2026-03-01T00:00:00.000Z",
+      },
+    ]);
+
+    const result = await persistEstimateV2HeroTransition({
+      projectId: "project-1",
+      projectTitle: "Project 1",
+      previousStatus: "planning",
+      autoScheduled: false,
+      stages: [
+        {
+          localStageId: "stage-existing",
+          title: "Shell",
+          order: 1,
+          discountBps: 0,
+        },
+      ],
+      works: [
+        {
+          localWorkId: "work-existing",
+          localStageId: "stage-existing",
+          title: "Framing",
+          order: 1,
+          plannedStart: "2026-03-10T00:00:00.000Z",
+          plannedEnd: "2026-03-11T00:00:00.000Z",
+        },
+      ],
+      lines: [
+        {
+          localLineId: "line-labor-existing",
+          localStageId: "stage-existing",
+          localWorkId: "work-existing",
+          title: "Crew",
+          type: "labor",
+          unit: "shift",
+          qtyMilli: 1000,
+          costUnitCents: 4200,
+        },
+      ],
+    });
+
+    expect(result.ids.taskIdByLocalWorkId["work-existing"]).toBe("task-existing");
+    expect(result.ids.checklistItemIdByLocalLineId["line-labor-existing"]).toBe("check-labor-existing");
+    expect(upsertHeroHRItemsMock).toHaveBeenCalledWith(
+      {},
+      [
+        expect.objectContaining({
+          taskId: "task-existing",
+          estimateWorkId: "work-existing",
+          title: "Crew",
+        }),
+      ],
+    );
+  });
+
+  it("reuses existing hero event ids as reconciliation hints instead of short-circuiting", async () => {
+    getHeroTransitionEventByIdMock.mockResolvedValue({
       id: "event-existing",
       payload: {
         source: "estimate_v2.hero_transition",
@@ -682,6 +933,56 @@ describe("persistEstimateV2HeroTransition", () => {
         },
       },
     });
+    loadHeroTasksForProjectMock.mockResolvedValue([
+      {
+        id: "task-existing",
+        project_id: "project-1",
+        stage_id: "stage-existing",
+        title: "Framing",
+        description: "Auto-created from Estimate v2 work",
+        status: "not_started",
+        assignee_profile_id: "profile-1",
+        created_by: "profile-1",
+        start_at: "2026-03-10T00:00:00.000Z",
+        due_at: "2026-03-11T00:00:00.000Z",
+        completed_at: null,
+        created_at: "2026-03-01T00:00:00.000Z",
+        updated_at: "2026-03-01T00:00:00.000Z",
+      },
+    ]);
+    loadHeroTaskChecklistItemsByEstimateWorkIdsMock.mockResolvedValue([
+      {
+        id: "check-existing",
+        task_id: "task-existing",
+        title: "Concrete",
+        is_done: false,
+        procurement_item_id: null,
+        estimate_resource_line_id: "line-existing",
+        estimate_work_id: "work-existing",
+        sort_order: 1,
+        created_at: "2026-03-01T00:00:00.000Z",
+        updated_at: "2026-03-01T00:00:00.000Z",
+      },
+    ]);
+    loadHeroProcurementItemsByEstimateLineIdMock.mockResolvedValue(new Map([
+      [
+        "line-existing",
+        {
+          id: "proc-existing",
+          estimateResourceLineId: "line-existing",
+          taskId: "task-existing",
+          title: "Concrete",
+          description: null,
+          category: null,
+          quantity: 1,
+          unit: "bag",
+          plannedUnitPriceCents: 12500,
+          plannedTotalPriceCents: 12500,
+          status: "requested",
+          createdBy: "profile-1",
+        },
+      ],
+    ]));
 
     const result = await persistEstimateV2HeroTransition({
       projectId: "project-1",
@@ -723,10 +1024,80 @@ describe("persistEstimateV2HeroTransition", () => {
     const cache = loadEstimateV2HeroTransitionCache("project-1");
 
     expect(result.ids.taskIdByLocalWorkId["work-existing"]).toBe("task-existing");
-    expect(insertHeroTransitionEventMock).not.toHaveBeenCalled();
-    expect(ensureProjectEstimateRootMock).not.toHaveBeenCalled();
-    expect(upsertHeroTasksMock).not.toHaveBeenCalled();
+    expect(insertHeroTransitionEventMock).toHaveBeenCalledOnce();
+    expect(ensureProjectEstimateRootMock).toHaveBeenCalled();
+    expect(upsertHeroTasksMock).toHaveBeenCalled();
     expect(cache?.status).toBe("completed");
     expect(cache?.ids.taskIdByLocalWorkId["work-existing"]).toBe("task-existing");
+  });
+
+  it.each([
+    {
+      label: "stage",
+      setup: () => ensureProjectStagesMock.mockRejectedValue(new Error("stages unavailable")),
+      code: "STAGE_ENSURE_FAILED",
+      message: "Stage reconciliation failed in Supabase.",
+    },
+    {
+      label: "procurement",
+      setup: () => upsertHeroProcurementItemsMock.mockRejectedValue(new Error("duplicate procurement row")),
+      code: "PROCUREMENT_WRITE_FAILED",
+      message: "Procurement reconciliation failed in Supabase.",
+    },
+    {
+      label: "activity",
+      setup: () => insertHeroTransitionEventMock.mockRejectedValue(new Error("insert blocked")),
+      code: "ACTIVITY_WRITE_FAILED",
+      message: "Activity reconciliation failed in Supabase.",
+    },
+  ])("surfaces step-specific retry messages when $label reconciliation fails", async ({ setup, code, message }) => {
+    setup();
+
+    try {
+      await persistEstimateV2HeroTransition({
+        projectId: "project-1",
+        projectTitle: "Project 1",
+        previousStatus: "planning",
+        autoScheduled: false,
+        stages: [
+          {
+            localStageId: "stage-existing",
+            title: "Shell",
+            order: 1,
+            discountBps: 0,
+          },
+        ],
+        works: [
+          {
+            localWorkId: "work-existing",
+            localStageId: "stage-existing",
+            title: "Framing",
+            order: 1,
+            plannedStart: "2026-03-10T00:00:00.000Z",
+            plannedEnd: "2026-03-11T00:00:00.000Z",
+          },
+        ],
+        lines: [
+          {
+            localLineId: "line-existing",
+            localStageId: "stage-existing",
+            localWorkId: "work-existing",
+            title: "Concrete",
+            type: "material",
+            unit: "bag",
+            qtyMilli: 1000,
+            costUnitCents: 12500,
+          },
+        ],
+      });
+      throw new Error("Expected hero transition to fail");
+    } catch (error) {
+      expect(error).toMatchObject({
+        code,
+      });
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toContain(message);
+      expect((error as Error).message).toContain("Retry will resume reconciliation.");
+    }
   });
 });

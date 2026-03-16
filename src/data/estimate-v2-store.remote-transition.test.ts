@@ -242,6 +242,43 @@ describe("estimate-v2 remote hero transition", () => {
     expect(persistEstimateV2HeroTransitionMock).toHaveBeenCalledOnce();
   });
 
+  it("still runs the remote reconciliation path when tasks already exist from a prior local materialization", async () => {
+    const projectId = "project-2";
+    const activated = setProjectEstimateStatus(projectId, "in_work", { skipSetup: true });
+    expect(activated.ok).toBe(true);
+    const paused = setProjectEstimateStatus(projectId, "paused");
+    expect(paused.ok).toBe(true);
+
+    const before = getEstimateV2ProjectState(projectId);
+    expect(before.works.every((work) => Boolean(work.taskId))).toBe(true);
+
+    const taskIdByLocalWorkId = Object.fromEntries(
+      before.works.map((work) => [work.id, work.taskId ?? `task-existing-${work.id}`]),
+    );
+
+    persistEstimateV2HeroTransitionMock.mockResolvedValue({
+      fingerprint: "fingerprint-existing-tasks",
+      profileId: "profile-1",
+      ids: {
+        estimateId: "estimate-existing-tasks",
+        versionId: "version-existing-tasks",
+        eventId: "event-existing-tasks",
+        stageIdByLocalStageId: {},
+        workIdByLocalWorkId: {},
+        lineIdByLocalLineId: {},
+        taskIdByLocalWorkId,
+        checklistItemIdByLocalLineId: {},
+        procurementItemIdByLocalLineId: {},
+        hrItemIdByLocalLineId: {},
+      },
+    });
+
+    const result = await transitionEstimateV2ProjectToInWork(projectId, { skipSetup: true });
+
+    expect(result.ok).toBe(true);
+    expect(persistEstimateV2HeroTransitionMock).toHaveBeenCalledOnce();
+  });
+
   it("downgrades old blocking hero-transition errors to a retryable transition failure", async () => {
     const projectId = "project-2";
 

@@ -50,6 +50,29 @@ export interface HeroHRItemUpsertInput {
   createdBy: string;
 }
 
+export interface ResolveExistingHeroHRItemInput {
+  localLineId: string;
+  estimateWorkId?: string | null;
+  taskId?: string | null;
+  title: string;
+  knownHrItemId?: string | null;
+}
+
+export interface ExistingHeroHRLineageRow {
+  id: string;
+  estimateWorkId: string | null;
+  taskId: string | null;
+  title: string;
+  description: string | null;
+  compensationType: HRItemRow["compensation_type"];
+  plannedCostCents: number | null;
+  actualCostCents: number | null;
+  status: HRItemRow["status"];
+  startAt: string | null;
+  endAt: string | null;
+  createdBy: string;
+}
+
 export interface SetProjectHRAssigneesInput {
   projectId: string;
   hrItemId: string;
@@ -235,6 +258,66 @@ async function resolveHeroTransitionIds(
     lineIdByLocalLineId: { ...latestEvent.payload.ids.lineIdByLocalLineId },
     hrItemIdByLocalLineId: { ...latestEvent.payload.ids.hrItemIdByLocalLineId },
   };
+}
+
+export async function resolveExistingHeroHRItemsByLineage(
+  supabase: TypedSupabaseClient,
+  input: {
+    projectId: string;
+    items: ResolveExistingHeroHRItemInput[];
+  },
+): Promise<Map<string, ExistingHeroHRLineageRow>> {
+  if (input.items.length === 0) {
+    return new Map();
+  }
+
+  const { data, error } = await supabase
+    .from("hr_items")
+    .select("id, estimate_work_id, task_id, title, description, compensation_type, planned_cost_cents, actual_cost_cents, status, start_at, end_at, created_by")
+    .eq("project_id", input.projectId);
+
+  if (error) {
+    throw error;
+  }
+
+  const rows = data ?? [];
+  const rowById = new Map(rows.map((row) => [row.id, row]));
+  const result = new Map<string, ExistingHeroHRLineageRow>();
+
+  input.items.forEach((item) => {
+    const directMatch = item.knownHrItemId ? rowById.get(item.knownHrItemId) ?? null : null;
+    const lineageMatches = rows.filter((row) => (
+      row.estimate_work_id === (item.estimateWorkId ?? null)
+      && row.task_id === (item.taskId ?? null)
+      && row.title === item.title
+    ));
+
+    if (!directMatch && lineageMatches.length > 1) {
+      throw new Error(`Ambiguous remote HR mapping for "${item.title}"`);
+    }
+
+    const resolved = directMatch ?? lineageMatches[0] ?? null;
+    if (!resolved) {
+      return;
+    }
+
+    result.set(item.localLineId, {
+      id: resolved.id,
+      estimateWorkId: resolved.estimate_work_id ?? null,
+      taskId: resolved.task_id ?? null,
+      title: resolved.title,
+      description: resolved.description ?? null,
+      compensationType: resolved.compensation_type,
+      plannedCostCents: resolved.planned_cost_cents ?? null,
+      actualCostCents: resolved.actual_cost_cents ?? null,
+      status: resolved.status,
+      startAt: resolved.start_at ?? null,
+      endAt: resolved.end_at ?? null,
+      createdBy: resolved.created_by,
+    });
+  });
+
+  return result;
 }
 
 async function syncHRItemAssignees(
@@ -536,48 +619,70 @@ export async function syncProjectHRFromEstimate(
     .filter((line) => line.type === "labor" || line.type === "subcontractor")
     .map((line) => ({
       line,
-      hrItemId: hrItemIdByEstimateLineId.get(line.id) ?? null,
       work: workById.get(line.workId) ?? null,
     }))
-    .filter((entry): entry is typeof entry & { hrItemId: string } => Boolean(entry.hrItemId));
+    .filter((entry) => Boolean(entry.work?.taskId));
 
   if (syncableLines.length === 0) {
     return;
   }
 
-  const hrItemIds = syncableLines.map((entry) => entry.hrItemId);
-  const { data: existingRows, error: existingRowsError } = await supabase
-    .from("hr_items")
-    .select("id, created_by")
-    .in("id", hrItemIds);
-
-  if (existingRowsError) {
-    throw existingRowsError;
-  }
-
-  const existingRowById = new Map((existingRows ?? []).map((row) => [row.id, row]));
-  await upsertHeroHRItems(
-    supabase,
-    syncableLines.map(({ line, hrItemId, work }) => ({
-      id: hrItemId,
-      projectId: input.projectId,
-      projectStageId: line.stageId,
+  const existingHrRowsByLocalLineId = await resolveExistingHeroHRItemsByLineage(supabase, {
+    projectId: input.projectId,
+    items: syncableLines.map(({ line, work }) => ({
+      localLineId: line.id,
       estimateWorkId: line.workId,
       taskId: work?.taskId ?? null,
       title: line.title,
-      plannedCostCents: linePlannedCostCents(line),
-      startAt: work?.plannedStart ?? null,
-      endAt: work?.plannedEnd ?? null,
-      createdBy: existingRowById.get(hrItemId)?.created_by ?? mode.profileId,
+      knownHrItemId: hrItemIdByEstimateLineId.get(line.id) ?? null,
     })),
+  });
+
+  const rowsToUpsert = syncableLines
+    .map(({ line, work }) => {
+      const existingRow = existingHrRowsByLocalLineId.get(line.id) ?? null;
+      const hrItemId = existingRow?.id
+        ?? hrItemIdByEstimateLineId.get(line.id)
+        ?? null;
+      if (!hrItemId) {
+        return null;
+      }
+
+      return {
+        id: hrItemId,
+        projectId: input.projectId,
+        projectStageId: line.stageId,
+        estimateWorkId: line.workId,
+        taskId: work?.taskId ?? null,
+        title: line.title,
+        description: existingRow?.description ?? null,
+        compensationType: existingRow?.compensationType ?? "fixed",
+        plannedCostCents: linePlannedCostCents(line),
+        actualCostCents: existingRow?.actualCostCents ?? null,
+        status: existingRow?.status,
+        startAt: work?.plannedStart ?? existingRow?.startAt ?? null,
+        endAt: work?.plannedEnd ?? existingRow?.endAt ?? null,
+        createdBy: existingRow?.createdBy ?? mode.profileId,
+      } satisfies HeroHRItemUpsertInput;
+    })
+    .filter((row): row is HeroHRItemUpsertInput => Boolean(row));
+
+  if (rowsToUpsert.length === 0) {
+    return;
+  }
+
+  await upsertHeroHRItems(
+    supabase,
+    rowsToUpsert,
   );
 
   const linesWithParticipantAssignees = syncableLines
     .filter(({ line }) => Boolean(line.assigneeId))
-    .map(({ line, hrItemId }) => ({
-      hrItemId,
+    .map(({ line }) => ({
+      hrItemId: existingHrRowsByLocalLineId.get(line.id)?.id ?? hrItemIdByEstimateLineId.get(line.id) ?? "",
       assigneeId: line.assigneeId as string,
-    }));
+    }))
+    .filter((entry) => Boolean(entry.hrItemId));
 
   if (linesWithParticipantAssignees.length === 0) {
     return;

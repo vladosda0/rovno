@@ -168,6 +168,8 @@ let mainStoreUnsubscribe: (() => void) | null = null;
 const remoteHydrationPromises = new Map<string, Promise<void>>();
 const remoteDraftSyncTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const remoteDraftSyncErrorSignatureByProjectId = new Map<string, string>();
+const heroTransitionInFlightByProjectId = new Set<string>();
+const deferredDraftSyncByProjectId = new Set<string>();
 
 function notify() {
   listeners.forEach((listener) => listener());
@@ -483,6 +485,11 @@ function queueProjectDraftSync(projectId: string) {
 
   saveWorkspaceEstimateCache(projectId, context.profileId, state);
 
+  if (heroTransitionInFlightByProjectId.has(projectId)) {
+    deferredDraftSyncByProjectId.add(projectId);
+    return;
+  }
+
   const existingTimer = remoteDraftSyncTimers.get(projectId);
   if (existingTimer) {
     clearTimeout(existingTimer);
@@ -566,6 +573,8 @@ export function registerEstimateV2ProjectAccessContext(
 export function clearEstimateV2ProjectAccessContext(projectId: string) {
   accessContextByProjectId.delete(projectId);
   remoteDraftSyncErrorSignatureByProjectId.delete(projectId);
+  heroTransitionInFlightByProjectId.delete(projectId);
+  deferredDraftSyncByProjectId.delete(projectId);
   const timer = remoteDraftSyncTimers.get(projectId);
   if (timer) {
     clearTimeout(timer);
@@ -2004,18 +2013,6 @@ export async function transitionEstimateV2ProjectToInWork(
     };
   }
 
-  if (!needsInWorkTaskMaterialization(state)) {
-    const result = setProjectEstimateStatus(projectId, "in_work", options);
-    if (!result.ok) {
-      return result;
-    }
-    return {
-      ok: true,
-      autoScheduled: result.autoScheduled ?? false,
-      baselineCaptured: result.baselineCaptured ?? false,
-    };
-  }
-
   const draftResult = buildPlanningToInWorkDraft(projectId, state, options);
   if (!draftResult.ok) {
     return {
@@ -2023,6 +2020,14 @@ export async function transitionEstimateV2ProjectToInWork(
       reason: "missing_work_dates",
       missingWorkIds: draftResult.missingWorkIds,
     };
+  }
+
+  heroTransitionInFlightByProjectId.add(projectId);
+  deferredDraftSyncByProjectId.delete(projectId);
+  const existingTimer = remoteDraftSyncTimers.get(projectId);
+  if (existingTimer) {
+    clearTimeout(existingTimer);
+    remoteDraftSyncTimers.delete(projectId);
   }
 
   try {
@@ -2082,8 +2087,13 @@ export async function transitionEstimateV2ProjectToInWork(
     return {
       ok: false,
       reason: "transition_failed",
-      errorMessage: "The transition did not complete and must be retried.",
+      errorMessage: "The Supabase transition did not complete. Some remote rows may already exist. Retry will resume reconciliation.",
     };
+  } finally {
+    heroTransitionInFlightByProjectId.delete(projectId);
+    if (deferredDraftSyncByProjectId.delete(projectId)) {
+      queueProjectDraftSync(projectId);
+    }
   }
 }
 
@@ -2723,6 +2733,8 @@ export function __unsafeResetEstimateV2ForTests() {
   remoteDraftSyncTimers.forEach((timer) => clearTimeout(timer));
   remoteDraftSyncTimers.clear();
   remoteDraftSyncErrorSignatureByProjectId.clear();
+  heroTransitionInFlightByProjectId.clear();
+  deferredDraftSyncByProjectId.clear();
   listeners.clear();
   crossSyncInProgress = false;
 }

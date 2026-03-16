@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import {
+  getHeroTransitionEventById,
   getLatestHeroTransitionEvent,
   insertHeroTransitionEvent,
   type HeroTransitionEventPayload,
@@ -17,6 +18,7 @@ import {
   ensureEstimateCurrentVersion,
   ensureProjectEstimateRoot,
   loadCurrentEstimateDraft,
+  resolveEstimateDraftRemoteIds,
   upsertEstimateResourceLines,
   upsertEstimateWorks,
 } from "@/data/estimate-source";
@@ -24,13 +26,23 @@ import {
   deleteHeroTaskChecklistItems,
   deleteHeroTasks,
   ensureProjectStages,
+  loadHeroTaskChecklistItemsByEstimateWorkIds,
+  loadHeroTasksForProject,
   upsertHeroTasks,
   upsertTaskChecklistItems,
 } from "@/data/planning-source";
-import { deleteHeroProcurementItems, upsertHeroProcurementItems } from "@/data/procurement-source";
-import { deleteHeroHRItems, upsertHeroHRItems } from "@/data/hr-source";
+import {
+  deleteHeroProcurementItems,
+  loadHeroProcurementItemsByEstimateLineId,
+  upsertHeroProcurementItems,
+} from "@/data/procurement-source";
+import {
+  deleteHeroHRItems,
+  resolveExistingHeroHRItemsByLineage,
+  upsertHeroHRItems,
+} from "@/data/hr-source";
 import { resolveRuntimeWorkspaceMode } from "@/data/workspace-source";
-import type { ResourceLineType } from "@/types/estimate-v2";
+import type { EstimateV2Snapshot, ResourceLineType } from "@/types/estimate-v2";
 
 const RESOURCE_TYPE_ORDER: Record<ResourceLineType, number> = {
   material: 0,
@@ -243,23 +255,18 @@ function buildFingerprint(plan: NormalizedTransitionPlan): string {
   return deterministicUuid(`estimate-v2-hero-transition:fingerprint:${JSON.stringify(plan)}`);
 }
 
-function buildIds(plan: NormalizedTransitionPlan, fingerprint: string): EstimateV2HeroTransitionIds {
+function buildIds(
+  plan: NormalizedTransitionPlan,
+  fingerprint: string,
+  draftIds: ReturnType<typeof resolveEstimateDraftRemoteIds>,
+): EstimateV2HeroTransitionIds {
   return {
-    estimateId: deterministicUuid(`project-estimate:${plan.projectId}`),
-    versionId: deterministicUuid(`estimate-version:${plan.projectId}:current`),
+    estimateId: draftIds.estimateId,
+    versionId: draftIds.versionId,
     eventId: deterministicUuid(`activity-event:${plan.projectId}:${fingerprint}:hero-transition`),
-    stageIdByLocalStageId: Object.fromEntries(plan.stages.map((stage) => [
-      stage.localStageId,
-      deterministicUuid(`project-stage:${plan.projectId}:${stage.localStageId}`),
-    ])),
-    workIdByLocalWorkId: Object.fromEntries(plan.works.map((work) => [
-      work.localWorkId,
-      deterministicUuid(`estimate-work:${plan.projectId}:${fingerprint}:${work.localWorkId}`),
-    ])),
-    lineIdByLocalLineId: Object.fromEntries(plan.lines.map((line) => [
-      line.localLineId,
-      deterministicUuid(`estimate-line:${plan.projectId}:${fingerprint}:${line.localLineId}`),
-    ])),
+    stageIdByLocalStageId: { ...draftIds.stageIdByLocalStageId },
+    workIdByLocalWorkId: { ...draftIds.workIdByLocalWorkId },
+    lineIdByLocalLineId: { ...draftIds.lineIdByLocalLineId },
     taskIdByLocalWorkId: Object.fromEntries(plan.works.map((work) => [
       work.localWorkId,
       deterministicUuid(`task:${plan.projectId}:${fingerprint}:${work.localWorkId}`),
@@ -287,6 +294,100 @@ function buildIds(plan: NormalizedTransitionPlan, fingerprint: string): Estimate
   };
 }
 
+function buildDraftResolutionSnapshot(plan: NormalizedTransitionPlan): Pick<
+  EstimateV2Snapshot,
+  "project" | "stages" | "works" | "lines" | "dependencies"
+> {
+  return {
+    project: {
+      id: plan.projectId,
+    } as EstimateV2Snapshot["project"],
+    stages: plan.stages.map((stage) => ({
+      id: stage.localStageId,
+      title: stage.title,
+      order: stage.order,
+      discountBps: stage.discountBps,
+    })) as EstimateV2Snapshot["stages"],
+    works: plan.works.map((work) => ({
+      id: work.localWorkId,
+      stageId: work.localStageId,
+      title: work.title,
+      order: work.order,
+      plannedStart: work.plannedStart,
+      plannedEnd: work.plannedEnd,
+    })) as EstimateV2Snapshot["works"],
+    lines: plan.lines.map((line) => ({
+      id: line.localLineId,
+      stageId: line.localStageId,
+      workId: line.localWorkId,
+      title: line.title,
+      type: line.type,
+      unit: line.unit,
+      qtyMilli: line.qtyMilli,
+      costUnitCents: line.costUnitCents,
+    })) as EstimateV2Snapshot["lines"],
+    dependencies: [],
+  };
+}
+
+function stepFailureMessage(base: string, error: unknown): string {
+  if (!(error instanceof Error) || !error.message) {
+    return base;
+  }
+
+  return `${base} ${error.message}`;
+}
+
+function resolveTaskIdsFromChecklist(
+  plan: NormalizedTransitionPlan,
+  ids: EstimateV2HeroTransitionIds,
+  checklistRows: Awaited<ReturnType<typeof loadHeroTaskChecklistItemsByEstimateWorkIds>>,
+): Record<string, string> {
+  const nextTaskIds = { ...ids.taskIdByLocalWorkId };
+
+  plan.works.forEach((work) => {
+    const resolvedWorkId = ids.workIdByLocalWorkId[work.localWorkId];
+    const taskIds = uniqueIds(
+      checklistRows
+        .filter((row) => row.estimate_work_id === resolvedWorkId)
+        .map((row) => row.task_id),
+    );
+
+    if (taskIds.length > 1) {
+      throw new Error(`Ambiguous remote task mapping for "${work.title}"`);
+    }
+
+    if (taskIds[0]) {
+      nextTaskIds[work.localWorkId] = taskIds[0];
+    }
+  });
+
+  return nextTaskIds;
+}
+
+function resolveChecklistItemIds(
+  plan: NormalizedTransitionPlan,
+  ids: EstimateV2HeroTransitionIds,
+  checklistRows: Awaited<ReturnType<typeof loadHeroTaskChecklistItemsByEstimateWorkIds>>,
+): Record<string, string> {
+  const nextChecklistIds = { ...ids.checklistItemIdByLocalLineId };
+
+  plan.lines.forEach((line) => {
+    const resolvedLineId = ids.lineIdByLocalLineId[line.localLineId];
+    const matches = checklistRows.filter((row) => row.estimate_resource_line_id === resolvedLineId);
+
+    if (matches.length > 1) {
+      throw new Error(`Ambiguous remote checklist mapping for "${line.title}"`);
+    }
+
+    if (matches[0]) {
+      nextChecklistIds[line.localLineId] = matches[0].id;
+    }
+  });
+
+  return nextChecklistIds;
+}
+
 function createTransitionPayload(
   fingerprint: string,
   previousStatus: "planning" | "paused",
@@ -308,48 +409,6 @@ function isRecoverableBlockedReason(reason: string): boolean {
     || reason.includes(REMOTE_EVENT_MISMATCH_MESSAGE)
     || reason.includes("Remote estimate snapshot rows already exist")
     || reason.includes("Remote estimate version rows already exist");
-}
-
-function resolveIdsFromExistingDraft(
-  plan: NormalizedTransitionPlan,
-  ids: EstimateV2HeroTransitionIds,
-  draft: Awaited<ReturnType<typeof loadCurrentEstimateDraft>>,
-): EstimateV2HeroTransitionIds {
-  const nextIds: EstimateV2HeroTransitionIds = {
-    ...ids,
-    estimateId: draft.estimate?.id ?? ids.estimateId,
-    versionId: draft.currentVersion?.id ?? ids.versionId,
-    stageIdByLocalStageId: { ...ids.stageIdByLocalStageId },
-    workIdByLocalWorkId: { ...ids.workIdByLocalWorkId },
-    lineIdByLocalLineId: { ...ids.lineIdByLocalLineId },
-    taskIdByLocalWorkId: { ...ids.taskIdByLocalWorkId },
-    checklistItemIdByLocalLineId: { ...ids.checklistItemIdByLocalLineId },
-    procurementItemIdByLocalLineId: { ...ids.procurementItemIdByLocalLineId },
-    hrItemIdByLocalLineId: { ...ids.hrItemIdByLocalLineId },
-  };
-
-  const remoteStageIds = new Set(draft.stages.map((stage) => stage.id));
-  plan.stages.forEach((stage) => {
-    if (remoteStageIds.has(stage.localStageId)) {
-      nextIds.stageIdByLocalStageId[stage.localStageId] = stage.localStageId;
-    }
-  });
-
-  const remoteWorkIds = new Set(draft.works.map((work) => work.id));
-  plan.works.forEach((work) => {
-    if (remoteWorkIds.has(work.localWorkId)) {
-      nextIds.workIdByLocalWorkId[work.localWorkId] = work.localWorkId;
-    }
-  });
-
-  const remoteLineIds = new Set(draft.lines.map((line) => line.id));
-  plan.lines.forEach((line) => {
-    if (remoteLineIds.has(line.localLineId)) {
-      nextIds.lineIdByLocalLineId[line.localLineId] = line.localLineId;
-    }
-  });
-
-  return nextIds;
 }
 
 function mergeDownstreamIds(
@@ -400,39 +459,6 @@ function mergeDownstreamIds(
   });
 
   return nextIds;
-}
-
-function draftContainsCurrentPlan(
-  plan: NormalizedTransitionPlan,
-  draft: Awaited<ReturnType<typeof loadCurrentEstimateDraft>>,
-): boolean {
-  if (!draft.estimate || !draft.currentVersion) {
-    return false;
-  }
-
-  const stageIds = new Set(draft.stages.map((stage) => stage.id));
-  const workIds = new Set(draft.works.map((work) => work.id));
-  const lineIds = new Set(draft.lines.map((line) => line.id));
-
-  return plan.stages.every((stage) => stageIds.has(stage.localStageId))
-    && plan.works.every((work) => workIds.has(work.localWorkId))
-    && plan.lines.every((line) => lineIds.has(line.localLineId));
-}
-
-function downstreamIdsCoverCurrentPlan(
-  plan: NormalizedTransitionPlan,
-  ids: EstimateV2HeroTransitionIds | null,
-): boolean {
-  if (!ids) return false;
-
-  return plan.works.every((work) => Boolean(ids.taskIdByLocalWorkId[work.localWorkId]))
-    && plan.lines.every((line) => Boolean(ids.checklistItemIdByLocalLineId[line.localLineId]))
-    && plan.lines
-      .filter((line) => line.type === "material" || line.type === "tool")
-      .every((line) => Boolean(ids.procurementItemIdByLocalLineId[line.localLineId]))
-    && plan.lines
-      .filter((line) => line.type === "labor" || line.type === "subcontractor")
-      .every((line) => Boolean(ids.hrItemIdByLocalLineId[line.localLineId]));
 }
 
 function uniqueIds(ids: Array<string | undefined>): string[] {
@@ -532,34 +558,28 @@ export async function persistEstimateV2HeroTransition(
     cache = null;
   }
 
-  if (cache?.status === "completed" && cache.fingerprint === fingerprint) {
-    return {
-      fingerprint,
-      ids: cache.ids,
-      profileId: mode.profileId,
-    };
-  }
-
+  const completedCache = cache?.status === "completed" && cache.fingerprint === fingerprint
+    ? cache
+    : null;
   const pendingCache = cache?.status === "pending" ? cache : null;
-  const latestEvent = await getLatestHeroTransitionEvent(supabase, plan.projectId);
-  const latestEventIds = latestEvent?.payload.ids ?? null;
-  if (latestEvent?.payload.fingerprint === fingerprint) {
-    saveEstimateV2HeroTransitionCompleted({
-      projectId: plan.projectId,
-      fingerprint,
-      ids: latestEvent.payload.ids,
-    });
-    return {
-      fingerprint,
-      ids: latestEvent.payload.ids,
-      profileId: mode.profileId,
-    };
-  }
-
   const existingDraft = await loadCurrentEstimateDraft(plan.projectId);
-  let ids = resolveIdsFromExistingDraft(plan, buildIds(plan, fingerprint), existingDraft);
-  ids = mergeDownstreamIds(plan, ids, latestEventIds);
+  const draftIds = resolveEstimateDraftRemoteIds({
+    projectId: plan.projectId,
+    snapshot: buildDraftResolutionSnapshot(plan),
+    existingDraft,
+  });
+  let ids = buildIds(plan, fingerprint, draftIds);
+
+  const exactEvent = await getHeroTransitionEventById(supabase, ids.eventId);
+  const latestEvent = exactEvent
+    ? null
+    : await getLatestHeroTransitionEvent(supabase, plan.projectId);
+  const eventRecoveryIds = exactEvent?.payload.ids
+    ?? (latestEvent?.payload.fingerprint === fingerprint ? latestEvent.payload.ids : null);
+
+  ids = mergeDownstreamIds(plan, ids, completedCache?.ids ?? null);
   ids = mergeDownstreamIds(plan, ids, pendingCache?.ids ?? null);
+  ids = mergeDownstreamIds(plan, ids, eventRecoveryIds);
 
   const staleDownstreamIds = pendingCache && pendingCache.fingerprint !== fingerprint
     ? collectStaleDownstreamIds(plan, pendingCache.ids)
@@ -569,41 +589,6 @@ export async function persistEstimateV2HeroTransition(
       hrItemIds: [],
       taskIds: [],
     };
-
-  if (latestEventIds && draftContainsCurrentPlan(plan, existingDraft) && downstreamIdsCoverCurrentPlan(plan, latestEventIds)) {
-    if (
-      staleDownstreamIds.checklistItemIds.length > 0
-      || staleDownstreamIds.procurementItemIds.length > 0
-      || staleDownstreamIds.hrItemIds.length > 0
-      || staleDownstreamIds.taskIds.length > 0
-    ) {
-      try {
-        await cleanupStaleDownstreamRows(staleDownstreamIds);
-      } catch (error) {
-        throw new EstimateV2HeroTransitionError(
-          "TASK_WRITE_FAILED",
-          "Transition recovery did not finish saving to Supabase. Retry the transition.",
-          { cause: error },
-        );
-      }
-    }
-
-    const completedIds = mergeDownstreamIds(
-      plan,
-      resolveIdsFromExistingDraft(plan, buildIds(plan, fingerprint), existingDraft),
-      latestEventIds,
-    );
-    saveEstimateV2HeroTransitionCompleted({
-      projectId: plan.projectId,
-      fingerprint,
-      ids: completedIds,
-    });
-    return {
-      fingerprint,
-      ids: completedIds,
-      profileId: mode.profileId,
-    };
-  }
 
   saveEstimateV2HeroTransitionPending({
     projectId: plan.projectId,
@@ -638,7 +623,10 @@ export async function persistEstimateV2HeroTransition(
   } catch (error) {
     throw new EstimateV2HeroTransitionError(
       "STAGE_ENSURE_FAILED",
-      "Could not sync project stages to Supabase. Estimate status was not changed.",
+      stepFailureMessage(
+        "Stage reconciliation failed in Supabase. Some remote rows may already exist. Retry will resume reconciliation.",
+        error,
+      ),
       { cause: error },
     );
   }
@@ -654,7 +642,7 @@ export async function persistEstimateV2HeroTransition(
     if (!rootResult.ok) {
       throw new EstimateV2HeroTransitionError(
         "ESTIMATE_SNAPSHOT_FAILED",
-        "Estimate snapshot could not be reconciled to Supabase. Retry the transition.",
+        "Estimate snapshot reconciliation failed in Supabase. Some remote rows may already exist. Retry will resume reconciliation.",
       );
     }
 
@@ -667,7 +655,7 @@ export async function persistEstimateV2HeroTransition(
     if (!versionResult.ok) {
       throw new EstimateV2HeroTransitionError(
         "ESTIMATE_SNAPSHOT_FAILED",
-        "Estimate snapshot could not be reconciled to Supabase. Retry the transition.",
+        "Estimate snapshot reconciliation failed in Supabase. Some remote rows may already exist. Retry will resume reconciliation.",
       );
     }
 
@@ -712,13 +700,42 @@ export async function persistEstimateV2HeroTransition(
 
     throw new EstimateV2HeroTransitionError(
       "ESTIMATE_SNAPSHOT_FAILED",
-      "Estimate snapshot did not finish saving to Supabase. Retry the transition.",
+      stepFailureMessage(
+        "Estimate snapshot reconciliation failed in Supabase. Some remote rows may already exist. Retry will resume reconciliation.",
+        error,
+      ),
       { cause: error },
     );
   }
 
   try {
     await cleanupStaleDownstreamRows(staleDownstreamIds);
+
+    const [taskRows, checklistRows] = await Promise.all([
+      loadHeroTasksForProject(supabase, plan.projectId),
+      loadHeroTaskChecklistItemsByEstimateWorkIds(
+        supabase,
+        Object.values(ids.workIdByLocalWorkId),
+      ),
+    ]);
+    const nextTaskIds = resolveTaskIdsFromChecklist(plan, ids, checklistRows);
+    const nextChecklistIds = resolveChecklistItemIds(plan, {
+      ...ids,
+      taskIdByLocalWorkId: nextTaskIds,
+    }, checklistRows);
+    ids = {
+      ...ids,
+      taskIdByLocalWorkId: nextTaskIds,
+      checklistItemIdByLocalLineId: nextChecklistIds,
+    };
+
+    saveEstimateV2HeroTransitionPending({
+      projectId: plan.projectId,
+      fingerprint,
+      ids,
+    });
+
+    const existingTaskRowById = new Map(taskRows.map((row) => [row.id, row]));
 
     await upsertHeroTasks(
       supabase,
@@ -727,10 +744,14 @@ export async function persistEstimateV2HeroTransition(
         projectId: plan.projectId,
         stageId: ids.stageIdByLocalStageId[work.localStageId],
         title: work.title,
-        description: "Auto-created from Estimate v2 work",
-        status: "not_started",
-        assigneeId: mode.profileId,
-        createdBy: mode.profileId,
+        description: existingTaskRowById.get(ids.taskIdByLocalWorkId[work.localWorkId])?.description
+          ?? "Auto-created from Estimate v2 work",
+        status: existingTaskRowById.get(ids.taskIdByLocalWorkId[work.localWorkId])?.status
+          ?? "not_started",
+        assigneeId: existingTaskRowById.get(ids.taskIdByLocalWorkId[work.localWorkId])?.assignee_profile_id
+          ?? mode.profileId,
+        createdBy: existingTaskRowById.get(ids.taskIdByLocalWorkId[work.localWorkId])?.created_by
+          ?? mode.profileId,
         startAt: work.plannedStart,
         dueAt: work.plannedEnd,
       })),
@@ -746,63 +767,132 @@ export async function persistEstimateV2HeroTransition(
     await upsertTaskChecklistItems(
       supabase,
       plan.works.flatMap((work) => (
-        (sortedLinesByWorkId.get(work.localWorkId) ?? []).map((line, index) => ({
-          id: ids.checklistItemIdByLocalLineId[line.localLineId],
-          taskId: ids.taskIdByLocalWorkId[work.localWorkId],
-          title: line.title,
-          isDone: false,
-          procurementItemId: null,
-          estimateResourceLineId: ids.lineIdByLocalLineId[line.localLineId],
-          estimateWorkId: ids.workIdByLocalWorkId[work.localWorkId],
-          sortOrder: index + 1,
-        }))
+        (sortedLinesByWorkId.get(work.localWorkId) ?? []).map((line, index) => {
+          const existingChecklistRow = checklistRows.find((row) => (
+            row.id === ids.checklistItemIdByLocalLineId[line.localLineId]
+          )) ?? null;
+          return {
+            id: ids.checklistItemIdByLocalLineId[line.localLineId],
+            taskId: ids.taskIdByLocalWorkId[work.localWorkId],
+            title: line.title,
+            isDone: existingChecklistRow?.is_done ?? false,
+            procurementItemId: existingChecklistRow?.procurement_item_id ?? null,
+            estimateResourceLineId: ids.lineIdByLocalLineId[line.localLineId],
+            estimateWorkId: ids.workIdByLocalWorkId[work.localWorkId],
+            sortOrder: index + 1,
+          };
+        })
       )),
     );
   } catch (error) {
     throw new EstimateV2HeroTransitionError(
       "TASK_WRITE_FAILED",
-      "Task generation did not finish saving to Supabase. Estimate status was not changed.",
+      stepFailureMessage(
+        "Task reconciliation failed in Supabase. Some task rows may already exist. Retry will resume reconciliation.",
+        error,
+      ),
       { cause: error },
     );
   }
 
   try {
+    const existingProcurementByEstimateLineId = await loadHeroProcurementItemsByEstimateLineId(supabase, {
+      projectId: plan.projectId,
+      estimateResourceLineIds: plan.lines.map((line) => ids.lineIdByLocalLineId[line.localLineId]),
+    });
+
+    ids = {
+      ...ids,
+      procurementItemIdByLocalLineId: {
+        ...ids.procurementItemIdByLocalLineId,
+        ...Object.fromEntries(plan.lines
+          .filter((line) => line.type === "material" || line.type === "tool")
+          .flatMap((line) => {
+            const existingRow = existingProcurementByEstimateLineId.get(ids.lineIdByLocalLineId[line.localLineId]);
+            return existingRow ? [[line.localLineId, existingRow.id]] : [];
+          })),
+      },
+    };
+
+    saveEstimateV2HeroTransitionPending({
+      projectId: plan.projectId,
+      fingerprint,
+      ids,
+    });
+
     await upsertHeroProcurementItems(
       supabase,
       plan.lines
         .filter((line) => line.type === "material" || line.type === "tool")
-        .map((line) => ({
-          id: ids.procurementItemIdByLocalLineId[line.localLineId],
-          projectId: plan.projectId,
-          estimateResourceLineId: ids.lineIdByLocalLineId[line.localLineId],
-          taskId: ids.taskIdByLocalWorkId[line.localWorkId],
-          title: line.title,
-          description: null,
-          category: null,
-          quantity: quantityFromQtyMilli(line.qtyMilli),
-          unit: line.unit,
-          plannedUnitPriceCents: line.costUnitCents,
-          plannedTotalPriceCents: totalPriceCentsFromLine(line),
-          status: "requested",
-          createdBy: mode.profileId,
-        })),
+        .map((line) => {
+          const existingRow = existingProcurementByEstimateLineId.get(ids.lineIdByLocalLineId[line.localLineId]) ?? null;
+          return {
+            id: ids.procurementItemIdByLocalLineId[line.localLineId],
+            projectId: plan.projectId,
+            estimateResourceLineId: ids.lineIdByLocalLineId[line.localLineId],
+            taskId: ids.taskIdByLocalWorkId[line.localWorkId],
+            title: line.title,
+            description: existingRow?.description ?? null,
+            category: existingRow?.category ?? null,
+            quantity: quantityFromQtyMilli(line.qtyMilli),
+            unit: line.unit,
+            plannedUnitPriceCents: line.costUnitCents,
+            plannedTotalPriceCents: totalPriceCentsFromLine(line),
+            status: existingRow?.status ?? "requested",
+            createdBy: existingRow?.createdBy ?? mode.profileId,
+          };
+        }),
     );
   } catch (error) {
     throw new EstimateV2HeroTransitionError(
       "PROCUREMENT_WRITE_FAILED",
-      "Procurement items did not finish saving to Supabase. Retry the transition.",
+      stepFailureMessage(
+        "Procurement reconciliation failed in Supabase. Some procurement rows may already exist. Retry will resume reconciliation.",
+        error,
+      ),
       { cause: error },
     );
   }
 
   try {
     const workByLocalId = new Map(plan.works.map((work) => [work.localWorkId, work]));
+    const existingHrRowsByLocalLineId = await resolveExistingHeroHRItemsByLineage(supabase, {
+      projectId: plan.projectId,
+      items: plan.lines
+        .filter((line) => line.type === "labor" || line.type === "subcontractor")
+        .map((line) => ({
+          localLineId: line.localLineId,
+          estimateWorkId: ids.workIdByLocalWorkId[line.localWorkId] ?? null,
+          taskId: ids.taskIdByLocalWorkId[line.localWorkId] ?? null,
+          title: line.title,
+          knownHrItemId: ids.hrItemIdByLocalLineId[line.localLineId] ?? null,
+        })),
+    });
+
+    ids = {
+      ...ids,
+      hrItemIdByLocalLineId: {
+        ...ids.hrItemIdByLocalLineId,
+        ...Object.fromEntries(Array.from(existingHrRowsByLocalLineId.entries()).map(([localLineId, row]) => [
+          localLineId,
+          row.id,
+        ])),
+      },
+    };
+
+    saveEstimateV2HeroTransitionPending({
+      projectId: plan.projectId,
+      fingerprint,
+      ids,
+    });
+
     await upsertHeroHRItems(
       supabase,
       plan.lines
         .filter((line) => line.type === "labor" || line.type === "subcontractor")
         .map((line) => {
           const parentWork = workByLocalId.get(line.localWorkId);
+          const existingRow = existingHrRowsByLocalLineId.get(line.localLineId) ?? null;
           return {
             id: ids.hrItemIdByLocalLineId[line.localLineId],
             projectId: plan.projectId,
@@ -810,21 +900,24 @@ export async function persistEstimateV2HeroTransition(
             estimateWorkId: ids.workIdByLocalWorkId[line.localWorkId] ?? null,
             taskId: ids.taskIdByLocalWorkId[line.localWorkId] ?? null,
             title: line.title,
-            description: null,
-            compensationType: "fixed" as const,
+            description: existingRow?.description ?? null,
+            compensationType: existingRow?.compensationType ?? "fixed",
             plannedCostCents: totalPriceCentsFromLine(line),
-            actualCostCents: null,
-            status: "planned" as const,
-            startAt: parentWork?.plannedStart ?? null,
-            endAt: parentWork?.plannedEnd ?? null,
-            createdBy: mode.profileId,
+            actualCostCents: existingRow?.actualCostCents ?? null,
+            status: existingRow?.status ?? "planned",
+            startAt: parentWork?.plannedStart ?? existingRow?.startAt ?? null,
+            endAt: parentWork?.plannedEnd ?? existingRow?.endAt ?? null,
+            createdBy: existingRow?.createdBy ?? mode.profileId,
           };
         }),
     );
   } catch (error) {
     throw new EstimateV2HeroTransitionError(
       "HR_WRITE_FAILED",
-      "HR items did not finish saving to Supabase. Retry the transition.",
+      stepFailureMessage(
+        "HR reconciliation failed in Supabase. Some HR rows may already exist. Retry will resume reconciliation.",
+        error,
+      ),
       { cause: error },
     );
   }
@@ -840,7 +933,10 @@ export async function persistEstimateV2HeroTransition(
   } catch (error) {
     throw new EstimateV2HeroTransitionError(
       "ACTIVITY_WRITE_FAILED",
-      "The transition did not complete and must be retried.",
+      stepFailureMessage(
+        "Activity reconciliation failed in Supabase. Some remote rows may already exist. Retry will resume reconciliation.",
+        error,
+      ),
       { cause: error },
     );
   }
