@@ -67,6 +67,10 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql",
       "sha256": "de59e4ba500a66353032b137b84d9fd5ec337012dd21f74ed45cc0b5f1362528"
+    },
+    {
+      "path": "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
+      "sha256": "d2b74460b8da19d1a8c7f13c7482373b72b51a289218e2512ddef9d456874ad8"
     }
   ],
   "generated_artifacts": [
@@ -105,7 +109,8 @@ export const manifest = {
     "sql/20260306165000_billing_launch_tables.sql",
     "sql/20260306165500_auth_bootstrap_and_domain_rpc.sql",
     "sql/20260306170000_grants_rls_enablement_and_policies.sql",
-    "sql/20260313180000_projects_owner_only_rls_hotfix.sql"
+    "sql/20260313180000_projects_owner_only_rls_hotfix.sql",
+    "sql/20260313183000_tasks_estimate_work_lineage.sql"
   ],
   "external_schema_references": [
     {
@@ -1246,7 +1251,7 @@ export const tables = {
             "toColumns": [
               "id"
             ],
-            "onDelete": "set"
+            "onDelete": "set null"
           }
         },
         {
@@ -1648,7 +1653,7 @@ export const tables = {
             "toColumns": [
               "id"
             ],
-            "onDelete": "set"
+            "onDelete": "set null"
           }
         },
         {
@@ -1717,6 +1722,16 @@ export const tables = {
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "estimate_work_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -1729,6 +1744,16 @@ export const tables = {
           "expression": "status in ('not_started', 'in_progress', 'done', 'blocked')",
           "usingIndex": null,
           "sourceMigration": "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql"
+        },
+        {
+          "type": "foreign_key",
+          "name": "tasks_estimate_work_id_fkey",
+          "columns": [
+            "estimate_work_id"
+          ],
+          "expression": null,
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql"
         }
       ],
       "indexes": [
@@ -1761,6 +1786,16 @@ export const tables = {
           "where": null,
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql"
+        },
+        {
+          "name": "idx_tasks_estimate_work_id_unique",
+          "unique": true,
+          "expressions": [
+            "estimate_work_id"
+          ],
+          "where": "estimate_work_id is not null",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql"
         }
       ],
       "triggers": [
@@ -1937,7 +1972,7 @@ export const tables = {
             "toColumns": [
               "id"
             ],
-            "onDelete": "set"
+            "onDelete": "set null"
           }
         },
         {
@@ -2180,7 +2215,7 @@ export const tables = {
             "toColumns": [
               "id"
             ],
-            "onDelete": "set"
+            "onDelete": "set null"
           }
         },
         {
@@ -2342,7 +2377,7 @@ export const tables = {
             "toColumns": [
               "id"
             ],
-            "onDelete": "set"
+            "onDelete": "set null"
           }
         },
         {
@@ -2700,7 +2735,7 @@ export const tables = {
             "toColumns": [
               "id"
             ],
-            "onDelete": "set"
+            "onDelete": "set null"
           }
         },
         {
@@ -3488,7 +3523,7 @@ export const tables = {
             "toColumns": [
               "id"
             ],
-            "onDelete": "set"
+            "onDelete": "set null"
           }
         },
         {
@@ -3505,7 +3540,7 @@ export const tables = {
             "toColumns": [
               "id"
             ],
-            "onDelete": "set"
+            "onDelete": "set null"
           }
         },
         {
@@ -3912,7 +3947,7 @@ export const tables = {
             "toColumns": [
               "id"
             ],
-            "onDelete": "set"
+            "onDelete": "set null"
           }
         },
         {
@@ -4095,7 +4130,7 @@ export const tables = {
             "toColumns": [
               "id"
             ],
-            "onDelete": "set"
+            "onDelete": "set null"
           }
         },
         {
@@ -4112,7 +4147,7 @@ export const tables = {
             "toColumns": [
               "id"
             ],
-            "onDelete": "set"
+            "onDelete": "set null"
           }
         },
         {
@@ -4129,7 +4164,7 @@ export const tables = {
             "toColumns": [
               "id"
             ],
-            "onDelete": "set"
+            "onDelete": "set null"
           }
         },
         {
@@ -4176,7 +4211,7 @@ export const tables = {
             "toColumns": [
               "id"
             ],
-            "onDelete": "set"
+            "onDelete": "set null"
           }
         },
         {
@@ -4331,7 +4366,7 @@ export const tables = {
             "toColumns": [
               "id"
             ],
-            "onDelete": "set"
+            "onDelete": "set null"
           }
         },
         {
@@ -4348,7 +4383,7 @@ export const tables = {
             "toColumns": [
               "id"
             ],
-            "onDelete": "set"
+            "onDelete": "set null"
           }
         },
         {
@@ -4365,7 +4400,7 @@ export const tables = {
             "toColumns": [
               "id"
             ],
-            "onDelete": "set"
+            "onDelete": "set null"
           }
         },
         {
@@ -4522,7 +4557,7 @@ export const tables = {
             "toColumns": [
               "id"
             ],
-            "onDelete": "set"
+            "onDelete": "set null"
           }
         },
         {
@@ -4539,7 +4574,7 @@ export const tables = {
             "toColumns": [
               "id"
             ],
-            "onDelete": "set"
+            "onDelete": "set null"
           }
         },
         {
@@ -4556,7 +4591,7 @@ export const tables = {
             "toColumns": [
               "id"
             ],
-            "onDelete": "set"
+            "onDelete": "set null"
           }
         },
         {
@@ -4926,7 +4961,7 @@ export const tables = {
             "toColumns": [
               "id"
             ],
-            "onDelete": "set"
+            "onDelete": "set null"
           }
         },
         {
@@ -4943,7 +4978,7 @@ export const tables = {
             "toColumns": [
               "id"
             ],
-            "onDelete": "set"
+            "onDelete": "set null"
           }
         },
         {
@@ -5000,7 +5035,7 @@ export const tables = {
             "toColumns": [
               "id"
             ],
-            "onDelete": "set"
+            "onDelete": "set null"
           }
         },
         {
@@ -5116,7 +5151,7 @@ export const tables = {
             "toColumns": [
               "id"
             ],
-            "onDelete": "set"
+            "onDelete": "set null"
           }
         },
         {
@@ -5965,7 +6000,7 @@ export const relations = {
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -6045,7 +6080,7 @@ export const relations = {
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -6109,7 +6144,7 @@ export const relations = {
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -6173,7 +6208,7 @@ export const relations = {
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -6237,7 +6272,7 @@ export const relations = {
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -6333,7 +6368,7 @@ export const relations = {
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -6509,7 +6544,7 @@ export const relations = {
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -6525,7 +6560,7 @@ export const relations = {
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -6605,7 +6640,7 @@ export const relations = {
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -6653,7 +6688,7 @@ export const relations = {
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -6669,7 +6704,7 @@ export const relations = {
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -6685,7 +6720,7 @@ export const relations = {
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -6701,7 +6736,7 @@ export const relations = {
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -6733,7 +6768,7 @@ export const relations = {
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -6749,7 +6784,7 @@ export const relations = {
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -6765,7 +6800,7 @@ export const relations = {
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -6797,7 +6832,7 @@ export const relations = {
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -6813,7 +6848,7 @@ export const relations = {
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -6829,7 +6864,7 @@ export const relations = {
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -6909,7 +6944,7 @@ export const relations = {
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -6925,7 +6960,7 @@ export const relations = {
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -6941,7 +6976,7 @@ export const relations = {
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -6973,7 +7008,7 @@ export const relations = {
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -7054,6 +7089,22 @@ export const relations = {
         "id"
       ],
       "onDelete": "cascade"
+    },
+    {
+      "name": "tasks_estimate_work_id_fkey",
+      "sourceMigration": "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
+      "sourceKind": "alter_table",
+      "fromSchema": "public",
+      "fromTable": "tasks",
+      "fromColumns": [
+        "estimate_work_id"
+      ],
+      "toSchema": "public",
+      "toTable": "estimate_works",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
     }
   ]
 } as const;
@@ -11492,6 +11543,7 @@ export const sourceTrace = {
         "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
         "supabase/migrations/20260306162500_estimates_core.sql",
         "supabase/migrations/20260306164000_hr_domain.sql",
+        "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
       ],
       "tables": [
@@ -11599,6 +11651,11 @@ export const sourceTrace = {
           "from": "public.hr_items",
           "to": "public.tasks",
           "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql"
+        },
+        {
+          "from": "public.tasks",
+          "to": "public.estimate_works",
+          "sourceMigration": "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql"
         }
       ]
     },
@@ -11691,6 +11748,7 @@ export const sourceTrace = {
         "supabase/migrations/20260306162500_estimates_core.sql",
         "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
         "supabase/migrations/20260306164000_hr_domain.sql",
+        "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
         "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
       ],
@@ -11797,6 +11855,11 @@ export const sourceTrace = {
           "from": "public.hr_items",
           "to": "public.estimate_works",
           "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql"
+        },
+        {
+          "from": "public.tasks",
+          "to": "public.estimate_works",
+          "sourceMigration": "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql"
         }
       ]
     },
@@ -12136,6 +12199,7 @@ export const slices = {
         "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
         "supabase/migrations/20260306162500_estimates_core.sql",
         "supabase/migrations/20260306164000_hr_domain.sql",
+        "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
       ],
       "tableCount": 4,
@@ -12163,6 +12227,7 @@ export const slices = {
         "supabase/migrations/20260306162500_estimates_core.sql",
         "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
         "supabase/migrations/20260306164000_hr_domain.sql",
+        "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
         "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
       ],

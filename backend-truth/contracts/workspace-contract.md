@@ -201,7 +201,7 @@ Indexes:
 | `public.project_members(profile_id)` | `public.profiles(id)` | `cascade` | `supabase/migrations/20260306161000_projects_membership_and_invites.sql` |
 | `public.project_invites(project_id)` | `public.projects(id)` | `cascade` | `supabase/migrations/20260306161000_projects_membership_and_invites.sql` |
 | `public.project_invites(invited_by)` | `public.profiles(id)` | `restrict` | `supabase/migrations/20260306161000_projects_membership_and_invites.sql` |
-| `public.project_invites(accepted_profile_id)` | `public.profiles(id)` | `set` | `supabase/migrations/20260306161000_projects_membership_and_invites.sql` |
+| `public.project_invites(accepted_profile_id)` | `public.profiles(id)` | `set null` | `supabase/migrations/20260306161000_projects_membership_and_invites.sql` |
 | `public.projects(current_stage_id)` | `public.project_stages(id)` | `set null` | `supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql` |
 
 ## Functions
