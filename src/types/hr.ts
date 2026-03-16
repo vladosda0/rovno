@@ -6,6 +6,7 @@ export interface HRPlannedItem {
   projectId: string;
   stageId: string;
   workId: string;
+  taskId: string | null;
   title: string;
   type: HRItemType;
   plannedQty: number;

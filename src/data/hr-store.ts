@@ -187,6 +187,7 @@ export function createFromEstimateLine(
     projectId,
     stageId: fields.stageId,
     workId: fields.workId,
+    taskId: null,
     title: fields.title,
     type: fields.type,
     plannedQty: Math.max(0, fields.plannedQty),

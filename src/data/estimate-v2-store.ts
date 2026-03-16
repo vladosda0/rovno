@@ -32,6 +32,7 @@ import {
   validateNoCycles,
 } from "@/lib/estimate-v2/schedule";
 import { syncProcurementFromEstimateV2 } from "@/lib/estimate-v2/procurement-sync";
+import { syncProjectHRFromEstimate } from "@/data/hr-source";
 import { syncHRFromEstimateV2 } from "@/data/hr-store";
 import type { ChecklistItem, ChecklistItemType, MemberRole, Task, TaskStatus } from "@/types/entities";
 import type {
@@ -502,6 +503,15 @@ function queueProjectDraftSync(projectId: string) {
         await saveCurrentEstimateDraft(projectId, getSnapshotFromState(normalized), {
           profileId: latestContext.profileId,
         });
+        await syncProjectHRFromEstimate(
+          { kind: "supabase", profileId: latestContext.profileId },
+          {
+            projectId,
+            estimateStatus: normalized.project.estimateStatus,
+            works: normalized.works,
+            lines: normalized.lines,
+          },
+        );
         remoteDraftSyncErrorSignatureByProjectId.delete(projectId);
       } catch (error) {
         const signature = error instanceof Error

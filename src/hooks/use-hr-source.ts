@@ -1,13 +1,18 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
 import {
   getHRItems,
   getHRPayments,
   subscribeHR,
 } from "@/data/hr-store";
-import { getHRSource } from "@/data/hr-source";
+import {
+  createProjectHRPayment as createProjectHRPaymentSource,
+  getHRSource,
+  setProjectHRAssignees as setProjectHRAssigneesSource,
+  setProjectHRItemStatus as setProjectHRItemStatusSource,
+} from "@/data/hr-source";
 import { useWorkspaceMode } from "@/hooks/use-workspace-source";
-import type { HRPayment, HRPlannedItem } from "@/types/hr";
+import type { HRItemStatus, HRPayment, HRPlannedItem } from "@/types/hr";
 
 const HR_QUERY_STALE_TIME_MS = 60_000;
 const EMPTY_HR_ITEMS: HRPlannedItem[] = [];
@@ -91,4 +96,89 @@ export function useProjectHRPayments(projectId: string): HRPayment[] {
   }
 
   return paymentsQuery.data ?? EMPTY_HR_PAYMENTS;
+}
+
+function assertHRMutationWorkspaceMode(
+  mode: ReturnType<typeof useWorkspaceMode>,
+) {
+  if (mode.kind === "pending-supabase") {
+    throw new Error("Supabase session is still loading.");
+  }
+
+  if (mode.kind === "guest") {
+    throw new Error("An authenticated Supabase session is required.");
+  }
+
+  return mode;
+}
+
+export function useProjectHRMutations(projectId: string) {
+  const mode = useWorkspaceMode();
+  const queryClient = useQueryClient();
+
+  const invalidateProjectItems = useCallback(async (resolvedMode: Extract<typeof mode, { kind: "supabase" }>) => {
+    await queryClient.invalidateQueries({
+      queryKey: hrQueryKeys.projectItems(resolvedMode.profileId, projectId),
+    });
+  }, [projectId, queryClient]);
+
+  const invalidateProjectPayments = useCallback(async (resolvedMode: Extract<typeof mode, { kind: "supabase" }>) => {
+    await queryClient.invalidateQueries({
+      queryKey: hrQueryKeys.projectPayments(resolvedMode.profileId, projectId),
+    });
+  }, [projectId, queryClient]);
+
+  const setAssignees = useCallback(async (hrItemId: string, assigneeIds: string[]) => {
+    const resolvedMode = assertHRMutationWorkspaceMode(mode);
+    await setProjectHRAssigneesSource(resolvedMode, {
+      projectId,
+      hrItemId,
+      assigneeIds,
+    });
+
+    if (resolvedMode.kind === "supabase") {
+      await invalidateProjectItems(resolvedMode);
+    }
+  }, [invalidateProjectItems, mode, projectId]);
+
+  const setItemStatus = useCallback(async (hrItemId: string, status: HRItemStatus) => {
+    const resolvedMode = assertHRMutationWorkspaceMode(mode);
+    await setProjectHRItemStatusSource(resolvedMode, {
+      projectId,
+      hrItemId,
+      status,
+    });
+
+    if (resolvedMode.kind === "supabase") {
+      await invalidateProjectItems(resolvedMode);
+    }
+  }, [invalidateProjectItems, mode, projectId]);
+
+  const createPayment = useCallback(async (input: {
+    hrItemId: string;
+    amount: number;
+    paidAt: string;
+    note?: string | null;
+  }) => {
+    const resolvedMode = assertHRMutationWorkspaceMode(mode);
+    const payment = await createProjectHRPaymentSource(resolvedMode, {
+      projectId,
+      hrItemId: input.hrItemId,
+      amount: input.amount,
+      paidAt: input.paidAt,
+      note: input.note,
+    });
+
+    if (resolvedMode.kind === "supabase") {
+      await invalidateProjectPayments(resolvedMode);
+    }
+
+    return payment;
+  }, [invalidateProjectPayments, mode, projectId]);
+
+  return {
+    setAssignees,
+    setItemStatus,
+    createPayment,
+  };
 }

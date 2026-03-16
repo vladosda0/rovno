@@ -3,7 +3,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as hrStore from "@/data/hr-store";
 import * as hrSource from "@/data/hr-source";
-import { useProjectHRItems, useProjectHRPayments } from "@/hooks/use-hr-source";
+import {
+  hrQueryKeys,
+  useProjectHRItems,
+  useProjectHRMutations,
+  useProjectHRPayments,
+} from "@/hooks/use-hr-source";
 import { authenticateRuntimeAuth } from "@/test/runtime-auth";
 import type { HRPayment, HRPlannedItem } from "@/types/hr";
 
@@ -23,6 +28,7 @@ function hrItem(partial: Partial<HRPlannedItem> = {}): HRPlannedItem {
     projectId: "project-1",
     stageId: "stage-1",
     workId: "work-1",
+    taskId: null,
     title: "HR Item One",
     type: "labor",
     plannedQty: 0,
@@ -64,6 +70,44 @@ function HRProbe({ projectId }: { projectId: string }) {
       <span data-testid="payment-count">{payments.length}</span>
       <span data-testid="item-titles">{items.map((item) => item.title).join("|")}</span>
       <span data-testid="payment-ids">{payments.map((payment) => payment.id).join("|")}</span>
+    </div>
+  );
+}
+
+function HRMutationProbe({ projectId }: { projectId: string }) {
+  const { setAssignees, setItemStatus, createPayment } = useProjectHRMutations(projectId);
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => {
+          void setAssignees("hr-item-1", ["profile-2", "profile-3"]);
+        }}
+      >
+        Update assignees
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          void setItemStatus("hr-item-1", "done");
+        }}
+      >
+        Update status
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          void createPayment({
+            hrItemId: "hr-item-1",
+            amount: 2500,
+            paidAt: "2026-03-04T00:00:00.000Z",
+            note: "Transfer",
+          });
+        }}
+      >
+        Add payment
+      </button>
     </div>
   );
 }
@@ -162,5 +206,98 @@ describe("useProjectHRItems/useProjectHRPayments", () => {
     expect(screen.getByTestId("payment-ids")).toHaveTextContent("supabase-payment-1");
     expect(source.getProjectHRItems).toHaveBeenCalledWith("project-1");
     expect(source.getProjectHRPayments).toHaveBeenCalledWith("project-1");
+  });
+
+  it("invalidates the relevant HR queries after Supabase mutations", async () => {
+    vi.stubEnv("VITE_WORKSPACE_SOURCE", "supabase");
+
+    const queryClient = createQueryClient();
+    const invalidateQueriesSpy = vi.spyOn(queryClient, "invalidateQueries");
+    const setAssigneesSpy = vi.spyOn(hrSource, "setProjectHRAssignees").mockResolvedValue(undefined);
+    const setStatusSpy = vi.spyOn(hrSource, "setProjectHRItemStatus").mockResolvedValue(undefined);
+    const createPaymentSpy = vi.spyOn(hrSource, "createProjectHRPayment").mockResolvedValue(hrPayment());
+
+    authenticateRuntimeAuth("profile-77");
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <HRMutationProbe projectId="project-1" />
+      </QueryClientProvider>,
+    );
+
+    act(() => {
+      screen.getByRole("button", { name: "Update assignees" }).click();
+      screen.getByRole("button", { name: "Update status" }).click();
+      screen.getByRole("button", { name: "Add payment" }).click();
+    });
+
+    await waitFor(() => {
+      expect(setAssigneesSpy).toHaveBeenCalledWith(
+        { kind: "supabase", profileId: "profile-77" },
+        { projectId: "project-1", hrItemId: "hr-item-1", assigneeIds: ["profile-2", "profile-3"] },
+      );
+    });
+    expect(setStatusSpy).toHaveBeenCalledWith(
+      { kind: "supabase", profileId: "profile-77" },
+      { projectId: "project-1", hrItemId: "hr-item-1", status: "done" },
+    );
+    expect(createPaymentSpy).toHaveBeenCalledWith(
+      { kind: "supabase", profileId: "profile-77" },
+      {
+        projectId: "project-1",
+        hrItemId: "hr-item-1",
+        amount: 2500,
+        paidAt: "2026-03-04T00:00:00.000Z",
+        note: "Transfer",
+      },
+    );
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: hrQueryKeys.projectItems("profile-77", "project-1"),
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+      queryKey: hrQueryKeys.projectPayments("profile-77", "project-1"),
+    });
+  });
+
+  it("skips React Query invalidation for browser-mode HR mutations", async () => {
+    const queryClient = createQueryClient();
+    const invalidateQueriesSpy = vi.spyOn(queryClient, "invalidateQueries");
+    const setAssigneesSpy = vi.spyOn(hrSource, "setProjectHRAssignees").mockResolvedValue(undefined);
+    const setStatusSpy = vi.spyOn(hrSource, "setProjectHRItemStatus").mockResolvedValue(undefined);
+    const createPaymentSpy = vi.spyOn(hrSource, "createProjectHRPayment").mockResolvedValue(hrPayment());
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <HRMutationProbe projectId="project-1" />
+      </QueryClientProvider>,
+    );
+
+    act(() => {
+      screen.getByRole("button", { name: "Update assignees" }).click();
+      screen.getByRole("button", { name: "Update status" }).click();
+      screen.getByRole("button", { name: "Add payment" }).click();
+    });
+
+    await waitFor(() => {
+      expect(setAssigneesSpy).toHaveBeenCalledWith(
+        { kind: "local" },
+        { projectId: "project-1", hrItemId: "hr-item-1", assigneeIds: ["profile-2", "profile-3"] },
+      );
+    });
+    expect(setStatusSpy).toHaveBeenCalledWith(
+      { kind: "local" },
+      { projectId: "project-1", hrItemId: "hr-item-1", status: "done" },
+    );
+    expect(createPaymentSpy).toHaveBeenCalledWith(
+      { kind: "local" },
+      {
+        projectId: "project-1",
+        hrItemId: "hr-item-1",
+        amount: 2500,
+        paidAt: "2026-03-04T00:00:00.000Z",
+        note: "Transfer",
+      },
+    );
+    expect(invalidateQueriesSpy).not.toHaveBeenCalled();
   });
 });

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
+import { ResourceTypeBadge } from "@/components/estimate-v2/ResourceTypeBadge";
 import { EmptyState } from "@/components/EmptyState";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,17 +27,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useEstimateV2Project } from "@/hooks/use-estimate-v2-data";
-import { useHRItems, useHRPayments, usePermission, useProject } from "@/hooks/use-mock-data";
+import { useProjectHRMutations } from "@/hooks/use-hr-source";
+import { useHRItems, useHRPayments, usePermission, useProject, useTasks } from "@/hooks/use-mock-data";
 import { useToast } from "@/hooks/use-toast";
 import { getUserById } from "@/data/store";
-import {
-  addPayment,
-  relinkToEstimateLine,
-  setHRAssignees,
-  setStatus,
-  updateFromEstimateLine,
-} from "@/data/hr-store";
+import type { TaskStatus } from "@/types/entities";
 import type { HRItemStatus, HRPlannedItem } from "@/types/hr";
 import { Users } from "lucide-react";
 
@@ -100,22 +97,32 @@ function assigneeSummary(assigneeIds: string[], namesById: Map<string, string>):
   return `${names[0]}, ${names[1]} +${names.length - 2}`;
 }
 
+function taskStatusToWorkStatus(
+  status: TaskStatus,
+): Exclude<HRItemStatus, "cancelled"> {
+  if (status === "in_progress") return "in_progress";
+  if (status === "done") return "done";
+  if (status === "blocked") return "blocked";
+  return "planned";
+}
+
 export default function ProjectHR() {
   const { id: projectId } = useParams<{ id: string }>();
   const pid = projectId!;
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const { project, members } = useProject(pid);
   const { lines } = useEstimateV2Project(pid);
+  const tasks = useTasks(pid);
   const hrItems = useHRItems(pid);
   const hrPayments = useHRPayments(pid);
+  const hrMutations = useProjectHRMutations(pid);
   const { can } = usePermission(pid);
   const canEdit = can("hr.edit");
 
   const [paymentDraftByItemId, setPaymentDraftByItemId] = useState<Record<string, string>>({});
-  const [relinkDraftByItemId, setRelinkDraftByItemId] = useState<Record<string, string>>({});
   const [searchQuery, setSearchQuery] = useState("");
-  const [orphanedOnly, setOrphanedOnly] = useState(false);
   const [workStatusFilter, setWorkStatusFilter] = useState<"all" | HRItemStatus>("all");
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<"all" | HRPaymentStatus>("all");
   const [assigneeFilter, setAssigneeFilter] = useState<"any" | "unassigned" | string>("any");
@@ -136,19 +143,15 @@ export default function ProjectHR() {
     [participants],
   );
 
-  const hrLines = useMemo(
-    () => lines.filter((line) => line.type === "labor" || line.type === "subcontractor"),
-    [lines],
+  const taskById = useMemo(
+    () => new Map(tasks.map((task) => [task.id, task])),
+    [tasks],
   );
 
-  const linkedHrItemIdByLineId = useMemo(() => {
-    const map = new Map<string, string>();
-    hrItems.forEach((item) => {
-      if (!item.sourceEstimateV2LineId) return;
-      map.set(item.sourceEstimateV2LineId, item.id);
-    });
-    return map;
-  }, [hrItems]);
+  const lineById = useMemo(
+    () => new Map(lines.map((line) => [line.id, line])),
+    [lines],
+  );
 
   const paidByItemId = useMemo(() => {
     const map = new Map<string, number>();
@@ -160,29 +163,58 @@ export default function ProjectHR() {
 
   const rows = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
+
     return hrItems
       .map((item) => {
+        const task = item.taskId ? taskById.get(item.taskId) ?? null : null;
+        const linkedLineId = item.sourceEstimateV2LineId
+          ?? (task
+            ? task.checklist
+              .filter((checklistItem) => Boolean(checklistItem.estimateV2LineId))
+              .filter((checklistItem) => checklistItem.text === item.title)
+              .map((checklistItem) => checklistItem.estimateV2LineId)
+              .find((lineId): lineId is string => Boolean(lineId))
+            : null)
+          ?? null;
+        const linkedLine = linkedLineId ? lineById.get(linkedLineId) ?? null : null;
         const paid = paidByItemId.get(item.id) ?? 0;
-        const planned = item.plannedQty * item.plannedRate;
+        const planned = linkedLine
+          ? Math.max(0, linkedLine.qtyMilli / 1_000) * Math.max(0, linkedLine.costUnitCents / 100)
+          : item.plannedQty * item.plannedRate;
         const remaining = Math.max(planned - paid, 0);
         const paymentStatus = paymentStatusFromTotals(planned, paid);
         const assigneeIds = normalizeAssigneeIds(item);
+        const estimateAssigneeLabel = linkedLine?.assigneeName?.trim()
+          || linkedLine?.assigneeEmail?.trim()
+          || null;
+        const visibleAssigneeSummary = assigneeIds.length > 0
+          ? assigneeSummary(assigneeIds, participantNameById)
+          : (estimateAssigneeLabel ?? "Unassigned");
+        const hasVisibleAssignee = assigneeIds.length > 0 || Boolean(estimateAssigneeLabel);
+        const workStatus = task ? taskStatusToWorkStatus(task.status) : item.status;
+        const title = linkedLine?.title ?? item.title;
+        const type = linkedLine?.type === "subcontractor" ? "subcontractor" : item.type;
 
         return {
           item,
+          task,
+          title,
+          type,
+          workStatus,
           planned,
           paid,
           remaining,
           paymentStatus,
           assigneeIds,
+          visibleAssigneeSummary,
+          hasVisibleAssignee,
         };
       })
-      .filter(({ item, paymentStatus, assigneeIds }) => {
-        if (normalizedQuery && !item.title.toLowerCase().includes(normalizedQuery)) return false;
-        if (orphanedOnly && !item.orphaned) return false;
-        if (workStatusFilter !== "all" && item.status !== workStatusFilter) return false;
+      .filter(({ title, paymentStatus, workStatus, assigneeIds, hasVisibleAssignee }) => {
+        if (normalizedQuery && !title.toLowerCase().includes(normalizedQuery)) return false;
+        if (workStatusFilter !== "all" && workStatus !== workStatusFilter) return false;
         if (paymentStatusFilter !== "all" && paymentStatus !== paymentStatusFilter) return false;
-        if (assigneeFilter === "unassigned" && assigneeIds.length > 0) return false;
+        if (assigneeFilter === "unassigned" && hasVisibleAssignee) return false;
         if (assigneeFilter !== "any" && assigneeFilter !== "unassigned" && !assigneeIds.includes(assigneeFilter)) return false;
         return true;
       })
@@ -191,9 +223,9 @@ export default function ProjectHR() {
         if (PAYMENT_STATUS_ORDER[a.paymentStatus] !== PAYMENT_STATUS_ORDER[b.paymentStatus]) {
           return PAYMENT_STATUS_ORDER[a.paymentStatus] - PAYMENT_STATUS_ORDER[b.paymentStatus];
         }
-        return a.item.title.localeCompare(b.item.title, "ru-RU");
+        return a.title.localeCompare(b.title, "ru-RU");
       });
-  }, [assigneeFilter, hrItems, orphanedOnly, paidByItemId, paymentStatusFilter, searchQuery, workStatusFilter]);
+  }, [assigneeFilter, hrItems, lineById, paidByItemId, paymentStatusFilter, participantNameById, searchQuery, taskById, workStatusFilter]);
 
   if (!project) {
     return <EmptyState icon={Users} title="Not found" description="Project not found." />;
@@ -215,7 +247,7 @@ export default function ProjectHR() {
           />
         ) : (
           <>
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-5">
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
               <Input
                 placeholder="Search title"
                 value={searchQuery}
@@ -266,16 +298,6 @@ export default function ProjectHR() {
                   ))}
                 </SelectContent>
               </Select>
-
-              <Button
-                type="button"
-                size="sm"
-                variant={orphanedOnly ? "default" : "outline"}
-                className="h-8"
-                onClick={() => setOrphanedOnly((prev) => !prev)}
-              >
-                {orphanedOnly ? "Orphaned only" : "Show all linkage"}
-              </Button>
             </div>
 
             <div className="overflow-x-auto">
@@ -283,219 +305,176 @@ export default function ProjectHR() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Title</TableHead>
-                    <TableHead>Type</TableHead>
                     <TableHead>Assignees</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead>Work Status</TableHead>
                     <TableHead>Payment status</TableHead>
                     <TableHead className="text-right">Planned</TableHead>
                     <TableHead className="text-right">Paid</TableHead>
                     <TableHead className="text-right">Remaining</TableHead>
-                    <TableHead>Relink</TableHead>
                     <TableHead>Add payment</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {rows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={10} className="text-center text-muted-foreground">
+                      <TableCell colSpan={8} className="text-center text-muted-foreground">
                         No HR items match current filters.
                       </TableCell>
                     </TableRow>
-                  ) : rows.map(({ item, planned, paid, remaining, paymentStatus, assigneeIds }) => {
-                    const canStartOrComplete = assigneeIds.length > 0;
-                    const relinkOptions = hrLines.filter((line) => {
-                      const linkedItemId = linkedHrItemIdByLineId.get(line.id);
-                      return !linkedItemId || linkedItemId === item.id;
-                    });
-
-                    return (
-                      <TableRow key={item.id}>
-                        <TableCell>
+                  ) : rows.map(({ item, task, title, type, workStatus, planned, paid, remaining, paymentStatus, assigneeIds, visibleAssigneeSummary }) => (
+                    <TableRow key={item.id}>
+                      <TableCell>
+                        <div className="space-y-1">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-medium text-foreground">{item.title}</span>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span>
+                                  <ResourceTypeBadge
+                                    type={type}
+                                    iconOnly
+                                    className="border-transparent"
+                                    labelOverride={type === "subcontractor" ? "Subcontractor" : "Employee"}
+                                  />
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                {type === "subcontractor" ? "Subcontractor" : "Employee"}
+                              </TooltipContent>
+                            </Tooltip>
+                            {item.taskId ? (
+                              <button
+                                type="button"
+                                className="font-medium text-foreground underline-offset-4 hover:underline"
+                                onClick={() => {
+                                  navigate(`/project/${pid}/tasks`, { state: { openTaskId: item.taskId } });
+                                }}
+                              >
+                                {title}
+                              </button>
+                            ) : (
+                              <span className="font-medium text-foreground">{title}</span>
+                            )}
                             {item.lockedFromEstimate && <Badge variant="outline">Locked</Badge>}
                             {item.orphaned && <Badge variant="destructive">Orphaned</Badge>}
                           </div>
-                        </TableCell>
-                        <TableCell className="capitalize">{item.type}</TableCell>
-                        <TableCell>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                className="h-8 max-w-[180px]"
-                                disabled={!canEdit}
-                              >
-                                <span className="truncate">{assigneeSummary(assigneeIds, participantNameById)}</span>
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="start" className="w-56">
-                              {participants.length === 0 ? (
-                                <DropdownMenuItem disabled>No participants available</DropdownMenuItem>
-                              ) : participants.map((participant) => {
-                                const checked = assigneeIds.includes(participant.id);
-                                return (
-                                  <DropdownMenuCheckboxItem
-                                    key={participant.id}
-                                    checked={checked}
-                                    onSelect={(event) => event.preventDefault()}
-                                    disabled={!canEdit}
-                                    onCheckedChange={(nextChecked) => {
-                                      if (!canEdit) return;
-                                      const nextIds = nextChecked === true
-                                        ? Array.from(new Set([...assigneeIds, participant.id]))
-                                        : assigneeIds.filter((id) => id !== participant.id);
-                                      const result = setHRAssignees(pid, item.id, nextIds);
-                                      if (!result.ok) {
-                                        toast({
-                                          title: result.error ?? "Unable to update assignees",
-                                          variant: "destructive",
-                                        });
-                                      }
-                                    }}
-                                  >
-                                    {participant.name}
-                                  </DropdownMenuCheckboxItem>
-                                );
-                              })}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                        <TableCell>
-                          <Select
-                            value={item.status}
-                            onValueChange={(value) => {
-                              const result = setStatus(item.id, value as HRItemStatus);
-                              if (!result.ok) {
-                                toast({
-                                  title: result.error ?? "Unable to update status",
-                                  variant: "destructive",
-                                });
-                              }
-                            }}
-                            disabled={!canEdit}
-                          >
-                            <SelectTrigger className="h-8 w-[150px]">
-                              <SelectValue>{statusLabel(item.status)}</SelectValue>
-                            </SelectTrigger>
-                            <SelectContent>
-                              {STATUS_OPTIONS.map((option) => {
-                                const requiresAssignee = option === "in_progress" || option === "done";
-                                return (
-                                  <SelectItem
-                                    key={option}
-                                    value={option}
-                                    disabled={!canStartOrComplete && requiresAssignee}
-                                  >
-                                    {statusLabel(option)}
-                                  </SelectItem>
-                                );
-                              })}
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={paymentStatusBadgeVariant(paymentStatus)}>
-                            {paymentStatusLabel(paymentStatus)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">{fmt(planned)}</TableCell>
-                        <TableCell className="text-right">{fmt(paid)}</TableCell>
-                        <TableCell className="text-right">{fmt(remaining)}</TableCell>
-                        <TableCell>
-                          {item.orphaned ? (
-                            <div className="flex items-center gap-2">
-                              <Select
-                                value={relinkDraftByItemId[item.id] || undefined}
-                                onValueChange={(value) => {
-                                  setRelinkDraftByItemId((prev) => ({ ...prev, [item.id]: value }));
-                                }}
-                                disabled={!canEdit}
-                              >
-                                <SelectTrigger className="h-8 w-[180px]">
-                                  <SelectValue placeholder="Select line" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {relinkOptions.map((line) => (
-                                    <SelectItem key={line.id} value={line.id}>{line.title}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                disabled={!canEdit || !relinkDraftByItemId[item.id]}
-                                onClick={() => {
-                                  const nextLineId = relinkDraftByItemId[item.id];
-                                  if (!nextLineId) return;
-                                  const nextLine = hrLines.find((line) => line.id === nextLineId);
-                                  if (!nextLine) return;
-
-                                  const relinkResult = relinkToEstimateLine(item.id, nextLineId);
-                                  if (!relinkResult.ok) {
-                                    toast({
-                                      title: relinkResult.error ?? "Unable to relink",
-                                      variant: "destructive",
-                                    });
-                                    return;
-                                  }
-
-                                  updateFromEstimateLine(pid, item.id, {
-                                    stageId: nextLine.stageId,
-                                    workId: nextLine.workId,
-                                    title: nextLine.title,
-                                    plannedQty: Math.max(0, nextLine.qtyMilli / 1_000),
-                                    plannedRate: Math.max(0, nextLine.costUnitCents / 100),
-                                    type: nextLine.type === "subcontractor" ? "subcontractor" : "labor",
-                                    lineId: nextLine.id,
-                                  });
-                                  toast({ title: "HR item relinked" });
-                                }}
-                              >
-                                Relink
-                              </Button>
-                            </div>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">Linked</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Input
-                              type="number"
-                              min="0"
-                              className="h-8 w-[110px]"
-                              placeholder="Amount"
-                              value={paymentDraftByItemId[item.id] ?? ""}
-                              onChange={(event) => {
-                                setPaymentDraftByItemId((prev) => ({
-                                  ...prev,
-                                  [item.id]: event.target.value,
-                                }));
-                              }}
-                              disabled={!canEdit}
-                            />
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled={!canEdit || !paymentDraftByItemId[item.id]}
+                          {task && (
+                            <button
+                              type="button"
+                              className="text-xs text-muted-foreground underline-offset-4 hover:underline"
                               onClick={() => {
-                                const amount = Number(paymentDraftByItemId[item.id] ?? 0);
-                                if (!Number.isFinite(amount) || amount <= 0) return;
-                                addPayment(item.id, amount, new Date().toISOString());
-                                setPaymentDraftByItemId((prev) => ({ ...prev, [item.id]: "" }));
-                                toast({ title: "Payment added" });
+                                navigate(`/project/${pid}/tasks`, { state: { openTaskId: task.id } });
                               }}
                             >
-                              Add
+                              Open in Tasks
+                            </button>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-8 max-w-[180px]"
+                              disabled={!canEdit}
+                            >
+                              <span className="truncate">{visibleAssigneeSummary}</span>
                             </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start" className="w-56">
+                            {participants.length === 0 ? (
+                              <DropdownMenuItem disabled>No participants available</DropdownMenuItem>
+                            ) : participants.map((participant) => {
+                              const checked = assigneeIds.includes(participant.id);
+                              return (
+                                <DropdownMenuCheckboxItem
+                                  key={participant.id}
+                                  checked={checked}
+                                  onSelect={(event) => event.preventDefault()}
+                                  disabled={!canEdit}
+                                  onCheckedChange={(nextChecked) => {
+                                    if (!canEdit) return;
+                                    const nextIds = nextChecked === true
+                                      ? Array.from(new Set([...assigneeIds, participant.id]))
+                                      : assigneeIds.filter((id) => id !== participant.id);
+                                    void hrMutations.setAssignees(item.id, nextIds).catch((error) => {
+                                      toast({
+                                        title: error instanceof Error
+                                          ? error.message
+                                          : "Unable to update assignees",
+                                        variant: "destructive",
+                                      });
+                                    });
+                                  }}
+                                >
+                                  {participant.name}
+                                </DropdownMenuCheckboxItem>
+                              );
+                            })}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">
+                          {statusLabel(workStatus)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={paymentStatusBadgeVariant(paymentStatus)}>
+                          {paymentStatusLabel(paymentStatus)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">{fmt(planned)}</TableCell>
+                      <TableCell className="text-right">{fmt(paid)}</TableCell>
+                      <TableCell className="text-right">{fmt(remaining)}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="number"
+                            min="0"
+                            className="h-8 w-[110px]"
+                            placeholder="Amount"
+                            value={paymentDraftByItemId[item.id] ?? ""}
+                            onChange={(event) => {
+                              setPaymentDraftByItemId((prev) => ({
+                                ...prev,
+                                [item.id]: event.target.value,
+                              }));
+                            }}
+                            disabled={!canEdit}
+                          />
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={!canEdit || !paymentDraftByItemId[item.id]}
+                            onClick={() => {
+                              const amount = Number(paymentDraftByItemId[item.id] ?? 0);
+                              if (!Number.isFinite(amount) || amount <= 0) return;
+                              void hrMutations.createPayment({
+                                hrItemId: item.id,
+                                amount,
+                                paidAt: new Date().toISOString(),
+                              }).then(() => {
+                                setPaymentDraftByItemId((prev) => ({ ...prev, [item.id]: "" }));
+                                toast({ title: "Payment added" });
+                              }).catch((error) => {
+                                toast({
+                                  title: error instanceof Error
+                                    ? error.message
+                                    : "Unable to add payment",
+                                  variant: "destructive",
+                                });
+                              });
+                            }}
+                          >
+                            Add
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
             </div>
