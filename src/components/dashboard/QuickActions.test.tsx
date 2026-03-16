@@ -22,7 +22,7 @@ describe("QuickActions", () => {
     vi.restoreAllMocks();
   });
 
-  it("disables manual document creation and shows the Supabase persistence hint", () => {
+  it("shows upload-only document creation and the Supabase persistence hint", () => {
     vi.stubEnv("VITE_WORKSPACE_SOURCE", "supabase");
     authenticateRuntimeAuth("profile-77");
 
@@ -46,9 +46,9 @@ describe("QuickActions", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Document" }));
 
-    expect(screen.getByRole("button", { name: "Manual" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Manual" })).not.toBeInTheDocument();
     expect(screen.getByText(
-      "Supabase mode saves the document record only. File contents, manual text, and AI-generated document bodies are not persisted yet.",
+      "Supabase mode saves the document record only. File contents, download, and sharing are coming soon.",
     )).toBeInTheDocument();
   });
 });

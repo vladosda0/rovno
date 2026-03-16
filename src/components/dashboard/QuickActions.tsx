@@ -726,33 +726,34 @@ export function QuickActions({
             <DialogTitle>Document</DialogTitle>
             <DialogDescription>
               {isSupabaseMode
-                ? "Create a document record. Manual and AI-authored document text is unavailable in Supabase mode."
+                ? "Create a document record. File bytes and authored document text are coming soon in Supabase mode."
                 : "Upload a document or create one manually."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-1">
-            <div className="flex items-center gap-2 rounded-panel bg-muted/40 p-1">
-              <Button
-                size="sm"
-                variant={documentMode === "upload" ? "default" : "ghost"}
-                className={documentMode === "upload" ? "bg-accent text-accent-foreground hover:bg-accent/90" : ""}
-                onClick={() => setDocumentMode("upload")}
-              >
-                Upload
-              </Button>
-              <Button
-                size="sm"
-                variant={documentMode === "manual" ? "default" : "ghost"}
-                className={documentMode === "manual" ? "bg-accent text-accent-foreground hover:bg-accent/90" : ""}
-                disabled={isSupabaseMode}
-                onClick={() => setDocumentMode("manual")}
-              >
-                Manual
-              </Button>
-            </div>
+            {!isSupabaseMode && (
+              <div className="flex items-center gap-2 rounded-panel bg-muted/40 p-1">
+                <Button
+                  size="sm"
+                  variant={documentMode === "upload" ? "default" : "ghost"}
+                  className={documentMode === "upload" ? "bg-accent text-accent-foreground hover:bg-accent/90" : ""}
+                  onClick={() => setDocumentMode("upload")}
+                >
+                  Upload
+                </Button>
+                <Button
+                  size="sm"
+                  variant={documentMode === "manual" ? "default" : "ghost"}
+                  className={documentMode === "manual" ? "bg-accent text-accent-foreground hover:bg-accent/90" : ""}
+                  onClick={() => setDocumentMode("manual")}
+                >
+                  Manual
+                </Button>
+              </div>
+            )}
             {isSupabaseMode && (
               <div className="rounded-panel bg-muted/50 p-2 text-caption text-muted-foreground">
-                Supabase mode saves the document record only. File contents, manual text, and AI-generated document bodies are not persisted yet.
+                Supabase mode saves the document record only. File contents, download, and sharing are coming soon.
               </div>
             )}
 
@@ -765,26 +766,31 @@ export function QuickActions({
                     onChange={(event) => setDocumentFile(event.target.files?.[0] ?? null)}
                   />
                 </div>
-                <label className="flex items-center gap-2 text-body-sm text-foreground">
-                  <Checkbox
-                    checked={documentAiScan}
-                    disabled={isSupabaseMode}
-                    onCheckedChange={(checked) => setDocumentAiScan(!!checked)}
-                  />
-                  <span className="inline-flex items-center gap-1">
-                    AI scan
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button type="button" className="text-muted-foreground hover:text-foreground">
-                          <Info className="h-3.5 w-3.5" />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        Let AI scan the doc, create tasks, checklists, add media.
-                      </TooltipContent>
-                    </Tooltip>
-                  </span>
-                </label>
+                {isSupabaseMode ? (
+                  <p className="text-caption text-muted-foreground">
+                    Choose a file name to create the document record now. The file itself will not upload yet.
+                  </p>
+                ) : (
+                  <label className="flex items-center gap-2 text-body-sm text-foreground">
+                    <Checkbox
+                      checked={documentAiScan}
+                      onCheckedChange={(checked) => setDocumentAiScan(!!checked)}
+                    />
+                    <span className="inline-flex items-center gap-1">
+                      AI scan
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button type="button" className="text-muted-foreground hover:text-foreground">
+                            <Info className="h-3.5 w-3.5" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          Let AI scan the doc, create tasks, checklists, add media.
+                        </TooltipContent>
+                      </Tooltip>
+                    </span>
+                  </label>
+                )}
               </div>
             ) : (
               <div className="space-y-2">

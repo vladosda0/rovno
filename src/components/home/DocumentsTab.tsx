@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Search, FileText, Upload, Pin, Grid3X3, List } from "lucide-react";
+import { DocumentListItem } from "@/components/documents/DocumentListItem";
 
 const CATEGORIES = [
   "All", "How-tos", "Instructions", "Catalogs", "Price lists", "Warranties", "Templates",
@@ -50,7 +51,7 @@ export function DocumentsTab() {
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Search documents…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-9" />
         </div>
-        <Button variant="outline" size="sm">
+        <Button variant="outline" size="sm" disabled>
           <Upload className="h-3.5 w-3.5 mr-1.5" /> Upload
         </Button>
         <div className="flex border border-border rounded-md">
@@ -62,6 +63,9 @@ export function DocumentsTab() {
           </Button>
         </div>
       </div>
+      <p className="text-caption text-muted-foreground">
+        Library upload is coming soon.
+      </p>
 
       {/* Categories */}
       <div className="flex gap-1.5 flex-wrap">
@@ -84,25 +88,27 @@ export function DocumentsTab() {
           <CardContent className="p-0">
             <div className="divide-y divide-border">
               {filtered.map((doc) => (
-                <div key={doc.id} className="flex items-center gap-3 px-sp-3 py-3 hover:bg-muted/30 transition-colors">
-                  <FileText className="h-5 w-5 text-muted-foreground shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-body-sm font-medium text-foreground truncate">
-                      {doc.pinned && <Pin className="h-3 w-3 inline mr-1 text-accent" />}
-                      {doc.title}
-                    </p>
-                    <div className="flex items-center gap-2 mt-0.5">
+                <DocumentListItem
+                  key={doc.id}
+                  title={doc.title}
+                  titleAdornment={doc.pinned ? <Pin className="mr-1 inline h-3 w-3 text-accent" /> : undefined}
+                  details={(
+                    <>
                       <Badge variant="secondary" className="text-[10px]">{doc.category}</Badge>
-                      {doc.tags.map((t) => (
-                        <span key={t} className="text-[10px] text-muted-foreground">#{t}</span>
+                      {doc.tags.map((tag) => (
+                        <span key={tag} className="text-[10px] text-muted-foreground">#{tag}</span>
                       ))}
+                    </>
+                  )}
+                  trailing={(
+                    <div className="flex items-center gap-2">
+                      <span className="text-caption text-muted-foreground">{doc.updatedAt}</span>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => togglePin(doc.id)}>
+                        <Pin className={`h-3.5 w-3.5 ${doc.pinned ? "text-accent" : "text-muted-foreground"}`} />
+                      </Button>
                     </div>
-                  </div>
-                  <span className="text-caption text-muted-foreground shrink-0">{doc.updatedAt}</span>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => togglePin(doc.id)}>
-                    <Pin className={`h-3.5 w-3.5 ${doc.pinned ? "text-accent" : "text-muted-foreground"}`} />
-                  </Button>
-                </div>
+                  )}
+                />
               ))}
               {filtered.length === 0 && (
                 <p className="text-caption text-muted-foreground py-8 text-center">No documents found.</p>

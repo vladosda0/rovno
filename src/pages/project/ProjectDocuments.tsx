@@ -1,62 +1,100 @@
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import {
-  FileText, Upload, Plus, Archive, Trash2, Download, Eye,
-  CheckCircle2, MessageSquare, GitBranch,
+  Archive,
+  Download,
+  Eye,
+  FileText,
+  MessageSquare,
+  Plus,
+  Printer,
+  Share2,
+  Trash2,
+  Upload,
+  CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table";
-import {
-  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
 } from "@/components/ui/alert-dialog";
-import { StatusBadge } from "@/components/StatusBadge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ConfirmModal } from "@/components/ConfirmModal";
+import { DocumentListItem } from "@/components/documents/DocumentListItem";
 import { PreviewCard } from "@/components/ai/PreviewCard";
 import { ActionBar } from "@/components/ai/ActionBar";
 import { EmptyState } from "@/components/EmptyState";
 import { toast } from "@/hooks/use-toast";
-import { useCurrentUser, useDocuments, useProject, useWorkspaceMode } from "@/hooks/use-mock-data";
-import { useProjectDocumentMutations } from "@/hooks/use-documents-media-source";
+import { useCurrentUser, useProject, useWorkspaceMode } from "@/hooks/use-mock-data";
+import {
+  useProjectDocumentMutations,
+  useProjectDocumentsState,
+} from "@/hooks/use-documents-media-source";
 import { usePermission, isOwnerOrCoOwner } from "@/lib/permissions";
-import { addDocument, addDocumentVersion, addEvent, deleteDocument as deleteDocumentLocal } from "@/data/store";
+import {
+  addDocument,
+  addDocumentVersion,
+  addEvent,
+  deleteDocument as deleteDocumentLocal,
+} from "@/data/store";
 import type { Document as DocType } from "@/types/entities";
 import type { ProposalChange } from "@/types/ai";
 
-function docStatusLabel(s: string) {
-  if (s === "draft") return "Draft";
-  if (s === "active") return "Approved";
-  if (s === "archived") return "Archived";
-  if (s === "awaiting_approval") return "Draft"; // map to draft badge
-  return s;
+const DOCUMENT_DEFAULT_TYPE = "specification";
+
+function ProjectDocumentsSkeleton() {
+  return (
+    <div className="glass rounded-card p-sp-2" data-testid="documents-skeleton">
+      <div className="space-y-3">
+        <Skeleton className="h-11 rounded-panel" />
+        <Skeleton className="h-11 rounded-panel" />
+        <Skeleton className="h-11 rounded-panel" />
+      </div>
+    </div>
+  );
+}
+
+function buildDocumentDownloadName(title: string) {
+  const normalized = title.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  return `${normalized || "document"}.txt`;
 }
 
 export default function ProjectDocuments() {
   const { id: projectId } = useParams<{ id: string }>();
   const pid = projectId!;
-  const documents = useDocuments(pid);
+  const { documents, isLoading } = useProjectDocumentsState(pid);
   const { project } = useProject(pid);
   const workspaceMode = useWorkspaceMode();
   const perm = usePermission(pid);
   const user = useCurrentUser();
   const {
     createDocument,
-    createDocumentVersion,
     archiveDocument,
     deleteDocument: deleteDocumentMutation,
   } = useProjectDocumentMutations(pid);
   const isOwner = isOwnerOrCoOwner(perm.role);
   const isContractor = perm.role === "contractor";
   const isSupabaseMode = workspaceMode.kind === "supabase";
-  const shouldWriteLocalEvents = workspaceMode.kind !== "supabase";
 
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadTitle, setUploadTitle] = useState("");
-  const [uploadType, setUploadType] = useState("specification");
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [generateOpen, setGenerateOpen] = useState(false);
   const [generateTitle, setGenerateTitle] = useState("");
   const [generateContent, setGenerateContent] = useState("");
@@ -64,35 +102,38 @@ export default function ProjectDocuments() {
   const [viewDoc, setViewDoc] = useState<DocType | null>(null);
   const [archiveDocId, setArchiveDocId] = useState<string | null>(null);
   const [deleteDocId, setDeleteDocId] = useState<string | null>(null);
-  const [exportOpen, setExportOpen] = useState(false);
-  const [newVersionDocId, setNewVersionDocId] = useState<string | null>(null);
-  const [showNewVersionPreview, setShowNewVersionPreview] = useState(false);
   const [commentOpen, setCommentOpen] = useState(false);
   const [commentText, setCommentText] = useState("");
 
-  const activeDocuments = documents.filter((d) => {
-    const latest = d.versions[d.versions.length - 1];
-    return latest?.status !== "archived";
+  const activeDocuments = documents.filter((document) => {
+    const latestVersion = document.versions[document.versions.length - 1];
+    return latestVersion?.status !== "archived";
   });
-  const archivedDocuments = documents.filter((d) => {
-    const latest = d.versions[d.versions.length - 1];
-    return latest?.status === "archived";
+  const archivedDocuments = documents.filter((document) => {
+    const latestVersion = document.versions[document.versions.length - 1];
+    return latestVersion?.status === "archived";
   });
 
-  /* --- Upload --- */
+  function closeUploadDialog() {
+    setUploadOpen(false);
+    setUploadTitle("");
+    setUploadFile(null);
+  }
+
   async function handleUpload() {
-    const title = uploadTitle || "Untitled document";
+    const title = uploadTitle.trim() || uploadFile?.name || "Untitled document";
 
     if (!isSupabaseMode) {
       const docId = `doc-${Date.now()}`;
-      const verId = `dv-${Date.now()}`;
+      const versionId = `dv-${Date.now()}`;
       addDocument({
         id: docId,
         project_id: pid,
-        type: uploadType,
+        type: DOCUMENT_DEFAULT_TYPE,
         title,
+        origin: "uploaded",
         versions: [{
-          id: verId,
+          id: versionId,
           document_id: docId,
           number: 1,
           status: "draft",
@@ -107,45 +148,26 @@ export default function ProjectDocuments() {
         object_type: "document",
         object_id: docId,
         timestamp: new Date().toISOString(),
-        payload: { title, type: uploadType },
+        payload: { title },
       });
-      setUploadOpen(false);
-      setUploadTitle("");
-      setUploadType("specification");
+      closeUploadDialog();
       toast({ title: "Document uploaded", description: title });
       return;
     }
 
     try {
-      const created = await createDocument({
-        type: uploadType,
+      await createDocument({
+        type: DOCUMENT_DEFAULT_TYPE,
         title,
         origin: "uploaded",
         initialVersionContent: "Uploaded document content placeholder.",
         initialVersionStatus: "draft",
       });
 
-      if (shouldWriteLocalEvents) {
-        addEvent({
-          id: `evt-${Date.now()}`,
-          project_id: pid,
-          actor_id: user.id,
-          type: "document_created",
-          object_type: "document",
-          object_id: created.documentId,
-          timestamp: new Date().toISOString(),
-          payload: { title, type: uploadType },
-        });
-      }
-
-      setUploadOpen(false);
-      setUploadTitle("");
-      setUploadType("specification");
+      closeUploadDialog();
       toast({
-        title: isSupabaseMode ? "Document created" : "Document uploaded",
-        description: isSupabaseMode
-          ? "Document metadata saved. File contents are not uploaded yet in Supabase mode."
-          : title,
+        title: "Document created",
+        description: "Document metadata saved. File contents are not uploaded yet in Supabase mode.",
       });
     } catch (error) {
       toast({
@@ -156,13 +178,12 @@ export default function ProjectDocuments() {
     }
   }
 
-  /* --- Generate via AI --- */
   function handleGeneratePreview() {
-    setGenerateContent(`AI-generated draft for "${generateTitle}".\n\nThis document outlines the terms and conditions for the ${project?.title ?? "project"}.`);
+    setGenerateContent(`AI-generated document for "${generateTitle}".\n\nThis document outlines the terms and conditions for the ${project?.title ?? "project"}.`);
     setShowGenPreview(true);
   }
 
-  async function handleGenerateConfirm() {
+  function handleGenerateConfirm() {
     if (isSupabaseMode) {
       toast({
         title: "Unavailable in Supabase mode",
@@ -173,14 +194,15 @@ export default function ProjectDocuments() {
     }
 
     const docId = `doc-gen-${Date.now()}`;
-    const verId = `dv-gen-${Date.now()}`;
+    const versionId = `dv-gen-${Date.now()}`;
     addDocument({
       id: docId,
       project_id: pid,
-      type: "contract",
-      title: generateTitle || "Generated Document",
+      type: DOCUMENT_DEFAULT_TYPE,
+      title: generateTitle || "Generated document",
+      origin: "ai_generated",
       versions: [{
-        id: verId,
+        id: versionId,
         document_id: docId,
         number: 1,
         status: "draft",
@@ -204,91 +226,17 @@ export default function ProjectDocuments() {
     toast({ title: "Document generated", description: generateTitle });
   }
 
-  /* --- New version --- */
-  function handleNewVersionPreview() {
-    setShowNewVersionPreview(true);
-  }
-
-  async function handleCreateNewVersion() {
-    if (!newVersionDocId) return;
-    const doc = documents.find((d) => d.id === newVersionDocId);
-    if (!doc) return;
-    const latest = doc.versions[doc.versions.length - 1];
-
-    if (!isSupabaseMode) {
-      const verId = `dv-new-${Date.now()}`;
-      addDocumentVersion(newVersionDocId, {
-        id: verId,
-        document_id: newVersionDocId,
-        number: doc.versions.length + 1,
-        status: "awaiting_approval",
-        content: latest.content + "\n\n[Updated in v" + (doc.versions.length + 1) + "]",
-      });
-      addEvent({
-        id: `evt-${Date.now()}`,
-        project_id: pid,
-        actor_id: user.id,
-        type: "document_version_created",
-        object_type: "document",
-        object_id: newVersionDocId,
-        timestamp: new Date().toISOString(),
-        payload: { title: doc.title, version: doc.versions.length + 1 },
-      });
-      setNewVersionDocId(null);
-      setShowNewVersionPreview(false);
-      toast({ title: "New version created", description: `v${doc.versions.length + 1} awaiting approval` });
-      return;
-    }
-
-    try {
-      const created = await createDocumentVersion({
-        documentId: newVersionDocId,
-        status: "awaiting_approval",
-        content: latest.content + "\n\n[Updated in v" + (doc.versions.length + 1) + "]",
-      });
-
-      if (shouldWriteLocalEvents) {
-        addEvent({
-          id: `evt-${Date.now()}`,
-          project_id: pid,
-          actor_id: user.id,
-          type: "document_version_created",
-          object_type: "document",
-          object_id: newVersionDocId,
-          timestamp: new Date().toISOString(),
-          payload: { title: doc.title, version: created.versionNumber },
-        });
-      }
-
-      setNewVersionDocId(null);
-      setShowNewVersionPreview(false);
-      toast({
-        title: "New version created",
-        description: isSupabaseMode
-          ? `v${created.versionNumber} saved. Text changes are not persisted yet in Supabase mode.`
-          : `v${created.versionNumber} awaiting approval`,
-      });
-    } catch (error) {
-      toast({
-        title: "Version creation failed",
-        description: error instanceof Error ? error.message : "Unable to create a new version.",
-        variant: "destructive",
-      });
-    }
-  }
-
-  /* --- Archive --- */
   async function handleArchive() {
     if (!archiveDocId) return;
-    const doc = documents.find((d) => d.id === archiveDocId);
-    if (!doc) return;
-    const latest = doc.versions[doc.versions.length - 1];
+    const document = documents.find((entry) => entry.id === archiveDocId);
+    if (!document) return;
+    const latestVersion = document.versions[document.versions.length - 1];
 
     if (!isSupabaseMode) {
       addDocumentVersion(archiveDocId, {
-        ...latest,
+        ...latestVersion,
         id: `dv-arch-${Date.now()}`,
-        number: doc.versions.length + 1,
+        number: document.versions.length + 1,
         status: "archived",
       });
       addEvent({
@@ -299,7 +247,7 @@ export default function ProjectDocuments() {
         object_type: "document",
         object_id: archiveDocId,
         timestamp: new Date().toISOString(),
-        payload: { title: doc.title },
+        payload: { title: document.title },
       });
       setArchiveDocId(null);
       toast({ title: "Document archived" });
@@ -307,24 +255,10 @@ export default function ProjectDocuments() {
     }
 
     try {
-      const created = await archiveDocument({
+      await archiveDocument({
         documentId: archiveDocId,
-        content: latest?.content ?? "",
+        content: latestVersion?.content ?? "",
       });
-
-      if (shouldWriteLocalEvents) {
-        addEvent({
-          id: `evt-${Date.now()}`,
-          project_id: pid,
-          actor_id: user.id,
-          type: "document_archived",
-          object_type: "document",
-          object_id: archiveDocId,
-          timestamp: new Date().toISOString(),
-          payload: { title: doc.title, version: created.versionNumber },
-        });
-      }
-
       setArchiveDocId(null);
       toast({ title: "Document archived" });
     } catch (error) {
@@ -336,10 +270,9 @@ export default function ProjectDocuments() {
     }
   }
 
-  /* --- Delete --- */
   async function handleDelete() {
     if (!deleteDocId) return;
-    const doc = documents.find((d) => d.id === deleteDocId);
+    const document = documents.find((entry) => entry.id === deleteDocId);
 
     if (!isSupabaseMode) {
       deleteDocumentLocal(deleteDocId);
@@ -351,30 +284,18 @@ export default function ProjectDocuments() {
         object_type: "document",
         object_id: deleteDocId,
         timestamp: new Date().toISOString(),
-        payload: { title: doc?.title },
+        payload: { title: document?.title },
       });
       setDeleteDocId(null);
+      setViewDoc(null);
       toast({ title: "Document deleted" });
       return;
     }
 
     try {
       await deleteDocumentMutation(deleteDocId);
-
-      if (shouldWriteLocalEvents) {
-        addEvent({
-          id: `evt-${Date.now()}`,
-          project_id: pid,
-          actor_id: user.id,
-          type: "document_deleted",
-          object_type: "document",
-          object_id: deleteDocId,
-          timestamp: new Date().toISOString(),
-          payload: { title: doc?.title },
-        });
-      }
-
       setDeleteDocId(null);
+      setViewDoc(null);
       toast({ title: "Document deleted" });
     } catch (error) {
       toast({
@@ -385,29 +306,21 @@ export default function ProjectDocuments() {
     }
   }
 
-  /* --- Contractor acknowledge --- */
-  function handleAcknowledge(doc: DocType) {
+  function handleAcknowledge(document: DocType) {
     addEvent({
       id: `evt-${Date.now()}`,
       project_id: pid,
       actor_id: user.id,
       type: "document_acknowledged",
       object_type: "document",
-      object_id: doc.id,
+      object_id: document.id,
       timestamp: new Date().toISOString(),
-      payload: { title: doc.title },
+      payload: { title: document.title },
     });
     setViewDoc(null);
-    toast({ title: "Acknowledged", description: doc.title });
+    toast({ title: "Acknowledged", description: document.title });
   }
 
-  /* --- Export --- */
-  function handleExport() {
-    setExportOpen(false);
-    toast({ title: "Export generated", description: "Document ready for download." });
-  }
-
-  /* --- Comment --- */
   function handleComment() {
     if (!viewDoc || !commentText.trim()) return;
     addEvent({
@@ -425,39 +338,45 @@ export default function ProjectDocuments() {
     toast({ title: "Comment added" });
   }
 
-  if (documents.length === 0) {
-    return (
-      <EmptyState
-        icon={FileText}
-        title="No documents"
-        description={isSupabaseMode
-          ? "Create a document record. Full document text persistence is coming soon in Supabase mode."
-          : "Upload a document or generate one with AI."}
-        actionLabel={perm.can("document.create") ? "Upload" : undefined}
-        onAction={perm.can("document.create") ? () => setUploadOpen(true) : undefined}
-      />
-    );
+  function handlePrintDocument() {
+    window.print();
   }
 
-  const genPreviewChanges: ProposalChange[] = [
-    { entity_type: "document", action: "create", label: generateTitle || "Document", after: "Draft v1" },
+  function handleDownloadDocument(projectDocument: DocType, content: string) {
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = window.document.createElement("a");
+    link.href = url;
+    link.download = buildDocumentDownloadName(projectDocument.title);
+    window.document.body.appendChild(link);
+    link.click();
+    window.document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  const generatePreviewChanges: ProposalChange[] = [
+    { entity_type: "document", action: "create", label: generateTitle || "Document", after: "Ready to review" },
   ];
 
-  const newVerDoc = newVersionDocId ? documents.find((d) => d.id === newVersionDocId) : null;
-  const newVerChanges: ProposalChange[] = newVerDoc
-    ? [{ entity_type: "document", action: "update", label: newVerDoc.title, before: `v${newVerDoc.versions.length}`, after: `v${newVerDoc.versions.length + 1}` }]
-    : [];
+  const latestViewedVersion = viewDoc?.versions[viewDoc.versions.length - 1];
+  const viewedDocumentIsArchived = latestViewedVersion?.status === "archived";
+  const canDownloadViewedDocument = Boolean(
+    viewDoc
+    && !isSupabaseMode
+    && latestViewedVersion?.content.trim(),
+  );
 
   return (
     <div className="space-y-sp-2">
-      {/* Header */}
       <div className="glass-elevated rounded-card p-sp-2 flex items-center justify-between flex-wrap gap-2">
         <div>
           <h2 className="text-h3 text-foreground">Documents</h2>
-          <p className="text-caption text-muted-foreground">{activeDocuments.length} active · {archivedDocuments.length} archived</p>
+          <p className="text-caption text-muted-foreground">
+            {isLoading ? "Loading documents..." : `${activeDocuments.length} active · ${archivedDocuments.length} archived`}
+          </p>
           {isSupabaseMode && (
             <p className="text-caption text-muted-foreground mt-1">
-              Supabase mode currently persists document metadata and version/archive state only.
+              Supabase mode currently saves document records, archive state, and delete actions. File bytes, download, and sharing are coming soon.
             </p>
           )}
         </div>
@@ -475,162 +394,157 @@ export default function ProjectDocuments() {
         )}
       </div>
 
-      {/* Active docs table */}
-      {activeDocuments.length > 0 && (
-        <div className="glass rounded-card overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Document</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Version</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="w-32"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {activeDocuments.map((doc) => {
-                const latest = doc.versions[doc.versions.length - 1];
-                return (
-                  <TableRow key={doc.id}>
-                    <TableCell>
-                      <button onClick={() => setViewDoc(doc)} className="text-body-sm font-medium text-foreground hover:text-accent transition-colors text-left">
-                        {doc.title}
-                      </button>
-                    </TableCell>
-                    <TableCell className="text-caption text-muted-foreground capitalize">{doc.type}</TableCell>
-                    <TableCell className="text-caption text-muted-foreground">v{latest.number}</TableCell>
-                    <TableCell>
-                      <StatusBadge status={docStatusLabel(latest.status)} variant="estimate" />
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-1 justify-end">
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setViewDoc(doc)} title="View">
+      {isLoading ? (
+        <ProjectDocumentsSkeleton />
+      ) : documents.length === 0 ? (
+        <EmptyState
+          icon={FileText}
+          title="No documents"
+          description={isSupabaseMode
+            ? "Create a document record for this project. File upload and full document text persistence are coming soon."
+            : "Upload a document or generate one with AI."}
+          actionLabel={perm.can("document.create") ? "Upload" : undefined}
+          onAction={perm.can("document.create") ? () => setUploadOpen(true) : undefined}
+        />
+      ) : (
+        <>
+          {activeDocuments.length > 0 && (
+            <div className="glass rounded-card overflow-hidden">
+              <div className="divide-y divide-border">
+                {activeDocuments.map((document) => (
+                  <DocumentListItem
+                    key={document.id}
+                    title={document.title}
+                    details={<span className="text-caption text-muted-foreground">Open preview</span>}
+                    onOpen={() => setViewDoc(document)}
+                    trailing={(
+                      <div className="flex gap-1">
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setViewDoc(document)} title="Preview">
                           <Eye className="h-3.5 w-3.5" />
                         </Button>
                         {isOwner && (
                           <>
-                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => { setNewVersionDocId(doc.id); handleNewVersionPreview(); }} title="New version">
-                              <GitBranch className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setExportOpen(true)} title="Export">
-                              <Download className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setArchiveDocId(doc.id)} title="Archive">
+                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setArchiveDocId(document.id)} title="Archive">
                               <Archive className="h-3.5 w-3.5" />
                             </Button>
-                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setDeleteDocId(doc.id)} title="Delete">
+                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setDeleteDocId(document.id)} title="Delete">
                               <Trash2 className="h-3.5 w-3.5 text-destructive" />
                             </Button>
                           </>
                         )}
                       </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
-      )}
-
-      {/* Archived section */}
-      {archivedDocuments.length > 0 && (
-        <div className="space-y-1">
-          <h3 className="text-body-sm font-semibold text-muted-foreground px-1">Archived</h3>
-          <div className="glass rounded-card overflow-hidden opacity-60">
-            <Table>
-              <TableBody>
-                {archivedDocuments.map((doc) => (
-                  <TableRow key={doc.id}>
-                    <TableCell className="text-body-sm text-muted-foreground">{doc.title}</TableCell>
-                    <TableCell className="text-caption text-muted-foreground capitalize">{doc.type}</TableCell>
-                    <TableCell><StatusBadge status="Archived" variant="estimate" /></TableCell>
-                  </TableRow>
+                    )}
+                  />
                 ))}
-              </TableBody>
-            </Table>
-          </div>
-        </div>
-      )}
-
-      {/* New version preview */}
-      {showNewVersionPreview && newVersionDocId && (
-        <div className="space-y-2">
-          <PreviewCard
-            summary={isSupabaseMode
-              ? `Create new version of "${newVerDoc?.title}" (metadata only in Supabase mode)`
-              : `Create new version of "${newVerDoc?.title}"`}
-            changes={newVerChanges}
-          />
-          {isSupabaseMode && (
-            <p className="text-caption text-muted-foreground px-1">
-              Supabase mode saves the version record only. Document body/history persistence is not available yet.
-            </p>
+              </div>
+            </div>
           )}
-          <ActionBar
-            onConfirm={handleCreateNewVersion}
-            onCancel={() => { setNewVersionDocId(null); setShowNewVersionPreview(false); }}
-          />
-        </div>
+
+          {archivedDocuments.length > 0 && (
+            <div className="space-y-1">
+              <h3 className="text-body-sm font-semibold text-muted-foreground px-1">Archived</h3>
+              <div className="glass rounded-card overflow-hidden opacity-70">
+                <div className="divide-y divide-border">
+                  {archivedDocuments.map((document) => (
+                    <DocumentListItem
+                      key={document.id}
+                      title={document.title}
+                      muted
+                      details={<span className="text-caption text-muted-foreground">Archived document</span>}
+                      onOpen={() => setViewDoc(document)}
+                      trailing={(
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setViewDoc(document)} title="Preview">
+                          <Eye className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
-      {/* Upload modal */}
-      <AlertDialog open={uploadOpen} onOpenChange={setUploadOpen}>
-        <AlertDialogContent className="glass-modal rounded-modal">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Upload document</AlertDialogTitle>
-            <AlertDialogDescription>
+      <Dialog
+        open={uploadOpen}
+        onOpenChange={(open) => {
+          if (open) {
+            setUploadOpen(true);
+            return;
+          }
+          closeUploadDialog();
+        }}
+      >
+        <DialogContent className="bg-card border border-border rounded-modal max-w-lg shadow-xl p-0 gap-0 [&>button.absolute]:hidden">
+          <DialogHeader className="border-b border-border px-5 py-4">
+            <DialogTitle>Upload document</DialogTitle>
+            <DialogDescription>
               {isSupabaseMode
-                ? "Create a document record for this project. File contents are not uploaded yet in Supabase mode."
+                ? "Create a document record for this project. The file itself will not upload yet in Supabase mode."
                 : "Add a document to this project."}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="space-y-3 py-2">
-            <div className="rounded-lg bg-warning/10 text-warning text-caption p-2">
-              ⚠ Do not upload documents containing personal identification data without consent.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="px-5 py-4 space-y-4">
+            <div className="rounded-panel bg-warning/10 p-3 text-caption text-warning">
+              Do not upload documents containing personal identification data without consent.
             </div>
             {isSupabaseMode && (
-              <div className="rounded-lg bg-muted/60 text-muted-foreground text-caption p-2">
-                Only the document record, type, and version metadata will persist for now.
+              <div className="rounded-panel bg-muted/50 p-3 text-caption text-muted-foreground">
+                Only the document record will persist for now. File bytes, download, and sharing are coming soon.
               </div>
             )}
             <div className="space-y-1">
               <label className="text-body-sm font-medium text-foreground">Title</label>
-              <Input value={uploadTitle} onChange={(e) => setUploadTitle(e.target.value)} placeholder="Document name" autoFocus />
+              <Input
+                value={uploadTitle}
+                onChange={(event) => setUploadTitle(event.target.value)}
+                placeholder="Document name"
+                autoFocus
+              />
             </div>
             <div className="space-y-1">
-              <label className="text-body-sm font-medium text-foreground">Type</label>
-              <select value={uploadType} onChange={(e) => setUploadType(e.target.value)} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
-                <option value="contract">Contract</option>
-                <option value="specification">Specification</option>
-                <option value="warranty">Warranty</option>
-                <option value="report">Report</option>
-              </select>
-            </div>
-            <div className="border-2 border-dashed border-border rounded-lg p-6 text-center">
-              <Upload className="mx-auto h-8 w-8 text-muted-foreground/40 mb-2" />
-              <p className="text-caption text-muted-foreground">Drag file here or click to browse</p>
+              <label className="text-body-sm font-medium text-foreground">File</label>
+              <Input
+                type="file"
+                onChange={(event) => {
+                  const file = event.target.files?.[0] ?? null;
+                  setUploadFile(file);
+                  if (file && !uploadTitle.trim()) {
+                    setUploadTitle(file.name);
+                  }
+                }}
+              />
+              <p className="text-caption text-muted-foreground">
+                {isSupabaseMode
+                  ? "Choose a file to name the record now. The file contents will not persist yet."
+                  : "Attach a file now, or create a placeholder document with a title only."}
+              </p>
             </div>
           </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleUpload} className="bg-accent text-accent-foreground hover:bg-accent/90">Upload</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+          <DialogFooter className="border-t border-border px-5 py-4">
+            <Button variant="outline" onClick={closeUploadDialog}>Cancel</Button>
+            <Button
+              className="bg-accent text-accent-foreground hover:bg-accent/90"
+              onClick={handleUpload}
+              disabled={!uploadTitle.trim() && !uploadFile}
+            >
+              {isSupabaseMode ? "Create document" : "Upload"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      {/* Generate modal */}
-      <AlertDialog open={generateOpen} onOpenChange={(o) => { setGenerateOpen(o); if (!o) setShowGenPreview(false); }}>
+      <AlertDialog open={generateOpen} onOpenChange={(open) => { setGenerateOpen(open); if (!open) setShowGenPreview(false); }}>
         <AlertDialogContent className="glass-modal rounded-modal max-w-lg">
           <AlertDialogHeader>
             <AlertDialogTitle>Generate document</AlertDialogTitle>
-            <AlertDialogDescription>AI will create a draft based on your description.</AlertDialogDescription>
+            <AlertDialogDescription>AI will create a document based on your description.</AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-3 py-2">
             <div className="space-y-1">
               <label className="text-body-sm font-medium text-foreground">Document title</label>
-              <Input value={generateTitle} onChange={(e) => setGenerateTitle(e.target.value)} placeholder="e.g. Subcontractor Agreement" autoFocus />
+              <Input value={generateTitle} onChange={(event) => setGenerateTitle(event.target.value)} placeholder="e.g. Subcontractor Agreement" autoFocus />
             </div>
             {!showGenPreview ? (
               <Button onClick={handleGeneratePreview} disabled={!generateTitle.trim()} className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
@@ -642,7 +556,7 @@ export default function ProjectDocuments() {
                   <p className="text-caption text-muted-foreground mb-1">Preview</p>
                   <p className="text-body-sm text-foreground whitespace-pre-wrap">{generateContent}</p>
                 </div>
-                <PreviewCard summary="Generate document" changes={genPreviewChanges} />
+                <PreviewCard summary="Generate document" changes={generatePreviewChanges} />
                 <ActionBar
                   onConfirm={handleGenerateConfirm}
                   onCancel={() => setShowGenPreview(false)}
@@ -658,59 +572,81 @@ export default function ProjectDocuments() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* View document modal */}
-      <AlertDialog open={!!viewDoc} onOpenChange={(o) => !o && setViewDoc(null)}>
-        <AlertDialogContent className="glass-modal rounded-modal max-w-lg">
-          {viewDoc && (() => {
-            const latest = viewDoc.versions[viewDoc.versions.length - 1];
-            return (
-              <>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>{viewDoc.title}</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    v{latest.number} · {viewDoc.type} · <StatusBadge status={docStatusLabel(latest.status)} variant="estimate" />
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <div className="glass rounded-card p-3 my-2 max-h-64 overflow-y-auto">
-                  {isSupabaseMode && !latest.content ? (
+      <Dialog open={!!viewDoc} onOpenChange={(open) => { if (!open) setViewDoc(null); }}>
+        <DialogContent className="bg-card border border-border rounded-modal max-w-lg shadow-xl p-0 gap-0 [&>button.absolute]:hidden">
+          {viewDoc && latestViewedVersion && (
+            <>
+              <DialogHeader className="border-b border-border px-5 py-4">
+                <DialogTitle>{viewDoc.title}</DialogTitle>
+                <DialogDescription>
+                  {viewedDocumentIsArchived ? "Archived document" : "Document preview"}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="px-5 py-4 space-y-4">
+                <div className="rounded-panel border border-border bg-muted/30 p-4 max-h-72 overflow-y-auto">
+                  {isSupabaseMode && !latestViewedVersion.content ? (
                     <p className="text-body-sm text-muted-foreground whitespace-pre-wrap">
-                      Full document text persistence is coming soon in Supabase mode. This record currently stores document metadata and version state only.
+                      Full document text persistence is coming soon in Supabase mode. This record currently stores document metadata only.
                     </p>
                   ) : (
-                    <p className="text-body-sm text-foreground whitespace-pre-wrap">{latest.content}</p>
+                    <p className="text-body-sm text-foreground whitespace-pre-wrap">{latestViewedVersion.content}</p>
                   )}
                 </div>
-                {viewDoc.versions.length > 1 && (
-                  <div className="text-caption text-muted-foreground">
-                    {viewDoc.versions.length} version(s) available
-                  </div>
-                )}
-                <AlertDialogFooter className="flex-wrap gap-1">
-                  {isContractor && (
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="outline" onClick={handlePrintDocument}>
+                    <Printer className="h-3.5 w-3.5 mr-1.5" /> Print
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleDownloadDocument(viewDoc, latestViewedVersion.content)}
+                    disabled={!canDownloadViewedDocument}
+                  >
+                    <Download className="h-3.5 w-3.5 mr-1.5" /> Download
+                  </Button>
+                  <Button size="sm" variant="outline" disabled>
+                    <Share2 className="h-3.5 w-3.5 mr-1.5" /> Share
+                  </Button>
+                </div>
+                <p className="text-caption text-muted-foreground">
+                  {isSupabaseMode
+                    ? "Download and sharing are coming soon for metadata-only records."
+                    : canDownloadViewedDocument
+                      ? "Sharing is coming soon."
+                      : "Download and sharing are coming soon for this document."}
+                </p>
+              </div>
+              <DialogFooter className="border-t border-border px-5 py-4 flex-wrap gap-2 sm:justify-between sm:space-x-0">
+                <div className="flex flex-wrap gap-2">
+                  {!isSupabaseMode && isContractor && (
                     <>
                       <Button size="sm" onClick={() => handleAcknowledge(viewDoc)} className="bg-accent text-accent-foreground hover:bg-accent/90">
                         <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Confirm acknowledgement
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => { setCommentOpen(true); }}>
+                      <Button size="sm" variant="outline" onClick={() => setCommentOpen(true)}>
                         <MessageSquare className="h-3.5 w-3.5 mr-1" /> Comment
                       </Button>
                     </>
                   )}
-                  <AlertDialogCancel>Close</AlertDialogCancel>
-                </AlertDialogFooter>
-              </>
-            );
-          })()}
-        </AlertDialogContent>
-      </AlertDialog>
+                  {isOwner && viewedDocumentIsArchived && (
+                    <Button size="sm" variant="outline" onClick={() => setDeleteDocId(viewDoc.id)} className="text-destructive hover:text-destructive">
+                      <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete
+                    </Button>
+                  )}
+                </div>
+                <Button size="sm" variant="outline" onClick={() => setViewDoc(null)}>Close</Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
-      {/* Comment modal */}
       <AlertDialog open={commentOpen} onOpenChange={setCommentOpen}>
         <AlertDialogContent className="glass-modal rounded-modal">
           <AlertDialogHeader>
             <AlertDialogTitle>Leave a comment</AlertDialogTitle>
           </AlertDialogHeader>
-          <Textarea value={commentText} onChange={(e) => setCommentText(e.target.value)} placeholder="Your comment..." className="min-h-[60px]" />
+          <Textarea value={commentText} onChange={(event) => setCommentText(event.target.value)} placeholder="Your comment..." className="min-h-[60px]" />
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleComment} className="bg-accent text-accent-foreground hover:bg-accent/90" disabled={!commentText.trim()}>
@@ -720,23 +656,9 @@ export default function ProjectDocuments() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Export modal */}
-      <ConfirmModal
-        open={exportOpen}
-        onOpenChange={setExportOpen}
-        title="Export document"
-        description="Choose export format."
-        confirmLabel="Export"
-        onConfirm={handleExport}
-        onCancel={() => setExportOpen(false)}
-        tertiaryLabel="Print"
-        onTertiary={() => { setExportOpen(false); toast({ title: "Print dialog opened" }); }}
-      />
-
-      {/* Archive confirm */}
       <ConfirmModal
         open={!!archiveDocId}
-        onOpenChange={(o) => !o && setArchiveDocId(null)}
+        onOpenChange={(open) => !open && setArchiveDocId(null)}
         title="Archive document?"
         description="This document will be moved to the archive."
         confirmLabel="Archive"
@@ -744,10 +666,9 @@ export default function ProjectDocuments() {
         onCancel={() => setArchiveDocId(null)}
       />
 
-      {/* Delete confirm */}
       <ConfirmModal
         open={!!deleteDocId}
-        onOpenChange={(o) => !o && setDeleteDocId(null)}
+        onOpenChange={(open) => !open && setDeleteDocId(null)}
         title="Delete document?"
         description="This will permanently remove the document and all its versions."
         confirmLabel="Delete"

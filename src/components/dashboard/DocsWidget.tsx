@@ -45,7 +45,7 @@ export function DocsWidget({ documents, projectId, className }: Props) {
                       <Pin className="h-2.5 w-2.5" /> Pinned
                     </span>
                   )}
-                  <span className="text-[10px] text-muted-foreground capitalize">{d.type} · v{latestVersion?.number}</span>
+                  <span className="text-[10px] text-muted-foreground">Document</span>
                 </div>
               );
             })}

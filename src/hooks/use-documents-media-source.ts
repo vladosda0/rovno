@@ -25,6 +25,11 @@ export const documentsMediaQueryKeys = {
     ["documents-media", "project-media", profileId, projectId] as const,
 };
 
+export interface ProjectDocumentsState {
+  documents: Document[];
+  isLoading: boolean;
+}
+
 function useStoreValue<T>(getter: () => T, enabled: boolean, fallback: T): T {
   const [value, setValue] = useState<T>(() => enabled ? getter() : fallback);
 
@@ -42,7 +47,7 @@ function useStoreValue<T>(getter: () => T, enabled: boolean, fallback: T): T {
   return enabled ? value : fallback;
 }
 
-export function useProjectDocuments(projectId: string): Document[] {
+export function useProjectDocumentsState(projectId: string): ProjectDocumentsState {
   const mode = useWorkspaceMode();
   const supabaseMode = mode.kind === "supabase" ? mode : null;
   const getDocuments = useCallback(() => store.getDocuments(projectId), [projectId]);
@@ -64,10 +69,27 @@ export function useProjectDocuments(projectId: string): Document[] {
   });
 
   if (mode.kind === "demo" || mode.kind === "local") {
-    return browserDocuments;
+    return {
+      documents: browserDocuments,
+      isLoading: false,
+    };
   }
 
-  return documentsQuery.data ?? EMPTY_PROJECT_DOCUMENTS;
+  if (mode.kind === "pending-supabase") {
+    return {
+      documents: EMPTY_PROJECT_DOCUMENTS,
+      isLoading: true,
+    };
+  }
+
+  return {
+    documents: documentsQuery.data ?? EMPTY_PROJECT_DOCUMENTS,
+    isLoading: documentsQuery.isPending,
+  };
+}
+
+export function useProjectDocuments(projectId: string): Document[] {
+  return useProjectDocumentsState(projectId).documents;
 }
 
 export function useProjectMedia(projectId: string): Media[] {

@@ -6,7 +6,7 @@ import * as store from "@/data/store";
 import {
   documentsMediaQueryKeys,
   useProjectDocumentMutations,
-  useProjectDocuments,
+  useProjectDocumentsState,
   useProjectMedia,
 } from "@/hooks/use-documents-media-source";
 import { authenticateRuntimeAuth } from "@/test/runtime-auth";
@@ -52,13 +52,14 @@ function media(partial: Partial<Media> = {}): Media {
 }
 
 function DocumentsMediaProbe({ projectId }: { projectId: string }) {
-  const documents = useProjectDocuments(projectId);
+  const { documents, isLoading } = useProjectDocumentsState(projectId);
   const mediaItems = useProjectMedia(projectId);
 
   return (
     <div>
       <span data-testid="document-count">{documents.length}</span>
       <span data-testid="media-count">{mediaItems.length}</span>
+      <span data-testid="documents-loading">{isLoading ? "yes" : "no"}</span>
       <span data-testid="document-titles">{documents.map((item) => item.title).join("|")}</span>
       <span data-testid="media-captions">{mediaItems.map((item) => item.caption).join("|")}</span>
     </div>
@@ -122,7 +123,7 @@ function DocumentsMutationProbe({ projectId }: { projectId: string }) {
   );
 }
 
-describe("useProjectDocuments/useProjectMedia", () => {
+describe("useProjectDocumentsState/useProjectMedia", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
     vi.restoreAllMocks();
@@ -151,6 +152,7 @@ describe("useProjectDocuments/useProjectMedia", () => {
 
     expect(screen.getByTestId("document-count")).toHaveTextContent("1");
     expect(screen.getByTestId("media-count")).toHaveTextContent("1");
+    expect(screen.getByTestId("documents-loading")).toHaveTextContent("no");
     expect(screen.getByTestId("document-titles")).toHaveTextContent("Document One");
     expect(screen.getByTestId("media-captions")).toHaveTextContent("Photo One");
 
@@ -203,6 +205,7 @@ describe("useProjectDocuments/useProjectMedia", () => {
 
     expect(screen.getByTestId("document-count")).toHaveTextContent("0");
     expect(screen.getByTestId("media-count")).toHaveTextContent("0");
+    expect(screen.getByTestId("documents-loading")).toHaveTextContent("yes");
     expect(getDocumentsSpy).not.toHaveBeenCalled();
     expect(getMediaSpy).not.toHaveBeenCalled();
 
@@ -216,6 +219,7 @@ describe("useProjectDocuments/useProjectMedia", () => {
       expect(screen.getByTestId("document-count")).toHaveTextContent("1");
     });
     expect(screen.getByTestId("media-count")).toHaveTextContent("1");
+    expect(screen.getByTestId("documents-loading")).toHaveTextContent("no");
     expect(screen.getByTestId("document-titles")).toHaveTextContent("Supabase Document");
     expect(screen.getByTestId("media-captions")).toHaveTextContent("Supabase Photo");
     expect(source.getProjectDocuments).toHaveBeenCalledWith("project-1");
