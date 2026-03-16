@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useParams } from "react-router-dom";
 import {
   FileText, Upload, Plus, Archive, Trash2, Download, Eye,
-  CheckCircle2, MessageSquare, GitBranch, Printer,
+  CheckCircle2, MessageSquare, GitBranch,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,13 +20,11 @@ import { PreviewCard } from "@/components/ai/PreviewCard";
 import { ActionBar } from "@/components/ai/ActionBar";
 import { EmptyState } from "@/components/EmptyState";
 import { toast } from "@/hooks/use-toast";
-import { useDocuments, useProject } from "@/hooks/use-mock-data";
+import { useCurrentUser, useDocuments, useProject, useWorkspaceMode } from "@/hooks/use-mock-data";
+import { useProjectDocumentMutations } from "@/hooks/use-documents-media-source";
 import { usePermission, isOwnerOrCoOwner } from "@/lib/permissions";
-import {
-  addDocument, updateDocument, addDocumentVersion, deleteDocument,
-  addEvent, getCurrentUser,
-} from "@/data/store";
-import type { Document as DocType, DocumentVersion } from "@/types/entities";
+import { addDocument, addDocumentVersion, addEvent, deleteDocument as deleteDocumentLocal } from "@/data/store";
+import type { Document as DocType } from "@/types/entities";
 import type { ProposalChange } from "@/types/ai";
 
 function docStatusLabel(s: string) {
@@ -42,10 +40,19 @@ export default function ProjectDocuments() {
   const pid = projectId!;
   const documents = useDocuments(pid);
   const { project } = useProject(pid);
+  const workspaceMode = useWorkspaceMode();
   const perm = usePermission(pid);
-  const user = getCurrentUser();
+  const user = useCurrentUser();
+  const {
+    createDocument,
+    createDocumentVersion,
+    archiveDocument,
+    deleteDocument: deleteDocumentMutation,
+  } = useProjectDocumentMutations(pid);
   const isOwner = isOwnerOrCoOwner(perm.role);
   const isContractor = perm.role === "contractor";
+  const isSupabaseMode = workspaceMode.kind === "supabase";
+  const shouldWriteLocalEvents = workspaceMode.kind !== "supabase";
 
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadTitle, setUploadTitle] = useState("");
@@ -73,35 +80,80 @@ export default function ProjectDocuments() {
   });
 
   /* --- Upload --- */
-  function handleUpload() {
-    const docId = `doc-${Date.now()}`;
-    const verId = `dv-${Date.now()}`;
-    addDocument({
-      id: docId,
-      project_id: pid,
-      type: uploadType,
-      title: uploadTitle || "Untitled document",
-      versions: [{
-        id: verId,
-        document_id: docId,
-        number: 1,
-        status: "draft",
-        content: "Uploaded document content placeholder.",
-      }],
-    });
-    addEvent({
-      id: `evt-${Date.now()}`,
-      project_id: pid,
-      actor_id: user.id,
-      type: "document_created",
-      object_type: "document",
-      object_id: docId,
-      timestamp: new Date().toISOString(),
-      payload: { title: uploadTitle, type: uploadType },
-    });
-    setUploadOpen(false);
-    setUploadTitle("");
-    toast({ title: "Document uploaded", description: uploadTitle || "Untitled" });
+  async function handleUpload() {
+    const title = uploadTitle || "Untitled document";
+
+    if (!isSupabaseMode) {
+      const docId = `doc-${Date.now()}`;
+      const verId = `dv-${Date.now()}`;
+      addDocument({
+        id: docId,
+        project_id: pid,
+        type: uploadType,
+        title,
+        versions: [{
+          id: verId,
+          document_id: docId,
+          number: 1,
+          status: "draft",
+          content: "Uploaded document content placeholder.",
+        }],
+      });
+      addEvent({
+        id: `evt-${Date.now()}`,
+        project_id: pid,
+        actor_id: user.id,
+        type: "document_created",
+        object_type: "document",
+        object_id: docId,
+        timestamp: new Date().toISOString(),
+        payload: { title, type: uploadType },
+      });
+      setUploadOpen(false);
+      setUploadTitle("");
+      setUploadType("specification");
+      toast({ title: "Document uploaded", description: title });
+      return;
+    }
+
+    try {
+      const created = await createDocument({
+        type: uploadType,
+        title,
+        origin: "uploaded",
+        initialVersionContent: "Uploaded document content placeholder.",
+        initialVersionStatus: "draft",
+      });
+
+      if (shouldWriteLocalEvents) {
+        addEvent({
+          id: `evt-${Date.now()}`,
+          project_id: pid,
+          actor_id: user.id,
+          type: "document_created",
+          object_type: "document",
+          object_id: created.documentId,
+          timestamp: new Date().toISOString(),
+          payload: { title, type: uploadType },
+        });
+      }
+
+      setUploadOpen(false);
+      setUploadTitle("");
+      setUploadType("specification");
+      toast({
+        title: isSupabaseMode ? "Document created" : "Document uploaded",
+        description: isSupabaseMode
+          ? "Document metadata saved. File contents are not uploaded yet in Supabase mode."
+          : title,
+      });
+    } catch (error) {
+      toast({
+        title: "Document upload failed",
+        description: error instanceof Error ? error.message : "Unable to create the document.",
+        variant: "destructive",
+      });
+    }
   }
 
   /* --- Generate via AI --- */
@@ -110,7 +162,16 @@ export default function ProjectDocuments() {
     setShowGenPreview(true);
   }
 
-  function handleGenerateConfirm() {
+  async function handleGenerateConfirm() {
+    if (isSupabaseMode) {
+      toast({
+        title: "Unavailable in Supabase mode",
+        description: "AI-generated document text is not persisted yet in Supabase mode.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const docId = `doc-gen-${Date.now()}`;
     const verId = `dv-gen-${Date.now()}`;
     addDocument({
@@ -148,77 +209,180 @@ export default function ProjectDocuments() {
     setShowNewVersionPreview(true);
   }
 
-  function handleCreateNewVersion() {
+  async function handleCreateNewVersion() {
     if (!newVersionDocId) return;
     const doc = documents.find((d) => d.id === newVersionDocId);
     if (!doc) return;
     const latest = doc.versions[doc.versions.length - 1];
-    const verId = `dv-new-${Date.now()}`;
-    addDocumentVersion(newVersionDocId, {
-      id: verId,
-      document_id: newVersionDocId,
-      number: doc.versions.length + 1,
-      status: "awaiting_approval",
-      content: latest.content + "\n\n[Updated in v" + (doc.versions.length + 1) + "]",
-    });
-    addEvent({
-      id: `evt-${Date.now()}`,
-      project_id: pid,
-      actor_id: user.id,
-      type: "document_version_created",
-      object_type: "document",
-      object_id: newVersionDocId,
-      timestamp: new Date().toISOString(),
-      payload: { title: doc.title, version: doc.versions.length + 1 },
-    });
-    setNewVersionDocId(null);
-    setShowNewVersionPreview(false);
-    toast({ title: "New version created", description: `v${doc.versions.length + 1} awaiting approval` });
+
+    if (!isSupabaseMode) {
+      const verId = `dv-new-${Date.now()}`;
+      addDocumentVersion(newVersionDocId, {
+        id: verId,
+        document_id: newVersionDocId,
+        number: doc.versions.length + 1,
+        status: "awaiting_approval",
+        content: latest.content + "\n\n[Updated in v" + (doc.versions.length + 1) + "]",
+      });
+      addEvent({
+        id: `evt-${Date.now()}`,
+        project_id: pid,
+        actor_id: user.id,
+        type: "document_version_created",
+        object_type: "document",
+        object_id: newVersionDocId,
+        timestamp: new Date().toISOString(),
+        payload: { title: doc.title, version: doc.versions.length + 1 },
+      });
+      setNewVersionDocId(null);
+      setShowNewVersionPreview(false);
+      toast({ title: "New version created", description: `v${doc.versions.length + 1} awaiting approval` });
+      return;
+    }
+
+    try {
+      const created = await createDocumentVersion({
+        documentId: newVersionDocId,
+        status: "awaiting_approval",
+        content: latest.content + "\n\n[Updated in v" + (doc.versions.length + 1) + "]",
+      });
+
+      if (shouldWriteLocalEvents) {
+        addEvent({
+          id: `evt-${Date.now()}`,
+          project_id: pid,
+          actor_id: user.id,
+          type: "document_version_created",
+          object_type: "document",
+          object_id: newVersionDocId,
+          timestamp: new Date().toISOString(),
+          payload: { title: doc.title, version: created.versionNumber },
+        });
+      }
+
+      setNewVersionDocId(null);
+      setShowNewVersionPreview(false);
+      toast({
+        title: "New version created",
+        description: isSupabaseMode
+          ? `v${created.versionNumber} saved. Text changes are not persisted yet in Supabase mode.`
+          : `v${created.versionNumber} awaiting approval`,
+      });
+    } catch (error) {
+      toast({
+        title: "Version creation failed",
+        description: error instanceof Error ? error.message : "Unable to create a new version.",
+        variant: "destructive",
+      });
+    }
   }
 
   /* --- Archive --- */
-  function handleArchive() {
+  async function handleArchive() {
     if (!archiveDocId) return;
     const doc = documents.find((d) => d.id === archiveDocId);
     if (!doc) return;
     const latest = doc.versions[doc.versions.length - 1];
-    addDocumentVersion(archiveDocId, {
-      ...latest,
-      id: `dv-arch-${Date.now()}`,
-      number: doc.versions.length + 1,
-      status: "archived",
-    });
-    addEvent({
-      id: `evt-${Date.now()}`,
-      project_id: pid,
-      actor_id: user.id,
-      type: "document_archived",
-      object_type: "document",
-      object_id: archiveDocId,
-      timestamp: new Date().toISOString(),
-      payload: { title: doc.title },
-    });
-    setArchiveDocId(null);
-    toast({ title: "Document archived" });
+
+    if (!isSupabaseMode) {
+      addDocumentVersion(archiveDocId, {
+        ...latest,
+        id: `dv-arch-${Date.now()}`,
+        number: doc.versions.length + 1,
+        status: "archived",
+      });
+      addEvent({
+        id: `evt-${Date.now()}`,
+        project_id: pid,
+        actor_id: user.id,
+        type: "document_archived",
+        object_type: "document",
+        object_id: archiveDocId,
+        timestamp: new Date().toISOString(),
+        payload: { title: doc.title },
+      });
+      setArchiveDocId(null);
+      toast({ title: "Document archived" });
+      return;
+    }
+
+    try {
+      const created = await archiveDocument({
+        documentId: archiveDocId,
+        content: latest?.content ?? "",
+      });
+
+      if (shouldWriteLocalEvents) {
+        addEvent({
+          id: `evt-${Date.now()}`,
+          project_id: pid,
+          actor_id: user.id,
+          type: "document_archived",
+          object_type: "document",
+          object_id: archiveDocId,
+          timestamp: new Date().toISOString(),
+          payload: { title: doc.title, version: created.versionNumber },
+        });
+      }
+
+      setArchiveDocId(null);
+      toast({ title: "Document archived" });
+    } catch (error) {
+      toast({
+        title: "Archive failed",
+        description: error instanceof Error ? error.message : "Unable to archive the document.",
+        variant: "destructive",
+      });
+    }
   }
 
   /* --- Delete --- */
-  function handleDelete() {
+  async function handleDelete() {
     if (!deleteDocId) return;
     const doc = documents.find((d) => d.id === deleteDocId);
-    deleteDocument(deleteDocId);
-    addEvent({
-      id: `evt-${Date.now()}`,
-      project_id: pid,
-      actor_id: user.id,
-      type: "document_deleted",
-      object_type: "document",
-      object_id: deleteDocId,
-      timestamp: new Date().toISOString(),
-      payload: { title: doc?.title },
-    });
-    setDeleteDocId(null);
-    toast({ title: "Document deleted" });
+
+    if (!isSupabaseMode) {
+      deleteDocumentLocal(deleteDocId);
+      addEvent({
+        id: `evt-${Date.now()}`,
+        project_id: pid,
+        actor_id: user.id,
+        type: "document_deleted",
+        object_type: "document",
+        object_id: deleteDocId,
+        timestamp: new Date().toISOString(),
+        payload: { title: doc?.title },
+      });
+      setDeleteDocId(null);
+      toast({ title: "Document deleted" });
+      return;
+    }
+
+    try {
+      await deleteDocumentMutation(deleteDocId);
+
+      if (shouldWriteLocalEvents) {
+        addEvent({
+          id: `evt-${Date.now()}`,
+          project_id: pid,
+          actor_id: user.id,
+          type: "document_deleted",
+          object_type: "document",
+          object_id: deleteDocId,
+          timestamp: new Date().toISOString(),
+          payload: { title: doc?.title },
+        });
+      }
+
+      setDeleteDocId(null);
+      toast({ title: "Document deleted" });
+    } catch (error) {
+      toast({
+        title: "Delete failed",
+        description: error instanceof Error ? error.message : "Unable to delete the document.",
+        variant: "destructive",
+      });
+    }
   }
 
   /* --- Contractor acknowledge --- */
@@ -266,7 +430,9 @@ export default function ProjectDocuments() {
       <EmptyState
         icon={FileText}
         title="No documents"
-        description="Upload a document or generate one with AI."
+        description={isSupabaseMode
+          ? "Create a document record. Full document text persistence is coming soon in Supabase mode."
+          : "Upload a document or generate one with AI."}
         actionLabel={perm.can("document.create") ? "Upload" : undefined}
         onAction={perm.can("document.create") ? () => setUploadOpen(true) : undefined}
       />
@@ -289,15 +455,22 @@ export default function ProjectDocuments() {
         <div>
           <h2 className="text-h3 text-foreground">Documents</h2>
           <p className="text-caption text-muted-foreground">{activeDocuments.length} active · {archivedDocuments.length} archived</p>
+          {isSupabaseMode && (
+            <p className="text-caption text-muted-foreground mt-1">
+              Supabase mode currently persists document metadata and version/archive state only.
+            </p>
+          )}
         </div>
         {perm.can("document.create") && (
           <div className="flex gap-1.5">
             <Button size="sm" variant="outline" onClick={() => setUploadOpen(true)}>
               <Upload className="h-4 w-4 mr-1.5" /> Upload
             </Button>
-            <Button size="sm" className="bg-accent text-accent-foreground hover:bg-accent/90" onClick={() => setGenerateOpen(true)}>
-              <Plus className="h-4 w-4 mr-1.5" /> Generate
-            </Button>
+            {!isSupabaseMode && (
+              <Button size="sm" className="bg-accent text-accent-foreground hover:bg-accent/90" onClick={() => setGenerateOpen(true)}>
+                <Plus className="h-4 w-4 mr-1.5" /> Generate
+              </Button>
+            )}
           </div>
         )}
       </div>
@@ -385,9 +558,16 @@ export default function ProjectDocuments() {
       {showNewVersionPreview && newVersionDocId && (
         <div className="space-y-2">
           <PreviewCard
-            summary={`Create new version of "${newVerDoc?.title}"`}
+            summary={isSupabaseMode
+              ? `Create new version of "${newVerDoc?.title}" (metadata only in Supabase mode)`
+              : `Create new version of "${newVerDoc?.title}"`}
             changes={newVerChanges}
           />
+          {isSupabaseMode && (
+            <p className="text-caption text-muted-foreground px-1">
+              Supabase mode saves the version record only. Document body/history persistence is not available yet.
+            </p>
+          )}
           <ActionBar
             onConfirm={handleCreateNewVersion}
             onCancel={() => { setNewVersionDocId(null); setShowNewVersionPreview(false); }}
@@ -400,12 +580,21 @@ export default function ProjectDocuments() {
         <AlertDialogContent className="glass-modal rounded-modal">
           <AlertDialogHeader>
             <AlertDialogTitle>Upload document</AlertDialogTitle>
-            <AlertDialogDescription>Add a document to this project.</AlertDialogDescription>
+            <AlertDialogDescription>
+              {isSupabaseMode
+                ? "Create a document record for this project. File contents are not uploaded yet in Supabase mode."
+                : "Add a document to this project."}
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-3 py-2">
             <div className="rounded-lg bg-warning/10 text-warning text-caption p-2">
               ⚠ Do not upload documents containing personal identification data without consent.
             </div>
+            {isSupabaseMode && (
+              <div className="rounded-lg bg-muted/60 text-muted-foreground text-caption p-2">
+                Only the document record, type, and version metadata will persist for now.
+              </div>
+            )}
             <div className="space-y-1">
               <label className="text-body-sm font-medium text-foreground">Title</label>
               <Input value={uploadTitle} onChange={(e) => setUploadTitle(e.target.value)} placeholder="Document name" autoFocus />
@@ -483,7 +672,13 @@ export default function ProjectDocuments() {
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <div className="glass rounded-card p-3 my-2 max-h-64 overflow-y-auto">
-                  <p className="text-body-sm text-foreground whitespace-pre-wrap">{latest.content}</p>
+                  {isSupabaseMode && !latest.content ? (
+                    <p className="text-body-sm text-muted-foreground whitespace-pre-wrap">
+                      Full document text persistence is coming soon in Supabase mode. This record currently stores document metadata and version state only.
+                    </p>
+                  ) : (
+                    <p className="text-body-sm text-foreground whitespace-pre-wrap">{latest.content}</p>
+                  )}
                 </div>
                 {viewDoc.versions.length > 1 && (
                   <div className="text-caption text-muted-foreground">

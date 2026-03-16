@@ -41,7 +41,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useCurrentUser, useEvents, useProject, useProjects, useTasks } from "@/hooks/use-mock-data";
+import { useCurrentUser, useEvents, useProject, useProjects, useTasks, useWorkspaceMode } from "@/hooks/use-mock-data";
 import { usePermission } from "@/lib/permissions";
 import { generateProposalQueue, getTextResponse, reviseProposalWithEdits } from "@/lib/ai-engine";
 import { commitProposal } from "@/lib/commit-proposal";
@@ -389,6 +389,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
 
   const isGuest = !isAuthenticated();
   const user = useCurrentUser();
+  const workspaceMode = useWorkspaceMode();
   const projects = useProjects();
   const permResult = usePermission(projectId || "");
   const perm = isProjectContext && !isGuest ? permResult : null;
@@ -725,6 +726,26 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
       let lastError = "Execution failed";
 
       while (attempt < 5 && !success) {
+        if (workspaceMode.kind === "supabase" && queueItem.proposal.type === "generate_document") {
+          lastError = "AI document generation is unavailable in Supabase mode until document text persistence is supported.";
+          setProposalQueue((prev) => (prev
+            ? {
+                ...prev,
+                retryByItemId: { ...prev.retryByItemId, [queueItem.id]: 1 },
+                executionErrorByItemId: {
+                  ...prev.executionErrorByItemId,
+                  [queueItem.id]: lastError,
+                },
+              }
+            : prev));
+          toast({
+            title: "Unavailable in Supabase mode",
+            description: lastError,
+            variant: "destructive",
+          });
+          break;
+        }
+
         attempt += 1;
         const workLogId = `wl-execute-${queueItem.id}-${attempt}-${Date.now()}`;
         setWorkLogs(new Map([
@@ -812,7 +833,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     setWorkLogs(new Map());
     setProposalQueue(null);
     executingQueueRef.current = false;
-  }, [projectId]);
+  }, [projectId, workspaceMode.kind]);
 
   const beginQueueExecution = useCallback((queueSnapshot: ProposalQueueState) => {
     if (executingQueueRef.current) return;
@@ -1658,6 +1679,15 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   function handleSaveLearnMessage(message: AIMessage) {
     if (savedMessageIds.has(message.id)) {
       toast({ title: "Already saved", description: "This answer is already in Documents." });
+      return;
+    }
+
+    if (workspaceMode.kind === "supabase") {
+      toast({
+        title: "Unavailable in Supabase mode",
+        description: "Learn-note saves need full document text persistence, which is not available yet in Supabase mode.",
+        variant: "destructive",
+      });
       return;
     }
 

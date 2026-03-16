@@ -1,7 +1,16 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
 import * as store from "@/data/store";
-import { getDocumentsMediaSource } from "@/data/documents-media-source";
+import {
+  archiveProjectDocument as archiveProjectDocumentSource,
+  createProjectDocument as createProjectDocumentSource,
+  createProjectDocumentVersion as createProjectDocumentVersionSource,
+  deleteProjectDocument as deleteProjectDocumentSource,
+  getDocumentsMediaSource,
+  type ArchiveProjectDocumentInput,
+  type CreateProjectDocumentInput,
+  type CreateProjectDocumentVersionInput,
+} from "@/data/documents-media-source";
 import { useWorkspaceMode } from "@/hooks/use-workspace-source";
 import type { Document, Media } from "@/types/entities";
 
@@ -87,4 +96,96 @@ export function useProjectMedia(projectId: string): Media[] {
   }
 
   return mediaQuery.data ?? EMPTY_PROJECT_MEDIA;
+}
+
+function assertDocumentsMutationWorkspaceMode(
+  mode: ReturnType<typeof useWorkspaceMode>,
+) {
+  if (mode.kind === "pending-supabase") {
+    throw new Error("Supabase session is still loading.");
+  }
+
+  if (mode.kind === "guest") {
+    throw new Error("An authenticated Supabase session is required.");
+  }
+
+  return mode;
+}
+
+export function useProjectDocumentMutations(projectId: string) {
+  const mode = useWorkspaceMode();
+  const queryClient = useQueryClient();
+
+  const invalidateProjectDocuments = useCallback(async (resolvedMode: Extract<typeof mode, { kind: "supabase" }>) => {
+    await queryClient.invalidateQueries({
+      queryKey: documentsMediaQueryKeys.projectDocuments(resolvedMode.profileId, projectId),
+    });
+  }, [projectId, queryClient]);
+
+  const createDocument = useCallback(async (
+    input: Omit<CreateProjectDocumentInput, "projectId">,
+  ) => {
+    const resolvedMode = assertDocumentsMutationWorkspaceMode(mode);
+    const created = await createProjectDocumentSource(resolvedMode, {
+      ...input,
+      projectId,
+    });
+
+    if (resolvedMode.kind === "supabase") {
+      await invalidateProjectDocuments(resolvedMode);
+    }
+
+    return created;
+  }, [invalidateProjectDocuments, mode, projectId]);
+
+  const createDocumentVersion = useCallback(async (
+    input: Omit<CreateProjectDocumentVersionInput, "projectId">,
+  ) => {
+    const resolvedMode = assertDocumentsMutationWorkspaceMode(mode);
+    const created = await createProjectDocumentVersionSource(resolvedMode, {
+      ...input,
+      projectId,
+    });
+
+    if (resolvedMode.kind === "supabase") {
+      await invalidateProjectDocuments(resolvedMode);
+    }
+
+    return created;
+  }, [invalidateProjectDocuments, mode, projectId]);
+
+  const archiveDocument = useCallback(async (
+    input: Omit<ArchiveProjectDocumentInput, "projectId">,
+  ) => {
+    const resolvedMode = assertDocumentsMutationWorkspaceMode(mode);
+    const created = await archiveProjectDocumentSource(resolvedMode, {
+      ...input,
+      projectId,
+    });
+
+    if (resolvedMode.kind === "supabase") {
+      await invalidateProjectDocuments(resolvedMode);
+    }
+
+    return created;
+  }, [invalidateProjectDocuments, mode, projectId]);
+
+  const deleteDocument = useCallback(async (documentId: string) => {
+    const resolvedMode = assertDocumentsMutationWorkspaceMode(mode);
+    await deleteProjectDocumentSource(resolvedMode, {
+      projectId,
+      documentId,
+    });
+
+    if (resolvedMode.kind === "supabase") {
+      await invalidateProjectDocuments(resolvedMode);
+    }
+  }, [invalidateProjectDocuments, mode, projectId]);
+
+  return {
+    createDocument,
+    createDocumentVersion,
+    archiveDocument,
+    deleteDocument,
+  };
 }

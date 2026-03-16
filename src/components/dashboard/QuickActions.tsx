@@ -11,6 +11,8 @@ import {
   getUserById,
 } from "@/data/store";
 import { createEstimateItemForTask } from "@/data/estimate-store";
+import { useProjectDocumentMutations } from "@/hooks/use-documents-media-source";
+import { useWorkspaceMode } from "@/hooks/use-mock-data";
 import { useToast } from "@/hooks/use-toast";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { Button } from "@/components/ui/button";
@@ -104,6 +106,9 @@ export function QuickActions({
   const { toast } = useToast();
   const navigate = useNavigate();
   const currentUser = getCurrentUser();
+  const workspaceMode = useWorkspaceMode();
+  const { createDocument } = useProjectDocumentMutations(projectId);
+  const isSupabaseMode = workspaceMode.kind === "supabase";
 
   const [openModal, setOpenModal] = useState<ModalKey | null>(null);
   const [discardModal, setDiscardModal] = useState<ModalKey | null>(null);
@@ -294,15 +299,49 @@ export function QuickActions({
     forceClose("task");
   };
 
-  const handleCreateDocument = () => {
+  const handleCreateDocument = async () => {
     if (documentMode === "manual" && !manualDocTitle.trim()) return;
     if (documentMode === "upload" && !documentFile) return;
+    if (isSupabaseMode && documentMode !== "upload") {
+      toast({
+        title: "Unavailable in Supabase mode",
+        description: "Manual and AI-authored document text is not persisted yet in Supabase mode.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     const now = new Date().toISOString();
     const id = `doc-${Date.now()}`;
     const manualTitle = manualDocTitle.trim() || "New document";
     const uploadedTitle = documentFile?.name || "Uploaded document";
     const title = documentMode === "manual" ? manualTitle : uploadedTitle;
+
+    if (isSupabaseMode) {
+      try {
+        await createDocument({
+          type: "specification",
+          title,
+          origin: "uploaded",
+          initialVersionContent: `Uploaded document placeholder for ${uploadedTitle}.`,
+          initialVersionStatus: "draft",
+        });
+
+        toast({
+          title: "Document created",
+          description: "Document metadata saved. File contents are not uploaded yet in Supabase mode.",
+        });
+        forceClose("document");
+      } catch (error) {
+        toast({
+          title: "Document creation failed",
+          description: error instanceof Error ? error.message : "Unable to create the document.",
+          variant: "destructive",
+        });
+      }
+
+      return;
+    }
 
     addDocument({
       id,
@@ -685,7 +724,11 @@ export function QuickActions({
         >
           <DialogHeader>
             <DialogTitle>Document</DialogTitle>
-            <DialogDescription>Upload a document or create one manually.</DialogDescription>
+            <DialogDescription>
+              {isSupabaseMode
+                ? "Create a document record. Manual and AI-authored document text is unavailable in Supabase mode."
+                : "Upload a document or create one manually."}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-1">
             <div className="flex items-center gap-2 rounded-panel bg-muted/40 p-1">
@@ -701,11 +744,17 @@ export function QuickActions({
                 size="sm"
                 variant={documentMode === "manual" ? "default" : "ghost"}
                 className={documentMode === "manual" ? "bg-accent text-accent-foreground hover:bg-accent/90" : ""}
+                disabled={isSupabaseMode}
                 onClick={() => setDocumentMode("manual")}
               >
                 Manual
               </Button>
             </div>
+            {isSupabaseMode && (
+              <div className="rounded-panel bg-muted/50 p-2 text-caption text-muted-foreground">
+                Supabase mode saves the document record only. File contents, manual text, and AI-generated document bodies are not persisted yet.
+              </div>
+            )}
 
             {documentMode === "upload" ? (
               <div className="space-y-2">
@@ -717,7 +766,11 @@ export function QuickActions({
                   />
                 </div>
                 <label className="flex items-center gap-2 text-body-sm text-foreground">
-                  <Checkbox checked={documentAiScan} onCheckedChange={(checked) => setDocumentAiScan(!!checked)} />
+                  <Checkbox
+                    checked={documentAiScan}
+                    disabled={isSupabaseMode}
+                    onCheckedChange={(checked) => setDocumentAiScan(!!checked)}
+                  />
                   <span className="inline-flex items-center gap-1">
                     AI scan
                     <Tooltip>
@@ -776,7 +829,9 @@ export function QuickActions({
             <Button
               className="bg-accent text-accent-foreground hover:bg-accent/90"
               onClick={handleCreateDocument}
-              disabled={documentMode === "manual" ? !manualDocTitle.trim() : !documentFile}
+              disabled={documentMode === "manual"
+                ? (isSupabaseMode || !manualDocTitle.trim())
+                : !documentFile}
             >
               Save
             </Button>
