@@ -79,6 +79,14 @@
     {
       "path": "supabase/migrations/20260317122000_storage_upload_grants_rls.sql",
       "sha256": "6de7d07e3d25607bfbcd4f81bb37bd355554a830ac01459def97ead82d9547fb"
+    },
+    {
+      "path": "supabase/migrations/20260317130000_storage_bucket_settings_split.sql",
+      "sha256": "968ca26a0a4d55998f0551b2f581426e11a61d7b1c0fbc2d80237758ef1e3564"
+    },
+    {
+      "path": "supabase/migrations/20260317133000_storage_bucket_config_table.sql",
+      "sha256": "310fd6c64dc054d4da08414f1374910c9bc9c250ef82f806751d56ac5b50bc7e"
     }
   ],
   "generated_artifacts": [
@@ -122,6 +130,8 @@
     "sql/20260317120000_storage_upload_intents.sql",
     "sql/20260317121000_storage_upload_rpcs.sql",
     "sql/20260317122000_storage_upload_grants_rls.sql",
+    "sql/20260317130000_storage_bucket_settings_split.sql",
+    "sql/20260317133000_storage_bucket_config_table.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],

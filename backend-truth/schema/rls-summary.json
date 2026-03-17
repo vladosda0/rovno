@@ -1785,6 +1785,13 @@
       "rlsEnabled": true,
       "authenticatedGrants": [],
       "policies": []
+    },
+    {
+      "schema": "public",
+      "table": "storage_bucket_config",
+      "rlsEnabled": false,
+      "authenticatedGrants": [],
+      "policies": []
     }
   ]
 }

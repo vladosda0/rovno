@@ -83,6 +83,14 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260317122000_storage_upload_grants_rls.sql",
       "sha256": "6de7d07e3d25607bfbcd4f81bb37bd355554a830ac01459def97ead82d9547fb"
+    },
+    {
+      "path": "supabase/migrations/20260317130000_storage_bucket_settings_split.sql",
+      "sha256": "968ca26a0a4d55998f0551b2f581426e11a61d7b1c0fbc2d80237758ef1e3564"
+    },
+    {
+      "path": "supabase/migrations/20260317133000_storage_bucket_config_table.sql",
+      "sha256": "310fd6c64dc054d4da08414f1374910c9bc9c250ef82f806751d56ac5b50bc7e"
     }
   ],
   "generated_artifacts": [
@@ -125,7 +133,9 @@ export const manifest = {
     "sql/20260313183000_tasks_estimate_work_lineage.sql",
     "sql/20260317120000_storage_upload_intents.sql",
     "sql/20260317121000_storage_upload_rpcs.sql",
-    "sql/20260317122000_storage_upload_grants_rls.sql"
+    "sql/20260317122000_storage_upload_grants_rls.sql",
+    "sql/20260317130000_storage_bucket_settings_split.sql",
+    "sql/20260317133000_storage_bucket_config_table.sql"
   ],
   "external_schema_references": [
     {
@@ -6205,6 +6215,75 @@ export const tables = {
       ],
       "indexes": [],
       "triggers": []
+    },
+    {
+      "schema": "public",
+      "name": "storage_bucket_config",
+      "sourceMigration": "supabase/migrations/20260317133000_storage_bucket_config_table.sql",
+      "columns": [
+        {
+          "name": "key",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "bucket",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "updated_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": "storage_bucket_config_key_check",
+          "columns": [],
+          "expression": "key in ('documents', 'media')",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260317133000_storage_bucket_config_table.sql"
+        },
+        {
+          "type": "check",
+          "name": "storage_bucket_config_bucket_nonempty",
+          "columns": [],
+          "expression": "length(trim(bucket)) > 0",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260317133000_storage_bucket_config_table.sql"
+        }
+      ],
+      "indexes": [],
+      "triggers": []
     }
   ]
 } as const;
@@ -8392,6 +8471,29 @@ export const checks = {
       "allowedValues": null,
       "expression": "size_bytes is null or size_bytes >= 0",
       "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql"
+    },
+    {
+      "schema": "public",
+      "table": "storage_bucket_config",
+      "column": "key",
+      "constraintName": "storage_bucket_config_key_check",
+      "kind": "enum_like",
+      "allowedValues": [
+        "documents",
+        "media"
+      ],
+      "expression": "key in ('documents', 'media')",
+      "sourceMigration": "supabase/migrations/20260317133000_storage_bucket_config_table.sql"
+    },
+    {
+      "schema": "public",
+      "table": "storage_bucket_config",
+      "column": null,
+      "constraintName": "storage_bucket_config_bucket_nonempty",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "length(trim(bucket)) > 0",
+      "sourceMigration": "supabase/migrations/20260317133000_storage_bucket_config_table.sql"
     }
   ]
 } as const;
@@ -8999,6 +9101,170 @@ export const functions = {
       "searchPath": "public",
       "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260317121000_storage_upload_rpcs.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "prepare_project_media_upload",
+      "signature": "public.prepare_project_media_upload(uuid, text, text, text, bigint, text default null)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid"
+        },
+        {
+          "name": "p_media_type",
+          "type": "text"
+        },
+        {
+          "name": "p_client_filename",
+          "type": "text"
+        },
+        {
+          "name": "p_mime_type",
+          "type": "text"
+        },
+        {
+          "name": "p_size_bytes",
+          "type": "bigint"
+        },
+        {
+          "name": "p_caption",
+          "type": "text default null"
+        }
+      ],
+      "returnType": "table ( upload_intent_id uuid, bucket text, object_path text, filename text, mime_type text, size_bytes bigint )",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260317130000_storage_bucket_settings_split.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "prepare_document_upload",
+      "signature": "public.prepare_document_upload(uuid, text, text, text, text, bigint, text default null)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid"
+        },
+        {
+          "name": "p_type",
+          "type": "text"
+        },
+        {
+          "name": "p_title",
+          "type": "text"
+        },
+        {
+          "name": "p_client_filename",
+          "type": "text"
+        },
+        {
+          "name": "p_mime_type",
+          "type": "text"
+        },
+        {
+          "name": "p_size_bytes",
+          "type": "bigint"
+        },
+        {
+          "name": "p_description",
+          "type": "text default null"
+        }
+      ],
+      "returnType": "table ( upload_intent_id uuid, bucket text, object_path text, filename text, mime_type text, size_bytes bigint )",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260317130000_storage_bucket_settings_split.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "prepare_project_media_upload",
+      "signature": "public.prepare_project_media_upload(uuid, text, text, text, bigint, text default null)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid"
+        },
+        {
+          "name": "p_media_type",
+          "type": "text"
+        },
+        {
+          "name": "p_client_filename",
+          "type": "text"
+        },
+        {
+          "name": "p_mime_type",
+          "type": "text"
+        },
+        {
+          "name": "p_size_bytes",
+          "type": "bigint"
+        },
+        {
+          "name": "p_caption",
+          "type": "text default null"
+        }
+      ],
+      "returnType": "table ( upload_intent_id uuid, bucket text, object_path text, filename text, mime_type text, size_bytes bigint )",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260317133000_storage_bucket_config_table.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "prepare_document_upload",
+      "signature": "public.prepare_document_upload(uuid, text, text, text, text, bigint, text default null)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid"
+        },
+        {
+          "name": "p_type",
+          "type": "text"
+        },
+        {
+          "name": "p_title",
+          "type": "text"
+        },
+        {
+          "name": "p_client_filename",
+          "type": "text"
+        },
+        {
+          "name": "p_mime_type",
+          "type": "text"
+        },
+        {
+          "name": "p_size_bytes",
+          "type": "bigint"
+        },
+        {
+          "name": "p_description",
+          "type": "text default null"
+        }
+      ],
+      "returnType": "table ( upload_intent_id uuid, bucket text, object_path text, filename text, mime_type text, size_bytes bigint )",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260317133000_storage_bucket_config_table.sql",
       "triggerUsages": []
     }
   ]
@@ -10791,6 +11057,13 @@ export const rls = {
       "rlsEnabled": true,
       "authenticatedGrants": [],
       "policies": []
+    },
+    {
+      "schema": "public",
+      "table": "storage_bucket_config",
+      "rlsEnabled": false,
+      "authenticatedGrants": [],
+      "policies": []
     }
   ]
 } as const;
@@ -11012,6 +11285,12 @@ export const sourceTrace = {
       "schema": "public",
       "table": "document_upload_intents",
       "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql"
+    },
+    {
+      "key": "public.storage_bucket_config",
+      "schema": "public",
+      "table": "storage_bucket_config",
+      "sourceMigration": "supabase/migrations/20260317133000_storage_bucket_config_table.sql"
     }
   ],
   "functions": [
@@ -11182,6 +11461,34 @@ export const sourceTrace = {
       "name": "finalize_document_upload",
       "signature": "public.finalize_document_upload(uuid)",
       "sourceMigration": "supabase/migrations/20260317121000_storage_upload_rpcs.sql"
+    },
+    {
+      "key": "public.prepare_project_media_upload",
+      "schema": "public",
+      "name": "prepare_project_media_upload",
+      "signature": "public.prepare_project_media_upload(uuid, text, text, text, bigint, text default null)",
+      "sourceMigration": "supabase/migrations/20260317130000_storage_bucket_settings_split.sql"
+    },
+    {
+      "key": "public.prepare_document_upload",
+      "schema": "public",
+      "name": "prepare_document_upload",
+      "signature": "public.prepare_document_upload(uuid, text, text, text, text, bigint, text default null)",
+      "sourceMigration": "supabase/migrations/20260317130000_storage_bucket_settings_split.sql"
+    },
+    {
+      "key": "public.prepare_project_media_upload",
+      "schema": "public",
+      "name": "prepare_project_media_upload",
+      "signature": "public.prepare_project_media_upload(uuid, text, text, text, bigint, text default null)",
+      "sourceMigration": "supabase/migrations/20260317133000_storage_bucket_config_table.sql"
+    },
+    {
+      "key": "public.prepare_document_upload",
+      "schema": "public",
+      "name": "prepare_document_upload",
+      "signature": "public.prepare_document_upload(uuid, text, text, text, text, bigint, text default null)",
+      "sourceMigration": "supabase/migrations/20260317133000_storage_bucket_config_table.sql"
     }
   ],
   "policies": [
@@ -12330,6 +12637,8 @@ export const sourceTrace = {
         "supabase/migrations/20260317120000_storage_upload_intents.sql",
         "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
         "supabase/migrations/20260317121000_storage_upload_rpcs.sql",
+        "supabase/migrations/20260317130000_storage_bucket_settings_split.sql",
+        "supabase/migrations/20260317133000_storage_bucket_config_table.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
       ],
       "tables": [
@@ -12345,7 +12654,11 @@ export const sourceTrace = {
         "public.prepare_project_media_upload",
         "public.finalize_project_media_upload",
         "public.prepare_document_upload",
-        "public.finalize_document_upload"
+        "public.finalize_document_upload",
+        "public.prepare_project_media_upload",
+        "public.prepare_document_upload",
+        "public.prepare_project_media_upload",
+        "public.prepare_document_upload"
       ],
       "policies": [
         "public.storage_objects.storage_objects_select",
@@ -12907,10 +13220,12 @@ export const slices = {
         "supabase/migrations/20260317120000_storage_upload_intents.sql",
         "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
         "supabase/migrations/20260317121000_storage_upload_rpcs.sql",
+        "supabase/migrations/20260317130000_storage_bucket_settings_split.sql",
+        "supabase/migrations/20260317133000_storage_bucket_config_table.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
       ],
       "tableCount": 6,
-      "functionCount": 5,
+      "functionCount": 9,
       "rlsTableCount": 6
     },
     {

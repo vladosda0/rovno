@@ -1347,6 +1347,27 @@ export type Database = {
           }
           Relationships: []
         }
+        "storage_bucket_config": {
+          Row: {
+          "key": "documents" | "media"
+          "bucket": string
+          "created_at": string
+          "updated_at": string
+          }
+          Insert: {
+          "key"?: "documents" | "media"
+          "bucket": string
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Update: {
+          "key"?: "documents" | "media"
+          "bucket"?: string
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Relationships: []
+        }
     }
     Views: {
       [_ in never]: never

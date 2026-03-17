@@ -44,6 +44,8 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20260317120000_storage_upload_intents.sql`
 - `supabase/migrations/20260317121000_storage_upload_rpcs.sql`
 - `supabase/migrations/20260317122000_storage_upload_grants_rls.sql`
+- `supabase/migrations/20260317130000_storage_bucket_settings_split.sql`
+- `supabase/migrations/20260317133000_storage_bucket_config_table.sql`
 
 ## Exclusions
 
