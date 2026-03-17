@@ -786,6 +786,46 @@
       "allowedValues": null,
       "expression": "amount_cents is null or amount_cents >= 0",
       "sourceMigration": "supabase/migrations/20260306165000_billing_launch_tables.sql"
+    },
+    {
+      "schema": "public",
+      "table": "project_media_upload_intents",
+      "column": "filename",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "length(btrim(filename)) > 0 and filename !~ '[\\\\/]'",
+      "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql"
+    },
+    {
+      "schema": "public",
+      "table": "project_media_upload_intents",
+      "column": "size_bytes",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "size_bytes is null or size_bytes >= 0",
+      "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql"
+    },
+    {
+      "schema": "public",
+      "table": "document_upload_intents",
+      "column": "filename",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "length(btrim(filename)) > 0 and filename !~ '[\\\\/]'",
+      "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql"
+    },
+    {
+      "schema": "public",
+      "table": "document_upload_intents",
+      "column": "size_bytes",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "size_bytes is null or size_bytes >= 0",
+      "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql"
     }
   ]
 }

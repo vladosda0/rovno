@@ -59,6 +59,26 @@
     {
       "path": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
       "sha256": "76a722d8f372d66064cb79a153d32625ca62359e02858be875b61e207316a709"
+    },
+    {
+      "path": "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql",
+      "sha256": "de59e4ba500a66353032b137b84d9fd5ec337012dd21f74ed45cc0b5f1362528"
+    },
+    {
+      "path": "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
+      "sha256": "d2b74460b8da19d1a8c7f13c7482373b72b51a289218e2512ddef9d456874ad8"
+    },
+    {
+      "path": "supabase/migrations/20260317120000_storage_upload_intents.sql",
+      "sha256": "2211b0ea7129bc5c49969de88ca1c4c43a106a71a67808e6d9a5c85055c07226"
+    },
+    {
+      "path": "supabase/migrations/20260317121000_storage_upload_rpcs.sql",
+      "sha256": "9fe5f12bee5ec4213c9411adbc6448a6481caf3817f0810de8250e14b8073e7b"
+    },
+    {
+      "path": "supabase/migrations/20260317122000_storage_upload_grants_rls.sql",
+      "sha256": "6de7d07e3d25607bfbcd4f81bb37bd355554a830ac01459def97ead82d9547fb"
     }
   ],
   "generated_artifacts": [
@@ -97,6 +117,11 @@
     "sql/20260306165000_billing_launch_tables.sql",
     "sql/20260306165500_auth_bootstrap_and_domain_rpc.sql",
     "sql/20260306170000_grants_rls_enablement_and_policies.sql",
+    "sql/20260313180000_projects_owner_only_rls_hotfix.sql",
+    "sql/20260313183000_tasks_estimate_work_lineage.sql",
+    "sql/20260317120000_storage_upload_intents.sql",
+    "sql/20260317121000_storage_upload_rpcs.sql",
+    "sql/20260317122000_storage_upload_grants_rls.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
