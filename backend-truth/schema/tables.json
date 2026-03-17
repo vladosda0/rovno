@@ -6058,6 +6058,75 @@
       ],
       "indexes": [],
       "triggers": []
+    },
+    {
+      "schema": "public",
+      "name": "storage_bucket_config",
+      "sourceMigration": "supabase/migrations/20260317133000_storage_bucket_config_table.sql",
+      "columns": [
+        {
+          "name": "key",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "bucket",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "updated_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": "storage_bucket_config_key_check",
+          "columns": [],
+          "expression": "key in ('documents', 'media')",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260317133000_storage_bucket_config_table.sql"
+        },
+        {
+          "type": "check",
+          "name": "storage_bucket_config_bucket_nonempty",
+          "columns": [],
+          "expression": "length(trim(bucket)) > 0",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260317133000_storage_bucket_config_table.sql"
+        }
+      ],
+      "indexes": [],
+      "triggers": []
     }
   ]
 }

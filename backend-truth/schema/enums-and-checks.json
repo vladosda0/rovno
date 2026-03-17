@@ -826,6 +826,29 @@
       "allowedValues": null,
       "expression": "size_bytes is null or size_bytes >= 0",
       "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql"
+    },
+    {
+      "schema": "public",
+      "table": "storage_bucket_config",
+      "column": "key",
+      "constraintName": "storage_bucket_config_key_check",
+      "kind": "enum_like",
+      "allowedValues": [
+        "documents",
+        "media"
+      ],
+      "expression": "key in ('documents', 'media')",
+      "sourceMigration": "supabase/migrations/20260317133000_storage_bucket_config_table.sql"
+    },
+    {
+      "schema": "public",
+      "table": "storage_bucket_config",
+      "column": null,
+      "constraintName": "storage_bucket_config_bucket_nonempty",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "length(trim(bucket)) > 0",
+      "sourceMigration": "supabase/migrations/20260317133000_storage_bucket_config_table.sql"
     }
   ]
 }

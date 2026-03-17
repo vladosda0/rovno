@@ -12,6 +12,8 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 - `supabase/migrations/20260317120000_storage_upload_intents.sql`
 - `supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql`
 - `supabase/migrations/20260317121000_storage_upload_rpcs.sql`
+- `supabase/migrations/20260317130000_storage_bucket_settings_split.sql`
+- `supabase/migrations/20260317133000_storage_bucket_config_table.sql`
 - `supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql`
 
 ## Tables
@@ -170,6 +172,10 @@ Constraints:
 | `public.finalize_project_media_upload(uuid)` | `table ( project_media_id uuid, storage_object_id uuid, project_id uuid, bucket text, object_path text, filename text )` | yes | `rpc` | `supabase/migrations/20260317121000_storage_upload_rpcs.sql` |
 | `public.prepare_document_upload(uuid, text, text, text, text, bigint, text)` | `table ( upload_intent_id uuid, bucket text, object_path text, filename text, mime_type text, size_bytes bigint )` | yes | `rpc` | `supabase/migrations/20260317121000_storage_upload_rpcs.sql` |
 | `public.finalize_document_upload(uuid)` | `table ( document_id uuid, document_version_id uuid, storage_object_id uuid, project_id uuid, bucket text, object_path text, filename text )` | yes | `rpc` | `supabase/migrations/20260317121000_storage_upload_rpcs.sql` |
+| `public.prepare_project_media_upload(uuid, text, text, text, bigint, text default null)` | `table ( upload_intent_id uuid, bucket text, object_path text, filename text, mime_type text, size_bytes bigint )` | no | `helper` | `supabase/migrations/20260317130000_storage_bucket_settings_split.sql` |
+| `public.prepare_document_upload(uuid, text, text, text, text, bigint, text default null)` | `table ( upload_intent_id uuid, bucket text, object_path text, filename text, mime_type text, size_bytes bigint )` | no | `helper` | `supabase/migrations/20260317130000_storage_bucket_settings_split.sql` |
+| `public.prepare_project_media_upload(uuid, text, text, text, bigint, text default null)` | `table ( upload_intent_id uuid, bucket text, object_path text, filename text, mime_type text, size_bytes bigint )` | no | `helper` | `supabase/migrations/20260317133000_storage_bucket_config_table.sql` |
+| `public.prepare_document_upload(uuid, text, text, text, text, bigint, text default null)` | `table ( upload_intent_id uuid, bucket text, object_path text, filename text, mime_type text, size_bytes bigint )` | no | `helper` | `supabase/migrations/20260317133000_storage_bucket_config_table.sql` |
 
 ## RLS and Grants
 

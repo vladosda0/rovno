@@ -215,6 +215,12 @@
       "schema": "public",
       "table": "document_upload_intents",
       "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql"
+    },
+    {
+      "key": "public.storage_bucket_config",
+      "schema": "public",
+      "table": "storage_bucket_config",
+      "sourceMigration": "supabase/migrations/20260317133000_storage_bucket_config_table.sql"
     }
   ],
   "functions": [
@@ -385,6 +391,34 @@
       "name": "finalize_document_upload",
       "signature": "public.finalize_document_upload(uuid)",
       "sourceMigration": "supabase/migrations/20260317121000_storage_upload_rpcs.sql"
+    },
+    {
+      "key": "public.prepare_project_media_upload",
+      "schema": "public",
+      "name": "prepare_project_media_upload",
+      "signature": "public.prepare_project_media_upload(uuid, text, text, text, bigint, text default null)",
+      "sourceMigration": "supabase/migrations/20260317130000_storage_bucket_settings_split.sql"
+    },
+    {
+      "key": "public.prepare_document_upload",
+      "schema": "public",
+      "name": "prepare_document_upload",
+      "signature": "public.prepare_document_upload(uuid, text, text, text, text, bigint, text default null)",
+      "sourceMigration": "supabase/migrations/20260317130000_storage_bucket_settings_split.sql"
+    },
+    {
+      "key": "public.prepare_project_media_upload",
+      "schema": "public",
+      "name": "prepare_project_media_upload",
+      "signature": "public.prepare_project_media_upload(uuid, text, text, text, bigint, text default null)",
+      "sourceMigration": "supabase/migrations/20260317133000_storage_bucket_config_table.sql"
+    },
+    {
+      "key": "public.prepare_document_upload",
+      "schema": "public",
+      "name": "prepare_document_upload",
+      "signature": "public.prepare_document_upload(uuid, text, text, text, text, bigint, text default null)",
+      "sourceMigration": "supabase/migrations/20260317133000_storage_bucket_config_table.sql"
     }
   ],
   "policies": [
@@ -1533,6 +1567,8 @@
         "supabase/migrations/20260317120000_storage_upload_intents.sql",
         "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
         "supabase/migrations/20260317121000_storage_upload_rpcs.sql",
+        "supabase/migrations/20260317130000_storage_bucket_settings_split.sql",
+        "supabase/migrations/20260317133000_storage_bucket_config_table.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
       ],
       "tables": [
@@ -1548,7 +1584,11 @@
         "public.prepare_project_media_upload",
         "public.finalize_project_media_upload",
         "public.prepare_document_upload",
-        "public.finalize_document_upload"
+        "public.finalize_document_upload",
+        "public.prepare_project_media_upload",
+        "public.prepare_document_upload",
+        "public.prepare_project_media_upload",
+        "public.prepare_document_upload"
       ],
       "policies": [
         "public.storage_objects.storage_objects_select",
