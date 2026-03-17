@@ -203,6 +203,18 @@
       "schema": "public",
       "table": "subscriptions",
       "sourceMigration": "supabase/migrations/20260306165000_billing_launch_tables.sql"
+    },
+    {
+      "key": "public.project_media_upload_intents",
+      "schema": "public",
+      "table": "project_media_upload_intents",
+      "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql"
+    },
+    {
+      "key": "public.document_upload_intents",
+      "schema": "public",
+      "table": "document_upload_intents",
+      "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql"
     }
   ],
   "functions": [
@@ -345,6 +357,34 @@
       "name": "approve_estimate_version_by_share_token",
       "signature": "public.approve_estimate_version_by_share_token(text, jsonb)",
       "sourceMigration": "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql"
+    },
+    {
+      "key": "public.prepare_project_media_upload",
+      "schema": "public",
+      "name": "prepare_project_media_upload",
+      "signature": "public.prepare_project_media_upload(uuid, text, text, text, bigint, text)",
+      "sourceMigration": "supabase/migrations/20260317121000_storage_upload_rpcs.sql"
+    },
+    {
+      "key": "public.finalize_project_media_upload",
+      "schema": "public",
+      "name": "finalize_project_media_upload",
+      "signature": "public.finalize_project_media_upload(uuid)",
+      "sourceMigration": "supabase/migrations/20260317121000_storage_upload_rpcs.sql"
+    },
+    {
+      "key": "public.prepare_document_upload",
+      "schema": "public",
+      "name": "prepare_document_upload",
+      "signature": "public.prepare_document_upload(uuid, text, text, text, text, bigint, text)",
+      "sourceMigration": "supabase/migrations/20260317121000_storage_upload_rpcs.sql"
+    },
+    {
+      "key": "public.finalize_document_upload",
+      "schema": "public",
+      "name": "finalize_document_upload",
+      "signature": "public.finalize_document_upload(uuid)",
+      "sourceMigration": "supabase/migrations/20260317121000_storage_upload_rpcs.sql"
     }
   ],
   "policies": [
@@ -1490,17 +1530,25 @@
       "kind": "derived_contract_bundle",
       "sourceMigrations": [
         "supabase/migrations/20260306162000_storage_documents_and_media.sql",
+        "supabase/migrations/20260317120000_storage_upload_intents.sql",
         "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
+        "supabase/migrations/20260317121000_storage_upload_rpcs.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
       ],
       "tables": [
         "public.storage_objects",
         "public.documents",
         "public.document_versions",
-        "public.project_media"
+        "public.project_media",
+        "public.project_media_upload_intents",
+        "public.document_upload_intents"
       ],
       "functions": [
-        "public.can_access_storage_object"
+        "public.can_access_storage_object",
+        "public.prepare_project_media_upload",
+        "public.finalize_project_media_upload",
+        "public.prepare_document_upload",
+        "public.finalize_document_upload"
       ],
       "policies": [
         "public.storage_objects.storage_objects_select",
@@ -1562,6 +1610,36 @@
           "from": "public.project_media",
           "to": "public.profiles",
           "sourceMigration": "supabase/migrations/20260306162000_storage_documents_and_media.sql"
+        },
+        {
+          "from": "public.project_media_upload_intents",
+          "to": "public.projects",
+          "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql"
+        },
+        {
+          "from": "public.project_media_upload_intents",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql"
+        },
+        {
+          "from": "public.project_media_upload_intents",
+          "to": "public.project_media",
+          "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql"
+        },
+        {
+          "from": "public.document_upload_intents",
+          "to": "public.projects",
+          "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql"
+        },
+        {
+          "from": "public.document_upload_intents",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql"
+        },
+        {
+          "from": "public.document_upload_intents",
+          "to": "public.documents",
+          "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql"
         }
       ]
     },

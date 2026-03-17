@@ -1237,6 +1237,118 @@
         "id"
       ],
       "onDelete": "cascade"
+    },
+    {
+      "name": "tasks_estimate_work_id_fkey",
+      "sourceMigration": "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
+      "sourceKind": "alter_table",
+      "fromSchema": "public",
+      "fromTable": "tasks",
+      "fromColumns": [
+        "estimate_work_id"
+      ],
+      "toSchema": "public",
+      "toTable": "estimate_works",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "project_media_upload_intents",
+      "fromColumns": [
+        "project_id"
+      ],
+      "toSchema": "public",
+      "toTable": "projects",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "project_media_upload_intents",
+      "fromColumns": [
+        "created_by"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "restrict"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "project_media_upload_intents",
+      "fromColumns": [
+        "project_media_id"
+      ],
+      "toSchema": "public",
+      "toTable": "project_media",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "document_upload_intents",
+      "fromColumns": [
+        "project_id"
+      ],
+      "toSchema": "public",
+      "toTable": "projects",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "document_upload_intents",
+      "fromColumns": [
+        "created_by"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "restrict"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "document_upload_intents",
+      "fromColumns": [
+        "document_id"
+      ],
+      "toSchema": "public",
+      "toTable": "documents",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
     }
   ]
 }

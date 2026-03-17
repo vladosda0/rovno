@@ -1771,6 +1771,20 @@
           "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
         }
       ]
+    },
+    {
+      "schema": "public",
+      "table": "project_media_upload_intents",
+      "rlsEnabled": true,
+      "authenticatedGrants": [],
+      "policies": []
+    },
+    {
+      "schema": "public",
+      "table": "document_upload_intents",
+      "rlsEnabled": true,
+      "authenticatedGrants": [],
+      "policies": []
     }
   ]
 }

@@ -9,7 +9,9 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 ## Source Migrations
 
 - `supabase/migrations/20260306162000_storage_documents_and_media.sql`
+- `supabase/migrations/20260317120000_storage_upload_intents.sql`
 - `supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql`
+- `supabase/migrations/20260317121000_storage_upload_rpcs.sql`
 - `supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql`
 
 ## Tables
@@ -94,6 +96,51 @@ Indexes:
 - `idx_project_media_project_id` on (`project_id`)
 - `idx_project_media_storage_object_id` on (`storage_object_id`)
 
+### public.project_media_upload_intents
+
+| Column | Type | Nullable | Default | Primary Key |
+| --- | --- | --- | --- | --- |
+| `id` | `uuid` | no | `gen_random_uuid()` | yes |
+| `project_id` | `uuid` | no |   | no |
+| `bucket` | `text` | no |   | no |
+| `object_path` | `text` | no |   | no |
+| `filename` | `text` | no |   | no |
+| `mime_type` | `text` | yes |   | no |
+| `size_bytes` | `bigint` | yes |   | no |
+| `media_type` | `text` | no |   | no |
+| `caption` | `text` | yes |   | no |
+| `created_by` | `uuid` | no |   | no |
+| `project_media_id` | `uuid` | yes |   | no |
+| `created_at` | `timestamptz` | no | `now()` | no |
+| `finalized_at` | `timestamptz` | yes |   | no |
+
+Constraints:
+- unnamed check (expression `length(btrim(filename)) > 0 and filename !~ '[\\/]'`)
+- unnamed check (expression `size_bytes is null or size_bytes >= 0`)
+
+### public.document_upload_intents
+
+| Column | Type | Nullable | Default | Primary Key |
+| --- | --- | --- | --- | --- |
+| `id` | `uuid` | no | `gen_random_uuid()` | yes |
+| `project_id` | `uuid` | no |   | no |
+| `type` | `text` | no |   | no |
+| `title` | `text` | no |   | no |
+| `description` | `text` | yes |   | no |
+| `bucket` | `text` | no |   | no |
+| `object_path` | `text` | no |   | no |
+| `filename` | `text` | no |   | no |
+| `mime_type` | `text` | yes |   | no |
+| `size_bytes` | `bigint` | yes |   | no |
+| `created_by` | `uuid` | no |   | no |
+| `document_id` | `uuid` | yes |   | no |
+| `created_at` | `timestamptz` | no | `now()` | no |
+| `finalized_at` | `timestamptz` | yes |   | no |
+
+Constraints:
+- unnamed check (expression `length(btrim(filename)) > 0 and filename !~ '[\\/]'`)
+- unnamed check (expression `size_bytes is null or size_bytes >= 0`)
+
 ## Relations
 
 | From | To | On Delete | Source |
@@ -106,13 +153,23 @@ Indexes:
 | `public.document_versions(created_by)` | `public.profiles(id)` | `restrict` | `supabase/migrations/20260306162000_storage_documents_and_media.sql` |
 | `public.project_media(project_id)` | `public.projects(id)` | `cascade` | `supabase/migrations/20260306162000_storage_documents_and_media.sql` |
 | `public.project_media(storage_object_id)` | `public.storage_objects(id)` | `cascade` | `supabase/migrations/20260306162000_storage_documents_and_media.sql` |
-| `public.project_media(uploaded_by)` | `public.profiles(id)` | `set` | `supabase/migrations/20260306162000_storage_documents_and_media.sql` |
+| `public.project_media(uploaded_by)` | `public.profiles(id)` | `set null` | `supabase/migrations/20260306162000_storage_documents_and_media.sql` |
+| `public.project_media_upload_intents(project_id)` | `public.projects(id)` | `cascade` | `supabase/migrations/20260317120000_storage_upload_intents.sql` |
+| `public.project_media_upload_intents(created_by)` | `public.profiles(id)` | `restrict` | `supabase/migrations/20260317120000_storage_upload_intents.sql` |
+| `public.project_media_upload_intents(project_media_id)` | `public.project_media(id)` | `set null` | `supabase/migrations/20260317120000_storage_upload_intents.sql` |
+| `public.document_upload_intents(project_id)` | `public.projects(id)` | `cascade` | `supabase/migrations/20260317120000_storage_upload_intents.sql` |
+| `public.document_upload_intents(created_by)` | `public.profiles(id)` | `restrict` | `supabase/migrations/20260317120000_storage_upload_intents.sql` |
+| `public.document_upload_intents(document_id)` | `public.documents(id)` | `set null` | `supabase/migrations/20260317120000_storage_upload_intents.sql` |
 
 ## Functions
 
 | Function | Returns | Auth Execute | Kind | Source |
 | --- | --- | --- | --- | --- |
 | `public.can_access_storage_object(uuid)` | `boolean` | yes | `rpc` | `supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql` |
+| `public.prepare_project_media_upload(uuid, text, text, text, bigint, text)` | `table ( upload_intent_id uuid, bucket text, object_path text, filename text, mime_type text, size_bytes bigint )` | yes | `rpc` | `supabase/migrations/20260317121000_storage_upload_rpcs.sql` |
+| `public.finalize_project_media_upload(uuid)` | `table ( project_media_id uuid, storage_object_id uuid, project_id uuid, bucket text, object_path text, filename text )` | yes | `rpc` | `supabase/migrations/20260317121000_storage_upload_rpcs.sql` |
+| `public.prepare_document_upload(uuid, text, text, text, text, bigint, text)` | `table ( upload_intent_id uuid, bucket text, object_path text, filename text, mime_type text, size_bytes bigint )` | yes | `rpc` | `supabase/migrations/20260317121000_storage_upload_rpcs.sql` |
+| `public.finalize_document_upload(uuid)` | `table ( document_id uuid, document_version_id uuid, storage_object_id uuid, project_id uuid, bucket text, object_path text, filename text )` | yes | `rpc` | `supabase/migrations/20260317121000_storage_upload_rpcs.sql` |
 
 ## RLS and Grants
 
@@ -168,4 +225,16 @@ Indexes:
     with check: `public.can_write_project_content(project_id)`
   - `project_media_delete` for `delete` to `authenticated`
     using: `public.can_write_project_content(project_id)`
+
+### public.project_media_upload_intents
+
+- RLS enabled: yes
+- Authenticated grants: none
+- Policies: none
+
+### public.document_upload_intents
+
+- RLS enabled: yes
+- Authenticated grants: none
+- Policies: none
 

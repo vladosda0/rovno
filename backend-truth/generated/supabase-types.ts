@@ -1248,6 +1248,105 @@ export type Database = {
           }
           Relationships: []
         }
+        "project_media_upload_intents": {
+          Row: {
+          "id": string
+          "project_id": string
+          "bucket": string
+          "object_path": string
+          "filename": string
+          "mime_type": string | null
+          "size_bytes": number | null
+          "media_type": string
+          "caption": string | null
+          "created_by": string
+          "project_media_id": string | null
+          "created_at": string
+          "finalized_at": string | null
+          }
+          Insert: {
+          "id"?: string
+          "project_id": string
+          "bucket": string
+          "object_path": string
+          "filename": string
+          "mime_type"?: string | null
+          "size_bytes"?: number | null
+          "media_type": string
+          "caption"?: string | null
+          "created_by": string
+          "project_media_id"?: string | null
+          "created_at"?: string
+          "finalized_at"?: string | null
+          }
+          Update: {
+          "id"?: string
+          "project_id"?: string
+          "bucket"?: string
+          "object_path"?: string
+          "filename"?: string
+          "mime_type"?: string | null
+          "size_bytes"?: number | null
+          "media_type"?: string
+          "caption"?: string | null
+          "created_by"?: string
+          "project_media_id"?: string | null
+          "created_at"?: string
+          "finalized_at"?: string | null
+          }
+          Relationships: []
+        }
+        "document_upload_intents": {
+          Row: {
+          "id": string
+          "project_id": string
+          "type": string
+          "title": string
+          "description": string | null
+          "bucket": string
+          "object_path": string
+          "filename": string
+          "mime_type": string | null
+          "size_bytes": number | null
+          "created_by": string
+          "document_id": string | null
+          "created_at": string
+          "finalized_at": string | null
+          }
+          Insert: {
+          "id"?: string
+          "project_id": string
+          "type": string
+          "title": string
+          "description"?: string | null
+          "bucket": string
+          "object_path": string
+          "filename": string
+          "mime_type"?: string | null
+          "size_bytes"?: number | null
+          "created_by": string
+          "document_id"?: string | null
+          "created_at"?: string
+          "finalized_at"?: string | null
+          }
+          Update: {
+          "id"?: string
+          "project_id"?: string
+          "type"?: string
+          "title"?: string
+          "description"?: string | null
+          "bucket"?: string
+          "object_path"?: string
+          "filename"?: string
+          "mime_type"?: string | null
+          "size_bytes"?: number | null
+          "created_by"?: string
+          "document_id"?: string | null
+          "created_at"?: string
+          "finalized_at"?: string | null
+          }
+          Relationships: []
+        }
     }
     Views: {
       [_ in never]: never
@@ -1324,6 +1423,41 @@ export type Database = {
           "p_payload": Json
           }
           Returns: string
+        }
+        "prepare_project_media_upload": {
+          Args: {
+          "p_project_id": string
+          "p_media_type": string
+          "p_client_filename": string
+          "p_mime_type": string
+          "p_size_bytes": number
+          "p_caption": string
+          }
+          Returns: unknown
+        }
+        "finalize_project_media_upload": {
+          Args: {
+          "p_upload_intent_id": string
+          }
+          Returns: unknown
+        }
+        "prepare_document_upload": {
+          Args: {
+          "p_project_id": string
+          "p_type": string
+          "p_title": string
+          "p_client_filename": string
+          "p_mime_type": string
+          "p_size_bytes": number
+          "p_description": string
+          }
+          Returns: unknown
+        }
+        "finalize_document_upload": {
+          Args: {
+          "p_upload_intent_id": string
+          }
+          Returns: unknown
         }
     }
     Enums: {

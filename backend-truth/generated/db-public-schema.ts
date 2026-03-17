@@ -63,6 +63,26 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
       "sha256": "76a722d8f372d66064cb79a153d32625ca62359e02858be875b61e207316a709"
+    },
+    {
+      "path": "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql",
+      "sha256": "de59e4ba500a66353032b137b84d9fd5ec337012dd21f74ed45cc0b5f1362528"
+    },
+    {
+      "path": "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
+      "sha256": "d2b74460b8da19d1a8c7f13c7482373b72b51a289218e2512ddef9d456874ad8"
+    },
+    {
+      "path": "supabase/migrations/20260317120000_storage_upload_intents.sql",
+      "sha256": "2211b0ea7129bc5c49969de88ca1c4c43a106a71a67808e6d9a5c85055c07226"
+    },
+    {
+      "path": "supabase/migrations/20260317121000_storage_upload_rpcs.sql",
+      "sha256": "9fe5f12bee5ec4213c9411adbc6448a6481caf3817f0810de8250e14b8073e7b"
+    },
+    {
+      "path": "supabase/migrations/20260317122000_storage_upload_grants_rls.sql",
+      "sha256": "6de7d07e3d25607bfbcd4f81bb37bd355554a830ac01459def97ead82d9547fb"
     }
   ],
   "generated_artifacts": [
@@ -100,7 +120,12 @@ export const manifest = {
     "sql/20260306164500_activity_and_notifications.sql",
     "sql/20260306165000_billing_launch_tables.sql",
     "sql/20260306165500_auth_bootstrap_and_domain_rpc.sql",
-    "sql/20260306170000_grants_rls_enablement_and_policies.sql"
+    "sql/20260306170000_grants_rls_enablement_and_policies.sql",
+    "sql/20260313180000_projects_owner_only_rls_hotfix.sql",
+    "sql/20260313183000_tasks_estimate_work_lineage.sql",
+    "sql/20260317120000_storage_upload_intents.sql",
+    "sql/20260317121000_storage_upload_rpcs.sql",
+    "sql/20260317122000_storage_upload_grants_rls.sql"
   ],
   "external_schema_references": [
     {
@@ -5806,6 +5831,380 @@ export const tables = {
           "sourceMigration": "supabase/migrations/20260306165000_billing_launch_tables.sql"
         }
       ]
+    },
+    {
+      "schema": "public",
+      "name": "project_media_upload_intents",
+      "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql",
+      "columns": [
+        {
+          "name": "id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "gen_random_uuid()",
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "project_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "projects",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "cascade"
+          }
+        },
+        {
+          "name": "bucket",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "object_path",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "filename",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "mime_type",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "size_bytes",
+          "sqlType": "bigint",
+          "tsType": "number",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "media_type",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "caption",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "created_by",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "profiles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "restrict"
+          }
+        },
+        {
+          "name": "project_media_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "project_media",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "finalized_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "filename"
+          ],
+          "expression": "length(btrim(filename)) > 0 and filename !~ '[\\\\/]'",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "size_bytes"
+          ],
+          "expression": "size_bytes is null or size_bytes >= 0",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql"
+        }
+      ],
+      "indexes": [],
+      "triggers": []
+    },
+    {
+      "schema": "public",
+      "name": "document_upload_intents",
+      "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql",
+      "columns": [
+        {
+          "name": "id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "gen_random_uuid()",
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "project_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "projects",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "cascade"
+          }
+        },
+        {
+          "name": "type",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "title",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "description",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "bucket",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "object_path",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "filename",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "mime_type",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "size_bytes",
+          "sqlType": "bigint",
+          "tsType": "number",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "created_by",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "profiles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "restrict"
+          }
+        },
+        {
+          "name": "document_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "documents",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "finalized_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "filename"
+          ],
+          "expression": "length(btrim(filename)) > 0 and filename !~ '[\\\\/]'",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "size_bytes"
+          ],
+          "expression": "size_bytes is null or size_bytes >= 0",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql"
+        }
+      ],
+      "indexes": [],
+      "triggers": []
     }
   ]
 } as const;
@@ -7049,6 +7448,118 @@ export const relations = {
         "id"
       ],
       "onDelete": "cascade"
+    },
+    {
+      "name": "tasks_estimate_work_id_fkey",
+      "sourceMigration": "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
+      "sourceKind": "alter_table",
+      "fromSchema": "public",
+      "fromTable": "tasks",
+      "fromColumns": [
+        "estimate_work_id"
+      ],
+      "toSchema": "public",
+      "toTable": "estimate_works",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "project_media_upload_intents",
+      "fromColumns": [
+        "project_id"
+      ],
+      "toSchema": "public",
+      "toTable": "projects",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "project_media_upload_intents",
+      "fromColumns": [
+        "created_by"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "restrict"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "project_media_upload_intents",
+      "fromColumns": [
+        "project_media_id"
+      ],
+      "toSchema": "public",
+      "toTable": "project_media",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "document_upload_intents",
+      "fromColumns": [
+        "project_id"
+      ],
+      "toSchema": "public",
+      "toTable": "projects",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "document_upload_intents",
+      "fromColumns": [
+        "created_by"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "restrict"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "document_upload_intents",
+      "fromColumns": [
+        "document_id"
+      ],
+      "toSchema": "public",
+      "toTable": "documents",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
     }
   ]
 } as const;
@@ -7841,6 +8352,46 @@ export const checks = {
       "allowedValues": null,
       "expression": "amount_cents is null or amount_cents >= 0",
       "sourceMigration": "supabase/migrations/20260306165000_billing_launch_tables.sql"
+    },
+    {
+      "schema": "public",
+      "table": "project_media_upload_intents",
+      "column": "filename",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "length(btrim(filename)) > 0 and filename !~ '[\\\\/]'",
+      "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql"
+    },
+    {
+      "schema": "public",
+      "table": "project_media_upload_intents",
+      "column": "size_bytes",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "size_bytes is null or size_bytes >= 0",
+      "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql"
+    },
+    {
+      "schema": "public",
+      "table": "document_upload_intents",
+      "column": "filename",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "length(btrim(filename)) > 0 and filename !~ '[\\\\/]'",
+      "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql"
+    },
+    {
+      "schema": "public",
+      "table": "document_upload_intents",
+      "column": "size_bytes",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "size_bytes is null or size_bytes >= 0",
+      "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql"
     }
   ]
 } as const;
@@ -8328,6 +8879,126 @@ export const functions = {
       "searchPath": null,
       "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "prepare_project_media_upload",
+      "signature": "public.prepare_project_media_upload(uuid, text, text, text, bigint, text)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid"
+        },
+        {
+          "name": "p_media_type",
+          "type": "text"
+        },
+        {
+          "name": "p_client_filename",
+          "type": "text"
+        },
+        {
+          "name": "p_mime_type",
+          "type": "text"
+        },
+        {
+          "name": "p_size_bytes",
+          "type": "bigint"
+        },
+        {
+          "name": "p_caption",
+          "type": "text"
+        }
+      ],
+      "returnType": "table ( upload_intent_id uuid, bucket text, object_path text, filename text, mime_type text, size_bytes bigint )",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260317121000_storage_upload_rpcs.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "finalize_project_media_upload",
+      "signature": "public.finalize_project_media_upload(uuid)",
+      "args": [
+        {
+          "name": "p_upload_intent_id",
+          "type": "uuid"
+        }
+      ],
+      "returnType": "table ( project_media_id uuid, storage_object_id uuid, project_id uuid, bucket text, object_path text, filename text )",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260317121000_storage_upload_rpcs.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "prepare_document_upload",
+      "signature": "public.prepare_document_upload(uuid, text, text, text, text, bigint, text)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid"
+        },
+        {
+          "name": "p_type",
+          "type": "text"
+        },
+        {
+          "name": "p_title",
+          "type": "text"
+        },
+        {
+          "name": "p_client_filename",
+          "type": "text"
+        },
+        {
+          "name": "p_mime_type",
+          "type": "text"
+        },
+        {
+          "name": "p_size_bytes",
+          "type": "bigint"
+        },
+        {
+          "name": "p_description",
+          "type": "text"
+        }
+      ],
+      "returnType": "table ( upload_intent_id uuid, bucket text, object_path text, filename text, mime_type text, size_bytes bigint )",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260317121000_storage_upload_rpcs.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "finalize_document_upload",
+      "signature": "public.finalize_document_upload(uuid)",
+      "args": [
+        {
+          "name": "p_upload_intent_id",
+          "type": "uuid"
+        }
+      ],
+      "returnType": "table ( document_id uuid, document_version_id uuid, storage_object_id uuid, project_id uuid, bucket text, object_path text, filename text )",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260317121000_storage_upload_rpcs.sql",
       "triggerUsages": []
     }
   ]
@@ -10106,6 +10777,20 @@ export const rls = {
           "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
         }
       ]
+    },
+    {
+      "schema": "public",
+      "table": "project_media_upload_intents",
+      "rlsEnabled": true,
+      "authenticatedGrants": [],
+      "policies": []
+    },
+    {
+      "schema": "public",
+      "table": "document_upload_intents",
+      "rlsEnabled": true,
+      "authenticatedGrants": [],
+      "policies": []
     }
   ]
 } as const;
@@ -10315,6 +11000,18 @@ export const sourceTrace = {
       "schema": "public",
       "table": "subscriptions",
       "sourceMigration": "supabase/migrations/20260306165000_billing_launch_tables.sql"
+    },
+    {
+      "key": "public.project_media_upload_intents",
+      "schema": "public",
+      "table": "project_media_upload_intents",
+      "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql"
+    },
+    {
+      "key": "public.document_upload_intents",
+      "schema": "public",
+      "table": "document_upload_intents",
+      "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql"
     }
   ],
   "functions": [
@@ -10457,6 +11154,34 @@ export const sourceTrace = {
       "name": "approve_estimate_version_by_share_token",
       "signature": "public.approve_estimate_version_by_share_token(text, jsonb)",
       "sourceMigration": "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql"
+    },
+    {
+      "key": "public.prepare_project_media_upload",
+      "schema": "public",
+      "name": "prepare_project_media_upload",
+      "signature": "public.prepare_project_media_upload(uuid, text, text, text, bigint, text)",
+      "sourceMigration": "supabase/migrations/20260317121000_storage_upload_rpcs.sql"
+    },
+    {
+      "key": "public.finalize_project_media_upload",
+      "schema": "public",
+      "name": "finalize_project_media_upload",
+      "signature": "public.finalize_project_media_upload(uuid)",
+      "sourceMigration": "supabase/migrations/20260317121000_storage_upload_rpcs.sql"
+    },
+    {
+      "key": "public.prepare_document_upload",
+      "schema": "public",
+      "name": "prepare_document_upload",
+      "signature": "public.prepare_document_upload(uuid, text, text, text, text, bigint, text)",
+      "sourceMigration": "supabase/migrations/20260317121000_storage_upload_rpcs.sql"
+    },
+    {
+      "key": "public.finalize_document_upload",
+      "schema": "public",
+      "name": "finalize_document_upload",
+      "signature": "public.finalize_document_upload(uuid)",
+      "sourceMigration": "supabase/migrations/20260317121000_storage_upload_rpcs.sql"
     }
   ],
   "policies": [
@@ -11602,17 +12327,25 @@ export const sourceTrace = {
       "kind": "derived_contract_bundle",
       "sourceMigrations": [
         "supabase/migrations/20260306162000_storage_documents_and_media.sql",
+        "supabase/migrations/20260317120000_storage_upload_intents.sql",
         "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
+        "supabase/migrations/20260317121000_storage_upload_rpcs.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
       ],
       "tables": [
         "public.storage_objects",
         "public.documents",
         "public.document_versions",
-        "public.project_media"
+        "public.project_media",
+        "public.project_media_upload_intents",
+        "public.document_upload_intents"
       ],
       "functions": [
-        "public.can_access_storage_object"
+        "public.can_access_storage_object",
+        "public.prepare_project_media_upload",
+        "public.finalize_project_media_upload",
+        "public.prepare_document_upload",
+        "public.finalize_document_upload"
       ],
       "policies": [
         "public.storage_objects.storage_objects_select",
@@ -11674,6 +12407,36 @@ export const sourceTrace = {
           "from": "public.project_media",
           "to": "public.profiles",
           "sourceMigration": "supabase/migrations/20260306162000_storage_documents_and_media.sql"
+        },
+        {
+          "from": "public.project_media_upload_intents",
+          "to": "public.projects",
+          "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql"
+        },
+        {
+          "from": "public.project_media_upload_intents",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql"
+        },
+        {
+          "from": "public.project_media_upload_intents",
+          "to": "public.project_media",
+          "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql"
+        },
+        {
+          "from": "public.document_upload_intents",
+          "to": "public.projects",
+          "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql"
+        },
+        {
+          "from": "public.document_upload_intents",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql"
+        },
+        {
+          "from": "public.document_upload_intents",
+          "to": "public.documents",
+          "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql"
         }
       ]
     },
@@ -12141,12 +12904,14 @@ export const slices = {
       "kind": "derived_contract_bundle",
       "sourceMigrations": [
         "supabase/migrations/20260306162000_storage_documents_and_media.sql",
+        "supabase/migrations/20260317120000_storage_upload_intents.sql",
         "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
+        "supabase/migrations/20260317121000_storage_upload_rpcs.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
       ],
-      "tableCount": 4,
-      "functionCount": 1,
-      "rlsTableCount": 4
+      "tableCount": 6,
+      "functionCount": 5,
+      "rlsTableCount": 6
     },
     {
       "name": "estimates",

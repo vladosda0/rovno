@@ -39,6 +39,11 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20260306165000_billing_launch_tables.sql`
 - `supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql`
 - `supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql`
+- `supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql`
+- `supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql`
+- `supabase/migrations/20260317120000_storage_upload_intents.sql`
+- `supabase/migrations/20260317121000_storage_upload_rpcs.sql`
+- `supabase/migrations/20260317122000_storage_upload_grants_rls.sql`
 
 ## Exclusions
 
