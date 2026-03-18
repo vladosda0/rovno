@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { trackEvent } from "@/lib/analytics";
 import { useCurrentUser } from "@/hooks/use-mock-data";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -39,7 +40,7 @@ export function BillingPanel() {
               </div>
               <p className="text-caption text-muted-foreground">Your current subscription tier</p>
             </div>
-            <Button variant="outline" size="sm" className="w-full sm:w-auto sm:shrink-0" onClick={() => navigate("/pricing")}>Compare plans</Button>
+            <Button variant="outline" size="sm" className="w-full sm:w-auto sm:shrink-0" onClick={() => { trackEvent("billing_panel_compare_plans_clicked"); navigate("/pricing"); }}>Compare plans</Button>
           </CardContent>
         </Card>
 
@@ -86,7 +87,7 @@ export function BillingPanel() {
           )}
 
           <div className="flex flex-wrap gap-sp-2 pt-sp-1">
-            <Button className="w-full sm:w-auto" onClick={() => navigate("/pricing")}>
+            <Button className="w-full sm:w-auto" onClick={() => { trackEvent("billing_panel_purchase_credits_clicked"); navigate("/pricing"); }}>
               <CreditCard className="h-4 w-4 mr-1.5" />
               Purchase credits
             </Button>

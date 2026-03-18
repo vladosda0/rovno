@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { trackEvent } from "@/lib/analytics";
 import { Check, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -48,6 +49,7 @@ function computeDisplayPrice(unitPrice: number, credits: CreditsOption): number 
 }
 
 export default function Pricing() {
+  useEffect(() => { trackEvent("pricing_page_viewed"); }, []);
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("monthly");
   const [selectedCreditsMaster, setSelectedCreditsMaster] = useState<CreditsOption>(100);
   const [selectedCreditsBusiness, setSelectedCreditsBusiness] = useState<CreditsOption>(100);

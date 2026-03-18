@@ -49,6 +49,7 @@ import {
   useWorkspaceProjectMembersState,
   useWorkspaceProjectState,
 } from "@/hooks/use-workspace-source";
+import { trackEvent } from "@/lib/analytics";
 import { getAuthRole } from "@/lib/auth-state";
 import {
   approveVersion,
@@ -1258,12 +1259,14 @@ export default function ProjectEstimate() {
   const handleCreateStage = () => {
     const created = createStage(pid, { title: "Add stage" });
     if (!created) return;
+    trackEvent("estimate_stage_created", { project_id: pid });
     setPendingStageTitleEditId(created.id);
   };
 
   const handleCreateWork = (stageId: string) => {
     const created = createWork(pid, { stageId, title: "Add work" });
     if (!created) return;
+    trackEvent("estimate_work_created", { project_id: pid, stage_id: stageId });
     setPendingWorkTitleEditId(created.id);
   };
 
@@ -1285,6 +1288,7 @@ export default function ProjectEstimate() {
       suppressResourceCreateAutoFocusRef.current = false;
       return;
     }
+    trackEvent("estimate_line_created", { project_id: pid, stage_id: stageId, work_id: workId, resource_type: option.value });
     window.requestAnimationFrame(() => {
       setPendingLineTitleEditId(created.id);
     });

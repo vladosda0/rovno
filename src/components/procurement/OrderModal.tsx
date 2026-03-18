@@ -8,6 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { createDraftOrder, placeOrder } from "@/data/order-store";
 import { getOrdersSource } from "@/data/orders-source";
+import { trackEvent } from "@/lib/analytics";
 import { getStock } from "@/data/inventory-store";
 import { useProcurementV2 } from "@/hooks/use-mock-data";
 import { useLocations } from "@/hooks/use-inventory-data";
@@ -190,12 +191,14 @@ export function OrderModal({
           toast({ title: "Unable to place order", description: placed.error, variant: "destructive" });
           return;
         }
+        trackEvent("procurement_order_placed", { project_id: projectId, kind: "stock", line_count: payloadLines.length });
         toast({ title: "Stock allocation completed" });
         onCompleted?.(created.id);
         onOpenChange(false);
         return;
       }
 
+      trackEvent("procurement_order_draft_created", { project_id: projectId, kind: "stock", line_count: payloadLines.length });
       toast({ title: "Draft saved" });
       onCompleted?.(created.id);
       onOpenChange(false);
@@ -234,6 +237,9 @@ export function OrderModal({
       if (action === "place") {
         const placed = await source.placeSupplierOrder(created.id);
         finalOrderId = placed.id;
+        trackEvent("procurement_order_placed", { project_id: projectId, kind: "supplier", supplier_name: supplierName || null, line_count: positiveLines.length });
+      } else {
+        trackEvent("procurement_order_draft_created", { project_id: projectId, kind: "supplier", supplier_name: supplierName || null, line_count: positiveLines.length });
       }
 
       if (supabaseMode) {

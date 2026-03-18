@@ -151,6 +151,7 @@ export default function ProjectDocuments() {
         timestamp: new Date().toISOString(),
         payload: { title },
       });
+      trackEvent("document_uploaded", { project_id: pid, origin: "uploaded" });
       closeUploadDialog();
       toast({ title: "Document uploaded", description: title });
       return;
@@ -165,6 +166,7 @@ export default function ProjectDocuments() {
         initialVersionStatus: "draft",
       });
 
+      trackEvent("document_uploaded", { project_id: pid, origin: "uploaded" });
       closeUploadDialog();
       toast({
         title: "Document created",

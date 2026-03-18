@@ -959,6 +959,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     }
 
     if (totalCredits <= 0) {
+      trackEvent("upgrade_prompt_shown", { surface: "ai_sidebar" });
       setLimitModalOpen(true);
       return;
     }

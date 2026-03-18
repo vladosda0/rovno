@@ -13,6 +13,7 @@ import { PhotoViewer } from "@/components/PhotoViewer";
 import { EmptyState } from "@/components/EmptyState";
 import { toast } from "@/hooks/use-toast";
 import { useMedia, useTasks } from "@/hooks/use-mock-data";
+import { trackEvent } from "@/lib/analytics";
 import { usePermission } from "@/lib/permissions";
 import { addMedia, addEvent, getCurrentUser } from "@/data/store";
 import type { Media as MediaType } from "@/types/entities";
@@ -59,6 +60,7 @@ export default function ProjectGallery() {
       timestamp: new Date().toISOString(),
       payload: { caption: uploadCaption },
     });
+    trackEvent("media_uploaded", { project_id: pid });
     setUploadOpen(false);
     setUploadCaption("");
     setUploadTaskId("");

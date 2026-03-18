@@ -21,6 +21,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { useToast } from "@/hooks/use-toast";
 import { getAuthRole } from "@/lib/auth-state";
+import { trackEvent } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import {
@@ -329,6 +330,7 @@ export default function ProjectTasks() {
           });
         }
 
+        trackEvent("project_stage_created", { project_id: pid });
         await invalidateProjectStages();
         setStageModalOpen(false);
         setNewStageTitle("");
