@@ -960,6 +960,7 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
 
   const hydration = (async () => {
     const currentState = ensureProjectState(projectId);
+    const cached = loadWorkspaceEstimateCache(projectId, input.profileId)?.state ?? null;
     const [workspaceSource, planningSource, draft] = await Promise.all([
       getWorkspaceSource({ kind: "supabase", profileId: input.profileId }),
       getPlanningSource({ kind: "supabase", profileId: input.profileId }),
@@ -969,8 +970,6 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
       workspaceSource.getProjectById(projectId),
       planningSource.getProjectTasks(projectId),
     ]);
-
-    const cached = loadWorkspaceEstimateCache(projectId, input.profileId)?.state ?? null;
     const remoteHasStructure = draft.stages.length > 0
       || draft.works.length > 0
       || draft.lines.length > 0
