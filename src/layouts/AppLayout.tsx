@@ -3,6 +3,8 @@ import { Suspense, lazy, useEffect, useState } from "react";
 import { PanelLeft } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { subscribePhotoConsult } from "@/lib/photo-consult-store";
+import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
+import { setAnalyticsUserId } from "@/lib/analytics";
 
 const AISidebar = lazy(() =>
   import("@/components/AISidebar").then((module) => ({ default: module.AISidebar })),
@@ -15,6 +17,7 @@ export default function AppLayout() {
   const location = useLocation();
 
   const hideAi = HIDE_AI_ROUTES.some((r) => location.pathname.startsWith(r));
+  const runtimeAuth = useRuntimeAuth();
 
   useEffect(() => {
     return subscribePhotoConsult(({ context }) => {
@@ -23,6 +26,14 @@ export default function AppLayout() {
       }
     });
   }, [hideAi]);
+
+  useEffect(() => {
+    if (runtimeAuth.status === "authenticated") {
+      setAnalyticsUserId(runtimeAuth.profileId);
+    } else {
+      setAnalyticsUserId(null);
+    }
+  }, [runtimeAuth.status, runtimeAuth.profileId]);
 
   return (
     <div className="flex flex-col min-h-screen w-full">

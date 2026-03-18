@@ -37,14 +37,84 @@ export type AnalyticsEventName =
 
 export type AnalyticsEventPayload = Record<string, unknown>;
 
+import mixpanel from 'mixpanel-browser';
+
+const SESSION_ID = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `session-${Date.now()}`;
+
+const MIXPANEL_TOKEN = import.meta.env.VITE_MIXPANEL_TOKEN;
+
+let mixpanelInitialized = false;
+
+function initMixpanel() {
+  if (mixpanelInitialized || !MIXPANEL_TOKEN || typeof window === 'undefined') return;
+  try {
+    mixpanel.init(MIXPANEL_TOKEN, {
+      debug: import.meta.env.DEV,
+      api_host: "https://api-eu.mixpanel.com",
+      persistence: "localStorage",
+      ignore_dnt: true,
+      autocapture: false,
+      record_sessions_percent: 0,
+    });
+    mixpanel.opt_in_tracking();
+    mixpanelInitialized = true;
+    if (currentUserId) {
+      try {
+        mixpanel.identify(currentUserId);
+      } catch (error) {
+        console.warn('[analytics] Mixpanel identify failed:', error);
+      }
+    }
+  } catch (error) {
+    console.warn('[analytics] Mixpanel init failed:', error);
+  }
+}
+
+let currentUserId: string | null = null;
+
+export function setAnalyticsUserId(userId: string | null) {
+  currentUserId = userId;
+  if (mixpanelInitialized) {
+    if (userId) {
+      try {
+        mixpanel.identify(userId);
+      } catch (error) {
+        console.warn('[analytics] Mixpanel identify failed:', error);
+      }
+    } else {
+      try {
+        mixpanel.reset();
+      } catch (error) {
+        console.warn('[analytics] Mixpanel reset failed:', error);
+      }
+    }
+  }
+}
+
+function getAnalyticsIdentity() {
+  return {
+    user_id: currentUserId ?? "anonymous",
+    session_id: SESSION_ID,
+  };
+}
+
 export function trackEvent(
   event: AnalyticsEventName,
   payload: AnalyticsEventPayload = {},
 ): void {
+  const identity = getAnalyticsIdentity();
+  const fullPayload = { ...identity, ...payload };
+
   if (import.meta.env.DEV) {
-    console.info("[analytics]", event, payload);
+    console.info("[analytics]", event, fullPayload);
   }
 
-  // Provider integration seam.
-  // Later this can forward to PostHog, self-hosted collector, RPC, etc.
+  if (!mixpanelInitialized) initMixpanel();
+  if (mixpanelInitialized) {
+    try {
+      mixpanel.track(event, fullPayload);
+    } catch (error) {
+      console.warn('[analytics] Mixpanel track failed:', error);
+    }
+  }
 }
