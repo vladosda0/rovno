@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { trackEvent } from "@/lib/analytics";
 import {
   AlertTriangle,
   CalendarIcon,
@@ -852,12 +853,20 @@ export default function ProjectProcurement() {
 
     try {
       const source = await getOrdersSource(supabaseMode ?? undefined);
+      let totalQty = 0;
       for (const payload of payloadByOrderAndLocation.values()) {
         await source.receiveSupplierOrder(payload.orderId, {
           locationId: payload.locationId,
           lines: payload.lines,
         });
+        totalQty += payload.lines.reduce((sum, line) => sum + line.qty, 0);
       }
+
+      trackEvent("procurement_item_updated", {
+        project_id: pid,
+        surface: "procurement",
+        total_qty: totalQty,
+      });
 
       if (supabaseMode) {
         const orderDetailInvalidations = Array.from(payloadByOrderAndLocation.values()).map((payload) => (
@@ -1017,6 +1026,17 @@ export default function ProjectProcurement() {
         },
       } satisfies Event);
     }
+
+    trackEvent("procurement_item_used_from_stock", {
+      project_id: pid,
+      surface: "procurement",
+      items_used: rowsToConsume.map(({ target, qty }) => ({
+        procurement_item_id: target.procurementItemId,
+        qty,
+        location_id: target.locationId,
+        participant_id: participantId,
+      })),
+    });
 
     toast({
       title: rowsToConsume.length > 1 ? "Stock updated" : "Stock item updated",

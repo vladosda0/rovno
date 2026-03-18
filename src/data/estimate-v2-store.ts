@@ -4,6 +4,7 @@ import { persistEstimateV2HeroTransition, EstimateV2HeroTransitionError } from "
 import { loadCurrentEstimateDraft, saveCurrentEstimateDraft } from "@/data/estimate-source";
 import { getPlanningSource } from "@/data/planning-source";
 import { getWorkspaceSource, resolveRuntimeWorkspaceMode } from "@/data/workspace-source";
+import { trackEvent } from "@/lib/analytics";
 import {
   addComment,
   addEvent,
@@ -2022,6 +2023,18 @@ export async function transitionEstimateV2ProjectToInWork(
     };
   }
 
+  const previousEstimateStatus = state.project.estimateStatus;
+  trackEvent("estimate_in_work_transition_requested", {
+    project_id: projectId,
+    surface: "estimate",
+    source: "transition",
+    from_status: previousEstimateStatus,
+    skip_setup: options.skipSetup ?? false,
+    auto_scheduled_preview: draftResult.draft.autoScheduled,
+    works_count: draftResult.draft.works.length,
+    lines_count: state.lines.length,
+  });
+
   heroTransitionInFlightByProjectId.add(projectId);
   deferredDraftSyncByProjectId.delete(projectId);
   const existingTimer = remoteDraftSyncTimers.get(projectId);
@@ -2069,6 +2082,18 @@ export async function transitionEstimateV2ProjectToInWork(
     );
     commitProjectStateChange(projectId);
 
+    trackEvent("estimate_in_work_transition_succeeded", {
+      project_id: projectId,
+      surface: "estimate",
+      source: "transition",
+      from_status: previousEstimateStatus,
+      skip_setup: options.skipSetup ?? false,
+      auto_scheduled: draftResult.draft.autoScheduled,
+      baseline_captured: true,
+      works_count: draftResult.draft.works.length,
+      lines_count: state.lines.length,
+    });
+
     return {
       ok: true,
       autoScheduled: draftResult.draft.autoScheduled,
@@ -2076,6 +2101,20 @@ export async function transitionEstimateV2ProjectToInWork(
     };
   } catch (error) {
     if (error instanceof EstimateV2HeroTransitionError) {
+      trackEvent("estimate_in_work_transition_failed", {
+        project_id: projectId,
+        surface: "estimate",
+        source: "transition",
+        from_status: previousEstimateStatus,
+        skip_setup: options.skipSetup ?? false,
+        works_count: draftResult.draft.works.length,
+        lines_count: state.lines.length,
+        reason: "transition_failed",
+        error_message: error.message,
+        error_type: "EstimateV2HeroTransitionError",
+        blocking: false,
+      });
+
       return {
         ok: false,
         reason: "transition_failed",
@@ -2083,6 +2122,19 @@ export async function transitionEstimateV2ProjectToInWork(
         blocking: false,
       };
     }
+    
+    trackEvent("estimate_in_work_transition_failed", {
+      project_id: projectId,
+      surface: "estimate",
+      source: "transition",
+      from_status: previousEstimateStatus,
+      skip_setup: options.skipSetup ?? false,
+      works_count: draftResult.draft.works.length,
+      lines_count: state.lines.length,
+      reason: "transition_failed",
+      error_message: "The Supabase transition did not complete. Some remote rows may already exist. Retry will resume reconciliation.",
+      error_type: "unknown",
+    });
 
     return {
       ok: false,

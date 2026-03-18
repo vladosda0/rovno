@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
+import { trackEvent } from "@/lib/analytics";
 import {
   getHRItems,
   getHRPayments,
@@ -130,29 +131,55 @@ export function useProjectHRMutations(projectId: string) {
 
   const setAssignees = useCallback(async (hrItemId: string, assigneeIds: string[]) => {
     const resolvedMode = assertHRMutationWorkspaceMode(mode);
+    const currentItems = queryClient.getQueryData(hrQueryKeys.projectItems(resolvedMode.profileId, projectId)) || [];
+    const currentItem = currentItems.find(item => item.id === hrItemId);
+    const previousAssigneeIds = currentItem?.assigneeIds || [];
+
     await setProjectHRAssigneesSource(resolvedMode, {
       projectId,
       hrItemId,
       assigneeIds,
     });
 
+    trackEvent("hr_item_assignees_changed", {
+      project_id: projectId,
+      surface: "hr",
+      hr_item_id: hrItemId,
+      previous_assignee_ids: previousAssigneeIds,
+      new_assignee_ids: assigneeIds,
+      count: assigneeIds.length,
+    });
+
     if (resolvedMode.kind === "supabase") {
       await invalidateProjectItems(resolvedMode);
     }
-  }, [invalidateProjectItems, mode, projectId]);
+  }, [invalidateProjectItems, mode, projectId, queryClient]);
 
   const setItemStatus = useCallback(async (hrItemId: string, status: HRItemStatus) => {
     const resolvedMode = assertHRMutationWorkspaceMode(mode);
+    const currentItems = queryClient.getQueryData(hrQueryKeys.projectItems(resolvedMode.profileId, projectId)) || [];
+    const currentItem = currentItems.find(item => item.id === hrItemId);
+    const previousStatus = currentItem?.status;
+
     await setProjectHRItemStatusSource(resolvedMode, {
       projectId,
       hrItemId,
       status,
     });
 
+    trackEvent("hr_item_status_changed", {
+      project_id: projectId,
+      surface: "hr",
+      hr_item_id: hrItemId,
+      previous_status: previousStatus,
+      new_status: status,
+      item_title: currentItem?.title,
+    });
+
     if (resolvedMode.kind === "supabase") {
       await invalidateProjectItems(resolvedMode);
     }
-  }, [invalidateProjectItems, mode, projectId]);
+  }, [invalidateProjectItems, mode, projectId, queryClient]);
 
   const createPayment = useCallback(async (input: {
     hrItemId: string;
@@ -167,6 +194,15 @@ export function useProjectHRMutations(projectId: string) {
       amount: input.amount,
       paidAt: input.paidAt,
       note: input.note,
+    });
+
+    trackEvent("hr_payment_created", {
+      project_id: projectId,
+      surface: "hr",
+      hr_item_id: input.hrItemId,
+      amount: input.amount,
+      paid_at: input.paidAt,
+      payment_status: payment.status,
     });
 
     if (resolvedMode.kind === "supabase") {

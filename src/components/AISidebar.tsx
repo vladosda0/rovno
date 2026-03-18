@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { trackEvent } from "@/lib/analytics";
 import {
   Bot,
   Send,
@@ -993,9 +994,18 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
       mode: learnMode ? "learn" : "default",
     };
     setMessages((prev) => [...prev, userMsg]);
+
     const targetProjectId = isProjectContext
       ? projectId
       : (isHomeContext && homeProjectMode !== GENERAL_MODE_VALUE ? homeProjectMode : "");
+
+    trackEvent("ai_prompt_submitted", {
+      project_id: targetProjectId,
+      surface: "ai",
+      prompt_length: content.length,
+      has_attachments: !!photoConsult,
+    });
+
     runAssistantForContent(content, userMsg.id, targetProjectId || undefined, userMsg.mode);
   }
 
@@ -1013,6 +1023,21 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
       ));
       const nextIndex = prev.activeIndex < nextItems.length - 1 ? prev.activeIndex + 1 : prev.activeIndex;
       const nextQueue = { ...prev, items: nextItems, activeIndex: nextIndex };
+      if (decision === "confirmed") {
+        trackEvent("ai_proposal_applied", {
+          project_id: projectId,
+          surface: "ai",
+          proposal_id: current.proposal.id,
+          proposal_type: current.proposal.type,
+        });
+      } else if (decision === "declined") {
+        trackEvent("ai_proposal_rejected", {
+          project_id: projectId,
+          surface: "ai",
+          proposal_id: current.proposal.id,
+          reason: "", // or from some state
+        });
+      }
       if (nextQueue.items.every((item) => item.decision !== "unresolved")) {
         nextQueueSnapshot = nextQueue;
       }

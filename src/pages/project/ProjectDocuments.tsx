@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useParams } from "react-router-dom";
+import { trackEvent } from "@/lib/analytics";
 import {
   Archive,
   Download,
@@ -209,6 +210,14 @@ export default function ProjectDocuments() {
         content: generateContent,
       }],
     });
+
+    trackEvent("ai_answer_saved_to_documents", {
+      project_id: pid,
+      surface: "documents",
+      document_id: docId,
+      content_length: generateContent.length,
+    });
+
     addEvent({
       id: `evt-${Date.now()}`,
       project_id: pid,
