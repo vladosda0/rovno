@@ -131,7 +131,9 @@ export function useProjectHRMutations(projectId: string) {
 
   const setAssignees = useCallback(async (hrItemId: string, assigneeIds: string[]) => {
     const resolvedMode = assertHRMutationWorkspaceMode(mode);
-    const currentItems = queryClient.getQueryData(hrQueryKeys.projectItems(resolvedMode.profileId, projectId)) || [];
+    const currentItems = resolvedMode.kind === "supabase"
+      ? queryClient.getQueryData<HRPlannedItem[]>(hrQueryKeys.projectItems(resolvedMode.profileId, projectId)) || []
+      : [];
     const currentItem = currentItems.find(item => item.id === hrItemId);
     const previousAssigneeIds = currentItem?.assigneeIds || [];
 
@@ -157,7 +159,9 @@ export function useProjectHRMutations(projectId: string) {
 
   const setItemStatus = useCallback(async (hrItemId: string, status: HRItemStatus) => {
     const resolvedMode = assertHRMutationWorkspaceMode(mode);
-    const currentItems = queryClient.getQueryData(hrQueryKeys.projectItems(resolvedMode.profileId, projectId)) || [];
+    const currentItems = resolvedMode.kind === "supabase"
+      ? queryClient.getQueryData<HRPlannedItem[]>(hrQueryKeys.projectItems(resolvedMode.profileId, projectId)) || []
+      : [];
     const currentItem = currentItems.find(item => item.id === hrItemId);
     const previousStatus = currentItem?.status;
 
@@ -202,7 +206,6 @@ export function useProjectHRMutations(projectId: string) {
       hr_item_id: input.hrItemId,
       amount: input.amount,
       paid_at: input.paidAt,
-      payment_status: payment.status,
     });
 
     if (resolvedMode.kind === "supabase") {
