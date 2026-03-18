@@ -4,8 +4,13 @@ import {
   createSupabaseProjectDocument,
   createSupabaseProjectDocumentVersion,
   deleteSupabaseProjectDocument,
+  finalizeSupabaseDocumentUpload,
+  finalizeSupabaseMediaUpload,
   mapProjectMediaRowToMedia,
+  prepareSupabaseDocumentUpload,
+  prepareSupabaseMediaUpload,
   shapeDocumentsWithVersions,
+  storageObjectRowToMeta,
 } from "@/data/documents-media-source";
 
 function documentRow(
@@ -55,9 +60,27 @@ function projectMediaRow(
   };
 }
 
+function storageObjectRow(
+  overrides: Partial<{ id: string; bucket: string; object_path: string; filename: string; mime_type: string | null; size_bytes: number | null; checksum: string | null; uploaded_by: string | null; created_at: string }> = {},
+) {
+  return {
+    id: "so-1",
+    bucket: "project-documents",
+    object_path: "projects/p1/documents/intent-1/file.pdf",
+    filename: "file.pdf",
+    mime_type: "application/pdf" as string | null,
+    size_bytes: 2048 as number | null,
+    checksum: null as string | null,
+    uploaded_by: "profile-1" as string | null,
+    created_at: "2026-03-01T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
 function createSupabaseStub(input: {
   documentsTable?: Record<string, unknown>;
   versionsTable?: Record<string, unknown>;
+  rpcResults?: Record<string, { data: unknown; error: unknown }>;
 }) {
   return {
     from: vi.fn((table: string) => {
@@ -70,6 +93,13 @@ function createSupabaseStub(input: {
       }
 
       throw new Error(`Unexpected table: ${table}`);
+    }),
+    rpc: vi.fn((name: string) => {
+      const result = input.rpcResults?.[name];
+      if (result) {
+        return Promise.resolve(result);
+      }
+      return Promise.resolve({ data: null, error: { message: `Unexpected RPC: ${name}` } });
     }),
   } as unknown as Parameters<typeof createSupabaseProjectDocument>[0];
 }
@@ -319,5 +349,301 @@ describe("documents-media-source helpers", () => {
 
     expect(documentsTable.delete).toHaveBeenCalledTimes(1);
     expect(eq).toHaveBeenCalledWith("id", "doc-1");
+  });
+
+  it("calls prepare_document_upload RPC and returns structured intent", async () => {
+    const rpcRow = {
+      upload_intent_id: "intent-doc-1",
+      bucket: "project-documents",
+      object_path: "projects/p1/documents/intent-doc-1/file.pdf",
+      filename: "file.pdf",
+      mime_type: "application/pdf",
+      size_bytes: 1024,
+    };
+    const supabase = createSupabaseStub({
+      rpcResults: {
+        prepare_document_upload: { data: [rpcRow], error: null },
+      },
+    });
+
+    const result = await prepareSupabaseDocumentUpload(supabase, {
+      projectId: "p1",
+      type: "specification",
+      title: "My Document",
+      clientFilename: "file.pdf",
+      mimeType: "application/pdf",
+      sizeBytes: 1024,
+    });
+
+    expect(result).toEqual({
+      uploadIntentId: "intent-doc-1",
+      bucket: "project-documents",
+      objectPath: "projects/p1/documents/intent-doc-1/file.pdf",
+      filename: "file.pdf",
+      mimeType: "application/pdf",
+      sizeBytes: 1024,
+    });
+    expect(supabase.rpc).toHaveBeenCalledWith("prepare_document_upload", expect.objectContaining({
+      p_project_id: "p1",
+      p_type: "specification",
+      p_title: "My Document",
+      p_client_filename: "file.pdf",
+    }));
+  });
+
+  it("calls finalize_document_upload RPC and returns linkage result", async () => {
+    const rpcRow = {
+      document_id: "doc-1",
+      document_version_id: "version-1",
+      storage_object_id: "so-1",
+      project_id: "p1",
+      bucket: "project-documents",
+      object_path: "projects/p1/documents/intent-doc-1/file.pdf",
+      filename: "file.pdf",
+    };
+    const supabase = createSupabaseStub({
+      rpcResults: {
+        finalize_document_upload: { data: [rpcRow], error: null },
+      },
+    });
+
+    const result = await finalizeSupabaseDocumentUpload(supabase, "intent-doc-1");
+
+    expect(result).toEqual({
+      documentId: "doc-1",
+      documentVersionId: "version-1",
+      storageObjectId: "so-1",
+      projectId: "p1",
+      bucket: "project-documents",
+      objectPath: "projects/p1/documents/intent-doc-1/file.pdf",
+      filename: "file.pdf",
+    });
+    expect(supabase.rpc).toHaveBeenCalledWith("finalize_document_upload", {
+      p_upload_intent_id: "intent-doc-1",
+    });
+  });
+
+  it("calls prepare_project_media_upload RPC and returns structured intent", async () => {
+    const rpcRow = {
+      upload_intent_id: "intent-media-1",
+      bucket: "project-media",
+      object_path: "projects/p1/media/intent-media-1/photo.jpg",
+      filename: "photo.jpg",
+      mime_type: "image/jpeg",
+      size_bytes: 2048,
+    };
+    const supabase = createSupabaseStub({
+      rpcResults: {
+        prepare_project_media_upload: { data: [rpcRow], error: null },
+      },
+    });
+
+    const result = await prepareSupabaseMediaUpload(supabase, {
+      projectId: "p1",
+      mediaType: "photo",
+      clientFilename: "photo.jpg",
+      mimeType: "image/jpeg",
+      sizeBytes: 2048,
+    });
+
+    expect(result).toEqual({
+      uploadIntentId: "intent-media-1",
+      bucket: "project-media",
+      objectPath: "projects/p1/media/intent-media-1/photo.jpg",
+      filename: "photo.jpg",
+      mimeType: "image/jpeg",
+      sizeBytes: 2048,
+    });
+    expect(supabase.rpc).toHaveBeenCalledWith("prepare_project_media_upload", expect.objectContaining({
+      p_project_id: "p1",
+      p_media_type: "photo",
+    }));
+  });
+
+  it("calls finalize_project_media_upload RPC and returns linkage result", async () => {
+    const rpcRow = {
+      project_media_id: "media-1",
+      storage_object_id: "so-1",
+      project_id: "p1",
+      bucket: "project-media",
+      object_path: "projects/p1/media/intent-media-1/photo.jpg",
+      filename: "photo.jpg",
+    };
+    const supabase = createSupabaseStub({
+      rpcResults: {
+        finalize_project_media_upload: { data: [rpcRow], error: null },
+      },
+    });
+
+    const result = await finalizeSupabaseMediaUpload(supabase, "intent-media-1");
+
+    expect(result).toEqual({
+      projectMediaId: "media-1",
+      storageObjectId: "so-1",
+      projectId: "p1",
+      bucket: "project-media",
+      objectPath: "projects/p1/media/intent-media-1/photo.jpg",
+      filename: "photo.jpg",
+    });
+    expect(supabase.rpc).toHaveBeenCalledWith("finalize_project_media_upload", {
+      p_upload_intent_id: "intent-media-1",
+    });
+  });
+
+  it("throws when prepare_document_upload returns an error", async () => {
+    const supabase = createSupabaseStub({
+      rpcResults: {
+        prepare_document_upload: { data: null, error: { message: "permission denied" } },
+      },
+    });
+
+    await expect(prepareSupabaseDocumentUpload(supabase, {
+      projectId: "p1",
+      type: "specification",
+      title: "Doc",
+      clientFilename: "file.pdf",
+      mimeType: "application/pdf",
+      sizeBytes: 1024,
+    })).rejects.toEqual({ message: "permission denied" });
+  });
+
+  it("throws when finalize_document_upload returns empty rows", async () => {
+    const supabase = createSupabaseStub({
+      rpcResults: {
+        finalize_document_upload: { data: [], error: null },
+      },
+    });
+
+    await expect(finalizeSupabaseDocumentUpload(supabase, "intent-1"))
+      .rejects.toThrow("finalize_document_upload returned no rows.");
+  });
+
+  it("surfaces storage metadata on document current version and file_meta when storage objects are provided", () => {
+    const soRow = storageObjectRow({
+      id: "so-current",
+      bucket: "project-documents",
+      object_path: "projects/p1/documents/intent-1/spec.pdf",
+      filename: "spec.pdf",
+      mime_type: "application/pdf",
+      size_bytes: 4096,
+    });
+    const storageObjectsById = new Map([[soRow.id, soRow]]);
+
+    const documents = shapeDocumentsWithVersions({
+      documentRows: [
+        documentRow({ id: "doc-1", title: "With Storage" }),
+      ],
+      versionRows: [
+        documentVersionRow({
+          id: "v1",
+          document_id: "doc-1",
+          version_number: 1,
+          is_current: true,
+          storage_object_id: "so-current",
+        }),
+      ],
+      storageObjectsById,
+    });
+
+    expect(documents).toHaveLength(1);
+    const doc = documents[0];
+
+    expect(doc.file_meta).toEqual({
+      filename: "spec.pdf",
+      mime: "application/pdf",
+      size: 4096,
+    });
+
+    const version = doc.versions[0];
+    expect(version.storage).toEqual({
+      id: "so-current",
+      bucket: "project-documents",
+      objectPath: "projects/p1/documents/intent-1/spec.pdf",
+      filename: "spec.pdf",
+      mimeType: "application/pdf",
+      sizeBytes: 4096,
+    });
+  });
+
+  it("leaves storage undefined on document versions with null storage_object_id even when map is provided", () => {
+    const storageObjectsById = new Map<string, ReturnType<typeof storageObjectRow>>();
+
+    const documents = shapeDocumentsWithVersions({
+      documentRows: [
+        documentRow({ id: "doc-1", title: "No Storage" }),
+      ],
+      versionRows: [
+        documentVersionRow({
+          id: "v1",
+          document_id: "doc-1",
+          version_number: 1,
+          is_current: true,
+          storage_object_id: null,
+        }),
+      ],
+      storageObjectsById,
+    });
+
+    expect(documents).toHaveLength(1);
+    expect(documents[0].file_meta).toBeUndefined();
+    expect(documents[0].versions[0].storage).toBeUndefined();
+  });
+
+  it("surfaces storage and file_meta on media rows when a storage object is provided", () => {
+    const soRow = storageObjectRow({
+      id: "so-media-1",
+      bucket: "project-media",
+      object_path: "projects/p1/media/intent-m1/photo.jpg",
+      filename: "photo.jpg",
+      mime_type: "image/jpeg",
+      size_bytes: 8192,
+    });
+
+    const media = mapProjectMediaRowToMedia(
+      projectMediaRow({ storage_object_id: "so-media-1" }),
+      soRow,
+    );
+
+    expect(media.storage).toEqual({
+      id: "so-media-1",
+      bucket: "project-media",
+      objectPath: "projects/p1/media/intent-m1/photo.jpg",
+      filename: "photo.jpg",
+      mimeType: "image/jpeg",
+      sizeBytes: 8192,
+    });
+
+    expect(media.file_meta).toEqual({
+      filename: "photo.jpg",
+      mime: "image/jpeg",
+      size: 8192,
+    });
+  });
+
+  it("leaves storage and file_meta undefined on media rows when no storage object is provided", () => {
+    const media = mapProjectMediaRowToMedia(projectMediaRow());
+
+    expect(media.storage).toBeUndefined();
+    expect(media.file_meta).toBeUndefined();
+  });
+
+  it("converts a storage object row to StorageObjectMeta", () => {
+    const row = storageObjectRow({
+      id: "so-test",
+      bucket: "my-bucket",
+      object_path: "some/path/file.txt",
+      filename: "file.txt",
+      mime_type: null,
+      size_bytes: null,
+    });
+
+    expect(storageObjectRowToMeta(row)).toEqual({
+      id: "so-test",
+      bucket: "my-bucket",
+      objectPath: "some/path/file.txt",
+      filename: "file.txt",
+      mimeType: null,
+      sizeBytes: null,
+    });
   });
 });

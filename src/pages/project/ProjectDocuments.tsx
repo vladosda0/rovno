@@ -46,6 +46,7 @@ import { useCurrentUser, useProject, useWorkspaceMode } from "@/hooks/use-mock-d
 import {
   useProjectDocumentMutations,
   useProjectDocumentsState,
+  useDocumentUploadMutations,
 } from "@/hooks/use-documents-media-source";
 import { usePermission, isOwnerOrCoOwner } from "@/lib/permissions";
 import {
@@ -89,6 +90,11 @@ export default function ProjectDocuments() {
     archiveDocument,
     deleteDocument: deleteDocumentMutation,
   } = useProjectDocumentMutations(pid);
+  const {
+    prepareUpload,
+    uploadBytes,
+    finalizeUpload,
+  } = useDocumentUploadMutations(pid);
   const isOwner = isOwnerOrCoOwner(perm.role);
   const isContractor = perm.role === "contractor";
   const isSupabaseMode = workspaceMode.kind === "supabase";
@@ -96,6 +102,8 @@ export default function ProjectDocuments() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadTitle, setUploadTitle] = useState("");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [pendingFinalizeIntentId, setPendingFinalizeIntentId] = useState<string | null>(null);
   const [generateOpen, setGenerateOpen] = useState(false);
   const [generateTitle, setGenerateTitle] = useState("");
   const [generateContent, setGenerateContent] = useState("");
@@ -119,6 +127,8 @@ export default function ProjectDocuments() {
     setUploadOpen(false);
     setUploadTitle("");
     setUploadFile(null);
+    setUploading(false);
+    setPendingFinalizeIntentId(null);
   }
 
   async function handleUpload() {
@@ -157,25 +167,54 @@ export default function ProjectDocuments() {
       return;
     }
 
+    if (!uploadFile) {
+      toast({ title: "Please select a file", variant: "destructive" });
+      return;
+    }
+
+    setUploading(true);
     try {
-      await createDocument({
+      const intent = await prepareUpload({
         type: DOCUMENT_DEFAULT_TYPE,
         title,
-        origin: "uploaded",
-        initialVersionContent: "Uploaded document content placeholder.",
-        initialVersionStatus: "draft",
+        clientFilename: uploadFile.name,
+        mimeType: uploadFile.type || "application/octet-stream",
+        sizeBytes: uploadFile.size,
       });
+
+      await uploadBytes(intent.bucket, intent.objectPath, uploadFile);
+
+      setPendingFinalizeIntentId(intent.uploadIntentId);
+      await finalizeUpload(intent.uploadIntentId);
 
       trackEvent("document_uploaded", { project_id: pid, origin: "uploaded" });
       closeUploadDialog();
-      toast({
-        title: "Document created",
-        description: "Document metadata saved. File contents are not uploaded yet in Supabase mode.",
-      });
+      toast({ title: "Document uploaded", description: title });
     } catch (error) {
+      setUploading(false);
       toast({
         title: "Document upload failed",
-        description: error instanceof Error ? error.message : "Unable to create the document.",
+        description: error instanceof Error ? error.message : "Unable to upload the document.",
+        variant: "destructive",
+      });
+    }
+  }
+
+  async function handleRetryFinalize() {
+    if (!pendingFinalizeIntentId) return;
+
+    setUploading(true);
+    try {
+      await finalizeUpload(pendingFinalizeIntentId);
+
+      trackEvent("document_uploaded", { project_id: pid, origin: "uploaded" });
+      closeUploadDialog();
+      toast({ title: "Document uploaded", description: "Upload finalized successfully." });
+    } catch (error) {
+      setUploading(false);
+      toast({
+        title: "Finalize failed",
+        description: error instanceof Error ? error.message : "Unable to finalize the upload. Try again.",
         variant: "destructive",
       });
     }
@@ -387,7 +426,7 @@ export default function ProjectDocuments() {
           </p>
           {isSupabaseMode && (
             <p className="text-caption text-muted-foreground mt-1">
-              Supabase mode currently saves document records, archive state, and delete actions. File bytes, download, and sharing are coming soon.
+              Documents are stored securely. Sharing is coming soon.
             </p>
           )}
         </div>
@@ -412,7 +451,7 @@ export default function ProjectDocuments() {
           icon={FileText}
           title="No documents"
           description={isSupabaseMode
-            ? "Create a document record for this project. File upload and full document text persistence are coming soon."
+            ? "Upload a document to this project."
             : "Upload a document or generate one with AI."}
           actionLabel={perm.can("document.create") ? "Upload" : undefined}
           onAction={perm.can("document.create") ? () => setUploadOpen(true) : undefined}
@@ -490,19 +529,15 @@ export default function ProjectDocuments() {
         <DialogContent className="bg-card border border-border rounded-modal max-w-lg shadow-xl p-0 gap-0 [&>button.absolute]:hidden">
           <DialogHeader className="border-b border-border px-5 py-4">
             <DialogTitle>Upload document</DialogTitle>
-            <DialogDescription>
-              {isSupabaseMode
-                ? "Create a document record for this project. The file itself will not upload yet in Supabase mode."
-                : "Add a document to this project."}
-            </DialogDescription>
+            <DialogDescription>Add a document to this project.</DialogDescription>
           </DialogHeader>
           <div className="px-5 py-4 space-y-4">
             <div className="rounded-panel bg-warning/10 p-3 text-caption text-warning">
               Do not upload documents containing personal identification data without consent.
             </div>
-            {isSupabaseMode && (
-              <div className="rounded-panel bg-muted/50 p-3 text-caption text-muted-foreground">
-                Only the document record will persist for now. File bytes, download, and sharing are coming soon.
+            {pendingFinalizeIntentId && (
+              <div className="rounded-panel bg-destructive/10 p-3 text-caption text-destructive">
+                File was uploaded but finalize failed. You can retry finalization below.
               </div>
             )}
             <div className="space-y-1">
@@ -512,12 +547,14 @@ export default function ProjectDocuments() {
                 onChange={(event) => setUploadTitle(event.target.value)}
                 placeholder="Document name"
                 autoFocus
+                disabled={uploading}
               />
             </div>
             <div className="space-y-1">
               <label className="text-body-sm font-medium text-foreground">File</label>
               <Input
                 type="file"
+                disabled={uploading}
                 onChange={(event) => {
                   const file = event.target.files?.[0] ?? null;
                   setUploadFile(file);
@@ -528,20 +565,30 @@ export default function ProjectDocuments() {
               />
               <p className="text-caption text-muted-foreground">
                 {isSupabaseMode
-                  ? "Choose a file to name the record now. The file contents will not persist yet."
+                  ? "A file is required to upload a document."
                   : "Attach a file now, or create a placeholder document with a title only."}
               </p>
             </div>
           </div>
           <DialogFooter className="border-t border-border px-5 py-4">
-            <Button variant="outline" onClick={closeUploadDialog}>Cancel</Button>
-            <Button
-              className="bg-accent text-accent-foreground hover:bg-accent/90"
-              onClick={handleUpload}
-              disabled={!uploadTitle.trim() && !uploadFile}
-            >
-              {isSupabaseMode ? "Create document" : "Upload"}
-            </Button>
+            <Button variant="outline" onClick={closeUploadDialog} disabled={uploading}>Cancel</Button>
+            {pendingFinalizeIntentId ? (
+              <Button
+                className="bg-accent text-accent-foreground hover:bg-accent/90"
+                onClick={handleRetryFinalize}
+                disabled={uploading}
+              >
+                {uploading ? "Finalizing…" : "Retry finalize"}
+              </Button>
+            ) : (
+              <Button
+                className="bg-accent text-accent-foreground hover:bg-accent/90"
+                onClick={handleUpload}
+                disabled={uploading || (isSupabaseMode ? !uploadFile : (!uploadTitle.trim() && !uploadFile))}
+              >
+                {uploading ? "Uploading…" : "Upload"}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -595,12 +642,14 @@ export default function ProjectDocuments() {
               </DialogHeader>
               <div className="px-5 py-4 space-y-4">
                 <div className="rounded-panel border border-border bg-muted/30 p-4 max-h-72 overflow-y-auto">
-                  {isSupabaseMode && !latestViewedVersion.content ? (
+                  {isSupabaseMode ? (
                     <p className="text-body-sm text-muted-foreground whitespace-pre-wrap">
-                      Full document text persistence is coming soon in Supabase mode. This record currently stores document metadata only.
+                      Document file is stored. Download and inline preview are coming soon.
                     </p>
-                  ) : (
+                  ) : latestViewedVersion.content ? (
                     <p className="text-body-sm text-foreground whitespace-pre-wrap">{latestViewedVersion.content}</p>
+                  ) : (
+                    <p className="text-body-sm text-muted-foreground whitespace-pre-wrap">No content available.</p>
                   )}
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -621,7 +670,7 @@ export default function ProjectDocuments() {
                 </div>
                 <p className="text-caption text-muted-foreground">
                   {isSupabaseMode
-                    ? "Download and sharing are coming soon for metadata-only records."
+                    ? "Download and sharing are coming soon."
                     : canDownloadViewedDocument
                       ? "Sharing is coming soon."
                       : "Download and sharing are coming soon for this document."}

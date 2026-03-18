@@ -10,6 +10,7 @@ const {
   mockUseWorkspaceMode,
   mockUseProjectDocumentsState,
   mockUseProjectDocumentMutations,
+  mockUseDocumentUploadMutations,
   mockUsePermission,
 } = vi.hoisted(() => ({
   mockUseCurrentUser: vi.fn(),
@@ -17,6 +18,7 @@ const {
   mockUseWorkspaceMode: vi.fn(),
   mockUseProjectDocumentsState: vi.fn(),
   mockUseProjectDocumentMutations: vi.fn(),
+  mockUseDocumentUploadMutations: vi.fn(),
   mockUsePermission: vi.fn(),
 }));
 
@@ -29,6 +31,7 @@ vi.mock("@/hooks/use-mock-data", () => ({
 vi.mock("@/hooks/use-documents-media-source", () => ({
   useProjectDocumentsState: (projectId: string) => mockUseProjectDocumentsState(projectId),
   useProjectDocumentMutations: (projectId: string) => mockUseProjectDocumentMutations(projectId),
+  useDocumentUploadMutations: (projectId: string) => mockUseDocumentUploadMutations(projectId),
 }));
 
 vi.mock("@/lib/permissions", () => ({
@@ -71,6 +74,7 @@ describe("ProjectDocuments", () => {
     mockUseWorkspaceMode.mockReset();
     mockUseProjectDocumentsState.mockReset();
     mockUseProjectDocumentMutations.mockReset();
+    mockUseDocumentUploadMutations.mockReset();
     mockUsePermission.mockReset();
     mockUseCurrentUser.mockReturnValue({ id: "user-1" });
     mockUseProject.mockReturnValue({ project: { title: "Apartment Renovation" } });
@@ -79,6 +83,11 @@ describe("ProjectDocuments", () => {
       createDocument: vi.fn(),
       archiveDocument: vi.fn(),
       deleteDocument: vi.fn(),
+    });
+    mockUseDocumentUploadMutations.mockReturnValue({
+      prepareUpload: vi.fn(),
+      uploadBytes: vi.fn(),
+      finalizeUpload: vi.fn(),
     });
   });
 
@@ -149,7 +158,7 @@ describe("ProjectDocuments", () => {
     expect(screen.getByRole("button", { name: "Print" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Download" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Share" })).toBeDisabled();
-    expect(screen.getByText("Download and sharing are coming soon for metadata-only records.")).toBeInTheDocument();
+    expect(screen.getByText("Download and sharing are coming soon.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Comment/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Confirm acknowledgement/i })).not.toBeInTheDocument();
   });

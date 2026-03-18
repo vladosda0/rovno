@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import * as store from "@/data/store";
 import type { WorkspaceMode } from "@/data/workspace-source";
 import { resolveWorkspaceMode } from "@/data/workspace-source";
-import type { Document, DocumentVersion, Media } from "@/types/entities";
+import type { Document, DocumentVersion, Media, StorageObjectMeta } from "@/types/entities";
 import type { Database as DocumentsMediaDatabase } from "../../backend-truth/generated/supabase-types";
 
 type DocumentRow = DocumentsMediaDatabase["public"]["Tables"]["documents"]["Row"];
@@ -11,6 +11,7 @@ type DocumentVersionRow = DocumentsMediaDatabase["public"]["Tables"]["document_v
 type DocumentVersionInsert = DocumentsMediaDatabase["public"]["Tables"]["document_versions"]["Insert"];
 type DocumentVersionUpdate = DocumentsMediaDatabase["public"]["Tables"]["document_versions"]["Update"];
 type ProjectMediaRow = DocumentsMediaDatabase["public"]["Tables"]["project_media"]["Row"];
+type StorageObjectRow = DocumentsMediaDatabase["public"]["Tables"]["storage_objects"]["Row"];
 type TypedSupabaseClient = SupabaseClient<DocumentsMediaDatabase>;
 
 export interface CreateProjectDocumentInput {
@@ -47,6 +48,53 @@ export interface ProjectDocumentMutationResult {
   versionNumber: number;
 }
 
+export interface PrepareDocumentUploadInput {
+  projectId: string;
+  type: string;
+  title: string;
+  clientFilename: string;
+  mimeType: string;
+  sizeBytes: number;
+  description?: string;
+}
+
+export interface PrepareUploadResult {
+  uploadIntentId: string;
+  bucket: string;
+  objectPath: string;
+  filename: string;
+  mimeType: string | null;
+  sizeBytes: number | null;
+}
+
+export interface FinalizeDocumentUploadResult {
+  documentId: string;
+  documentVersionId: string;
+  storageObjectId: string;
+  projectId: string;
+  bucket: string;
+  objectPath: string;
+  filename: string;
+}
+
+export interface PrepareMediaUploadInput {
+  projectId: string;
+  mediaType: string;
+  clientFilename: string;
+  mimeType: string;
+  sizeBytes: number;
+  caption?: string;
+}
+
+export interface FinalizeMediaUploadResult {
+  projectMediaId: string;
+  storageObjectId: string;
+  projectId: string;
+  bucket: string;
+  objectPath: string;
+  filename: string;
+}
+
 export interface DocumentsMediaSource {
   mode: WorkspaceMode["kind"];
   getProjectDocuments: (projectId: string) => Promise<Document[]>;
@@ -55,6 +103,11 @@ export interface DocumentsMediaSource {
   createProjectDocumentVersion: (input: CreateProjectDocumentVersionInput) => Promise<ProjectDocumentMutationResult>;
   archiveProjectDocument: (input: ArchiveProjectDocumentInput) => Promise<ProjectDocumentMutationResult>;
   deleteProjectDocument: (input: DeleteProjectDocumentInput) => Promise<void>;
+  prepareDocumentUpload: (input: PrepareDocumentUploadInput) => Promise<PrepareUploadResult>;
+  finalizeDocumentUpload: (uploadIntentId: string) => Promise<FinalizeDocumentUploadResult>;
+  prepareMediaUpload: (input: PrepareMediaUploadInput) => Promise<PrepareUploadResult>;
+  finalizeMediaUpload: (uploadIntentId: string) => Promise<FinalizeMediaUploadResult>;
+  uploadBytes: (bucket: string, objectPath: string, file: File) => Promise<void>;
 }
 
 function createDocumentMutationId(): string {
@@ -160,6 +213,52 @@ function createBrowserDocumentsMediaSource(mode: WorkspaceMode["kind"]): Documen
     async deleteProjectDocument(input) {
       store.deleteDocument(input.documentId);
     },
+    async prepareDocumentUpload(input) {
+      const intentId = createDocumentMutationId();
+      return {
+        uploadIntentId: intentId,
+        bucket: "browser-local",
+        objectPath: `projects/${input.projectId}/documents/${intentId}/${input.clientFilename}`,
+        filename: input.clientFilename,
+        mimeType: input.mimeType,
+        sizeBytes: input.sizeBytes,
+      };
+    },
+    async finalizeDocumentUpload(uploadIntentId) {
+      return {
+        documentId: createDocumentMutationId(),
+        documentVersionId: createDocumentMutationId(),
+        storageObjectId: createDocumentMutationId(),
+        projectId: "",
+        bucket: "browser-local",
+        objectPath: `browser/${uploadIntentId}`,
+        filename: "file",
+      };
+    },
+    async prepareMediaUpload(input) {
+      const intentId = createDocumentMutationId();
+      return {
+        uploadIntentId: intentId,
+        bucket: "browser-local",
+        objectPath: `projects/${input.projectId}/media/${intentId}/${input.clientFilename}`,
+        filename: input.clientFilename,
+        mimeType: input.mimeType,
+        sizeBytes: input.sizeBytes,
+      };
+    },
+    async finalizeMediaUpload(uploadIntentId) {
+      return {
+        projectMediaId: createDocumentMutationId(),
+        storageObjectId: createDocumentMutationId(),
+        projectId: "",
+        bucket: "browser-local",
+        objectPath: `browser/${uploadIntentId}`,
+        filename: "file",
+      };
+    },
+    async uploadBytes() {
+      // no-op in browser/demo mode
+    },
   };
 }
 
@@ -168,8 +267,13 @@ export function mapDocumentVersionRowToDocumentVersion(
   input: {
     hasCurrentVersion: boolean;
     archivedVersionId: string | null;
+    storageObject?: StorageObjectRow;
   },
 ): DocumentVersion {
+  const storage = input.storageObject
+    ? storageObjectRowToMeta(input.storageObject)
+    : undefined;
+
   return {
     id: row.id,
     document_id: row.document_id,
@@ -180,13 +284,23 @@ export function mapDocumentVersionRowToDocumentVersion(
         ? "draft"
         : "draft",
     content: "",
+    storage,
   };
 }
 
 export function mapDocumentRowToDocument(
   row: DocumentRow,
   versions: DocumentVersion[],
+  currentVersionStorage?: StorageObjectMeta,
 ): Document {
+  const fileMeta = currentVersionStorage
+    ? {
+        filename: currentVersionStorage.filename,
+        mime: currentVersionStorage.mimeType ?? "application/octet-stream",
+        size: currentVersionStorage.sizeBytes ?? 0,
+      }
+    : undefined;
+
   return {
     id: row.id,
     project_id: row.project_id,
@@ -196,7 +310,7 @@ export function mapDocumentRowToDocument(
     origin: row.origin ?? undefined,
     description: row.description ?? undefined,
     created_at: row.created_at,
-    file_meta: undefined,
+    file_meta: fileMeta,
     ai_flags: undefined,
   };
 }
@@ -204,7 +318,9 @@ export function mapDocumentRowToDocument(
 export function shapeDocumentsWithVersions(input: {
   documentRows: DocumentRow[];
   versionRows: DocumentVersionRow[];
+  storageObjectsById?: Map<string, StorageObjectRow>;
 }): Document[] {
+  const storageObjects = input.storageObjectsById ?? new Map<string, StorageObjectRow>();
   const versionRowsByDocumentId = new Map<string, DocumentVersionRow[]>();
 
   for (const row of input.versionRows) {
@@ -227,19 +343,49 @@ export function shapeDocumentsWithVersions(input: {
     const archivedVersionId = hasCurrentVersion
       ? null
       : versionRows[versionRows.length - 1]?.id ?? null;
-    const versions = versionRows.map((versionRow) => mapDocumentVersionRowToDocumentVersion(
-      versionRow,
-      {
-        hasCurrentVersion,
-        archivedVersionId,
-      },
-    ));
+    const currentVersionRow = versionRows.find((entry) => entry.is_current);
+    const currentVersionStorageRow = currentVersionRow?.storage_object_id
+      ? storageObjects.get(currentVersionRow.storage_object_id)
+      : undefined;
 
-    return [mapDocumentRowToDocument(row, versions)];
+    const versions = versionRows.map((versionRow) => {
+      const versionStorageRow = versionRow.storage_object_id
+        ? storageObjects.get(versionRow.storage_object_id)
+        : undefined;
+
+      return mapDocumentVersionRowToDocumentVersion(
+        versionRow,
+        {
+          hasCurrentVersion,
+          archivedVersionId,
+          storageObject: versionStorageRow,
+        },
+      );
+    });
+
+    const currentVersionStorage = currentVersionStorageRow
+      ? storageObjectRowToMeta(currentVersionStorageRow)
+      : undefined;
+
+    return [mapDocumentRowToDocument(row, versions, currentVersionStorage)];
   });
 }
 
-export function mapProjectMediaRowToMedia(row: ProjectMediaRow): Media {
+export function mapProjectMediaRowToMedia(
+  row: ProjectMediaRow,
+  storageObject?: StorageObjectRow,
+): Media {
+  const storage = storageObject
+    ? storageObjectRowToMeta(storageObject)
+    : undefined;
+  const fileMeta = storageObject
+    ? {
+        filename: storageObject.filename,
+        mime: storageObject.mime_type ?? "application/octet-stream",
+        size: storageObject.size_bytes ?? 0,
+      }
+    : undefined;
+
   return {
     id: row.id,
     project_id: row.project_id,
@@ -249,13 +395,78 @@ export function mapProjectMediaRowToMedia(row: ProjectMediaRow): Media {
     description: undefined,
     is_final: false,
     created_at: row.created_at,
-    file_meta: undefined,
+    file_meta: fileMeta,
+    storage,
   };
+}
+
+interface PrepareUploadRpcRow {
+  upload_intent_id: string;
+  bucket: string;
+  object_path: string;
+  filename: string;
+  mime_type: string | null;
+  size_bytes: number | null;
+}
+
+interface FinalizeDocumentUploadRpcRow {
+  document_id: string;
+  document_version_id: string;
+  storage_object_id: string;
+  project_id: string;
+  bucket: string;
+  object_path: string;
+  filename: string;
+}
+
+interface FinalizeMediaUploadRpcRow {
+  project_media_id: string;
+  storage_object_id: string;
+  project_id: string;
+  bucket: string;
+  object_path: string;
+  filename: string;
 }
 
 async function loadSupabaseClient(): Promise<TypedSupabaseClient> {
   const { supabase } = await import("@/integrations/supabase/client");
   return supabase as unknown as TypedSupabaseClient;
+}
+
+export function storageObjectRowToMeta(row: StorageObjectRow): StorageObjectMeta {
+  return {
+    id: row.id,
+    bucket: row.bucket,
+    objectPath: row.object_path,
+    filename: row.filename,
+    mimeType: row.mime_type,
+    sizeBytes: row.size_bytes,
+  };
+}
+
+async function fetchStorageObjectsByIds(
+  supabase: TypedSupabaseClient,
+  ids: string[],
+): Promise<Map<string, StorageObjectRow>> {
+  const map = new Map<string, StorageObjectRow>();
+  if (ids.length === 0) {
+    return map;
+  }
+
+  const { data, error } = await supabase
+    .from("storage_objects")
+    .select("*")
+    .in("id", ids);
+
+  if (error) {
+    throw error;
+  }
+
+  for (const row of data ?? []) {
+    map.set(row.id, row);
+  }
+
+  return map;
 }
 
 async function getDocumentVersionRows(
@@ -432,6 +643,130 @@ export async function deleteSupabaseProjectDocument(
   }
 }
 
+export async function prepareSupabaseDocumentUpload(
+  supabase: TypedSupabaseClient,
+  input: PrepareDocumentUploadInput,
+): Promise<PrepareUploadResult> {
+  const { data, error } = await supabase.rpc("prepare_document_upload", {
+    p_project_id: input.projectId,
+    p_type: input.type,
+    p_title: input.title,
+    p_client_filename: input.clientFilename,
+    p_mime_type: input.mimeType,
+    p_size_bytes: input.sizeBytes,
+    p_description: input.description ?? null,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  const rows = data as unknown as PrepareUploadRpcRow[];
+  if (!rows || rows.length === 0) {
+    throw new Error("prepare_document_upload returned no rows.");
+  }
+
+  const row = rows[0];
+  return {
+    uploadIntentId: row.upload_intent_id,
+    bucket: row.bucket,
+    objectPath: row.object_path,
+    filename: row.filename,
+    mimeType: row.mime_type,
+    sizeBytes: row.size_bytes,
+  };
+}
+
+export async function finalizeSupabaseDocumentUpload(
+  supabase: TypedSupabaseClient,
+  uploadIntentId: string,
+): Promise<FinalizeDocumentUploadResult> {
+  const { data, error } = await supabase.rpc("finalize_document_upload", {
+    p_upload_intent_id: uploadIntentId,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  const rows = data as unknown as FinalizeDocumentUploadRpcRow[];
+  if (!rows || rows.length === 0) {
+    throw new Error("finalize_document_upload returned no rows.");
+  }
+
+  const row = rows[0];
+  return {
+    documentId: row.document_id,
+    documentVersionId: row.document_version_id,
+    storageObjectId: row.storage_object_id,
+    projectId: row.project_id,
+    bucket: row.bucket,
+    objectPath: row.object_path,
+    filename: row.filename,
+  };
+}
+
+export async function prepareSupabaseMediaUpload(
+  supabase: TypedSupabaseClient,
+  input: PrepareMediaUploadInput,
+): Promise<PrepareUploadResult> {
+  const { data, error } = await supabase.rpc("prepare_project_media_upload", {
+    p_project_id: input.projectId,
+    p_media_type: input.mediaType,
+    p_client_filename: input.clientFilename,
+    p_mime_type: input.mimeType,
+    p_size_bytes: input.sizeBytes,
+    p_caption: input.caption ?? null,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  const rows = data as unknown as PrepareUploadRpcRow[];
+  if (!rows || rows.length === 0) {
+    throw new Error("prepare_project_media_upload returned no rows.");
+  }
+
+  const row = rows[0];
+  return {
+    uploadIntentId: row.upload_intent_id,
+    bucket: row.bucket,
+    objectPath: row.object_path,
+    filename: row.filename,
+    mimeType: row.mime_type,
+    sizeBytes: row.size_bytes,
+  };
+}
+
+export async function finalizeSupabaseMediaUpload(
+  supabase: TypedSupabaseClient,
+  uploadIntentId: string,
+): Promise<FinalizeMediaUploadResult> {
+  const { data, error } = await supabase.rpc("finalize_project_media_upload", {
+    p_upload_intent_id: uploadIntentId,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  const rows = data as unknown as FinalizeMediaUploadRpcRow[];
+  if (!rows || rows.length === 0) {
+    throw new Error("finalize_project_media_upload returned no rows.");
+  }
+
+  const row = rows[0];
+  return {
+    projectMediaId: row.project_media_id,
+    storageObjectId: row.storage_object_id,
+    projectId: row.project_id,
+    bucket: row.bucket,
+    objectPath: row.object_path,
+    filename: row.filename,
+  };
+}
+
 export function createSupabaseDocumentsMediaSource(
   supabase: TypedSupabaseClient,
   profileId: string,
@@ -465,9 +800,16 @@ export function createSupabaseDocumentsMediaSource(
         throw versionsError;
       }
 
+      const allVersionRows = versionRows ?? [];
+      const storageObjectIds = allVersionRows
+        .map((row) => row.storage_object_id)
+        .filter((id): id is string => id != null);
+      const storageObjectsById = await fetchStorageObjectsByIds(supabase, storageObjectIds);
+
       return shapeDocumentsWithVersions({
         documentRows: rows,
-        versionRows: versionRows ?? [],
+        versionRows: allVersionRows,
+        storageObjectsById,
       });
     },
 
@@ -482,7 +824,15 @@ export function createSupabaseDocumentsMediaSource(
         throw error;
       }
 
-      return (data ?? []).map(mapProjectMediaRowToMedia);
+      const mediaRows = data ?? [];
+      const storageObjectIds = mediaRows
+        .map((row) => row.storage_object_id)
+        .filter((id): id is string => id != null && id !== "");
+      const storageObjectsById = await fetchStorageObjectsByIds(supabase, storageObjectIds);
+
+      return mediaRows.map((row) =>
+        mapProjectMediaRowToMedia(row, storageObjectsById.get(row.storage_object_id)),
+      );
     },
     async createProjectDocument(input) {
       return createSupabaseProjectDocument(supabase, profileId, input);
@@ -495,6 +845,30 @@ export function createSupabaseDocumentsMediaSource(
     },
     async deleteProjectDocument(input) {
       return deleteSupabaseProjectDocument(supabase, input);
+    },
+    async prepareDocumentUpload(input) {
+      return prepareSupabaseDocumentUpload(supabase, input);
+    },
+    async finalizeDocumentUpload(uploadIntentId) {
+      return finalizeSupabaseDocumentUpload(supabase, uploadIntentId);
+    },
+    async prepareMediaUpload(input) {
+      return prepareSupabaseMediaUpload(supabase, input);
+    },
+    async finalizeMediaUpload(uploadIntentId) {
+      return finalizeSupabaseMediaUpload(supabase, uploadIntentId);
+    },
+    async uploadBytes(bucket, objectPath, file) {
+      const { error } = await (supabase as unknown as SupabaseClient).storage
+        .from(bucket)
+        .upload(objectPath, file, {
+          contentType: file.type,
+          upsert: false,
+        });
+
+      if (error) {
+        throw error;
+      }
     },
   };
 }
@@ -541,4 +915,46 @@ export async function deleteProjectDocument(
 ): Promise<void> {
   const source = await getDocumentsMediaSource(mode);
   return source.deleteProjectDocument(input);
+}
+
+export async function prepareDocumentUpload(
+  mode: WorkspaceMode,
+  input: PrepareDocumentUploadInput,
+): Promise<PrepareUploadResult> {
+  const source = await getDocumentsMediaSource(mode);
+  return source.prepareDocumentUpload(input);
+}
+
+export async function finalizeDocumentUpload(
+  mode: WorkspaceMode,
+  uploadIntentId: string,
+): Promise<FinalizeDocumentUploadResult> {
+  const source = await getDocumentsMediaSource(mode);
+  return source.finalizeDocumentUpload(uploadIntentId);
+}
+
+export async function prepareMediaUpload(
+  mode: WorkspaceMode,
+  input: PrepareMediaUploadInput,
+): Promise<PrepareUploadResult> {
+  const source = await getDocumentsMediaSource(mode);
+  return source.prepareMediaUpload(input);
+}
+
+export async function finalizeMediaUpload(
+  mode: WorkspaceMode,
+  uploadIntentId: string,
+): Promise<FinalizeMediaUploadResult> {
+  const source = await getDocumentsMediaSource(mode);
+  return source.finalizeMediaUpload(uploadIntentId);
+}
+
+export async function uploadBytes(
+  mode: WorkspaceMode,
+  bucket: string,
+  objectPath: string,
+  file: File,
+): Promise<void> {
+  const source = await getDocumentsMediaSource(mode);
+  return source.uploadBytes(bucket, objectPath, file);
 }

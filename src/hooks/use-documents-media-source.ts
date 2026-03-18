@@ -6,10 +6,20 @@ import {
   createProjectDocument as createProjectDocumentSource,
   createProjectDocumentVersion as createProjectDocumentVersionSource,
   deleteProjectDocument as deleteProjectDocumentSource,
+  prepareDocumentUpload as prepareDocumentUploadSource,
+  finalizeDocumentUpload as finalizeDocumentUploadSource,
+  prepareMediaUpload as prepareMediaUploadSource,
+  finalizeMediaUpload as finalizeMediaUploadSource,
+  uploadBytes as uploadBytesSource,
   getDocumentsMediaSource,
   type ArchiveProjectDocumentInput,
   type CreateProjectDocumentInput,
   type CreateProjectDocumentVersionInput,
+  type PrepareDocumentUploadInput,
+  type PrepareMediaUploadInput,
+  type PrepareUploadResult,
+  type FinalizeDocumentUploadResult,
+  type FinalizeMediaUploadResult,
 } from "@/data/documents-media-source";
 import { useWorkspaceMode } from "@/hooks/use-workspace-source";
 import type { Document, Media } from "@/types/entities";
@@ -209,5 +219,103 @@ export function useProjectDocumentMutations(projectId: string) {
     createDocumentVersion,
     archiveDocument,
     deleteDocument,
+  };
+}
+
+export function useDocumentUploadMutations(projectId: string) {
+  const mode = useWorkspaceMode();
+  const queryClient = useQueryClient();
+
+  const invalidateProjectDocuments = useCallback(async (resolvedMode: Extract<typeof mode, { kind: "supabase" }>) => {
+    await queryClient.invalidateQueries({
+      queryKey: documentsMediaQueryKeys.projectDocuments(resolvedMode.profileId, projectId),
+    });
+  }, [projectId, queryClient]);
+
+  const prepareUpload = useCallback(async (
+    input: Omit<PrepareDocumentUploadInput, "projectId">,
+  ): Promise<PrepareUploadResult> => {
+    const resolvedMode = assertDocumentsMutationWorkspaceMode(mode);
+    return prepareDocumentUploadSource(resolvedMode, {
+      ...input,
+      projectId,
+    });
+  }, [mode, projectId]);
+
+  const uploadBytes = useCallback(async (
+    bucket: string,
+    objectPath: string,
+    file: File,
+  ): Promise<void> => {
+    const resolvedMode = assertDocumentsMutationWorkspaceMode(mode);
+    return uploadBytesSource(resolvedMode, bucket, objectPath, file);
+  }, [mode]);
+
+  const finalizeUpload = useCallback(async (
+    uploadIntentId: string,
+  ): Promise<FinalizeDocumentUploadResult> => {
+    const resolvedMode = assertDocumentsMutationWorkspaceMode(mode);
+    const result = await finalizeDocumentUploadSource(resolvedMode, uploadIntentId);
+
+    if (resolvedMode.kind === "supabase") {
+      await invalidateProjectDocuments(resolvedMode);
+    }
+
+    return result;
+  }, [invalidateProjectDocuments, mode]);
+
+  return {
+    prepareUpload,
+    uploadBytes,
+    finalizeUpload,
+  };
+}
+
+export function useMediaUploadMutations(projectId: string) {
+  const mode = useWorkspaceMode();
+  const queryClient = useQueryClient();
+
+  const invalidateProjectMedia = useCallback(async (resolvedMode: Extract<typeof mode, { kind: "supabase" }>) => {
+    await queryClient.invalidateQueries({
+      queryKey: documentsMediaQueryKeys.projectMedia(resolvedMode.profileId, projectId),
+    });
+  }, [projectId, queryClient]);
+
+  const prepareUpload = useCallback(async (
+    input: Omit<PrepareMediaUploadInput, "projectId">,
+  ): Promise<PrepareUploadResult> => {
+    const resolvedMode = assertDocumentsMutationWorkspaceMode(mode);
+    return prepareMediaUploadSource(resolvedMode, {
+      ...input,
+      projectId,
+    });
+  }, [mode, projectId]);
+
+  const uploadBytes = useCallback(async (
+    bucket: string,
+    objectPath: string,
+    file: File,
+  ): Promise<void> => {
+    const resolvedMode = assertDocumentsMutationWorkspaceMode(mode);
+    return uploadBytesSource(resolvedMode, bucket, objectPath, file);
+  }, [mode]);
+
+  const finalizeUpload = useCallback(async (
+    uploadIntentId: string,
+  ): Promise<FinalizeMediaUploadResult> => {
+    const resolvedMode = assertDocumentsMutationWorkspaceMode(mode);
+    const result = await finalizeMediaUploadSource(resolvedMode, uploadIntentId);
+
+    if (resolvedMode.kind === "supabase") {
+      await invalidateProjectMedia(resolvedMode);
+    }
+
+    return result;
+  }, [invalidateProjectMedia, mode]);
+
+  return {
+    prepareUpload,
+    uploadBytes,
+    finalizeUpload,
   };
 }

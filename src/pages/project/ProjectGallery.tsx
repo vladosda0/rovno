@@ -12,7 +12,8 @@ import {
 import { PhotoViewer } from "@/components/PhotoViewer";
 import { EmptyState } from "@/components/EmptyState";
 import { toast } from "@/hooks/use-toast";
-import { useMedia, useTasks } from "@/hooks/use-mock-data";
+import { useMedia, useTasks, useWorkspaceMode } from "@/hooks/use-mock-data";
+import { useMediaUploadMutations } from "@/hooks/use-documents-media-source";
 import { trackEvent } from "@/lib/analytics";
 import { usePermission } from "@/lib/permissions";
 import { addMedia, addEvent, getCurrentUser } from "@/data/store";
@@ -25,11 +26,21 @@ export default function ProjectGallery() {
   const tasks = useTasks(pid);
   const perm = usePermission(pid);
   const user = getCurrentUser();
+  const workspaceMode = useWorkspaceMode();
+  const isSupabaseMode = workspaceMode.kind === "supabase";
+  const {
+    prepareUpload,
+    uploadBytes,
+    finalizeUpload,
+  } = useMediaUploadMutations(pid);
 
   const [filter, setFilter] = useState<"all" | "final" | "progress">("all");
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadCaption, setUploadCaption] = useState("");
   const [uploadTaskId, setUploadTaskId] = useState("");
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [pendingFinalizeIntentId, setPendingFinalizeIntentId] = useState<string | null>(null);
   const [viewPhoto, setViewPhoto] = useState<MediaType | null>(null);
 
   const filtered = photos.filter((p) => {
@@ -38,33 +49,94 @@ export default function ProjectGallery() {
     return true;
   });
 
-  /* --- Upload --- */
-  function handleUpload() {
-    const mediaId = `media-${Date.now()}`;
-    addMedia({
-      id: mediaId,
-      project_id: pid,
-      task_id: uploadTaskId || undefined,
-      uploader_id: user.id,
-      caption: uploadCaption || "Photo",
-      is_final: false,
-      created_at: new Date().toISOString(),
-    });
-    addEvent({
-      id: `evt-${Date.now()}`,
-      project_id: pid,
-      actor_id: user.id,
-      type: "photo_uploaded",
-      object_type: "media",
-      object_id: mediaId,
-      timestamp: new Date().toISOString(),
-      payload: { caption: uploadCaption },
-    });
-    trackEvent("media_uploaded", { project_id: pid });
+  function closeUploadDialog() {
     setUploadOpen(false);
     setUploadCaption("");
     setUploadTaskId("");
-    toast({ title: "Photo uploaded" });
+    setUploadFile(null);
+    setUploading(false);
+    setPendingFinalizeIntentId(null);
+  }
+
+  async function handleUpload() {
+    if (!isSupabaseMode) {
+      const mediaId = `media-${Date.now()}`;
+      addMedia({
+        id: mediaId,
+        project_id: pid,
+        task_id: uploadTaskId || undefined,
+        uploader_id: user.id,
+        caption: uploadCaption || "Photo",
+        is_final: false,
+        created_at: new Date().toISOString(),
+      });
+      addEvent({
+        id: `evt-${Date.now()}`,
+        project_id: pid,
+        actor_id: user.id,
+        type: "photo_uploaded",
+        object_type: "media",
+        object_id: mediaId,
+        timestamp: new Date().toISOString(),
+        payload: { caption: uploadCaption },
+      });
+      trackEvent("media_uploaded", { project_id: pid });
+      closeUploadDialog();
+      toast({ title: "Photo uploaded" });
+      return;
+    }
+
+    if (!uploadFile) {
+      toast({ title: "Please select a file", variant: "destructive" });
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const intent = await prepareUpload({
+        mediaType: "photo",
+        clientFilename: uploadFile.name,
+        mimeType: uploadFile.type || "image/jpeg",
+        sizeBytes: uploadFile.size,
+        caption: uploadCaption || undefined,
+      });
+
+      await uploadBytes(intent.bucket, intent.objectPath, uploadFile);
+
+      setPendingFinalizeIntentId(intent.uploadIntentId);
+      await finalizeUpload(intent.uploadIntentId);
+
+      trackEvent("media_uploaded", { project_id: pid });
+      closeUploadDialog();
+      toast({ title: "Photo uploaded" });
+    } catch (error) {
+      setUploading(false);
+      toast({
+        title: "Photo upload failed",
+        description: error instanceof Error ? error.message : "Unable to upload the photo.",
+        variant: "destructive",
+      });
+    }
+  }
+
+  async function handleRetryFinalize() {
+    if (!pendingFinalizeIntentId) return;
+
+    setUploading(true);
+    try {
+      await finalizeUpload(pendingFinalizeIntentId);
+
+      trackEvent("media_uploaded", { project_id: pid });
+      closeUploadDialog();
+      toast({ title: "Photo uploaded", description: "Upload finalized successfully." });
+    } catch (error) {
+      setUploading(false);
+      toast({
+        title: "Finalize failed",
+        description: error instanceof Error ? error.message : "Unable to finalize the upload. Try again.",
+        variant: "destructive",
+      });
+    }
   }
 
   /* placeholder colors for mock thumbnails */
@@ -157,40 +229,75 @@ export default function ProjectGallery() {
       />
 
       {/* Upload modal */}
-      <AlertDialog open={uploadOpen} onOpenChange={setUploadOpen}>
+      <AlertDialog open={uploadOpen} onOpenChange={(open) => { if (!open) closeUploadDialog(); else setUploadOpen(true); }}>
         <AlertDialogContent className="bg-card border border-border shadow-xl rounded-modal">
           <AlertDialogHeader>
             <AlertDialogTitle>Upload photos</AlertDialogTitle>
             <AlertDialogDescription>Add project photos with an optional caption.</AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-3 py-2">
-            <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
-              <Camera className="mx-auto h-10 w-10 text-muted-foreground/30 mb-2" />
-              <p className="text-caption text-muted-foreground">Drag photos here or click to browse</p>
+            {pendingFinalizeIntentId && (
+              <div className="rounded-panel bg-destructive/10 p-3 text-caption text-destructive">
+                File was uploaded but finalize failed. You can retry finalization below.
+              </div>
+            )}
+            <div className="space-y-1">
+              <label className="text-body-sm font-medium text-foreground">Photo</label>
+              <Input
+                type="file"
+                accept="image/*"
+                disabled={uploading}
+                onChange={(e) => {
+                  setUploadFile(e.target.files?.[0] ?? null);
+                }}
+              />
+              {!isSupabaseMode && (
+                <div className="border-2 border-dashed border-border rounded-lg p-8 text-center mt-2">
+                  <Camera className="mx-auto h-10 w-10 text-muted-foreground/30 mb-2" />
+                  <p className="text-caption text-muted-foreground">Or drag photos here</p>
+                </div>
+              )}
             </div>
             <div className="space-y-1">
               <label className="text-body-sm font-medium text-foreground">Caption (optional)</label>
-              <Input value={uploadCaption} onChange={(e) => setUploadCaption(e.target.value)} placeholder="e.g. Kitchen wiring complete" />
+              <Input value={uploadCaption} onChange={(e) => setUploadCaption(e.target.value)} placeholder="e.g. Kitchen wiring complete" disabled={uploading} />
             </div>
-            <div className="space-y-1">
-              <label className="text-body-sm font-medium text-foreground">Link to task (optional)</label>
-              <select
-                value={uploadTaskId}
-                onChange={(e) => setUploadTaskId(e.target.value)}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-              >
-                <option value="">No task</option>
-                {tasks.map((t) => (
-                  <option key={t.id} value={t.id}>{t.title}</option>
-                ))}
-              </select>
-            </div>
+            {!isSupabaseMode && (
+              <div className="space-y-1">
+                <label className="text-body-sm font-medium text-foreground">Link to task (optional)</label>
+                <select
+                  value={uploadTaskId}
+                  onChange={(e) => setUploadTaskId(e.target.value)}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  disabled={uploading}
+                >
+                  <option value="">No task</option>
+                  {tasks.map((t) => (
+                    <option key={t.id} value={t.id}>{t.title}</option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleUpload} className="bg-accent text-accent-foreground hover:bg-accent/90">
-              Upload
-            </AlertDialogAction>
+            <AlertDialogCancel disabled={uploading}>Cancel</AlertDialogCancel>
+            {pendingFinalizeIntentId ? (
+              <AlertDialogAction
+                onClick={(e) => { e.preventDefault(); handleRetryFinalize(); }}
+                className="bg-accent text-accent-foreground hover:bg-accent/90"
+                disabled={uploading}
+              >
+                {uploading ? "Finalizing…" : "Retry finalize"}
+              </AlertDialogAction>
+            ) : (
+              <AlertDialogAction
+                onClick={(e) => { e.preventDefault(); handleUpload(); }}
+                className="bg-accent text-accent-foreground hover:bg-accent/90"
+                disabled={uploading || (isSupabaseMode && !uploadFile)}
+              >
+                {uploading ? "Uploading…" : "Upload"}
+              </AlertDialogAction>
+            )}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

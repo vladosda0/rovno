@@ -302,12 +302,22 @@ export interface OrderWithLines extends Order {
   receiveEvents?: OrderReceiveEvent[];
 }
 
+export interface StorageObjectMeta {
+  id: string;
+  bucket: string;
+  objectPath: string;
+  filename: string;
+  mimeType: string | null;
+  sizeBytes: number | null;
+}
+
 export interface DocumentVersion {
   id: string;
   document_id: string;
   number: number;
   status: DocumentVersionStatus;
   content: string;
+  storage?: StorageObjectMeta;
 }
 
 export interface Document {
@@ -344,6 +354,7 @@ export interface Media {
     mime: string;
     size: number;
   };
+  storage?: StorageObjectMeta;
 }
 
 export interface Event {
