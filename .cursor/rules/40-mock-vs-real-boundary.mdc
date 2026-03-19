@@ -1,0 +1,20 @@
+---
+alwaysApply: true
+---
+
+This repo contains both real domain logic and mock/demo layers.
+
+When touching a feature, classify it first:
+- canonical runtime domain logic
+- local mock/demo screen
+- adapter/seam between mock and real
+- placeholder UI with no backend contract
+
+Do not silently convert a mock/demo surface into a real integration.
+Do not silently remove a demo fallback.
+Do not infer canonical behavior from seed data, localStorage stubs, or placeholder tabs.
+
+If a task introduces persistence into a mock area:
+- make the seam explicit
+- preserve current fallback behavior unless the request explicitly retires it
+- note what remains mock and what became real

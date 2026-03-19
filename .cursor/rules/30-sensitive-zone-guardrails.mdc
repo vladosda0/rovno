@@ -1,0 +1,30 @@
+---
+description: 
+globs: src/pages/project/ProjectEstimate.tsx  src/data/estimate-v2-store.ts  src/lib/estimate-v2/**  src/pages/project/ProjectProcurement.tsx  src/data/procurement-store.ts  src/data/order-store.ts  src/data/inventory-store.ts  src/lib/procurement-*  src/pages/project/ProjectTasks.tsx  src/components/tasks/**  src/data/hr-store.ts  src/pages/project/ProjectHR.tsx  src/components/AISidebar.tsx  src/lib/commit-proposal.ts  src/data/store.ts
+alwaysApply: false
+---
+
+You are touching a sensitive Rovno zone.
+
+Before editing, identify:
+- canonical model in play
+- legacy/v2 overlap, if any
+- cross-domain side effects
+- downstream flows that may break
+
+At minimum, inspect whether the change affects:
+- estimate → task materialization
+- estimate → procurement sync
+- estimate → HR sync
+- checklist/material linkage
+- procurement ordered/received/in-stock derivations
+- inventory balances or movements
+- AI proposal commit behavior
+- event/activity side effects
+
+Rules for sensitive zones:
+- Prefer additive changes over structural rewrites.
+- Do not change statuses, lineage, sync semantics, or cross-domain mapping casually.
+- Do not assume legacy and v2 models are interchangeable.
+- If canonical ownership is unclear, stop and audit first.
+- Provide a targeted regression checklist before handoff.

@@ -1,0 +1,24 @@
+---
+alwaysApply: true
+---
+
+Rovno source-of-truth hierarchy:
+
+1. SQL migrations in `rovno-db`
+2. generated DB types
+3. generated `backend-truth/`
+4. frontend adapters/mappers
+5. UI state/components
+
+Non-negotiable rules:
+
+- Never invent backend structure from UI code.
+- Never treat local mock/demo store shapes as backend truth.
+- If UI conflicts with schema, schema wins.
+- `backend-truth/` inside `rovno` is read-only.
+- Do not hand-edit `backend-truth/`.
+- Backend changes belong in `rovno-db` first.
+- Frontend must adapt to backend truth through adapters/mappers, not by mutating the contract mirror.
+
+If a requested feature needs backend fields, RPCs, storage rules, auth rules, or RLS behavior that do not exist in migrations or `backend-truth/`, stop and report that the backend contract is missing.
+Do not guess.

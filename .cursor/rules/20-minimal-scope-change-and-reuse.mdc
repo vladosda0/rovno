@@ -1,0 +1,20 @@
+---
+description: 
+alwaysApply: true
+---
+
+Default editing behavior:
+
+- Reuse existing architecture before creating new abstractions.
+- Prefer existing stores, hooks, helpers, components, and patterns already used in the relevant slice.
+- Do not reorganize folders, rename large surfaces, or introduce new dependencies unless explicitly requested.
+- Do not “clean up nearby code” unless it is directly required for the requested change.
+- Do not casually replace demo/mock behavior with real persistence.
+- Keep the diff small and intention-revealing.
+
+For changes that touch more than 2 files, first list:
+- exact files you expect to edit
+- why each file is needed
+- what you will deliberately not touch
+
+Then proceed.

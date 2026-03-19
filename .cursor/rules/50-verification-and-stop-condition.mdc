@@ -1,0 +1,23 @@
+---
+alwaysApply: true
+---
+
+A change is not complete when code is written.
+A change is complete only when it is verified to the extent possible in scope.
+
+After edits:
+- run the smallest relevant checks available
+- review the diff for unrelated changes
+- state what was verified
+- state what was not verified
+- state any remaining assumptions or risk
+
+Prefer targeted verification:
+- relevant tests first
+- build/typecheck/lint as appropriate
+- behavior notes for the exact flow changed
+- nearby regression checks for affected core loop surfaces
+
+If you cannot verify a critical assumption, do not present the work as settled.
+Say what is still unknown and what needs inspection.
+Stop instead of guessing.

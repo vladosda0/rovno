@@ -1,0 +1,34 @@
+---
+alwaysApply: true
+---
+
+Before proposing edits or making edits, classify the task first:
+
+- planning/spec
+- repo audit
+- implementation
+- verification/review
+- backend/schema
+- server/deployment
+
+For any non-trivial task, separate these three things explicitly:
+1. product intent
+2. repo reality
+3. implementation plan
+
+Do not collapse them into one step.
+
+Before editing, verify the working context from the repo itself:
+- which repo: `rovno` or `rovno-db`
+- which layer: backend truth, adapter/mapping, app store, UI, infra
+- which environment/branch if visible in context
+- if server-related, which target environment/server is intended
+
+If the current implementation is not confirmed, do not start editing.
+Audit first.
+
+Prefer minimal, local, reversible changes.
+Do not broaden scope just because a larger refactor looks cleaner.
+
+Human controls Git operations.
+Do not commit, merge, reset, revert, or delete branches unless explicitly requested.
