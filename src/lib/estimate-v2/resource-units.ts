@@ -25,6 +25,6 @@ export function resolveUnitSelectValue(type: ResourceLineType, unit: string): st
 export function buildUnitSelectOptions(type: ResourceLineType): Array<{ value: string; label: string }> {
   return [
     ...RESOURCE_UNITS_BY_TYPE[type].map((unit) => ({ value: unit, label: unit })),
-    { value: CUSTOM_UNIT_SENTINEL, label: "Custom…" },
+    { value: CUSTOM_UNIT_SENTINEL, label: "Other" },
   ];
 }

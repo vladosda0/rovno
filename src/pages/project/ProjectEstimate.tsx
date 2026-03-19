@@ -97,6 +97,7 @@ import { EstimateGantt } from "@/components/estimate-v2/gantt/EstimateGantt";
 import {
   buildUnitSelectOptions,
   CUSTOM_UNIT_SENTINEL,
+  getUnitOptionsForType,
   resolveUnitSelectValue,
 } from "@/lib/estimate-v2/resource-units";
 import type {
@@ -1302,7 +1303,7 @@ export default function ProjectEstimate() {
     });
     setCustomUnitDraftByLineId((current) => ({
       ...current,
-      [lineId]: current[lineId] ?? currentUnit,
+      [lineId]: current[lineId] ?? (currentUnit.trim() || "other"),
     }));
   };
 
@@ -1359,7 +1360,7 @@ export default function ProjectEstimate() {
                     <SelectValue placeholder={estimateStatusLabel(estimateProject.estimateStatus)} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="planning">Planning</SelectItem>
+                    {estimateProject.estimateStatus !== "in_work" && <SelectItem value="planning">Planning</SelectItem>}
                     <SelectItem value="in_work">In work</SelectItem>
                     <SelectItem value="paused">Paused</SelectItem>
                     <SelectItem value="finished">Finished</SelectItem>
@@ -1435,10 +1436,12 @@ export default function ProjectEstimate() {
             {regime === "client" ? (
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4">
+                  <p className="col-span-2 text-sm font-semibold text-foreground md:col-span-3 lg:col-span-4">Financial</p>
                   <div className="rounded-md bg-muted/30 px-2.5 py-2">
                     <p className="text-[11px] text-muted-foreground">Total (inc VAT)</p>
                     <p className="text-sm font-semibold tabular-nums text-foreground">{money(totals.totalCents, estimateProject.currency)}</p>
                   </div>
+                  <p className="col-span-2 text-sm font-semibold text-foreground md:col-span-3 lg:col-span-4">Timing</p>
                   <div className="rounded-md bg-muted/30 px-2.5 py-2">
                     <p className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
                       Days to end
@@ -1506,6 +1509,7 @@ export default function ProjectEstimate() {
             ) : (
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4">
+                  <p className="col-span-2 text-sm font-semibold text-foreground md:col-span-3 lg:col-span-4">Financial</p>
                   <div className="rounded-md bg-muted/30 px-2.5 py-2">
                     <p className="text-[11px] text-muted-foreground">Planned total</p>
                     <p className="text-sm font-semibold tabular-nums text-foreground">
@@ -1532,6 +1536,7 @@ export default function ProjectEstimate() {
                       {money(combinedPlanFact.fact.toBePaidPlannedCents, estimateProject.currency)}
                     </p>
                   </div>
+                  <p className="col-span-2 text-sm font-semibold text-foreground md:col-span-3 lg:col-span-4">Timing</p>
                   <div className="rounded-md bg-muted/30 px-2.5 py-2">
                     <p className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
                       Days to end
@@ -1977,8 +1982,12 @@ export default function ProjectEstimate() {
                                         <TableHead className="h-9 w-[128px] py-1 pr-2">Unit</TableHead>
                                         {regime !== "client" && <TableHead className="h-9 w-[120px] py-1 pr-2 text-right tabular-nums">Cost unit</TableHead>}
                                         {regime !== "client" && <TableHead className="h-9 w-[120px] py-1 pr-2 text-right tabular-nums">Cost total</TableHead>}
-                                        {regime === "contractor" && <TableHead className="h-9 w-[92px] py-1 pr-2 text-right tabular-nums">Markup %</TableHead>}
-                                        {regime !== "client" && <TableHead className="h-9 w-[92px] py-1 pr-2 text-right tabular-nums">Discount %</TableHead>}
+                                        {regime === "contractor" && (
+                                          <TableHead className="h-9 w-[92px] whitespace-nowrap py-1 pr-2 text-right tabular-nums">Markup %</TableHead>
+                                        )}
+                                        {regime !== "client" && (
+                                          <TableHead className="h-9 w-[92px] whitespace-nowrap py-1 pr-2 text-right tabular-nums">Discount %</TableHead>
+                                        )}
                                         <TableHead className="h-9 w-[120px] py-1 pr-2 text-right tabular-nums">Client unit</TableHead>
                                         <TableHead className="h-9 w-[126px] py-1 pr-2 text-right tabular-nums">Client total</TableHead>
                                         {canEditEstimate && <TableHead className="h-9 w-10 py-1 pr-0" />}
@@ -2071,34 +2080,14 @@ export default function ProjectEstimate() {
 
                                             <TableCell className="w-[128px] py-1.5 pr-2 align-top">
                                               {canEditEstimate ? (
-                                                <div className="space-y-1">
-                                                  <Select
-                                                    value={unitSelectValue}
-                                                    onValueChange={(nextValue) => {
-                                                      if (nextValue === CUSTOM_UNIT_SENTINEL) {
-                                                        openCustomUnitInput(line.id, isCustomUnit ? line.unit : "");
-                                                        return;
-                                                      }
-                                                      closeCustomUnitInput(line.id);
-                                                      updateLine(pid, line.id, { unit: nextValue });
-                                                    }}
-                                                  >
-                                                    <SelectTrigger className="h-7 border-transparent bg-transparent px-1 py-0 text-sm shadow-none focus:ring-1 focus:ring-ring/40">
-                                                      <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                      {buildUnitSelectOptions(line.type).map((option) => (
-                                                        <SelectItem key={`${line.id}-${option.value}`} value={option.value}>
-                                                          {option.label}
-                                                        </SelectItem>
-                                                      ))}
-                                                    </SelectContent>
-                                                  </Select>
-                                                  {shouldShowCustomInput && (
+                                                shouldShowCustomInput ? (
+                                                  <div className="inline-flex max-w-full items-center gap-1">
                                                     <Input
-                                                      className="h-7"
+                                                      className="h-7 w-auto max-w-[calc(100%-1.75rem)] px-2 py-0 text-sm"
+                                                      size={Math.min(18, Math.max(3, (customDraft ?? "").length + 1))}
                                                       value={customDraft}
-                                                      placeholder="Custom unit"
+                                                      placeholder=""
+                                                      aria-label="Unit"
                                                       onChange={(event) => {
                                                         const nextValue = event.target.value;
                                                         setCustomUnitDraftByLineId((current) => ({
@@ -2113,8 +2102,57 @@ export default function ProjectEstimate() {
                                                         commitCustomUnit(line);
                                                       }}
                                                     />
-                                                  )}
-                                                </div>
+                                                    <DropdownMenu>
+                                                      <DropdownMenuTrigger asChild>
+                                                        <Button
+                                                          type="button"
+                                                          variant="ghost"
+                                                          size="icon"
+                                                          className="h-7 w-7 shrink-0 border border-transparent bg-transparent text-foreground shadow-none hover:bg-muted/60 focus-visible:ring-1 focus-visible:ring-ring/40"
+                                                          aria-label="Preset units"
+                                                        >
+                                                          <ChevronDown className="h-4 w-4 opacity-50" />
+                                                        </Button>
+                                                      </DropdownMenuTrigger>
+                                                      <DropdownMenuContent align="end" className="max-h-60 overflow-y-auto">
+                                                        {getUnitOptionsForType(line.type).map((unit) => (
+                                                          <DropdownMenuItem
+                                                            key={`${line.id}-preset-${unit}`}
+                                                            onSelect={() => {
+                                                              closeCustomUnitInput(line.id);
+                                                              updateLine(pid, line.id, { unit });
+                                                            }}
+                                                          >
+                                                            {unit}
+                                                          </DropdownMenuItem>
+                                                        ))}
+                                                      </DropdownMenuContent>
+                                                    </DropdownMenu>
+                                                  </div>
+                                                ) : (
+                                                  <Select
+                                                    value={unitSelectValue}
+                                                    onValueChange={(nextValue) => {
+                                                      if (nextValue === CUSTOM_UNIT_SENTINEL) {
+                                                        openCustomUnitInput(line.id, isCustomUnit ? line.unit : "");
+                                                        return;
+                                                      }
+                                                      closeCustomUnitInput(line.id);
+                                                      updateLine(pid, line.id, { unit: nextValue });
+                                                    }}
+                                                  >
+                                                    <SelectTrigger className="h-7 w-auto max-w-full min-w-0 border-transparent bg-transparent px-2 py-0 text-sm shadow-none focus:ring-1 focus:ring-ring/40">
+                                                      <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                      {buildUnitSelectOptions(line.type).map((option) => (
+                                                        <SelectItem key={`${line.id}-${option.value}`} value={option.value}>
+                                                          {option.label}
+                                                        </SelectItem>
+                                                      ))}
+                                                    </SelectContent>
+                                                  </Select>
+                                                )
                                               ) : (
                                                 <div className="min-h-7 px-1 py-0.5 text-sm text-foreground">
                                                   {line.unit || "—"}
@@ -2147,7 +2185,7 @@ export default function ProjectEstimate() {
                                                   value={line.markupBps}
                                                   readOnly={!canEditEstimate}
                                                   onCommit={(nextValue) => updateLine(pid, line.id, { markupBps: nextValue })}
-                                                  formatDisplay={(value) => fromBpsToPercent(value)}
+                                                  formatDisplay={(value) => `${fromBpsToPercent(value)}%`}
                                                   formatInput={(value) => fromBpsToPercent(value)}
                                                   parseInput={(raw) => toBpsFromPercent(raw)}
                                                 />
@@ -2160,13 +2198,13 @@ export default function ProjectEstimate() {
                                                   <InlineEditableNumber
                                                     value={line.discountBpsOverride ?? 0}
                                                     onCommit={(nextValue) => updateLine(pid, line.id, { discountBpsOverride: nextValue })}
-                                                    formatDisplay={(value) => fromBpsToPercent(value)}
+                                                    formatDisplay={(value) => `${fromBpsToPercent(value)}%`}
                                                     formatInput={(value) => fromBpsToPercent(value)}
                                                     parseInput={(raw) => toBpsFromPercent(raw)}
                                                   />
                                                 ) : (
-                                                  <div className="min-h-7 px-1 py-0.5 text-right text-sm tabular-nums text-foreground">
-                                                    {fromBpsToPercent(effectiveDiscountForDisplay(line, stage, estimateProject.discountBps))}
+                                                  <div className="min-h-7 whitespace-nowrap px-1 py-0.5 text-right text-sm tabular-nums text-foreground">
+                                                    {`${fromBpsToPercent(effectiveDiscountForDisplay(line, stage, estimateProject.discountBps))}%`}
                                                   </div>
                                                 )}
                                               </TableCell>

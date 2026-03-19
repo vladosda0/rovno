@@ -15,11 +15,11 @@ describe("estimate-v2 resource units", () => {
     expect(getUnitOptionsForType("other")).toEqual(["item", "set", "job"]);
   });
 
-  it("keeps Custom option as the last dropdown item", () => {
+  it("keeps Other (custom sentinel) option as the last dropdown item", () => {
     const options = buildUnitSelectOptions("material");
     expect(options[options.length - 1]).toEqual({
       value: CUSTOM_UNIT_SENTINEL,
-      label: "Custom…",
+      label: "Other",
     });
   });
 

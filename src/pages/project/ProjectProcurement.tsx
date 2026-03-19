@@ -72,7 +72,6 @@ import { inventoryQueryKeys } from "@/hooks/use-inventory-data";
 import { orderQueryKeys } from "@/hooks/use-order-data";
 import { procurementQueryKeys } from "@/hooks/use-procurement-source";
 import { useWorkspaceMode } from "@/hooks/use-workspace-source";
-import { relinkProcurementItemToEstimateV2Line } from "@/lib/estimate-v2/procurement-sync";
 import { computeProjectTotals } from "@/lib/estimate-v2/pricing";
 import type {
   Event,
@@ -244,7 +243,6 @@ export default function ProjectProcurement() {
   const detailItem = itemId ? (items.find((item) => item.id === itemId) ?? null) : null;
   const [editForm, setEditForm] = useState<Partial<ProcurementItemV2>>({});
   const [attachmentUrl, setAttachmentUrl] = useState("");
-  const [relinkLineId, setRelinkLineId] = useState<string>("");
 
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const draftRef = useRef<Partial<ProcurementItemV2>>({});
@@ -435,11 +433,6 @@ export default function ProjectProcurement() {
       return next.size === prev.size ? prev : next;
     });
   }, [requestedItems]);
-
-  const procurementEstimateLines = useMemo(
-    () => estimateState.lines.filter((line) => line.type === "material" || line.type === "tool"),
-    [estimateState.lines],
-  );
 
   const placedSupplierOrders = useMemo(() => (
     orders
@@ -738,7 +731,6 @@ export default function ProjectProcurement() {
   useEffect(() => {
     if (!detailItem) {
       initializedDetailIdRef.current = null;
-      setRelinkLineId("");
       return;
     }
     if (initializedDetailIdRef.current === detailItem.id) return;
@@ -748,7 +740,6 @@ export default function ProjectProcurement() {
     draftRef.current = { ...detailItem };
     lastPersistedSignatureRef.current = computeDraftSignature(detailItem);
     setAttachmentUrl("");
-    setRelinkLineId(detailItem.sourceEstimateV2LineId ?? "");
     clearAutosaveTimer();
   }, [detailItem, computeDraftSignature, clearAutosaveTimer]);
 
@@ -2199,54 +2190,6 @@ export default function ProjectProcurement() {
                     className="h-9"
                     disabled={!canEdit}
                   />
-                </div>
-
-                <div>
-                  <label className="text-xs text-muted-foreground">Estimate line link</label>
-                  <div className="mt-1 flex flex-wrap items-center gap-2">
-                    <Select value={relinkLineId || undefined} onValueChange={setRelinkLineId}>
-                      <SelectTrigger className="h-9 w-[320px]">
-                        <SelectValue placeholder="Select estimate line" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {procurementEstimateLines.map((line) => (
-                          <SelectItem key={line.id} value={line.id}>
-                            {line.title}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-9"
-                      disabled={!canEdit || !relinkLineId}
-                      onClick={() => {
-                        if (!relinkLineId) return;
-                        const ok = relinkProcurementItemToEstimateV2Line(
-                          pid,
-                          detailItem.id,
-                          relinkLineId,
-                          estimateState,
-                        );
-                        if (!ok) {
-                          toast({ title: "Unable to relink", variant: "destructive" });
-                          return;
-                        }
-                        patchEditForm((prev) => ({
-                          ...prev,
-                          sourceEstimateV2LineId: relinkLineId,
-                          orphaned: false,
-                          orphanedAt: null,
-                          orphanedReason: null,
-                          lockedFromEstimate: true,
-                        }), "immediate");
-                        toast({ title: "Item relinked" });
-                      }}
-                    >
-                      Relink
-                    </Button>
-                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

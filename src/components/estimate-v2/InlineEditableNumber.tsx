@@ -87,7 +87,7 @@ export function InlineEditableNumber({
   if (!canEdit) {
     const rendered = toDisplay(value);
     return (
-      <div className={cn("min-h-7 px-1 py-0.5 text-right text-sm tabular-nums text-foreground", className, displayClassName)}>
+      <div className={cn("min-h-7 whitespace-nowrap px-1 py-0.5 text-right text-sm tabular-nums text-foreground", className, displayClassName)}>
         {rendered || <span className="text-muted-foreground">{placeholder}</span>}
       </div>
     );
@@ -137,7 +137,7 @@ export function InlineEditableNumber({
         type="button"
         onClick={() => setIsEditing(true)}
         className={cn(
-          "flex min-h-7 w-full items-center justify-end rounded-sm px-1 py-0.5 text-right text-sm tabular-nums text-foreground transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/40",
+          "flex min-h-7 whitespace-nowrap w-full items-center justify-end rounded-sm px-1 py-0.5 text-right text-sm tabular-nums text-foreground transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/40",
           displayClassName,
         )}
       >
