@@ -404,7 +404,21 @@
       "schema": "public",
       "name": "finalize_project_media_upload",
       "signature": "public.finalize_project_media_upload(uuid, uuid, boolean)",
-      "sourceMigration": "supabase/migrations/20260320110000_task_final_media_contract.sql"
+      "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
+    },
+    {
+      "key": "public.enforce_tasks_estimate_lineage_scope",
+      "schema": "public",
+      "name": "enforce_tasks_estimate_lineage_scope",
+      "signature": "public.enforce_tasks_estimate_lineage_scope()",
+      "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
+    },
+    {
+      "key": "public.guard_estimate_work_stage_reassignment",
+      "schema": "public",
+      "name": "guard_estimate_work_stage_reassignment",
+      "signature": "public.guard_estimate_work_stage_reassignment()",
+      "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
     }
   ],
   "policies": [
@@ -497,12 +511,12 @@
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
     },
     {
-      "key": "public.projects.projects_update",
+      "key": "public.projects.projects_select",
       "schema": "public",
       "table": "projects",
-      "name": "projects_update",
-      "command": "update",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+      "name": "projects_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql"
     },
     {
       "key": "public.projects.projects_delete",
@@ -511,6 +525,14 @@
       "name": "projects_delete",
       "command": "delete",
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.projects.projects_update",
+      "schema": "public",
+      "table": "projects",
+      "name": "projects_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
     },
     {
       "key": "public.project_members.project_members_select",
@@ -1323,7 +1345,9 @@
         "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
         "supabase/migrations/20260306161000_projects_membership_and_invites.sql",
         "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql",
-        "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
+        "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql",
+        "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
       ],
       "tables": [
         "public.profiles",
@@ -1360,9 +1384,8 @@
         "public.notification_preferences.notification_preferences_insert",
         "public.notification_preferences.notification_preferences_update",
         "public.projects.projects_select",
-        "public.projects.projects_insert",
-        "public.projects.projects_update",
         "public.projects.projects_delete",
+        "public.projects.projects_update",
         "public.project_members.project_members_select",
         "public.project_members.project_members_insert",
         "public.project_members.project_members_update",
@@ -1572,6 +1595,7 @@
         "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
         "supabase/migrations/20260317133000_storage_bucket_config_table.sql",
         "supabase/migrations/20260317121000_storage_upload_rpcs.sql",
+        "supabase/migrations/20260320130000_codex_review_findings_fixes.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
       ],
       "tables": [

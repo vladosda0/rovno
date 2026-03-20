@@ -15,6 +15,7 @@
     "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
     "supabase/migrations/20260317133000_storage_bucket_config_table.sql",
     "supabase/migrations/20260317121000_storage_upload_rpcs.sql",
+    "supabase/migrations/20260320130000_codex_review_findings_fixes.sql",
     "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
   ],
   "tables": [
@@ -1573,7 +1574,7 @@
         },
         {
           "name": "p_is_final",
-          "type": "boolean default false",
+          "type": "boolean default null",
           "identityType": "boolean"
         }
       ],
@@ -1582,7 +1583,7 @@
       "volatility": "volatile",
       "securityDefiner": true,
       "searchPath": "public",
-      "sourceMigration": "supabase/migrations/20260320110000_task_final_media_contract.sql",
+      "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql",
       "authenticatedExecute": true,
       "triggerUsages": []
     }

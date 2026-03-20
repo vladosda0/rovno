@@ -77,6 +77,9 @@ Indexes:
 - `idx_estimate_works_estimate_version_id` on (`estimate_version_id`)
 - `idx_estimate_works_project_stage_id` on (`project_stage_id`)
 
+Triggers:
+- `guard_estimate_work_stage_reassignment`: before update of project_stage_id, executes `public.guard_estimate_work_stage_reassignment()`
+
 ### public.estimate_resource_lines
 
 | Column | Type | Nullable | Default | Primary Key |

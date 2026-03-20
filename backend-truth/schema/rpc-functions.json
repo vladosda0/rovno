@@ -707,7 +707,7 @@
         },
         {
           "name": "p_is_final",
-          "type": "boolean default false",
+          "type": "boolean default null",
           "identityType": "boolean"
         }
       ],
@@ -717,8 +717,48 @@
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260320110000_task_final_media_contract.sql",
+      "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql",
       "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "enforce_tasks_estimate_lineage_scope",
+      "signature": "public.enforce_tasks_estimate_lineage_scope()",
+      "args": [],
+      "returnType": "trigger",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql",
+      "triggerUsages": [
+        {
+          "table": "public.tasks",
+          "triggerName": "enforce_tasks_estimate_lineage_scope",
+          "activation": "before insert or update of project_id, stage_id, estimate_work_id"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "guard_estimate_work_stage_reassignment",
+      "signature": "public.guard_estimate_work_stage_reassignment()",
+      "args": [],
+      "returnType": "trigger",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql",
+      "triggerUsages": [
+        {
+          "table": "public.estimate_works",
+          "triggerName": "guard_estimate_work_stage_reassignment",
+          "activation": "before update of project_stage_id"
+        }
+      ]
     }
   ]
 }

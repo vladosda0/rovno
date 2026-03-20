@@ -186,16 +186,16 @@
           "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
         },
         {
-          "name": "projects_update",
+          "name": "projects_select",
           "schema": "public",
           "table": "projects",
-          "command": "update",
+          "command": "select",
           "roles": [
             "authenticated"
           ],
-          "using": "owner_profile_id = auth.uid()\n  or exists (\n    select 1\n    from public.project_members pm\n    where pm.project_id = id\n      and pm.profile_id = auth.uid()\n      and pm.role = 'co_owner'\n  )",
-          "withCheck": "true",
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+          "using": "owner_profile_id = auth.uid()",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql"
         },
         {
           "name": "projects_delete",
@@ -207,7 +207,19 @@
           ],
           "using": "owner_profile_id = auth.uid()\n  or exists (\n    select 1\n    from public.project_members pm\n    where pm.project_id = id\n      and pm.profile_id = auth.uid()\n      and pm.role = 'co_owner'\n  )",
           "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+          "sourceMigration": "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql"
+        },
+        {
+          "name": "projects_update",
+          "schema": "public",
+          "table": "projects",
+          "command": "update",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "owner_profile_id = auth.uid()",
+          "withCheck": "owner_profile_id = auth.uid()\n  or exists (\n    select 1\n    from public.project_members pm\n    where pm.project_id = id\n      and pm.profile_id = owner_profile_id\n      and pm.role in ('owner', 'co_owner')\n  )",
+          "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
         }
       ]
     },
