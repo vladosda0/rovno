@@ -14,6 +14,7 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 - `supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql`
 - `supabase/migrations/20260317133000_storage_bucket_config_table.sql`
 - `supabase/migrations/20260317121000_storage_upload_rpcs.sql`
+- `supabase/migrations/20260320130000_codex_review_findings_fixes.sql`
 - `supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql`
 
 ## Tables
@@ -157,51 +158,6 @@ Constraints:
 - unnamed check (expression `length(btrim(filename)) > 0 and filename !~ '[\\/]'`)
 - unnamed check (expression `size_bytes is null or size_bytes >= 0`)
 
-### public.project_media_upload_intents
-
-| Column | Type | Nullable | Default | Primary Key |
-| --- | --- | --- | --- | --- |
-| `id` | `uuid` | no | `gen_random_uuid()` | yes |
-| `project_id` | `uuid` | no |   | no |
-| `bucket` | `text` | no |   | no |
-| `object_path` | `text` | no |   | no |
-| `filename` | `text` | no |   | no |
-| `mime_type` | `text` | yes |   | no |
-| `size_bytes` | `bigint` | yes |   | no |
-| `media_type` | `text` | no |   | no |
-| `caption` | `text` | yes |   | no |
-| `created_by` | `uuid` | no |   | no |
-| `project_media_id` | `uuid` | yes |   | no |
-| `created_at` | `timestamptz` | no | `now()` | no |
-| `finalized_at` | `timestamptz` | yes |   | no |
-
-Constraints:
-- unnamed check (expression `length(btrim(filename)) > 0 and filename !~ '[\\/]'`)
-- unnamed check (expression `size_bytes is null or size_bytes >= 0`)
-
-### public.document_upload_intents
-
-| Column | Type | Nullable | Default | Primary Key |
-| --- | --- | --- | --- | --- |
-| `id` | `uuid` | no | `gen_random_uuid()` | yes |
-| `project_id` | `uuid` | no |   | no |
-| `type` | `text` | no |   | no |
-| `title` | `text` | no |   | no |
-| `description` | `text` | yes |   | no |
-| `bucket` | `text` | no |   | no |
-| `object_path` | `text` | no |   | no |
-| `filename` | `text` | no |   | no |
-| `mime_type` | `text` | yes |   | no |
-| `size_bytes` | `bigint` | yes |   | no |
-| `created_by` | `uuid` | no |   | no |
-| `document_id` | `uuid` | yes |   | no |
-| `created_at` | `timestamptz` | no | `now()` | no |
-| `finalized_at` | `timestamptz` | yes |   | no |
-
-Constraints:
-- unnamed check (expression `length(btrim(filename)) > 0 and filename !~ '[\\/]'`)
-- unnamed check (expression `size_bytes is null or size_bytes >= 0`)
-
 ## Relations
 
 | From | To | On Delete | Source |
@@ -234,7 +190,7 @@ Constraints:
 | `public.prepare_document_upload(uuid, text, text, text, text, bigint, text)` | `table ( upload_intent_id uuid, bucket text, object_path text, filename text, mime_type text, size_bytes bigint )` | yes | `rpc` | `supabase/migrations/20260317133000_storage_bucket_config_table.sql` |
 | `public.finalize_document_upload(uuid)` | `table ( document_id uuid, document_version_id uuid, storage_object_id uuid, project_id uuid, bucket text, object_path text, filename text )` | yes | `rpc` | `supabase/migrations/20260317121000_storage_upload_rpcs.sql` |
 | `public.prepare_project_media_upload(uuid, text, text, text, bigint, text, uuid, boolean)` | `table ( upload_intent_id uuid, bucket text, object_path text, filename text, mime_type text, size_bytes bigint )` | yes | `rpc` | `supabase/migrations/20260320110000_task_final_media_contract.sql` |
-| `public.finalize_project_media_upload(uuid, uuid, boolean)` | `table ( project_media_id uuid, storage_object_id uuid, project_id uuid, bucket text, object_path text, filename text )` | yes | `rpc` | `supabase/migrations/20260320110000_task_final_media_contract.sql` |
+| `public.finalize_project_media_upload(uuid, uuid, boolean)` | `table ( project_media_id uuid, storage_object_id uuid, project_id uuid, bucket text, object_path text, filename text )` | yes | `rpc` | `supabase/migrations/20260320130000_codex_review_findings_fixes.sql` |
 
 ## RLS and Grants
 

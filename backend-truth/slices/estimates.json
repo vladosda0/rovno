@@ -413,7 +413,16 @@
           "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
         }
       ],
-      "triggers": []
+      "triggers": [
+        {
+          "name": "guard_estimate_work_stage_reassignment",
+          "activation": "before update of project_stage_id",
+          "functionSchema": "public",
+          "functionName": "guard_estimate_work_stage_reassignment",
+          "functionSignature": "public.guard_estimate_work_stage_reassignment()",
+          "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
+        }
+      ]
     },
     {
       "schema": "public",

@@ -73,6 +73,7 @@ Indexes:
 
 Triggers:
 - `set_tasks_updated_at`: before update, executes `public.set_updated_at()`
+- `enforce_tasks_estimate_lineage_scope`: before insert or update of project_id, stage_id, estimate_work_id, executes `public.enforce_tasks_estimate_lineage_scope()`
 
 ### public.task_comments
 

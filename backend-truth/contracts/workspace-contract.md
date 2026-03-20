@@ -13,6 +13,8 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 - `supabase/migrations/20260306161000_projects_membership_and_invites.sql`
 - `supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql`
 - `supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql`
+- `supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql`
+- `supabase/migrations/20260320130000_codex_review_findings_fixes.sql`
 
 ## Tables
 
@@ -272,11 +274,13 @@ Indexes:
     using: `owner_profile_id = auth.uid() or exists ( select 1 from public.project_members pm where pm.project_id = id and pm.profile_id = auth.uid() )`
   - `projects_insert` for `insert` to `authenticated`
     with check: `owner_profile_id = auth.uid()`
-  - `projects_update` for `update` to `authenticated`
-    using: `owner_profile_id = auth.uid() or exists ( select 1 from public.project_members pm where pm.project_id = id and pm.profile_id = auth.uid() and pm.role = 'co_owner' )`
-    with check: `true`
+  - `projects_select` for `select` to `authenticated`
+    using: `owner_profile_id = auth.uid()`
   - `projects_delete` for `delete` to `authenticated`
-    using: `owner_profile_id = auth.uid() or exists ( select 1 from public.project_members pm where pm.project_id = id and pm.profile_id = auth.uid() and pm.role = 'co_owner' )`
+    using: `owner_profile_id = auth.uid()`
+  - `projects_update` for `update` to `authenticated`
+    using: `owner_profile_id = auth.uid()`
+    with check: `owner_profile_id = auth.uid() or exists ( select 1 from public.project_members pm where pm.project_id = id and pm.profile_id = owner_profile_id and pm.role in ('owner', 'co_owner') )`
 
 ### public.project_members
 

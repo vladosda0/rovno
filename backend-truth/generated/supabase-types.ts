@@ -1385,28 +1385,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-        "current_profile_id": {
-          Args: Record<PropertyKey, never>
-          Returns: string
-        }
-        "project_role": {
+        "accept_project_invite": {
           Args: {
-          "p_project_id": string
+          "p_invite_token": string
+          }
+          Returns: Database['public']['Tables']["project_invites"]['Row']
+        }
+        "approve_estimate_version_by_share_token": {
+          Args: {
+          "p_share_token": string
+          "p_payload": Json
           }
           Returns: string
-        }
-        "is_project_member": {
-          Args: {
-          "p_project_id": string
-          }
-          Returns: boolean
-        }
-        "has_project_role": {
-          Args: {
-          "p_project_id": string
-          "p_roles": unknown
-          }
-          Returns: boolean
         }
         "can_access_project": {
           Args: {
@@ -1414,13 +1404,13 @@ export type Database = {
           }
           Returns: boolean
         }
-        "can_manage_project": {
+        "can_access_storage_object": {
           Args: {
-          "p_project_id": string
+          "p_storage_object_id": string
           }
           Returns: boolean
         }
-        "can_write_project_content": {
+        "can_manage_project": {
           Args: {
           "p_project_id": string
           }
@@ -1432,17 +1422,29 @@ export type Database = {
           }
           Returns: boolean
         }
-        "can_access_storage_object": {
+        "can_write_project_content": {
           Args: {
-          "p_storage_object_id": string
+          "p_project_id": string
           }
           Returns: boolean
         }
-        "accept_project_invite": {
+        "current_profile_id": {
+          Args: Record<PropertyKey, never>
+          Returns: string
+        }
+        "finalize_document_upload": {
           Args: {
-          "p_invite_token": string
+          "p_upload_intent_id": string
           }
-          Returns: Database['public']['Tables']["project_invites"]['Row']
+          Returns: unknown
+        }
+        "finalize_project_media_upload": {
+          Args: {
+          "p_upload_intent_id": string
+          "p_task_id": unknown
+          "p_is_final": unknown
+          }
+          Returns: unknown
         }
         "get_shared_estimate_version": {
           Args: {
@@ -1450,10 +1452,47 @@ export type Database = {
           }
           Returns: Database['public']['Tables']["estimate_versions"]['Row']
         }
-        "approve_estimate_version_by_share_token": {
+        "has_project_role": {
           Args: {
-          "p_share_token": string
-          "p_payload": Json
+          "p_project_id": string
+          "p_roles": unknown
+          }
+          Returns: boolean
+        }
+        "is_project_member": {
+          Args: {
+          "p_project_id": string
+          }
+          Returns: boolean
+        }
+        "prepare_document_upload": {
+          Args: {
+          "p_project_id": string
+          "p_type": string
+          "p_title": string
+          "p_client_filename": string
+          "p_mime_type": string
+          "p_size_bytes": number
+          "p_description": unknown
+          }
+          Returns: unknown
+        }
+        "prepare_project_media_upload": {
+          Args: {
+          "p_project_id": string
+          "p_media_type": string
+          "p_client_filename": string
+          "p_mime_type": string
+          "p_size_bytes": number
+          "p_caption": unknown
+          "p_task_id": unknown
+          "p_is_final": unknown
+          }
+          Returns: unknown
+        }
+        "project_role": {
+          Args: {
+          "p_project_id": string
           }
           Returns: string
         }

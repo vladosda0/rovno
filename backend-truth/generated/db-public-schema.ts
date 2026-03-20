@@ -95,6 +95,10 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260320110000_task_final_media_contract.sql",
       "sha256": "0d98c127cba23c1f6b0318e949b48f0d5b7f98892dff7cb17dbdb5f5d9bde894"
+    },
+    {
+      "path": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql",
+      "sha256": "54b9ab9bc73e6b09c1f0956867eefceb0910e333db3a91eb3e38f61e56f54736"
     }
   ],
   "generated_artifacts": [
@@ -140,7 +144,8 @@ export const manifest = {
     "sql/20260317122000_storage_upload_grants_rls.sql",
     "sql/20260317130000_storage_bucket_settings_split.sql",
     "sql/20260317133000_storage_bucket_config_table.sql",
-    "sql/20260320110000_task_final_media_contract.sql"
+    "sql/20260320110000_task_final_media_contract.sql",
+    "sql/20260320130000_codex_review_findings_fixes.sql"
   ],
   "external_schema_references": [
     {
@@ -1806,6 +1811,14 @@ export const tables = {
           "functionName": "set_updated_at",
           "functionSignature": "public.set_updated_at()",
           "sourceMigration": "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql"
+        },
+        {
+          "name": "enforce_tasks_estimate_lineage_scope",
+          "activation": "before insert or update of project_id, stage_id, estimate_work_id",
+          "functionSchema": "public",
+          "functionName": "enforce_tasks_estimate_lineage_scope",
+          "functionSignature": "public.enforce_tasks_estimate_lineage_scope()",
+          "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
         }
       ]
     },
@@ -2892,7 +2905,16 @@ export const tables = {
           "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
         }
       ],
-      "triggers": []
+      "triggers": [
+        {
+          "name": "guard_estimate_work_stage_reassignment",
+          "activation": "before update of project_stage_id",
+          "functionSchema": "public",
+          "functionName": "guard_estimate_work_stage_reassignment",
+          "functionSignature": "public.guard_estimate_work_stage_reassignment()",
+          "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
+        }
+      ]
     },
     {
       "schema": "public",
@@ -9382,7 +9404,7 @@ export const functions = {
         },
         {
           "name": "p_is_final",
-          "type": "boolean default false",
+          "type": "boolean default null",
           "identityType": "boolean"
         }
       ],
@@ -9392,8 +9414,48 @@ export const functions = {
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260320110000_task_final_media_contract.sql",
+      "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql",
       "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "enforce_tasks_estimate_lineage_scope",
+      "signature": "public.enforce_tasks_estimate_lineage_scope()",
+      "args": [],
+      "returnType": "trigger",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql",
+      "triggerUsages": [
+        {
+          "table": "public.tasks",
+          "triggerName": "enforce_tasks_estimate_lineage_scope",
+          "activation": "before insert or update of project_id, stage_id, estimate_work_id"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "guard_estimate_work_stage_reassignment",
+      "signature": "public.guard_estimate_work_stage_reassignment()",
+      "args": [],
+      "returnType": "trigger",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql",
+      "triggerUsages": [
+        {
+          "table": "public.estimate_works",
+          "triggerName": "guard_estimate_work_stage_reassignment",
+          "activation": "before update of project_stage_id"
+        }
+      ]
     }
   ]
 } as const;
@@ -9586,16 +9648,16 @@ export const rls = {
           "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
         },
         {
-          "name": "projects_update",
+          "name": "projects_select",
           "schema": "public",
           "table": "projects",
-          "command": "update",
+          "command": "select",
           "roles": [
             "authenticated"
           ],
-          "using": "owner_profile_id = auth.uid()\n  or exists (\n    select 1\n    from public.project_members pm\n    where pm.project_id = id\n      and pm.profile_id = auth.uid()\n      and pm.role = 'co_owner'\n  )",
-          "withCheck": "true",
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+          "using": "owner_profile_id = auth.uid()",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql"
         },
         {
           "name": "projects_delete",
@@ -9607,7 +9669,19 @@ export const rls = {
           ],
           "using": "owner_profile_id = auth.uid()\n  or exists (\n    select 1\n    from public.project_members pm\n    where pm.project_id = id\n      and pm.profile_id = auth.uid()\n      and pm.role = 'co_owner'\n  )",
           "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+          "sourceMigration": "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql"
+        },
+        {
+          "name": "projects_update",
+          "schema": "public",
+          "table": "projects",
+          "command": "update",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "owner_profile_id = auth.uid()",
+          "withCheck": "owner_profile_id = auth.uid()\n  or exists (\n    select 1\n    from public.project_members pm\n    where pm.project_id = id\n      and pm.profile_id = owner_profile_id\n      and pm.role in ('owner', 'co_owner')\n  )",
+          "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
         }
       ]
     },
@@ -11602,7 +11676,21 @@ export const sourceTrace = {
       "schema": "public",
       "name": "finalize_project_media_upload",
       "signature": "public.finalize_project_media_upload(uuid, uuid, boolean)",
-      "sourceMigration": "supabase/migrations/20260320110000_task_final_media_contract.sql"
+      "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
+    },
+    {
+      "key": "public.enforce_tasks_estimate_lineage_scope",
+      "schema": "public",
+      "name": "enforce_tasks_estimate_lineage_scope",
+      "signature": "public.enforce_tasks_estimate_lineage_scope()",
+      "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
+    },
+    {
+      "key": "public.guard_estimate_work_stage_reassignment",
+      "schema": "public",
+      "name": "guard_estimate_work_stage_reassignment",
+      "signature": "public.guard_estimate_work_stage_reassignment()",
+      "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
     }
   ],
   "policies": [
@@ -11695,12 +11783,12 @@ export const sourceTrace = {
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
     },
     {
-      "key": "public.projects.projects_update",
+      "key": "public.projects.projects_select",
       "schema": "public",
       "table": "projects",
-      "name": "projects_update",
-      "command": "update",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+      "name": "projects_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql"
     },
     {
       "key": "public.projects.projects_delete",
@@ -11709,6 +11797,14 @@ export const sourceTrace = {
       "name": "projects_delete",
       "command": "delete",
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.projects.projects_update",
+      "schema": "public",
+      "table": "projects",
+      "name": "projects_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
     },
     {
       "key": "public.project_members.project_members_select",
@@ -12521,7 +12617,9 @@ export const sourceTrace = {
         "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
         "supabase/migrations/20260306161000_projects_membership_and_invites.sql",
         "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql",
-        "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
+        "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql",
+        "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
       ],
       "tables": [
         "public.profiles",
@@ -12558,9 +12656,8 @@ export const sourceTrace = {
         "public.notification_preferences.notification_preferences_insert",
         "public.notification_preferences.notification_preferences_update",
         "public.projects.projects_select",
-        "public.projects.projects_insert",
-        "public.projects.projects_update",
         "public.projects.projects_delete",
+        "public.projects.projects_update",
         "public.project_members.project_members_select",
         "public.project_members.project_members_insert",
         "public.project_members.project_members_update",
@@ -12770,6 +12867,7 @@ export const sourceTrace = {
         "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
         "supabase/migrations/20260317133000_storage_bucket_config_table.sql",
         "supabase/migrations/20260317121000_storage_upload_rpcs.sql",
+        "supabase/migrations/20260320130000_codex_review_findings_fixes.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
       ],
       "tables": [
@@ -13329,7 +13427,9 @@ export const slices = {
         "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
         "supabase/migrations/20260306161000_projects_membership_and_invites.sql",
         "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql",
-        "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
+        "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql",
+        "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
       ],
       "tableCount": 6,
       "functionCount": 14,
@@ -13363,6 +13463,7 @@ export const slices = {
         "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
         "supabase/migrations/20260317133000_storage_bucket_config_table.sql",
         "supabase/migrations/20260317121000_storage_upload_rpcs.sql",
+        "supabase/migrations/20260320130000_codex_review_findings_fixes.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
       ],
       "tableCount": 6,

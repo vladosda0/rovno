@@ -1644,6 +1644,14 @@
           "functionName": "set_updated_at",
           "functionSignature": "public.set_updated_at()",
           "sourceMigration": "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql"
+        },
+        {
+          "name": "enforce_tasks_estimate_lineage_scope",
+          "activation": "before insert or update of project_id, stage_id, estimate_work_id",
+          "functionSchema": "public",
+          "functionName": "enforce_tasks_estimate_lineage_scope",
+          "functionSignature": "public.enforce_tasks_estimate_lineage_scope()",
+          "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
         }
       ]
     },
@@ -2730,7 +2738,16 @@
           "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
         }
       ],
-      "triggers": []
+      "triggers": [
+        {
+          "name": "guard_estimate_work_stage_reassignment",
+          "activation": "before update of project_stage_id",
+          "functionSchema": "public",
+          "functionName": "guard_estimate_work_stage_reassignment",
+          "functionSignature": "public.guard_estimate_work_stage_reassignment()",
+          "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
+        }
+      ]
     },
     {
       "schema": "public",
