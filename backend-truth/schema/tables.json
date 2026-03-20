@@ -2247,9 +2247,47 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "task_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "tasks",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
+        },
+        {
+          "name": "is_final",
+          "sqlType": "boolean",
+          "tsType": "boolean",
+          "nullable": false,
+          "defaultSql": "false",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
-      "constraints": [],
+      "constraints": [
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "is_final"
+          ],
+          "expression": "not is_final or task_id is not null",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260320110000_task_final_media_contract.sql"
+        }
+      ],
       "indexes": [
         {
           "name": "idx_project_media_project_id",
@@ -2270,6 +2308,27 @@
           "where": null,
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260306162000_storage_documents_and_media.sql"
+        },
+        {
+          "name": "idx_project_media_task_id",
+          "unique": false,
+          "expressions": [
+            "task_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260320110000_task_final_media_contract.sql"
+        },
+        {
+          "name": "idx_project_media_task_id_is_final",
+          "unique": false,
+          "expressions": [
+            "task_id",
+            "is_final"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260320110000_task_final_media_contract.sql"
         }
       ],
       "triggers": []
@@ -5840,6 +5899,33 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "task_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "tasks",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
+        },
+        {
+          "name": "is_final",
+          "sqlType": "boolean",
+          "tsType": "boolean",
+          "nullable": false,
+          "defaultSql": "false",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -5862,9 +5948,41 @@
           "expression": "size_bytes is null or size_bytes >= 0",
           "usingIndex": null,
           "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "is_final"
+          ],
+          "expression": "not is_final or task_id is not null",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260320110000_task_final_media_contract.sql"
         }
       ],
-      "indexes": [],
+      "indexes": [
+        {
+          "name": "idx_project_media_upload_intents_task_id",
+          "unique": false,
+          "expressions": [
+            "task_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260320110000_task_final_media_contract.sql"
+        },
+        {
+          "name": "idx_project_media_upload_intents_task_id_is_final",
+          "unique": false,
+          "expressions": [
+            "task_id",
+            "is_final"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260320110000_task_final_media_contract.sql"
+        }
+      ],
       "triggers": []
     },
     {

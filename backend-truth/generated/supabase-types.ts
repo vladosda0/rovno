@@ -489,6 +489,8 @@ export type Database = {
           "media_type": string
           "caption": string | null
           "created_at": string
+          "task_id": string | null
+          "is_final": boolean
           }
           Insert: {
           "id"?: string
@@ -498,6 +500,8 @@ export type Database = {
           "media_type": string
           "caption"?: string | null
           "created_at"?: string
+          "task_id"?: string | null
+          "is_final"?: boolean
           }
           Update: {
           "id"?: string
@@ -507,6 +511,8 @@ export type Database = {
           "media_type"?: string
           "caption"?: string | null
           "created_at"?: string
+          "task_id"?: string | null
+          "is_final"?: boolean
           }
           Relationships: []
         }
@@ -1263,6 +1269,8 @@ export type Database = {
           "project_media_id": string | null
           "created_at": string
           "finalized_at": string | null
+          "task_id": string | null
+          "is_final": boolean
           }
           Insert: {
           "id"?: string
@@ -1278,6 +1286,8 @@ export type Database = {
           "project_media_id"?: string | null
           "created_at"?: string
           "finalized_at"?: string | null
+          "task_id"?: string | null
+          "is_final"?: boolean
           }
           Update: {
           "id"?: string
@@ -1293,6 +1303,8 @@ export type Database = {
           "project_media_id"?: string | null
           "created_at"?: string
           "finalized_at"?: string | null
+          "task_id"?: string | null
+          "is_final"?: boolean
           }
           Relationships: []
         }
@@ -1452,7 +1464,7 @@ export type Database = {
           "p_client_filename": string
           "p_mime_type": string
           "p_size_bytes": number
-          "p_caption": string
+          "p_caption": unknown
           }
           Returns: unknown
         }
@@ -1470,13 +1482,34 @@ export type Database = {
           "p_client_filename": string
           "p_mime_type": string
           "p_size_bytes": number
-          "p_description": string
+          "p_description": unknown
           }
           Returns: unknown
         }
         "finalize_document_upload": {
           Args: {
           "p_upload_intent_id": string
+          }
+          Returns: unknown
+        }
+        "prepare_project_media_upload": {
+          Args: {
+          "p_project_id": string
+          "p_media_type": string
+          "p_client_filename": string
+          "p_mime_type": string
+          "p_size_bytes": number
+          "p_caption": unknown
+          "p_task_id": unknown
+          "p_is_final": unknown
+          }
+          Returns: unknown
+        }
+        "finalize_project_media_upload": {
+          Args: {
+          "p_upload_intent_id": string
+          "p_task_id": unknown
+          "p_is_final": unknown
           }
           Returns: unknown
         }

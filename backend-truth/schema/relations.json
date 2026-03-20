@@ -1349,6 +1349,38 @@
         "id"
       ],
       "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260320110000_task_final_media_contract.sql",
+      "sourceKind": "alter_table",
+      "fromSchema": "public",
+      "fromTable": "project_media_upload_intents",
+      "fromColumns": [
+        "task_id"
+      ],
+      "toSchema": "public",
+      "toTable": "tasks",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260320110000_task_final_media_contract.sql",
+      "sourceKind": "alter_table",
+      "fromSchema": "public",
+      "fromTable": "project_media",
+      "fromColumns": [
+        "task_id"
+      ],
+      "toSchema": "public",
+      "toTable": "tasks",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
     }
   ]
 }

@@ -428,6 +428,16 @@
     },
     {
       "schema": "public",
+      "table": "project_media",
+      "column": "is_final",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "not is_final or task_id is not null",
+      "sourceMigration": "supabase/migrations/20260320110000_task_final_media_contract.sql"
+    },
+    {
+      "schema": "public",
       "table": "project_estimates",
       "column": "status",
       "constraintName": null,
@@ -806,6 +816,16 @@
       "allowedValues": null,
       "expression": "size_bytes is null or size_bytes >= 0",
       "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql"
+    },
+    {
+      "schema": "public",
+      "table": "project_media_upload_intents",
+      "column": "is_final",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "not is_final or task_id is not null",
+      "sourceMigration": "supabase/migrations/20260320110000_task_final_media_contract.sql"
     },
     {
       "schema": "public",

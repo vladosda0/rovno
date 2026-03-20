@@ -1519,19 +1519,23 @@
       "args": [
         {
           "name": "p_project_id",
-          "type": "uuid"
+          "type": "uuid",
+          "identityType": "uuid"
         },
         {
           "name": "p_inventory_item_id",
-          "type": "uuid"
+          "type": "uuid",
+          "identityType": "uuid"
         },
         {
           "name": "p_inventory_location_id",
-          "type": "uuid"
+          "type": "uuid",
+          "identityType": "uuid"
         },
         {
           "name": "p_delta",
-          "type": "numeric"
+          "type": "numeric",
+          "identityType": "numeric"
         }
       ],
       "returnType": "void",

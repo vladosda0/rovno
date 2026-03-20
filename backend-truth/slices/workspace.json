@@ -1552,7 +1552,8 @@
       "args": [
         {
           "name": "p_project_id",
-          "type": "uuid"
+          "type": "uuid",
+          "identityType": "uuid"
         }
       ],
       "returnType": "text",
@@ -1572,7 +1573,8 @@
       "args": [
         {
           "name": "p_project_id",
-          "type": "uuid"
+          "type": "uuid",
+          "identityType": "uuid"
         }
       ],
       "returnType": "boolean",
@@ -1592,11 +1594,13 @@
       "args": [
         {
           "name": "p_project_id",
-          "type": "uuid"
+          "type": "uuid",
+          "identityType": "uuid"
         },
         {
           "name": "p_roles",
-          "type": "text[]"
+          "type": "text[]",
+          "identityType": "text[]"
         }
       ],
       "returnType": "boolean",
@@ -1616,7 +1620,8 @@
       "args": [
         {
           "name": "p_project_id",
-          "type": "uuid"
+          "type": "uuid",
+          "identityType": "uuid"
         }
       ],
       "returnType": "boolean",
@@ -1636,7 +1641,8 @@
       "args": [
         {
           "name": "p_project_id",
-          "type": "uuid"
+          "type": "uuid",
+          "identityType": "uuid"
         }
       ],
       "returnType": "boolean",
@@ -1656,7 +1662,8 @@
       "args": [
         {
           "name": "p_project_id",
-          "type": "uuid"
+          "type": "uuid",
+          "identityType": "uuid"
         }
       ],
       "returnType": "boolean",
@@ -1676,7 +1683,8 @@
       "args": [
         {
           "name": "p_profile_id",
-          "type": "uuid"
+          "type": "uuid",
+          "identityType": "uuid"
         }
       ],
       "returnType": "boolean",
@@ -1696,7 +1704,8 @@
       "args": [
         {
           "name": "p_invite_token",
-          "type": "text"
+          "type": "text",
+          "identityType": "text"
         }
       ],
       "returnType": "public.project_invites",

@@ -943,7 +943,8 @@
       "args": [
         {
           "name": "p_share_token",
-          "type": "text"
+          "type": "text",
+          "identityType": "text"
         }
       ],
       "returnType": "public.estimate_versions",
@@ -963,11 +964,13 @@
       "args": [
         {
           "name": "p_share_token",
-          "type": "text"
+          "type": "text",
+          "identityType": "text"
         },
         {
           "name": "p_payload",
-          "type": "jsonb"
+          "type": "jsonb",
+          "identityType": "jsonb"
         }
       ],
       "returnType": "uuid",
