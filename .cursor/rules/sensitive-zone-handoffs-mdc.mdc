@@ -1,0 +1,80 @@
+---
+description: 
+alwaysApply: true
+---
+
+---
+description: Escalate Rovno sensitive-zone work to stricter subagent review and verification.
+globs:
+  - "src/pages/project/**"
+  - "src/components/procurement/**"
+  - "src/lib/procurement*"
+  - "src/lib/estimate*"
+  - "src/data/**"
+  - "src/hooks/**"
+  - "backend-truth/**"
+  - "supabase/**"
+  - "scripts/generate-backend-truth*"
+  - "scripts/test-backend-truth-generator*"
+  - "contracts/**"
+alwaysApply: false
+---
+
+# Rovno sensitive-zone handoffs
+
+These paths are high-blast-radius areas.
+When the task touches them, use stricter delegation and do not treat them like routine edits.
+
+## Sensitive zones
+
+Frontend-sensitive:
+- estimate and estimate-v2 flows
+- tasks and checklist linkage
+- procurement, orders, receiving, inventory movement
+- HR sync and estimate-driven HR lineage
+- AI/sidebar execution paths
+- cross-view consistency and permission-sensitive UI
+- adapters consuming backend truth
+- legacy/v2 bridges
+
+Backend-sensitive:
+- migrations changing launch-loop entities
+- RLS, grants, policies
+- RPCs, triggers, auth/bootstrap
+- backend-truth generation and sync pipeline
+
+## Required behavior
+
+If a touched file falls in a sensitive zone:
+
+1. run `repo-auditor` unless the current implementation path is already grounded
+2. run `backend-contract-truth-inspector` whenever backend shape, permissions, or truth-layer assumptions are involved
+3. run `implementation-planner` before write work
+4. use the correct implementer for the repo
+5. run `sensitive-zone-reviewer`
+6. run `independent-verifier`
+
+## Required collaborations
+
+For sensitive frontend work:
+`repo-auditor` -> `backend-contract-truth-inspector` when relevant -> `implementation-planner` -> `frontend-flow-implementer` -> `sensitive-zone-reviewer` -> `independent-verifier`
+
+For sensitive backend work:
+`repo-auditor` -> `backend-contract-truth-inspector` -> `implementation-planner` -> `schema-migration-implementer` -> `sensitive-zone-reviewer` -> `independent-verifier`
+
+## Stop conditions
+
+Do not implement yet if any of these are true:
+- UI appears to assume unsupported backend shape
+- the task would require editing `backend-truth/` manually
+- the smallest safe change surface is still unclear
+- the request mixes product wishes with unverified repo reality
+- the change crosses `rovno` and `rovno-db` but ownership is not clear
+
+## Verification standard
+
+Sensitive-zone work is not complete until:
+- an independent reviewer has checked acceptance criteria
+- obvious adjacent regressions were considered
+- contract implications were checked when relevant
+- the final diff stayed within the intended scope

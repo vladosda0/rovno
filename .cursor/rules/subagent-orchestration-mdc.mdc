@@ -1,0 +1,109 @@
+---
+alwaysApply: true
+---
+
+---
+description: Use Rovno subagents consistently for audit, contract inspection, planning, implementation, and independent verification.
+globs:
+---
+
+# Rovno subagent orchestration
+
+Use subagents to keep work specialized, context-isolated, and independently verified.
+
+## Core rule
+
+Do not jump straight into implementation when repo reality, backend truth, or blast radius is unclear.
+
+Prefer this sequence:
+
+1. inspect reality
+2. inspect backend truth if relevant
+3. plan minimal change
+4. implement in the correct repo
+5. independently verify
+
+## Invocation rules
+
+Invoke `repo-auditor` when:
+- the request starts from product intent, symptoms, screenshots, or vague behavior
+- the relevant files or flow are not already clear
+- the change likely spans multiple files or layers
+- the current implementation may differ from what the user assumes
+
+Invoke `backend-contract-truth-inspector` when:
+- the task touches schema, Supabase, generated DB types, `backend-truth/`, adapters, or contract assumptions
+- the request implies a field, relation, enum, RPC, policy, or permission
+- the task spans `rovno` and `rovno-db`
+- UI code might be inventing backend shape
+
+Invoke `implementation-planner` when:
+- the task is not trivial
+- more than one file is likely to change
+- there are multiple possible implementation paths
+- the task touches any sensitive or cross-domain flow
+- the parent is about to delegate write work
+
+Invoke `frontend-flow-implementer` only when:
+- the repo is `rovno`
+- audit is complete
+- contract inspection is complete if relevant
+- there is a grounded plan
+- the task is actually frontend/runtime wiring rather than backend truth work
+
+Invoke `schema-migration-implementer` only when:
+- the repo is `rovno-db`
+- backend truth must change first
+- audit and contract inspection are complete
+- there is a grounded plan
+- the change belongs in migrations, RLS, grants, RPCs, triggers, or generator-related backend work
+
+Invoke `independent-verifier` after every non-trivial implementation.
+
+## Handoff rules
+
+`repo-auditor` may hand off to:
+- `backend-contract-truth-inspector` if backend truth matters
+- `implementation-planner` if repo reality is already clear
+- `sensitive-zone-reviewer` if the area is obviously high risk
+
+`backend-contract-truth-inspector` may hand off to:
+- `implementation-planner` when the contract direction is clear
+- `frontend-flow-implementer` if frontend-only wiring is safe
+- `schema-migration-implementer` if backend truth must change first
+
+`implementation-planner` may hand off to:
+- `frontend-flow-implementer` for `rovno`
+- `schema-migration-implementer` for `rovno-db`
+
+Implementers must hand off to:
+- `independent-verifier` by default
+- `sensitive-zone-reviewer` first if the task touches a sensitive zone, then `independent-verifier`
+
+## Collaboration patterns
+
+Standard app task:
+`repo-auditor` -> `implementation-planner` -> `frontend-flow-implementer` -> `independent-verifier`
+
+App task with backend assumptions:
+`repo-auditor` -> `backend-contract-truth-inspector` -> `implementation-planner` -> `frontend-flow-implementer` -> `independent-verifier`
+
+Backend truth task:
+`repo-auditor` -> `backend-contract-truth-inspector` -> `implementation-planner` -> `schema-migration-implementer` -> `independent-verifier`
+
+High-risk task:
+`repo-auditor` -> `backend-contract-truth-inspector` -> `implementation-planner` -> implementer -> `sensitive-zone-reviewer` -> `independent-verifier`
+
+## Conflict-of-interest rule
+
+Implementers do not self-verify.
+
+- `frontend-flow-implementer` must not declare the task verified
+- `schema-migration-implementer` must not declare downstream integration verified
+
+Verification must come from `independent-verifier`.
+
+## Escalation rule
+
+If the agent cannot confidently answer which repo owns the change, whether backend truth already supports it, or what the smallest safe edit surface is, do not implement yet.
+Delegate first.
