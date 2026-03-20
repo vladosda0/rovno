@@ -29,10 +29,11 @@ function line(partial: Partial<EstimateV2ResourceLine>): EstimateV2ResourceLine 
   };
 }
 
-function work(partial: Partial<EstimateV2Work> = {}): Pick<EstimateV2Work, "id" | "plannedStart"> {
+function work(partial: Partial<EstimateV2Work> = {}): Pick<EstimateV2Work, "id" | "plannedStart" | "stageId"> {
   return {
     id: partial.id ?? "work-1",
     plannedStart: partial.plannedStart ?? null,
+    stageId: partial.stageId ?? "stage-1",
   };
 }
 
@@ -82,6 +83,63 @@ describe("estimate-v2 procurement sync", () => {
     expect(updated?.plannedUnitPrice).toBe(15);
     expect(updated?.lockedFromEstimate).toBe(true);
     expect(updated?.requiredByDate).toBe(nextStart);
+  });
+
+  it("falls back requiredByDate to stage start when work plannedStart is missing", () => {
+    const projectId = `proc-sync-stage-fallback-${Date.now()}`;
+    const workIdMissingStart = `work-${Date.now()}-a`;
+    const workIdWithStart = `work-${Date.now()}-b`;
+    const stageId = "stage-1";
+    const stageStart = "2026-04-10T00:00:00.000Z";
+
+    syncProcurementFromEstimateV2(projectId, {
+      project: { estimateStatus: "in_work" },
+      lines: [
+        line({
+          id: `line-${Date.now()}`,
+          projectId,
+          workId: workIdMissingStart,
+          stageId,
+          type: "material",
+          qtyMilli: 2_500,
+          costUnitCents: 1_230,
+        }),
+      ],
+      works: [
+        work({ id: workIdMissingStart, stageId, plannedStart: null }),
+        work({ id: workIdWithStart, stageId, plannedStart: stageStart }),
+      ],
+    });
+
+    const created = getProcurementItems(projectId)[0];
+    expect(created.requiredByDate).toBe(stageStart);
+  });
+
+  it("falls back procurement stageId to linked work stageId when line stageId is empty", () => {
+    const projectId = `proc-sync-stage-id-fallback-${Date.now()}`;
+    const workId = `work-${Date.now()}`;
+    const stageId = "stage-1";
+    const plannedStart = "2026-04-10T00:00:00.000Z";
+
+    syncProcurementFromEstimateV2(projectId, {
+      project: { estimateStatus: "in_work" },
+      lines: [
+        line({
+          id: `line-${Date.now()}`,
+          projectId,
+          workId,
+          stageId: "",
+          type: "material",
+          qtyMilli: 2_500,
+          costUnitCents: 1_230,
+        }),
+      ],
+      works: [work({ id: workId, stageId, plannedStart })],
+    });
+
+    const created = getProcurementItems(projectId)[0];
+    expect(created.stageId).toBe(stageId);
+    expect(created.requiredByDate).toBe(plannedStart);
   });
 
   it("marks orphan on estimate line delete", () => {

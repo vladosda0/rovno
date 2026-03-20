@@ -1,5 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { Loader2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -39,6 +40,8 @@ export function ReceiveOrderModal({
     [locations],
   );
   const { toast } = useToast();
+  const [receiveInFlight, setReceiveInFlight] = useState(false);
+  const receiveInFlightRef = useRef(false);
 
   const [locationId, setLocationId] = useState("");
   const [lineQty, setLineQty] = useState<Record<string, number>>({});
@@ -62,6 +65,7 @@ export function ReceiveOrderModal({
 
   const submit = async () => {
     if (!order) return;
+    if (receiveInFlightRef.current) return;
     if (order.status !== "placed") {
       toast({ title: "Order is not receivable", variant: "destructive" });
       return;
@@ -80,6 +84,8 @@ export function ReceiveOrderModal({
       return;
     }
 
+    receiveInFlightRef.current = true;
+    setReceiveInFlight(true);
     try {
       const source = await getOrdersSource(supabaseMode ?? undefined);
       await source.receiveSupplierOrder(order.id, { locationId, lines });
@@ -118,12 +124,15 @@ export function ReceiveOrderModal({
         description: error instanceof Error ? error.message : "Please try again.",
         variant: "destructive",
       });
+    } finally {
+      receiveInFlightRef.current = false;
+      setReceiveInFlight(false);
     }
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[92vw] max-w-2xl max-h-[88vh] overflow-hidden p-0 gap-0">
+      <DialogContent className="w-[92vw] max-w-2xl max-h-[88vh] overflow-hidden p-0 gap-0 flex flex-col">
         <DialogHeader className="px-5 py-4 border-b border-border">
           <DialogTitle>Receive order</DialogTitle>
         </DialogHeader>
@@ -131,7 +140,7 @@ export function ReceiveOrderModal({
         {!order ? (
           <div className="px-5 py-4 text-sm text-muted-foreground">Order not found.</div>
         ) : (
-          <div className="px-5 py-4 overflow-y-auto space-y-4">
+          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
             <div>
               <label className="text-xs text-muted-foreground">Receive to location</label>
               <LocationPicker projectId={projectId} value={locationId} onChange={setLocationId} />
@@ -184,7 +193,14 @@ export function ReceiveOrderModal({
 
         <DialogFooter className="px-5 py-4 border-t border-border">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
-          <Button type="button" onClick={submit} disabled={!order || order.status !== "placed"}>Receive</Button>
+          <Button
+            type="button"
+            onClick={submit}
+            disabled={!order || order.status !== "placed" || receiveInFlight}
+          >
+            {receiveInFlight ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}
+            {receiveInFlight ? "Receiving..." : "Receive"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

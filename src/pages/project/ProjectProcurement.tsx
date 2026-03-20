@@ -8,6 +8,7 @@ import {
   ChevronDown,
   ChevronRight,
   Link2,
+  Loader2,
   Search,
   ShoppingCart,
 } from "lucide-react";
@@ -207,7 +208,7 @@ export default function ProjectProcurement() {
 
   const savedListState = useMemo(() => readListState(pid), [pid]);
 
-  const items = useProcurementV2(pid);
+  const baseItems = useProcurementV2(pid);
   const orders = useOrders(pid);
   const locations = useLocations(pid);
   const stockRows = useInventoryStock(pid);
@@ -216,6 +217,113 @@ export default function ProjectProcurement() {
   const perm = usePermission(pid);
   const canEdit = perm.can("procurement.edit");
   const canUseFromStock = canEdit && !isSupabaseMode;
+
+  const items = useMemo(() => {
+    const workById = new Map(estimateState.works.map((work) => [work.id, work]));
+    const lineById = new Map(estimateState.lines.map((line) => [line.id, line]));
+    const nowIso = new Date().toISOString();
+
+    const stageStartByStageId = new Map<string, string>();
+    estimateState.works.forEach((work) => {
+      if (!work.plannedStart) return;
+      if (!work.stageId) return;
+
+      const ts = new Date(work.plannedStart).getTime();
+      if (!Number.isFinite(ts)) return;
+
+      const existing = stageStartByStageId.get(work.stageId);
+      if (!existing) {
+        stageStartByStageId.set(work.stageId, work.plannedStart);
+        return;
+      }
+
+      const existingTs = new Date(existing).getTime();
+      if (Number.isFinite(existingTs) && ts < existingTs) {
+        stageStartByStageId.set(work.stageId, work.plannedStart);
+      }
+    });
+
+    const fallbackStageId = estimateState.stages[0]?.id ?? null;
+    const derivedItems = baseItems.map((item) => {
+      const lineId = item.sourceEstimateV2LineId ?? null;
+      if (!lineId) return item;
+      const line = lineById.get(lineId);
+      if (!line) return item;
+
+      const work = workById.get(line.workId) ?? null;
+      const resolvedStageId = line.stageId || work?.stageId || fallbackStageId;
+      if (!resolvedStageId) return item;
+
+      const requiredByDate = work?.plannedStart ?? stageStartByStageId.get(resolvedStageId) ?? null;
+      const derivedType: ProcurementItemType = line.type === "tool" ? "tool" : "material";
+      const requiredQty = Math.max(0, line.qtyMilli / 1_000);
+      const plannedUnitPrice = Math.max(0, line.costUnitCents / 100);
+
+      return {
+        ...item,
+        stageId: resolvedStageId,
+        type: derivedType,
+        name: line.title,
+        requiredByDate,
+        requiredQty,
+        plannedUnitPrice,
+      };
+    });
+
+    const linkedLineIds = new Set(
+      derivedItems
+        .map((item) => item.sourceEstimateV2LineId ?? null)
+        .filter((lineId): lineId is string => !!lineId),
+    );
+
+    const missingDerivedItems = estimateState.lines
+      .filter((line) => (line.type === "material" || line.type === "tool"))
+      .filter((line) => !linkedLineIds.has(line.id))
+      .map((line) => {
+        const work = workById.get(line.workId) ?? null;
+        const resolvedStageId = line.stageId || work?.stageId || fallbackStageId;
+        const requiredByDate = work?.plannedStart ?? (resolvedStageId ? stageStartByStageId.get(resolvedStageId) ?? null : null);
+        const derivedType: ProcurementItemType = line.type === "tool" ? "tool" : "material";
+        const requiredQty = Math.max(0, line.qtyMilli / 1_000);
+        const plannedUnitPrice = Math.max(0, line.costUnitCents / 100);
+
+        return {
+          id: `estimate-line-${line.id}`,
+          projectId: line.projectId,
+          stageId: resolvedStageId ?? null,
+          categoryId: null,
+          type: derivedType,
+          name: line.title,
+          spec: null,
+          unit: line.unit,
+          requiredByDate,
+          requiredQty,
+          orderedQty: 0,
+          receivedQty: 0,
+          plannedUnitPrice,
+          actualUnitPrice: null,
+          supplier: null,
+          supplierPreferred: null,
+          locationPreferredId: null,
+          lockedFromEstimate: true,
+          sourceEstimateItemId: null,
+          sourceEstimateV2LineId: line.id,
+          orphaned: false,
+          orphanedAt: null,
+          orphanedReason: null,
+          linkUrl: null,
+          notes: null,
+          attachments: [],
+          createdFrom: "estimate",
+          linkedTaskIds: [],
+          archived: false,
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        } satisfies ProcurementItemV2;
+      });
+
+    return [...derivedItems, ...missingDerivedItems];
+  }, [baseItems, estimateState.lines, estimateState.works, estimateState.stages]);
 
   const [search, setSearch] = useState(savedListState?.search ?? "");
   const [activeTab, setActiveTab] = useState<ProcurementTab>(savedListState?.activeTab ?? "requested");
@@ -228,6 +336,8 @@ export default function ProjectProcurement() {
   const [receiveModalTargets, setReceiveModalTargets] = useState<OrderedReceivableTarget[]>([]);
   const [receiveModalQtyByKey, setReceiveModalQtyByKey] = useState<Record<string, number>>({});
   const [receiveModalLocationByKey, setReceiveModalLocationByKey] = useState<Record<string, string>>({});
+  const [receiveItemsConfirmInFlight, setReceiveItemsConfirmInFlight] = useState(false);
+  const receiveItemsConfirmInFlightRef = useRef(false);
   const [useFromStockOpen, setUseFromStockOpen] = useState(false);
   const [useFromStockTargets, setUseFromStockTargets] = useState<InStockTableRow[]>([]);
   const [useFromStockQtyByKey, setUseFromStockQtyByKey] = useState<Record<string, string>>({});
@@ -383,12 +493,11 @@ export default function ProjectProcurement() {
     return item.name.toLowerCase().includes(q) || (item.spec?.toLowerCase().includes(q) ?? false);
   }, [search]);
 
-  const requestedItems = useMemo(() => (
-    items
-      .filter(isEstimateLinkedProcurementItem)
-      .filter((item) => (remainingByItemId.get(item.id) ?? 0) > 0)
-      .filter(isItemSearchMatch)
-  ), [items, remainingByItemId, isItemSearchMatch]);
+  const requestedItems = useMemo(() => {
+    const estimateLinkedItems = items.filter(isEstimateLinkedProcurementItem);
+    const remainingPositiveItems = estimateLinkedItems.filter((item) => (remainingByItemId.get(item.id) ?? 0) > 0);
+    return remainingPositiveItems.filter(isItemSearchMatch);
+  }, [items, remainingByItemId, isItemSearchMatch]);
 
   const requestedStageMap = useMemo(() => {
     const map = new Map<string, ProcurementItemV2[]>();
@@ -805,101 +914,109 @@ export default function ProjectProcurement() {
   };
 
   const submitReceiveItems = async () => {
-    const payloadByOrderAndLocation = new Map<string, { orderId: string; locationId: string; lines: Array<{ lineId: string; qty: number }> }>();
-    let hasMissingLocation = false;
-
-    receiveModalTargets.forEach((target) => {
-      const rawQty = Number(receiveModalQtyByKey[target.selectionKey] ?? 0);
-      const clampedQty = Math.min(target.remainingQty, Math.max(0, Number.isFinite(rawQty) ? rawQty : 0));
-      if (clampedQty <= 0) return;
-      const locationId = receiveModalLocationByKey[target.selectionKey] ?? target.locationId ?? defaultLocationId ?? "";
-      if (!locationId) {
-        hasMissingLocation = true;
-        return;
-      }
-
-      const payloadKey = `${target.orderId}:${locationId}`;
-      const existing = payloadByOrderAndLocation.get(payloadKey);
-      if (!existing) {
-        payloadByOrderAndLocation.set(payloadKey, {
-          orderId: target.orderId,
-          locationId,
-          lines: [{ lineId: target.lineId, qty: clampedQty }],
-        });
-        return;
-      }
-
-      existing.lines.push({ lineId: target.lineId, qty: clampedQty });
-    });
-
-    if (hasMissingLocation) {
-      toast({ title: "Location is required", description: "Select receive location for each item", variant: "destructive" });
-      return;
-    }
-
-    if (payloadByOrderAndLocation.size === 0) {
-      toast({ title: "No quantities entered", description: "Set at least one quantity greater than zero", variant: "destructive" });
-      return;
-    }
-
+    if (receiveItemsConfirmInFlightRef.current) return;
+    receiveItemsConfirmInFlightRef.current = true;
+    setReceiveItemsConfirmInFlight(true);
     try {
-      const source = await getOrdersSource(supabaseMode ?? undefined);
-      let totalQty = 0;
-      for (const payload of payloadByOrderAndLocation.values()) {
-        await source.receiveSupplierOrder(payload.orderId, {
-          locationId: payload.locationId,
-          lines: payload.lines,
+      const payloadByOrderAndLocation = new Map<string, { orderId: string; locationId: string; lines: Array<{ lineId: string; qty: number }> }>();
+      let hasMissingLocation = false;
+
+      receiveModalTargets.forEach((target) => {
+        const rawQty = Number(receiveModalQtyByKey[target.selectionKey] ?? 0);
+        const clampedQty = Math.min(target.remainingQty, Math.max(0, Number.isFinite(rawQty) ? rawQty : 0));
+        if (clampedQty <= 0) return;
+        const locationId = receiveModalLocationByKey[target.selectionKey] ?? target.locationId ?? defaultLocationId ?? "";
+        if (!locationId) {
+          hasMissingLocation = true;
+          return;
+        }
+
+        const payloadKey = `${target.orderId}:${locationId}`;
+        const existing = payloadByOrderAndLocation.get(payloadKey);
+        if (!existing) {
+          payloadByOrderAndLocation.set(payloadKey, {
+            orderId: target.orderId,
+            locationId,
+            lines: [{ lineId: target.lineId, qty: clampedQty }],
+          });
+          return;
+        }
+
+        existing.lines.push({ lineId: target.lineId, qty: clampedQty });
+      });
+
+      if (hasMissingLocation) {
+        toast({ title: "Location is required", description: "Select receive location for each item", variant: "destructive" });
+        return;
+      }
+
+      if (payloadByOrderAndLocation.size === 0) {
+        toast({ title: "No quantities entered", description: "Set at least one quantity greater than zero", variant: "destructive" });
+        return;
+      }
+
+      try {
+        const source = await getOrdersSource(supabaseMode ?? undefined);
+        let totalQty = 0;
+        for (const payload of payloadByOrderAndLocation.values()) {
+          await source.receiveSupplierOrder(payload.orderId, {
+            locationId: payload.locationId,
+            lines: payload.lines,
+          });
+          totalQty += payload.lines.reduce((sum, line) => sum + line.qty, 0);
+        }
+
+        trackEvent("procurement_item_updated", {
+          project_id: pid,
+          surface: "procurement",
+          total_qty: totalQty,
         });
-        totalQty += payload.lines.reduce((sum, line) => sum + line.qty, 0);
+
+        if (supabaseMode) {
+          const orderDetailInvalidations = Array.from(payloadByOrderAndLocation.values()).map((payload) => (
+            queryClient.invalidateQueries({
+              queryKey: orderQueryKeys.orderById(supabaseMode.profileId, payload.orderId),
+            })
+          ));
+          await Promise.all([
+            queryClient.invalidateQueries({
+              queryKey: orderQueryKeys.projectOrders(supabaseMode.profileId, pid),
+            }),
+            queryClient.invalidateQueries({
+              queryKey: orderQueryKeys.placedSupplierOrders(supabaseMode.profileId, pid),
+            }),
+            queryClient.invalidateQueries({
+              queryKey: orderQueryKeys.placedSupplierOrdersAllProjects(supabaseMode.profileId),
+            }),
+            queryClient.invalidateQueries({
+              queryKey: procurementQueryKeys.projectItems(supabaseMode.profileId, pid),
+            }),
+            queryClient.invalidateQueries({
+              queryKey: inventoryQueryKeys.projectLocations(supabaseMode.profileId, pid),
+            }),
+            queryClient.invalidateQueries({
+              queryKey: inventoryQueryKeys.projectStock(supabaseMode.profileId, pid),
+            }),
+            ...orderDetailInvalidations,
+          ]);
+        }
+
+        toast({ title: payloadByOrderAndLocation.size > 1 ? "Items received" : "Item received" });
+        setReceiveModalOpen(false);
+        setReceiveModalTargets([]);
+        setReceiveModalQtyByKey({});
+        setReceiveModalLocationByKey({});
+        setSelectedOrderedLineKeys(new Set());
+      } catch (error) {
+        toast({
+          title: "Receive failed",
+          description: error instanceof Error ? error.message : "Please try again.",
+          variant: "destructive",
+        });
       }
-
-      trackEvent("procurement_item_updated", {
-        project_id: pid,
-        surface: "procurement",
-        total_qty: totalQty,
-      });
-
-      if (supabaseMode) {
-        const orderDetailInvalidations = Array.from(payloadByOrderAndLocation.values()).map((payload) => (
-          queryClient.invalidateQueries({
-            queryKey: orderQueryKeys.orderById(supabaseMode.profileId, payload.orderId),
-          })
-        ));
-        await Promise.all([
-          queryClient.invalidateQueries({
-            queryKey: orderQueryKeys.projectOrders(supabaseMode.profileId, pid),
-          }),
-          queryClient.invalidateQueries({
-            queryKey: orderQueryKeys.placedSupplierOrders(supabaseMode.profileId, pid),
-          }),
-          queryClient.invalidateQueries({
-            queryKey: orderQueryKeys.placedSupplierOrdersAllProjects(supabaseMode.profileId),
-          }),
-          queryClient.invalidateQueries({
-            queryKey: procurementQueryKeys.projectItems(supabaseMode.profileId, pid),
-          }),
-          queryClient.invalidateQueries({
-            queryKey: inventoryQueryKeys.projectLocations(supabaseMode.profileId, pid),
-          }),
-          queryClient.invalidateQueries({
-            queryKey: inventoryQueryKeys.projectStock(supabaseMode.profileId, pid),
-          }),
-          ...orderDetailInvalidations,
-        ]);
-      }
-
-      toast({ title: payloadByOrderAndLocation.size > 1 ? "Items received" : "Item received" });
-      setReceiveModalOpen(false);
-      setReceiveModalTargets([]);
-      setReceiveModalQtyByKey({});
-      setReceiveModalLocationByKey({});
-      setSelectedOrderedLineKeys(new Set());
-    } catch (error) {
-      toast({
-        title: "Receive failed",
-        description: error instanceof Error ? error.message : "Please try again.",
-        variant: "destructive",
-      });
+    } finally {
+      receiveItemsConfirmInFlightRef.current = false;
+      setReceiveItemsConfirmInFlight(false);
     }
   };
 
@@ -1997,7 +2114,7 @@ export default function ProjectProcurement() {
           }
         }}
       >
-        <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] p-0 gap-0 overflow-hidden">
+        <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col">
           <DialogHeader className="px-5 py-4 border-b border-border">
             <DialogTitle>Receive items</DialogTitle>
           </DialogHeader>
@@ -2005,7 +2122,7 @@ export default function ProjectProcurement() {
           {receiveModalTargets.length === 0 ? (
             <div className="px-5 py-4 text-sm text-muted-foreground">No items selected.</div>
           ) : (
-            <div className="px-5 py-4 overflow-y-auto space-y-3">
+            <div className="px-5 py-4 flex-1 overflow-y-auto space-y-3">
               {receiveModalTargets.length === 1 && (
                 <div className="rounded-lg border border-border p-3">
                   <p className="font-medium text-foreground">{receiveModalTargets[0].itemName}</p>
@@ -2079,8 +2196,13 @@ export default function ProjectProcurement() {
 
           <DialogFooter className="px-5 py-4 border-t border-border">
             <Button type="button" variant="outline" onClick={() => setReceiveModalOpen(false)}>Close</Button>
-            <Button type="button" onClick={submitReceiveItems} disabled={!canEdit || receiveModalTargets.length === 0}>
-              Confirm received
+            <Button
+              type="button"
+              onClick={submitReceiveItems}
+              disabled={!canEdit || receiveModalTargets.length === 0 || receiveItemsConfirmInFlight}
+            >
+              {receiveItemsConfirmInFlight ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}
+              {receiveItemsConfirmInFlight ? "Receiving..." : "Confirm received"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2104,7 +2226,7 @@ export default function ProjectProcurement() {
       />
 
       <Dialog open={!!itemId && !orderId} onOpenChange={(nextOpen) => !nextOpen && closeDetail()}>
-        <DialogContent className="h-[95vh] w-[100vw] max-w-none rounded-none p-0 gap-0 overflow-hidden sm:h-auto sm:w-[75vw] sm:max-w-6xl sm:max-h-[90vh] sm:rounded-xl">
+        <DialogContent className="h-[95vh] w-[100vw] max-w-none rounded-none p-0 gap-0 overflow-hidden flex flex-col sm:h-auto sm:w-[75vw] sm:max-w-6xl sm:max-h-[90vh] sm:rounded-xl">
           <DialogHeader className="border-b border-border px-4 py-3 pr-12 sm:px-6 sm:py-4">
             <DialogTitle>Procurement request</DialogTitle>
           </DialogHeader>
@@ -2114,7 +2236,7 @@ export default function ProjectProcurement() {
               <p className="text-sm text-muted-foreground">Item not found.</p>
             </div>
           ) : (
-            <div className="overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
+            <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
               <div className="mx-auto w-full max-w-4xl space-y-4">
                 <div className="flex flex-wrap items-center gap-2">
                   {detailItem.lockedFromEstimate && (
@@ -2135,7 +2257,7 @@ export default function ProjectProcurement() {
                     <div className="mt-1">
                       <ItemTypePicker
                         value={(editForm.type ?? "material") as ProcurementItemType}
-                        disabled={!canEdit}
+                        disabled={!canEdit || activeTab === "ordered"}
                         onChange={(nextType) => patchEditForm((prev) => ({ ...prev, type: nextType }), "immediate")}
                       />
                     </div>
@@ -2147,7 +2269,7 @@ export default function ProjectProcurement() {
                         <PopoverTrigger asChild>
                           <Button
                             variant="outline"
-                            disabled={!canEdit || !!detailItem.lockedFromEstimate}
+                            disabled={!canEdit || activeTab === "ordered" || !!detailItem.lockedFromEstimate}
                             className={cn("h-9 w-full justify-start text-left", isOverdue(editForm.requiredByDate) && "text-destructive")}
                           >
                             <CalendarIcon className="h-4 w-4 mr-2" />
@@ -2177,7 +2299,7 @@ export default function ProjectProcurement() {
                     onChange={(event) => patchEditForm((prev) => ({ ...prev, name: event.target.value }))}
                     onBlur={() => persistDraftNowIfChanged(draftRef.current)}
                     className="h-9"
-                    disabled={!canEdit}
+                    disabled={!canEdit || activeTab === "ordered"}
                   />
                 </div>
 
@@ -2205,7 +2327,7 @@ export default function ProjectProcurement() {
                       }}
                       onBlur={() => persistDraftNowIfChanged(draftRef.current)}
                       className="h-9"
-                      disabled={!canEdit || !!detailItem.lockedFromEstimate}
+                      disabled={!canEdit || activeTab === "ordered" || !!detailItem.lockedFromEstimate}
                     />
                   </div>
                   <div>
@@ -2234,7 +2356,7 @@ export default function ProjectProcurement() {
                       onBlur={() => persistDraftNowIfChanged(draftRef.current)}
                       className="h-9"
                       placeholder="RUB"
-                      disabled={!canEdit}
+                      disabled={!canEdit || activeTab === "ordered"}
                     />
                   </div>
                 </div>

@@ -53,12 +53,12 @@ export function ReceiveOrderPickerModal({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="w-[95vw] max-w-3xl max-h-[88vh] overflow-hidden p-0 gap-0">
+        <DialogContent className="w-[95vw] max-w-3xl max-h-[88vh] overflow-hidden p-0 gap-0 flex flex-col">
           <DialogHeader className="px-5 py-4 border-b border-border">
             <DialogTitle>Receive purchase order</DialogTitle>
           </DialogHeader>
 
-          <div className="px-5 py-4 space-y-3 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input

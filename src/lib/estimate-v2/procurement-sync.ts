@@ -18,7 +18,7 @@ export type ProcurementSyncReason = "estimate_line_deleted" | "estimate_line_typ
 interface EstimateV2SyncStateLike {
   project: Pick<EstimateV2Project, "estimateStatus">;
   lines: EstimateV2ResourceLine[];
-  works: Pick<EstimateV2Work, "id" | "plannedStart">[];
+  works: Pick<EstimateV2Work, "id" | "plannedStart" | "stageId">[];
 }
 
 const PROCUREMENT_TYPES = new Set<EstimateV2ResourceLine["type"]>(["material", "tool"]);
@@ -38,8 +38,11 @@ function plannedUnitPriceFromLine(line: EstimateV2ResourceLine): number {
 function requiredByDateFromWorkStart(
   line: EstimateV2ResourceLine,
   workStartByWorkId: Map<string, string | null>,
+  stageStartByStageId: Map<string, string>,
+  resolvedStageId: string | null,
 ): string | null {
-  return workStartByWorkId.get(line.workId) ?? null;
+  return workStartByWorkId.get(line.workId)
+    ?? (resolvedStageId ? stageStartByStageId.get(resolvedStageId) ?? null : null);
 }
 
 function isEstimateV2Linked(
@@ -61,13 +64,18 @@ function applyEstimateLineToProcurementItem(
   itemId: string,
   line: EstimateV2ResourceLine,
   workStartByWorkId: Map<string, string | null>,
+  workStageIdByWorkId: Map<string, string>,
+  stageStartByStageId: Map<string, string>,
+  fallbackStageId: string | null,
 ) {
+  const resolvedStageId = line.stageId || workStageIdByWorkId.get(line.workId) || fallbackStageId;
+  const requiredByDate = requiredByDateFromWorkStart(line, workStartByWorkId, stageStartByStageId, resolvedStageId ?? null);
   updateProcurementItem(itemId, {
-    stageId: line.stageId,
+    stageId: resolvedStageId ?? null,
     type: line.type === "tool" ? "tool" : "material",
     name: line.title,
     unit: line.unit,
-    requiredByDate: requiredByDateFromWorkStart(line, workStartByWorkId),
+    requiredByDate,
     requiredQty: qtyFromLine(line),
     plannedUnitPrice: plannedUnitPriceFromLine(line),
     lockedFromEstimate: true,
@@ -112,16 +120,21 @@ function createFromLine(
   projectId: string,
   line: EstimateV2ResourceLine,
   workStartByWorkId: Map<string, string | null>,
+  workStageIdByWorkId: Map<string, string>,
+  stageStartByStageId: Map<string, string>,
+  fallbackStageId: string | null,
 ) {
+  const resolvedStageId = line.stageId || workStageIdByWorkId.get(line.workId) || fallbackStageId;
+  const requiredByDate = requiredByDateFromWorkStart(line, workStartByWorkId, stageStartByStageId, resolvedStageId ?? null);
   addProcurementItem({
     projectId,
-    stageId: line.stageId,
+    stageId: resolvedStageId ?? null,
     categoryId: null,
     type: line.type === "tool" ? "tool" : "material",
     name: line.title,
     spec: null,
     unit: line.unit,
-    requiredByDate: requiredByDateFromWorkStart(line, workStartByWorkId),
+    requiredByDate,
     requiredQty: qtyFromLine(line),
     orderedQty: 0,
     receivedQty: 0,
@@ -149,11 +162,21 @@ function relinkProcurementItem(
   itemId: string,
   line: EstimateV2ResourceLine,
   workStartByWorkId: Map<string, string | null>,
+  workStageIdByWorkId: Map<string, string>,
+  stageStartByStageId: Map<string, string>,
+  fallbackStageId: string | null,
 ): boolean {
   const existing = getProcurementItemById(itemId);
   if (!existing || existing.projectId !== line.projectId) return false;
 
-  applyEstimateLineToProcurementItem(itemId, line, workStartByWorkId);
+  applyEstimateLineToProcurementItem(
+    itemId,
+    line,
+    workStartByWorkId,
+    workStageIdByWorkId,
+    stageStartByStageId,
+    fallbackStageId,
+  );
   return true;
 }
 
@@ -169,7 +192,33 @@ export function relinkProcurementItemToEstimateV2Line(
   const workStartByWorkId = new Map(
     estimateState.works.map((work) => [work.id, work.plannedStart ?? null]),
   );
-  return relinkProcurementItem(itemId, line, workStartByWorkId);
+
+  const workStageIdByWorkId = new Map(
+    estimateState.works.map((work) => [work.id, work.stageId]),
+  );
+
+  const stageStartByStageId = new Map<string, string>();
+  estimateState.works.forEach((work) => {
+    if (!work.plannedStart) return;
+    if (!work.stageId) return;
+
+    const ts = new Date(work.plannedStart).getTime();
+    if (!Number.isFinite(ts)) return;
+
+    const existing = stageStartByStageId.get(work.stageId);
+    if (!existing) {
+      stageStartByStageId.set(work.stageId, work.plannedStart);
+      return;
+    }
+
+    const existingTs = new Date(existing).getTime();
+    if (Number.isFinite(existingTs) && ts < existingTs) {
+      stageStartByStageId.set(work.stageId, work.plannedStart);
+    }
+  });
+
+  const fallbackStageId = estimateState.works.find((work) => work.stageId)?.stageId ?? null;
+  return relinkProcurementItem(itemId, line, workStartByWorkId, workStageIdByWorkId, stageStartByStageId, fallbackStageId);
 }
 
 export function syncProcurementFromEstimateV2(
@@ -184,6 +233,26 @@ export function syncProcurementFromEstimateV2(
   const workStartByWorkId = new Map(
     estimateState.works.map((work) => [work.id, work.plannedStart ?? null]),
   );
+  const workStageIdByWorkId = new Map(
+    estimateState.works.map((work) => [work.id, work.stageId]),
+  );
+  const stageStartByStageId = new Map<string, string>();
+  estimateState.works.forEach((work) => {
+    if (!work.plannedStart) return;
+    if (!work.stageId) return;
+    const ts = new Date(work.plannedStart).getTime();
+    if (!Number.isFinite(ts)) return;
+    const existing = stageStartByStageId.get(work.stageId);
+    if (!existing) {
+      stageStartByStageId.set(work.stageId, work.plannedStart);
+      return;
+    }
+    const existingTs = new Date(existing).getTime();
+    if (Number.isFinite(existingTs) && ts < existingTs) {
+      stageStartByStageId.set(work.stageId, work.plannedStart);
+    }
+  });
+  const fallbackStageId = estimateState.works.find((work) => work.stageId)?.stageId ?? null;
 
   const items = getProcurementItems(projectId, true);
   const claimedItemIds = new Set<string>();
@@ -235,12 +304,19 @@ export function syncProcurementFromEstimateV2(
     }
 
     if (existing) {
-      applyEstimateLineToProcurementItem(existing.id, line, workStartByWorkId);
+      applyEstimateLineToProcurementItem(
+        existing.id,
+        line,
+        workStartByWorkId,
+        workStageIdByWorkId,
+        stageStartByStageId,
+        fallbackStageId,
+      );
       return;
     }
 
     if (nowInWork) {
-      createFromLine(projectId, line, workStartByWorkId);
+      createFromLine(projectId, line, workStartByWorkId, workStageIdByWorkId, stageStartByStageId, fallbackStageId);
     }
   });
 }

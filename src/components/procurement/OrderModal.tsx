@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Fragment, useEffect, useMemo, useState } from "react";
-import { CalendarIcon, Save, Send } from "lucide-react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { CalendarIcon, Loader2, Save, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,7 @@ import { LocationPicker } from "@/components/procurement/LocationPicker";
 import type { DraftOrderLineInput } from "@/data/order-store";
 import type { OrderKind } from "@/types/entities";
 import { useWorkspaceMode } from "@/hooks/use-workspace-source";
+import { useEstimateV2Project } from "@/hooks/use-estimate-v2-data";
 
 interface OrderModalProps {
   open: boolean;
@@ -51,7 +52,7 @@ export function OrderModal({
   initialItemIds,
   onCompleted,
 }: OrderModalProps) {
-  const items = useProcurementV2(projectId);
+  const baseItems = useProcurementV2(projectId);
   const orders = useOrders(projectId);
   const locations = useLocations(projectId);
   const workspaceMode = useWorkspaceMode();
@@ -59,6 +60,60 @@ export function OrderModal({
   const isSupabaseMode = workspaceMode.kind === "supabase";
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const estimateState = useEstimateV2Project(projectId);
+
+  const items = useMemo(() => {
+    const workById = new Map(estimateState.works.map((work) => [work.id, work]));
+    const lineById = new Map(estimateState.lines.map((line) => [line.id, line]));
+
+    const stageStartByStageId = new Map<string, string>();
+    estimateState.works.forEach((work) => {
+      if (!work.plannedStart) return;
+      if (!work.stageId) return;
+      const ts = new Date(work.plannedStart).getTime();
+      if (!Number.isFinite(ts)) return;
+
+      const existing = stageStartByStageId.get(work.stageId);
+      if (!existing) {
+        stageStartByStageId.set(work.stageId, work.plannedStart);
+        return;
+      }
+
+      const existingTs = new Date(existing).getTime();
+      if (Number.isFinite(existingTs) && ts < existingTs) {
+        stageStartByStageId.set(work.stageId, work.plannedStart);
+      }
+    });
+
+    const fallbackStageId = estimateState.stages[0]?.id ?? null;
+
+    return baseItems.map((item) => {
+      const lineId = item.sourceEstimateV2LineId ?? null;
+      if (!lineId) return item;
+      const line = lineById.get(lineId);
+      if (!line) return item;
+
+      const work = workById.get(line.workId) ?? null;
+      const resolvedStageId = line.stageId || work?.stageId || fallbackStageId;
+      if (!resolvedStageId) return item;
+
+      const requiredByDate = work?.plannedStart ?? stageStartByStageId.get(resolvedStageId) ?? null;
+      const derivedType = line.type === "tool" ? "tool" : "material";
+      const requiredQty = Math.max(0, line.qtyMilli / 1_000);
+      const plannedUnitPrice = Math.max(0, line.costUnitCents / 100);
+
+      return {
+        ...item,
+        stageId: resolvedStageId,
+        type: derivedType,
+        name: line.title,
+        unit: line.unit,
+        requiredByDate,
+        requiredQty,
+        plannedUnitPrice,
+      };
+    });
+  }, [baseItems, estimateState.lines, estimateState.works, estimateState.stages]);
 
   const [kind, setKind] = useState<OrderKind>("supplier");
   const [supplierName, setSupplierName] = useState("");
@@ -69,6 +124,8 @@ export function OrderModal({
   const [invoiceAttachment, setInvoiceAttachment] = useState<{ name: string; url: string } | null>(null);
   const [note, setNote] = useState("");
   const [lines, setLines] = useState<DraftLineState[]>([]);
+  const [orderActionInFlight, setOrderActionInFlight] = useState<null | "draft" | "place">(null);
+  const orderActionInFlightRef = useRef<null | "draft" | "place">(null);
 
   const itemById = useMemo(
     () => new Map(items.map((item) => [item.id, item])),
@@ -122,6 +179,7 @@ export function OrderModal({
   const canPlaceOrder = hasOrderedLines && allOrderedLinesHaveValidActualPrices;
 
   const saveOrder = async (action: "draft" | "place") => {
+    if (orderActionInFlightRef.current) return;
     const positiveLines = lines.filter((line) => line.qty > 0);
     const payloadLines: DraftOrderLineInput[] = positiveLines.map((line) => ({
       procurementItemId: line.procurementItemId,
@@ -145,6 +203,9 @@ export function OrderModal({
       return;
     }
 
+    orderActionInFlightRef.current = action;
+    setOrderActionInFlight(action);
+    try {
     if (kind === "stock") {
       for (const line of payloadLines) {
         const item = itemById.get(line.procurementItemId);
@@ -276,6 +337,10 @@ export function OrderModal({
         variant: "destructive",
       });
     }
+    } finally {
+      orderActionInFlightRef.current = null;
+      setOrderActionInFlight(null);
+    }
   };
 
   const totalAmount = allOrderedLinesHaveValidActualPrices
@@ -284,12 +349,12 @@ export function OrderModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[96vw] max-w-5xl max-h-[90vh] p-0 gap-0 overflow-hidden">
+      <DialogContent className="w-[96vw] max-w-5xl max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col">
         <DialogHeader className="px-5 py-4 border-b border-border">
           <DialogTitle>Create order</DialogTitle>
         </DialogHeader>
 
-        <div className="overflow-y-auto px-5 py-4 space-y-4">
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
           <div className="flex items-center gap-2">
             <Button
               type="button"
@@ -526,13 +591,26 @@ export function OrderModal({
         <DialogFooter className="px-5 py-4 border-t border-border">
           <div className="mr-auto text-sm text-muted-foreground">Total: {fmtCost(totalAmount)}</div>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
-          <Button type="button" variant="secondary" onClick={() => saveOrder("draft")} disabled={!hasOrderedLines}>
-            <Save className="h-4 w-4 mr-1" />
-            Save draft
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => saveOrder("draft")}
+            disabled={!hasOrderedLines || !!orderActionInFlight}
+          >
+            {orderActionInFlight === "draft"
+              ? <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+              : <Save className="h-4 w-4 mr-1" />}
+            {orderActionInFlight === "draft" ? "Saving..." : "Save draft"}
           </Button>
-          <Button type="button" onClick={() => saveOrder("place")} disabled={!canPlaceOrder}>
-            <Send className="h-4 w-4 mr-1" />
-            Place order
+          <Button
+            type="button"
+            onClick={() => saveOrder("place")}
+            disabled={!canPlaceOrder || !!orderActionInFlight}
+          >
+            {orderActionInFlight === "place"
+              ? <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+              : <Send className="h-4 w-4 mr-1" />}
+            {orderActionInFlight === "place" ? "Placing..." : "Place order"}
           </Button>
         </DialogFooter>
       </DialogContent>

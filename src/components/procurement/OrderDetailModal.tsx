@@ -104,7 +104,7 @@ export function OrderDetailModal({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] p-0 gap-0 overflow-hidden">
+        <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col">
           <DialogHeader className="px-5 py-4 border-b border-border">
             <DialogTitle className="flex items-center gap-2">
               Order details
@@ -113,9 +113,9 @@ export function OrderDetailModal({
           </DialogHeader>
 
           {!order ? (
-            <div className="px-5 py-4 text-sm text-muted-foreground">Order not found.</div>
+            <div className="flex-1 px-5 py-4 text-sm text-muted-foreground">Order not found.</div>
           ) : (
-            <div className="px-5 py-4 overflow-y-auto space-y-4">
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                 <div className="rounded-lg border border-border p-3 space-y-1">
                   <p className="text-xs text-muted-foreground">Source</p>
