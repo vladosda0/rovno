@@ -1920,7 +1920,7 @@
           "roles": [
             "authenticated"
           ],
-          "using": "owner_profile_id = auth.uid()\n  or exists (\n    select 1\n    from public.project_members pm\n    where pm.project_id = id\n      and pm.profile_id = auth.uid()\n      and pm.role = 'co_owner'\n  )",
+          "using": "owner_profile_id = auth.uid()",
           "withCheck": null,
           "sourceMigration": "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql"
         },

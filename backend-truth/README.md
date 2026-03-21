@@ -48,6 +48,7 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20260317133000_storage_bucket_config_table.sql`
 - `supabase/migrations/20260320110000_task_final_media_contract.sql`
 - `supabase/migrations/20260320130000_codex_review_findings_fixes.sql`
+- `supabase/migrations/20260320143000_add_sanitize_uploaded_filename.sql`
 
 ## Exclusions
 

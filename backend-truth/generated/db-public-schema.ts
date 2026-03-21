@@ -99,6 +99,10 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql",
       "sha256": "54b9ab9bc73e6b09c1f0956867eefceb0910e333db3a91eb3e38f61e56f54736"
+    },
+    {
+      "path": "supabase/migrations/20260320143000_add_sanitize_uploaded_filename.sql",
+      "sha256": "01d69ddbebf1b9768edbabdb29cd3f12ffb295b0c0074f0edf8d1a718c5c08f6"
     }
   ],
   "generated_artifacts": [
@@ -145,7 +149,8 @@ export const manifest = {
     "sql/20260317130000_storage_bucket_settings_split.sql",
     "sql/20260317133000_storage_bucket_config_table.sql",
     "sql/20260320110000_task_final_media_contract.sql",
-    "sql/20260320130000_codex_review_findings_fixes.sql"
+    "sql/20260320130000_codex_review_findings_fixes.sql",
+    "sql/20260320143000_add_sanitize_uploaded_filename.sql"
   ],
   "external_schema_references": [
     {
@@ -9456,6 +9461,26 @@ export const functions = {
           "activation": "before update of project_stage_id"
         }
       ]
+    },
+    {
+      "schema": "public",
+      "name": "sanitize_uploaded_filename",
+      "signature": "public.sanitize_uploaded_filename(text)",
+      "args": [
+        {
+          "name": "input",
+          "type": "text",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "text",
+      "language": "plpgsql",
+      "volatility": "immutable",
+      "securityDefiner": false,
+      "searchPath": null,
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260320143000_add_sanitize_uploaded_filename.sql",
+      "triggerUsages": []
     }
   ]
 } as const;
@@ -9667,7 +9692,7 @@ export const rls = {
           "roles": [
             "authenticated"
           ],
-          "using": "owner_profile_id = auth.uid()\n  or exists (\n    select 1\n    from public.project_members pm\n    where pm.project_id = id\n      and pm.profile_id = auth.uid()\n      and pm.role = 'co_owner'\n  )",
+          "using": "owner_profile_id = auth.uid()",
           "withCheck": null,
           "sourceMigration": "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql"
         },
@@ -11691,6 +11716,13 @@ export const sourceTrace = {
       "name": "guard_estimate_work_stage_reassignment",
       "signature": "public.guard_estimate_work_stage_reassignment()",
       "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
+    },
+    {
+      "key": "public.sanitize_uploaded_filename",
+      "schema": "public",
+      "name": "sanitize_uploaded_filename",
+      "signature": "public.sanitize_uploaded_filename(text)",
+      "sourceMigration": "supabase/migrations/20260320143000_add_sanitize_uploaded_filename.sql"
     }
   ],
   "policies": [
@@ -11797,6 +11829,14 @@ export const sourceTrace = {
       "name": "projects_delete",
       "command": "delete",
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.projects.projects_update",
+      "schema": "public",
+      "table": "projects",
+      "name": "projects_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
     },
     {
       "key": "public.projects.projects_update",
