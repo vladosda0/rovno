@@ -419,6 +419,13 @@
       "name": "guard_estimate_work_stage_reassignment",
       "signature": "public.guard_estimate_work_stage_reassignment()",
       "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
+    },
+    {
+      "key": "public.sanitize_uploaded_filename",
+      "schema": "public",
+      "name": "sanitize_uploaded_filename",
+      "signature": "public.sanitize_uploaded_filename(text)",
+      "sourceMigration": "supabase/migrations/20260320143000_add_sanitize_uploaded_filename.sql"
     }
   ],
   "policies": [
@@ -525,6 +532,14 @@
       "name": "projects_delete",
       "command": "delete",
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.projects.projects_update",
+      "schema": "public",
+      "table": "projects",
+      "name": "projects_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
     },
     {
       "key": "public.projects.projects_update",

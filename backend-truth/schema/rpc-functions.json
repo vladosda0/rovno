@@ -759,6 +759,26 @@
           "activation": "before update of project_stage_id"
         }
       ]
+    },
+    {
+      "schema": "public",
+      "name": "sanitize_uploaded_filename",
+      "signature": "public.sanitize_uploaded_filename(text)",
+      "args": [
+        {
+          "name": "input",
+          "type": "text",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "text",
+      "language": "plpgsql",
+      "volatility": "immutable",
+      "securityDefiner": false,
+      "searchPath": null,
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260320143000_add_sanitize_uploaded_filename.sql",
+      "triggerUsages": []
     }
   ]
 }
