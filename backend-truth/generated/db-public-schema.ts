@@ -11896,6 +11896,14 @@ export const sourceTrace = {
       "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
     },
     {
+      "key": "public.projects.projects_update",
+      "schema": "public",
+      "table": "projects",
+      "name": "projects_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
+    },
+    {
       "key": "public.project_members.project_members_select",
       "schema": "public",
       "table": "project_members",
