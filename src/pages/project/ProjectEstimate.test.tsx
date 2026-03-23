@@ -4,14 +4,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import ProjectEstimate from "@/pages/project/ProjectEstimate";
-import { __unsafeResetStoreForTests, addMember, addProject, addTask } from "@/data/store";
+import { __unsafeResetStoreForTests, addMember, addProject, addTask, updateTask } from "@/data/store";
 import {
+  __unsafeResetEstimateV2ForTests,
   createLine,
   createStage,
   createWork,
   getEstimateV2ProjectState,
   setProjectEstimateStatus,
 } from "@/data/estimate-v2-store";
+import { __unsafeResetHrForTests } from "@/data/hr-store";
+import { createDraftOrder, placeOrder, receiveOrder, __unsafeResetOrdersForTests } from "@/data/order-store";
+import { __unsafeResetInventoryForTests } from "@/data/inventory-store";
+import { getProcurementItems } from "@/data/procurement-store";
 import { computeProjectTotals } from "@/lib/estimate-v2/pricing";
 import {
   clearDemoSession,
@@ -248,6 +253,50 @@ function seedEstimateLine(projectId: string) {
   return { stage, work, line };
 }
 
+function getLinkedProcurementItem(projectId: string, lineId: string) {
+  return getProcurementItems(projectId).find((item) => item.sourceEstimateV2LineId === lineId) ?? null;
+}
+
+function createPlacedSupplierOrderForLine(
+  projectId: string,
+  lineId: string,
+  options: { qty: number; receivedQty?: number },
+) {
+  const procurementItem = getLinkedProcurementItem(projectId, lineId);
+  expect(procurementItem).not.toBeNull();
+  if (!procurementItem) return null;
+
+  const draft = createDraftOrder({
+    projectId,
+    kind: "supplier",
+    deliverToLocationId: `${projectId}-loc-site`,
+    lines: [{
+      procurementItemId: procurementItem.id,
+      qty: options.qty,
+      unit: procurementItem.unit,
+      plannedUnitPrice: procurementItem.plannedUnitPrice ?? 0,
+      actualUnitPrice: procurementItem.actualUnitPrice ?? procurementItem.plannedUnitPrice ?? 0,
+    }],
+  });
+
+  const placed = placeOrder(draft.id);
+  expect(placed.ok).toBe(true);
+
+  if ((options.receivedQty ?? 0) > 0) {
+    const orderLineId = draft.lines[0]?.id;
+    expect(orderLineId).toBeTruthy();
+    if (orderLineId) {
+      const received = receiveOrder(draft.id, {
+        locationId: `${projectId}-loc-site`,
+        lines: [{ lineId: orderLineId, qty: options.receivedQty ?? 0 }],
+      });
+      expect(received.ok).toBe(true);
+    }
+  }
+
+  return procurementItem;
+}
+
 describe("ProjectEstimate", () => {
   beforeEach(() => {
     class MockPointerEvent extends MouseEvent {
@@ -295,6 +344,10 @@ describe("ProjectEstimate", () => {
     clearStoredAuthProfile();
     setAuthRole("owner");
     __unsafeResetStoreForTests();
+    __unsafeResetEstimateV2ForTests();
+    __unsafeResetOrdersForTests();
+    __unsafeResetInventoryForTests();
+    __unsafeResetHrForTests();
   });
 
   afterEach(() => {
@@ -641,6 +694,204 @@ describe("ProjectEstimate", () => {
     });
 
     expect(getEstimateV2ProjectState(projectId).project.estimateStatus).toBe("in_work");
+  });
+
+  it("uses a simple one-step confirmation when deleting a resource without downstream consequences", async () => {
+    const projectId = "project-estimate-delete-resource-simple";
+    setupLocalProject(projectId);
+    const currentStage = createStage(projectId, { title: "Delete stage" });
+    expect(currentStage).not.toBeNull();
+    if (!currentStage) return;
+
+    const currentWork = createWork(projectId, { stageId: currentStage.id, title: "Delete work" });
+    expect(currentWork).not.toBeNull();
+    if (!currentWork) return;
+
+    const currentLine = createLine(projectId, {
+      stageId: currentStage.id,
+      workId: currentWork.id,
+      title: "Simple resource",
+      type: "material",
+      qtyMilli: 1_000,
+      costUnitCents: 5_000,
+    });
+    expect(currentLine).not.toBeNull();
+    if (!currentLine) return;
+
+    await act(async () => {
+      renderProjectEstimate(projectId);
+      await flushUi();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Delete resource Simple resource" }));
+      await flushUi();
+    });
+
+    const dialog = screen.getByRole("alertdialog", { name: "Delete resource?" });
+    expect(within(dialog).getByText("This resource will be removed from the estimate. This action cannot be undone.")).toBeInTheDocument();
+    expect(within(dialog).queryByText(/normal UI flow/i)).not.toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+      await flushUi();
+    });
+
+    await waitFor(() => {
+      expect(getEstimateV2ProjectState(projectId).lines).toHaveLength(0);
+    });
+    expect(screen.queryByText("Simple resource")).not.toBeInTheDocument();
+  });
+
+  it("shows the stronger financial warning when deleting a resource with ordered or stocked downstream state", async () => {
+    const projectId = "project-estimate-delete-resource-financial";
+    setupLocalProject(projectId);
+    const seeded = seedEstimateLine(projectId);
+    expect(seeded).not.toBeNull();
+    if (!seeded) return;
+
+    const statusResult = setProjectEstimateStatus(projectId, "in_work", { skipSetup: true });
+    expect(statusResult.ok).toBe(true);
+    createPlacedSupplierOrderForLine(projectId, seeded.line.id, { qty: 1, receivedQty: 1 });
+
+    await act(async () => {
+      renderProjectEstimate(projectId);
+      await flushUi();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Delete resource Concrete" }));
+      await flushUi();
+    });
+
+    const dialog = screen.getByRole("alertdialog", { name: "Delete resource permanently?" });
+    expect(within(dialog).getByText(/cannot be recovered through the normal UI flow/i)).toBeInTheDocument();
+    expect(within(dialog).getByText("Concrete (Fully ordered, In stock)")).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole("button", { name: "Delete permanently" }));
+      await flushUi();
+    });
+
+    await waitFor(() => {
+      expect(getEstimateV2ProjectState(projectId).lines).toHaveLength(0);
+    });
+  });
+
+  it("uses a staged execution then financial confirmation when deleting a started work", async () => {
+    const projectId = "project-estimate-delete-work-staged";
+    setupLocalProject(projectId);
+    const seeded = seedEstimateLine(projectId);
+    expect(seeded).not.toBeNull();
+    if (!seeded) return;
+
+    const statusResult = setProjectEstimateStatus(projectId, "in_work", { skipSetup: true });
+    expect(statusResult.ok).toBe(true);
+    createPlacedSupplierOrderForLine(projectId, seeded.line.id, { qty: 1 });
+
+    const taskId = getEstimateV2ProjectState(projectId).works[0]?.taskId;
+    expect(taskId).toBeTruthy();
+    if (taskId) {
+      updateTask(taskId, { status: "in_progress" });
+    }
+
+    await act(async () => {
+      renderProjectEstimate(projectId);
+      await flushUi();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Delete work Framing" }));
+      await flushUi();
+    });
+
+    const executionDialog = screen.getByRole("alertdialog", { name: "Delete work?" });
+    expect(within(executionDialog).getByText(/already in progress/i)).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(within(executionDialog).getByRole("button", { name: "Continue" }));
+      await flushUi();
+    });
+
+    const financialDialog = await screen.findByRole("alertdialog", { name: "Delete work permanently?" });
+    expect(within(financialDialog).getByText(/cannot be recovered through the normal UI flow/i)).toBeInTheDocument();
+    expect(within(financialDialog).getByText("Concrete (Fully ordered)")).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(within(financialDialog).getByRole("button", { name: "Delete permanently" }));
+      await flushUi();
+    });
+
+    await waitFor(() => {
+      expect(getEstimateV2ProjectState(projectId).works).toHaveLength(0);
+    });
+  });
+
+  it("shows started items first and then the stronger financial warning when deleting a stage", async () => {
+    const projectId = "project-estimate-delete-stage-staged";
+    setupLocalProject(projectId);
+    const seeded = seedEstimateLine(projectId);
+    expect(seeded).not.toBeNull();
+    if (!seeded) return;
+
+    const statusResult = setProjectEstimateStatus(projectId, "in_work", { skipSetup: true });
+    expect(statusResult.ok).toBe(true);
+    createPlacedSupplierOrderForLine(projectId, seeded.line.id, { qty: 1 });
+
+    const linkedTaskId = getEstimateV2ProjectState(projectId).works[0]?.taskId;
+    expect(linkedTaskId).toBeTruthy();
+    if (linkedTaskId) {
+      updateTask(linkedTaskId, { status: "in_progress" });
+    }
+
+    addTask({
+      id: "manual-stage-task",
+      project_id: projectId,
+      stage_id: seeded.stage.id,
+      title: "Manual blocked task",
+      description: "",
+      status: "blocked",
+      assignee_id: "",
+      checklist: [],
+      comments: [],
+      attachments: [],
+      photos: [],
+      linked_estimate_item_ids: [],
+      created_at: "2026-03-01T00:00:00.000Z",
+    });
+
+    await act(async () => {
+      renderProjectEstimate(projectId);
+      await flushUi();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Delete stage Shell" }));
+      await flushUi();
+    });
+
+    const executionDialog = screen.getByRole("alertdialog", { name: "Delete stage?" });
+    expect(within(executionDialog).getByText(/started and is not Done/i)).toBeInTheDocument();
+    expect(within(executionDialog).getByText("Framing (Work: In progress)")).toBeInTheDocument();
+    expect(within(executionDialog).getByText("Manual blocked task (Task: Blocked)")).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(within(executionDialog).getByRole("button", { name: "Continue" }));
+      await flushUi();
+    });
+
+    const financialDialog = await screen.findByRole("alertdialog", { name: "Delete stage permanently?" });
+    expect(within(financialDialog).getByText(/cannot be recovered through the normal UI flow/i)).toBeInTheDocument();
+    expect(within(financialDialog).getByText("Concrete (Fully ordered)")).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(within(financialDialog).getByRole("button", { name: "Delete permanently" }));
+      await flushUi();
+    });
+
+    await waitFor(() => {
+      expect(getEstimateV2ProjectState(projectId).stages).toHaveLength(0);
+    });
   });
 
   it("updates the footer VAT summary totals", async () => {

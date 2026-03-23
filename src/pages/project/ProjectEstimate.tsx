@@ -43,6 +43,7 @@ import {
   useProcurementV2,
   useTasks,
 } from "@/hooks/use-mock-data";
+import { useLocations } from "@/hooks/use-inventory-data";
 import {
   useWorkspaceCurrentUserState,
   useWorkspaceMode,
@@ -100,6 +101,14 @@ import {
   getUnitOptionsForType,
   resolveUnitSelectValue,
 } from "@/lib/estimate-v2/resource-units";
+import {
+  assessResourceDelete,
+  assessStageDelete,
+  assessWorkDelete,
+  getNextDeleteStep,
+  type DeleteAssessment,
+  type DeleteDialogStep,
+} from "@/lib/estimate-v2/delete-safeguards";
 import type {
   ApprovalStamp,
   EstimateV2ResourceLine,
@@ -289,6 +298,90 @@ interface ClientRecipient {
   email: string;
 }
 
+interface PendingDeleteState {
+  assessment: DeleteAssessment;
+  step: DeleteDialogStep;
+}
+
+function deleteEntityLabel(kind: DeleteAssessment["kind"]): string {
+  if (kind === "resource") return "resource";
+  if (kind === "work") return "work";
+  return "stage";
+}
+
+function deleteDialogTitle(assessment: DeleteAssessment, step: DeleteDialogStep): string {
+  const label = deleteEntityLabel(assessment.kind);
+  if (step === "financial") return `Delete ${label} permanently?`;
+  return `Delete ${label}?`;
+}
+
+function simpleDeleteDescription(assessment: DeleteAssessment): string {
+  if (assessment.kind === "resource") {
+    return "This resource will be removed from the estimate. This action cannot be undone.";
+  }
+  if (assessment.kind === "work") {
+    return "This work and all resources inside it will be removed from the estimate. This action cannot be undone.";
+  }
+  return "This stage and all works and resources inside it will be removed from the estimate. This action cannot be undone.";
+}
+
+function workExecutionDescription(assessment: DeleteAssessment): string {
+  if (assessment.kind !== "work") return "";
+  if (assessment.execution.isDone) {
+    return "This work is already completed. Deleting it will discard estimate context for work that has already been executed.";
+  }
+  if (assessment.execution.status === "in_progress") {
+    return "This work is already in progress. Deleting it will discard estimate context for work that has already started.";
+  }
+  if (assessment.execution.status === "blocked") {
+    return "This work has already started and is currently blocked. Deleting it will discard estimate context for that execution.";
+  }
+  return "This work has already started. Deleting it will discard estimate context for that execution.";
+}
+
+function executionDeleteDescription(assessment: DeleteAssessment): string {
+  if (assessment.kind === "work") return workExecutionDescription(assessment);
+  if (assessment.kind === "stage") {
+    return "This stage already contains work that has started and is not Done. Review the list below before you continue.";
+  }
+  return simpleDeleteDescription(assessment);
+}
+
+function financialDeleteDescription(assessment: DeleteAssessment): string {
+  const label = deleteEntityLabel(assessment.kind);
+  return `Deleting this ${label} will remove estimate context that is already tied to ordered, stocked, or paid work and materials. This can affect financial and operational records, and the data cannot be recovered through the normal UI flow.`;
+}
+
+function pendingDeleteDescription(pendingDelete: PendingDeleteState): string {
+  if (pendingDelete.step === "simple") return simpleDeleteDescription(pendingDelete.assessment);
+  if (pendingDelete.step === "execution") return executionDeleteDescription(pendingDelete.assessment);
+  return financialDeleteDescription(pendingDelete.assessment);
+}
+
+function pendingDeleteConfirmLabel(pendingDelete: PendingDeleteState): string {
+  if (pendingDelete.step === "financial") return "Delete permanently";
+  if (pendingDelete.step === "execution" && getNextDeleteStep(pendingDelete.assessment, pendingDelete.step)) {
+    return "Continue";
+  }
+  return "Delete";
+}
+
+function procurementConsequenceLabel(
+  consequence: DeleteAssessment["financial"]["procurement"][number],
+): string {
+  const statuses: string[] = [];
+  if (consequence.orderedState === "partial") statuses.push("Partially ordered");
+  if (consequence.orderedState === "full") statuses.push("Fully ordered");
+  if (consequence.inStock) statuses.push("In stock");
+  return statuses.join(", ");
+}
+
+function hrConsequenceLabel(
+  consequence: DeleteAssessment["financial"]["hr"][number],
+): string {
+  return consequence.paymentState === "full" ? "Fully paid" : "Partially paid";
+}
+
 function ProjectEstimateSkeleton() {
   return (
     <div className="space-y-sp-2 p-sp-2">
@@ -381,6 +474,7 @@ export default function ProjectEstimate() {
   const orders = useOrders(pid);
   const hrItems = useHRItems(pid);
   const hrPayments = useHRPayments(pid);
+  const locations = useLocations(pid);
 
   const {
     project: estimateProject,
@@ -430,7 +524,9 @@ export default function ProjectEstimate() {
   const [financialResourcesExpanded, setFinancialResourcesExpanded] = useState(false);
   const [customUnitDraftByLineId, setCustomUnitDraftByLineId] = useState<Record<string, string>>({});
   const [customUnitInputLineIds, setCustomUnitInputLineIds] = useState<Set<string>>(new Set());
+  const [pendingDelete, setPendingDelete] = useState<PendingDeleteState | null>(null);
   const suppressResourceCreateAutoFocusRef = useRef(false);
+  const pendingDeleteNextStepRef = useRef<DeleteDialogStep | null>(null);
 
   useEffect(() => {
     if (!estimateHasSavedContent) return;
@@ -595,6 +691,18 @@ export default function ProjectEstimate() {
   const availableParticipantSlots = Math.max(participantLimit - members.length, 0);
 
   const workById = useMemo(() => new Map(works.map((work) => [work.id, work])), [works]);
+  const deleteGuardSource = useMemo(() => ({
+    projectId: pid,
+    stages,
+    works,
+    lines,
+    tasks,
+    procurementItems,
+    orders,
+    hrItems,
+    hrPayments,
+    locations,
+  }), [pid, stages, works, lines, tasks, procurementItems, orders, hrItems, hrPayments, locations]);
 
   const latestApproved = useMemo(() => (
     versions
@@ -654,6 +762,7 @@ export default function ProjectEstimate() {
   const changedLineIds = useMemo(() => new Set(diff.changedLineIds), [diff.changedLineIds]);
 
   const stageById = useMemo(() => new Map(stages.map((stage) => [stage.id, stage])), [stages]);
+  const lineById = useMemo(() => new Map(lines.map((line) => [line.id, line])), [lines]);
 
   const lineTotalsById = useMemo(() => {
     const map = new Map<string, ReturnType<typeof computeLineTotals>>();
@@ -1327,6 +1436,72 @@ export default function ProjectEstimate() {
     closeCustomUnitInput(line.id);
   };
 
+  const handlePendingDeleteOpenChange = (open: boolean) => {
+    if (open) return;
+    const nextStep = pendingDeleteNextStepRef.current;
+    pendingDeleteNextStepRef.current = null;
+    if (nextStep) {
+      setPendingDelete((current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          step: nextStep,
+        };
+      });
+      return;
+    }
+    setPendingDelete(null);
+  };
+
+  const openResourceDelete = (lineId: string) => {
+    const line = lineById.get(lineId);
+    if (!line) return;
+    const assessment = assessResourceDelete(line, deleteGuardSource);
+    setPendingDelete({
+      assessment,
+      step: assessment.initialStep,
+    });
+  };
+
+  const openWorkDelete = (workId: string) => {
+    const work = workById.get(workId);
+    if (!work) return;
+    const assessment = assessWorkDelete(work, deleteGuardSource);
+    setPendingDelete({
+      assessment,
+      step: assessment.initialStep,
+    });
+  };
+
+  const openStageDelete = (stageId: string) => {
+    const stage = stageById.get(stageId);
+    if (!stage) return;
+    const assessment = assessStageDelete(stage, deleteGuardSource);
+    setPendingDelete({
+      assessment,
+      step: assessment.initialStep,
+    });
+  };
+
+  const confirmPendingDelete = () => {
+    if (!pendingDelete) return;
+    const nextStep = getNextDeleteStep(pendingDelete.assessment, pendingDelete.step);
+    if (nextStep) {
+      pendingDeleteNextStepRef.current = nextStep;
+      return;
+    }
+
+    if (pendingDelete.assessment.kind === "resource") {
+      deleteLine(pid, pendingDelete.assessment.entityId);
+      return;
+    }
+    if (pendingDelete.assessment.kind === "work") {
+      deleteWork(pid, pendingDelete.assessment.entityId);
+      return;
+    }
+    deleteStage(pid, pendingDelete.assessment.entityId);
+  };
+
   const isEstimatePageLoading = workspaceMode.kind === "pending-supabase"
     || isProjectLoading
     || isCurrentUserLoading
@@ -1921,7 +2096,14 @@ export default function ProjectEstimate() {
                             </span>
                           </div>
                           {canEditEstimate && (
-                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => deleteStage(pid, stage.id)}>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7"
+                              aria-label={`Delete stage ${stage.title}`}
+                              title="Delete stage"
+                              onClick={() => openStageDelete(stage.id)}
+                            >
                               <Trash2 className="h-4 w-4 text-destructive" />
                             </Button>
                           )}
@@ -1957,7 +2139,14 @@ export default function ProjectEstimate() {
                                     />
                                   </div>
                                   {canEditEstimate && (
-                                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => deleteWork(pid, work.id)}>
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-7 w-7"
+                                      aria-label={`Delete work ${work.title}`}
+                                      title="Delete work"
+                                      onClick={() => openWorkDelete(work.id)}
+                                    >
                                       <Trash2 className="h-4 w-4 text-destructive" />
                                     </Button>
                                   )}
@@ -2222,7 +2411,9 @@ export default function ProjectEstimate() {
                                                   size="icon"
                                                   variant="ghost"
                                                   className="h-7 w-7"
-                                                  onClick={() => deleteLine(pid, line.id)}
+                                                  aria-label={`Delete resource ${line.title}`}
+                                                  title="Delete resource"
+                                                  onClick={() => openResourceDelete(line.id)}
                                                 >
                                                   <Trash2 className="h-4 w-4 text-destructive" />
                                                 </Button>
@@ -2394,6 +2585,63 @@ export default function ProjectEstimate() {
           </TabsContent>
 
         </Tabs>
+
+        <ConfirmModal
+          open={Boolean(pendingDelete)}
+          onOpenChange={handlePendingDeleteOpenChange}
+          title={pendingDelete ? deleteDialogTitle(pendingDelete.assessment, pendingDelete.step) : "Delete"}
+          description={pendingDelete ? pendingDeleteDescription(pendingDelete) : ""}
+          confirmLabel={pendingDelete ? pendingDeleteConfirmLabel(pendingDelete) : "Delete"}
+          cancelLabel="Cancel"
+          onConfirm={confirmPendingDelete}
+          onCancel={() => {
+            pendingDeleteNextStepRef.current = null;
+            setPendingDelete(null);
+          }}
+        >
+          {pendingDelete?.step === "execution" && pendingDelete.assessment.kind === "stage" && pendingDelete.assessment.startedEntries.length > 0 && (
+            <div className="max-h-48 overflow-auto rounded-md border border-border p-2">
+              <p className="mb-2 text-caption text-muted-foreground">Started work and tasks in this stage</p>
+              <ul className="space-y-1">
+                {pendingDelete.assessment.startedEntries.map((entry) => (
+                  <li key={`${entry.kind}-${entry.id}`} className="text-caption text-foreground">
+                    {entry.title} ({entry.kind === "work" ? "Work" : "Task"}: {entry.statusLabel})
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {pendingDelete?.step === "financial" && pendingDelete.assessment.financial.hasConsequences && (
+            <div className="max-h-56 overflow-auto rounded-md border border-border p-2 space-y-3">
+              {pendingDelete.assessment.financial.procurement.length > 0 && (
+                <div>
+                  <p className="mb-2 text-caption text-muted-foreground">Procurement and stock already affected</p>
+                  <ul className="space-y-1">
+                    {pendingDelete.assessment.financial.procurement.map((item) => (
+                      <li key={item.procurementItemId} className="text-caption text-foreground">
+                        {item.title} ({procurementConsequenceLabel(item)})
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {pendingDelete.assessment.financial.hr.length > 0 && (
+                <div>
+                  <p className="mb-2 text-caption text-muted-foreground">HR and payment records already affected</p>
+                  <ul className="space-y-1">
+                    {pendingDelete.assessment.financial.hr.map((item) => (
+                      <li key={item.hrItemId} className="text-caption text-foreground">
+                        {item.title} ({hrConsequenceLabel(item)})
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+        </ConfirmModal>
 
         <ConfirmModal
           open={missingDatesWorkIds.length > 0}
