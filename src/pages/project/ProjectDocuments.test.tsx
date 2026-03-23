@@ -97,14 +97,15 @@ describe("ProjectDocuments", () => {
 
     renderProjectDocuments();
 
-    const emptyState = screen.getByText("No documents").closest("div");
+    const emptyState = screen.getByText("No documents").closest(".rounded-card");
     expect(emptyState).toBeTruthy();
     if (!emptyState) return;
 
-    fireEvent.click(within(emptyState).getByRole("button", { name: "Upload" }));
+    fireEvent.click(within(emptyState).getByRole("button", { name: "Upload a document" }));
 
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(screen.getByText("Upload document")).toBeInTheDocument();
+    expect(screen.queryByText("0 active · 0 archived")).not.toBeInTheDocument();
   });
 
   it("shows a skeleton while Supabase documents are loading without flashing the empty state", () => {

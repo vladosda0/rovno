@@ -208,6 +208,10 @@ describe("ProjectHR", () => {
       ],
     });
     mocks.useEstimateV2Project.mockReturnValue({
+      project: {
+        id: "project-1",
+        estimateStatus: "in_work",
+      },
       lines: [
         {
           id: "line-1",
@@ -319,5 +323,22 @@ describe("ProjectHR", () => {
     expect(screen.getAllByText("Unassigned").length).toBeGreaterThan(0);
     expect(screen.queryByText("Alex Crew")).not.toBeInTheDocument();
     expect(screen.queryByRole("option", { name: "Alex Crew" })).not.toBeInTheDocument();
+  });
+
+  it("shows planning gate and hides task navigation affordances during planning", () => {
+    mocks.useEstimateV2Project.mockReturnValue({
+      project: {
+        id: "project-1",
+        estimateStatus: "planning",
+      },
+      lines: [],
+    });
+
+    renderProjectHR("project-1");
+
+    expect(screen.getByText("HR will be ready after planning")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open Estimate" })).toBeInTheDocument();
+    expect(screen.queryByText("Open in Tasks")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Painter crew" })).not.toBeInTheDocument();
   });
 });

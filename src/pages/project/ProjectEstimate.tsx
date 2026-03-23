@@ -992,7 +992,6 @@ export default function ProjectEstimate() {
   const handleTabChange = (nextTab: string) => {
     if (!showEstimateWorkspace && nextTab !== "estimate") return;
     if (nextTab === "work_log") {
-      if (estimateProject.estimateStatus !== "in_work") return;
       navigate(`/project/${pid}/tasks`);
       return;
     }
@@ -1826,14 +1825,14 @@ export default function ProjectEstimate() {
             <Tooltip>
               <TooltipTrigger asChild>
                 <span>
-                  <TabsTrigger value="work_log" disabled={!showEstimateWorkspace || estimateProject.estimateStatus !== "in_work"}>
+                  <TabsTrigger value="work_log" disabled={!showEstimateWorkspace}>
                     Work log
                   </TabsTrigger>
                 </span>
               </TooltipTrigger>
-              {(!showEstimateWorkspace || estimateProject.estimateStatus !== "in_work") && (
+              {!showEstimateWorkspace && (
                 <TooltipContent>
-                  {!showEstimateWorkspace ? "Create an estimate first" : "Available after moving project to In work"}
+                  Create an estimate first. Tasks are available from here, and Procurement/HR unlock after In work.
                 </TooltipContent>
               )}
             </Tooltip>

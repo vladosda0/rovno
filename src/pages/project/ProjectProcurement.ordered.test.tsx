@@ -14,6 +14,7 @@ import { __unsafeResetInventoryForTests, ensureDefaultLocation } from "@/data/in
 import { TooltipProvider } from "@/components/ui/tooltip";
 import ProjectProcurement from "@/pages/project/ProjectProcurement";
 import { clearDemoSession, enterDemoSession, setAuthRole } from "@/lib/auth-state";
+import { setProjectEstimateStatus } from "@/data/estimate-v2-store";
 
 function renderProjectProcurement(projectId: string) {
   const queryClient = new QueryClient({
@@ -93,6 +94,7 @@ describe("ProjectProcurement Ordered tab", () => {
     clearDemoSession();
     enterDemoSession("project-1");
     setAuthRole("owner");
+    setProjectEstimateStatus("project-1", "in_work", { skipSetup: true });
   });
 
   it("shows Receive action and partial warning tooltip without 'of X' text", async () => {

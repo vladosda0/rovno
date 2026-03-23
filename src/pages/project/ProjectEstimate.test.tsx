@@ -21,6 +21,16 @@ import {
   setStoredAuthProfile,
 } from "@/lib/auth-state";
 
+const navigateMock = vi.fn();
+
+vi.mock("react-router-dom", async () => {
+  const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
+  return {
+    ...actual,
+    useNavigate: () => navigateMock,
+  };
+});
+
 vi.mock("@/components/ui/select", async () => {
   const React = await import("react");
 
@@ -159,6 +169,7 @@ function renderProjectEstimate(projectId: string) {
         <MemoryRouter initialEntries={[`/project/${projectId}/estimate`]}>
           <Routes>
             <Route path="/project/:id/estimate" element={<ProjectEstimate />} />
+            <Route path="/project/:id/tasks" element={<div>Tasks page</div>} />
           </Routes>
         </MemoryRouter>
       </TooltipProvider>
@@ -279,6 +290,7 @@ describe("ProjectEstimate", () => {
 
     localStorage.clear();
     sessionStorage.clear();
+    navigateMock.mockReset();
     clearDemoSession();
     clearStoredAuthProfile();
     setAuthRole("owner");
@@ -459,6 +471,34 @@ describe("ProjectEstimate", () => {
     });
     expect(getEstimateV2ProjectState(projectId).works[0]?.plannedStart).toBeTruthy();
     expect(getEstimateV2ProjectState(projectId).works[0]?.plannedEnd).toBeTruthy();
+  });
+
+  it("opens tasks from Work log while estimate is still planning", async () => {
+    const projectId = "project-estimate-worklog-planning";
+    setupLocalProject(projectId);
+
+    await act(async () => {
+      renderProjectEstimate(projectId);
+      await flushUi();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Create estimate" }));
+      await flushUi();
+    });
+
+    const workLogTab = screen.getByRole("tab", { name: "Work log" });
+    expect(workLogTab).toBeEnabled();
+
+    fireEvent.pointerDown(workLogTab);
+    fireEvent.click(workLogTab);
+    fireEvent.keyDown(workLogTab, { key: "Enter", code: "Enter" });
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalled();
+    });
+    const [firstCall] = navigateMock.mock.calls;
+    expect(firstCall?.[0]).toBe(`/project/${projectId}/tasks`);
   });
 
   it("keeps the detailed cost overview collapsed by default in work mode", async () => {

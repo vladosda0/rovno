@@ -5,7 +5,6 @@ import {
   Archive,
   Download,
   Eye,
-  FileText,
   MessageSquare,
   Plus,
   Printer,
@@ -40,7 +39,7 @@ import { ConfirmModal } from "@/components/ConfirmModal";
 import { DocumentListItem } from "@/components/documents/DocumentListItem";
 import { PreviewCard } from "@/components/ai/PreviewCard";
 import { ActionBar } from "@/components/ai/ActionBar";
-import { EmptyState } from "@/components/EmptyState";
+import { ProjectWorkflowEmptyState } from "@/components/ProjectWorkflowEmptyState";
 import { toast } from "@/hooks/use-toast";
 import { useCurrentUser, useProject, useWorkspaceMode } from "@/hooks/use-mock-data";
 import {
@@ -416,44 +415,48 @@ export default function ProjectDocuments() {
     && latestViewedVersion?.content.trim(),
   );
 
+  const showOnlyEmptyState = !isLoading && documents.length === 0;
+
   return (
     <div className="space-y-sp-2">
-      <div className="glass-elevated rounded-card p-sp-2 flex items-center justify-between flex-wrap gap-2">
-        <div>
-          <h2 className="text-h3 text-foreground">Documents</h2>
-          <p className="text-caption text-muted-foreground">
-            {isLoading ? "Loading documents..." : `${activeDocuments.length} active · ${archivedDocuments.length} archived`}
-          </p>
-          {isSupabaseMode && (
-            <p className="text-caption text-muted-foreground mt-1">
-              Documents are stored securely. Sharing is coming soon.
+      {!showOnlyEmptyState && (
+        <div className="glass-elevated rounded-card p-sp-2 flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <h2 className="text-h3 text-foreground">Documents</h2>
+            <p className="text-caption text-muted-foreground">
+              {isLoading ? "Loading documents..." : `${activeDocuments.length} active · ${archivedDocuments.length} archived`}
             </p>
-          )}
-        </div>
-        {perm.can("document.create") && (
-          <div className="flex gap-1.5">
-            <Button size="sm" variant="outline" onClick={() => setUploadOpen(true)}>
-              <Upload className="h-4 w-4 mr-1.5" /> Upload
-            </Button>
-            {!isSupabaseMode && (
-              <Button size="sm" className="bg-accent text-accent-foreground hover:bg-accent/90" onClick={() => setGenerateOpen(true)}>
-                <Plus className="h-4 w-4 mr-1.5" /> Generate
-              </Button>
+            {isSupabaseMode && (
+              <p className="text-caption text-muted-foreground mt-1">
+                Documents are stored securely. Sharing is coming soon.
+              </p>
             )}
           </div>
-        )}
-      </div>
+          {perm.can("document.create") && (
+            <div className="flex gap-1.5">
+              <Button size="sm" variant="outline" onClick={() => setUploadOpen(true)}>
+                <Upload className="h-4 w-4 mr-1.5" /> Upload
+              </Button>
+              {!isSupabaseMode && (
+                <Button size="sm" className="bg-accent text-accent-foreground hover:bg-accent/90" onClick={() => setGenerateOpen(true)}>
+                  <Plus className="h-4 w-4 mr-1.5" /> Generate
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {isLoading ? (
         <ProjectDocumentsSkeleton />
       ) : documents.length === 0 ? (
-        <EmptyState
-          icon={FileText}
+        <ProjectWorkflowEmptyState
+          variant="documents"
           title="No documents"
           description={isSupabaseMode
             ? "Upload a document to this project."
             : "Upload a document or generate one with AI."}
-          actionLabel={perm.can("document.create") ? "Upload" : undefined}
+          actionLabel={perm.can("document.create") ? "Upload a document" : undefined}
           onAction={perm.can("document.create") ? () => setUploadOpen(true) : undefined}
         />
       ) : (

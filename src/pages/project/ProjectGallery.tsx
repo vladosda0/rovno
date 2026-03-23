@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import {
-  Image, Upload, Camera, Star, X,
+  Upload, Camera, Star, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel,
 } from "@/components/ui/alert-dialog";
 import { PhotoViewer } from "@/components/PhotoViewer";
-import { EmptyState } from "@/components/EmptyState";
+import { ProjectWorkflowEmptyState } from "@/components/ProjectWorkflowEmptyState";
 import { toast } from "@/hooks/use-toast";
 import { useMedia, useTasks, useWorkspaceMode } from "@/hooks/use-mock-data";
 import { useMediaUploadMutations } from "@/hooks/use-documents-media-source";
@@ -147,11 +147,11 @@ export default function ProjectGallery() {
 
   if (photos.length === 0) {
     return (
-      <EmptyState
-        icon={Image}
+      <ProjectWorkflowEmptyState
+        variant="gallery"
         title="No photos yet"
         description="Upload project photos to document progress."
-        actionLabel="Upload Photos"
+        actionLabel="Upload a photo"
         onAction={() => setUploadOpen(true)}
       />
     );

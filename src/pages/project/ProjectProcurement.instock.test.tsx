@@ -21,6 +21,7 @@ import {
 import { toInventoryKey } from "@/lib/procurement-fulfillment";
 import { getEvents, getTasks } from "@/data/store";
 import { clearDemoSession, enterDemoSession, setAuthRole } from "@/lib/auth-state";
+import { setProjectEstimateStatus } from "@/data/estimate-v2-store";
 
 function renderProjectProcurement(projectId: string) {
   const queryClient = new QueryClient({
@@ -141,6 +142,7 @@ describe("ProjectProcurement In stock tab", () => {
     clearDemoSession();
     enterDemoSession("project-1");
     setAuthRole("owner");
+    setProjectEstimateStatus("project-1", "in_work", { skipSetup: true });
   });
 
   it("shows minimal columns and creates 'Request more' task with prefilled fields", () => {

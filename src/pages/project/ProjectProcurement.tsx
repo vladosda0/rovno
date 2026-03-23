@@ -39,6 +39,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Calendar } from "@/components/ui/calendar";
 import { EmptyState } from "@/components/EmptyState";
+import { ProjectWorkflowEmptyState } from "@/components/ProjectWorkflowEmptyState";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useProject, useProcurementV2 } from "@/hooks/use-mock-data";
 import { useOrders } from "@/hooks/use-order-data";
@@ -1295,6 +1296,18 @@ export default function ProjectProcurement() {
     }
     setSelectedInStockRowKeys(new Set());
   };
+
+  if (estimateState.project.estimateStatus === "planning") {
+    return (
+      <ProjectWorkflowEmptyState
+        variant="procurement"
+        title="Procurement will open very soon"
+        description="Great progress so far. Procurement items will appear here once your Estimate is moved to In work."
+        actionLabel="Open Estimate"
+        onAction={() => navigate(`/project/${pid}/estimate`)}
+      />
+    );
+  }
 
   if (items.length === 0) {
     return (

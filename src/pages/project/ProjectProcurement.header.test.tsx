@@ -7,6 +7,7 @@ import ProjectProcurement from "@/pages/project/ProjectProcurement";
 import { addProcurementItem } from "@/data/procurement-store";
 import { __unsafeResetOrdersForTests } from "@/data/order-store";
 import { __unsafeResetInventoryForTests } from "@/data/inventory-store";
+import { setProjectEstimateStatus } from "@/data/estimate-v2-store";
 import { clearDemoSession, enterDemoSession, setAuthRole } from "@/lib/auth-state";
 
 function renderProjectProcurement(projectId: string) {
@@ -74,6 +75,18 @@ describe("ProjectProcurement header redesign", () => {
     clearDemoSession();
     enterDemoSession("project-1");
     setAuthRole("owner");
+    setProjectEstimateStatus("project-1", "in_work", { skipSetup: true });
+  });
+
+  it("shows planning gate with estimate CTA before procurement is in work", () => {
+    const projectId = "project-1";
+    setProjectEstimateStatus(projectId, "planning");
+
+    renderProjectProcurement(projectId);
+
+    expect(screen.getByText("Procurement will open very soon")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open Estimate" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Procurement" })).not.toBeInTheDocument();
   });
 
   it("renders KPI header + controls row with count-only tabs", () => {

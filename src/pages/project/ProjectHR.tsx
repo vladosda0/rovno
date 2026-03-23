@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ResourceTypeBadge } from "@/components/estimate-v2/ResourceTypeBadge";
 import { EmptyState } from "@/components/EmptyState";
+import { ProjectWorkflowEmptyState } from "@/components/ProjectWorkflowEmptyState";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -114,7 +115,8 @@ export default function ProjectHR() {
   const navigate = useNavigate();
 
   const { project, members } = useProject(pid);
-  const { lines } = useEstimateV2Project(pid);
+  const estimateState = useEstimateV2Project(pid);
+  const { lines } = estimateState;
   const tasks = useTasks(pid);
   const hrItems = useHRItems(pid);
   const hrPayments = useHRPayments(pid);
@@ -234,6 +236,18 @@ export default function ProjectHR() {
 
   if (!project) {
     return <EmptyState icon={Users} title="Not found" description="Project not found." />;
+  }
+
+  if (estimateState.project.estimateStatus === "planning") {
+    return (
+      <ProjectWorkflowEmptyState
+        variant="hr"
+        title="HR will be ready after planning"
+        description="You are in a great place to start. HR items will appear here once your Estimate is moved to In work."
+        actionLabel="Open Estimate"
+        onAction={() => navigate(`/project/${pid}/estimate`)}
+      />
+    );
   }
 
   return (
