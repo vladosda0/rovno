@@ -502,14 +502,6 @@
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
     },
     {
-      "key": "public.projects.projects_select",
-      "schema": "public",
-      "table": "projects",
-      "name": "projects_select",
-      "command": "select",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-    },
-    {
       "key": "public.projects.projects_insert",
       "schema": "public",
       "table": "projects",
@@ -531,23 +523,7 @@
       "table": "projects",
       "name": "projects_delete",
       "command": "delete",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-    },
-    {
-      "key": "public.projects.projects_update",
-      "schema": "public",
-      "table": "projects",
-      "name": "projects_update",
-      "command": "update",
-      "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
-    },
-    {
-      "key": "public.projects.projects_update",
-      "schema": "public",
-      "table": "projects",
-      "name": "projects_update",
-      "command": "update",
-      "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
+      "sourceMigration": "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql"
     },
     {
       "key": "public.projects.projects_update",
@@ -1406,6 +1382,7 @@
         "public.notification_preferences.notification_preferences_select",
         "public.notification_preferences.notification_preferences_insert",
         "public.notification_preferences.notification_preferences_update",
+        "public.projects.projects_insert",
         "public.projects.projects_select",
         "public.projects.projects_delete",
         "public.projects.projects_update",
@@ -1749,6 +1726,7 @@
         "supabase/migrations/20260306162500_estimates_core.sql",
         "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
         "supabase/migrations/20260306164000_hr_domain.sql",
+        "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
         "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
       ],
@@ -1855,6 +1833,11 @@
           "from": "public.hr_items",
           "to": "public.estimate_works",
           "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql"
+        },
+        {
+          "from": "public.tasks",
+          "to": "public.estimate_works",
+          "sourceMigration": "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql"
         }
       ]
     },

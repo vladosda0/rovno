@@ -1131,7 +1131,7 @@
             "toColumns": [
               "id"
             ],
-            "onDelete": "set"
+            "onDelete": "set null"
           }
         },
         {
@@ -1406,7 +1406,7 @@
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": "projects_current_stage_id_fkey",
@@ -1876,18 +1876,6 @@
         "update"
       ],
       "policies": [
-        {
-          "name": "projects_select",
-          "schema": "public",
-          "table": "projects",
-          "command": "select",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "owner_profile_id = auth.uid()\n  or exists (\n    select 1\n    from public.project_members pm\n    where pm.project_id = id\n      and pm.profile_id = auth.uid()\n  )",
-          "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-        },
         {
           "name": "projects_insert",
           "schema": "public",

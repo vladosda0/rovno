@@ -321,6 +321,7 @@ export type Database = {
           "completed_at": string | null
           "created_at": string
           "updated_at": string
+          "estimate_work_id": string | null
           }
           Insert: {
           "id"?: string
@@ -336,6 +337,7 @@ export type Database = {
           "completed_at"?: string | null
           "created_at"?: string
           "updated_at"?: string
+          "estimate_work_id"?: string | null
           }
           Update: {
           "id"?: string
@@ -351,6 +353,7 @@ export type Database = {
           "completed_at"?: string | null
           "created_at"?: string
           "updated_at"?: string
+          "estimate_work_id"?: string | null
           }
           Relationships: []
         }
@@ -1495,62 +1498,6 @@ export type Database = {
           "p_project_id": string
           }
           Returns: string
-        }
-        "prepare_project_media_upload": {
-          Args: {
-          "p_project_id": string
-          "p_media_type": string
-          "p_client_filename": string
-          "p_mime_type": string
-          "p_size_bytes": number
-          "p_caption": unknown
-          }
-          Returns: unknown
-        }
-        "finalize_project_media_upload": {
-          Args: {
-          "p_upload_intent_id": string
-          }
-          Returns: unknown
-        }
-        "prepare_document_upload": {
-          Args: {
-          "p_project_id": string
-          "p_type": string
-          "p_title": string
-          "p_client_filename": string
-          "p_mime_type": string
-          "p_size_bytes": number
-          "p_description": unknown
-          }
-          Returns: unknown
-        }
-        "finalize_document_upload": {
-          Args: {
-          "p_upload_intent_id": string
-          }
-          Returns: unknown
-        }
-        "prepare_project_media_upload": {
-          Args: {
-          "p_project_id": string
-          "p_media_type": string
-          "p_client_filename": string
-          "p_mime_type": string
-          "p_size_bytes": number
-          "p_caption": unknown
-          "p_task_id": unknown
-          "p_is_final": unknown
-          }
-          Returns: unknown
-        }
-        "finalize_project_media_upload": {
-          Args: {
-          "p_upload_intent_id": string
-          "p_task_id": unknown
-          "p_is_final": unknown
-          }
-          Returns: unknown
         }
     }
     Enums: {
