@@ -107,6 +107,10 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260323110000_storage_project_media_insert_policy.sql",
       "sha256": "e310c1d27ce94ce768250db583b0e35cb4d92ad710e62d3fd1e57bce89446970"
+    },
+    {
+      "path": "supabase/migrations/20260323113000_finalize_media_bucket_ambiguity_fix.sql",
+      "sha256": "63b04a3bfcdaeaf8fd584318a95d0e607bfae311449544a310bb5619c6f41b41"
     }
   ],
   "generated_artifacts": [
@@ -155,7 +159,8 @@ export const manifest = {
     "sql/20260320110000_task_final_media_contract.sql",
     "sql/20260320130000_codex_review_findings_fixes.sql",
     "sql/20260320143000_add_sanitize_uploaded_filename.sql",
-    "sql/20260323110000_storage_project_media_insert_policy.sql"
+    "sql/20260323110000_storage_project_media_insert_policy.sql",
+    "sql/20260323113000_finalize_media_bucket_ambiguity_fix.sql"
   ],
   "external_schema_references": [
     {
@@ -9431,7 +9436,7 @@ export const functions = {
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql",
+      "sourceMigration": "supabase/migrations/20260323113000_finalize_media_bucket_ambiguity_fix.sql",
       "triggerUsages": []
     },
     {
@@ -11713,7 +11718,7 @@ export const sourceTrace = {
       "schema": "public",
       "name": "finalize_project_media_upload",
       "signature": "public.finalize_project_media_upload(uuid, uuid, boolean)",
-      "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
+      "sourceMigration": "supabase/migrations/20260323113000_finalize_media_bucket_ambiguity_fix.sql"
     },
     {
       "key": "public.enforce_tasks_estimate_lineage_scope",
@@ -11841,6 +11846,14 @@ export const sourceTrace = {
       "name": "projects_delete",
       "command": "delete",
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.projects.projects_update",
+      "schema": "public",
+      "table": "projects",
+      "name": "projects_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
     },
     {
       "key": "public.projects.projects_update",
@@ -12935,7 +12948,7 @@ export const sourceTrace = {
         "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
         "supabase/migrations/20260317133000_storage_bucket_config_table.sql",
         "supabase/migrations/20260317121000_storage_upload_rpcs.sql",
-        "supabase/migrations/20260320130000_codex_review_findings_fixes.sql",
+        "supabase/migrations/20260323113000_finalize_media_bucket_ambiguity_fix.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
       ],
       "tables": [
@@ -13531,7 +13544,7 @@ export const slices = {
         "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
         "supabase/migrations/20260317133000_storage_bucket_config_table.sql",
         "supabase/migrations/20260317121000_storage_upload_rpcs.sql",
-        "supabase/migrations/20260320130000_codex_review_findings_fixes.sql",
+        "supabase/migrations/20260323113000_finalize_media_bucket_ambiguity_fix.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
       ],
       "tableCount": 6,

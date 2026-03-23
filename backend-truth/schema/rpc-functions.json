@@ -717,7 +717,7 @@
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql",
+      "sourceMigration": "supabase/migrations/20260323113000_finalize_media_bucket_ambiguity_fix.sql",
       "triggerUsages": []
     },
     {

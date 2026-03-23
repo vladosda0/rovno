@@ -50,6 +50,7 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20260320130000_codex_review_findings_fixes.sql`
 - `supabase/migrations/20260320143000_add_sanitize_uploaded_filename.sql`
 - `supabase/migrations/20260323110000_storage_project_media_insert_policy.sql`
+- `supabase/migrations/20260323113000_finalize_media_bucket_ambiguity_fix.sql`
 
 ## Exclusions
 
