@@ -1,0 +1,36 @@
+---
+description: Prevent agent confusion around generated files, stash conflicts, and local workspace noise
+alwaysApply: true
+---
+
+# Generated artifacts and local-noise handling
+
+## Generated / local-noise examples
+
+Treat these carefully:
+- `backend-truth/**`
+- temp output folders
+- `.cursor/**`
+- debug logs
+- ad hoc verification files
+- stash conflict leftovers
+
+## Rules
+
+- Do not mistake untracked local artifacts for source-of-truth changes.
+- Do not include `.cursor/`, temp folders, debug logs, or scratch outputs in implementation commits unless explicitly intended.
+- If a stash exists and generated files are conflicted, report it as local Git-state corruption/mixed state, not backend drift.
+- If the repo is dirty due to generated artifacts, recommend cleanup before coding.
+
+## Commit hygiene
+
+One commit = one intention.
+
+Do not mix:
+- migration history edits
+- generator updates
+- generated snapshots
+- debug/temp artifacts
+- unrelated docs
+
+Split them into separate change sets or explicitly recommend cleanup.

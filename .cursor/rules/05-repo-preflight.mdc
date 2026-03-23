@@ -1,0 +1,62 @@
+---
+description: Mandatory preflight before any coding, edits, planning, or Git-sensitive work
+alwaysApply: true
+---
+
+# Repo preflight
+
+Before doing any substantive work, perform a preflight check and state the result briefly.
+
+## Required checks
+
+1. Confirm current repo context:
+   - are we in `rovno` or `rovno-db`
+   - current branch
+   - whether this is local/dev/main/server/Supabase work
+
+2. Check Git state:
+   - `git status -sb`
+   - if needed, `git branch --show-current`
+   - if needed, `git rev-list --left-right --count HEAD...origin/dev`
+
+3. Classify repo state into one of:
+   - clean and current
+   - dirty working tree
+   - unmerged/conflicted
+   - behind origin/dev
+   - mixed state
+
+## Hard-stop conditions
+
+Stop implementation and warn the user before making edits if any of these are true:
+- there are unmerged files
+- the repo is in mixed/conflict state
+- `backend-truth/` is dirty unexpectedly
+- branch is behind `origin/dev`
+- current repo/app/environment is unclear
+
+## Behavior
+
+- Do not continue with implementation until preflight is acknowledged.
+- Do not hide dirty-state findings.
+- Do not assume remote drift explains local modified files.
+- Distinguish clearly between:
+  - local working tree changes
+  - staged changes
+  - untracked files
+  - behind/ahead state
+  - stash/merge/rebase conflict state
+
+## Output format
+
+Use this compact structure:
+
+- Repo: ...
+- Branch: ...
+- State: clean / dirty / conflicted / behind / mixed
+- Risk: low / medium / high
+- Blocking issue: ...
+- Safe next step: ...
+
+If state is clean and current, proceed.
+If not, stop and recommend cleanup/sync first.
