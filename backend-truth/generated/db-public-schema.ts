@@ -160,7 +160,9 @@ export const manifest = {
     "sql/20260320130000_codex_review_findings_fixes.sql",
     "sql/20260320143000_add_sanitize_uploaded_filename.sql",
     "sql/20260323110000_storage_project_media_insert_policy.sql",
-    "sql/20260323113000_finalize_media_bucket_ambiguity_fix.sql"
+    "sql/20260323113000_finalize_media_bucket_ambiguity_fix.sql",
+    "generated/db-public-schema.ts",
+    "generated/supabase-types.ts"
   ],
   "external_schema_references": [
     {
@@ -11846,6 +11848,14 @@ export const sourceTrace = {
       "name": "projects_delete",
       "command": "delete",
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.projects.projects_update",
+      "schema": "public",
+      "table": "projects",
+      "name": "projects_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
     },
     {
       "key": "public.projects.projects_update",
