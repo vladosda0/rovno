@@ -302,9 +302,10 @@ export function useMediaUploadMutations(projectId: string) {
 
   const finalizeUpload = useCallback(async (
     uploadIntentId: string,
+    options?: { taskId?: string; isFinal?: boolean },
   ): Promise<FinalizeMediaUploadResult> => {
     const resolvedMode = assertDocumentsMutationWorkspaceMode(mode);
-    const result = await finalizeMediaUploadSource(resolvedMode, uploadIntentId);
+    const result = await finalizeMediaUploadSource(resolvedMode, uploadIntentId, options);
 
     if (resolvedMode.kind === "supabase") {
       await invalidateProjectMedia(resolvedMode);

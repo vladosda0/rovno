@@ -84,6 +84,8 @@ export interface PrepareMediaUploadInput {
   mimeType: string;
   sizeBytes: number;
   caption?: string;
+  taskId?: string;
+  isFinal?: boolean;
 }
 
 export interface FinalizeMediaUploadResult {
@@ -106,7 +108,7 @@ export interface DocumentsMediaSource {
   prepareDocumentUpload: (input: PrepareDocumentUploadInput) => Promise<PrepareUploadResult>;
   finalizeDocumentUpload: (uploadIntentId: string) => Promise<FinalizeDocumentUploadResult>;
   prepareMediaUpload: (input: PrepareMediaUploadInput) => Promise<PrepareUploadResult>;
-  finalizeMediaUpload: (uploadIntentId: string) => Promise<FinalizeMediaUploadResult>;
+  finalizeMediaUpload: (uploadIntentId: string, options?: { taskId?: string; isFinal?: boolean }) => Promise<FinalizeMediaUploadResult>;
   uploadBytes: (bucket: string, objectPath: string, file: File) => Promise<void>;
 }
 
@@ -389,11 +391,11 @@ export function mapProjectMediaRowToMedia(
   return {
     id: row.id,
     project_id: row.project_id,
-    task_id: undefined,
+    task_id: row.task_id ?? undefined,
     uploader_id: row.uploaded_by ?? "",
     caption: row.caption ?? "",
     description: undefined,
-    is_final: false,
+    is_final: row.is_final,
     created_at: row.created_at,
     file_meta: fileMeta,
     storage,
@@ -710,14 +712,35 @@ export async function prepareSupabaseMediaUpload(
   supabase: TypedSupabaseClient,
   input: PrepareMediaUploadInput,
 ): Promise<PrepareUploadResult> {
-  const { data, error } = await supabase.rpc("prepare_project_media_upload", {
+  let { data, error } = await supabase.rpc("prepare_project_media_upload", {
     p_project_id: input.projectId,
     p_media_type: input.mediaType,
     p_client_filename: input.clientFilename,
     p_mime_type: input.mimeType,
     p_size_bytes: input.sizeBytes,
     p_caption: input.caption ?? null,
+    p_task_id: input.taskId ?? null,
+    p_is_final: input.isFinal ?? false,
   });
+
+  const shouldRetryWithLegacyPrepareSignature = Boolean(
+    error
+      && (error as { code?: string }).code === "PGRST202"
+      && error.message.includes("prepare_project_media_upload")
+      && error.message.includes("p_task_id"),
+  );
+  if (shouldRetryWithLegacyPrepareSignature) {
+    const retry = await supabase.rpc("prepare_project_media_upload", {
+      p_project_id: input.projectId,
+      p_media_type: input.mediaType,
+      p_client_filename: input.clientFilename,
+      p_mime_type: input.mimeType,
+      p_size_bytes: input.sizeBytes,
+      p_caption: input.caption ?? null,
+    });
+    data = retry.data;
+    error = retry.error;
+  }
 
   if (error) {
     throw error;
@@ -742,10 +765,27 @@ export async function prepareSupabaseMediaUpload(
 export async function finalizeSupabaseMediaUpload(
   supabase: TypedSupabaseClient,
   uploadIntentId: string,
+  options?: { taskId?: string; isFinal?: boolean },
 ): Promise<FinalizeMediaUploadResult> {
-  const { data, error } = await supabase.rpc("finalize_project_media_upload", {
+  let { data, error } = await supabase.rpc("finalize_project_media_upload", {
     p_upload_intent_id: uploadIntentId,
+    p_task_id: options?.taskId ?? null,
+    p_is_final: options?.isFinal ?? false,
   });
+
+  const shouldRetryWithLegacyFinalizeSignature = Boolean(
+    error
+      && (error as { code?: string }).code === "PGRST202"
+      && error.message.includes("finalize_project_media_upload")
+      && error.message.includes("p_task_id"),
+  );
+  if (shouldRetryWithLegacyFinalizeSignature) {
+    const retry = await supabase.rpc("finalize_project_media_upload", {
+      p_upload_intent_id: uploadIntentId,
+    });
+    data = retry.data;
+    error = retry.error;
+  }
 
   if (error) {
     throw error;
@@ -855,8 +895,8 @@ export function createSupabaseDocumentsMediaSource(
     async prepareMediaUpload(input) {
       return prepareSupabaseMediaUpload(supabase, input);
     },
-    async finalizeMediaUpload(uploadIntentId) {
-      return finalizeSupabaseMediaUpload(supabase, uploadIntentId);
+    async finalizeMediaUpload(uploadIntentId, options) {
+      return finalizeSupabaseMediaUpload(supabase, uploadIntentId, options);
     },
     async uploadBytes(bucket, objectPath, file) {
       const { error } = await (supabase as unknown as SupabaseClient).storage
@@ -944,9 +984,10 @@ export async function prepareMediaUpload(
 export async function finalizeMediaUpload(
   mode: WorkspaceMode,
   uploadIntentId: string,
+  options?: { taskId?: string; isFinal?: boolean },
 ): Promise<FinalizeMediaUploadResult> {
   const source = await getDocumentsMediaSource(mode);
-  return source.finalizeMediaUpload(uploadIntentId);
+  return source.finalizeMediaUpload(uploadIntentId, options);
 }
 
 export async function uploadBytes(

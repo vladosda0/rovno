@@ -10,6 +10,7 @@ import {
 import { Search, AlertTriangle, CheckCircle2, Circle, Clock, Ban } from "lucide-react";
 import * as store from "@/data/store";
 import type { TaskStatus } from "@/types/entities";
+import { useToast } from "@/hooks/use-toast";
 
 const STATUS_ICON: Record<TaskStatus, React.ElementType> = {
   not_started: Circle,
@@ -31,6 +32,7 @@ const STATUS_COLOR: Record<TaskStatus, string> = {
 };
 
 export function TasksTab() {
+  const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [projectFilter, setProjectFilter] = useState<string>("all");
@@ -53,7 +55,35 @@ export function TasksTab() {
   }, [allTasks, search, statusFilter, projectFilter]);
 
   function handleToggleDone(taskId: string, currentStatus: TaskStatus) {
-    store.updateTask(taskId, { status: currentStatus === "done" ? "not_started" : "done" });
+    if (currentStatus === "done") {
+      store.updateTask(taskId, { status: "not_started" });
+      return;
+    }
+
+    const task = allTasks.find((entry) => entry.id === taskId);
+    if (!task) return;
+    if (task.checklist.some((item) => !item.done)) {
+      toast({
+        title: "Cannot mark as Done",
+        description: "All checklist items must be checked or resolved first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const hasFinalMedia = store
+      .getMedia(task.project_id)
+      .some((mediaItem) => mediaItem.task_id === task.id && mediaItem.is_final);
+    if (!hasFinalMedia) {
+      toast({
+        title: "No final-result media",
+        description: "Upload at least one final-result photo before moving this task to Done.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    store.updateTask(taskId, { status: "done" });
   }
 
   return (

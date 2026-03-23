@@ -5,22 +5,25 @@ import {
   type RuntimeWorkspaceMode,
   type WorkspaceMode,
 } from "@/data/workspace-source";
-import type { ChecklistItem, ChecklistItemType, Stage, Task } from "@/types/entities";
+import type { ChecklistItem, ChecklistItemType, Comment, Stage, Task } from "@/types/entities";
 import type { Database as PlanningDatabase } from "../../backend-truth/generated/supabase-types";
 
 type ProjectStageRow = PlanningDatabase["public"]["Tables"]["project_stages"]["Row"];
 type TaskRow = PlanningDatabase["public"]["Tables"]["tasks"]["Row"];
 type TaskChecklistItemRow = PlanningDatabase["public"]["Tables"]["task_checklist_items"]["Row"];
+type TaskCommentRow = PlanningDatabase["public"]["Tables"]["task_comments"]["Row"];
 type EstimateResourceLineRow = PlanningDatabase["public"]["Tables"]["estimate_resource_lines"]["Row"];
 type ProjectStageInsert = PlanningDatabase["public"]["Tables"]["project_stages"]["Insert"];
 type TaskInsert = PlanningDatabase["public"]["Tables"]["tasks"]["Insert"];
 type TaskChecklistItemInsert = PlanningDatabase["public"]["Tables"]["task_checklist_items"]["Insert"];
+type TaskCommentInsert = PlanningDatabase["public"]["Tables"]["task_comments"]["Insert"];
 type TaskUpdateRow = PlanningDatabase["public"]["Tables"]["tasks"]["Update"];
 type TypedSupabaseClient = SupabaseClient<PlanningDatabase>;
 
 const PROJECT_STAGE_SELECT = "id, project_id, title, description, sort_order, status";
 const TASK_SELECT = "id, project_id, stage_id, title, description, status, assignee_profile_id, created_at, start_at, due_at";
 const TASK_CHECKLIST_SELECT = "id, task_id, title, is_done, procurement_item_id, estimate_resource_line_id, estimate_work_id, sort_order";
+const TASK_COMMENT_SELECT = "id, task_id, author_profile_id, body, created_at";
 const ESTIMATE_RESOURCE_LINE_SELECT = "id, resource_type, quantity, unit";
 
 export interface CreateProjectStageInput {
@@ -59,6 +62,17 @@ export interface PlanningSource {
   createProjectStage: (input: CreateProjectStageInput) => Promise<Stage>;
   createProjectTask: (input: CreateProjectTaskInput) => Promise<Task>;
   updateProjectTask: (taskId: string, patch: UpdateProjectTaskInput) => Promise<Task>;
+  updateTaskChecklistItem: (
+    taskId: string,
+    itemId: string,
+    patch: { done?: boolean; text?: string },
+  ) => Promise<void>;
+  createTaskChecklistItem: (
+    taskId: string,
+    input: { text: string; done?: boolean; sortOrder?: number },
+  ) => Promise<void>;
+  deleteTaskChecklistItem: (taskId: string, itemId: string) => Promise<void>;
+  createTaskComment: (taskId: string, body: string, authorId?: string) => Promise<void>;
 }
 
 export interface EnsureProjectStageInput {
@@ -203,6 +217,36 @@ function createBrowserPlanningSource(mode: "demo" | "local"): PlanningSource {
 
       return task;
     },
+    async updateTaskChecklistItem(taskId: string, itemId: string, patch: { done?: boolean; text?: string }) {
+      const task = store.getTask(taskId);
+      if (!task) {
+        throw new Error(`Task not found: ${taskId}`);
+      }
+      const nextChecklist = task.checklist.map((item) => (
+        item.id === itemId
+          ? {
+              ...item,
+              done: patch.done ?? item.done,
+              text: patch.text ?? item.text,
+            }
+          : item
+      ));
+      store.updateChecklist(taskId, nextChecklist);
+    },
+    async createTaskChecklistItem(taskId: string, input: { text: string; done?: boolean; sortOrder?: number }) {
+      store.addChecklistItem(taskId, {
+        id: `cl-${Date.now()}`,
+        text: input.text,
+        done: input.done ?? false,
+        type: "subtask",
+      });
+    },
+    async deleteTaskChecklistItem(taskId: string, itemId: string) {
+      store.deleteChecklistItem(taskId, itemId);
+    },
+    async createTaskComment(taskId: string, body: string) {
+      store.addComment(taskId, body);
+    },
   };
 }
 
@@ -275,6 +319,15 @@ function mapTaskChecklistItemRowToChecklistItem(
       ? Math.max(1, Math.round(linkedLine.quantity * 1_000))
       : undefined,
     estimateV2Unit: linkedLine?.unit ?? undefined,
+  };
+}
+
+function mapTaskCommentRowToComment(row: TaskCommentRow): Comment {
+  return {
+    id: row.id,
+    author_id: row.author_profile_id,
+    text: row.body,
+    created_at: row.created_at,
   };
 }
 
@@ -507,6 +560,15 @@ function createSupabasePlanningSource(
       if (checklistError) {
         throw checklistError;
       }
+      const { data: commentRows, error: commentError } = await supabase
+        .from("task_comments")
+        .select(TASK_COMMENT_SELECT)
+        .in("task_id", taskIds)
+        .order("created_at", { ascending: true });
+
+      if (commentError) {
+        throw commentError;
+      }
 
       const estimateLineIds = Array.from(new Set(
         (checklistRows ?? [])
@@ -530,16 +592,23 @@ function createSupabasePlanningSource(
 
       const lineById = new Map(estimateLineRows.map((row) => [row.id, row]));
       const checklistByTaskId = new Map<string, ChecklistItem[]>();
+      const commentsByTaskId = new Map<string, Comment[]>();
 
       (checklistRows ?? []).forEach((row) => {
         const list = checklistByTaskId.get(row.task_id) ?? [];
         list.push(mapTaskChecklistItemRowToChecklistItem(row, lineById));
         checklistByTaskId.set(row.task_id, list);
       });
+      (commentRows ?? []).forEach((row) => {
+        const list = commentsByTaskId.get(row.task_id) ?? [];
+        list.push(mapTaskCommentRowToComment(row));
+        commentsByTaskId.set(row.task_id, list);
+      });
 
       return taskRows.map((row) => ({
         ...mapTaskRowToTask(row),
         checklist: checklistByTaskId.get(row.id) ?? [],
+        comments: commentsByTaskId.get(row.id) ?? [],
       }));
     },
 
@@ -603,6 +672,56 @@ function createSupabasePlanningSource(
       }
 
       return mapTaskRowToTask(data);
+    },
+    async updateTaskChecklistItem(taskId: string, itemId: string, patch: { done?: boolean; text?: string }) {
+      const rowPatch: PlanningDatabase["public"]["Tables"]["task_checklist_items"]["Update"] = {};
+      if (patch.done !== undefined) rowPatch.is_done = patch.done;
+      if (patch.text !== undefined) rowPatch.title = patch.text;
+      const { error } = await supabase
+        .from("task_checklist_items")
+        .update(rowPatch)
+        .eq("id", itemId)
+        .eq("task_id", taskId);
+      if (error) throw error;
+    },
+    async createTaskChecklistItem(taskId: string, input: { text: string; done?: boolean; sortOrder?: number }) {
+      const { data: lastRow, error: lastRowError } = await supabase
+        .from("task_checklist_items")
+        .select("sort_order")
+        .eq("task_id", taskId)
+        .order("sort_order", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (lastRowError) throw lastRowError;
+      const insert: TaskChecklistItemInsert = {
+        task_id: taskId,
+        title: input.text,
+        is_done: input.done ?? false,
+        sort_order: input.sortOrder ?? ((lastRow?.sort_order ?? 0) + 1),
+      };
+      const { error } = await supabase
+        .from("task_checklist_items")
+        .insert(insert);
+      if (error) throw error;
+    },
+    async deleteTaskChecklistItem(taskId: string, itemId: string) {
+      const { error } = await supabase
+        .from("task_checklist_items")
+        .delete()
+        .eq("id", itemId)
+        .eq("task_id", taskId);
+      if (error) throw error;
+    },
+    async createTaskComment(taskId: string, body: string, authorId?: string) {
+      const insert: TaskCommentInsert = {
+        task_id: taskId,
+        body,
+        author_profile_id: authorId ?? "",
+      };
+      const { error } = await supabase
+        .from("task_comments")
+        .insert(insert);
+      if (error) throw error;
     },
   };
 }

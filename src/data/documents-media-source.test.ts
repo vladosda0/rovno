@@ -52,8 +52,10 @@ function projectMediaRow(
     id: "media-1",
     project_id: "project-1",
     storage_object_id: "storage-1",
+    task_id: "task-1",
     uploaded_by: "profile-2",
     media_type: "photo",
+    is_final: false,
     caption: "Before shot",
     created_at: "2026-03-01T00:00:00.000Z",
     ...overrides,
@@ -166,6 +168,8 @@ describe("documents-media-source helpers", () => {
 
   it("maps project media rows to the frontend Media contract with safe defaults", () => {
     const media = mapProjectMediaRowToMedia(projectMediaRow({
+      task_id: null,
+      is_final: true,
       uploaded_by: null,
       caption: null,
     }));
@@ -177,7 +181,7 @@ describe("documents-media-source helpers", () => {
       uploader_id: "",
       caption: "",
       description: undefined,
-      is_final: false,
+      is_final: true,
       created_at: "2026-03-01T00:00:00.000Z",
       file_meta: undefined,
     });
@@ -444,6 +448,8 @@ describe("documents-media-source helpers", () => {
       clientFilename: "photo.jpg",
       mimeType: "image/jpeg",
       sizeBytes: 2048,
+      taskId: "task-42",
+      isFinal: true,
     });
 
     expect(result).toEqual({
@@ -457,6 +463,8 @@ describe("documents-media-source helpers", () => {
     expect(supabase.rpc).toHaveBeenCalledWith("prepare_project_media_upload", expect.objectContaining({
       p_project_id: "p1",
       p_media_type: "photo",
+      p_task_id: "task-42",
+      p_is_final: true,
     }));
   });
 
@@ -475,7 +483,10 @@ describe("documents-media-source helpers", () => {
       },
     });
 
-    const result = await finalizeSupabaseMediaUpload(supabase, "intent-media-1");
+    const result = await finalizeSupabaseMediaUpload(supabase, "intent-media-1", {
+      taskId: "task-42",
+      isFinal: true,
+    });
 
     expect(result).toEqual({
       projectMediaId: "media-1",
@@ -487,6 +498,8 @@ describe("documents-media-source helpers", () => {
     });
     expect(supabase.rpc).toHaveBeenCalledWith("finalize_project_media_upload", {
       p_upload_intent_id: "intent-media-1",
+      p_task_id: "task-42",
+      p_is_final: true,
     });
   });
 

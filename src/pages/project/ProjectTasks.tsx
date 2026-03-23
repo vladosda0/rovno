@@ -5,7 +5,6 @@ import { useProject, useTasks, usePermission, useMedia, useWorkspaceMode } from 
 import {
   getUserById, getCurrentUser, updateTask, addTask,
   deleteStage as storeDeleteStage, completeStage as storeCompleteStage,
-  addMedia, addEvent, addComment,
 } from "@/data/store";
 import { getPlanningSource } from "@/data/planning-source";
 import { allUsers } from "@/data/seed";
@@ -32,6 +31,7 @@ import { planningQueryKeys } from "@/hooks/use-planning-source";
 import type { TaskStatus } from "@/types/entities";
 import { createEstimateItemForTask } from "@/data/estimate-store";
 import { useEstimateV2Project } from "@/hooks/use-estimate-v2-data";
+import { useMediaUploadMutations } from "@/hooks/use-documents-media-source";
 
 const statusMeta: Record<TaskStatus, { label: string; Icon: typeof Circle; colorClass: string; bgClass: string }> = {
   not_started: { label: "Not started", Icon: Circle, colorClass: "text-muted-foreground", bgClass: "bg-muted" },
@@ -58,6 +58,7 @@ export default function ProjectTasks() {
   const isClientRegime = estimateProject.regime === "client";
   const canCreateTask = !isClientRegime && userCan("task.create");
   const canEditTask = !isClientRegime && userCan("task.edit");
+  const { prepareUpload, uploadBytes, finalizeUpload } = useMediaUploadMutations(pid);
 
   const location = useLocation();
 
@@ -103,7 +104,8 @@ export default function ProjectTasks() {
 
   // --- Done prompt ---
   const [donePrompt, setDonePrompt] = useState<{ taskId: string } | null>(null);
-  const [donePhotoCaptions, setDonePhotoCaptions] = useState<string[]>([""]);
+  const [doneFiles, setDoneFiles] = useState<File[]>([]);
+  const [doneUploading, setDoneUploading] = useState(false);
   const [doneComment, setDoneComment] = useState("");
 
   // --- Blocked prompt ---
@@ -146,14 +148,25 @@ export default function ProjectTasks() {
     if (!task || task.status === newStatus) return;
 
     if (newStatus === "done") {
+      const unresolvedChecklistItems = task.checklist.filter((item) => !item.done);
+      if (unresolvedChecklistItems.length > 0) {
+        toast({
+          title: "Cannot mark as Done",
+          description: "All checklist items must be checked or resolved first.",
+          variant: "destructive",
+        });
+        return;
+      }
       setBlockedPrompt(null); // close any existing prompt
+      setSelectedTaskId(null);
       setDonePrompt({ taskId });
-      setDonePhotoCaptions([""]);
+      setDoneFiles([]);
       setDoneComment("");
       return;
     }
     if (newStatus === "blocked") {
       setDonePrompt(null); // close any existing prompt
+      setSelectedTaskId(null);
       setBlockedPrompt({ taskId });
       setBlockedReason("");
       return;
@@ -177,61 +190,174 @@ export default function ProjectTasks() {
   }, [canEditTask, tasks, toast, workspaceMode, invalidateProjectTasks]);
 
   // Confirm Done
-  const handleConfirmDone = useCallback(() => {
+  const handleConfirmDone = useCallback(async () => {
     if (!donePrompt) return;
-    const validCaptions = donePhotoCaptions.filter((c) => c.trim());
-    // Create media items for each photo
-    validCaptions.forEach((caption, i) => {
-      const mediaId = `media-done-${Date.now()}-${i}`;
-      addMedia({
-        id: mediaId,
-        project_id: pid,
-        task_id: donePrompt.taskId,
-        uploader_id: currentUser.id,
-        caption: caption || "Final result",
-        is_final: true,
-        created_at: new Date().toISOString(),
+
+    const task = tasks.find((entry) => entry.id === donePrompt.taskId);
+    if (!task) return;
+    if (task.checklist.some((item) => !item.done)) {
+      toast({
+        title: "Cannot mark as Done",
+        description: "All checklist items must be checked or resolved first.",
+        variant: "destructive",
       });
-      addEvent({
-        id: `evt-${Date.now()}-${i}`,
-        project_id: pid,
-        actor_id: currentUser.id,
-        type: "photo_uploaded",
-        object_type: "media",
-        object_id: mediaId,
-        timestamp: new Date().toISOString(),
-        payload: { caption },
-      });
-    });
-    // If no captions but still photos (at least 1 "slot"), create one generic
-    if (validCaptions.length === 0) {
-      const mediaId = `media-done-${Date.now()}`;
-      addMedia({
-        id: mediaId,
-        project_id: pid,
-        task_id: donePrompt.taskId,
-        uploader_id: currentUser.id,
-        caption: "Final result photo",
-        is_final: true,
-        created_at: new Date().toISOString(),
-      });
+      return;
     }
-    if (doneComment.trim()) {
-      addComment(donePrompt.taskId, doneComment.trim());
+    if (doneFiles.length === 0) {
+      toast({
+        title: "No media uploaded",
+        description: "Add at least one final-result photo before confirming Done.",
+        variant: "destructive",
+      });
+      return;
     }
-    updateTask(donePrompt.taskId, { status: "done" });
-    setDonePrompt(null);
-    toast({ title: "Task marked as Done" });
-  }, [donePrompt, donePhotoCaptions, doneComment, pid, currentUser, toast]);
+
+    setDoneUploading(true);
+    try {
+      for (const file of doneFiles) {
+        const intent = await prepareUpload({
+          mediaType: "photo",
+          clientFilename: file.name,
+          mimeType: file.type || "image/jpeg",
+          sizeBytes: file.size,
+          caption: doneComment.trim() || undefined,
+          taskId: donePrompt.taskId,
+          isFinal: true,
+        });
+        await uploadBytes(intent.bucket, intent.objectPath, file);
+        await finalizeUpload(intent.uploadIntentId, { taskId: donePrompt.taskId, isFinal: true });
+      }
+
+      const source = await getPlanningSource(
+        workspaceMode.kind === "pending-supabase" ? undefined : workspaceMode,
+      );
+      if (doneComment.trim()) {
+        const authorId = workspaceMode.kind === "supabase" ? workspaceMode.profileId : currentUser.id;
+        await source.createTaskComment(donePrompt.taskId, doneComment.trim(), authorId);
+      }
+      await source.updateProjectTask(donePrompt.taskId, { status: "done" });
+      await invalidateProjectTasks();
+
+      setDonePrompt(null);
+      setDoneFiles([]);
+      setDoneComment("");
+      toast({ title: "Task marked as Done" });
+    } catch (error) {
+      toast({
+        title: "Unable to complete task",
+        description: error instanceof Error ? error.message : "Final-result upload failed.",
+        variant: "destructive",
+      });
+    } finally {
+      setDoneUploading(false);
+    }
+  }, [
+    donePrompt,
+    doneFiles,
+    doneComment,
+    tasks,
+    prepareUpload,
+    uploadBytes,
+    finalizeUpload,
+    workspaceMode,
+    invalidateProjectTasks,
+    toast,
+    currentUser.id,
+  ]);
 
   // Confirm Blocked
-  const handleConfirmBlocked = useCallback(() => {
+  const handleConfirmBlocked = useCallback(async () => {
     if (!blockedPrompt) return;
-    addComment(blockedPrompt.taskId, `🚫 Blocker reason: ${blockedReason.trim()}`);
-    updateTask(blockedPrompt.taskId, { status: "blocked" });
-    setBlockedPrompt(null);
-    toast({ title: "Task marked as Blocked" });
-  }, [blockedPrompt, blockedReason, toast]);
+    try {
+      const source = await getPlanningSource(
+        workspaceMode.kind === "pending-supabase" ? undefined : workspaceMode,
+      );
+      const authorId = workspaceMode.kind === "supabase" ? workspaceMode.profileId : currentUser.id;
+      await source.createTaskComment(blockedPrompt.taskId, `Blocker reason: ${blockedReason.trim()}`, authorId);
+      await source.updateProjectTask(blockedPrompt.taskId, { status: "blocked" });
+      await invalidateProjectTasks();
+      setBlockedPrompt(null);
+      setBlockedReason("");
+      toast({ title: "Task marked as Blocked" });
+    } catch (error) {
+      toast({
+        title: "Unable to mark task as blocked",
+        description: error instanceof Error ? error.message : "Failed to persist blocked status.",
+        variant: "destructive",
+      });
+    }
+  }, [blockedPrompt, blockedReason, workspaceMode, currentUser.id, invalidateProjectTasks, toast]);
+
+  const handleChecklistToggle = useCallback(async (
+    taskId: string,
+    itemId: string,
+    done: boolean,
+  ) => {
+    try {
+      const source = await getPlanningSource(
+        workspaceMode.kind === "pending-supabase" ? undefined : workspaceMode,
+      );
+      await source.updateTaskChecklistItem(taskId, itemId, { done });
+      await invalidateProjectTasks();
+    } catch (error) {
+      toast({
+        title: "Unable to update checklist",
+        description: error instanceof Error ? error.message : "Checklist update failed.",
+        variant: "destructive",
+      });
+      throw error;
+    }
+  }, [workspaceMode, invalidateProjectTasks, toast]);
+
+  const handleAddChecklistItem = useCallback(async (taskId: string, text: string) => {
+    try {
+      const source = await getPlanningSource(
+        workspaceMode.kind === "pending-supabase" ? undefined : workspaceMode,
+      );
+      await source.createTaskChecklistItem(taskId, { text: text.trim(), done: false });
+      await invalidateProjectTasks();
+    } catch (error) {
+      toast({
+        title: "Unable to add checklist item",
+        description: error instanceof Error ? error.message : "Checklist item was not added.",
+        variant: "destructive",
+      });
+    }
+  }, [workspaceMode, invalidateProjectTasks, toast]);
+
+  const handleDeleteChecklistItem = useCallback(async (taskId: string, itemId: string) => {
+    try {
+      const source = await getPlanningSource(
+        workspaceMode.kind === "pending-supabase" ? undefined : workspaceMode,
+      );
+      await source.deleteTaskChecklistItem(taskId, itemId);
+      await invalidateProjectTasks();
+    } catch (error) {
+      toast({
+        title: "Unable to delete checklist item",
+        description: error instanceof Error ? error.message : "Checklist item was not deleted.",
+        variant: "destructive",
+      });
+    }
+  }, [workspaceMode, invalidateProjectTasks, toast]);
+
+  const handleTaskCommentCreate = useCallback(async (taskId: string, body: string) => {
+    try {
+      const source = await getPlanningSource(
+        workspaceMode.kind === "pending-supabase" ? undefined : workspaceMode,
+      );
+      const authorId = workspaceMode.kind === "supabase" ? workspaceMode.profileId : currentUser.id;
+      await source.createTaskComment(taskId, body.trim(), authorId);
+      await invalidateProjectTasks();
+      toast({ title: "Comment added" });
+    } catch (error) {
+      toast({
+        title: "Unable to add comment",
+        description: error instanceof Error ? error.message : "Comment was not saved.",
+        variant: "destructive",
+      });
+    }
+  }, [workspaceMode, currentUser.id, invalidateProjectTasks, toast]);
 
   // --- Handlers ---
   const openNewTask = useCallback((prefillStatus?: TaskStatus) => {
@@ -584,6 +710,10 @@ export default function ProjectTasks() {
         canEdit={canEditTask}
         onStatusChange={handleStatusChange}
         projectMedia={media}
+        onChecklistToggle={handleChecklistToggle}
+        onChecklistAdd={handleAddChecklistItem}
+        onChecklistDelete={handleDeleteChecklistItem}
+        onAddComment={handleTaskCommentCreate}
       />
 
       {/* New Task Modal */}
@@ -725,39 +855,16 @@ export default function ProjectTasks() {
             <p className="text-sm text-muted-foreground">Upload at least one photo to confirm completion.</p>
 
             <div className="space-y-2">
-              {donePhotoCaptions.map((caption, idx) => (
-                <div key={idx} className="flex gap-2 items-center">
-                  <div className="h-12 w-12 rounded-lg bg-muted flex items-center justify-center shrink-0 border border-border">
-                    <Camera className="h-5 w-5 text-muted-foreground/50" />
-                  </div>
-                  <Input
-                    value={caption}
-                    onChange={(e) => {
-                      const updated = [...donePhotoCaptions];
-                      updated[idx] = e.target.value;
-                      setDonePhotoCaptions(updated);
-                    }}
-                    placeholder={`Photo ${idx + 1} caption…`}
-                    className="text-sm h-8"
-                  />
-                  {donePhotoCaptions.length > 1 && (
-                    <button
-                      onClick={() => setDonePhotoCaptions(donePhotoCaptions.filter((_, i) => i !== idx))}
-                      className="text-muted-foreground hover:text-destructive"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  )}
-                </div>
-              ))}
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-caption"
-                onClick={() => setDonePhotoCaptions([...donePhotoCaptions, ""])}
-              >
-                <Plus className="h-3 w-3 mr-1" /> Add another photo
-              </Button>
+              <Input
+                type="file"
+                accept="image/*"
+                multiple
+                disabled={doneUploading}
+                onChange={(e) => setDoneFiles(Array.from(e.target.files ?? []))}
+              />
+              <p className="text-caption text-muted-foreground">
+                {doneFiles.length > 0 ? `${doneFiles.length} file(s) selected` : "No files selected"}
+              </p>
             </div>
 
             <div>
@@ -774,10 +881,10 @@ export default function ProjectTasks() {
               <Button variant="outline" onClick={() => setDonePrompt(null)}>Back</Button>
               <Button
                 className="bg-success text-success-foreground hover:bg-success/90"
-                onClick={handleConfirmDone}
-                disabled={donePhotoCaptions.every((c) => !c.trim()) && donePhotoCaptions.length <= 1}
+                onClick={() => void handleConfirmDone()}
+                disabled={doneUploading || doneFiles.length === 0}
               >
-                <CheckCircle2 className="h-4 w-4 mr-1" /> Mark Done
+                <CheckCircle2 className="h-4 w-4 mr-1" /> {doneUploading ? "Uploading..." : "Mark Done"}
               </Button>
             </div>
           </div>
@@ -805,7 +912,7 @@ export default function ProjectTasks() {
               <Button variant="outline" onClick={() => setBlockedPrompt(null)}>Cancel</Button>
               <Button
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                onClick={handleConfirmBlocked}
+                onClick={() => void handleConfirmBlocked()}
                 disabled={blockedReason.trim().length < 5}
               >
                 <AlertTriangle className="h-4 w-4 mr-1" /> Mark Blocked

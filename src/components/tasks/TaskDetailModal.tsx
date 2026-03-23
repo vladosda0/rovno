@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Dialog, DialogContent,
 } from "@/components/ui/dialog";
@@ -9,28 +10,26 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { PhotoViewer } from "@/components/PhotoViewer";
 import {
-  getUserById, getCurrentUser, addComment,
-  updateChecklist, deleteTask, updateTaskDescription,
-  updateTaskDeadline, addChecklistItem, deleteChecklistItem,
-  getMedia, updateTask, addMedia,
+  getUserById, deleteTask, updateTaskDescription,
+  updateTaskDeadline, updateTask,
 } from "@/data/store";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Send, CheckSquare, Trash2, Plus, X, Calendar, Camera, Image, Upload, Package,
+  Send, CheckSquare, Trash2, Plus, X, Calendar, Camera, Image, Upload, Loader2,
 } from "lucide-react";
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
   AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel,
 } from "@/components/ui/alert-dialog";
-import type { Task, TaskStatus, Media as MediaType, ChecklistItemType } from "@/types/entities";
-import { createEstimateItemForChecklist, syncEstimateItemName } from "@/data/estimate-store";
-import { linkChecklistMaterial, getProcurementItemById } from "@/data/procurement-store";
-import { computeStatus, statusLabel as procStatusLabel } from "@/lib/procurement-utils";
-import { StatusBadge } from "@/components/StatusBadge";
+import type { Task, TaskStatus, Media as MediaType } from "@/types/entities";
+import { syncEstimateItemName } from "@/data/estimate-store";
+import { useMediaUploadMutations } from "@/hooks/use-documents-media-source";
+import { ResourceTypeBadge } from "@/components/estimate-v2/ResourceTypeBadge";
 import { format } from "date-fns";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarPicker } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
+import type { ResourceLineType } from "@/types/estimate-v2";
 
 const statusLabel: Record<string, string> = {
   not_started: "Not started",
@@ -48,16 +47,37 @@ interface Props {
   canEdit: boolean;
   onStatusChange?: (taskId: string, newStatus: TaskStatus) => void;
   projectMedia?: MediaType[];
+  onChecklistToggle?: (taskId: string, itemId: string, done: boolean) => Promise<void> | void;
+  onChecklistAdd?: (taskId: string, text: string) => Promise<void> | void;
+  onChecklistDelete?: (taskId: string, itemId: string) => Promise<void> | void;
+  onAddComment?: (taskId: string, body: string) => Promise<void> | void;
 }
 
-export function TaskDetailModal({ task, open, onOpenChange, canEdit, onStatusChange, projectMedia }: Props) {
+export function TaskDetailModal({
+  task,
+  open,
+  onOpenChange,
+  canEdit,
+  onStatusChange,
+  projectMedia,
+  onChecklistToggle,
+  onChecklistAdd,
+  onChecklistDelete,
+  onAddComment,
+}: Props) {
+  const navigate = useNavigate();
   const { toast } = useToast();
+  const { prepareUpload, uploadBytes, finalizeUpload } = useMediaUploadMutations(task?.project_id ?? "");
   const [commentText, setCommentText] = useState("");
   const [descDraft, setDescDraft] = useState("");
   const [newCheckItem, setNewCheckItem] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadCaption, setUploadCaption] = useState("");
+  const [uploadFiles, setUploadFiles] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [pendingChecklist, setPendingChecklist] = useState<{ itemId: string; nextDone: boolean } | null>(null);
+  const [pendingChecklistItemIds, setPendingChecklistItemIds] = useState<Record<string, boolean>>({});
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const descTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -124,45 +144,55 @@ export function TaskDetailModal({ task, open, onOpenChange, canEdit, onStatusCha
     }, 800);
   }, [task]);
 
+  const getChecklistResourceType = useCallback((item: Task["checklist"][number]): ResourceLineType => {
+    if (item.estimateV2ResourceType === "material") return "material";
+    if (item.estimateV2ResourceType === "tool") return "tool";
+    if (item.estimateV2ResourceType === "labor") return "labor";
+    if (item.estimateV2ResourceType === "subcontractor") return "subcontractor";
+    if (item.type === "material") return "material";
+    if (item.type === "tool") return "tool";
+    return "other";
+  }, []);
+
+  const toggleChecklistItem = useCallback(async (itemId: string, nextDone: boolean) => {
+    if (!task || !onChecklistToggle) return;
+    setPendingChecklistItemIds((prev) => ({ ...prev, [itemId]: true }));
+    try {
+      await onChecklistToggle(task.id, itemId, nextDone);
+    } finally {
+      setPendingChecklistItemIds((prev) => {
+        const next = { ...prev };
+        delete next[itemId];
+        return next;
+      });
+    }
+  }, [task, onChecklistToggle]);
+
   const handleChecklistToggle = useCallback((itemId: string) => {
     if (!task) return;
-    const updated = task.checklist.map((c) =>
-      c.id === itemId ? { ...c, done: !c.done } : c
-    );
-    updateChecklist(task.id, updated);
-  }, [task]);
+    if (pendingChecklistItemIds[itemId]) return;
+    const item = task.checklist.find((entry) => entry.id === itemId);
+    if (!item) return;
+    const nextDone = !item.done;
+    const isLinked = Boolean(item.procurementItemId || item.estimateV2LineId || item.estimateV2WorkId);
+    if (isLinked && nextDone) {
+      setPendingChecklist({ itemId, nextDone });
+      return;
+    }
+    void toggleChecklistItem(itemId, nextDone);
+  }, [task, pendingChecklistItemIds, toggleChecklistItem]);
 
   const handleAddCheckItem = useCallback(() => {
     if (!task || !newCheckItem.trim()) return;
-    const clItem = { id: `cl-${Date.now()}`, text: newCheckItem.trim(), done: false, type: "subtask" as ChecklistItemType };
-    addChecklistItem(task.id, clItem);
-    createEstimateItemForChecklist(clItem, task);
+    void onChecklistAdd?.(task.id, newCheckItem.trim());
     setNewCheckItem("");
-  }, [task, newCheckItem]);
-
-  const handleChecklistTypeChange = useCallback((itemId: string, newType: ChecklistItemType) => {
-    if (!task) return;
-    const updated = task.checklist.map((c) => {
-      if (c.id !== itemId) return c;
-      const item = { ...c, type: newType };
-      if (newType === "material" && !item.procurementItemId) {
-        const procId = linkChecklistMaterial({ id: c.id, text: c.text }, task);
-        item.procurementItemId = procId;
-      }
-      if (newType !== "material") {
-        item.procurementItemId = null;
-      }
-      return item;
-    });
-    updateChecklist(task.id, updated);
-  }, [task]);
+  }, [task, newCheckItem, onChecklistAdd]);
 
   const handleAddComment = useCallback(() => {
     if (!task || !commentText.trim()) return;
-    addComment(task.id, commentText.trim());
+    void onAddComment?.(task.id, commentText.trim());
     setCommentText("");
-    toast({ title: "Comment added" });
-  }, [task, commentText, toast]);
+  }, [task, commentText, onAddComment]);
 
   const handleDelete = useCallback(() => {
     if (!task) return;
@@ -345,9 +375,9 @@ export function TaskDetailModal({ task, open, onOpenChange, canEdit, onStatusCha
               </p>
                <div className="space-y-1">
                 {task.checklist.map((item) => {
-                  const itemType = item.type ?? "subtask";
-                  const procItem = item.procurementItemId ? getProcurementItemById(item.procurementItemId) : null;
-                  const procStatus = procItem ? computeStatus(procItem) : null;
+                  const resourceType = getChecklistResourceType(item);
+                  const isLinked = Boolean(item.procurementItemId || item.estimateV2LineId || item.estimateV2WorkId);
+                  const isPending = Boolean(pendingChecklistItemIds[item.id]);
                   return (
                     <div
                       key={item.id}
@@ -355,36 +385,23 @@ export function TaskDetailModal({ task, open, onOpenChange, canEdit, onStatusCha
                     >
                       <Checkbox
                         checked={item.done}
-                        disabled={!canEdit}
+                        disabled={!canEdit || isPending}
                         onCheckedChange={() => handleChecklistToggle(item.id)}
                       />
                       <span className={`text-caption flex-1 ${item.done ? "line-through text-muted-foreground" : "text-foreground"}`}>
                         {item.text}
                       </span>
-                      {/* Type selector */}
-                      {canEdit && (
-                        <select
-                          value={itemType}
-                          onChange={(e) => handleChecklistTypeChange(item.id, e.target.value as ChecklistItemType)}
-                          className="text-[10px] bg-transparent border border-border rounded px-1 py-0.5 text-muted-foreground h-5"
-                        >
-                          <option value="subtask">Subtask</option>
-                          <option value="material">Material</option>
-                          <option value="tool">Tool</option>
-                        </select>
+                      {resourceType !== "other" && (
+                        <ResourceTypeBadge type={resourceType} className="h-5 px-1.5 text-[10px]" />
                       )}
-                      {!canEdit && itemType !== "subtask" && (
-                        <span className="text-[10px] text-muted-foreground px-1 py-0.5 bg-muted rounded">
-                          {itemType === "material" ? "Material" : "Tool"}
+                      {isPending && (
+                        <span className="inline-flex items-center text-[10px] text-muted-foreground">
+                          <Loader2 className="h-3 w-3 animate-spin" />
                         </span>
                       )}
-                      {/* Procurement status pill for materials */}
-                      {itemType === "material" && procStatus && (
-                        <StatusBadge status={procStatusLabel(procStatus)} variant="procurement" className="text-[10px] px-1.5 py-0" />
-                      )}
-                      {canEdit && (
+                      {canEdit && !isLinked && (
                         <button
-                          onClick={() => deleteChecklistItem(task.id, item.id)}
+                          onClick={() => void onChecklistDelete?.(task.id, item.id)}
                           className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
                         >
                           <X className="h-3 w-3" />
@@ -506,9 +523,17 @@ export function TaskDetailModal({ task, open, onOpenChange, canEdit, onStatusCha
             <AlertDialogDescription>Add photos to this task with an optional caption.</AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-3 py-2">
-            <div className="border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:border-accent/40 transition-colors">
-              <Upload className="mx-auto h-10 w-10 text-muted-foreground/30 mb-2" />
-              <p className="text-caption text-muted-foreground">Drag photos here or click to browse</p>
+            <div className="border-2 border-dashed border-border rounded-lg p-4 text-center hover:border-accent/40 transition-colors space-y-2">
+              <Upload className="mx-auto h-8 w-8 text-muted-foreground/30" />
+              <Input
+                type="file"
+                multiple
+                accept="image/*"
+                onChange={(e) => setUploadFiles(Array.from(e.target.files ?? []))}
+              />
+              <p className="text-caption text-muted-foreground">
+                {uploadFiles.length > 0 ? `${uploadFiles.length} file(s) selected` : "Select one or more photos"}
+              </p>
             </div>
             <div className="space-y-1">
               <label className="text-body-sm font-medium text-foreground">Caption (optional)</label>
@@ -519,22 +544,114 @@ export function TaskDetailModal({ task, open, onOpenChange, canEdit, onStatusCha
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-accent text-accent-foreground hover:bg-accent/90"
-              onClick={() => {
-                const user = getCurrentUser();
-                const mediaId = `media-${Date.now()}`;
-                addMedia({
-                  id: mediaId,
-                  project_id: task.project_id,
-                  task_id: task.id,
-                  uploader_id: user.id,
-                  caption: uploadCaption || "Photo",
-                  is_final: false,
-                  created_at: new Date().toISOString(),
-                });
-                toast({ title: "Photo uploaded" });
+              onClick={async (event) => {
+                event.preventDefault();
+                if (uploadFiles.length === 0) {
+                  toast({ title: "No files selected", variant: "destructive" });
+                  return;
+                }
+                setUploading(true);
+                try {
+                  for (const file of uploadFiles) {
+                    const intent = await prepareUpload({
+                      mediaType: "photo",
+                      clientFilename: file.name,
+                      mimeType: file.type || "image/jpeg",
+                      sizeBytes: file.size,
+                      caption: uploadCaption.trim() || undefined,
+                      taskId: task.id,
+                      isFinal: false,
+                    });
+                    await uploadBytes(intent.bucket, intent.objectPath, file);
+                    await finalizeUpload(intent.uploadIntentId, { taskId: task.id, isFinal: false });
+                  }
+                  setUploadOpen(false);
+                  setUploadCaption("");
+                  setUploadFiles([]);
+                  toast({ title: "Photo uploaded" });
+                } catch (error) {
+                  toast({
+                    title: "Upload failed",
+                    description: error instanceof Error ? error.message : "Unable to upload media.",
+                    variant: "destructive",
+                  });
+                } finally {
+                  setUploading(false);
+                }
               }}
             >
-              Add
+              {uploading ? "Uploading..." : "Add"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!pendingChecklist} onOpenChange={(nextOpen) => { if (!nextOpen) setPendingChecklist(null); }}>
+        <AlertDialogContent className="bg-card border border-border shadow-xl rounded-modal z-[80]">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Review before completing</AlertDialogTitle>
+            <AlertDialogDescription>
+              {(() => {
+                const linked = task.checklist.find((i) => i.id === pendingChecklist?.itemId);
+                const linkedType = getChecklistResourceType(linked ?? {
+                  id: "",
+                  text: "",
+                  done: false,
+                });
+                if (linkedType === "material" || linkedType === "tool") {
+                  return "This item is linked to procurement and may still need ordering or receiving. You can still mark it complete if the work is verified on site.";
+                }
+                if (linkedType === "labor" || linkedType === "subcontractor") {
+                  return "This item is linked to HR and may still have pending assignments or payouts. You can still mark it complete if the work is verified.";
+                }
+                return "Please review linked data before marking this checklist item complete.";
+              })()}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="text-xs text-muted-foreground">
+            <button
+              type="button"
+              className="underline text-destructive"
+              onClick={() => {
+                const linked = task.checklist.find((i) => i.id === pendingChecklist?.itemId);
+                const linkedType = getChecklistResourceType(linked ?? {
+                  id: "",
+                  text: "",
+                  done: false,
+                });
+                if (linkedType === "material" || linkedType === "tool") {
+                  navigate(`/project/${task.project_id}/procurement`);
+                } else {
+                  navigate(`/project/${task.project_id}/hr`);
+                }
+                setPendingChecklist(null);
+                onOpenChange(false);
+              }}
+            >
+              {(() => {
+                const linked = task.checklist.find((i) => i.id === pendingChecklist?.itemId);
+                const linkedType = getChecklistResourceType(linked ?? {
+                  id: "",
+                  text: "",
+                  done: false,
+                });
+                return linkedType === "material" || linkedType === "tool"
+                  ? "Open Procurement"
+                  : "Open HR";
+              })()}
+            </button>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (!pendingChecklist) return;
+                void toggleChecklistItem(pendingChecklist.itemId, pendingChecklist.nextDone);
+                setPendingChecklist(null);
+              }}
+            >
+              Mark as complete anyway
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
