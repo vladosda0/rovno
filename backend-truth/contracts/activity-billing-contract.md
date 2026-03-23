@@ -119,7 +119,7 @@ Triggers:
 | From | To | On Delete | Source |
 | --- | --- | --- | --- |
 | `public.activity_events(project_id)` | `public.projects(id)` | `cascade` | `supabase/migrations/20260306164500_activity_and_notifications.sql` |
-| `public.activity_events(actor_profile_id)` | `public.profiles(id)` | `set null` | `supabase/migrations/20260306164500_activity_and_notifications.sql` |
+| `public.activity_events(actor_profile_id)` | `public.profiles(id)` | `set` | `supabase/migrations/20260306164500_activity_and_notifications.sql` |
 | `public.notifications(profile_id)` | `public.profiles(id)` | `cascade` | `supabase/migrations/20260306164500_activity_and_notifications.sql` |
 | `public.notifications(project_id)` | `public.projects(id)` | `cascade` | `supabase/migrations/20260306164500_activity_and_notifications.sql` |
 | `public.billing_customers(profile_id)` | `public.profiles(id)` | `cascade` | `supabase/migrations/20260306165000_billing_launch_tables.sql` |

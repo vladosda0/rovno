@@ -189,20 +189,20 @@ Triggers:
 | `public.inventory_balances(inventory_item_id)` | `public.inventory_items(id)` | `cascade` | `supabase/migrations/20260306163000_inventory_foundation.sql` |
 | `public.inventory_balances(inventory_location_id)` | `public.inventory_locations(id)` | `cascade` | `supabase/migrations/20260306163000_inventory_foundation.sql` |
 | `public.procurement_items(project_id)` | `public.projects(id)` | `cascade` | `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql` |
-| `public.procurement_items(estimate_resource_line_id)` | `public.estimate_resource_lines(id)` | `set null` | `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql` |
-| `public.procurement_items(task_id)` | `public.tasks(id)` | `set null` | `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql` |
+| `public.procurement_items(estimate_resource_line_id)` | `public.estimate_resource_lines(id)` | `set` | `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql` |
+| `public.procurement_items(task_id)` | `public.tasks(id)` | `set` | `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql` |
 | `public.procurement_items(created_by)` | `public.profiles(id)` | `restrict` | `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql` |
 | `public.orders(project_id)` | `public.projects(id)` | `cascade` | `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql` |
 | `public.orders(created_by)` | `public.profiles(id)` | `restrict` | `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql` |
 | `public.order_lines(order_id)` | `public.orders(id)` | `cascade` | `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql` |
-| `public.order_lines(procurement_item_id)` | `public.procurement_items(id)` | `set null` | `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql` |
+| `public.order_lines(procurement_item_id)` | `public.procurement_items(id)` | `set` | `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql` |
 | `public.inventory_movements(project_id)` | `public.projects(id)` | `cascade` | `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql` |
 | `public.inventory_movements(inventory_item_id)` | `public.inventory_items(id)` | `cascade` | `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql` |
-| `public.inventory_movements(inventory_location_id)` | `public.inventory_locations(id)` | `set null` | `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql` |
-| `public.inventory_movements(order_line_id)` | `public.order_lines(id)` | `set null` | `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql` |
-| `public.inventory_movements(procurement_item_id)` | `public.procurement_items(id)` | `set null` | `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql` |
-| `public.inventory_movements(created_by)` | `public.profiles(id)` | `set null` | `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql` |
-| `public.task_checklist_items(procurement_item_id)` | `public.procurement_items(id)` | `set null` | `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql` |
+| `public.inventory_movements(inventory_location_id)` | `public.inventory_locations(id)` | `set` | `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql` |
+| `public.inventory_movements(order_line_id)` | `public.order_lines(id)` | `set` | `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql` |
+| `public.inventory_movements(procurement_item_id)` | `public.procurement_items(id)` | `set` | `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql` |
+| `public.inventory_movements(created_by)` | `public.profiles(id)` | `set` | `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql` |
+| `public.task_checklist_items(procurement_item_id)` | `public.procurement_items(id)` | `set` | `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql` |
 
 ## Functions
 

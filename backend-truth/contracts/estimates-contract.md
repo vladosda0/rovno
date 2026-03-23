@@ -11,7 +11,6 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 - `supabase/migrations/20260306162500_estimates_core.sql`
 - `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql`
 - `supabase/migrations/20260306164000_hr_domain.sql`
-- `supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql`
 - `supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql`
 - `supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql`
 
@@ -132,16 +131,15 @@ Indexes:
 | `public.estimate_versions(estimate_id)` | `public.project_estimates(id)` | `cascade` | `supabase/migrations/20260306162500_estimates_core.sql` |
 | `public.estimate_versions(created_by)` | `public.profiles(id)` | `restrict` | `supabase/migrations/20260306162500_estimates_core.sql` |
 | `public.estimate_works(estimate_version_id)` | `public.estimate_versions(id)` | `cascade` | `supabase/migrations/20260306162500_estimates_core.sql` |
-| `public.estimate_works(project_stage_id)` | `public.project_stages(id)` | `set null` | `supabase/migrations/20260306162500_estimates_core.sql` |
+| `public.estimate_works(project_stage_id)` | `public.project_stages(id)` | `set` | `supabase/migrations/20260306162500_estimates_core.sql` |
 | `public.estimate_resource_lines(estimate_work_id)` | `public.estimate_works(id)` | `cascade` | `supabase/migrations/20260306162500_estimates_core.sql` |
 | `public.estimate_dependencies(estimate_version_id)` | `public.estimate_versions(id)` | `cascade` | `supabase/migrations/20260306162500_estimates_core.sql` |
 | `public.estimate_dependencies(from_work_id)` | `public.estimate_works(id)` | `cascade` | `supabase/migrations/20260306162500_estimates_core.sql` |
 | `public.estimate_dependencies(to_work_id)` | `public.estimate_works(id)` | `cascade` | `supabase/migrations/20260306162500_estimates_core.sql` |
-| `public.procurement_items(estimate_resource_line_id)` | `public.estimate_resource_lines(id)` | `set null` | `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql` |
-| `public.task_checklist_items(estimate_resource_line_id)` | `public.estimate_resource_lines(id)` | `set null` | `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql` |
-| `public.task_checklist_items(estimate_work_id)` | `public.estimate_works(id)` | `set null` | `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql` |
-| `public.hr_items(estimate_work_id)` | `public.estimate_works(id)` | `set null` | `supabase/migrations/20260306164000_hr_domain.sql` |
-| `public.tasks(estimate_work_id)` | `public.estimate_works(id)` | `set null` | `supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql` |
+| `public.procurement_items(estimate_resource_line_id)` | `public.estimate_resource_lines(id)` | `set` | `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql` |
+| `public.task_checklist_items(estimate_resource_line_id)` | `public.estimate_resource_lines(id)` | `set` | `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql` |
+| `public.task_checklist_items(estimate_work_id)` | `public.estimate_works(id)` | `set` | `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql` |
+| `public.hr_items(estimate_work_id)` | `public.estimate_works(id)` | `set` | `supabase/migrations/20260306164000_hr_domain.sql` |
 
 ## Functions
 

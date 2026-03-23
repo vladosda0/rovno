@@ -289,7 +289,7 @@
             "toColumns": [
               "id"
             ],
-            "onDelete": "set null"
+            "onDelete": "set"
           }
         },
         {
@@ -358,16 +358,6 @@
           "primaryKey": false,
           "unique": false,
           "references": null
-        },
-        {
-          "name": "estimate_work_id",
-          "sqlType": "uuid",
-          "tsType": "string",
-          "nullable": true,
-          "defaultSql": null,
-          "primaryKey": false,
-          "unique": false,
-          "references": null
         }
       ],
       "constraints": [
@@ -380,16 +370,6 @@
           "expression": "status in ('not_started', 'in_progress', 'done', 'blocked')",
           "usingIndex": null,
           "sourceMigration": "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql"
-        },
-        {
-          "type": "foreign_key",
-          "name": "tasks_estimate_work_id_fkey",
-          "columns": [
-            "estimate_work_id"
-          ],
-          "expression": null,
-          "usingIndex": null,
-          "sourceMigration": "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql"
         }
       ],
       "indexes": [
@@ -422,16 +402,6 @@
           "where": null,
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql"
-        },
-        {
-          "name": "idx_tasks_estimate_work_id_unique",
-          "unique": true,
-          "expressions": [
-            "estimate_work_id"
-          ],
-          "where": "estimate_work_id is not null",
-          "attachedConstraintName": null,
-          "sourceMigration": "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql"
         }
       ],
       "triggers": [
@@ -593,7 +563,7 @@
             "toColumns": [
               "id"
             ],
-            "onDelete": "set null"
+            "onDelete": "set"
           }
         },
         {
@@ -610,7 +580,7 @@
             "toColumns": [
               "id"
             ],
-            "onDelete": "set null"
+            "onDelete": "set"
           }
         },
         {
@@ -627,7 +597,7 @@
             "toColumns": [
               "id"
             ],
-            "onDelete": "set null"
+            "onDelete": "set"
           }
         },
         {
@@ -818,7 +788,7 @@
       "toColumns": [
         "id"
       ],
-      "onDelete": "set null"
+      "onDelete": "set"
     },
     {
       "name": null,
@@ -882,7 +852,7 @@
       "toColumns": [
         "id"
       ],
-      "onDelete": "set null"
+      "onDelete": "set"
     },
     {
       "name": null,
@@ -898,7 +868,7 @@
       "toColumns": [
         "id"
       ],
-      "onDelete": "set null"
+      "onDelete": "set"
     },
     {
       "name": null,
@@ -930,7 +900,7 @@
       "toColumns": [
         "id"
       ],
-      "onDelete": "set null"
+      "onDelete": "set"
     },
     {
       "name": null,
@@ -946,7 +916,7 @@
       "toColumns": [
         "id"
       ],
-      "onDelete": "set null"
+      "onDelete": "set"
     },
     {
       "name": null,
@@ -962,7 +932,7 @@
       "toColumns": [
         "id"
       ],
-      "onDelete": "set null"
+      "onDelete": "set"
     },
     {
       "name": null,
@@ -978,7 +948,7 @@
       "toColumns": [
         "id"
       ],
-      "onDelete": "set null"
+      "onDelete": "set"
     },
     {
       "name": null,

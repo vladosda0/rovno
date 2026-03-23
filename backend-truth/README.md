@@ -49,7 +49,6 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20260320110000_task_final_media_contract.sql`
 - `supabase/migrations/20260320130000_codex_review_findings_fixes.sql`
 - `supabase/migrations/20260320143000_add_sanitize_uploaded_filename.sql`
-- `supabase/migrations/20260323110000_storage_project_media_insert_policy.sql`
 
 ## Exclusions
 
@@ -60,7 +59,6 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 ## External Schema References
 
 - Table `auth.users` referenced from `supabase/migrations/20260306160500_core_profiles_and_preferences.sql`
-- Table `storage.objects` referenced from `supabase/migrations/20260323110000_storage_project_media_insert_policy.sql`
 
 ## Platform Dependencies
 
