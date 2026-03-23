@@ -103,6 +103,10 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260320143000_add_sanitize_uploaded_filename.sql",
       "sha256": "01d69ddbebf1b9768edbabdb29cd3f12ffb295b0c0074f0edf8d1a718c5c08f6"
+    },
+    {
+      "path": "supabase/migrations/20260323110000_storage_project_media_insert_policy.sql",
+      "sha256": "e310c1d27ce94ce768250db583b0e35cb4d92ad710e62d3fd1e57bce89446970"
     }
   ],
   "generated_artifacts": [
@@ -150,7 +154,8 @@ export const manifest = {
     "sql/20260317133000_storage_bucket_config_table.sql",
     "sql/20260320110000_task_final_media_contract.sql",
     "sql/20260320130000_codex_review_findings_fixes.sql",
-    "sql/20260320143000_add_sanitize_uploaded_filename.sql"
+    "sql/20260320143000_add_sanitize_uploaded_filename.sql",
+    "sql/20260323110000_storage_project_media_insert_policy.sql"
   ],
   "external_schema_references": [
     {
@@ -159,6 +164,13 @@ export const manifest = {
       "name": "users",
       "referencedBy": "public.profiles",
       "sourceMigration": "supabase/migrations/20260306160500_core_profiles_and_preferences.sql"
+    },
+    {
+      "kind": "table",
+      "schema": "storage",
+      "name": "objects",
+      "referencedBy": "policy",
+      "sourceMigration": "supabase/migrations/20260323110000_storage_project_media_insert_policy.sql"
     }
   ],
   "platform_dependencies": [
@@ -11829,6 +11841,14 @@ export const sourceTrace = {
       "name": "projects_delete",
       "command": "delete",
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.projects.projects_update",
+      "schema": "public",
+      "table": "projects",
+      "name": "projects_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
     },
     {
       "key": "public.projects.projects_update",
