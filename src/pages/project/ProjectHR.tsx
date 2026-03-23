@@ -33,6 +33,7 @@ import { useProjectHRMutations } from "@/hooks/use-hr-source";
 import { useHRItems, useHRPayments, usePermission, useProject, useTasks } from "@/hooks/use-mock-data";
 import { useToast } from "@/hooks/use-toast";
 import { getUserById } from "@/data/store";
+import { isDemoSessionActive } from "@/lib/auth-state";
 import type { TaskStatus } from "@/types/entities";
 import type { HRItemStatus, HRPlannedItem } from "@/types/hr";
 import { Users } from "lucide-react";
@@ -91,7 +92,7 @@ function normalizeAssigneeIds(item: HRPlannedItem): string[] {
 }
 
 function assigneeSummary(assigneeIds: string[], namesById: Map<string, string>): string {
-  const names = assigneeIds.map((id) => namesById.get(id) ?? id);
+  const names = assigneeIds.map((id) => namesById.get(id)).filter((name): name is string => Boolean(name));
   if (names.length === 0) return "Unassigned";
   if (names.length <= 2) return names.join(", ");
   return `${names[0]}, ${names[1]} +${names.length - 2}`;
@@ -120,6 +121,7 @@ export default function ProjectHR() {
   const hrMutations = useProjectHRMutations(pid);
   const { can } = usePermission(pid);
   const canEdit = can("hr.edit");
+  const isDemoMode = isDemoSessionActive();
 
   const [paymentDraftByItemId, setPaymentDraftByItemId] = useState<Record<string, string>>({});
   const [searchQuery, setSearchQuery] = useState("");
@@ -183,14 +185,16 @@ export default function ProjectHR() {
           : item.plannedQty * item.plannedRate;
         const remaining = Math.max(planned - paid, 0);
         const paymentStatus = paymentStatusFromTotals(planned, paid);
-        const assigneeIds = normalizeAssigneeIds(item);
+        const allAssigneeIds = normalizeAssigneeIds(item);
+        const knownAssigneeIds = allAssigneeIds.filter((assigneeId) => participantNameById.has(assigneeId));
+        const hiddenAssigneeIds = allAssigneeIds.filter((assigneeId) => !participantNameById.has(assigneeId));
         const estimateAssigneeLabel = linkedLine?.assigneeName?.trim()
           || linkedLine?.assigneeEmail?.trim()
           || null;
-        const visibleAssigneeSummary = assigneeIds.length > 0
-          ? assigneeSummary(assigneeIds, participantNameById)
-          : (estimateAssigneeLabel ?? "Unassigned");
-        const hasVisibleAssignee = assigneeIds.length > 0 || Boolean(estimateAssigneeLabel);
+        const visibleAssigneeSummary = knownAssigneeIds.length > 0
+          ? assigneeSummary(knownAssigneeIds, participantNameById)
+          : (!isDemoMode && estimateAssigneeLabel ? estimateAssigneeLabel : "Unassigned");
+        const hasVisibleAssignee = knownAssigneeIds.length > 0 || (!isDemoMode && Boolean(estimateAssigneeLabel));
         const workStatus = task ? taskStatusToWorkStatus(task.status) : item.status;
         const title = linkedLine?.title ?? item.title;
         const type = linkedLine?.type === "subcontractor" ? "subcontractor" : item.type;
@@ -205,7 +209,8 @@ export default function ProjectHR() {
           paid,
           remaining,
           paymentStatus,
-          assigneeIds,
+          assigneeIds: knownAssigneeIds,
+          hiddenAssigneeIds,
           visibleAssigneeSummary,
           hasVisibleAssignee,
         };
@@ -225,7 +230,7 @@ export default function ProjectHR() {
         }
         return a.title.localeCompare(b.title, "ru-RU");
       });
-  }, [assigneeFilter, hrItems, lineById, paidByItemId, paymentStatusFilter, participantNameById, searchQuery, taskById, workStatusFilter]);
+  }, [assigneeFilter, hrItems, isDemoMode, lineById, paidByItemId, paymentStatusFilter, participantNameById, searchQuery, taskById, workStatusFilter]);
 
   if (!project) {
     return <EmptyState icon={Users} title="Not found" description="Project not found." />;
@@ -321,7 +326,7 @@ export default function ProjectHR() {
                         No HR items match current filters.
                       </TableCell>
                     </TableRow>
-                  ) : rows.map(({ item, task, title, type, workStatus, planned, paid, remaining, paymentStatus, assigneeIds, visibleAssigneeSummary }) => (
+                  ) : rows.map(({ item, task, title, type, workStatus, planned, paid, remaining, paymentStatus, assigneeIds, hiddenAssigneeIds, visibleAssigneeSummary }) => (
                     <TableRow key={item.id}>
                       <TableCell>
                         <div className="space-y-1">
@@ -399,7 +404,7 @@ export default function ProjectHR() {
                                     const nextIds = nextChecked === true
                                       ? Array.from(new Set([...assigneeIds, participant.id]))
                                       : assigneeIds.filter((id) => id !== participant.id);
-                                    void hrMutations.setAssignees(item.id, nextIds).catch((error) => {
+                                    void hrMutations.setAssignees(item.id, [...nextIds, ...hiddenAssigneeIds]).catch((error) => {
                                       toast({
                                         title: error instanceof Error
                                           ? error.message

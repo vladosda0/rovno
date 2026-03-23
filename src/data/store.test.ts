@@ -26,7 +26,7 @@ describe("store", () => {
     __unsafeResetStoreForTests();
   });
 
-  it("returns cached workspace users before falling back to seeded demo users", () => {
+  it("returns cached workspace users before falling back to seeded demo users in local mode", () => {
     cacheWorkspaceUsers([
       {
         id: "user-2",
@@ -42,6 +42,30 @@ describe("store", () => {
 
     expect(getUserById("user-2")?.name).toBe("Supabase Maria");
     expect(getUserById("user-3")?.name).toBe("Dmitry Sokolov");
+  });
+
+  it("ignores cached workspace users while demo session is active", () => {
+    cacheWorkspaceUsers([
+      {
+        id: "user-2",
+        email: "supabase@example.com",
+        name: "Supabase Maria",
+        locale: "en",
+        timezone: "UTC",
+        plan: "pro",
+        credits_free: 0,
+        credits_paid: 100,
+      },
+    ]);
+    enterDemoSession("project-1");
+    __unsafeResetStoreForTests();
+
+    expect(getCurrentUser()).toMatchObject({
+      id: "user-1",
+      email: "alex@stroyagent.io",
+      name: "Alex Petrov",
+    });
+    expect(getUserById("user-2")?.name).toBe("Maria Ivanova");
   });
 
   it("starts authenticated local workspaces empty instead of inheriting demo projects", () => {
@@ -78,5 +102,32 @@ describe("store", () => {
     __unsafeResetStoreForTests();
 
     expect(getProjects().some((project) => project.id === "project-demo-persisted")).toBe(true);
+  });
+
+  it("sanitizes polluted persisted demo user identity before reads", () => {
+    sessionStorage.setItem(
+      "workspace-demo-state",
+      JSON.stringify({
+        user: {
+          id: "real-user-id",
+          email: "real@example.com",
+          name: "Real User",
+          locale: "en",
+          timezone: "UTC",
+          plan: "pro",
+          credits_free: 0,
+          credits_paid: 999,
+        },
+      }),
+    );
+
+    enterDemoSession("project-1");
+    __unsafeResetStoreForTests();
+
+    expect(getCurrentUser()).toMatchObject({
+      id: "user-1",
+      email: "alex@stroyagent.io",
+      name: "Alex Petrov",
+    });
   });
 });

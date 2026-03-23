@@ -7,6 +7,7 @@ import { AuthCard } from "@/components/auth/AuthCard";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { clearDemoSession, isOnboarded } from "@/lib/auth-state";
+import { clearAiSidebarSessionPreference } from "@/lib/ai-sidebar-session";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -37,6 +38,7 @@ export default function Login() {
       }
 
       clearDemoSession();
+      clearAiSidebarSessionPreference();
       toast({ title: "Welcome back!", description: "Signed in successfully." });
       navigate(isOnboarded() ? "/home" : "/onboarding");
     } catch (error) {

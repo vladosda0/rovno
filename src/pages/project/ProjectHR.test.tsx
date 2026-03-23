@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import ProjectHR from "@/pages/project/ProjectHR";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { HRPayment, HRPlannedItem } from "@/types/hr";
+import { clearDemoSession, enterDemoSession } from "@/lib/auth-state";
 
 const navigateMock = vi.fn();
 
@@ -182,6 +183,7 @@ function renderProjectHR(projectId: string) {
 
 describe("ProjectHR", () => {
   beforeEach(() => {
+    clearDemoSession();
     navigateMock.mockReset();
     mocks.useProject.mockReturnValue({
       project: {
@@ -284,5 +286,38 @@ describe("ProjectHR", () => {
     expect(navigateMock).toHaveBeenCalledWith("/project/project-1/tasks", {
       state: { openTaskId: "task-1" },
     });
+  });
+
+  it("hides unknown assignees and estimate fallback labels in demo mode", () => {
+    enterDemoSession("project-1");
+    mocks.useProject.mockReturnValue({
+      project: {
+        id: "project-1",
+        owner_id: "user-1",
+        title: "Project One",
+        type: "residential",
+        project_mode: "contractor",
+        automation_level: "manual",
+        current_stage_id: "",
+        progress_pct: 0,
+      },
+      members: [
+        {
+          project_id: "project-1",
+          user_id: "user-99",
+          role: "owner",
+          ai_access: "project_pool",
+          credit_limit: 500,
+          used_credits: 0,
+        },
+      ],
+    });
+    mocks.useHRItems.mockReturnValue([hrItem({ assigneeIds: ["user-99"] })]);
+
+    renderProjectHR("project-1");
+
+    expect(screen.getAllByText("Unassigned").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Alex Crew")).not.toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Alex Crew" })).not.toBeInTheDocument();
   });
 });

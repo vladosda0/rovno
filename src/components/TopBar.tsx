@@ -17,6 +17,7 @@ import { useCurrentUser, useProjects } from "@/hooks/use-mock-data";
 import { supabase } from "@/integrations/supabase/client";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
 import { clearDemoSession, clearStoredAuthProfile, setAuthRole } from "@/lib/auth-state";
+import { clearAiSidebarSessionPreference } from "@/lib/ai-sidebar-session";
 
 interface MockCredits {
   dailyTotal: number;
@@ -95,6 +96,7 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
 
       setCredits(DEFAULT_CREDITS);
       clearDemoSession();
+      clearAiSidebarSessionPreference();
       clearStoredAuthProfile();
       setAuthRole("guest");
       toast({ title: "Logged out" });

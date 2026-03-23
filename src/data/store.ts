@@ -146,12 +146,19 @@ function cloneWorkspaceState(state: BrowserWorkspaceState): BrowserWorkspaceStat
   };
 }
 
+function sanitizeDemoState(state: BrowserWorkspaceState): BrowserWorkspaceState {
+  return {
+    ...state,
+    user: { ...seedUser },
+  };
+}
+
 function loadPersistedDemoState(): BrowserWorkspaceState | null {
   try {
     const raw = sessionStorage.getItem(DEMO_STATE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<BrowserWorkspaceState>;
-    return {
+    return sanitizeDemoState({
       user: parsed.user ?? { ...seedUser },
       projects: parsed.projects ?? [...seedProjects],
       members: parsed.members ?? [...seedMembers],
@@ -165,7 +172,7 @@ function loadPersistedDemoState(): BrowserWorkspaceState | null {
       notifications: parsed.notifications ?? [...seedNotifications],
       contractorProposals: parsed.contractorProposals ?? [],
       invites: parsed.invites ?? [],
-    };
+    });
   } catch {
     return null;
   }
@@ -173,13 +180,13 @@ function loadPersistedDemoState(): BrowserWorkspaceState | null {
 
 function persistDemoState(state: BrowserWorkspaceState) {
   try {
-    sessionStorage.setItem(DEMO_STATE_KEY, JSON.stringify(state));
+    sessionStorage.setItem(DEMO_STATE_KEY, JSON.stringify(sanitizeDemoState(state)));
   } catch {
     // Ignore storage write failures and keep the in-memory snapshot.
   }
 }
 
-let demoState = loadPersistedDemoState() ?? createSeededDemoState();
+let demoState = sanitizeDemoState(loadPersistedDemoState() ?? createSeededDemoState());
 let localState = createEmptyLocalState(getStoredAuthProfile());
 let localProfileId = localState.user.id;
 
@@ -216,8 +223,9 @@ function getStateForMode(mode: BrowserWorkspaceKind = getActiveBrowserWorkspaceK
 
 function setStateForMode(mode: BrowserWorkspaceKind, state: BrowserWorkspaceState) {
   if (mode === "demo") {
-    demoState = state;
-    persistDemoState(state);
+    const sanitizedDemoState = sanitizeDemoState(state);
+    demoState = sanitizedDemoState;
+    persistDemoState(sanitizedDemoState);
     return;
   }
 
@@ -295,8 +303,13 @@ export function getCurrentUser(): User {
 }
 
 export function getUserById(id: string): User | undefined {
-  const activeUser = getStateUserById(getStateForMode(), id);
+  const mode = getActiveBrowserWorkspaceKind();
+  const activeState = getStateForMode(mode);
+  const activeUser = getStateUserById(activeState, id);
   if (activeUser) return activeUser;
+  if (mode === "demo") {
+    return allUsers.find((user) => user.id === id);
+  }
   return getCachedWorkspaceUser(id) ?? allUsers.find((user) => user.id === id);
 }
 
@@ -817,7 +830,7 @@ export function deleteChecklistItem(taskId: string, itemId: string) {
 }
 
 export function __unsafeResetStoreForTests() {
-  demoState = loadPersistedDemoState() ?? createSeededDemoState();
+  demoState = sanitizeDemoState(loadPersistedDemoState() ?? createSeededDemoState());
   localState = createEmptyLocalState(getStoredAuthProfile());
   localProfileId = localState.user.id;
   listeners.clear();
