@@ -404,7 +404,7 @@
       "schema": "public",
       "name": "finalize_project_media_upload",
       "signature": "public.finalize_project_media_upload(uuid, uuid, boolean)",
-      "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
+      "sourceMigration": "supabase/migrations/20260323113000_finalize_media_bucket_ambiguity_fix.sql"
     },
     {
       "key": "public.enforce_tasks_estimate_lineage_scope",
@@ -532,6 +532,14 @@
       "name": "projects_delete",
       "command": "delete",
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.projects.projects_update",
+      "schema": "public",
+      "table": "projects",
+      "name": "projects_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
     },
     {
       "key": "public.projects.projects_update",
@@ -1626,7 +1634,7 @@
         "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
         "supabase/migrations/20260317133000_storage_bucket_config_table.sql",
         "supabase/migrations/20260317121000_storage_upload_rpcs.sql",
-        "supabase/migrations/20260320130000_codex_review_findings_fixes.sql",
+        "supabase/migrations/20260323113000_finalize_media_bucket_ambiguity_fix.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
       ],
       "tables": [

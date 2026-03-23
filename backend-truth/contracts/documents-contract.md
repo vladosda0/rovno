@@ -14,7 +14,7 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 - `supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql`
 - `supabase/migrations/20260317133000_storage_bucket_config_table.sql`
 - `supabase/migrations/20260317121000_storage_upload_rpcs.sql`
-- `supabase/migrations/20260320130000_codex_review_findings_fixes.sql`
+- `supabase/migrations/20260323113000_finalize_media_bucket_ambiguity_fix.sql`
 - `supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql`
 
 ## Tables
@@ -190,7 +190,7 @@ Constraints:
 | `public.prepare_document_upload(uuid, text, text, text, text, bigint, text)` | `table ( upload_intent_id uuid, bucket text, object_path text, filename text, mime_type text, size_bytes bigint )` | yes | `rpc` | `supabase/migrations/20260317133000_storage_bucket_config_table.sql` |
 | `public.finalize_document_upload(uuid)` | `table ( document_id uuid, document_version_id uuid, storage_object_id uuid, project_id uuid, bucket text, object_path text, filename text )` | yes | `rpc` | `supabase/migrations/20260317121000_storage_upload_rpcs.sql` |
 | `public.prepare_project_media_upload(uuid, text, text, text, bigint, text, uuid, boolean)` | `table ( upload_intent_id uuid, bucket text, object_path text, filename text, mime_type text, size_bytes bigint )` | yes | `rpc` | `supabase/migrations/20260320110000_task_final_media_contract.sql` |
-| `public.finalize_project_media_upload(uuid, uuid, boolean)` | `table ( project_media_id uuid, storage_object_id uuid, project_id uuid, bucket text, object_path text, filename text )` | yes | `rpc` | `supabase/migrations/20260320130000_codex_review_findings_fixes.sql` |
+| `public.finalize_project_media_upload(uuid, uuid, boolean)` | `table ( project_media_id uuid, storage_object_id uuid, project_id uuid, bucket text, object_path text, filename text )` | yes | `rpc` | `supabase/migrations/20260323113000_finalize_media_bucket_ambiguity_fix.sql` |
 
 ## RLS and Grants
 
