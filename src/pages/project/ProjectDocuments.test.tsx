@@ -136,6 +136,47 @@ describe("ProjectDocuments", () => {
     expect(screen.queryByTitle("New version")).not.toBeInTheDocument();
   });
 
+  it("switches to grid mode while keeping preview and archive grouping intact", () => {
+    mockUseWorkspaceMode.mockReturnValue({ kind: "local" });
+    mockUseProjectDocumentsState.mockReturnValue({
+      documents: [
+        createDocument({ id: "doc-active", title: "Active Document" }),
+        createDocument({
+          id: "doc-archived",
+          title: "Archived Document",
+          versions: [{
+            id: "version-archived",
+            document_id: "doc-archived",
+            number: 2,
+            status: "archived",
+            content: "Archived content",
+          }],
+        }),
+      ],
+      isLoading: false,
+    });
+
+    renderProjectDocuments();
+
+    const listViewButton = screen.getByRole("radio", { name: "List view" });
+    const gridViewButton = screen.getByRole("radio", { name: "Grid view" });
+
+    expect(listViewButton).toHaveAttribute("data-state", "on");
+
+    fireEvent.click(gridViewButton);
+
+    expect(gridViewButton).toHaveAttribute("data-state", "on");
+    expect(screen.getByText("Archived")).toBeInTheDocument();
+    expect(screen.getByText("Archived Document")).toBeInTheDocument();
+    expect(screen.getAllByTitle("Archive")).toHaveLength(1);
+    expect(screen.getAllByTitle("Delete")).toHaveLength(1);
+
+    fireEvent.click(screen.getByText("Active Document"));
+
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByText("Document preview")).toBeInTheDocument();
+  });
+
   it("shows print plus disabled download and share actions for Supabase preview", () => {
     mockUseWorkspaceMode.mockReturnValue({ kind: "supabase", profileId: "user-1" });
     mockUseProjectDocumentsState.mockReturnValue({

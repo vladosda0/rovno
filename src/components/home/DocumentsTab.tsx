@@ -3,8 +3,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Search, FileText, Upload, Pin, Grid3X3, List } from "lucide-react";
+import { Search, Upload, Pin } from "lucide-react";
+import { DocumentGridCard } from "@/components/documents/DocumentGridCard";
 import { DocumentListItem } from "@/components/documents/DocumentListItem";
+import { DocumentsViewModeToggle, type DocumentViewMode } from "@/components/documents/DocumentsViewModeToggle";
 
 const CATEGORIES = [
   "All", "How-tos", "Instructions", "Catalogs", "Price lists", "Warranties", "Templates",
@@ -30,7 +32,7 @@ const MOCK_DOCS: LibraryDoc[] = [
 export function DocumentsTab() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<string>("All");
-  const [viewMode, setViewMode] = useState<"list" | "grid">("list");
+  const [viewMode, setViewMode] = useState<DocumentViewMode>("list");
   const [docs, setDocs] = useState(MOCK_DOCS);
 
   const filtered = docs.filter((d) => {
@@ -54,14 +56,7 @@ export function DocumentsTab() {
         <Button variant="outline" size="sm" disabled>
           <Upload className="h-3.5 w-3.5 mr-1.5" /> Upload
         </Button>
-        <div className="flex border border-border rounded-md">
-          <Button variant={viewMode === "list" ? "secondary" : "ghost"} size="icon" className="h-9 w-9 rounded-r-none" onClick={() => setViewMode("list")}>
-            <List className="h-4 w-4" />
-          </Button>
-          <Button variant={viewMode === "grid" ? "secondary" : "ghost"} size="icon" className="h-9 w-9 rounded-l-none" onClick={() => setViewMode("grid")}>
-            <Grid3X3 className="h-4 w-4" />
-          </Button>
-        </div>
+        <DocumentsViewModeToggle value={viewMode} onValueChange={setViewMode} />
       </div>
       <p className="text-caption text-muted-foreground">
         Library upload is coming soon.
@@ -119,23 +114,39 @@ export function DocumentsTab() {
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3">
           {filtered.map((doc) => (
-            <Card key={doc.id} className="hover:shadow-md transition-shadow cursor-pointer">
-              <CardContent className="space-y-2 p-4 sm:p-6">
-                <div className="flex items-start gap-2">
-                  <FileText className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
-                  <p className="text-body-sm font-medium text-foreground">
-                    {doc.pinned && <Pin className="h-3 w-3 inline mr-1 text-accent" />}
-                    {doc.title}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 flex-wrap">
+            <DocumentGridCard
+              key={doc.id}
+              title={doc.title}
+              titleAdornment={doc.pinned ? <Pin className="mr-1 inline h-3 w-3 text-accent" /> : undefined}
+              actions={(
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => togglePin(doc.id)}
+                  title={doc.pinned ? "Unpin" : "Pin"}
+                >
+                  <Pin className={`h-3.5 w-3.5 ${doc.pinned ? "text-accent" : "text-muted-foreground"}`} />
+                </Button>
+              )}
+              meta={(
+                <>
                   <Badge variant="secondary" className="text-[10px]">{doc.category}</Badge>
-                  {doc.tags.map((t) => <span key={t} className="text-[10px] text-muted-foreground">#{t}</span>)}
-                </div>
-                <p className="text-caption text-muted-foreground">{doc.updatedAt}</p>
+                  {doc.tags.map((tag) => (
+                    <span key={tag} className="text-[10px] text-muted-foreground">#{tag}</span>
+                  ))}
+                  <span className="text-caption text-muted-foreground">{doc.updatedAt}</span>
+                </>
+              )}
+            />
+          ))}
+          {filtered.length === 0 && (
+            <Card className="sm:col-span-2 lg:col-span-3">
+              <CardContent className="py-8 text-center text-caption text-muted-foreground">
+                No documents found.
               </CardContent>
             </Card>
-          ))}
+          )}
         </div>
       )}
     </div>

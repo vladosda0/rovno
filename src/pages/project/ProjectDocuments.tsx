@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { format } from "date-fns";
 import { useParams } from "react-router-dom";
 import { trackEvent } from "@/lib/analytics";
 import {
@@ -36,7 +37,9 @@ import {
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ConfirmModal } from "@/components/ConfirmModal";
+import { DocumentGridCard } from "@/components/documents/DocumentGridCard";
 import { DocumentListItem } from "@/components/documents/DocumentListItem";
+import { DocumentsViewModeToggle, type DocumentViewMode } from "@/components/documents/DocumentsViewModeToggle";
 import { PreviewCard } from "@/components/ai/PreviewCard";
 import { ActionBar } from "@/components/ai/ActionBar";
 import { ProjectWorkflowEmptyState } from "@/components/ProjectWorkflowEmptyState";
@@ -76,6 +79,13 @@ function buildDocumentDownloadName(title: string) {
   return `${normalized || "document"}.txt`;
 }
 
+function formatDocumentDate(timestamp?: string) {
+  if (!timestamp) return null;
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return null;
+  return format(date, "MMM d, yyyy");
+}
+
 export default function ProjectDocuments() {
   const { id: projectId } = useParams<{ id: string }>();
   const pid = projectId!;
@@ -85,7 +95,6 @@ export default function ProjectDocuments() {
   const perm = usePermission(pid);
   const user = useCurrentUser();
   const {
-    createDocument,
     archiveDocument,
     deleteDocument: deleteDocumentMutation,
   } = useProjectDocumentMutations(pid);
@@ -112,6 +121,7 @@ export default function ProjectDocuments() {
   const [deleteDocId, setDeleteDocId] = useState<string | null>(null);
   const [commentOpen, setCommentOpen] = useState(false);
   const [commentText, setCommentText] = useState("");
+  const [viewMode, setViewMode] = useState<DocumentViewMode>("list");
 
   const activeDocuments = documents.filter((document) => {
     const latestVersion = document.versions[document.versions.length - 1];
@@ -417,6 +427,86 @@ export default function ProjectDocuments() {
 
   const showOnlyEmptyState = !isLoading && documents.length === 0;
 
+  function renderDocumentMeta(document: DocType, archived = false) {
+    const detailItems = [
+      archived ? "Archived document" : "Open preview",
+      document.file_meta?.filename,
+      formatDocumentDate(document.created_at),
+    ].filter(Boolean) as string[];
+
+    return detailItems.map((detail) => (
+      <span key={`${document.id}-${detail}`} className="text-caption text-muted-foreground">
+        {detail}
+      </span>
+    ));
+  }
+
+  function renderActiveDocumentActions(document: DocType) {
+    return (
+      <div className="flex gap-1">
+        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setViewDoc(document)} title="Preview">
+          <Eye className="h-3.5 w-3.5" />
+        </Button>
+        {isOwner && (
+          <>
+            <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setArchiveDocId(document.id)} title="Archive">
+              <Archive className="h-3.5 w-3.5" />
+            </Button>
+            <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setDeleteDocId(document.id)} title="Delete">
+              <Trash2 className="h-3.5 w-3.5 text-destructive" />
+            </Button>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  function renderDocumentsSection(sectionDocuments: DocType[], archived = false) {
+    if (sectionDocuments.length === 0) return null;
+
+    if (viewMode === "grid") {
+      return (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {sectionDocuments.map((document) => (
+            <DocumentGridCard
+              key={document.id}
+              title={document.title}
+              onOpen={() => setViewDoc(document)}
+              muted={archived}
+              actions={archived ? (
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setViewDoc(document)} title="Preview">
+                  <Eye className="h-3.5 w-3.5" />
+                </Button>
+              ) : renderActiveDocumentActions(document)}
+              meta={renderDocumentMeta(document, archived)}
+            />
+          ))}
+        </div>
+      );
+    }
+
+    return (
+      <div className={`glass rounded-card overflow-hidden ${archived ? "opacity-70" : ""}`}>
+        <div className="divide-y divide-border">
+          {sectionDocuments.map((document) => (
+            <DocumentListItem
+              key={document.id}
+              title={document.title}
+              muted={archived}
+              details={renderDocumentMeta(document, archived)}
+              onOpen={() => setViewDoc(document)}
+              trailing={archived ? (
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setViewDoc(document)} title="Preview">
+                  <Eye className="h-3.5 w-3.5" />
+                </Button>
+              ) : renderActiveDocumentActions(document)}
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-sp-2">
       {!showOnlyEmptyState && (
@@ -432,18 +522,23 @@ export default function ProjectDocuments() {
               </p>
             )}
           </div>
-          {perm.can("document.create") && (
-            <div className="flex gap-1.5">
-              <Button size="sm" variant="outline" onClick={() => setUploadOpen(true)}>
-                <Upload className="h-4 w-4 mr-1.5" /> Upload
-              </Button>
-              {!isSupabaseMode && (
-                <Button size="sm" className="bg-accent text-accent-foreground hover:bg-accent/90" onClick={() => setGenerateOpen(true)}>
-                  <Plus className="h-4 w-4 mr-1.5" /> Generate
+          <div className="flex items-center gap-2 flex-wrap">
+            {documents.length > 0 && (
+              <DocumentsViewModeToggle value={viewMode} onValueChange={setViewMode} />
+            )}
+            {perm.can("document.create") && (
+              <div className="flex gap-1.5">
+                <Button size="sm" variant="outline" onClick={() => setUploadOpen(true)}>
+                  <Upload className="h-4 w-4 mr-1.5" /> Upload
                 </Button>
-              )}
-            </div>
-          )}
+                {!isSupabaseMode && (
+                  <Button size="sm" className="bg-accent text-accent-foreground hover:bg-accent/90" onClick={() => setGenerateOpen(true)}>
+                    <Plus className="h-4 w-4 mr-1.5" /> Generate
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -462,58 +557,13 @@ export default function ProjectDocuments() {
       ) : (
         <>
           {activeDocuments.length > 0 && (
-            <div className="glass rounded-card overflow-hidden">
-              <div className="divide-y divide-border">
-                {activeDocuments.map((document) => (
-                  <DocumentListItem
-                    key={document.id}
-                    title={document.title}
-                    details={<span className="text-caption text-muted-foreground">Open preview</span>}
-                    onOpen={() => setViewDoc(document)}
-                    trailing={(
-                      <div className="flex gap-1">
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setViewDoc(document)} title="Preview">
-                          <Eye className="h-3.5 w-3.5" />
-                        </Button>
-                        {isOwner && (
-                          <>
-                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setArchiveDocId(document.id)} title="Archive">
-                              <Archive className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setDeleteDocId(document.id)} title="Delete">
-                              <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    )}
-                  />
-                ))}
-              </div>
-            </div>
+            renderDocumentsSection(activeDocuments)
           )}
 
           {archivedDocuments.length > 0 && (
             <div className="space-y-1">
               <h3 className="text-body-sm font-semibold text-muted-foreground px-1">Archived</h3>
-              <div className="glass rounded-card overflow-hidden opacity-70">
-                <div className="divide-y divide-border">
-                  {archivedDocuments.map((document) => (
-                    <DocumentListItem
-                      key={document.id}
-                      title={document.title}
-                      muted
-                      details={<span className="text-caption text-muted-foreground">Archived document</span>}
-                      onOpen={() => setViewDoc(document)}
-                      trailing={(
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setViewDoc(document)} title="Preview">
-                          <Eye className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
-                    />
-                  ))}
-                </div>
-              </div>
+              {renderDocumentsSection(archivedDocuments, true)}
             </div>
           )}
         </>
