@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { allUsers } from "@/data/seed";
 import {
   addTask,
   addDocument,
   addMedia,
-  addMember,
   addEvent,
   getCurrentUser,
+  getProjectInvites,
   getUserById,
 } from "@/data/store";
 import { createEstimateItemForTask } from "@/data/estimate-store";
@@ -59,7 +58,12 @@ import {
   X,
 } from "lucide-react";
 import { ReceiveOrderPickerModal } from "@/components/procurement/ReceiveOrderPickerModal";
-import type { Member, MemberRole, Stage, Task, TaskStatus } from "@/types/entities";
+import { createWorkspaceProjectInvite } from "@/data/workspace-source";
+import type { AIAccess, Member, MemberRole, Stage, Task, TaskStatus } from "@/types/entities";
+import {
+  getInviteAiAccessOptions,
+  getInviteRoleOptions,
+} from "@/lib/participant-role-policy";
 
 type ModalKey = "task" | "document" | "photo" | "participant" | "credits";
 
@@ -72,6 +76,8 @@ interface Props {
   canCreateTask: boolean;
   canCreateDocument: boolean;
   canManageParticipants: boolean;
+  actorRole: MemberRole;
+  actorAiAccess: AIAccess;
 }
 
 type TaskChecklistDraft = {
@@ -102,6 +108,8 @@ export function QuickActions({
   canCreateTask,
   canCreateDocument,
   canManageParticipants,
+  actorRole,
+  actorAiAccess,
 }: Props) {
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -109,6 +117,11 @@ export function QuickActions({
   const workspaceMode = useWorkspaceMode();
   const { createDocument } = useProjectDocumentMutations(projectId);
   const isSupabaseMode = workspaceMode.kind === "supabase";
+
+  const inviteRoleOptions = useMemo(
+    () => getInviteRoleOptions(actorRole),
+    [actorRole],
+  );
 
   const [openModal, setOpenModal] = useState<ModalKey | null>(null);
   const [discardModal, setDiscardModal] = useState<ModalKey | null>(null);
@@ -150,6 +163,12 @@ export function QuickActions({
       setParticipantViewerRegime("build_myself");
     }
   }, [participantViewerRegime, projectMode]);
+
+  useEffect(() => {
+    if (!inviteRoleOptions.includes(participantRole)) {
+      setParticipantRole(inviteRoleOptions[0] ?? "contractor");
+    }
+  }, [inviteRoleOptions, participantRole]);
 
   const memberOptions = useMemo(
     () => members.map((member) => ({ member, user: getUserById(member.user_id) })).filter((item) => !!item.user),
@@ -452,55 +471,71 @@ export function QuickActions({
     forceClose("photo");
   };
 
-  const handleInviteParticipant = () => {
-    if (!participantEmail.trim()) return;
+  const handleInviteParticipant = async () => {
+    const trimmedEmail = participantEmail.trim().toLowerCase();
+    if (!trimmedEmail) return;
 
-    const existingUser = allUsers.find((u) => u.email === participantEmail.trim());
-    const candidateUserId = existingUser?.id ?? `user-invite-${Date.now()}`;
-    const isAlreadyMember = members.some((member) => member.user_id === candidateUserId);
+    // Supabase mode uses the canonical Participants tab flow.
+    if (isSupabaseMode) {
+      navigate(`/project/${projectId}/participants`);
+      forceClose("participant");
+      return;
+    }
+
+    const isAlreadyMember = members.some(
+      (member) => getUserById(member.user_id)?.email?.toLowerCase() === trimmedEmail,
+    );
     if (isAlreadyMember) {
       toast({ title: "Already invited", description: "This user is already a project participant.", variant: "destructive" });
       return;
     }
 
-    addMember({
-      project_id: projectId,
-      user_id: candidateUserId,
+    const pendingInvites = getProjectInvites(projectId);
+    const hasPendingInvite = pendingInvites.some(
+      (invite) => invite.status === "pending" && invite.email.toLowerCase() === trimmedEmail,
+    );
+    if (hasPendingInvite) {
+      toast({ title: "Already invited", description: "This user already has a pending invitation.", variant: "destructive" });
+      return;
+    }
+
+    const allowedAiAccess = getInviteAiAccessOptions(actorAiAccess);
+    const inviteAiAccess: AIAccess = participantRole === "viewer"
+      ? "none"
+      : (allowedAiAccess.includes("consult_only") ? "consult_only" : "none");
+
+    const resolvedInviteMode = workspaceMode.kind === "pending-supabase"
+      ? { kind: "local" as const }
+      : workspaceMode;
+
+    const createdInvite = await createWorkspaceProjectInvite(resolvedInviteMode, {
+      projectId,
+      email: trimmedEmail,
       role: participantRole,
-      viewer_regime: participantRole === "viewer" ? participantViewerRegime : undefined,
-      ai_access: participantRole === "viewer" ? "none" : "consult_only",
-      credit_limit: parseInt(participantCredits, 10) || 0,
-      used_credits: 0,
+      aiAccess: inviteAiAccess,
+      viewerRegime: participantRole === "viewer" ? participantViewerRegime : null,
+      creditLimit: parseInt(participantCredits, 10) || 0,
+      invitedBy: currentUser.id,
     });
 
-    addEvent({
-      id: `evt-invite-${Date.now()}`,
-      project_id: projectId,
-      actor_id: currentUser.id,
-      type: "member_added",
-      object_type: "member",
-      object_id: candidateUserId,
-      timestamp: new Date().toISOString(),
-      payload: {
-        email: participantEmail.trim(),
-        role: participantRole,
-      },
-    });
-
-    if (participantRole === "viewer") {
+    if (resolvedInviteMode.kind !== "supabase") {
       addEvent({
-        id: `evt-viewer-regime-${Date.now()}`,
+        id: `evt-invite-${Date.now()}`,
         project_id: projectId,
         actor_id: currentUser.id,
-        type: "estimate.viewer_regime_set",
+        type: "member_added",
         object_type: "member",
-        object_id: candidateUserId,
+        object_id: createdInvite.id,
         timestamp: new Date().toISOString(),
-        payload: { regime: participantViewerRegime },
+        payload: {
+          email: createdInvite.email,
+          role: createdInvite.role,
+          source: "invite",
+        },
       });
     }
 
-    toast({ title: "Invitation sent", description: participantEmail.trim() });
+    toast({ title: "Invitation sent", description: trimmedEmail });
     forceClose("participant");
   };
 
@@ -536,7 +571,13 @@ export function QuickActions({
                 variant="outline"
                 className="text-caption h-7"
                 disabled={!canManageParticipants}
-                onClick={() => setOpenModal("participant")}
+                onClick={() => {
+                  if (isSupabaseMode) {
+                    navigate(`/project/${projectId}/participants`);
+                    return;
+                  }
+                  setOpenModal("participant");
+                }}
               >
                 <UserPlus className="h-3 w-3 mr-1" /> Participant
               </Button>
@@ -998,9 +1039,11 @@ export function QuickActions({
               >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="co_owner">Co-owner</SelectItem>
-                  <SelectItem value="contractor">Contractor</SelectItem>
-                  <SelectItem value="viewer">Viewer</SelectItem>
+                  {inviteRoleOptions.map((role) => (
+                    <SelectItem key={role} value={role}>
+                      {role === "co_owner" ? "Co-owner" : role.charAt(0).toUpperCase() + role.slice(1).replace("_", " ")}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

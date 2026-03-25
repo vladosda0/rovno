@@ -8,6 +8,7 @@ import {
   addMember,
   addProject,
   addProjectInvite,
+  updateMember,
 } from "@/data/store";
 import { clearDemoSession, clearStoredAuthProfile, setAuthRole, setStoredAuthProfile } from "@/lib/auth-state";
 
@@ -113,5 +114,48 @@ describe("ProjectParticipants", () => {
     fireEvent.click(screen.getByRole("button", { name: "Update" }));
 
     expect(await within(inviteTable).findByText("Viewer")).toBeInTheDocument();
+  });
+
+  it("does not offer co_owner as a role option when the actor is co_owner", async () => {
+    const queryClient = createQueryClient();
+
+    // Adjust existing store membership to a co_owner actor.
+    const profile = setStoredAuthProfile({
+      email: "owner@example.com",
+      name: "Owner User",
+    });
+    setAuthRole("co_owner");
+    updateMember("project-1", profile.id, {
+      role: "co_owner",
+      ai_access: "project_pool",
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/project/project-1/participants"]}>
+          <Routes>
+            <Route path="/project/:id/participants" element={<ProjectParticipants />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    const inviteSection = screen.getByRole("heading", { name: "Invitations" }).closest("section");
+    const inviteTable = within(inviteSection as HTMLElement).getByRole("table");
+    const inviteRow = within(inviteTable).getByText("invitee@example.com").closest("tr");
+
+    fireEvent.pointerDown(within(inviteRow as HTMLElement).getByRole("button"), { button: 0, ctrlKey: false });
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Change role" }));
+
+    const coOwnerCountBefore = screen.queryAllByText("Co-owner").length;
+    const contractorCountBefore = screen.queryAllByText("Contractor").length;
+    const viewerCountBefore = screen.queryAllByText("Viewer").length;
+    fireEvent.click(screen.getByRole("combobox"));
+
+    // Co-owner should not be available for role change by a co_owner actor.
+    const coOwnerCountAfter = screen.queryAllByText("Co-owner").length;
+    expect(coOwnerCountAfter).toBe(coOwnerCountBefore);
+    expect(screen.queryAllByText("Contractor").length).toBeGreaterThan(contractorCountBefore);
+    expect(screen.queryAllByText("Viewer").length).toBeGreaterThan(viewerCountBefore);
   });
 });

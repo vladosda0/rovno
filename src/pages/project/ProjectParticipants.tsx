@@ -33,6 +33,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "@/hooks/use-toast";
 import type { Member, MemberRole, AIAccess } from "@/types/entities";
+import {
+  getInviteAiAccessOptions,
+  getInviteRoleOptions,
+  getReassignRoleOptions,
+} from "@/lib/participant-role-policy";
 
 const roleIcons: Record<MemberRole, typeof Crown> = {
   owner: Crown,
@@ -91,6 +96,14 @@ export default function ProjectParticipants() {
   const queryClient = useQueryClient();
   const currentUser = useCurrentUser();
 
+  const actorRole = perm.seam.membership?.role ?? "viewer";
+  const actorAiAccess = perm.seam.membership?.ai_access ?? "none";
+  const inviteRoleOptions = useMemo(() => getInviteRoleOptions(actorRole), [actorRole]);
+  const inviteAiAccessOptions = useMemo(
+    () => getInviteAiAccessOptions(actorAiAccess),
+    [actorAiAccess],
+  );
+
   const projectMode = project?.project_mode === "build_myself" ? "build_myself" : "contractor";
   const defaultViewerRegime = projectMode === "build_myself" ? "build_myself" : "client";
   const availableViewerRegimes = projectMode === "build_myself"
@@ -114,10 +127,40 @@ export default function ProjectParticipants() {
     }
   }, [inviteViewerRegime, projectMode]);
 
+  useEffect(() => {
+    if (!inviteOpen) return;
+
+    if (!inviteRoleOptions.includes(inviteRole)) {
+      setInviteRole(inviteRoleOptions[0] ?? "contractor");
+    }
+
+    if (!inviteAiAccessOptions.includes(inviteAI)) {
+      setInviteAI(inviteAiAccessOptions[0] ?? "none");
+    }
+  }, [
+    inviteOpen,
+    inviteRoleOptions,
+    inviteRole,
+    inviteAiAccessOptions,
+    inviteAI,
+  ]);
+
   const canInvite = perm.can("member.invite") && workspaceMode.kind !== "pending-supabase";
   const workspaceKey = workspaceMode.kind === "supabase" ? workspaceMode.profileId : workspaceMode.kind;
   const membersQueryKey = workspaceQueryKeys.projectMembers(workspaceKey, projectId);
   const invitesQueryKey = workspaceQueryKeys.projectInvites(workspaceKey, projectId);
+
+  const roleTargetCurrentRole = useMemo(() => {
+    if (!roleTarget) return null;
+    if (roleTarget.kind === "member") {
+      return members.find((m) => m.user_id === roleTarget.userId)?.role ?? null;
+    }
+    return invites.find((i) => i.id === roleTarget.inviteId)?.role ?? null;
+  }, [roleTarget, members, invites]);
+
+  const reassignRoleOptions: MemberRole[] = roleTargetCurrentRole
+    ? getReassignRoleOptions(actorRole, roleTargetCurrentRole)
+    : [];
 
   const memberEmailById = useMemo(
     () =>
@@ -435,7 +478,8 @@ export default function ProjectParticipants() {
                               <DropdownMenuItem
                                 onClick={() => {
                                   setRoleTarget({ kind: "member", userId: member.user_id });
-                                  setNewRole(member.role);
+                                  const options = getReassignRoleOptions(actorRole, member.role);
+                                  setNewRole(options.includes(member.role) ? member.role : (options[0] ?? "contractor"));
                                   setChangeRoleOpen(true);
                                 }}
                               >
@@ -504,7 +548,8 @@ export default function ProjectParticipants() {
                             <DropdownMenuItem
                               onClick={() => {
                                 setRoleTarget({ kind: "invite", inviteId: invite.id });
-                                setNewRole(invite.role);
+                              const options = getReassignRoleOptions(actorRole, invite.role);
+                              setNewRole(options.includes(invite.role) ? invite.role : (options[0] ?? "contractor"));
                                 setChangeRoleOpen(true);
                               }}
                             >
@@ -557,9 +602,9 @@ export default function ProjectParticipants() {
             >
               <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="co_owner">Co-owner</SelectItem>
-                <SelectItem value="contractor">Contractor</SelectItem>
-                <SelectItem value="viewer">Viewer</SelectItem>
+                {inviteRoleOptions.map((role) => (
+                  <SelectItem key={role} value={role}>{roleLabels[role]}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -586,9 +631,9 @@ export default function ProjectParticipants() {
             <Select value={inviteAI} onValueChange={(value) => setInviteAI(value as AIAccess)}>
               <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">No AI</SelectItem>
-                <SelectItem value="consult_only">Consult only</SelectItem>
-                <SelectItem value="project_pool">Project pool</SelectItem>
+                {inviteAiAccessOptions.map((aiAccess) => (
+                  <SelectItem key={aiAccess} value={aiAccess}>{aiLabels[aiAccess]}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -617,9 +662,9 @@ export default function ProjectParticipants() {
           <Select value={newRole} onValueChange={(value) => setNewRole(value as MemberRole)}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="co_owner">Co-owner</SelectItem>
-              <SelectItem value="contractor">Contractor</SelectItem>
-              <SelectItem value="viewer">Viewer</SelectItem>
+              {(reassignRoleOptions.length > 0 ? reassignRoleOptions : (["contractor"] as MemberRole[])).map((role) => (
+                <SelectItem key={role} value={role}>{roleLabels[role]}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>

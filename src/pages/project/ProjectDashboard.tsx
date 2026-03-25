@@ -19,7 +19,6 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
-import { isOwnerOrCoOwner } from "@/lib/permissions";
 import { Copy, Info, LayoutDashboard, MapPin } from "lucide-react";
 
 export default function ProjectDashboard() {
@@ -36,7 +35,10 @@ export default function ProjectDashboard() {
   const estimate = useEstimate(projectId);
   const documents = useDocuments(projectId);
   const media = useMedia(projectId);
-  const { can: userCan, role } = usePermission(projectId);
+  const perm = usePermission(projectId);
+  const userCan = perm.can;
+  const actorRole = perm.seam.membership?.role ?? "viewer";
+  const actorAiAccess = perm.seam.membership?.ai_access ?? "none";
 
   const doneTasks = useMemo(
     () => tasks.filter((task) => task.status === "done" || (task.status as string) === "completed").length,
@@ -50,7 +52,7 @@ export default function ProjectDashboard() {
   }), [tasks]);
   const totalTasks = tasks.length;
   const progressPct = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
-  const canManageParticipants = isOwnerOrCoOwner(role);
+  const canManageParticipants = perm.can("member.invite");
 
   const handleCopyAddress = async () => {
     if (!project?.address) return;
@@ -143,6 +145,8 @@ export default function ProjectDashboard() {
         canCreateTask={userCan("task.create")}
         canCreateDocument={userCan("document.create")}
         canManageParticipants={canManageParticipants}
+        actorRole={actorRole}
+        actorAiAccess={actorAiAccess}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-6 gap-sp-2 items-stretch">
