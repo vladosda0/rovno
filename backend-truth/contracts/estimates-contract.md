@@ -13,6 +13,7 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 - `supabase/migrations/20260306164000_hr_domain.sql`
 - `supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql`
 - `supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql`
+- `supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql`
 
 ## Tables
 
@@ -185,8 +186,6 @@ Indexes:
 - RLS enabled: yes
 - Authenticated grants: `delete`, `insert`, `select`, `update`
 - Policies:
-  - `estimate_works_select` for `select` to `authenticated`
-    using: `exists ( select 1 from public.estimate_versions ev join public.project_estimates pe on pe.id = ev.estimate_id where ev.id = estimate_version_id and public.can_access_project(pe.project_id) )`
   - `estimate_works_insert` for `insert` to `authenticated`
     with check: `exists ( select 1 from public.estimate_versions ev join public.project_estimates pe on pe.id = ev.estimate_id where ev.id = estimate_version_id and public.can_write_project_content(pe.project_id) )`
   - `estimate_works_update` for `update` to `authenticated`
@@ -194,14 +193,14 @@ Indexes:
     with check: `exists ( select 1 from public.estimate_versions ev join public.project_estimates pe on pe.id = ev.estimate_id where ev.id = estimate_version_id and public.can_write_project_content(pe.project_id) )`
   - `estimate_works_delete` for `delete` to `authenticated`
     using: `exists ( select 1 from public.estimate_versions ev join public.project_estimates pe on pe.id = ev.estimate_id where ev.id = estimate_version_id and public.can_write_project_content(pe.project_id) )`
+  - `estimate_works_select` for `select` to `authenticated`
+    using: `exists ( select 1 from public.estimate_versions ev join public.project_estimates pe on pe.id = ev.estimate_id where ev.id = estimate_version_id and public.can_access_project(pe.project_id) and public.can_view_sensitive_detail(pe.project_id) )`
 
 ### public.estimate_resource_lines
 
 - RLS enabled: yes
 - Authenticated grants: `delete`, `insert`, `select`, `update`
 - Policies:
-  - `estimate_resource_lines_select` for `select` to `authenticated`
-    using: `exists ( select 1 from public.estimate_works ew join public.estimate_versions ev on ev.id = ew.estimate_version_id join public.project_estimates pe on pe.id = ev.estimate_id where ew.id = estimate_work_id and public.can_access_project(pe.project_id) )`
   - `estimate_resource_lines_insert` for `insert` to `authenticated`
     with check: `exists ( select 1 from public.estimate_works ew join public.estimate_versions ev on ev.id = ew.estimate_version_id join public.project_estimates pe on pe.id = ev.estimate_id where ew.id = estimate_work_id and public.can_write_project_content(pe.project_id) )`
   - `estimate_resource_lines_update` for `update` to `authenticated`
@@ -209,6 +208,8 @@ Indexes:
     with check: `exists ( select 1 from public.estimate_works ew join public.estimate_versions ev on ev.id = ew.estimate_version_id join public.project_estimates pe on pe.id = ev.estimate_id where ew.id = estimate_work_id and public.can_write_project_content(pe.project_id) )`
   - `estimate_resource_lines_delete` for `delete` to `authenticated`
     using: `exists ( select 1 from public.estimate_works ew join public.estimate_versions ev on ev.id = ew.estimate_version_id join public.project_estimates pe on pe.id = ev.estimate_id where ew.id = estimate_work_id and public.can_write_project_content(pe.project_id) )`
+  - `estimate_resource_lines_select` for `select` to `authenticated`
+    using: `exists ( select 1 from public.estimate_works ew join public.estimate_versions ev on ev.id = ew.estimate_version_id join public.project_estimates pe on pe.id = ev.estimate_id where ew.id = estimate_work_id and public.can_access_project(pe.project_id) and public.can_view_sensitive_detail(pe.project_id) )`
 
 ### public.estimate_dependencies
 

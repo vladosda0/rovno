@@ -11,7 +11,7 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 - `supabase/migrations/20260306162000_storage_documents_and_media.sql`
 - `supabase/migrations/20260317120000_storage_upload_intents.sql`
 - `supabase/migrations/20260320110000_task_final_media_contract.sql`
-- `supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql`
+- `supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql`
 - `supabase/migrations/20260317133000_storage_bucket_config_table.sql`
 - `supabase/migrations/20260317121000_storage_upload_rpcs.sql`
 - `supabase/migrations/20260323113000_finalize_media_bucket_ambiguity_fix.sql`
@@ -53,15 +53,18 @@ Indexes:
 | `created_by` | `uuid` | no |   | no |
 | `created_at` | `timestamptz` | no | `now()` | no |
 | `updated_at` | `timestamptz` | no | `now()` | no |
+| `visibility_class` | `text` | no | `'shared_project'` | no |
 
 Constraints:
 - unnamed check (expression `origin in ('project_creation', 'uploaded', 'manual', 'ai_generated')`)
+- unnamed check (expression `visibility_class in ('shared_project', 'internal')`)
 
 Indexes:
 - `idx_documents_project_id` on (`project_id`)
 
 Triggers:
 - `set_documents_updated_at`: before update, executes `public.set_updated_at()`
+- `guard_documents_visibility_class_change`: before insert or update of visibility_class, executes `public.guard_documents_visibility_class_change()`
 
 ### public.document_versions
 
@@ -96,15 +99,20 @@ Indexes:
 | `created_at` | `timestamptz` | no | `now()` | no |
 | `task_id` | `uuid` | yes |   | no |
 | `is_final` | `boolean` | no | `false` | no |
+| `visibility_class` | `text` | no | `'shared_project'` | no |
 
 Constraints:
 - unnamed check (expression `not is_final or task_id is not null`)
+- unnamed check (expression `visibility_class in ('shared_project', 'internal')`)
 
 Indexes:
 - `idx_project_media_project_id` on (`project_id`)
 - `idx_project_media_storage_object_id` on (`storage_object_id`)
 - `idx_project_media_task_id` on (`task_id`)
 - `idx_project_media_task_id_is_final` on (`task_id`, `is_final`)
+
+Triggers:
+- `guard_project_media_visibility_class_change`: before insert or update of visibility_class, executes `public.guard_project_media_visibility_class_change()`
 
 ### public.project_media_upload_intents
 
@@ -184,7 +192,7 @@ Constraints:
 
 | Function | Returns | Auth Execute | Kind | Source |
 | --- | --- | --- | --- | --- |
-| `public.can_access_storage_object(uuid)` | `boolean` | yes | `rpc` | `supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql` |
+| `public.can_access_storage_object(uuid)` | `boolean` | yes | `rpc` | `supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql` |
 | `public.prepare_project_media_upload(uuid, text, text, text, bigint, text)` | `table ( upload_intent_id uuid, bucket text, object_path text, filename text, mime_type text, size_bytes bigint )` | yes | `rpc` | `supabase/migrations/20260317133000_storage_bucket_config_table.sql` |
 | `public.finalize_project_media_upload(uuid)` | `table ( project_media_id uuid, storage_object_id uuid, project_id uuid, bucket text, object_path text, filename text )` | yes | `rpc` | `supabase/migrations/20260317121000_storage_upload_rpcs.sql` |
 | `public.prepare_document_upload(uuid, text, text, text, text, bigint, text)` | `table ( upload_intent_id uuid, bucket text, object_path text, filename text, mime_type text, size_bytes bigint )` | yes | `rpc` | `supabase/migrations/20260317133000_storage_bucket_config_table.sql` |
@@ -207,8 +215,6 @@ Constraints:
 - RLS enabled: yes
 - Authenticated grants: `delete`, `insert`, `select`, `update`
 - Policies:
-  - `documents_select` for `select` to `authenticated`
-    using: `public.can_access_project(project_id)`
   - `documents_insert` for `insert` to `authenticated`
     with check: `public.can_write_project_content(project_id) and created_by = auth.uid()`
   - `documents_update` for `update` to `authenticated`
@@ -216,14 +222,14 @@ Constraints:
     with check: `public.can_write_project_content(project_id)`
   - `documents_delete` for `delete` to `authenticated`
     using: `public.can_write_project_content(project_id)`
+  - `documents_select` for `select` to `authenticated`
+    using: `public.can_access_project(project_id) and ( visibility_class = 'shared_project' or public.can_view_internal_documents(project_id) )`
 
 ### public.document_versions
 
 - RLS enabled: yes
 - Authenticated grants: `delete`, `insert`, `select`, `update`
 - Policies:
-  - `document_versions_select` for `select` to `authenticated`
-    using: `exists ( select 1 from public.documents d where d.id = document_id and public.can_access_project(d.project_id) )`
   - `document_versions_insert` for `insert` to `authenticated`
     with check: `created_by = auth.uid() and exists ( select 1 from public.documents d where d.id = document_id and public.can_write_project_content(d.project_id) )`
   - `document_versions_update` for `update` to `authenticated`
@@ -231,14 +237,14 @@ Constraints:
     with check: `exists ( select 1 from public.documents d where d.id = document_id and public.can_write_project_content(d.project_id) )`
   - `document_versions_delete` for `delete` to `authenticated`
     using: `exists ( select 1 from public.documents d where d.id = document_id and public.can_write_project_content(d.project_id) )`
+  - `document_versions_select` for `select` to `authenticated`
+    using: `exists ( select 1 from public.documents d where d.id = document_id and public.can_access_project(d.project_id) and ( d.visibility_class = 'shared_project' or public.can_view_internal_documents(d.project_id) ) )`
 
 ### public.project_media
 
 - RLS enabled: yes
 - Authenticated grants: `delete`, `insert`, `select`, `update`
 - Policies:
-  - `project_media_select` for `select` to `authenticated`
-    using: `public.can_access_project(project_id)`
   - `project_media_insert` for `insert` to `authenticated`
     with check: `public.can_write_project_content(project_id) and uploaded_by = auth.uid()`
   - `project_media_update` for `update` to `authenticated`
@@ -246,6 +252,20 @@ Constraints:
     with check: `public.can_write_project_content(project_id)`
   - `project_media_delete` for `delete` to `authenticated`
     using: `public.can_write_project_content(project_id)`
+  - `project_media_select` for `select` to `authenticated`
+    using: `public.can_access_project(project_id) and ( visibility_class = 'shared_project' or public.can_view_internal_documents(project_id) )`
+
+### public.project_media_upload_intents
+
+- RLS enabled: yes
+- Authenticated grants: none
+- Policies: none
+
+### public.document_upload_intents
+
+- RLS enabled: yes
+- Authenticated grants: none
+- Policies: none
 
 ### public.project_media_upload_intents
 

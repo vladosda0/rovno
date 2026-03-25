@@ -51,6 +51,9 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20260320143000_add_sanitize_uploaded_filename.sql`
 - `supabase/migrations/20260323110000_storage_project_media_insert_policy.sql`
 - `supabase/migrations/20260323113000_finalize_media_bucket_ambiguity_fix.sql`
+- `supabase/migrations/20260324140000_project_launch_authority.sql`
+- `supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql`
+- `supabase/migrations/20260325120000_doc_media_visibility_write_enforcement.sql`
 
 ## Exclusions
 

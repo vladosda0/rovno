@@ -266,6 +266,34 @@
     },
     {
       "schema": "public",
+      "table": "project_members",
+      "column": "finance_visibility",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "none",
+        "summary",
+        "detail"
+      ],
+      "expression": "finance_visibility in ('none', 'summary', 'detail')",
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
+    },
+    {
+      "schema": "public",
+      "table": "project_members",
+      "column": "internal_docs_visibility",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "none",
+        "view",
+        "edit"
+      ],
+      "expression": "internal_docs_visibility in ('none', 'view', 'edit')",
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
+    },
+    {
+      "schema": "public",
       "table": "project_invites",
       "column": "role",
       "constraintName": null,
@@ -344,6 +372,34 @@
     },
     {
       "schema": "public",
+      "table": "project_invites",
+      "column": "finance_visibility",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "none",
+        "summary",
+        "detail"
+      ],
+      "expression": "finance_visibility in ('none', 'summary', 'detail')",
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
+    },
+    {
+      "schema": "public",
+      "table": "project_invites",
+      "column": "internal_docs_visibility",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "none",
+        "view",
+        "edit"
+      ],
+      "expression": "internal_docs_visibility in ('none', 'view', 'edit')",
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
+    },
+    {
+      "schema": "public",
       "table": "project_stages",
       "column": "sort_order",
       "constraintName": null,
@@ -418,6 +474,19 @@
     },
     {
       "schema": "public",
+      "table": "documents",
+      "column": "visibility_class",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "shared_project",
+        "internal"
+      ],
+      "expression": "visibility_class in ('shared_project', 'internal')",
+      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
+    },
+    {
+      "schema": "public",
       "table": "document_versions",
       "column": "version_number",
       "constraintName": null,
@@ -435,6 +504,19 @@
       "allowedValues": null,
       "expression": "not is_final or task_id is not null",
       "sourceMigration": "supabase/migrations/20260320110000_task_final_media_contract.sql"
+    },
+    {
+      "schema": "public",
+      "table": "project_media",
+      "column": "visibility_class",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "shared_project",
+        "internal"
+      ],
+      "expression": "visibility_class in ('shared_project', 'internal')",
+      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
     },
     {
       "schema": "public",

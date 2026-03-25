@@ -10,6 +10,7 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 
 - `supabase/migrations/20260306164000_hr_domain.sql`
 - `supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql`
+- `supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql`
 
 ## Tables
 
@@ -117,8 +118,6 @@ Indexes:
 - RLS enabled: yes
 - Authenticated grants: `delete`, `insert`, `select`, `update`
 - Policies:
-  - `hr_items_select` for `select` to `authenticated`
-    using: `public.can_access_project(project_id)`
   - `hr_items_insert` for `insert` to `authenticated`
     with check: `public.can_write_project_content(project_id) and created_by = auth.uid()`
   - `hr_items_update` for `update` to `authenticated`
@@ -126,6 +125,8 @@ Indexes:
     with check: `public.can_write_project_content(project_id)`
   - `hr_items_delete` for `delete` to `authenticated`
     using: `public.can_write_project_content(project_id)`
+  - `hr_items_select` for `select` to `authenticated`
+    using: `public.can_access_project(project_id) and public.can_view_sensitive_detail(project_id)`
 
 ### public.hr_item_assignees
 
@@ -147,8 +148,6 @@ Indexes:
 - RLS enabled: yes
 - Authenticated grants: `delete`, `insert`, `select`, `update`
 - Policies:
-  - `hr_payments_select` for `select` to `authenticated`
-    using: `public.can_access_project(project_id)`
   - `hr_payments_insert` for `insert` to `authenticated`
     with check: `public.can_write_project_content(project_id) and (created_by is null or created_by = auth.uid())`
   - `hr_payments_update` for `update` to `authenticated`
@@ -156,4 +155,6 @@ Indexes:
     with check: `public.can_write_project_content(project_id)`
   - `hr_payments_delete` for `delete` to `authenticated`
     using: `public.can_write_project_content(project_id)`
+  - `hr_payments_select` for `select` to `authenticated`
+    using: `public.can_access_project(project_id) and public.can_view_sensitive_detail(project_id)`
 

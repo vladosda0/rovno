@@ -11,6 +11,7 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 - `supabase/migrations/20260306163000_inventory_foundation.sql`
 - `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql`
 - `supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql`
+- `supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql`
 
 ## Tables
 
@@ -256,8 +257,6 @@ Triggers:
 - RLS enabled: yes
 - Authenticated grants: `delete`, `insert`, `select`, `update`
 - Policies:
-  - `procurement_items_select` for `select` to `authenticated`
-    using: `public.can_access_project(project_id)`
   - `procurement_items_insert` for `insert` to `authenticated`
     with check: `public.can_write_project_content(project_id) and created_by = auth.uid()`
   - `procurement_items_update` for `update` to `authenticated`
@@ -265,6 +264,8 @@ Triggers:
     with check: `public.can_write_project_content(project_id)`
   - `procurement_items_delete` for `delete` to `authenticated`
     using: `public.can_write_project_content(project_id)`
+  - `procurement_items_select` for `select` to `authenticated`
+    using: `public.can_access_project(project_id) and public.can_view_sensitive_detail(project_id)`
 
 ### public.orders
 
@@ -286,8 +287,6 @@ Triggers:
 - RLS enabled: yes
 - Authenticated grants: `delete`, `insert`, `select`, `update`
 - Policies:
-  - `order_lines_select` for `select` to `authenticated`
-    using: `exists ( select 1 from public.orders o where o.id = order_id and public.can_access_project(o.project_id) )`
   - `order_lines_insert` for `insert` to `authenticated`
     with check: `exists ( select 1 from public.orders o where o.id = order_id and public.can_write_project_content(o.project_id) )`
   - `order_lines_update` for `update` to `authenticated`
@@ -295,6 +294,8 @@ Triggers:
     with check: `exists ( select 1 from public.orders o where o.id = order_id and public.can_write_project_content(o.project_id) )`
   - `order_lines_delete` for `delete` to `authenticated`
     using: `exists ( select 1 from public.orders o where o.id = order_id and public.can_write_project_content(o.project_id) )`
+  - `order_lines_select` for `select` to `authenticated`
+    using: `exists ( select 1 from public.orders o where o.id = order_id and public.can_access_project(o.project_id) and public.can_view_sensitive_detail(o.project_id) )`
 
 ### public.inventory_movements
 
