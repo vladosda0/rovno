@@ -1,7 +1,6 @@
 import { NavLink } from "@/components/NavLink";
 import { useParams } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { usePermission } from "@/lib/permissions";
 import {
   LayoutDashboard, Calculator, ShoppingCart,
   Image, FileText, Users, HardHat,
@@ -27,8 +26,6 @@ export function ProjectTabs({ className, projectId }: ProjectTabsProps) {
   const resolvedProjectId = projectId ?? id;
 
   if (!resolvedProjectId) return null;
-
-  const perm = usePermission(resolvedProjectId);
 
   return (
     <nav className={cn("flex items-center gap-0.5 overflow-x-auto whitespace-nowrap border-b border-border px-sp-2 py-1", className)}>

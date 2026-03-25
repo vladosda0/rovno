@@ -12,6 +12,31 @@ import { authenticateRuntimeAuth } from "@/test/runtime-auth";
 import { __unsafeSetRuntimeAuthStateForTests } from "@/hooks/use-runtime-auth";
 import { OrderModal } from "@/components/procurement/OrderModal";
 
+type EmptyRowsResult = { data: unknown[]; error: null };
+type EmptySingleResult = { data: null; error: null };
+
+type MockQueryBuilder = {
+  select: () => MockQueryBuilder;
+  eq: () => MockQueryBuilder;
+  in: () => MockQueryBuilder;
+  order: () => MockQueryBuilder;
+  is: () => MockQueryBuilder;
+  limit: () => MockQueryBuilder;
+  update: () => MockQueryBuilder;
+  insert: () => MockQueryBuilder;
+  upsert: () => MockQueryBuilder;
+  delete: () => MockQueryBuilder;
+  maybeSingle: () => Promise<EmptySingleResult>;
+  single: () => Promise<EmptySingleResult>;
+  then: <TResult1 = EmptyRowsResult, TResult2 = never>(
+    onFulfilled?: ((value: EmptyRowsResult) => TResult1 | PromiseLike<TResult1>) | null,
+    onRejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+  ) => Promise<TResult1 | TResult2>;
+  catch: <TResult = never>(
+    onRejected?: ((reason: unknown) => TResult | PromiseLike<TResult>) | null,
+  ) => Promise<EmptyRowsResult | TResult>;
+};
+
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: vi.fn(() => {
@@ -20,7 +45,7 @@ vi.mock("@/integrations/supabase/client", () => ({
       const emptyRows = { data: [], error: null };
       const emptySingle = { data: null, error: null };
 
-      const builder: any = {
+      const builder: MockQueryBuilder = {
         select: () => builder,
         eq: () => builder,
         in: () => builder,
@@ -33,8 +58,8 @@ vi.mock("@/integrations/supabase/client", () => ({
         delete: () => builder,
         maybeSingle: () => Promise.resolve(emptySingle),
         single: () => Promise.resolve(emptySingle),
-        then: (onFulfilled: any, onRejected: any) => Promise.resolve(emptyRows).then(onFulfilled, onRejected),
-        catch: (onRejected: any) => Promise.resolve(emptyRows).catch(onRejected),
+        then: (onFulfilled, onRejected) => Promise.resolve(emptyRows).then(onFulfilled, onRejected),
+        catch: (onRejected) => Promise.resolve(emptyRows).catch(onRejected),
       };
 
       return builder;
