@@ -56,6 +56,7 @@ function memberRow(overrides: Partial<Parameters<typeof mapProjectMemberRowToMem
     credit_limit: 50,
     used_credits: 10,
     joined_at: "2026-03-01T00:00:00.000Z",
+    finance_visibility: "none" as const,
     ...overrides,
   };
 }
@@ -117,6 +118,7 @@ describe("workspace-source helpers", () => {
       role: "contractor",
       viewer_regime: undefined,
       ai_access: "consult_only",
+      finance_visibility: "none",
       credit_limit: 50,
       used_credits: 10,
     });
@@ -190,6 +192,7 @@ describe("workspace-source helpers", () => {
       user_id: "profile-1",
       role: "owner",
       ai_access: "project_pool",
+      finance_visibility: "detail",
       credit_limit: 500,
       used_credits: 0,
     });

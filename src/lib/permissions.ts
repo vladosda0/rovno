@@ -1,44 +1,46 @@
-import type { MemberRole, AIAccess } from "@/types/entities";
+import { useMemo } from "react";
 import {
   useWorkspaceCurrentUser,
+  useWorkspaceProject,
   useWorkspaceProjectMembers,
 } from "@/hooks/use-workspace-source";
+import { can, type Action } from "@/lib/permission-matrix";
+import {
+  buildProjectAuthoritySeam,
+  type ProjectAuthoritySeam,
+} from "@/lib/project-authority-seam";
 
-export type Action =
-  | "ai.generate"
-  | "task.create"
-  | "task.edit"
-  | "estimate.approve"
-  | "member.invite"
-  | "document.create"
-  | "procurement.edit"
-  | "hr.edit";
+export type { Action } from "@/lib/permission-matrix";
+export { can, isOwnerOrCoOwner } from "@/lib/permission-matrix";
+export type { ProjectAuthoritySeam } from "@/lib/project-authority-seam";
+export { buildProjectAuthoritySeam } from "@/lib/project-authority-seam";
 
-const CONTRACTOR_ACTIONS: Action[] = [
-  "ai.generate", "task.create", "task.edit", "document.create", "procurement.edit", "hr.edit",
-];
-
-export function isOwnerOrCoOwner(role: MemberRole): role is "owner" | "co_owner" {
-  return role === "owner" || role === "co_owner";
-}
-
-export function can(role: MemberRole, action: Action, aiAccess?: AIAccess): boolean {
-  if (isOwnerOrCoOwner(role)) return true;
-  if (role === "viewer") return false;
-  // contractor
-  if (action === "ai.generate") return aiAccess !== "none";
-  return CONTRACTOR_ACTIONS.includes(action);
+/** UI and non-React callers (e.g. AI commit) should use this instead of re-lookup in the demo store alone. */
+export function seamAllowsAction(seam: ProjectAuthoritySeam, action: Action): boolean {
+  const role = seam.membership?.role ?? "viewer";
+  const aiAccess = seam.membership?.ai_access ?? "none";
+  return can(role, action, aiAccess);
 }
 
 export function usePermission(projectId: string) {
   const user = useWorkspaceCurrentUser();
   const members = useWorkspaceProjectMembers(projectId);
-  const membership = members.find((m) => m.user_id === user.id);
-  const role: MemberRole = membership?.role ?? "viewer";
-  const aiAccess: AIAccess = membership?.ai_access ?? "none";
+  const project = useWorkspaceProject(projectId);
+
+  const seam = useMemo(
+    () =>
+      buildProjectAuthoritySeam({
+        projectId,
+        profileId: user.id,
+        members,
+        project,
+      }),
+    [projectId, user.id, members, project],
+  );
 
   return {
-    role,
-    can: (action: Action) => can(role, action, aiAccess),
+    seam,
+    can: (action: Action) => seamAllowsAction(seam, action),
+    role: seam.membership?.role ?? "viewer",
   };
 }

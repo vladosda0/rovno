@@ -75,6 +75,7 @@ async function ensureOwnerProjectMember(
     viewer_regime: null,
     credit_limit: 500,
     used_credits: 0,
+    finance_visibility: "detail",
   };
 
   const { error: insertError } = await supabase
@@ -123,6 +124,7 @@ function createBrowserWorkspaceSource(mode: store.BrowserWorkspaceKind): Workspa
         user_id: user.id,
         role: "owner",
         ai_access: "project_pool",
+        finance_visibility: "detail",
         credit_limit: 500,
         used_credits: 0,
       });
@@ -168,6 +170,7 @@ export function mapProjectMemberRowToMember(row: ProjectMemberRow): Member {
     role: row.role,
     viewer_regime: row.viewer_regime ?? undefined,
     ai_access: row.ai_access,
+    finance_visibility: row.finance_visibility,
     credit_limit: row.credit_limit,
     used_credits: row.used_credits,
   };

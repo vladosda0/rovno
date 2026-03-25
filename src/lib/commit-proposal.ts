@@ -1,12 +1,12 @@
 import type { AIProposal } from "@/types/ai";
-import { can } from "@/lib/permissions";
+import { buildProjectAuthoritySeam, seamAllowsAction } from "@/lib/permissions";
 import {
   getCurrentUser, getMembers, getProject, getStages,
   addTask, addEvent, addProcurementItem, addDocument,
   updateEstimateItems, deductCredit,
   addProject, addMember, addStage,
 } from "@/data/store";
-import type { MemberRole, AIAccess } from "@/types/entities";
+import type { ProjectAuthoritySeam } from "@/lib/project-authority-seam";
 
 export interface CommitResultItem {
   type: string;
@@ -30,6 +30,11 @@ export interface CommitProposalOptions {
   eventSource?: "ai" | "user";
   eventActorId?: string;
   emitProposalEvent?: boolean;
+  /**
+   * When set (e.g. from `usePermission().seam`), AI authority matches workspace-backed membership.
+   * Omit only for browser-only paths where the store is the same source as the shell (demo/local).
+   */
+  authoritySeam?: ProjectAuthoritySeam;
 }
 
 function buildPayloadWithSource(payload: Record<string, unknown>, source?: "ai" | "user") {
@@ -43,12 +48,17 @@ export function commitProposal(proposal: AIProposal, options: CommitProposalOpti
   }
 
   const user = getCurrentUser();
-  const members = getMembers(proposal.project_id);
-  const membership = members.find((m) => m.user_id === user.id);
-  const role: MemberRole = membership?.role ?? "viewer";
-  const aiAccess: AIAccess = membership?.ai_access ?? "none";
 
-  if (!can(role, "ai.generate", aiAccess)) {
+  const authoritySeam =
+    options.authoritySeam ??
+    buildProjectAuthoritySeam({
+      projectId: proposal.project_id,
+      profileId: user.id,
+      members: getMembers(proposal.project_id),
+      project: getProject(proposal.project_id),
+    });
+
+  if (!seamAllowsAction(authoritySeam, "ai.generate")) {
     return { success: false, error: "You don't have permission to use AI generation.", eventIds: [], created: [], updated: [] };
   }
 
@@ -57,7 +67,7 @@ export function commitProposal(proposal: AIProposal, options: CommitProposalOpti
     return { success: false, error: "No credits remaining. Upgrade your plan.", eventIds: [], created: [], updated: [] };
   }
 
-  const project = getProject(proposal.project_id);
+  const project = authoritySeam.project ?? getProject(proposal.project_id);
   const stages = getStages(proposal.project_id);
   const currentStage = stages.find((s) => s.id === project?.current_stage_id) ?? stages[0];
   const eventActorId = options.eventActorId ?? (options.eventSource === "ai" ? "ai" : user.id);
@@ -253,6 +263,7 @@ function commitProjectProposal(proposal: AIProposal, options: CommitProposalOpti
     user_id: user.id,
     role: "owner",
     ai_access: "project_pool",
+    finance_visibility: "detail",
     credit_limit: 500,
     used_credits: 0,
   });

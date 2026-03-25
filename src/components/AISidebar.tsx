@@ -394,6 +394,8 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const projects = useProjects();
   const permResult = usePermission(projectId || "");
   const perm = isProjectContext && !isGuest ? permResult : null;
+  /** Aligns AI commit checks with workspace membership (critical for Supabase mode: store `getMembers` is empty). */
+  const seamForProjectCommit = isProjectContext && !isGuest ? permResult.seam : undefined;
   const { project, members } = useProject(projectId || "");
   const tasks = useTasks(projectId || "");
 
@@ -762,6 +764,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
               eventSource: "ai",
               eventActorId: "ai",
               emitProposalEvent: true,
+              authoritySeam: seamForProjectCommit,
             });
 
         if (result.success) {
@@ -834,7 +837,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     setWorkLogs(new Map());
     setProposalQueue(null);
     executingQueueRef.current = false;
-  }, [projectId, workspaceMode.kind]);
+  }, [projectId, workspaceMode.kind, seamForProjectCommit]);
 
   const beginQueueExecution = useCallback((queueSnapshot: ProposalQueueState) => {
     if (executingQueueRef.current) return;
