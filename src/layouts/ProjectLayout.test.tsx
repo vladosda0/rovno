@@ -85,7 +85,7 @@ describe("ProjectLayout", () => {
     expect(screen.queryByText("Project not found")).not.toBeInTheDocument();
   });
 
-  it("shows no-access fallback for estimate when sensitive access is denied", () => {
+  it("does not block estimate route when sensitive detail overlay is denied", () => {
     useWorkspaceModeMock.mockReturnValue({ kind: "demo" });
     useWorkspaceProjectStateMock.mockReturnValue({
       project: undefined,
@@ -114,7 +114,7 @@ describe("ProjectLayout", () => {
 
     renderProjectLayout("/project/project-1/estimate");
 
-    expect(screen.getByText("No access")).toBeInTheDocument();
-    expect(screen.queryByText("Estimate content")).not.toBeInTheDocument();
+    expect(screen.queryByText("No access")).not.toBeInTheDocument();
+    expect(screen.getByText("Estimate content")).toBeInTheDocument();
   });
 });

@@ -3,7 +3,7 @@ import { AlertTriangle } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useWorkspaceMode, useWorkspaceProjectState } from "@/hooks/use-workspace-source";
-import { usePermission, seamCanViewSensitiveDetail } from "@/lib/permissions";
+import { usePermission } from "@/lib/permissions";
 
 function ProjectLayoutSkeleton() {
   return (
@@ -50,30 +50,6 @@ export default function ProjectLayout() {
           icon={AlertTriangle}
           title="Project not found"
           description="This project does not exist."
-        />
-      </div>
-    );
-  }
-
-  // UX alignment: for sensitive modules, avoid rendering full content when backend would deny.
-  // Backend remains authoritative; this prevents “obvious tab/route confusion”.
-  const projectBase = id ? `/project/${id}/` : "";
-  const relativePath = projectBase && location.pathname.startsWith(projectBase)
-    ? location.pathname.slice(projectBase.length)
-    : "";
-  const moduleKey = relativePath.split("/")[0];
-
-  const isSensitiveModule = moduleKey === "estimate"
-    || moduleKey === "procurement"
-    || moduleKey === "hr";
-
-  if (isSensitiveModule && !seamCanViewSensitiveDetail(perm.seam)) {
-    return (
-      <div className="flex-1 p-sp-3">
-        <EmptyState
-          icon={AlertTriangle}
-          title="No access"
-          description="You don't have permission to view this module."
         />
       </div>
     );

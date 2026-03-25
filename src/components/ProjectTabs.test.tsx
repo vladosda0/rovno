@@ -68,9 +68,10 @@ describe("ProjectTabs", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.queryByRole("link", { name: "Estimate" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Procurement" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "HR" })).not.toBeInTheDocument();
+    // Sensitive-detail overlay must not hide the whole modules.
+    expect(screen.getByRole("link", { name: "Estimate" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Procurement" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "HR" })).toBeInTheDocument();
 
     // Non-sensitive tabs should remain visible.
     expect(screen.getByRole("link", { name: "Dashboard" })).toBeInTheDocument();
