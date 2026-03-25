@@ -1,10 +1,11 @@
 import { Outlet, useLocation } from "react-router-dom";
 import { Suspense, lazy, useEffect, useState } from "react";
-import { PanelLeft } from "lucide-react";
+import { PanelLeft, Wrench, X } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { subscribePhotoConsult } from "@/lib/photo-consult-store";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
 import { setAnalyticsUserId } from "@/lib/analytics";
+import { AuthSimulator } from "@/components/settings/AuthSimulator";
 import {
   readAiSidebarSessionPreference,
   writeAiSidebarSessionPreference,
@@ -18,6 +19,7 @@ const HIDE_AI_ROUTES = ["/settings"];
 
 export default function AppLayout() {
   const [aiSidebarCollapsed, setAiSidebarCollapsed] = useState(() => readAiSidebarSessionPreference() ?? false);
+  const [devToolsOpen, setDevToolsOpen] = useState(false);
   const location = useLocation();
 
   const hideAi = HIDE_AI_ROUTES.some((r) => location.pathname.startsWith(r));
@@ -78,6 +80,37 @@ export default function AppLayout() {
           <Outlet />
         </main>
       </div>
+
+      {import.meta.env.DEV && (
+        <>
+          {devToolsOpen ? (
+            <div className="fixed bottom-4 right-4 z-50 w-[420px] max-w-[calc(100vw-1rem)]">
+              <div className="max-h-[70vh] overflow-auto">
+                <div className="flex justify-end pb-2">
+                  <button
+                    type="button"
+                    aria-label="Minimize dev tools"
+                    onClick={() => setDevToolsOpen(false)}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border/60 bg-background hover:bg-accent/10"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <AuthSimulator />
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              aria-label="Open dev tools"
+              onClick={() => setDevToolsOpen(true)}
+              className="fixed bottom-4 right-4 z-50 inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border/60 bg-background/60 backdrop-blur supports-[backdrop-filter]:bg-background/70"
+            >
+              <Wrench className="h-4 w-4 text-accent" />
+            </button>
+          )}
+        </>
+      )}
     </div>
   );
 }

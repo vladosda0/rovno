@@ -1,60 +1,144 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
-import type { MemberRole } from "@/types/entities";
-import { setAuthRole, getAuthRole } from "@/lib/auth-state";
-import { useProjects } from "@/hooks/use-mock-data";
-import type { Regime } from "@/types/estimate-v2";
-import { getEstimateV2ProjectState, isDemoProject, setRegimeDev } from "@/data/estimate-v2-store";
+import type { AIAccess, MemberRole } from "@/types/entities";
+import type { AuthRole } from "@/lib/auth-state";
+import { getAuthRole, setAuthRole } from "@/lib/auth-state";
+import { addMember, updateMember } from "@/data/store";
+import type { BrowserWorkspaceKind } from "@/data/store";
+import { useCurrentUser, useProjects, useWorkspaceMode } from "@/hooks/use-mock-data";
+import { useLocation, useMatch } from "react-router-dom";
 
 export function AuthSimulator() {
   const projects = useProjects();
-  const [role, setRole] = useState<string>(getAuthRole());
-  const demoProjects = useMemo(
-    () => projects.filter((project) => isDemoProject(project.id)),
-    [projects],
+  const location = useLocation();
+  const projectMatch = useMatch("/project/:id/*");
+  const routeProjectId = projectMatch?.params.id as string | undefined;
+  const isInsideProject = Boolean(routeProjectId);
+  const canSelectProject = location.pathname === "/home" || location.pathname.startsWith("/home/") || location.pathname.startsWith("/settings");
+
+  const workspaceMode = useWorkspaceMode();
+  const currentUser = useCurrentUser();
+
+  const [role, setRole] = useState<AuthRole>(getAuthRole());
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+
+  const effectiveProjectId = routeProjectId ?? selectedProjectId;
+  const scopedProject = useMemo(
+    () => (effectiveProjectId ? projects.find((p) => p.id === effectiveProjectId) : null),
+    [projects, effectiveProjectId],
   );
-  const [regimeProjectId, setRegimeProjectId] = useState<string>("project-1");
-  const [regime, setRegime] = useState<Regime>("contractor");
 
-  useEffect(() => {
-    if (demoProjects.length === 0) return;
-    if (demoProjects.some((project) => project.id === regimeProjectId)) return;
-    setRegimeProjectId(demoProjects[0]!.id);
-  }, [demoProjects, regimeProjectId]);
+  const canMutateWorkspaceMembership = workspaceMode.kind === "demo" || workspaceMode.kind === "local";
 
-  useEffect(() => {
-    if (!regimeProjectId) return;
-    const current = getEstimateV2ProjectState(regimeProjectId).project.regime;
-    setRegime(current);
-  }, [regimeProjectId]);
+  const applyDisabled =
+    !effectiveProjectId ||
+    !canSelectProject && !isInsideProject ||
+    !canMutateWorkspaceMembership;
+
+  const mapRoleToMembership = (selectedRole: AuthRole): {
+    memberRole: MemberRole;
+    aiAccess: AIAccess;
+    creditLimit: number;
+    usedCredits: number;
+  } => {
+    switch (selectedRole) {
+      case "owner":
+        return { memberRole: "owner", aiAccess: "project_pool", creditLimit: 500, usedCredits: 0 };
+      case "co_owner":
+        return { memberRole: "co_owner", aiAccess: "project_pool", creditLimit: 500, usedCredits: 0 };
+      case "contractor":
+        return { memberRole: "contractor", aiAccess: "consult_only", creditLimit: 100, usedCredits: 0 };
+      case "viewer":
+        return { memberRole: "viewer", aiAccess: "none", creditLimit: 0, usedCredits: 0 };
+      case "guest":
+        // Guest has no auth, but membership is updated to viewer+no-AI so project permission matrix stays strict.
+        return { memberRole: "viewer", aiAccess: "none", creditLimit: 0, usedCredits: 0 };
+      default:
+        return { memberRole: "viewer", aiAccess: "none", creditLimit: 0, usedCredits: 0 };
+    }
+  };
 
   const handleApply = () => {
-    setAuthRole(role as MemberRole | "guest");
-    toast({ title: "Role switched", description: `Now simulating: ${role}` });
-    // Force page reload to propagate changes
+    if (!effectiveProjectId) return;
+
+    if (!canMutateWorkspaceMembership) {
+      toast({
+        title: "Project simulation unavailable",
+        description: "Role simulation is editable only in local/demo workspace modes.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!currentUser.id) {
+      toast({ title: "No current user", description: "Unable to simulate membership without a user id.", variant: "destructive" });
+      return;
+    }
+
+    const membership = mapRoleToMembership(role);
+
+    const mutationMode = workspaceMode.kind as BrowserWorkspaceKind;
+    const updated = updateMember(
+      effectiveProjectId,
+      currentUser.id,
+      { role: membership.memberRole, ai_access: membership.aiAccess },
+      mutationMode,
+    );
+
+    if (!updated) {
+      addMember({
+        project_id: effectiveProjectId,
+        user_id: currentUser.id,
+        role: membership.memberRole,
+        ai_access: membership.aiAccess,
+        credit_limit: membership.creditLimit,
+        used_credits: membership.usedCredits,
+      });
+    }
+
+    setAuthRole(role);
+    toast({
+      title: "Project role switched",
+      description: `${scopedProject?.title ?? effectiveProjectId}: ${role}`,
+    });
     window.location.reload();
   };
 
-  const handleApplyRegime = () => {
-    if (!regimeProjectId) return;
-    const ok = setRegimeDev(regimeProjectId, regime);
-    if (!ok) {
-      toast({ title: "Unable to switch regime", description: "Allowed only in DEV for demo projects.", variant: "destructive" });
-      return;
-    }
-    const projectTitle = demoProjects.find((project) => project.id === regimeProjectId)?.title ?? regimeProjectId;
-    toast({ title: "Regime switched", description: `${projectTitle}: ${regime.replace("_", " ")}` });
-  };
-
   return (
-    <div className="rounded-card border border-border/60 bg-background/70 p-sp-2 space-y-sp-2">
+    <div className="rounded-card border border-border/60 bg-background p-sp-2 space-y-sp-2">
       <div className="space-y-0.5">
         <p className="text-caption font-medium uppercase tracking-wide text-muted-foreground">Role simulation</p>
         <h3 className="text-body-sm font-medium text-foreground">Auth Simulator</h3>
-        <p className="text-caption text-muted-foreground/80">Dev-only: switch between user roles to test RBAC behavior.</p>
+        <p className="text-caption text-muted-foreground/80">Dev-only: simulate membership role scoped to a project.</p>
       </div>
+
+      <div className="space-y-1.5">
+        <label className="text-body-sm font-medium text-foreground">Project scope</label>
+        <Select
+          value={effectiveProjectId ?? ""}
+          disabled={isInsideProject || !canSelectProject || projects.length === 0}
+          onValueChange={(v) => setSelectedProjectId(v)}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder={isInsideProject ? "Project" : "Select project"} />
+          </SelectTrigger>
+          <SelectContent>
+            {projects.map((project) => (
+              <SelectItem key={project.id} value={project.id}>
+                {project.title}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {!canMutateWorkspaceMembership && (
+          <p className="text-caption text-destructive/90">
+            Simulation works only in local/demo workspace modes.
+          </p>
+        )}
+      </div>
+
       <div className="space-y-1.5">
         <label className="text-body-sm font-medium text-foreground">Simulated role</label>
         <Select value={role} onValueChange={setRole}>
@@ -70,52 +154,8 @@ export function AuthSimulator() {
           </SelectContent>
         </Select>
       </div>
-      <Button onClick={handleApply} variant="outline" className="w-full sm:w-auto">
+      <Button onClick={handleApply} disabled={applyDisabled} variant="outline" className="w-full sm:w-auto">
         Apply Role
-      </Button>
-
-      <div className="pt-sp-2 border-t border-border space-y-1.5">
-        <h4 className="text-body-sm font-medium text-foreground">Estimate Regime Simulator</h4>
-        <p className="text-caption text-muted-foreground/80">Dev-only: switch regime for seeded demo projects regardless of role.</p>
-      </div>
-
-      <div className="space-y-1.5">
-        <label className="text-body-sm font-medium text-foreground">Demo project</label>
-        <Select value={regimeProjectId} onValueChange={setRegimeProjectId}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {demoProjects.map((project) => (
-              <SelectItem key={project.id} value={project.id}>
-                {project.title}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="space-y-1.5">
-        <label className="text-body-sm font-medium text-foreground">Estimate regime</label>
-        <Select value={regime} onValueChange={(value) => setRegime(value as Regime)}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="contractor">Contractor</SelectItem>
-            <SelectItem value="client">Client</SelectItem>
-            <SelectItem value="build_myself">Build myself</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <Button
-        onClick={handleApplyRegime}
-        variant="outline"
-        className="w-full sm:w-auto"
-        disabled={!regimeProjectId}
-      >
-        Apply Regime
       </Button>
     </div>
   );

@@ -8,7 +8,6 @@ import { NotificationsPanel } from "@/components/settings/panels/NotificationsPa
 import { SecurityPanel } from "@/components/settings/panels/SecurityPanel";
 import { PrivacyPanel } from "@/components/settings/panels/PrivacyPanel";
 import { BillingPanel } from "@/components/settings/panels/BillingPanel";
-import { AuthSimulator } from "@/components/settings/AuthSimulator";
 import { Badge } from "@/components/ui/badge";
 
 const VALID_TABS = new Set<SettingsTab>([
@@ -88,16 +87,7 @@ export default function Settings() {
             {renderPanel()}
           </div>
 
-          {/* Dev tools */}
-          {import.meta.env.DEV && (
-            <div className="rounded-card border border-border/60 bg-card/50 p-sp-2 space-y-sp-2">
-              <div className="flex items-center gap-1.5">
-                <p className="text-caption font-medium uppercase tracking-wide text-muted-foreground">Dev tools</p>
-                <Badge variant="secondary" className="text-[9px]">DEV</Badge>
-              </div>
-              <AuthSimulator />
-            </div>
-          )}
+          {/* Dev tools are rendered as a floating panel in AppLayout */}
         </div>
       </div>
     </div>
