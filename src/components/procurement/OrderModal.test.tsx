@@ -9,7 +9,44 @@ import { __unsafeResetInventoryForTests } from "@/data/inventory-store";
 import { __unsafeResetOrdersForTests } from "@/data/order-store";
 import { fmtCost } from "@/lib/procurement-utils";
 import { authenticateRuntimeAuth } from "@/test/runtime-auth";
+import { __unsafeSetRuntimeAuthStateForTests } from "@/hooks/use-runtime-auth";
 import { OrderModal } from "@/components/procurement/OrderModal";
+
+vi.mock("@/integrations/supabase/client", () => ({
+  supabase: {
+    from: vi.fn(() => {
+      // Minimal chainable mock that supports the common supabase query patterns used
+      // by other hooks imported in OrderModal (estimate/procurement/etc).
+      const emptyRows = { data: [], error: null };
+      const emptySingle = { data: null, error: null };
+
+      const builder: any = {
+        select: () => builder,
+        eq: () => builder,
+        in: () => builder,
+        order: () => builder,
+        is: () => builder,
+        limit: () => builder,
+        update: () => builder,
+        insert: () => builder,
+        upsert: () => builder,
+        delete: () => builder,
+        maybeSingle: () => Promise.resolve(emptySingle),
+        single: () => Promise.resolve(emptySingle),
+        then: (onFulfilled: any, onRejected: any) => Promise.resolve(emptyRows).then(onFulfilled, onRejected),
+        catch: (onRejected: any) => Promise.resolve(emptyRows).catch(onRejected),
+      };
+
+      return builder;
+    }),
+    auth: {
+      getSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
+      onAuthStateChange: vi.fn().mockReturnValue({
+        data: { subscription: { unsubscribe: vi.fn() } },
+      }),
+    },
+  },
+}));
 
 function createQueryClient() {
   return new QueryClient({
@@ -82,6 +119,15 @@ function renderOpenModal(requiredQty = 10) {
 
 describe("OrderModal", () => {
   beforeEach(() => {
+    vi.stubEnv("VITE_WORKSPACE_SOURCE", "local");
+    // Prevent `useRuntimeAuth()` from calling `supabase.auth.getSession()` (network) during this suite.
+    // Many tests don't care about auth; they only need deterministic runtime-auth state.
+    __unsafeSetRuntimeAuthStateForTests({
+      status: "guest",
+      session: null,
+      user: null,
+      profileId: null,
+    });
     __unsafeResetOrdersForTests();
     __unsafeResetInventoryForTests();
   });

@@ -1,6 +1,7 @@
 import { NavLink } from "@/components/NavLink";
 import { useParams } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { usePermission, seamCanViewSensitiveDetail } from "@/lib/permissions";
 import {
   LayoutDashboard, Calculator, ShoppingCart,
   Image, FileText, Users, HardHat,
@@ -27,9 +28,19 @@ export function ProjectTabs({ className, projectId }: ProjectTabsProps) {
 
   if (!resolvedProjectId) return null;
 
+  const perm = usePermission(resolvedProjectId);
+  const canViewSensitiveDetail = seamCanViewSensitiveDetail(perm.seam);
+
   return (
     <nav className={cn("flex items-center gap-0.5 overflow-x-auto whitespace-nowrap border-b border-border px-sp-2 py-1", className)}>
-      {tabs.map((tab) => (
+      {tabs
+        .filter((tab) => {
+          if (tab.path === "estimate" || tab.path === "procurement" || tab.path === "hr") {
+            return canViewSensitiveDetail;
+          }
+          return true;
+        })
+        .map((tab) => (
         <NavLink
           key={tab.path}
           to={`/project/${resolvedProjectId}/${tab.path}`}
@@ -39,7 +50,7 @@ export function ProjectTabs({ className, projectId }: ProjectTabsProps) {
           <tab.icon className="h-4 w-4" />
           <span>{tab.label}</span>
         </NavLink>
-      ))}
+        ))}
     </nav>
   );
 }
