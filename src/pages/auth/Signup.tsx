@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { clearDemoSession } from "@/lib/auth-state";
+import { clearDemoSession, setAuthRole } from "@/lib/auth-state";
 import { clearAiSidebarSessionPreference } from "@/lib/ai-sidebar-session";
 
 export default function Signup() {
@@ -45,6 +45,7 @@ export default function Signup() {
       clearDemoSession();
       clearAiSidebarSessionPreference();
       if (data.session?.user) {
+        setAuthRole("owner");
         toast({ title: "Account created!", description: "Welcome to СтройАгент." });
         navigate("/onboarding");
         return;

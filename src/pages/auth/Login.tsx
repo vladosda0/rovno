@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { clearDemoSession, isOnboarded } from "@/lib/auth-state";
+import { clearDemoSession, isOnboarded, setAuthRole } from "@/lib/auth-state";
 import { clearAiSidebarSessionPreference } from "@/lib/ai-sidebar-session";
 
 export default function Login() {
@@ -39,6 +39,7 @@ export default function Login() {
 
       clearDemoSession();
       clearAiSidebarSessionPreference();
+      setAuthRole("owner");
       toast({ title: "Welcome back!", description: "Signed in successfully." });
       navigate(isOnboarded() ? "/home" : "/onboarding");
     } catch (error) {
