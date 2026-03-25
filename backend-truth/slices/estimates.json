@@ -13,7 +13,8 @@
     "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
     "supabase/migrations/20260306164000_hr_domain.sql",
     "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
-    "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
+    "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
   ],
   "tables": [
     {
@@ -1127,18 +1128,6 @@
       ],
       "policies": [
         {
-          "name": "estimate_works_select",
-          "schema": "public",
-          "table": "estimate_works",
-          "command": "select",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "exists (\n    select 1\n    from public.estimate_versions ev\n    join public.project_estimates pe\n      on pe.id = ev.estimate_id\n    where ev.id = estimate_version_id\n      and public.can_access_project(pe.project_id)\n  )",
-          "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-        },
-        {
           "name": "estimate_works_insert",
           "schema": "public",
           "table": "estimate_works",
@@ -1173,6 +1162,18 @@
           "using": "exists (\n    select 1\n    from public.estimate_versions ev\n    join public.project_estimates pe\n      on pe.id = ev.estimate_id\n    where ev.id = estimate_version_id\n      and public.can_write_project_content(pe.project_id)\n  )",
           "withCheck": null,
           "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        },
+        {
+          "name": "estimate_works_select",
+          "schema": "public",
+          "table": "estimate_works",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n    select 1\n    from public.estimate_versions ev\n    join public.project_estimates pe\n      on pe.id = ev.estimate_id\n    where ev.id = estimate_version_id\n      and public.can_access_project(pe.project_id)\n      and public.can_view_sensitive_detail(pe.project_id)\n  )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
         }
       ]
     },
@@ -1187,18 +1188,6 @@
         "update"
       ],
       "policies": [
-        {
-          "name": "estimate_resource_lines_select",
-          "schema": "public",
-          "table": "estimate_resource_lines",
-          "command": "select",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "exists (\n    select 1\n    from public.estimate_works ew\n    join public.estimate_versions ev\n      on ev.id = ew.estimate_version_id\n    join public.project_estimates pe\n      on pe.id = ev.estimate_id\n    where ew.id = estimate_work_id\n      and public.can_access_project(pe.project_id)\n  )",
-          "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-        },
         {
           "name": "estimate_resource_lines_insert",
           "schema": "public",
@@ -1234,6 +1223,18 @@
           "using": "exists (\n    select 1\n    from public.estimate_works ew\n    join public.estimate_versions ev\n      on ev.id = ew.estimate_version_id\n    join public.project_estimates pe\n      on pe.id = ev.estimate_id\n    where ew.id = estimate_work_id\n      and public.can_write_project_content(pe.project_id)\n  )",
           "withCheck": null,
           "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        },
+        {
+          "name": "estimate_resource_lines_select",
+          "schema": "public",
+          "table": "estimate_resource_lines",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n    select 1\n    from public.estimate_works ew\n    join public.estimate_versions ev\n      on ev.id = ew.estimate_version_id\n    join public.project_estimates pe\n      on pe.id = ev.estimate_id\n    where ew.id = estimate_work_id\n      and public.can_access_project(pe.project_id)\n      and public.can_view_sensitive_detail(pe.project_id)\n  )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
         }
       ]
     },

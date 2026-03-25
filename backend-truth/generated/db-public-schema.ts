@@ -111,6 +111,18 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260323113000_finalize_media_bucket_ambiguity_fix.sql",
       "sha256": "63b04a3bfcdaeaf8fd584318a95d0e607bfae311449544a310bb5619c6f41b41"
+    },
+    {
+      "path": "supabase/migrations/20260324140000_project_launch_authority.sql",
+      "sha256": "f03b756c3aff1f127f101d1a2d7bb5200219cf7309fe1f16e18f93caf9c105e1"
+    },
+    {
+      "path": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
+      "sha256": "30dd708bb4221e3f36a721695d221febfbfafc9b1bf9ff34882164505d3eb5e7"
+    },
+    {
+      "path": "supabase/migrations/20260325120000_doc_media_visibility_write_enforcement.sql",
+      "sha256": "55508144d70db2e8fcba4897c1aa4822aa56bc6de5414a6b28835c1bd12e6239"
     }
   ],
   "generated_artifacts": [
@@ -161,6 +173,9 @@ export const manifest = {
     "sql/20260320143000_add_sanitize_uploaded_filename.sql",
     "sql/20260323110000_storage_project_media_insert_policy.sql",
     "sql/20260323113000_finalize_media_bucket_ambiguity_fix.sql",
+    "sql/20260324140000_project_launch_authority.sql",
+    "sql/20260325100000_sensitive_visibility_and_document_classification.sql",
+    "sql/20260325120000_doc_media_visibility_write_enforcement.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -1069,6 +1084,16 @@ export const tables = {
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "finance_visibility",
+          "sqlType": "text",
+          "tsType": "\"none\" | \"summary\" | \"detail\"",
+          "nullable": false,
+          "defaultSql": "'none'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -1142,6 +1167,26 @@ export const tables = {
           "usingIndex": null,
           "nullsNotDistinct": false,
           "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "finance_visibility"
+          ],
+          "expression": "finance_visibility in ('none', 'summary', 'detail')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "finance_visibility"
+          ],
+          "expression": "internal_docs_visibility in ('none', 'view', 'edit')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
         }
       ],
       "indexes": [
@@ -1174,6 +1219,14 @@ export const tables = {
           "functionName": "enforce_project_member_owner_role",
           "functionSignature": "public.enforce_project_member_owner_role()",
           "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql"
+        },
+        {
+          "name": "enforce_project_member_delegation",
+          "activation": "before insert or update",
+          "functionSchema": "public",
+          "functionName": "enforce_project_member_delegation",
+          "functionSignature": "public.enforce_project_member_delegation()",
+          "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
         }
       ]
     },
@@ -1332,6 +1385,16 @@ export const tables = {
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "finance_visibility",
+          "sqlType": "text",
+          "tsType": "\"none\" | \"summary\" | \"detail\"",
+          "nullable": false,
+          "defaultSql": "'none'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -1404,6 +1467,26 @@ export const tables = {
           "usingIndex": null,
           "nullsNotDistinct": false,
           "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "finance_visibility"
+          ],
+          "expression": "finance_visibility in ('none', 'summary', 'detail')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "finance_visibility"
+          ],
+          "expression": "internal_docs_visibility in ('none', 'view', 'edit')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
         }
       ],
       "indexes": [
@@ -1439,7 +1522,16 @@ export const tables = {
           "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql"
         }
       ],
-      "triggers": []
+      "triggers": [
+        {
+          "name": "enforce_project_invite_delegation",
+          "activation": "before insert or update",
+          "functionSchema": "public",
+          "functionName": "enforce_project_invite_delegation",
+          "functionSignature": "public.enforce_project_invite_delegation()",
+          "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
+        }
+      ]
     },
     {
       "schema": "public",
@@ -2169,6 +2261,16 @@ export const tables = {
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "visibility_class",
+          "sqlType": "text",
+          "tsType": "\"shared_project\" | \"internal\"",
+          "nullable": false,
+          "defaultSql": "'shared_project'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -2181,6 +2283,16 @@ export const tables = {
           "expression": "origin in ('project_creation', 'uploaded', 'manual', 'ai_generated')",
           "usingIndex": null,
           "sourceMigration": "supabase/migrations/20260306162000_storage_documents_and_media.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "visibility_class"
+          ],
+          "expression": "visibility_class in ('shared_project', 'internal')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
         }
       ],
       "indexes": [
@@ -2203,6 +2315,14 @@ export const tables = {
           "functionName": "set_updated_at",
           "functionSignature": "public.set_updated_at()",
           "sourceMigration": "supabase/migrations/20260306162000_storage_documents_and_media.sql"
+        },
+        {
+          "name": "guard_documents_visibility_class_change",
+          "activation": "before insert or update of visibility_class",
+          "functionSchema": "public",
+          "functionName": "guard_documents_visibility_class_change",
+          "functionSignature": "public.guard_documents_visibility_class_change()",
+          "sourceMigration": "supabase/migrations/20260325120000_doc_media_visibility_write_enforcement.sql"
         }
       ]
     },
@@ -2473,6 +2593,16 @@ export const tables = {
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "visibility_class",
+          "sqlType": "text",
+          "tsType": "\"shared_project\" | \"internal\"",
+          "nullable": false,
+          "defaultSql": "'shared_project'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -2485,6 +2615,16 @@ export const tables = {
           "expression": "not is_final or task_id is not null",
           "usingIndex": null,
           "sourceMigration": "supabase/migrations/20260320110000_task_final_media_contract.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "visibility_class"
+          ],
+          "expression": "visibility_class in ('shared_project', 'internal')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
         }
       ],
       "indexes": [
@@ -2530,7 +2670,16 @@ export const tables = {
           "sourceMigration": "supabase/migrations/20260320110000_task_final_media_contract.sql"
         }
       ],
-      "triggers": []
+      "triggers": [
+        {
+          "name": "guard_project_media_visibility_class_change",
+          "activation": "before insert or update of visibility_class",
+          "functionSchema": "public",
+          "functionName": "guard_project_media_visibility_class_change",
+          "functionSignature": "public.guard_project_media_visibility_class_change()",
+          "sourceMigration": "supabase/migrations/20260325120000_doc_media_visibility_write_enforcement.sql"
+        }
+      ]
     },
     {
       "schema": "public",
@@ -8112,6 +8261,34 @@ export const checks = {
     },
     {
       "schema": "public",
+      "table": "project_members",
+      "column": "finance_visibility",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "none",
+        "summary",
+        "detail"
+      ],
+      "expression": "finance_visibility in ('none', 'summary', 'detail')",
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
+    },
+    {
+      "schema": "public",
+      "table": "project_members",
+      "column": "internal_docs_visibility",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "none",
+        "view",
+        "edit"
+      ],
+      "expression": "internal_docs_visibility in ('none', 'view', 'edit')",
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
+    },
+    {
+      "schema": "public",
       "table": "project_invites",
       "column": "role",
       "constraintName": null,
@@ -8190,6 +8367,34 @@ export const checks = {
     },
     {
       "schema": "public",
+      "table": "project_invites",
+      "column": "finance_visibility",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "none",
+        "summary",
+        "detail"
+      ],
+      "expression": "finance_visibility in ('none', 'summary', 'detail')",
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
+    },
+    {
+      "schema": "public",
+      "table": "project_invites",
+      "column": "internal_docs_visibility",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "none",
+        "view",
+        "edit"
+      ],
+      "expression": "internal_docs_visibility in ('none', 'view', 'edit')",
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
+    },
+    {
+      "schema": "public",
       "table": "project_stages",
       "column": "sort_order",
       "constraintName": null,
@@ -8264,6 +8469,19 @@ export const checks = {
     },
     {
       "schema": "public",
+      "table": "documents",
+      "column": "visibility_class",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "shared_project",
+        "internal"
+      ],
+      "expression": "visibility_class in ('shared_project', 'internal')",
+      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
+    },
+    {
+      "schema": "public",
       "table": "document_versions",
       "column": "version_number",
       "constraintName": null,
@@ -8281,6 +8499,19 @@ export const checks = {
       "allowedValues": null,
       "expression": "not is_final or task_id is not null",
       "sourceMigration": "supabase/migrations/20260320110000_task_final_media_contract.sql"
+    },
+    {
+      "schema": "public",
+      "table": "project_media",
+      "column": "visibility_class",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "shared_project",
+        "internal"
+      ],
+      "expression": "visibility_class in ('shared_project', 'internal')",
+      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
     },
     {
       "schema": "public",
@@ -8853,7 +9084,7 @@ export const functions = {
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": false,
-      "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql",
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql",
       "triggerUsages": [
         {
           "table": "public.projects",
@@ -9150,10 +9381,10 @@ export const functions = {
       "returnType": "boolean",
       "language": "sql",
       "volatility": "stable",
-      "securityDefiner": false,
-      "searchPath": null,
+      "securityDefiner": true,
+      "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
+      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
       "triggerUsages": []
     },
     {
@@ -9173,7 +9404,7 @@ export const functions = {
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql",
       "triggerUsages": []
     },
     {
@@ -9500,6 +9731,391 @@ export const functions = {
       "authenticatedExecute": false,
       "sourceMigration": "supabase/migrations/20260320143000_add_sanitize_uploaded_filename.sql",
       "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "ai_access_rank",
+      "signature": "public.ai_access_rank(text)",
+      "args": [
+        {
+          "name": "p_access",
+          "type": "text",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "integer",
+      "language": "sql",
+      "volatility": "immutable",
+      "securityDefiner": false,
+      "searchPath": null,
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "finance_visibility_rank",
+      "signature": "public.finance_visibility_rank(text)",
+      "args": [
+        {
+          "name": "p_level",
+          "type": "text",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "integer",
+      "language": "sql",
+      "volatility": "immutable",
+      "securityDefiner": false,
+      "searchPath": null,
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "internal_docs_visibility_rank",
+      "signature": "public.internal_docs_visibility_rank(text)",
+      "args": [
+        {
+          "name": "p_level",
+          "type": "text",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "integer",
+      "language": "sql",
+      "volatility": "immutable",
+      "securityDefiner": false,
+      "searchPath": null,
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "project_role_for_profile",
+      "signature": "public.project_role_for_profile(uuid, uuid)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_profile_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "text",
+      "language": "sql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "actor_ai_access_delegate_cap",
+      "signature": "public.actor_ai_access_delegate_cap(uuid, uuid)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_actor",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "integer",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "actor_finance_visibility_delegate_cap",
+      "signature": "public.actor_finance_visibility_delegate_cap(uuid, uuid)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_actor",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "integer",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "actor_internal_docs_delegate_cap",
+      "signature": "public.actor_internal_docs_delegate_cap(uuid, uuid)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_actor",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "integer",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "assert_project_participant_delegate_ok",
+      "signature": "public.assert_project_participant_delegate_ok(uuid, uuid, text, text, text, text)",
+      "args": [
+        {
+          "name": "p_actor",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_role",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_ai_access",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_finance_visibility",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_internal_docs_visibility",
+          "type": "text",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "void",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "effective_finance_visibility",
+      "signature": "public.effective_finance_visibility(uuid)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "text",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "effective_internal_docs_visibility",
+      "signature": "public.effective_internal_docs_visibility(uuid)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "text",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "effective_ai_access_for_profile",
+      "signature": "public.effective_ai_access_for_profile(uuid)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "text",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "enforce_project_invite_delegation",
+      "signature": "public.enforce_project_invite_delegation()",
+      "args": [],
+      "returnType": "trigger",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql",
+      "triggerUsages": [
+        {
+          "table": "public.project_invites",
+          "triggerName": "enforce_project_invite_delegation",
+          "activation": "before insert or update"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "enforce_project_member_delegation",
+      "signature": "public.enforce_project_member_delegation()",
+      "args": [],
+      "returnType": "trigger",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql",
+      "triggerUsages": [
+        {
+          "table": "public.project_members",
+          "triggerName": "enforce_project_member_delegation",
+          "activation": "before insert or update"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "can_view_internal_documents",
+      "signature": "public.can_view_internal_documents(uuid)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "boolean",
+      "language": "sql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "can_view_sensitive_detail",
+      "signature": "public.can_view_sensitive_detail(uuid)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "boolean",
+      "language": "sql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "guard_documents_visibility_class_change",
+      "signature": "public.guard_documents_visibility_class_change()",
+      "args": [],
+      "returnType": "trigger",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260325120000_doc_media_visibility_write_enforcement.sql",
+      "triggerUsages": [
+        {
+          "table": "public.documents",
+          "triggerName": "guard_documents_visibility_class_change",
+          "activation": "before insert or update of visibility_class"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "guard_project_media_visibility_class_change",
+      "signature": "public.guard_project_media_visibility_class_change()",
+      "args": [],
+      "returnType": "trigger",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260325120000_doc_media_visibility_write_enforcement.sql",
+      "triggerUsages": [
+        {
+          "table": "public.project_media",
+          "triggerName": "guard_project_media_visibility_class_change",
+          "activation": "before insert or update of visibility_class"
+        }
+      ]
     }
   ]
 } as const;
@@ -9748,9 +10364,9 @@ export const rls = {
           "roles": [
             "authenticated"
           ],
-          "using": "profile_id = auth.uid()\n  or exists (\n    select 1\n    from public.projects p\n    where p.id = project_id\n      and p.owner_profile_id = auth.uid()\n  )",
+          "using": "profile_id = auth.uid()\n  or exists (\n    select 1\n    from public.projects p\n    where p.id = project_id\n      and p.owner_profile_id = auth.uid()\n  )\n  or public.has_project_role(project_id, array['co_owner'])",
           "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+          "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
         },
         {
           "name": "project_members_insert",
@@ -9762,7 +10378,7 @@ export const rls = {
           ],
           "using": null,
           "withCheck": "exists (\n    select 1\n    from public.projects p\n    where p.id = project_id\n      and p.owner_profile_id = auth.uid()\n  )\n  and (\n    role <> 'owner'\n    or profile_id = (\n      select p.owner_profile_id\n      from public.projects p\n      where p.id = project_id\n    )\n  )",
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+          "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
         },
         {
           "name": "project_members_update",
@@ -9772,9 +10388,9 @@ export const rls = {
           "roles": [
             "authenticated"
           ],
-          "using": "exists (\n    select 1\n    from public.projects p\n    where p.id = project_id\n      and p.owner_profile_id = auth.uid()\n  )\n  and profile_id <> (\n    select p.owner_profile_id\n    from public.projects p\n    where p.id = project_id\n  )",
-          "withCheck": "exists (\n    select 1\n    from public.projects p\n    where p.id = project_id\n      and p.owner_profile_id = auth.uid()\n  )\n  and profile_id <> (\n    select p.owner_profile_id\n    from public.projects p\n    where p.id = project_id\n  )",
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+          "using": "(\n    exists (\n      select 1\n      from public.projects p\n      where p.id = project_id\n        and p.owner_profile_id = auth.uid()\n    )\n    and profile_id <> (\n      select p.owner_profile_id\n      from public.projects p\n      where p.id = project_id\n    )\n  )\n  or (\n    public.has_project_role(project_id, array['co_owner'])\n    and role in ('contractor', 'viewer')\n    and profile_id <> (\n      select p.owner_profile_id\n      from public.projects p\n      where p.id = project_id\n    )\n  )",
+          "withCheck": "(\n    exists (\n      select 1\n      from public.projects p\n      where p.id = project_id\n        and p.owner_profile_id = auth.uid()\n    )\n    and profile_id <> (\n      select p.owner_profile_id\n      from public.projects p\n      where p.id = project_id\n    )\n  )\n  or (\n    public.has_project_role(project_id, array['co_owner'])\n    and role in ('contractor', 'viewer')\n    and profile_id <> (\n      select p.owner_profile_id\n      from public.projects p\n      where p.id = project_id\n    )\n  )",
+          "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
         },
         {
           "name": "project_members_delete",
@@ -9784,9 +10400,9 @@ export const rls = {
           "roles": [
             "authenticated"
           ],
-          "using": "exists (\n    select 1\n    from public.projects p\n    where p.id = project_id\n      and p.owner_profile_id = auth.uid()\n  )\n  and profile_id <> (\n    select p.owner_profile_id\n    from public.projects p\n    where p.id = project_id\n  )",
+          "using": "(\n    exists (\n      select 1\n      from public.projects p\n      where p.id = project_id\n        and p.owner_profile_id = auth.uid()\n    )\n    and profile_id <> (\n      select p.owner_profile_id\n      from public.projects p\n      where p.id = project_id\n    )\n  )\n  or (\n    public.has_project_role(project_id, array['co_owner'])\n    and role in ('contractor', 'viewer')\n    and profile_id <> (\n      select p.owner_profile_id\n      from public.projects p\n      where p.id = project_id\n    )\n  )",
           "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+          "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
         }
       ]
     },
@@ -10068,18 +10684,6 @@ export const rls = {
       ],
       "policies": [
         {
-          "name": "documents_select",
-          "schema": "public",
-          "table": "documents",
-          "command": "select",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "public.can_access_project(project_id)",
-          "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-        },
-        {
           "name": "documents_insert",
           "schema": "public",
           "table": "documents",
@@ -10114,6 +10718,18 @@ export const rls = {
           "using": "public.can_write_project_content(project_id)",
           "withCheck": null,
           "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        },
+        {
+          "name": "documents_select",
+          "schema": "public",
+          "table": "documents",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "public.can_access_project(project_id)\n  and (\n    visibility_class = 'shared_project'\n    or public.can_view_internal_documents(project_id)\n  )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
         }
       ]
     },
@@ -10128,18 +10744,6 @@ export const rls = {
         "update"
       ],
       "policies": [
-        {
-          "name": "document_versions_select",
-          "schema": "public",
-          "table": "document_versions",
-          "command": "select",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "exists (\n    select 1\n    from public.documents d\n    where d.id = document_id\n      and public.can_access_project(d.project_id)\n  )",
-          "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-        },
         {
           "name": "document_versions_insert",
           "schema": "public",
@@ -10175,6 +10779,18 @@ export const rls = {
           "using": "exists (\n    select 1\n    from public.documents d\n    where d.id = document_id\n      and public.can_write_project_content(d.project_id)\n  )",
           "withCheck": null,
           "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        },
+        {
+          "name": "document_versions_select",
+          "schema": "public",
+          "table": "document_versions",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n    select 1\n    from public.documents d\n    where d.id = document_id\n      and public.can_access_project(d.project_id)\n      and (\n        d.visibility_class = 'shared_project'\n        or public.can_view_internal_documents(d.project_id)\n      )\n  )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
         }
       ]
     },
@@ -10189,18 +10805,6 @@ export const rls = {
         "update"
       ],
       "policies": [
-        {
-          "name": "project_media_select",
-          "schema": "public",
-          "table": "project_media",
-          "command": "select",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "public.can_access_project(project_id)",
-          "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-        },
         {
           "name": "project_media_insert",
           "schema": "public",
@@ -10236,6 +10840,18 @@ export const rls = {
           "using": "public.can_write_project_content(project_id)",
           "withCheck": null,
           "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        },
+        {
+          "name": "project_media_select",
+          "schema": "public",
+          "table": "project_media",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "public.can_access_project(project_id)\n  and (\n    visibility_class = 'shared_project'\n    or public.can_view_internal_documents(project_id)\n  )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
         }
       ]
     },
@@ -10373,18 +10989,6 @@ export const rls = {
       ],
       "policies": [
         {
-          "name": "estimate_works_select",
-          "schema": "public",
-          "table": "estimate_works",
-          "command": "select",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "exists (\n    select 1\n    from public.estimate_versions ev\n    join public.project_estimates pe\n      on pe.id = ev.estimate_id\n    where ev.id = estimate_version_id\n      and public.can_access_project(pe.project_id)\n  )",
-          "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-        },
-        {
           "name": "estimate_works_insert",
           "schema": "public",
           "table": "estimate_works",
@@ -10419,6 +11023,18 @@ export const rls = {
           "using": "exists (\n    select 1\n    from public.estimate_versions ev\n    join public.project_estimates pe\n      on pe.id = ev.estimate_id\n    where ev.id = estimate_version_id\n      and public.can_write_project_content(pe.project_id)\n  )",
           "withCheck": null,
           "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        },
+        {
+          "name": "estimate_works_select",
+          "schema": "public",
+          "table": "estimate_works",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n    select 1\n    from public.estimate_versions ev\n    join public.project_estimates pe\n      on pe.id = ev.estimate_id\n    where ev.id = estimate_version_id\n      and public.can_access_project(pe.project_id)\n      and public.can_view_sensitive_detail(pe.project_id)\n  )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
         }
       ]
     },
@@ -10433,18 +11049,6 @@ export const rls = {
         "update"
       ],
       "policies": [
-        {
-          "name": "estimate_resource_lines_select",
-          "schema": "public",
-          "table": "estimate_resource_lines",
-          "command": "select",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "exists (\n    select 1\n    from public.estimate_works ew\n    join public.estimate_versions ev\n      on ev.id = ew.estimate_version_id\n    join public.project_estimates pe\n      on pe.id = ev.estimate_id\n    where ew.id = estimate_work_id\n      and public.can_access_project(pe.project_id)\n  )",
-          "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-        },
         {
           "name": "estimate_resource_lines_insert",
           "schema": "public",
@@ -10480,6 +11084,18 @@ export const rls = {
           "using": "exists (\n    select 1\n    from public.estimate_works ew\n    join public.estimate_versions ev\n      on ev.id = ew.estimate_version_id\n    join public.project_estimates pe\n      on pe.id = ev.estimate_id\n    where ew.id = estimate_work_id\n      and public.can_write_project_content(pe.project_id)\n  )",
           "withCheck": null,
           "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        },
+        {
+          "name": "estimate_resource_lines_select",
+          "schema": "public",
+          "table": "estimate_resource_lines",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n    select 1\n    from public.estimate_works ew\n    join public.estimate_versions ev\n      on ev.id = ew.estimate_version_id\n    join public.project_estimates pe\n      on pe.id = ev.estimate_id\n    where ew.id = estimate_work_id\n      and public.can_access_project(pe.project_id)\n      and public.can_view_sensitive_detail(pe.project_id)\n  )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
         }
       ]
     },
@@ -10700,18 +11316,6 @@ export const rls = {
       ],
       "policies": [
         {
-          "name": "procurement_items_select",
-          "schema": "public",
-          "table": "procurement_items",
-          "command": "select",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "public.can_access_project(project_id)",
-          "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-        },
-        {
           "name": "procurement_items_insert",
           "schema": "public",
           "table": "procurement_items",
@@ -10746,6 +11350,18 @@ export const rls = {
           "using": "public.can_write_project_content(project_id)",
           "withCheck": null,
           "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        },
+        {
+          "name": "procurement_items_select",
+          "schema": "public",
+          "table": "procurement_items",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "public.can_access_project(project_id)\n  and public.can_view_sensitive_detail(project_id)",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
         }
       ]
     },
@@ -10822,18 +11438,6 @@ export const rls = {
       ],
       "policies": [
         {
-          "name": "order_lines_select",
-          "schema": "public",
-          "table": "order_lines",
-          "command": "select",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "exists (\n    select 1\n    from public.orders o\n    where o.id = order_id\n      and public.can_access_project(o.project_id)\n  )",
-          "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-        },
-        {
           "name": "order_lines_insert",
           "schema": "public",
           "table": "order_lines",
@@ -10868,6 +11472,18 @@ export const rls = {
           "using": "exists (\n    select 1\n    from public.orders o\n    where o.id = order_id\n      and public.can_write_project_content(o.project_id)\n  )",
           "withCheck": null,
           "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        },
+        {
+          "name": "order_lines_select",
+          "schema": "public",
+          "table": "order_lines",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n    select 1\n    from public.orders o\n    where o.id = order_id\n      and public.can_access_project(o.project_id)\n      and public.can_view_sensitive_detail(o.project_id)\n  )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
         }
       ]
     },
@@ -11005,18 +11621,6 @@ export const rls = {
       ],
       "policies": [
         {
-          "name": "hr_items_select",
-          "schema": "public",
-          "table": "hr_items",
-          "command": "select",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "public.can_access_project(project_id)",
-          "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-        },
-        {
           "name": "hr_items_insert",
           "schema": "public",
           "table": "hr_items",
@@ -11051,6 +11655,18 @@ export const rls = {
           "using": "public.can_write_project_content(project_id)",
           "withCheck": null,
           "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        },
+        {
+          "name": "hr_items_select",
+          "schema": "public",
+          "table": "hr_items",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "public.can_access_project(project_id)\n  and public.can_view_sensitive_detail(project_id)",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
         }
       ]
     },
@@ -11127,18 +11743,6 @@ export const rls = {
       ],
       "policies": [
         {
-          "name": "hr_payments_select",
-          "schema": "public",
-          "table": "hr_payments",
-          "command": "select",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "public.can_access_project(project_id)",
-          "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-        },
-        {
           "name": "hr_payments_insert",
           "schema": "public",
           "table": "hr_payments",
@@ -11173,6 +11777,18 @@ export const rls = {
           "using": "public.can_write_project_content(project_id)",
           "withCheck": null,
           "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        },
+        {
+          "name": "hr_payments_select",
+          "schema": "public",
+          "table": "hr_payments",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "public.can_access_project(project_id)\n  and public.can_view_sensitive_detail(project_id)",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
         }
       ]
     },
@@ -11559,7 +12175,7 @@ export const sourceTrace = {
       "schema": "public",
       "name": "handle_project_owner_membership",
       "signature": "public.handle_project_owner_membership()",
-      "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql"
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
     },
     {
       "key": "public.enforce_project_member_owner_role",
@@ -11657,14 +12273,14 @@ export const sourceTrace = {
       "schema": "public",
       "name": "can_access_storage_object",
       "signature": "public.can_access_storage_object(uuid)",
-      "sourceMigration": "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql"
+      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
     },
     {
       "key": "public.accept_project_invite",
       "schema": "public",
       "name": "accept_project_invite",
       "signature": "public.accept_project_invite(text)",
-      "sourceMigration": "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql"
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
     },
     {
       "key": "public.get_shared_estimate_version",
@@ -11742,6 +12358,125 @@ export const sourceTrace = {
       "name": "sanitize_uploaded_filename",
       "signature": "public.sanitize_uploaded_filename(text)",
       "sourceMigration": "supabase/migrations/20260320143000_add_sanitize_uploaded_filename.sql"
+    },
+    {
+      "key": "public.ai_access_rank",
+      "schema": "public",
+      "name": "ai_access_rank",
+      "signature": "public.ai_access_rank(text)",
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
+    },
+    {
+      "key": "public.finance_visibility_rank",
+      "schema": "public",
+      "name": "finance_visibility_rank",
+      "signature": "public.finance_visibility_rank(text)",
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
+    },
+    {
+      "key": "public.internal_docs_visibility_rank",
+      "schema": "public",
+      "name": "internal_docs_visibility_rank",
+      "signature": "public.internal_docs_visibility_rank(text)",
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
+    },
+    {
+      "key": "public.project_role_for_profile",
+      "schema": "public",
+      "name": "project_role_for_profile",
+      "signature": "public.project_role_for_profile(uuid, uuid)",
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
+    },
+    {
+      "key": "public.actor_ai_access_delegate_cap",
+      "schema": "public",
+      "name": "actor_ai_access_delegate_cap",
+      "signature": "public.actor_ai_access_delegate_cap(uuid, uuid)",
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
+    },
+    {
+      "key": "public.actor_finance_visibility_delegate_cap",
+      "schema": "public",
+      "name": "actor_finance_visibility_delegate_cap",
+      "signature": "public.actor_finance_visibility_delegate_cap(uuid, uuid)",
+      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
+    },
+    {
+      "key": "public.actor_internal_docs_delegate_cap",
+      "schema": "public",
+      "name": "actor_internal_docs_delegate_cap",
+      "signature": "public.actor_internal_docs_delegate_cap(uuid, uuid)",
+      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
+    },
+    {
+      "key": "public.assert_project_participant_delegate_ok",
+      "schema": "public",
+      "name": "assert_project_participant_delegate_ok",
+      "signature": "public.assert_project_participant_delegate_ok(uuid, uuid, text, text, text, text)",
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
+    },
+    {
+      "key": "public.effective_finance_visibility",
+      "schema": "public",
+      "name": "effective_finance_visibility",
+      "signature": "public.effective_finance_visibility(uuid)",
+      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
+    },
+    {
+      "key": "public.effective_internal_docs_visibility",
+      "schema": "public",
+      "name": "effective_internal_docs_visibility",
+      "signature": "public.effective_internal_docs_visibility(uuid)",
+      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
+    },
+    {
+      "key": "public.effective_ai_access_for_profile",
+      "schema": "public",
+      "name": "effective_ai_access_for_profile",
+      "signature": "public.effective_ai_access_for_profile(uuid)",
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
+    },
+    {
+      "key": "public.enforce_project_invite_delegation",
+      "schema": "public",
+      "name": "enforce_project_invite_delegation",
+      "signature": "public.enforce_project_invite_delegation()",
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
+    },
+    {
+      "key": "public.enforce_project_member_delegation",
+      "schema": "public",
+      "name": "enforce_project_member_delegation",
+      "signature": "public.enforce_project_member_delegation()",
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
+    },
+    {
+      "key": "public.can_view_internal_documents",
+      "schema": "public",
+      "name": "can_view_internal_documents",
+      "signature": "public.can_view_internal_documents(uuid)",
+      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
+    },
+    {
+      "key": "public.can_view_sensitive_detail",
+      "schema": "public",
+      "name": "can_view_sensitive_detail",
+      "signature": "public.can_view_sensitive_detail(uuid)",
+      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
+    },
+    {
+      "key": "public.guard_documents_visibility_class_change",
+      "schema": "public",
+      "name": "guard_documents_visibility_class_change",
+      "signature": "public.guard_documents_visibility_class_change()",
+      "sourceMigration": "supabase/migrations/20260325120000_doc_media_visibility_write_enforcement.sql"
+    },
+    {
+      "key": "public.guard_project_media_visibility_class_change",
+      "schema": "public",
+      "name": "guard_project_media_visibility_class_change",
+      "signature": "public.guard_project_media_visibility_class_change()",
+      "sourceMigration": "supabase/migrations/20260325120000_doc_media_visibility_write_enforcement.sql"
     }
   ],
   "policies": [
@@ -11930,12 +12665,20 @@ export const sourceTrace = {
       "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
     },
     {
+      "key": "public.projects.projects_update",
+      "schema": "public",
+      "table": "projects",
+      "name": "projects_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
+    },
+    {
       "key": "public.project_members.project_members_select",
       "schema": "public",
       "table": "project_members",
       "name": "project_members_select",
       "command": "select",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
     },
     {
       "key": "public.project_members.project_members_insert",
@@ -11943,7 +12686,7 @@ export const sourceTrace = {
       "table": "project_members",
       "name": "project_members_insert",
       "command": "insert",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
     },
     {
       "key": "public.project_members.project_members_update",
@@ -11951,7 +12694,7 @@ export const sourceTrace = {
       "table": "project_members",
       "name": "project_members_update",
       "command": "update",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
     },
     {
       "key": "public.project_members.project_members_delete",
@@ -11959,7 +12702,7 @@ export const sourceTrace = {
       "table": "project_members",
       "name": "project_members_delete",
       "command": "delete",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
     },
     {
       "key": "public.project_invites.project_invites_select",
@@ -12098,14 +12841,6 @@ export const sourceTrace = {
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
     },
     {
-      "key": "public.documents.documents_select",
-      "schema": "public",
-      "table": "documents",
-      "name": "documents_select",
-      "command": "select",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-    },
-    {
       "key": "public.documents.documents_insert",
       "schema": "public",
       "table": "documents",
@@ -12130,12 +12865,12 @@ export const sourceTrace = {
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
     },
     {
-      "key": "public.document_versions.document_versions_select",
+      "key": "public.documents.documents_select",
       "schema": "public",
-      "table": "document_versions",
-      "name": "document_versions_select",
+      "table": "documents",
+      "name": "documents_select",
       "command": "select",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
     },
     {
       "key": "public.document_versions.document_versions_insert",
@@ -12162,12 +12897,12 @@ export const sourceTrace = {
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
     },
     {
-      "key": "public.project_media.project_media_select",
+      "key": "public.document_versions.document_versions_select",
       "schema": "public",
-      "table": "project_media",
-      "name": "project_media_select",
+      "table": "document_versions",
+      "name": "document_versions_select",
       "command": "select",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
     },
     {
       "key": "public.project_media.project_media_insert",
@@ -12192,6 +12927,14 @@ export const sourceTrace = {
       "name": "project_media_delete",
       "command": "delete",
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.project_media.project_media_select",
+      "schema": "public",
+      "table": "project_media",
+      "name": "project_media_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
     },
     {
       "key": "public.project_estimates.project_estimates_select",
@@ -12258,14 +13001,6 @@ export const sourceTrace = {
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
     },
     {
-      "key": "public.estimate_works.estimate_works_select",
-      "schema": "public",
-      "table": "estimate_works",
-      "name": "estimate_works_select",
-      "command": "select",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-    },
-    {
       "key": "public.estimate_works.estimate_works_insert",
       "schema": "public",
       "table": "estimate_works",
@@ -12290,12 +13025,12 @@ export const sourceTrace = {
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
     },
     {
-      "key": "public.estimate_resource_lines.estimate_resource_lines_select",
+      "key": "public.estimate_works.estimate_works_select",
       "schema": "public",
-      "table": "estimate_resource_lines",
-      "name": "estimate_resource_lines_select",
+      "table": "estimate_works",
+      "name": "estimate_works_select",
       "command": "select",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
     },
     {
       "key": "public.estimate_resource_lines.estimate_resource_lines_insert",
@@ -12320,6 +13055,14 @@ export const sourceTrace = {
       "name": "estimate_resource_lines_delete",
       "command": "delete",
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.estimate_resource_lines.estimate_resource_lines_select",
+      "schema": "public",
+      "table": "estimate_resource_lines",
+      "name": "estimate_resource_lines_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
     },
     {
       "key": "public.estimate_dependencies.estimate_dependencies_select",
@@ -12426,14 +13169,6 @@ export const sourceTrace = {
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
     },
     {
-      "key": "public.procurement_items.procurement_items_select",
-      "schema": "public",
-      "table": "procurement_items",
-      "name": "procurement_items_select",
-      "command": "select",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-    },
-    {
       "key": "public.procurement_items.procurement_items_insert",
       "schema": "public",
       "table": "procurement_items",
@@ -12456,6 +13191,14 @@ export const sourceTrace = {
       "name": "procurement_items_delete",
       "command": "delete",
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.procurement_items.procurement_items_select",
+      "schema": "public",
+      "table": "procurement_items",
+      "name": "procurement_items_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
     },
     {
       "key": "public.orders.orders_select",
@@ -12490,14 +13233,6 @@ export const sourceTrace = {
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
     },
     {
-      "key": "public.order_lines.order_lines_select",
-      "schema": "public",
-      "table": "order_lines",
-      "name": "order_lines_select",
-      "command": "select",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-    },
-    {
       "key": "public.order_lines.order_lines_insert",
       "schema": "public",
       "table": "order_lines",
@@ -12520,6 +13255,14 @@ export const sourceTrace = {
       "name": "order_lines_delete",
       "command": "delete",
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.order_lines.order_lines_select",
+      "schema": "public",
+      "table": "order_lines",
+      "name": "order_lines_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
     },
     {
       "key": "public.inventory_movements.inventory_movements_select",
@@ -12586,14 +13329,6 @@ export const sourceTrace = {
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
     },
     {
-      "key": "public.hr_items.hr_items_select",
-      "schema": "public",
-      "table": "hr_items",
-      "name": "hr_items_select",
-      "command": "select",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-    },
-    {
       "key": "public.hr_items.hr_items_insert",
       "schema": "public",
       "table": "hr_items",
@@ -12616,6 +13351,14 @@ export const sourceTrace = {
       "name": "hr_items_delete",
       "command": "delete",
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.hr_items.hr_items_select",
+      "schema": "public",
+      "table": "hr_items",
+      "name": "hr_items_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
     },
     {
       "key": "public.hr_item_assignees.hr_item_assignees_select",
@@ -12650,14 +13393,6 @@ export const sourceTrace = {
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
     },
     {
-      "key": "public.hr_payments.hr_payments_select",
-      "schema": "public",
-      "table": "hr_payments",
-      "name": "hr_payments_select",
-      "command": "select",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-    },
-    {
       "key": "public.hr_payments.hr_payments_insert",
       "schema": "public",
       "table": "hr_payments",
@@ -12680,6 +13415,14 @@ export const sourceTrace = {
       "name": "hr_payments_delete",
       "command": "delete",
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.hr_payments.hr_payments_select",
+      "schema": "public",
+      "table": "hr_payments",
+      "name": "hr_payments_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
     },
     {
       "key": "public.activity_events.activity_events_select",
@@ -12740,6 +13483,8 @@ export const sourceTrace = {
         "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
         "supabase/migrations/20260306161000_projects_membership_and_invites.sql",
         "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql",
+        "supabase/migrations/20260324140000_project_launch_authority.sql",
+        "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql",
         "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
@@ -12766,7 +13511,12 @@ export const sourceTrace = {
         "public.can_manage_project",
         "public.can_write_project_content",
         "public.can_see_profile",
-        "public.accept_project_invite"
+        "public.accept_project_invite",
+        "public.effective_finance_visibility",
+        "public.effective_internal_docs_visibility",
+        "public.effective_ai_access_for_profile",
+        "public.can_view_internal_documents",
+        "public.can_view_sensitive_detail"
       ],
       "policies": [
         "public.profiles.profiles_select",
@@ -12987,7 +13737,7 @@ export const sourceTrace = {
         "supabase/migrations/20260306162000_storage_documents_and_media.sql",
         "supabase/migrations/20260317120000_storage_upload_intents.sql",
         "supabase/migrations/20260320110000_task_final_media_contract.sql",
-        "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
+        "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
         "supabase/migrations/20260317133000_storage_bucket_config_table.sql",
         "supabase/migrations/20260317121000_storage_upload_rpcs.sql",
         "supabase/migrations/20260323113000_finalize_media_bucket_ambiguity_fix.sql",
@@ -13012,18 +13762,18 @@ export const sourceTrace = {
       ],
       "policies": [
         "public.storage_objects.storage_objects_select",
-        "public.documents.documents_select",
         "public.documents.documents_insert",
         "public.documents.documents_update",
         "public.documents.documents_delete",
-        "public.document_versions.document_versions_select",
+        "public.documents.documents_select",
         "public.document_versions.document_versions_insert",
         "public.document_versions.document_versions_update",
         "public.document_versions.document_versions_delete",
-        "public.project_media.project_media_select",
+        "public.document_versions.document_versions_select",
         "public.project_media.project_media_insert",
         "public.project_media.project_media_update",
-        "public.project_media.project_media_delete"
+        "public.project_media.project_media_delete",
+        "public.project_media.project_media_select"
       ],
       "relations": [
         {
@@ -13122,7 +13872,8 @@ export const sourceTrace = {
         "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
         "supabase/migrations/20260306164000_hr_domain.sql",
         "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
-        "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
+        "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
       "tables": [
         "public.project_estimates",
@@ -13144,14 +13895,14 @@ export const sourceTrace = {
         "public.estimate_versions.estimate_versions_insert",
         "public.estimate_versions.estimate_versions_update",
         "public.estimate_versions.estimate_versions_delete",
-        "public.estimate_works.estimate_works_select",
         "public.estimate_works.estimate_works_insert",
         "public.estimate_works.estimate_works_update",
         "public.estimate_works.estimate_works_delete",
-        "public.estimate_resource_lines.estimate_resource_lines_select",
+        "public.estimate_works.estimate_works_select",
         "public.estimate_resource_lines.estimate_resource_lines_insert",
         "public.estimate_resource_lines.estimate_resource_lines_update",
         "public.estimate_resource_lines.estimate_resource_lines_delete",
+        "public.estimate_resource_lines.estimate_resource_lines_select",
         "public.estimate_dependencies.estimate_dependencies_select",
         "public.estimate_dependencies.estimate_dependencies_insert",
         "public.estimate_dependencies.estimate_dependencies_update",
@@ -13237,7 +13988,8 @@ export const sourceTrace = {
       "sourceMigrations": [
         "supabase/migrations/20260306163000_inventory_foundation.sql",
         "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
-        "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
+        "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
       "tables": [
         "public.inventory_items",
@@ -13262,18 +14014,18 @@ export const sourceTrace = {
         "public.inventory_locations.inventory_locations_update",
         "public.inventory_locations.inventory_locations_delete",
         "public.inventory_balances.inventory_balances_select",
-        "public.procurement_items.procurement_items_select",
         "public.procurement_items.procurement_items_insert",
         "public.procurement_items.procurement_items_update",
         "public.procurement_items.procurement_items_delete",
+        "public.procurement_items.procurement_items_select",
         "public.orders.orders_select",
         "public.orders.orders_insert",
         "public.orders.orders_update",
         "public.orders.orders_delete",
-        "public.order_lines.order_lines_select",
         "public.order_lines.order_lines_insert",
         "public.order_lines.order_lines_update",
         "public.order_lines.order_lines_delete",
+        "public.order_lines.order_lines_select",
         "public.inventory_movements.inventory_movements_select",
         "public.inventory_movements.inventory_movements_insert",
         "public.inventory_movements.inventory_movements_update",
@@ -13388,7 +14140,8 @@ export const sourceTrace = {
       "kind": "derived_contract_bundle",
       "sourceMigrations": [
         "supabase/migrations/20260306164000_hr_domain.sql",
-        "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
+        "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
       "tables": [
         "public.hr_items",
@@ -13397,18 +14150,18 @@ export const sourceTrace = {
       ],
       "functions": [],
       "policies": [
-        "public.hr_items.hr_items_select",
         "public.hr_items.hr_items_insert",
         "public.hr_items.hr_items_update",
         "public.hr_items.hr_items_delete",
+        "public.hr_items.hr_items_select",
         "public.hr_item_assignees.hr_item_assignees_select",
         "public.hr_item_assignees.hr_item_assignees_insert",
         "public.hr_item_assignees.hr_item_assignees_update",
         "public.hr_item_assignees.hr_item_assignees_delete",
-        "public.hr_payments.hr_payments_select",
         "public.hr_payments.hr_payments_insert",
         "public.hr_payments.hr_payments_update",
-        "public.hr_payments.hr_payments_delete"
+        "public.hr_payments.hr_payments_delete",
+        "public.hr_payments.hr_payments_select"
       ],
       "relations": [
         {
@@ -13550,12 +14303,14 @@ export const slices = {
         "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
         "supabase/migrations/20260306161000_projects_membership_and_invites.sql",
         "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql",
+        "supabase/migrations/20260324140000_project_launch_authority.sql",
+        "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql",
         "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
       ],
       "tableCount": 6,
-      "functionCount": 14,
+      "functionCount": 19,
       "rlsTableCount": 6
     },
     {
@@ -13583,7 +14338,7 @@ export const slices = {
         "supabase/migrations/20260306162000_storage_documents_and_media.sql",
         "supabase/migrations/20260317120000_storage_upload_intents.sql",
         "supabase/migrations/20260320110000_task_final_media_contract.sql",
-        "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
+        "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
         "supabase/migrations/20260317133000_storage_bucket_config_table.sql",
         "supabase/migrations/20260317121000_storage_upload_rpcs.sql",
         "supabase/migrations/20260323113000_finalize_media_bucket_ambiguity_fix.sql",
@@ -13602,7 +14357,8 @@ export const slices = {
         "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
         "supabase/migrations/20260306164000_hr_domain.sql",
         "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
-        "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
+        "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
       "tableCount": 5,
       "functionCount": 2,
@@ -13615,7 +14371,8 @@ export const slices = {
       "sourceMigrations": [
         "supabase/migrations/20260306163000_inventory_foundation.sql",
         "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
-        "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
+        "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
       "tableCount": 7,
       "functionCount": 2,
@@ -13627,7 +14384,8 @@ export const slices = {
       "kind": "derived_contract_bundle",
       "sourceMigrations": [
         "supabase/migrations/20260306164000_hr_domain.sql",
-        "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
+        "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
       "tableCount": 3,
       "functionCount": 0,

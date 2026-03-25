@@ -132,7 +132,7 @@
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": false,
-      "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql",
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql",
       "triggerUsages": [
         {
           "table": "public.projects",
@@ -429,10 +429,10 @@
       "returnType": "boolean",
       "language": "sql",
       "volatility": "stable",
-      "securityDefiner": false,
-      "searchPath": null,
+      "securityDefiner": true,
+      "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
+      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
       "triggerUsages": []
     },
     {
@@ -452,7 +452,7 @@
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql",
       "triggerUsages": []
     },
     {
@@ -779,6 +779,391 @@
       "authenticatedExecute": false,
       "sourceMigration": "supabase/migrations/20260320143000_add_sanitize_uploaded_filename.sql",
       "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "ai_access_rank",
+      "signature": "public.ai_access_rank(text)",
+      "args": [
+        {
+          "name": "p_access",
+          "type": "text",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "integer",
+      "language": "sql",
+      "volatility": "immutable",
+      "securityDefiner": false,
+      "searchPath": null,
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "finance_visibility_rank",
+      "signature": "public.finance_visibility_rank(text)",
+      "args": [
+        {
+          "name": "p_level",
+          "type": "text",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "integer",
+      "language": "sql",
+      "volatility": "immutable",
+      "securityDefiner": false,
+      "searchPath": null,
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "internal_docs_visibility_rank",
+      "signature": "public.internal_docs_visibility_rank(text)",
+      "args": [
+        {
+          "name": "p_level",
+          "type": "text",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "integer",
+      "language": "sql",
+      "volatility": "immutable",
+      "securityDefiner": false,
+      "searchPath": null,
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "project_role_for_profile",
+      "signature": "public.project_role_for_profile(uuid, uuid)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_profile_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "text",
+      "language": "sql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "actor_ai_access_delegate_cap",
+      "signature": "public.actor_ai_access_delegate_cap(uuid, uuid)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_actor",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "integer",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "actor_finance_visibility_delegate_cap",
+      "signature": "public.actor_finance_visibility_delegate_cap(uuid, uuid)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_actor",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "integer",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "actor_internal_docs_delegate_cap",
+      "signature": "public.actor_internal_docs_delegate_cap(uuid, uuid)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_actor",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "integer",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "assert_project_participant_delegate_ok",
+      "signature": "public.assert_project_participant_delegate_ok(uuid, uuid, text, text, text, text)",
+      "args": [
+        {
+          "name": "p_actor",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_role",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_ai_access",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_finance_visibility",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_internal_docs_visibility",
+          "type": "text",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "void",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "effective_finance_visibility",
+      "signature": "public.effective_finance_visibility(uuid)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "text",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "effective_internal_docs_visibility",
+      "signature": "public.effective_internal_docs_visibility(uuid)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "text",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "effective_ai_access_for_profile",
+      "signature": "public.effective_ai_access_for_profile(uuid)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "text",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "enforce_project_invite_delegation",
+      "signature": "public.enforce_project_invite_delegation()",
+      "args": [],
+      "returnType": "trigger",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql",
+      "triggerUsages": [
+        {
+          "table": "public.project_invites",
+          "triggerName": "enforce_project_invite_delegation",
+          "activation": "before insert or update"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "enforce_project_member_delegation",
+      "signature": "public.enforce_project_member_delegation()",
+      "args": [],
+      "returnType": "trigger",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql",
+      "triggerUsages": [
+        {
+          "table": "public.project_members",
+          "triggerName": "enforce_project_member_delegation",
+          "activation": "before insert or update"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "can_view_internal_documents",
+      "signature": "public.can_view_internal_documents(uuid)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "boolean",
+      "language": "sql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "can_view_sensitive_detail",
+      "signature": "public.can_view_sensitive_detail(uuid)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "boolean",
+      "language": "sql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "guard_documents_visibility_class_change",
+      "signature": "public.guard_documents_visibility_class_change()",
+      "args": [],
+      "returnType": "trigger",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260325120000_doc_media_visibility_write_enforcement.sql",
+      "triggerUsages": [
+        {
+          "table": "public.documents",
+          "triggerName": "guard_documents_visibility_class_change",
+          "activation": "before insert or update of visibility_class"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "guard_project_media_visibility_class_change",
+      "signature": "public.guard_project_media_visibility_class_change()",
+      "args": [],
+      "returnType": "trigger",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260325120000_doc_media_visibility_write_enforcement.sql",
+      "triggerUsages": [
+        {
+          "table": "public.project_media",
+          "triggerName": "guard_project_media_visibility_class_change",
+          "activation": "before insert or update of visibility_class"
+        }
+      ]
     }
   ]
 }

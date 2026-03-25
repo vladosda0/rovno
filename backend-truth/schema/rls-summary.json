@@ -242,9 +242,9 @@
           "roles": [
             "authenticated"
           ],
-          "using": "profile_id = auth.uid()\n  or exists (\n    select 1\n    from public.projects p\n    where p.id = project_id\n      and p.owner_profile_id = auth.uid()\n  )",
+          "using": "profile_id = auth.uid()\n  or exists (\n    select 1\n    from public.projects p\n    where p.id = project_id\n      and p.owner_profile_id = auth.uid()\n  )\n  or public.has_project_role(project_id, array['co_owner'])",
           "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+          "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
         },
         {
           "name": "project_members_insert",
@@ -256,7 +256,7 @@
           ],
           "using": null,
           "withCheck": "exists (\n    select 1\n    from public.projects p\n    where p.id = project_id\n      and p.owner_profile_id = auth.uid()\n  )\n  and (\n    role <> 'owner'\n    or profile_id = (\n      select p.owner_profile_id\n      from public.projects p\n      where p.id = project_id\n    )\n  )",
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+          "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
         },
         {
           "name": "project_members_update",
@@ -266,9 +266,9 @@
           "roles": [
             "authenticated"
           ],
-          "using": "exists (\n    select 1\n    from public.projects p\n    where p.id = project_id\n      and p.owner_profile_id = auth.uid()\n  )\n  and profile_id <> (\n    select p.owner_profile_id\n    from public.projects p\n    where p.id = project_id\n  )",
-          "withCheck": "exists (\n    select 1\n    from public.projects p\n    where p.id = project_id\n      and p.owner_profile_id = auth.uid()\n  )\n  and profile_id <> (\n    select p.owner_profile_id\n    from public.projects p\n    where p.id = project_id\n  )",
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+          "using": "(\n    exists (\n      select 1\n      from public.projects p\n      where p.id = project_id\n        and p.owner_profile_id = auth.uid()\n    )\n    and profile_id <> (\n      select p.owner_profile_id\n      from public.projects p\n      where p.id = project_id\n    )\n  )\n  or (\n    public.has_project_role(project_id, array['co_owner'])\n    and role in ('contractor', 'viewer')\n    and profile_id <> (\n      select p.owner_profile_id\n      from public.projects p\n      where p.id = project_id\n    )\n  )",
+          "withCheck": "(\n    exists (\n      select 1\n      from public.projects p\n      where p.id = project_id\n        and p.owner_profile_id = auth.uid()\n    )\n    and profile_id <> (\n      select p.owner_profile_id\n      from public.projects p\n      where p.id = project_id\n    )\n  )\n  or (\n    public.has_project_role(project_id, array['co_owner'])\n    and role in ('contractor', 'viewer')\n    and profile_id <> (\n      select p.owner_profile_id\n      from public.projects p\n      where p.id = project_id\n    )\n  )",
+          "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
         },
         {
           "name": "project_members_delete",
@@ -278,9 +278,9 @@
           "roles": [
             "authenticated"
           ],
-          "using": "exists (\n    select 1\n    from public.projects p\n    where p.id = project_id\n      and p.owner_profile_id = auth.uid()\n  )\n  and profile_id <> (\n    select p.owner_profile_id\n    from public.projects p\n    where p.id = project_id\n  )",
+          "using": "(\n    exists (\n      select 1\n      from public.projects p\n      where p.id = project_id\n        and p.owner_profile_id = auth.uid()\n    )\n    and profile_id <> (\n      select p.owner_profile_id\n      from public.projects p\n      where p.id = project_id\n    )\n  )\n  or (\n    public.has_project_role(project_id, array['co_owner'])\n    and role in ('contractor', 'viewer')\n    and profile_id <> (\n      select p.owner_profile_id\n      from public.projects p\n      where p.id = project_id\n    )\n  )",
           "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+          "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
         }
       ]
     },
@@ -562,18 +562,6 @@
       ],
       "policies": [
         {
-          "name": "documents_select",
-          "schema": "public",
-          "table": "documents",
-          "command": "select",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "public.can_access_project(project_id)",
-          "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-        },
-        {
           "name": "documents_insert",
           "schema": "public",
           "table": "documents",
@@ -608,6 +596,18 @@
           "using": "public.can_write_project_content(project_id)",
           "withCheck": null,
           "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        },
+        {
+          "name": "documents_select",
+          "schema": "public",
+          "table": "documents",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "public.can_access_project(project_id)\n  and (\n    visibility_class = 'shared_project'\n    or public.can_view_internal_documents(project_id)\n  )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
         }
       ]
     },
@@ -622,18 +622,6 @@
         "update"
       ],
       "policies": [
-        {
-          "name": "document_versions_select",
-          "schema": "public",
-          "table": "document_versions",
-          "command": "select",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "exists (\n    select 1\n    from public.documents d\n    where d.id = document_id\n      and public.can_access_project(d.project_id)\n  )",
-          "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-        },
         {
           "name": "document_versions_insert",
           "schema": "public",
@@ -669,6 +657,18 @@
           "using": "exists (\n    select 1\n    from public.documents d\n    where d.id = document_id\n      and public.can_write_project_content(d.project_id)\n  )",
           "withCheck": null,
           "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        },
+        {
+          "name": "document_versions_select",
+          "schema": "public",
+          "table": "document_versions",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n    select 1\n    from public.documents d\n    where d.id = document_id\n      and public.can_access_project(d.project_id)\n      and (\n        d.visibility_class = 'shared_project'\n        or public.can_view_internal_documents(d.project_id)\n      )\n  )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
         }
       ]
     },
@@ -683,18 +683,6 @@
         "update"
       ],
       "policies": [
-        {
-          "name": "project_media_select",
-          "schema": "public",
-          "table": "project_media",
-          "command": "select",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "public.can_access_project(project_id)",
-          "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-        },
         {
           "name": "project_media_insert",
           "schema": "public",
@@ -730,6 +718,18 @@
           "using": "public.can_write_project_content(project_id)",
           "withCheck": null,
           "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        },
+        {
+          "name": "project_media_select",
+          "schema": "public",
+          "table": "project_media",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "public.can_access_project(project_id)\n  and (\n    visibility_class = 'shared_project'\n    or public.can_view_internal_documents(project_id)\n  )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
         }
       ]
     },
@@ -867,18 +867,6 @@
       ],
       "policies": [
         {
-          "name": "estimate_works_select",
-          "schema": "public",
-          "table": "estimate_works",
-          "command": "select",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "exists (\n    select 1\n    from public.estimate_versions ev\n    join public.project_estimates pe\n      on pe.id = ev.estimate_id\n    where ev.id = estimate_version_id\n      and public.can_access_project(pe.project_id)\n  )",
-          "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-        },
-        {
           "name": "estimate_works_insert",
           "schema": "public",
           "table": "estimate_works",
@@ -913,6 +901,18 @@
           "using": "exists (\n    select 1\n    from public.estimate_versions ev\n    join public.project_estimates pe\n      on pe.id = ev.estimate_id\n    where ev.id = estimate_version_id\n      and public.can_write_project_content(pe.project_id)\n  )",
           "withCheck": null,
           "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        },
+        {
+          "name": "estimate_works_select",
+          "schema": "public",
+          "table": "estimate_works",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n    select 1\n    from public.estimate_versions ev\n    join public.project_estimates pe\n      on pe.id = ev.estimate_id\n    where ev.id = estimate_version_id\n      and public.can_access_project(pe.project_id)\n      and public.can_view_sensitive_detail(pe.project_id)\n  )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
         }
       ]
     },
@@ -927,18 +927,6 @@
         "update"
       ],
       "policies": [
-        {
-          "name": "estimate_resource_lines_select",
-          "schema": "public",
-          "table": "estimate_resource_lines",
-          "command": "select",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "exists (\n    select 1\n    from public.estimate_works ew\n    join public.estimate_versions ev\n      on ev.id = ew.estimate_version_id\n    join public.project_estimates pe\n      on pe.id = ev.estimate_id\n    where ew.id = estimate_work_id\n      and public.can_access_project(pe.project_id)\n  )",
-          "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-        },
         {
           "name": "estimate_resource_lines_insert",
           "schema": "public",
@@ -974,6 +962,18 @@
           "using": "exists (\n    select 1\n    from public.estimate_works ew\n    join public.estimate_versions ev\n      on ev.id = ew.estimate_version_id\n    join public.project_estimates pe\n      on pe.id = ev.estimate_id\n    where ew.id = estimate_work_id\n      and public.can_write_project_content(pe.project_id)\n  )",
           "withCheck": null,
           "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        },
+        {
+          "name": "estimate_resource_lines_select",
+          "schema": "public",
+          "table": "estimate_resource_lines",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n    select 1\n    from public.estimate_works ew\n    join public.estimate_versions ev\n      on ev.id = ew.estimate_version_id\n    join public.project_estimates pe\n      on pe.id = ev.estimate_id\n    where ew.id = estimate_work_id\n      and public.can_access_project(pe.project_id)\n      and public.can_view_sensitive_detail(pe.project_id)\n  )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
         }
       ]
     },
@@ -1194,18 +1194,6 @@
       ],
       "policies": [
         {
-          "name": "procurement_items_select",
-          "schema": "public",
-          "table": "procurement_items",
-          "command": "select",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "public.can_access_project(project_id)",
-          "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-        },
-        {
           "name": "procurement_items_insert",
           "schema": "public",
           "table": "procurement_items",
@@ -1240,6 +1228,18 @@
           "using": "public.can_write_project_content(project_id)",
           "withCheck": null,
           "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        },
+        {
+          "name": "procurement_items_select",
+          "schema": "public",
+          "table": "procurement_items",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "public.can_access_project(project_id)\n  and public.can_view_sensitive_detail(project_id)",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
         }
       ]
     },
@@ -1316,18 +1316,6 @@
       ],
       "policies": [
         {
-          "name": "order_lines_select",
-          "schema": "public",
-          "table": "order_lines",
-          "command": "select",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "exists (\n    select 1\n    from public.orders o\n    where o.id = order_id\n      and public.can_access_project(o.project_id)\n  )",
-          "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-        },
-        {
           "name": "order_lines_insert",
           "schema": "public",
           "table": "order_lines",
@@ -1362,6 +1350,18 @@
           "using": "exists (\n    select 1\n    from public.orders o\n    where o.id = order_id\n      and public.can_write_project_content(o.project_id)\n  )",
           "withCheck": null,
           "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        },
+        {
+          "name": "order_lines_select",
+          "schema": "public",
+          "table": "order_lines",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n    select 1\n    from public.orders o\n    where o.id = order_id\n      and public.can_access_project(o.project_id)\n      and public.can_view_sensitive_detail(o.project_id)\n  )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
         }
       ]
     },
@@ -1499,18 +1499,6 @@
       ],
       "policies": [
         {
-          "name": "hr_items_select",
-          "schema": "public",
-          "table": "hr_items",
-          "command": "select",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "public.can_access_project(project_id)",
-          "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-        },
-        {
           "name": "hr_items_insert",
           "schema": "public",
           "table": "hr_items",
@@ -1545,6 +1533,18 @@
           "using": "public.can_write_project_content(project_id)",
           "withCheck": null,
           "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        },
+        {
+          "name": "hr_items_select",
+          "schema": "public",
+          "table": "hr_items",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "public.can_access_project(project_id)\n  and public.can_view_sensitive_detail(project_id)",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
         }
       ]
     },
@@ -1621,18 +1621,6 @@
       ],
       "policies": [
         {
-          "name": "hr_payments_select",
-          "schema": "public",
-          "table": "hr_payments",
-          "command": "select",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "public.can_access_project(project_id)",
-          "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-        },
-        {
           "name": "hr_payments_insert",
           "schema": "public",
           "table": "hr_payments",
@@ -1667,6 +1655,18 @@
           "using": "public.can_write_project_content(project_id)",
           "withCheck": null,
           "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        },
+        {
+          "name": "hr_payments_select",
+          "schema": "public",
+          "table": "hr_payments",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "public.can_access_project(project_id)\n  and public.can_view_sensitive_detail(project_id)",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
         }
       ]
     },

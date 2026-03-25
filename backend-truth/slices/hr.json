@@ -10,7 +10,8 @@
   "kind": "derived_contract_bundle",
   "sourceMigrations": [
     "supabase/migrations/20260306164000_hr_domain.sql",
-    "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
+    "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
   ],
   "tables": [
     {
@@ -800,18 +801,6 @@
       ],
       "policies": [
         {
-          "name": "hr_items_select",
-          "schema": "public",
-          "table": "hr_items",
-          "command": "select",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "public.can_access_project(project_id)",
-          "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-        },
-        {
           "name": "hr_items_insert",
           "schema": "public",
           "table": "hr_items",
@@ -846,6 +835,18 @@
           "using": "public.can_write_project_content(project_id)",
           "withCheck": null,
           "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        },
+        {
+          "name": "hr_items_select",
+          "schema": "public",
+          "table": "hr_items",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "public.can_access_project(project_id)\n  and public.can_view_sensitive_detail(project_id)",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
         }
       ]
     },
@@ -922,18 +923,6 @@
       ],
       "policies": [
         {
-          "name": "hr_payments_select",
-          "schema": "public",
-          "table": "hr_payments",
-          "command": "select",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "public.can_access_project(project_id)",
-          "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-        },
-        {
           "name": "hr_payments_insert",
           "schema": "public",
           "table": "hr_payments",
@@ -968,6 +957,18 @@
           "using": "public.can_write_project_content(project_id)",
           "withCheck": null,
           "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        },
+        {
+          "name": "hr_payments_select",
+          "schema": "public",
+          "table": "hr_payments",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "public.can_access_project(project_id)\n  and public.can_view_sensitive_detail(project_id)",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
         }
       ]
     }

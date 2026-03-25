@@ -878,6 +878,16 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "finance_visibility",
+          "sqlType": "text",
+          "tsType": "\"none\" | \"summary\" | \"detail\"",
+          "nullable": false,
+          "defaultSql": "'none'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -951,6 +961,26 @@
           "usingIndex": null,
           "nullsNotDistinct": false,
           "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "finance_visibility"
+          ],
+          "expression": "finance_visibility in ('none', 'summary', 'detail')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "finance_visibility"
+          ],
+          "expression": "internal_docs_visibility in ('none', 'view', 'edit')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
         }
       ],
       "indexes": [
@@ -983,6 +1013,14 @@
           "functionName": "enforce_project_member_owner_role",
           "functionSignature": "public.enforce_project_member_owner_role()",
           "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql"
+        },
+        {
+          "name": "enforce_project_member_delegation",
+          "activation": "before insert or update",
+          "functionSchema": "public",
+          "functionName": "enforce_project_member_delegation",
+          "functionSignature": "public.enforce_project_member_delegation()",
+          "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
         }
       ]
     },
@@ -1141,6 +1179,16 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "finance_visibility",
+          "sqlType": "text",
+          "tsType": "\"none\" | \"summary\" | \"detail\"",
+          "nullable": false,
+          "defaultSql": "'none'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -1213,6 +1261,26 @@
           "usingIndex": null,
           "nullsNotDistinct": false,
           "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "finance_visibility"
+          ],
+          "expression": "finance_visibility in ('none', 'summary', 'detail')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "finance_visibility"
+          ],
+          "expression": "internal_docs_visibility in ('none', 'view', 'edit')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
         }
       ],
       "indexes": [
@@ -1248,7 +1316,16 @@
           "sourceMigration": "supabase/migrations/20260306161000_projects_membership_and_invites.sql"
         }
       ],
-      "triggers": []
+      "triggers": [
+        {
+          "name": "enforce_project_invite_delegation",
+          "activation": "before insert or update",
+          "functionSchema": "public",
+          "functionName": "enforce_project_invite_delegation",
+          "functionSignature": "public.enforce_project_invite_delegation()",
+          "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
+        }
+      ]
     },
     {
       "schema": "public",
@@ -1978,6 +2055,16 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "visibility_class",
+          "sqlType": "text",
+          "tsType": "\"shared_project\" | \"internal\"",
+          "nullable": false,
+          "defaultSql": "'shared_project'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -1990,6 +2077,16 @@
           "expression": "origin in ('project_creation', 'uploaded', 'manual', 'ai_generated')",
           "usingIndex": null,
           "sourceMigration": "supabase/migrations/20260306162000_storage_documents_and_media.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "visibility_class"
+          ],
+          "expression": "visibility_class in ('shared_project', 'internal')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
         }
       ],
       "indexes": [
@@ -2012,6 +2109,14 @@
           "functionName": "set_updated_at",
           "functionSignature": "public.set_updated_at()",
           "sourceMigration": "supabase/migrations/20260306162000_storage_documents_and_media.sql"
+        },
+        {
+          "name": "guard_documents_visibility_class_change",
+          "activation": "before insert or update of visibility_class",
+          "functionSchema": "public",
+          "functionName": "guard_documents_visibility_class_change",
+          "functionSignature": "public.guard_documents_visibility_class_change()",
+          "sourceMigration": "supabase/migrations/20260325120000_doc_media_visibility_write_enforcement.sql"
         }
       ]
     },
@@ -2282,6 +2387,16 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "visibility_class",
+          "sqlType": "text",
+          "tsType": "\"shared_project\" | \"internal\"",
+          "nullable": false,
+          "defaultSql": "'shared_project'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -2294,6 +2409,16 @@
           "expression": "not is_final or task_id is not null",
           "usingIndex": null,
           "sourceMigration": "supabase/migrations/20260320110000_task_final_media_contract.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "visibility_class"
+          ],
+          "expression": "visibility_class in ('shared_project', 'internal')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
         }
       ],
       "indexes": [
@@ -2339,7 +2464,16 @@
           "sourceMigration": "supabase/migrations/20260320110000_task_final_media_contract.sql"
         }
       ],
-      "triggers": []
+      "triggers": [
+        {
+          "name": "guard_project_media_visibility_class_change",
+          "activation": "before insert or update of visibility_class",
+          "functionSchema": "public",
+          "functionName": "guard_project_media_visibility_class_change",
+          "functionSignature": "public.guard_project_media_visibility_class_change()",
+          "sourceMigration": "supabase/migrations/20260325120000_doc_media_visibility_write_enforcement.sql"
+        }
+      ]
     },
     {
       "schema": "public",

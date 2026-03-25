@@ -197,6 +197,7 @@ export type Database = {
           "credit_limit": number
           "used_credits": number
           "joined_at": string
+          "finance_visibility": "none" | "summary" | "detail"
           }
           Insert: {
           "id"?: string
@@ -208,6 +209,7 @@ export type Database = {
           "credit_limit"?: number
           "used_credits"?: number
           "joined_at"?: string
+          "finance_visibility"?: "none" | "summary" | "detail"
           }
           Update: {
           "id"?: string
@@ -219,6 +221,7 @@ export type Database = {
           "credit_limit"?: number
           "used_credits"?: number
           "joined_at"?: string
+          "finance_visibility"?: "none" | "summary" | "detail"
           }
           Relationships: []
         }
@@ -237,6 +240,7 @@ export type Database = {
           "accepted_profile_id": string | null
           "created_at": string
           "accepted_at": string | null
+          "finance_visibility": "none" | "summary" | "detail"
           }
           Insert: {
           "id"?: string
@@ -252,6 +256,7 @@ export type Database = {
           "accepted_profile_id"?: string | null
           "created_at"?: string
           "accepted_at"?: string | null
+          "finance_visibility"?: "none" | "summary" | "detail"
           }
           Update: {
           "id"?: string
@@ -267,6 +272,7 @@ export type Database = {
           "accepted_profile_id"?: string | null
           "created_at"?: string
           "accepted_at"?: string | null
+          "finance_visibility"?: "none" | "summary" | "detail"
           }
           Relationships: []
         }
@@ -425,6 +431,7 @@ export type Database = {
           "created_by": string
           "created_at": string
           "updated_at": string
+          "visibility_class": "shared_project" | "internal"
           }
           Insert: {
           "id"?: string
@@ -436,6 +443,7 @@ export type Database = {
           "created_by": string
           "created_at"?: string
           "updated_at"?: string
+          "visibility_class"?: "shared_project" | "internal"
           }
           Update: {
           "id"?: string
@@ -447,6 +455,7 @@ export type Database = {
           "created_by"?: string
           "created_at"?: string
           "updated_at"?: string
+          "visibility_class"?: "shared_project" | "internal"
           }
           Relationships: []
         }
@@ -491,6 +500,7 @@ export type Database = {
           "created_at": string
           "task_id": string | null
           "is_final": boolean
+          "visibility_class": "shared_project" | "internal"
           }
           Insert: {
           "id"?: string
@@ -502,6 +512,7 @@ export type Database = {
           "created_at"?: string
           "task_id"?: string | null
           "is_final"?: boolean
+          "visibility_class"?: "shared_project" | "internal"
           }
           Update: {
           "id"?: string
@@ -513,6 +524,7 @@ export type Database = {
           "created_at"?: string
           "task_id"?: string | null
           "is_final"?: boolean
+          "visibility_class"?: "shared_project" | "internal"
           }
           Relationships: []
         }
@@ -1391,6 +1403,12 @@ export type Database = {
           }
           Returns: Database['public']['Tables']["project_invites"]['Row']
         }
+        "ai_access_rank": {
+          Args: {
+          "p_access": string
+          }
+          Returns: number
+        }
         "approve_estimate_version_by_share_token": {
           Args: {
           "p_share_token": string
@@ -1422,6 +1440,18 @@ export type Database = {
           }
           Returns: boolean
         }
+        "can_view_internal_documents": {
+          Args: {
+          "p_project_id": string
+          }
+          Returns: boolean
+        }
+        "can_view_sensitive_detail": {
+          Args: {
+          "p_project_id": string
+          }
+          Returns: boolean
+        }
         "can_write_project_content": {
           Args: {
           "p_project_id": string
@@ -1430,6 +1460,24 @@ export type Database = {
         }
         "current_profile_id": {
           Args: Record<PropertyKey, never>
+          Returns: string
+        }
+        "effective_ai_access_for_profile": {
+          Args: {
+          "p_project_id": string
+          }
+          Returns: string
+        }
+        "effective_finance_visibility": {
+          Args: {
+          "p_project_id": string
+          }
+          Returns: string
+        }
+        "effective_internal_docs_visibility": {
+          Args: {
+          "p_project_id": string
+          }
           Returns: string
         }
         "finalize_document_upload": {
@@ -1446,6 +1494,12 @@ export type Database = {
           }
           Returns: unknown
         }
+        "finance_visibility_rank": {
+          Args: {
+          "p_level": string
+          }
+          Returns: number
+        }
         "get_shared_estimate_version": {
           Args: {
           "p_share_token": string
@@ -1458,6 +1512,12 @@ export type Database = {
           "p_roles": unknown
           }
           Returns: boolean
+        }
+        "internal_docs_visibility_rank": {
+          Args: {
+          "p_level": string
+          }
+          Returns: number
         }
         "is_project_member": {
           Args: {

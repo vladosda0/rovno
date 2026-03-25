@@ -12,6 +12,8 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 - `supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql`
 - `supabase/migrations/20260306161000_projects_membership_and_invites.sql`
 - `supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql`
+- `supabase/migrations/20260324140000_project_launch_authority.sql`
+- `supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql`
 - `supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql`
 - `supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql`
 - `supabase/migrations/20260320130000_codex_review_findings_fixes.sql`
@@ -141,6 +143,7 @@ Triggers:
 | `credit_limit` | `integer` | no | `0` | no |
 | `used_credits` | `integer` | no | `0` | no |
 | `joined_at` | `timestamptz` | no | `now()` | no |
+| `finance_visibility` | `text` | no | `'none'` | no |
 
 Constraints:
 - unnamed check (expression `role in ('owner', 'co_owner', 'contractor', 'viewer')`)
@@ -150,6 +153,8 @@ Constraints:
 - unnamed check (expression `used_credits >= 0`)
 - `project_members_viewer_regime_check` check (expression `(role = 'viewer' and viewer_regime is not null) or (role <> 'viewer' and viewer_regime is null)`)
 - unnamed unique (columns `project_id`, `profile_id`)
+- unnamed check (expression `finance_visibility in ('none', 'summary', 'detail')`)
+- unnamed check (expression `internal_docs_visibility in ('none', 'view', 'edit')`)
 
 Indexes:
 - `idx_project_members_project_id` on (`project_id`)
@@ -157,6 +162,7 @@ Indexes:
 
 Triggers:
 - `guard_project_members_owner_role`: before insert or update, executes `public.enforce_project_member_owner_role()`
+- `enforce_project_member_delegation`: before insert or update, executes `public.enforce_project_member_delegation()`
 
 ### public.project_invites
 
@@ -175,6 +181,7 @@ Triggers:
 | `accepted_profile_id` | `uuid` | yes |   | no |
 | `created_at` | `timestamptz` | no | `now()` | no |
 | `accepted_at` | `timestamptz` | yes |   | no |
+| `finance_visibility` | `text` | no | `'none'` | no |
 
 Constraints:
 - unnamed check (expression `role in ('owner', 'co_owner', 'contractor', 'viewer')`)
@@ -184,11 +191,16 @@ Constraints:
 - unnamed check (expression `status in ('pending', 'accepted', 'revoked', 'expired')`)
 - `project_invites_viewer_regime_check` check (expression `(role = 'viewer' and viewer_regime is not null) or (role <> 'viewer' and viewer_regime is null)`)
 - unnamed unique (columns `invite_token`)
+- unnamed check (expression `finance_visibility in ('none', 'summary', 'detail')`)
+- unnamed check (expression `internal_docs_visibility in ('none', 'view', 'edit')`)
 
 Indexes:
 - `idx_project_invites_active_email` on (`project_id`, `lower(email)`), unique, where `status = 'pending'`
 - `idx_project_invites_project_id` on (`project_id`)
 - `idx_project_invites_invited_by` on (`invited_by`)
+
+Triggers:
+- `enforce_project_invite_delegation`: before insert or update, executes `public.enforce_project_invite_delegation()`
 
 ## Relations
 
@@ -210,7 +222,7 @@ Indexes:
 | Function | Returns | Auth Execute | Kind | Source |
 | --- | --- | --- | --- | --- |
 | `public.guard_project_owner_change()` | `trigger` | no | `trigger_helper` | `supabase/migrations/20260306161000_projects_membership_and_invites.sql` |
-| `public.handle_project_owner_membership()` | `trigger` | no | `trigger_helper` | `supabase/migrations/20260306161000_projects_membership_and_invites.sql` |
+| `public.handle_project_owner_membership()` | `trigger` | no | `trigger_helper` | `supabase/migrations/20260324140000_project_launch_authority.sql` |
 | `public.enforce_project_member_owner_role()` | `trigger` | no | `trigger_helper` | `supabase/migrations/20260306161000_projects_membership_and_invites.sql` |
 | `public.handle_profile_defaults()` | `trigger` | no | `trigger_helper` | `supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql` |
 | `public.handle_auth_user_created()` | `trigger` | no | `trigger_helper` | `supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql` |
@@ -222,7 +234,12 @@ Indexes:
 | `public.can_manage_project(uuid)` | `boolean` | yes | `rpc` | `supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql` |
 | `public.can_write_project_content(uuid)` | `boolean` | yes | `rpc` | `supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql` |
 | `public.can_see_profile(uuid)` | `boolean` | yes | `rpc` | `supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql` |
-| `public.accept_project_invite(text)` | `public.project_invites` | yes | `rpc` | `supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql` |
+| `public.accept_project_invite(text)` | `public.project_invites` | yes | `rpc` | `supabase/migrations/20260324140000_project_launch_authority.sql` |
+| `public.effective_finance_visibility(uuid)` | `text` | yes | `rpc` | `supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql` |
+| `public.effective_internal_docs_visibility(uuid)` | `text` | yes | `rpc` | `supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql` |
+| `public.effective_ai_access_for_profile(uuid)` | `text` | yes | `rpc` | `supabase/migrations/20260324140000_project_launch_authority.sql` |
+| `public.can_view_internal_documents(uuid)` | `boolean` | yes | `rpc` | `supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql` |
+| `public.can_view_sensitive_detail(uuid)` | `boolean` | yes | `rpc` | `supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql` |
 
 ## RLS and Grants
 
@@ -288,14 +305,14 @@ Indexes:
 - Authenticated grants: `delete`, `insert`, `select`, `update`
 - Policies:
   - `project_members_select` for `select` to `authenticated`
-    using: `profile_id = auth.uid() or exists ( select 1 from public.projects p where p.id = project_id and p.owner_profile_id = auth.uid() )`
+    using: `profile_id = auth.uid() or exists ( select 1 from public.projects p where p.id = project_id and p.owner_profile_id = auth.uid() ) or public.has_project_role(project_id, array['co_owner'])`
   - `project_members_insert` for `insert` to `authenticated`
     with check: `exists ( select 1 from public.projects p where p.id = project_id and p.owner_profile_id = auth.uid() ) and ( role <> 'owner' or profile_id = ( select p.owner_profile_id from public.projects p where p.id = project_id ) )`
   - `project_members_update` for `update` to `authenticated`
-    using: `exists ( select 1 from public.projects p where p.id = project_id and p.owner_profile_id = auth.uid() ) and profile_id <> ( select p.owner_profile_id from public.projects p where p.id = project_id )`
-    with check: `exists ( select 1 from public.projects p where p.id = project_id and p.owner_profile_id = auth.uid() ) and profile_id <> ( select p.owner_profile_id from public.projects p where p.id = project_id )`
+    using: `( exists ( select 1 from public.projects p where p.id = project_id and p.owner_profile_id = auth.uid() ) and profile_id <> ( select p.owner_profile_id from public.projects p where p.id = project_id ) ) or ( public.has_project_role(project_id, array['co_owner']) and role in ('contractor', 'viewer') and profile_id <> ( select p.owner_profile_id from public.projects p where p.id = project_id ) )`
+    with check: `( exists ( select 1 from public.projects p where p.id = project_id and p.owner_profile_id = auth.uid() ) and profile_id <> ( select p.owner_profile_id from public.projects p where p.id = project_id ) ) or ( public.has_project_role(project_id, array['co_owner']) and role in ('contractor', 'viewer') and profile_id <> ( select p.owner_profile_id from public.projects p where p.id = project_id ) )`
   - `project_members_delete` for `delete` to `authenticated`
-    using: `exists ( select 1 from public.projects p where p.id = project_id and p.owner_profile_id = auth.uid() ) and profile_id <> ( select p.owner_profile_id from public.projects p where p.id = project_id )`
+    using: `( exists ( select 1 from public.projects p where p.id = project_id and p.owner_profile_id = auth.uid() ) and profile_id <> ( select p.owner_profile_id from public.projects p where p.id = project_id ) ) or ( public.has_project_role(project_id, array['co_owner']) and role in ('contractor', 'viewer') and profile_id <> ( select p.owner_profile_id from public.projects p where p.id = project_id ) )`
 
 ### public.project_invites
 
