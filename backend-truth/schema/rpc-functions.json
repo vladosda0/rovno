@@ -1164,6 +1164,31 @@
           "activation": "before insert or update of visibility_class"
         }
       ]
+    },
+    {
+      "schema": "public",
+      "name": "is_project_owner_for_actor",
+      "signature": "public.is_project_owner_for_actor(uuid, uuid)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_actor",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "boolean",
+      "language": "sql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql",
+      "triggerUsages": []
     }
   ]
 }

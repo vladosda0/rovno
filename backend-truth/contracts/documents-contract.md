@@ -267,15 +267,3 @@ Constraints:
 - Authenticated grants: none
 - Policies: none
 
-### public.project_media_upload_intents
-
-- RLS enabled: yes
-- Authenticated grants: none
-- Policies: none
-
-### public.document_upload_intents
-
-- RLS enabled: yes
-- Authenticated grants: none
-- Policies: none
-

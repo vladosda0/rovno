@@ -17,6 +17,8 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 - `supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql`
 - `supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql`
 - `supabase/migrations/20260320130000_codex_review_findings_fixes.sql`
+- `supabase/migrations/20260325123000_restore_projects_select_membership_visibility.sql`
+- `supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql`
 
 ## Tables
 
@@ -291,13 +293,13 @@ Triggers:
     using: `owner_profile_id = auth.uid() or exists ( select 1 from public.project_members pm where pm.project_id = id and pm.profile_id = auth.uid() )`
   - `projects_insert` for `insert` to `authenticated`
     with check: `owner_profile_id = auth.uid()`
-  - `projects_select` for `select` to `authenticated`
-    using: `owner_profile_id = auth.uid()`
   - `projects_delete` for `delete` to `authenticated`
     using: `owner_profile_id = auth.uid()`
   - `projects_update` for `update` to `authenticated`
     using: `owner_profile_id = auth.uid()`
     with check: `owner_profile_id = auth.uid() or exists ( select 1 from public.project_members pm where pm.project_id = id and pm.profile_id = owner_profile_id and pm.role in ('owner', 'co_owner') )`
+  - `projects_select` for `select` to `authenticated`
+    using: `owner_profile_id = auth.uid() or exists ( select 1 from public.project_members pm where pm.project_id = id and pm.profile_id = auth.uid() )`
 
 ### public.project_members
 
@@ -305,14 +307,14 @@ Triggers:
 - Authenticated grants: `delete`, `insert`, `select`, `update`
 - Policies:
   - `project_members_select` for `select` to `authenticated`
-    using: `profile_id = auth.uid() or exists ( select 1 from public.projects p where p.id = project_id and p.owner_profile_id = auth.uid() ) or public.has_project_role(project_id, array['co_owner'])`
+    using: `profile_id = auth.uid() or public.is_project_owner_for_actor(project_id, auth.uid())`
   - `project_members_insert` for `insert` to `authenticated`
-    with check: `exists ( select 1 from public.projects p where p.id = project_id and p.owner_profile_id = auth.uid() ) and ( role <> 'owner' or profile_id = ( select p.owner_profile_id from public.projects p where p.id = project_id ) )`
+    with check: `public.is_project_owner_for_actor(project_id, auth.uid()) and ( role <> 'owner' or profile_id = ( select p.owner_profile_id from public.projects p where p.id = project_id ) )`
   - `project_members_update` for `update` to `authenticated`
-    using: `( exists ( select 1 from public.projects p where p.id = project_id and p.owner_profile_id = auth.uid() ) and profile_id <> ( select p.owner_profile_id from public.projects p where p.id = project_id ) ) or ( public.has_project_role(project_id, array['co_owner']) and role in ('contractor', 'viewer') and profile_id <> ( select p.owner_profile_id from public.projects p where p.id = project_id ) )`
-    with check: `( exists ( select 1 from public.projects p where p.id = project_id and p.owner_profile_id = auth.uid() ) and profile_id <> ( select p.owner_profile_id from public.projects p where p.id = project_id ) ) or ( public.has_project_role(project_id, array['co_owner']) and role in ('contractor', 'viewer') and profile_id <> ( select p.owner_profile_id from public.projects p where p.id = project_id ) )`
+    using: `public.is_project_owner_for_actor(project_id, auth.uid()) and profile_id <> ( select p.owner_profile_id from public.projects p where p.id = project_id )`
+    with check: `public.is_project_owner_for_actor(project_id, auth.uid()) and profile_id <> ( select p.owner_profile_id from public.projects p where p.id = project_id )`
   - `project_members_delete` for `delete` to `authenticated`
-    using: `( exists ( select 1 from public.projects p where p.id = project_id and p.owner_profile_id = auth.uid() ) and profile_id <> ( select p.owner_profile_id from public.projects p where p.id = project_id ) ) or ( public.has_project_role(project_id, array['co_owner']) and role in ('contractor', 'viewer') and profile_id <> ( select p.owner_profile_id from public.projects p where p.id = project_id ) )`
+    using: `public.is_project_owner_for_actor(project_id, auth.uid()) and profile_id <> ( select p.owner_profile_id from public.projects p where p.id = project_id )`
 
 ### public.project_invites
 

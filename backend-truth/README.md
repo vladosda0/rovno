@@ -54,6 +54,10 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20260324140000_project_launch_authority.sql`
 - `supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql`
 - `supabase/migrations/20260325120000_doc_media_visibility_write_enforcement.sql`
+- `supabase/migrations/20260325123000_restore_projects_select_membership_visibility.sql`
+- `supabase/migrations/20260325126000_fix_project_members_co_owner_policy_recursion.sql`
+- `supabase/migrations/20260325130000_remove_co_owner_project_members_policy_branch.sql`
+- `supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql`
 
 ## Exclusions
 

@@ -123,6 +123,22 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260325120000_doc_media_visibility_write_enforcement.sql",
       "sha256": "55508144d70db2e8fcba4897c1aa4822aa56bc6de5414a6b28835c1bd12e6239"
+    },
+    {
+      "path": "supabase/migrations/20260325123000_restore_projects_select_membership_visibility.sql",
+      "sha256": "9a3fd9ed1f67da2a50de460d42566a103ae5a8b8dbdb885ae6b5fe4a6b8246d5"
+    },
+    {
+      "path": "supabase/migrations/20260325126000_fix_project_members_co_owner_policy_recursion.sql",
+      "sha256": "e550e71d3c669d35fe02a132589a7b70792c87ff18ecba33eca9be769108d3a2"
+    },
+    {
+      "path": "supabase/migrations/20260325130000_remove_co_owner_project_members_policy_branch.sql",
+      "sha256": "ad820fbc2ae19571679d71d0dd0cd48e9181a385e58a72b3ea889ab4123b8ba9"
+    },
+    {
+      "path": "supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql",
+      "sha256": "c77bfe0a429490526f5f21b0b9bd6ea686b10341bea6dcffb5b0fede379e83b9"
     }
   ],
   "generated_artifacts": [
@@ -176,6 +192,10 @@ export const manifest = {
     "sql/20260324140000_project_launch_authority.sql",
     "sql/20260325100000_sensitive_visibility_and_document_classification.sql",
     "sql/20260325120000_doc_media_visibility_write_enforcement.sql",
+    "sql/20260325123000_restore_projects_select_membership_visibility.sql",
+    "sql/20260325126000_fix_project_members_co_owner_policy_recursion.sql",
+    "sql/20260325130000_remove_co_owner_project_members_policy_branch.sql",
+    "sql/20260325133000_break_projects_project_members_rls_cycle.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -10116,6 +10136,31 @@ export const functions = {
           "activation": "before insert or update of visibility_class"
         }
       ]
+    },
+    {
+      "schema": "public",
+      "name": "is_project_owner_for_actor",
+      "signature": "public.is_project_owner_for_actor(uuid, uuid)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_actor",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "boolean",
+      "language": "sql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql",
+      "triggerUsages": []
     }
   ]
 } as const;
@@ -10308,18 +10353,6 @@ export const rls = {
           "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
         },
         {
-          "name": "projects_select",
-          "schema": "public",
-          "table": "projects",
-          "command": "select",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "owner_profile_id = auth.uid()",
-          "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql"
-        },
-        {
           "name": "projects_delete",
           "schema": "public",
           "table": "projects",
@@ -10342,6 +10375,18 @@ export const rls = {
           "using": "owner_profile_id = auth.uid()",
           "withCheck": "owner_profile_id = auth.uid()\n  or exists (\n    select 1\n    from public.project_members pm\n    where pm.project_id = id\n      and pm.profile_id = owner_profile_id\n      and pm.role in ('owner', 'co_owner')\n  )",
           "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
+        },
+        {
+          "name": "projects_select",
+          "schema": "public",
+          "table": "projects",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "owner_profile_id = auth.uid()\n  or exists (\n    select 1\n    from public.project_members pm\n    where pm.project_id = id\n      and pm.profile_id = auth.uid()\n  )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260325123000_restore_projects_select_membership_visibility.sql"
         }
       ]
     },
@@ -10364,9 +10409,9 @@ export const rls = {
           "roles": [
             "authenticated"
           ],
-          "using": "profile_id = auth.uid()\n  or exists (\n    select 1\n    from public.projects p\n    where p.id = project_id\n      and p.owner_profile_id = auth.uid()\n  )\n  or public.has_project_role(project_id, array['co_owner'])",
+          "using": "profile_id = auth.uid()\n  or public.is_project_owner_for_actor(project_id, auth.uid())",
           "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
+          "sourceMigration": "supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql"
         },
         {
           "name": "project_members_insert",
@@ -10377,8 +10422,8 @@ export const rls = {
             "authenticated"
           ],
           "using": null,
-          "withCheck": "exists (\n    select 1\n    from public.projects p\n    where p.id = project_id\n      and p.owner_profile_id = auth.uid()\n  )\n  and (\n    role <> 'owner'\n    or profile_id = (\n      select p.owner_profile_id\n      from public.projects p\n      where p.id = project_id\n    )\n  )",
-          "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
+          "withCheck": "public.is_project_owner_for_actor(project_id, auth.uid())\n  and (\n    role <> 'owner'\n    or profile_id = (\n      select p.owner_profile_id\n      from public.projects p\n      where p.id = project_id\n    )\n  )",
+          "sourceMigration": "supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql"
         },
         {
           "name": "project_members_update",
@@ -10388,9 +10433,9 @@ export const rls = {
           "roles": [
             "authenticated"
           ],
-          "using": "(\n    exists (\n      select 1\n      from public.projects p\n      where p.id = project_id\n        and p.owner_profile_id = auth.uid()\n    )\n    and profile_id <> (\n      select p.owner_profile_id\n      from public.projects p\n      where p.id = project_id\n    )\n  )\n  or (\n    public.has_project_role(project_id, array['co_owner'])\n    and role in ('contractor', 'viewer')\n    and profile_id <> (\n      select p.owner_profile_id\n      from public.projects p\n      where p.id = project_id\n    )\n  )",
-          "withCheck": "(\n    exists (\n      select 1\n      from public.projects p\n      where p.id = project_id\n        and p.owner_profile_id = auth.uid()\n    )\n    and profile_id <> (\n      select p.owner_profile_id\n      from public.projects p\n      where p.id = project_id\n    )\n  )\n  or (\n    public.has_project_role(project_id, array['co_owner'])\n    and role in ('contractor', 'viewer')\n    and profile_id <> (\n      select p.owner_profile_id\n      from public.projects p\n      where p.id = project_id\n    )\n  )",
-          "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
+          "using": "public.is_project_owner_for_actor(project_id, auth.uid())\n  and profile_id <> (\n    select p.owner_profile_id\n    from public.projects p\n    where p.id = project_id\n  )",
+          "withCheck": "public.is_project_owner_for_actor(project_id, auth.uid())\n  and profile_id <> (\n    select p.owner_profile_id\n    from public.projects p\n    where p.id = project_id\n  )",
+          "sourceMigration": "supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql"
         },
         {
           "name": "project_members_delete",
@@ -10400,9 +10445,9 @@ export const rls = {
           "roles": [
             "authenticated"
           ],
-          "using": "(\n    exists (\n      select 1\n      from public.projects p\n      where p.id = project_id\n        and p.owner_profile_id = auth.uid()\n    )\n    and profile_id <> (\n      select p.owner_profile_id\n      from public.projects p\n      where p.id = project_id\n    )\n  )\n  or (\n    public.has_project_role(project_id, array['co_owner'])\n    and role in ('contractor', 'viewer')\n    and profile_id <> (\n      select p.owner_profile_id\n      from public.projects p\n      where p.id = project_id\n    )\n  )",
+          "using": "public.is_project_owner_for_actor(project_id, auth.uid())\n  and profile_id <> (\n    select p.owner_profile_id\n    from public.projects p\n    where p.id = project_id\n  )",
           "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
+          "sourceMigration": "supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql"
         }
       ]
     },
@@ -12477,6 +12522,13 @@ export const sourceTrace = {
       "name": "guard_project_media_visibility_class_change",
       "signature": "public.guard_project_media_visibility_class_change()",
       "sourceMigration": "supabase/migrations/20260325120000_doc_media_visibility_write_enforcement.sql"
+    },
+    {
+      "key": "public.is_project_owner_for_actor",
+      "schema": "public",
+      "name": "is_project_owner_for_actor",
+      "signature": "public.is_project_owner_for_actor(uuid, uuid)",
+      "sourceMigration": "supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql"
     }
   ],
   "policies": [
@@ -12567,14 +12619,6 @@ export const sourceTrace = {
       "name": "projects_insert",
       "command": "insert",
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-    },
-    {
-      "key": "public.projects.projects_select",
-      "schema": "public",
-      "table": "projects",
-      "name": "projects_select",
-      "command": "select",
-      "sourceMigration": "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql"
     },
     {
       "key": "public.projects.projects_delete",
@@ -12673,12 +12717,28 @@ export const sourceTrace = {
       "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
     },
     {
+      "key": "public.projects.projects_update",
+      "schema": "public",
+      "table": "projects",
+      "name": "projects_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
+    },
+    {
+      "key": "public.projects.projects_select",
+      "schema": "public",
+      "table": "projects",
+      "name": "projects_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260325123000_restore_projects_select_membership_visibility.sql"
+    },
+    {
       "key": "public.project_members.project_members_select",
       "schema": "public",
       "table": "project_members",
       "name": "project_members_select",
       "command": "select",
-      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
+      "sourceMigration": "supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql"
     },
     {
       "key": "public.project_members.project_members_insert",
@@ -12686,7 +12746,7 @@ export const sourceTrace = {
       "table": "project_members",
       "name": "project_members_insert",
       "command": "insert",
-      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
+      "sourceMigration": "supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql"
     },
     {
       "key": "public.project_members.project_members_update",
@@ -12694,7 +12754,7 @@ export const sourceTrace = {
       "table": "project_members",
       "name": "project_members_update",
       "command": "update",
-      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
+      "sourceMigration": "supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql"
     },
     {
       "key": "public.project_members.project_members_delete",
@@ -12702,7 +12762,7 @@ export const sourceTrace = {
       "table": "project_members",
       "name": "project_members_delete",
       "command": "delete",
-      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
+      "sourceMigration": "supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql"
     },
     {
       "key": "public.project_invites.project_invites_select",
@@ -13487,7 +13547,9 @@ export const sourceTrace = {
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql",
-        "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
+        "supabase/migrations/20260320130000_codex_review_findings_fixes.sql",
+        "supabase/migrations/20260325123000_restore_projects_select_membership_visibility.sql",
+        "supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql"
       ],
       "tables": [
         "public.profiles",
@@ -13528,9 +13590,10 @@ export const sourceTrace = {
         "public.notification_preferences.notification_preferences_select",
         "public.notification_preferences.notification_preferences_insert",
         "public.notification_preferences.notification_preferences_update",
-        "public.projects.projects_select",
+        "public.projects.projects_insert",
         "public.projects.projects_delete",
         "public.projects.projects_update",
+        "public.projects.projects_select",
         "public.project_members.project_members_select",
         "public.project_members.project_members_insert",
         "public.project_members.project_members_update",
@@ -14307,7 +14370,9 @@ export const slices = {
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql",
-        "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
+        "supabase/migrations/20260320130000_codex_review_findings_fixes.sql",
+        "supabase/migrations/20260325123000_restore_projects_select_membership_visibility.sql",
+        "supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql"
       ],
       "tableCount": 6,
       "functionCount": 19,
