@@ -135,6 +135,18 @@
     {
       "path": "supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql",
       "sha256": "c77bfe0a429490526f5f21b0b9bd6ea686b10341bea6dcffb5b0fede379e83b9"
+    },
+    {
+      "path": "supabase/migrations/20260326190000_restore_co_owner_project_members_rls_subset.sql",
+      "sha256": "aac93a3d6d595bb43caf7dacb93d722b0cabb16b0191fc3e6ca80a6a7155a241"
+    },
+    {
+      "path": "supabase/migrations/20260326203000_owner_transfer_and_member_identity_guard.sql",
+      "sha256": "87903829d76f97a8eb189790e3fdd6995388de7b644657cb6774851a5371fc61"
+    },
+    {
+      "path": "supabase/migrations/20260326213000_internal_visibility_write_boundary.sql",
+      "sha256": "8fc6861bf2b643243b4be618c3d13dafaa0bbf3c7e4a094cce0cba0385b57d11"
     }
   ],
   "generated_artifacts": [
@@ -192,6 +204,9 @@
     "sql/20260325126000_fix_project_members_co_owner_policy_recursion.sql",
     "sql/20260325130000_remove_co_owner_project_members_policy_branch.sql",
     "sql/20260325133000_break_projects_project_members_rls_cycle.sql",
+    "sql/20260326190000_restore_co_owner_project_members_rls_subset.sql",
+    "sql/20260326203000_owner_transfer_and_member_identity_guard.sql",
+    "sql/20260326213000_internal_visibility_write_boundary.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],

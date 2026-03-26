@@ -235,18 +235,6 @@
       ],
       "policies": [
         {
-          "name": "project_members_select",
-          "schema": "public",
-          "table": "project_members",
-          "command": "select",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "profile_id = auth.uid()\n  or public.is_project_owner_for_actor(project_id, auth.uid())",
-          "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql"
-        },
-        {
           "name": "project_members_insert",
           "schema": "public",
           "table": "project_members",
@@ -256,18 +244,6 @@
           ],
           "using": null,
           "withCheck": "public.is_project_owner_for_actor(project_id, auth.uid())\n  and (\n    role <> 'owner'\n    or profile_id = (\n      select p.owner_profile_id\n      from public.projects p\n      where p.id = project_id\n    )\n  )",
-          "sourceMigration": "supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql"
-        },
-        {
-          "name": "project_members_update",
-          "schema": "public",
-          "table": "project_members",
-          "command": "update",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "public.is_project_owner_for_actor(project_id, auth.uid())\n  and profile_id <> (\n    select p.owner_profile_id\n    from public.projects p\n    where p.id = project_id\n  )",
-          "withCheck": "public.is_project_owner_for_actor(project_id, auth.uid())\n  and profile_id <> (\n    select p.owner_profile_id\n    from public.projects p\n    where p.id = project_id\n  )",
           "sourceMigration": "supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql"
         },
         {
@@ -281,6 +257,30 @@
           "using": "public.is_project_owner_for_actor(project_id, auth.uid())\n  and profile_id <> (\n    select p.owner_profile_id\n    from public.projects p\n    where p.id = project_id\n  )",
           "withCheck": null,
           "sourceMigration": "supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql"
+        },
+        {
+          "name": "project_members_select",
+          "schema": "public",
+          "table": "project_members",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "profile_id = auth.uid()\n  or public.is_project_owner_for_actor(project_id, auth.uid())\n  or public.project_role_for_profile(project_id, auth.uid()) = 'co_owner'",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260326190000_restore_co_owner_project_members_rls_subset.sql"
+        },
+        {
+          "name": "project_members_update",
+          "schema": "public",
+          "table": "project_members",
+          "command": "update",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "(\n    public.is_project_owner_for_actor(project_id, auth.uid())\n    and profile_id <> (\n      select p.owner_profile_id\n      from public.projects p\n      where p.id = project_id\n    )\n  )\n  or (\n    public.project_role_for_profile(project_id, auth.uid()) = 'co_owner'\n    and role in ('contractor', 'viewer')\n    and profile_id <> (\n      select p.owner_profile_id\n      from public.projects p\n      where p.id = project_id\n    )\n  )",
+          "withCheck": "(\n    public.is_project_owner_for_actor(project_id, auth.uid())\n    and profile_id <> (\n      select p.owner_profile_id\n      from public.projects p\n      where p.id = project_id\n    )\n  )\n  or (\n    public.project_role_for_profile(project_id, auth.uid()) = 'co_owner'\n    and role in ('contractor', 'viewer')\n    and profile_id <> (\n      select p.owner_profile_id\n      from public.projects p\n      where p.id = project_id\n    )\n  )",
+          "sourceMigration": "supabase/migrations/20260326190000_restore_co_owner_project_members_rls_subset.sql"
         }
       ]
     },
@@ -574,30 +574,6 @@
           "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
         },
         {
-          "name": "documents_update",
-          "schema": "public",
-          "table": "documents",
-          "command": "update",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "public.can_write_project_content(project_id)",
-          "withCheck": "public.can_write_project_content(project_id)",
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-        },
-        {
-          "name": "documents_delete",
-          "schema": "public",
-          "table": "documents",
-          "command": "delete",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "public.can_write_project_content(project_id)",
-          "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-        },
-        {
           "name": "documents_select",
           "schema": "public",
           "table": "documents",
@@ -608,6 +584,30 @@
           "using": "public.can_access_project(project_id)\n  and (\n    visibility_class = 'shared_project'\n    or public.can_view_internal_documents(project_id)\n  )",
           "withCheck": null,
           "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
+        },
+        {
+          "name": "documents_update",
+          "schema": "public",
+          "table": "documents",
+          "command": "update",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "public.can_write_project_content(project_id)\n  and (\n    visibility_class = 'shared_project'\n    or public.can_view_internal_documents(project_id)\n  )",
+          "withCheck": "public.can_write_project_content(project_id)\n  and (\n    visibility_class = 'shared_project'\n    or public.can_view_internal_documents(project_id)\n  )",
+          "sourceMigration": "supabase/migrations/20260326213000_internal_visibility_write_boundary.sql"
+        },
+        {
+          "name": "documents_delete",
+          "schema": "public",
+          "table": "documents",
+          "command": "delete",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "public.can_write_project_content(project_id)\n  and (\n    visibility_class = 'shared_project'\n    or public.can_view_internal_documents(project_id)\n  )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260326213000_internal_visibility_write_boundary.sql"
         }
       ]
     },
@@ -635,30 +635,6 @@
           "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
         },
         {
-          "name": "document_versions_update",
-          "schema": "public",
-          "table": "document_versions",
-          "command": "update",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "exists (\n    select 1\n    from public.documents d\n    where d.id = document_id\n      and public.can_write_project_content(d.project_id)\n  )",
-          "withCheck": "exists (\n    select 1\n    from public.documents d\n    where d.id = document_id\n      and public.can_write_project_content(d.project_id)\n  )",
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-        },
-        {
-          "name": "document_versions_delete",
-          "schema": "public",
-          "table": "document_versions",
-          "command": "delete",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "exists (\n    select 1\n    from public.documents d\n    where d.id = document_id\n      and public.can_write_project_content(d.project_id)\n  )",
-          "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-        },
-        {
           "name": "document_versions_select",
           "schema": "public",
           "table": "document_versions",
@@ -669,6 +645,30 @@
           "using": "exists (\n    select 1\n    from public.documents d\n    where d.id = document_id\n      and public.can_access_project(d.project_id)\n      and (\n        d.visibility_class = 'shared_project'\n        or public.can_view_internal_documents(d.project_id)\n      )\n  )",
           "withCheck": null,
           "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
+        },
+        {
+          "name": "document_versions_update",
+          "schema": "public",
+          "table": "document_versions",
+          "command": "update",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n    select 1\n    from public.documents d\n    where d.id = document_id\n      and public.can_write_project_content(d.project_id)\n      and (\n        d.visibility_class = 'shared_project'\n        or public.can_view_internal_documents(d.project_id)\n      )\n  )",
+          "withCheck": "exists (\n    select 1\n    from public.documents d\n    where d.id = document_id\n      and public.can_write_project_content(d.project_id)\n      and (\n        d.visibility_class = 'shared_project'\n        or public.can_view_internal_documents(d.project_id)\n      )\n  )",
+          "sourceMigration": "supabase/migrations/20260326213000_internal_visibility_write_boundary.sql"
+        },
+        {
+          "name": "document_versions_delete",
+          "schema": "public",
+          "table": "document_versions",
+          "command": "delete",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n    select 1\n    from public.documents d\n    where d.id = document_id\n      and public.can_write_project_content(d.project_id)\n      and (\n        d.visibility_class = 'shared_project'\n        or public.can_view_internal_documents(d.project_id)\n      )\n  )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260326213000_internal_visibility_write_boundary.sql"
         }
       ]
     },
@@ -696,30 +696,6 @@
           "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
         },
         {
-          "name": "project_media_update",
-          "schema": "public",
-          "table": "project_media",
-          "command": "update",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "public.can_write_project_content(project_id)",
-          "withCheck": "public.can_write_project_content(project_id)",
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-        },
-        {
-          "name": "project_media_delete",
-          "schema": "public",
-          "table": "project_media",
-          "command": "delete",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "public.can_write_project_content(project_id)",
-          "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-        },
-        {
           "name": "project_media_select",
           "schema": "public",
           "table": "project_media",
@@ -730,6 +706,30 @@
           "using": "public.can_access_project(project_id)\n  and (\n    visibility_class = 'shared_project'\n    or public.can_view_internal_documents(project_id)\n  )",
           "withCheck": null,
           "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
+        },
+        {
+          "name": "project_media_update",
+          "schema": "public",
+          "table": "project_media",
+          "command": "update",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "public.can_write_project_content(project_id)\n  and (\n    visibility_class = 'shared_project'\n    or public.can_view_internal_documents(project_id)\n  )",
+          "withCheck": "public.can_write_project_content(project_id)\n  and (\n    visibility_class = 'shared_project'\n    or public.can_view_internal_documents(project_id)\n  )",
+          "sourceMigration": "supabase/migrations/20260326213000_internal_visibility_write_boundary.sql"
+        },
+        {
+          "name": "project_media_delete",
+          "schema": "public",
+          "table": "project_media",
+          "command": "delete",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "public.can_write_project_content(project_id)\n  and (\n    visibility_class = 'shared_project'\n    or public.can_view_internal_documents(project_id)\n  )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260326213000_internal_visibility_write_boundary.sql"
         }
       ]
     },

@@ -516,7 +516,7 @@
       "schema": "public",
       "name": "enforce_project_member_delegation",
       "signature": "public.enforce_project_member_delegation()",
-      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
+      "sourceMigration": "supabase/migrations/20260326203000_owner_transfer_and_member_identity_guard.sql"
     },
     {
       "key": "public.can_view_internal_documents",
@@ -716,22 +716,6 @@
       "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
     },
     {
-      "key": "public.projects.projects_update",
-      "schema": "public",
-      "table": "projects",
-      "name": "projects_update",
-      "command": "update",
-      "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
-    },
-    {
-      "key": "public.projects.projects_update",
-      "schema": "public",
-      "table": "projects",
-      "name": "projects_update",
-      "command": "update",
-      "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
-    },
-    {
       "key": "public.projects.projects_select",
       "schema": "public",
       "table": "projects",
@@ -756,12 +740,20 @@
       "sourceMigration": "supabase/migrations/20260325123000_restore_projects_select_membership_visibility.sql"
     },
     {
-      "key": "public.project_members.project_members_select",
+      "key": "public.projects.projects_update",
       "schema": "public",
-      "table": "project_members",
-      "name": "project_members_select",
+      "table": "projects",
+      "name": "projects_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
+    },
+    {
+      "key": "public.projects.projects_select",
+      "schema": "public",
+      "table": "projects",
+      "name": "projects_select",
       "command": "select",
-      "sourceMigration": "supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql"
+      "sourceMigration": "supabase/migrations/20260325123000_restore_projects_select_membership_visibility.sql"
     },
     {
       "key": "public.project_members.project_members_insert",
@@ -772,20 +764,28 @@
       "sourceMigration": "supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql"
     },
     {
-      "key": "public.project_members.project_members_update",
-      "schema": "public",
-      "table": "project_members",
-      "name": "project_members_update",
-      "command": "update",
-      "sourceMigration": "supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql"
-    },
-    {
       "key": "public.project_members.project_members_delete",
       "schema": "public",
       "table": "project_members",
       "name": "project_members_delete",
       "command": "delete",
       "sourceMigration": "supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql"
+    },
+    {
+      "key": "public.project_members.project_members_select",
+      "schema": "public",
+      "table": "project_members",
+      "name": "project_members_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260326190000_restore_co_owner_project_members_rls_subset.sql"
+    },
+    {
+      "key": "public.project_members.project_members_update",
+      "schema": "public",
+      "table": "project_members",
+      "name": "project_members_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260326190000_restore_co_owner_project_members_rls_subset.sql"
     },
     {
       "key": "public.project_invites.project_invites_select",
@@ -932,22 +932,6 @@
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
     },
     {
-      "key": "public.documents.documents_update",
-      "schema": "public",
-      "table": "documents",
-      "name": "documents_update",
-      "command": "update",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-    },
-    {
-      "key": "public.documents.documents_delete",
-      "schema": "public",
-      "table": "documents",
-      "name": "documents_delete",
-      "command": "delete",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-    },
-    {
       "key": "public.documents.documents_select",
       "schema": "public",
       "table": "documents",
@@ -956,27 +940,27 @@
       "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
     },
     {
+      "key": "public.documents.documents_update",
+      "schema": "public",
+      "table": "documents",
+      "name": "documents_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260326213000_internal_visibility_write_boundary.sql"
+    },
+    {
+      "key": "public.documents.documents_delete",
+      "schema": "public",
+      "table": "documents",
+      "name": "documents_delete",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260326213000_internal_visibility_write_boundary.sql"
+    },
+    {
       "key": "public.document_versions.document_versions_insert",
       "schema": "public",
       "table": "document_versions",
       "name": "document_versions_insert",
       "command": "insert",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-    },
-    {
-      "key": "public.document_versions.document_versions_update",
-      "schema": "public",
-      "table": "document_versions",
-      "name": "document_versions_update",
-      "command": "update",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-    },
-    {
-      "key": "public.document_versions.document_versions_delete",
-      "schema": "public",
-      "table": "document_versions",
-      "name": "document_versions_delete",
-      "command": "delete",
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
     },
     {
@@ -988,6 +972,22 @@
       "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
     },
     {
+      "key": "public.document_versions.document_versions_update",
+      "schema": "public",
+      "table": "document_versions",
+      "name": "document_versions_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260326213000_internal_visibility_write_boundary.sql"
+    },
+    {
+      "key": "public.document_versions.document_versions_delete",
+      "schema": "public",
+      "table": "document_versions",
+      "name": "document_versions_delete",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260326213000_internal_visibility_write_boundary.sql"
+    },
+    {
       "key": "public.project_media.project_media_insert",
       "schema": "public",
       "table": "project_media",
@@ -996,12 +996,20 @@
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
     },
     {
+      "key": "public.project_media.project_media_select",
+      "schema": "public",
+      "table": "project_media",
+      "name": "project_media_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
+    },
+    {
       "key": "public.project_media.project_media_update",
       "schema": "public",
       "table": "project_media",
       "name": "project_media_update",
       "command": "update",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260326213000_internal_visibility_write_boundary.sql"
     },
     {
       "key": "public.project_media.project_media_delete",
@@ -1009,7 +1017,7 @@
       "table": "project_media",
       "name": "project_media_delete",
       "command": "delete",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260326213000_internal_visibility_write_boundary.sql"
     },
     {
       "key": "public.project_media.project_media_select",
@@ -1572,7 +1580,8 @@
         "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql",
         "supabase/migrations/20260320130000_codex_review_findings_fixes.sql",
         "supabase/migrations/20260325123000_restore_projects_select_membership_visibility.sql",
-        "supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql"
+        "supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql",
+        "supabase/migrations/20260326190000_restore_co_owner_project_members_rls_subset.sql"
       ],
       "tables": [
         "public.profiles",
@@ -1617,10 +1626,10 @@
         "public.projects.projects_delete",
         "public.projects.projects_update",
         "public.projects.projects_select",
-        "public.project_members.project_members_select",
         "public.project_members.project_members_insert",
-        "public.project_members.project_members_update",
         "public.project_members.project_members_delete",
+        "public.project_members.project_members_select",
+        "public.project_members.project_members_update",
         "public.project_invites.project_invites_select",
         "public.project_invites.project_invites_insert",
         "public.project_invites.project_invites_update",
@@ -1827,7 +1836,8 @@
         "supabase/migrations/20260317133000_storage_bucket_config_table.sql",
         "supabase/migrations/20260317121000_storage_upload_rpcs.sql",
         "supabase/migrations/20260323113000_finalize_media_bucket_ambiguity_fix.sql",
-        "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+        "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
+        "supabase/migrations/20260326213000_internal_visibility_write_boundary.sql"
       ],
       "tables": [
         "public.storage_objects",
@@ -1849,14 +1859,15 @@
       "policies": [
         "public.storage_objects.storage_objects_select",
         "public.documents.documents_insert",
+        "public.documents.documents_select",
         "public.documents.documents_update",
         "public.documents.documents_delete",
-        "public.documents.documents_select",
         "public.document_versions.document_versions_insert",
+        "public.document_versions.document_versions_select",
         "public.document_versions.document_versions_update",
         "public.document_versions.document_versions_delete",
-        "public.document_versions.document_versions_select",
         "public.project_media.project_media_insert",
+        "public.project_media.project_media_select",
         "public.project_media.project_media_update",
         "public.project_media.project_media_delete",
         "public.project_media.project_media_select"
