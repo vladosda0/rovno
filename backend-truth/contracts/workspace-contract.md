@@ -289,8 +289,6 @@ Triggers:
 - RLS enabled: yes
 - Authenticated grants: `delete`, `insert`, `select`, `update`
 - Policies:
-  - `projects_select` for `select` to `authenticated`
-    using: `owner_profile_id = auth.uid() or exists ( select 1 from public.project_members pm where pm.project_id = id and pm.profile_id = auth.uid() )`
   - `projects_insert` for `insert` to `authenticated`
     with check: `owner_profile_id = auth.uid()`
   - `projects_delete` for `delete` to `authenticated`
