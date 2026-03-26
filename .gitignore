@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Cursor local noise
+.cursor/plans/
+.cursor/debug*.log
