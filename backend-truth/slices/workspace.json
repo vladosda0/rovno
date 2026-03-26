@@ -19,7 +19,8 @@
     "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql",
     "supabase/migrations/20260320130000_codex_review_findings_fixes.sql",
     "supabase/migrations/20260325123000_restore_projects_select_membership_visibility.sql",
-    "supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql"
+    "supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql",
+    "supabase/migrations/20260326190000_restore_co_owner_project_members_rls_subset.sql"
   ],
   "tables": [
     {
@@ -2136,18 +2137,6 @@
       ],
       "policies": [
         {
-          "name": "project_members_select",
-          "schema": "public",
-          "table": "project_members",
-          "command": "select",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "profile_id = auth.uid()\n  or public.is_project_owner_for_actor(project_id, auth.uid())",
-          "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql"
-        },
-        {
           "name": "project_members_insert",
           "schema": "public",
           "table": "project_members",
@@ -2157,18 +2146,6 @@
           ],
           "using": null,
           "withCheck": "public.is_project_owner_for_actor(project_id, auth.uid())\n  and (\n    role <> 'owner'\n    or profile_id = (\n      select p.owner_profile_id\n      from public.projects p\n      where p.id = project_id\n    )\n  )",
-          "sourceMigration": "supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql"
-        },
-        {
-          "name": "project_members_update",
-          "schema": "public",
-          "table": "project_members",
-          "command": "update",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "public.is_project_owner_for_actor(project_id, auth.uid())\n  and profile_id <> (\n    select p.owner_profile_id\n    from public.projects p\n    where p.id = project_id\n  )",
-          "withCheck": "public.is_project_owner_for_actor(project_id, auth.uid())\n  and profile_id <> (\n    select p.owner_profile_id\n    from public.projects p\n    where p.id = project_id\n  )",
           "sourceMigration": "supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql"
         },
         {
@@ -2182,6 +2159,30 @@
           "using": "public.is_project_owner_for_actor(project_id, auth.uid())\n  and profile_id <> (\n    select p.owner_profile_id\n    from public.projects p\n    where p.id = project_id\n  )",
           "withCheck": null,
           "sourceMigration": "supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql"
+        },
+        {
+          "name": "project_members_select",
+          "schema": "public",
+          "table": "project_members",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "profile_id = auth.uid()\n  or public.is_project_owner_for_actor(project_id, auth.uid())\n  or public.project_role_for_profile(project_id, auth.uid()) = 'co_owner'",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260326190000_restore_co_owner_project_members_rls_subset.sql"
+        },
+        {
+          "name": "project_members_update",
+          "schema": "public",
+          "table": "project_members",
+          "command": "update",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "(\n    public.is_project_owner_for_actor(project_id, auth.uid())\n    and profile_id <> (\n      select p.owner_profile_id\n      from public.projects p\n      where p.id = project_id\n    )\n  )\n  or (\n    public.project_role_for_profile(project_id, auth.uid()) = 'co_owner'\n    and role in ('contractor', 'viewer')\n    and profile_id <> (\n      select p.owner_profile_id\n      from public.projects p\n      where p.id = project_id\n    )\n  )",
+          "withCheck": "(\n    public.is_project_owner_for_actor(project_id, auth.uid())\n    and profile_id <> (\n      select p.owner_profile_id\n      from public.projects p\n      where p.id = project_id\n    )\n  )\n  or (\n    public.project_role_for_profile(project_id, auth.uid()) = 'co_owner'\n    and role in ('contractor', 'viewer')\n    and profile_id <> (\n      select p.owner_profile_id\n      from public.projects p\n      where p.id = project_id\n    )\n  )",
+          "sourceMigration": "supabase/migrations/20260326190000_restore_co_owner_project_members_rls_subset.sql"
         }
       ]
     },

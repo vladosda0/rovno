@@ -16,6 +16,7 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 - `supabase/migrations/20260317121000_storage_upload_rpcs.sql`
 - `supabase/migrations/20260323113000_finalize_media_bucket_ambiguity_fix.sql`
 - `supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql`
+- `supabase/migrations/20260326213000_internal_visibility_write_boundary.sql`
 
 ## Tables
 
@@ -217,13 +218,13 @@ Constraints:
 - Policies:
   - `documents_insert` for `insert` to `authenticated`
     with check: `public.can_write_project_content(project_id) and created_by = auth.uid()`
-  - `documents_update` for `update` to `authenticated`
-    using: `public.can_write_project_content(project_id)`
-    with check: `public.can_write_project_content(project_id)`
-  - `documents_delete` for `delete` to `authenticated`
-    using: `public.can_write_project_content(project_id)`
   - `documents_select` for `select` to `authenticated`
     using: `public.can_access_project(project_id) and ( visibility_class = 'shared_project' or public.can_view_internal_documents(project_id) )`
+  - `documents_update` for `update` to `authenticated`
+    using: `public.can_write_project_content(project_id) and ( visibility_class = 'shared_project' or public.can_view_internal_documents(project_id) )`
+    with check: `public.can_write_project_content(project_id) and ( visibility_class = 'shared_project' or public.can_view_internal_documents(project_id) )`
+  - `documents_delete` for `delete` to `authenticated`
+    using: `public.can_write_project_content(project_id) and ( visibility_class = 'shared_project' or public.can_view_internal_documents(project_id) )`
 
 ### public.document_versions
 
@@ -232,13 +233,13 @@ Constraints:
 - Policies:
   - `document_versions_insert` for `insert` to `authenticated`
     with check: `created_by = auth.uid() and exists ( select 1 from public.documents d where d.id = document_id and public.can_write_project_content(d.project_id) )`
-  - `document_versions_update` for `update` to `authenticated`
-    using: `exists ( select 1 from public.documents d where d.id = document_id and public.can_write_project_content(d.project_id) )`
-    with check: `exists ( select 1 from public.documents d where d.id = document_id and public.can_write_project_content(d.project_id) )`
-  - `document_versions_delete` for `delete` to `authenticated`
-    using: `exists ( select 1 from public.documents d where d.id = document_id and public.can_write_project_content(d.project_id) )`
   - `document_versions_select` for `select` to `authenticated`
     using: `exists ( select 1 from public.documents d where d.id = document_id and public.can_access_project(d.project_id) and ( d.visibility_class = 'shared_project' or public.can_view_internal_documents(d.project_id) ) )`
+  - `document_versions_update` for `update` to `authenticated`
+    using: `exists ( select 1 from public.documents d where d.id = document_id and public.can_write_project_content(d.project_id) and ( d.visibility_class = 'shared_project' or public.can_view_internal_documents(d.project_id) ) )`
+    with check: `exists ( select 1 from public.documents d where d.id = document_id and public.can_write_project_content(d.project_id) and ( d.visibility_class = 'shared_project' or public.can_view_internal_documents(d.project_id) ) )`
+  - `document_versions_delete` for `delete` to `authenticated`
+    using: `exists ( select 1 from public.documents d where d.id = document_id and public.can_write_project_content(d.project_id) and ( d.visibility_class = 'shared_project' or public.can_view_internal_documents(d.project_id) ) )`
 
 ### public.project_media
 
@@ -247,13 +248,13 @@ Constraints:
 - Policies:
   - `project_media_insert` for `insert` to `authenticated`
     with check: `public.can_write_project_content(project_id) and uploaded_by = auth.uid()`
-  - `project_media_update` for `update` to `authenticated`
-    using: `public.can_write_project_content(project_id)`
-    with check: `public.can_write_project_content(project_id)`
-  - `project_media_delete` for `delete` to `authenticated`
-    using: `public.can_write_project_content(project_id)`
   - `project_media_select` for `select` to `authenticated`
     using: `public.can_access_project(project_id) and ( visibility_class = 'shared_project' or public.can_view_internal_documents(project_id) )`
+  - `project_media_update` for `update` to `authenticated`
+    using: `public.can_write_project_content(project_id) and ( visibility_class = 'shared_project' or public.can_view_internal_documents(project_id) )`
+    with check: `public.can_write_project_content(project_id) and ( visibility_class = 'shared_project' or public.can_view_internal_documents(project_id) )`
+  - `project_media_delete` for `delete` to `authenticated`
+    using: `public.can_write_project_content(project_id) and ( visibility_class = 'shared_project' or public.can_view_internal_documents(project_id) )`
 
 ### public.project_media_upload_intents
 

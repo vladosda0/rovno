@@ -1076,7 +1076,7 @@
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": false,
-      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql",
+      "sourceMigration": "supabase/migrations/20260326203000_owner_transfer_and_member_identity_guard.sql",
       "triggerUsages": [
         {
           "table": "public.project_members",
