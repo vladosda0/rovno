@@ -19,6 +19,19 @@ export type WorkspaceMode =
   | { kind: "supabase"; profileId: string };
 export type RuntimeWorkspaceMode = WorkspaceMode | { kind: "guest" };
 
+/** Successful delivery from the `send-project-invite` edge function. */
+export type SendWorkspaceProjectInviteEmailSuccessPayload = {
+  ok: true;
+  inviteId: string;
+  recipientEmail: string;
+  providerMessageId?: string;
+};
+
+/** Result of attempting to send invite email (skipped outside real Supabase workspace). */
+export type SendWorkspaceProjectInviteEmailResult =
+  | { kind: "sent"; payload: SendWorkspaceProjectInviteEmailSuccessPayload }
+  | { kind: "skipped" };
+
 export interface WorkspaceSource {
   mode: WorkspaceMode["kind"];
   getCurrentUser: () => Promise<User>;
@@ -233,6 +246,115 @@ export function selectRuntimeWorkspaceMode(input: {
 async function loadSupabaseClient(): Promise<TypedSupabaseClient> {
   const { supabase } = await import("@/integrations/supabase/client");
   return supabase as unknown as TypedSupabaseClient;
+}
+
+function messageFromEdgeFunctionFailure(error: unknown, data: unknown): string {
+  const fromJson = parseEdgeFunctionErrorBody(data);
+  if (fromJson) return fromJson;
+  if (error && typeof error === "object" && "message" in error && typeof (error as { message: unknown }).message === "string") {
+    return (error as { message: string }).message;
+  }
+  return "Unable to send invite email";
+}
+
+/**
+ * When `functions.invoke` fails with `FunctionsHttpError`, `error.context` is the raw `Response`
+ * (body not yet consumed). Read JSON `{ error }` or text so toasts show the backend reason.
+ */
+async function messageFromFunctionsInvokeFailure(error: unknown, data: unknown): Promise<string> {
+  const fromData = parseEdgeFunctionErrorBody(data);
+  if (fromData) return fromData;
+
+  if (error && typeof error === "object" && "context" in error) {
+    const ctx = (error as { context?: unknown }).context;
+    if (typeof Response !== "undefined" && ctx instanceof Response) {
+      const status = ctx.status;
+      const raw = await ctx.clone().text().catch(() => "");
+      const trimmed = raw.trim();
+      if (trimmed) {
+        try {
+          const j = JSON.parse(trimmed) as Record<string, unknown>;
+          if (typeof j.error === "string") return j.error;
+          if (j.error && typeof j.error === "object" && j.error !== null && "message" in j.error) {
+            const m = (j.error as { message?: unknown }).message;
+            if (typeof m === "string") return m;
+          }
+          if (typeof j.message === "string") return j.message;
+        } catch {
+          /* not JSON */
+        }
+        return trimmed.length <= 400 ? trimmed : `${trimmed.slice(0, 400)}…`;
+      }
+      const statusText = ctx.statusText?.trim();
+      return statusText ? `HTTP ${status} ${statusText}` : `HTTP ${status}`;
+    }
+  }
+
+  return messageFromEdgeFunctionFailure(error, data);
+}
+
+function parseEdgeFunctionErrorBody(data: unknown): string | null {
+  if (!data || typeof data !== "object") return null;
+  const record = data as Record<string, unknown>;
+  if (typeof record.error === "string") return record.error;
+  if (record.error && typeof record.error === "object" && "message" in record.error
+    && typeof (record.error as { message: unknown }).message === "string") {
+    return (record.error as { message: string }).message;
+  }
+  return null;
+}
+
+function parseSendProjectInviteSuccess(data: unknown, fallbackInviteId: string): SendWorkspaceProjectInviteEmailSuccessPayload | null {
+  if (!data || typeof data !== "object") return null;
+  const record = data as Record<string, unknown>;
+  if (record.ok !== true) return null;
+  const inviteId = typeof record.inviteId === "string" ? record.inviteId : fallbackInviteId;
+  const recipientEmail = typeof record.recipientEmail === "string" ? record.recipientEmail : "";
+  const providerMessageId = typeof record.providerMessageId === "string" ? record.providerMessageId : undefined;
+  return {
+    ok: true,
+    inviteId,
+    recipientEmail,
+    providerMessageId,
+  };
+}
+
+/**
+ * Sends the invite email via Supabase Edge Function `send-project-invite`.
+ * Only calls the backend when `mode.kind === "supabase"`; demo/local IDs are not valid for the sender.
+ */
+export async function sendWorkspaceProjectInviteEmail(
+  mode: WorkspaceMode | RuntimeWorkspaceMode,
+  inviteId: string,
+): Promise<SendWorkspaceProjectInviteEmailResult> {
+  if (mode.kind === "guest") {
+    throw new Error("An authenticated Supabase session is required.");
+  }
+
+  if (mode.kind !== "supabase") {
+    return { kind: "skipped" };
+  }
+
+  const supabase = await loadSupabaseClient();
+  const { data, error } = await supabase.functions.invoke("send-project-invite", {
+    body: { inviteId },
+  });
+
+  if (error) {
+    throw new Error(await messageFromFunctionsInvokeFailure(error, data));
+  }
+
+  const parsed = parseSendProjectInviteSuccess(data, inviteId);
+  if (parsed) {
+    return { kind: "sent", payload: parsed };
+  }
+
+  const bodyError = parseEdgeFunctionErrorBody(data);
+  if (bodyError) {
+    throw new Error(bodyError);
+  }
+
+  throw new Error("Unexpected response from send-project-invite");
 }
 
 export async function resolveWorkspaceMode(): Promise<WorkspaceMode> {

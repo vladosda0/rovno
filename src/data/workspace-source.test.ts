@@ -7,7 +7,20 @@ import {
   mapProjectMemberRowToMember,
   mapProjectRowToProject,
   selectWorkspaceMode,
+  sendWorkspaceProjectInviteEmail,
 } from "@/data/workspace-source";
+
+const { invokeMock } = vi.hoisted(() => ({
+  invokeMock: vi.fn(),
+}));
+
+vi.mock("@/integrations/supabase/client", () => ({
+  supabase: {
+    functions: {
+      invoke: (...args: unknown[]) => invokeMock(...args),
+    },
+  },
+}));
 
 function profileRow(overrides: Partial<Parameters<typeof mapProfileRowToUser>[0]> = {}) {
   return {
@@ -60,6 +73,94 @@ function memberRow(overrides: Partial<Parameters<typeof mapProjectMemberRowToMem
     ...overrides,
   };
 }
+
+describe("sendWorkspaceProjectInviteEmail", () => {
+  afterEach(() => {
+    invokeMock.mockReset();
+  });
+
+  it("invokes send-project-invite with inviteId for Supabase mode", async () => {
+    const inviteId = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
+    invokeMock.mockResolvedValue({
+      data: {
+        ok: true,
+        inviteId,
+        recipientEmail: "x@example.com",
+        providerMessageId: "msg-1",
+      },
+      error: null,
+    });
+
+    const result = await sendWorkspaceProjectInviteEmail({ kind: "supabase", profileId: "p1" }, inviteId);
+
+    expect(invokeMock).toHaveBeenCalledWith("send-project-invite", expect.objectContaining({
+      body: { inviteId },
+    }));
+    expect(result).toEqual({
+      kind: "sent",
+      payload: {
+        ok: true,
+        inviteId,
+        recipientEmail: "x@example.com",
+        providerMessageId: "msg-1",
+      },
+    });
+  });
+
+  it("returns parsed success when the edge function responds without providerMessageId", async () => {
+    const inviteId = "b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
+    invokeMock.mockResolvedValue({
+      data: { ok: true, inviteId, recipientEmail: "y@example.com" },
+      error: null,
+    });
+
+    const result = await sendWorkspaceProjectInviteEmail({ kind: "supabase", profileId: "p1" }, inviteId);
+
+    expect(result.kind).toBe("sent");
+    if (result.kind === "sent") {
+      expect(result.payload).toEqual({
+        ok: true,
+        inviteId,
+        recipientEmail: "y@example.com",
+        providerMessageId: undefined,
+      });
+    }
+  });
+
+  it("throws a normalized Error when the function returns an error field in the body", async () => {
+    invokeMock.mockResolvedValue({
+      data: { error: "Invite not found" },
+      error: null,
+    });
+
+    await expect(
+      sendWorkspaceProjectInviteEmail({ kind: "supabase", profileId: "p1" }, "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"),
+    ).rejects.toThrow("Invite not found");
+  });
+
+  it("throws using invoke error message when the client reports an error", async () => {
+    invokeMock.mockResolvedValue({
+      data: null,
+      error: { message: "Edge function returned a non-2xx status code" },
+    });
+
+    await expect(
+      sendWorkspaceProjectInviteEmail({ kind: "supabase", profileId: "p1" }, "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"),
+    ).rejects.toThrow("Edge function returned a non-2xx status code");
+  });
+
+  it("does not invoke the edge function for local or demo mode", async () => {
+    await expect(sendWorkspaceProjectInviteEmail({ kind: "local" }, "any-id")).resolves.toEqual({ kind: "skipped" });
+    await expect(sendWorkspaceProjectInviteEmail({ kind: "demo" }, "any-id")).resolves.toEqual({ kind: "skipped" });
+    expect(invokeMock).not.toHaveBeenCalled();
+  });
+
+  it("throws for guest mode", async () => {
+    await expect(sendWorkspaceProjectInviteEmail({ kind: "guest" }, "any-id")).rejects.toThrow(
+      "An authenticated Supabase session is required.",
+    );
+  });
+});
 
 describe("workspace-source helpers", () => {
   afterEach(() => {

@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Users, Plus, MoreVertical, Shield, Eye, Wrench, Crown, Mail } from "lucide-react";
+import { Users, Plus, MoreVertical, Shield, Eye, Wrench, Crown, Mail, Send } from "lucide-react";
 import { useCurrentUser, useProject, useProjectInvites, useWorkspaceMode } from "@/hooks/use-mock-data";
 import { usePermission } from "@/lib/permissions";
 import { addEvent, getUserById } from "@/data/store";
 import {
   createWorkspaceProjectInvite,
+  sendWorkspaceProjectInviteEmail,
   updateWorkspaceProjectInvite,
   updateWorkspaceProjectMemberRole,
   type WorkspaceProjectInvite,
@@ -85,6 +86,16 @@ function inviteStatusClassName(status: WorkspaceProjectInvite["status"]) {
   if (status === "expired") return "bg-warning/10 text-warning-foreground";
   return "bg-muted text-muted-foreground";
 }
+
+type InviteEmailDeliveryOutcome =
+  | { kind: "not_applicable" }
+  | { kind: "sent"; recipientEmail: string }
+  | { kind: "failed"; message: string };
+
+type CreateInviteWithDeliveryResult = {
+  createdInvite: WorkspaceProjectInvite;
+  emailDelivery: InviteEmailDeliveryOutcome;
+};
 
 export default function ProjectParticipants() {
   const { id } = useParams<{ id: string }>();
@@ -176,20 +187,44 @@ export default function ProjectParticipants() {
   );
 
   const createInviteMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (): Promise<CreateInviteWithDeliveryResult> => {
       const trimmedEmail = inviteEmail.trim().toLowerCase();
-      return createWorkspaceProjectInvite(
-        workspaceMode.kind === "pending-supabase" ? { kind: "local" } : workspaceMode,
-        {
-          projectId,
-          email: trimmedEmail,
-          role: inviteRole,
-          aiAccess: inviteAI,
-          viewerRegime: inviteRole === "viewer" ? inviteViewerRegime : null,
-          creditLimit: parseInt(inviteLimit, 10) || 50,
-          invitedBy: currentUser.id,
-        },
-      );
+      const modeForInvite =
+        workspaceMode.kind === "pending-supabase" ? { kind: "local" as const } : workspaceMode;
+
+      const createdInvite = await createWorkspaceProjectInvite(modeForInvite, {
+        projectId,
+        email: trimmedEmail,
+        role: inviteRole,
+        aiAccess: inviteAI,
+        viewerRegime: inviteRole === "viewer" ? inviteViewerRegime : null,
+        creditLimit: parseInt(inviteLimit, 10) || 50,
+        invitedBy: currentUser.id,
+      });
+
+      if (workspaceMode.kind !== "supabase") {
+        return { createdInvite, emailDelivery: { kind: "not_applicable" } };
+      }
+
+      try {
+        const delivery = await sendWorkspaceProjectInviteEmail(workspaceMode, createdInvite.id);
+        if (delivery.kind === "skipped") {
+          return { createdInvite, emailDelivery: { kind: "not_applicable" } };
+        }
+        return {
+          createdInvite,
+          emailDelivery: {
+            kind: "sent",
+            recipientEmail: delivery.payload.recipientEmail || createdInvite.email,
+          },
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unable to send invite email";
+        return {
+          createdInvite,
+          emailDelivery: { kind: "failed", message },
+        };
+      }
     },
     onMutate: async () => {
       if (workspaceMode.kind !== "supabase") return undefined;
@@ -213,7 +248,7 @@ export default function ProjectParticipants() {
       queryClient.setQueryData<WorkspaceProjectInvite[]>(invitesQueryKey, [optimisticInvite, ...previousInvites]);
       return { previousInvites };
     },
-    onSuccess: (createdInvite) => {
+    onSuccess: ({ createdInvite, emailDelivery }) => {
       if (workspaceMode.kind !== "supabase") {
         addEvent({
           id: `evt-invite-${Date.now()}`,
@@ -227,10 +262,24 @@ export default function ProjectParticipants() {
         });
       }
 
-      toast({
-        title: "Invitation sent",
-        description: `${createdInvite.email} invited as ${roleLabels[createdInvite.role]}.`,
-      });
+      if (emailDelivery.kind === "failed") {
+        toast({
+          title: "Invite created",
+          description: `The invitation for ${createdInvite.email} was saved, but the email could not be sent (${emailDelivery.message}). You can resend from the row menu.`,
+          variant: "destructive",
+        });
+      } else if (emailDelivery.kind === "sent") {
+        toast({
+          title: "Invitation sent",
+          description: `${emailDelivery.recipientEmail} invited as ${roleLabels[createdInvite.role]}.`,
+        });
+      } else {
+        toast({
+          title: "Invitation sent",
+          description: `${createdInvite.email} invited as ${roleLabels[createdInvite.role]}.`,
+        });
+      }
+
       setInviteOpen(false);
       setInviteEmail("");
       setInviteRole("contractor");
@@ -252,6 +301,38 @@ export default function ProjectParticipants() {
       if (workspaceMode.kind === "supabase") {
         await queryClient.invalidateQueries({ queryKey: invitesQueryKey });
       }
+    },
+  });
+
+  const resendInviteEmailMutation = useMutation({
+    mutationFn: async (inviteId: string) => {
+      if (workspaceMode.kind !== "supabase") {
+        throw new Error("Resend is only available in the connected workspace.");
+      }
+      return sendWorkspaceProjectInviteEmail(workspaceMode, inviteId);
+    },
+    onSuccess: (result) => {
+      if (result.kind === "skipped") {
+        toast({
+          title: "Email not sent",
+          description: "Resend is not available in this workspace mode.",
+          variant: "destructive",
+        });
+        return;
+      }
+      toast({
+        title: "Invitation email sent",
+        description: result.payload.recipientEmail
+          ? `Sent to ${result.payload.recipientEmail}.`
+          : "The invitation email was sent.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Resend failed",
+        description: error instanceof Error ? error.message : "Unable to resend invite email.",
+        variant: "destructive",
+      });
     },
   });
 
@@ -524,6 +605,8 @@ export default function ProjectParticipants() {
               ) : invites.map((invite) => {
                 const inviter = getUserById(invite.invited_by);
                 const canEditInvite = canInvite && invite.status === "pending";
+                const showResendEmail =
+                  workspaceMode.kind === "supabase" && canInvite && invite.status === "pending";
                 return (
                   <TableRow key={invite.id}>
                     <TableCell className="text-body-sm text-foreground">{invite.email}</TableCell>
@@ -545,6 +628,19 @@ export default function ProjectParticipants() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="glass-elevated rounded-card">
+                            {showResendEmail && (
+                              <DropdownMenuItem
+                                disabled={
+                                  resendInviteEmailMutation.isPending
+                                  && resendInviteEmailMutation.variables === invite.id
+                                }
+                                onClick={() => {
+                                  resendInviteEmailMutation.mutate(invite.id);
+                                }}
+                              >
+                                <Send className="mr-2 h-3.5 w-3.5" /> Resend email
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuItem
                               onClick={() => {
                                 setRoleTarget({ kind: "invite", inviteId: invite.id });
