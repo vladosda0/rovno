@@ -47,27 +47,25 @@ function useWorkspaceModeState(): WorkspaceModeState {
   const runtimeAuth = useRuntimeAuth();
   const demoSessionActive = isDemoSessionActive();
 
+  const supabaseRequested = isSupabaseWorkspaceRequested();
+  const supabaseConfig = hasSupabaseWorkspaceConfig();
+
+  let mode: WorkspaceModeState;
   if (demoSessionActive) {
-    return { kind: "demo" };
+    mode = { kind: "demo" };
+  } else if (!supabaseRequested) {
+    mode = { kind: "local" };
+  } else if (!supabaseConfig) {
+    mode = { kind: "guest" };
+  } else if (runtimeAuth.status === "loading") {
+    mode = { kind: "pending-supabase" };
+  } else if (runtimeAuth.status !== "authenticated" || !runtimeAuth.profileId) {
+    mode = { kind: "guest" };
+  } else {
+    mode = { kind: "supabase", profileId: runtimeAuth.profileId };
   }
 
-  if (!isSupabaseWorkspaceRequested()) {
-    return { kind: "local" };
-  }
-
-  if (!hasSupabaseWorkspaceConfig()) {
-    return { kind: "guest" };
-  }
-
-  if (runtimeAuth.status === "loading") {
-    return { kind: "pending-supabase" };
-  }
-
-  if (runtimeAuth.status !== "authenticated" || !runtimeAuth.profileId) {
-    return { kind: "guest" };
-  }
-
-  return { kind: "supabase", profileId: runtimeAuth.profileId };
+  return mode;
 }
 
 export function useWorkspaceMode(): WorkspaceModeState {
@@ -92,24 +90,20 @@ export function useWorkspaceCurrentUserState(): {
     staleTime: WORKSPACE_QUERY_STALE_TIME_MS,
   });
 
+  let user: User;
+  let isLoading: boolean;
   if (mode.kind === "demo" || mode.kind === "local") {
-    return {
-      user: store.getCurrentUser(),
-      isLoading: false,
-    };
+    user = store.getCurrentUser();
+    isLoading = false;
+  } else if (mode.kind === "pending-supabase") {
+    user = EMPTY_WORKSPACE_USER;
+    isLoading = true;
+  } else {
+    user = userQuery.data ?? EMPTY_WORKSPACE_USER;
+    isLoading = userQuery.isPending;
   }
 
-  if (mode.kind === "pending-supabase") {
-    return {
-      user: EMPTY_WORKSPACE_USER,
-      isLoading: true,
-    };
-  }
-
-  return {
-    user: userQuery.data ?? EMPTY_WORKSPACE_USER,
-    isLoading: userQuery.isPending,
-  };
+  return { user, isLoading };
 }
 
 export function useWorkspaceCurrentUser(): User {

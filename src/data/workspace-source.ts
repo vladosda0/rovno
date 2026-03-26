@@ -344,7 +344,8 @@ function createSupabaseWorkspaceSource(
         throw error;
       }
 
-      return filterActiveProjectRows(data ?? []).map(mapProjectRowToProject);
+      const activeRows = filterActiveProjectRows(data ?? []);
+      return activeRows.map(mapProjectRowToProject);
     },
 
     async getProjectById(projectId: string) {
