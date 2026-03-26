@@ -10,6 +10,7 @@ import {
 import { useProjects, useCurrentUser } from "@/hooks/use-mock-data";
 import { useProjectsRecentEventsMap } from "@/hooks/use-activity-source";
 import * as store from "@/data/store";
+import { PendingInvitationsBlock } from "@/components/home/PendingInvitationsBlock";
 
 function getStatusColor(progress: number): string {
   if (progress >= 100) return "bg-success/15 text-success";
@@ -67,6 +68,8 @@ export function OverviewTab() {
       <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
         {/* Left column */}
         <div className="space-y-4 sm:space-y-6">
+          <PendingInvitationsBlock />
+
           {/* My Projects */}
           <Card>
             <CardContent className="p-4 sm:p-6">

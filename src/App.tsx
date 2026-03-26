@@ -29,6 +29,7 @@ const ProjectDocuments = lazy(() => import("@/pages/project/ProjectDocuments"));
 const ProjectActivity = lazy(() => import("@/pages/project/ProjectActivity"));
 const ProjectParticipants = lazy(() => import("@/pages/project/ProjectParticipants"));
 const ShareEstimate = lazy(() => import("@/pages/share/ShareEstimate"));
+const InviteAccept = lazy(() => import("@/pages/invite/InviteAccept"));
 const ThemeDemo = lazy(() => import("@/pages/ThemeDemo"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
@@ -57,6 +58,7 @@ const App = () => (
           <Route path="/pricing" element={routeElement(<Pricing />)} />
           <Route path="/theme" element={routeElement(<ThemeDemo />)} />
           <Route path="/share/estimate/:shareId" element={routeElement(<ShareEstimate />)} />
+          <Route path="/invite/accept/:inviteToken" element={routeElement(<InviteAccept />)} />
 
           {/* Auth layout */}
           <Route element={routeElement(<AuthLayout />)}>

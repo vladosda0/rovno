@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,10 +11,13 @@ import { clearAiSidebarSessionPreference } from "@/lib/ai-sidebar-session";
 
 export default function Signup() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const nextUrl = searchParams.get("next");
+  const postAuthDestination = nextUrl && nextUrl.startsWith("/") ? nextUrl : "/onboarding";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,11 +50,15 @@ export default function Signup() {
       if (data.session?.user) {
         setAuthRole("owner");
         toast({ title: "Account created!", description: "Welcome to СтройАгент." });
-        navigate("/onboarding");
+        navigate(postAuthDestination);
         return;
       }
 
       toast({ title: "Account created!", description: "Check your email to confirm your account." });
+      if (nextUrl && nextUrl.startsWith("/")) {
+        navigate(`/auth/login?next=${encodeURIComponent(nextUrl)}`);
+        return;
+      }
       navigate("/auth/login");
     } catch (error) {
       toast({

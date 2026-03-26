@@ -1,0 +1,99 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
+import InviteAccept from "@/pages/invite/InviteAccept";
+
+const { useRuntimeAuthMock, acceptProjectInviteMock } = vi.hoisted(() => ({
+  useRuntimeAuthMock: vi.fn(),
+  acceptProjectInviteMock: vi.fn(),
+}));
+
+vi.mock("@/hooks/use-runtime-auth", () => ({
+  useRuntimeAuth: () => useRuntimeAuthMock(),
+}));
+
+vi.mock("@/lib/accept-project-invite", () => ({
+  acceptProjectInvite: acceptProjectInviteMock,
+}));
+
+function renderInvitePage(path = "/invite/accept/token-123") {
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <Routes>
+        <Route path="/invite/accept/:inviteToken" element={<InviteAccept />} />
+        <Route path="/project/:id/dashboard" element={<div>Project dashboard</div>} />
+      </Routes>
+    </MemoryRouter>,
+  );
+}
+
+describe("InviteAccept", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useRealTimers();
+  });
+
+  it("shows auth continuation links when user is not authenticated", () => {
+    useRuntimeAuthMock.mockReturnValue({
+      status: "guest",
+      session: null,
+      user: null,
+      profileId: null,
+    });
+
+    renderInvitePage();
+
+    const signInLink = screen.getByRole("link", { name: /sign in/i });
+    const signUpLink = screen.getByRole("link", { name: /create account/i });
+
+    expect(signInLink).toHaveAttribute("href", "/auth/login?next=%2Finvite%2Faccept%2Ftoken-123");
+    expect(signUpLink).toHaveAttribute("href", "/auth/signup?next=%2Finvite%2Faccept%2Ftoken-123");
+    expect(acceptProjectInviteMock).not.toHaveBeenCalled();
+  });
+
+  it("accepts invite and redirects to project dashboard for authenticated users", async () => {
+    useRuntimeAuthMock.mockReturnValue({
+      status: "authenticated",
+      session: null,
+      user: { id: "profile-1" },
+      profileId: "profile-1",
+    });
+    acceptProjectInviteMock.mockResolvedValue({
+      ok: true,
+      invite: {
+        id: "invite-1",
+        project_id: "project-1",
+        invite_token: "token-123",
+      },
+    });
+
+    renderInvitePage();
+
+    await waitFor(() => {
+      expect(acceptProjectInviteMock).toHaveBeenCalledWith("token-123");
+    });
+
+    expect(await screen.findByText("Project dashboard")).toBeInTheDocument();
+  });
+
+  it("shows backend error message when acceptance fails", async () => {
+    useRuntimeAuthMock.mockReturnValue({
+      status: "authenticated",
+      session: null,
+      user: { id: "profile-1" },
+      profileId: "profile-1",
+    });
+    acceptProjectInviteMock.mockResolvedValue({
+      ok: false,
+      error: {
+        code: "invite_email_mismatch",
+        message: "This invite was sent to a different email address.",
+        rawError: null,
+      },
+    });
+
+    renderInvitePage();
+
+    expect(await screen.findByText("This invite was sent to a different email address.")).toBeInTheDocument();
+  });
+});
