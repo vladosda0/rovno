@@ -17,6 +17,8 @@ Non-negotiable rules:
 - If UI conflicts with schema, schema wins.
 - `backend-truth/` inside `rovno` is read-only.
 - Do not hand-edit `backend-truth/`.
+- Do not manually regenerate `backend-truth/` from local agent sessions.
+- Mirror refresh must happen via the automated GitHub sync PR workflow after `rovno-db` is pushed to `dev`.
 - Backend changes belong in `rovno-db` first.
 - Frontend must adapt to backend truth through adapters/mappers, not by mutating the contract mirror.
 

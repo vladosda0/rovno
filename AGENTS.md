@@ -115,6 +115,8 @@ Rules:
 4. Keep demo/mock data behavior separate from real backend-backed behavior unless explicitly designed otherwise.
 5. Preserve demo mode unless the task explicitly changes it.
 6. When working on the first integration seam, prefer hook/repository boundaries over page-by-page rewrites.
+7. Do not manually regenerate `backend-truth/` from local agent sessions.
+8. `backend-truth/` updates must arrive through the automated GitHub sync PR flow after `rovno-db` changes are complete and pushed to `dev`.
 
 Important current architecture fact:
 - this repo still contains seeded/mock runtime state
@@ -164,6 +166,7 @@ When asked to prepare commit guidance:
 - separate generated artifacts from hand-written logic when practical
 
 If changes touch both app code and backend contract generation, prefer separate commits and separate repos.
+For contract mirror updates, prefer the automated sync PR in `rovno` over local manual regeneration.
 
 ---
 
