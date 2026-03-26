@@ -1525,6 +1525,13 @@ export type Database = {
           }
           Returns: boolean
         }
+        "is_project_owner_for_actor": {
+          Args: {
+          "p_project_id": string
+          "p_actor": string
+          }
+          Returns: boolean
+        }
         "prepare_document_upload": {
           Args: {
           "p_project_id": string

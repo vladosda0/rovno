@@ -545,6 +545,13 @@
       "name": "guard_project_media_visibility_class_change",
       "signature": "public.guard_project_media_visibility_class_change()",
       "sourceMigration": "supabase/migrations/20260325120000_doc_media_visibility_write_enforcement.sql"
+    },
+    {
+      "key": "public.is_project_owner_for_actor",
+      "schema": "public",
+      "name": "is_project_owner_for_actor",
+      "signature": "public.is_project_owner_for_actor(uuid, uuid)",
+      "sourceMigration": "supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql"
     }
   ],
   "policies": [
@@ -635,14 +642,6 @@
       "name": "projects_insert",
       "command": "insert",
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-    },
-    {
-      "key": "public.projects.projects_select",
-      "schema": "public",
-      "table": "projects",
-      "name": "projects_select",
-      "command": "select",
-      "sourceMigration": "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql"
     },
     {
       "key": "public.projects.projects_delete",
@@ -741,12 +740,28 @@
       "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
     },
     {
+      "key": "public.projects.projects_update",
+      "schema": "public",
+      "table": "projects",
+      "name": "projects_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
+    },
+    {
+      "key": "public.projects.projects_select",
+      "schema": "public",
+      "table": "projects",
+      "name": "projects_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260325123000_restore_projects_select_membership_visibility.sql"
+    },
+    {
       "key": "public.project_members.project_members_select",
       "schema": "public",
       "table": "project_members",
       "name": "project_members_select",
       "command": "select",
-      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
+      "sourceMigration": "supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql"
     },
     {
       "key": "public.project_members.project_members_insert",
@@ -754,7 +769,7 @@
       "table": "project_members",
       "name": "project_members_insert",
       "command": "insert",
-      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
+      "sourceMigration": "supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql"
     },
     {
       "key": "public.project_members.project_members_update",
@@ -762,7 +777,7 @@
       "table": "project_members",
       "name": "project_members_update",
       "command": "update",
-      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
+      "sourceMigration": "supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql"
     },
     {
       "key": "public.project_members.project_members_delete",
@@ -770,7 +785,7 @@
       "table": "project_members",
       "name": "project_members_delete",
       "command": "delete",
-      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
+      "sourceMigration": "supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql"
     },
     {
       "key": "public.project_invites.project_invites_select",
@@ -1555,7 +1570,9 @@
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql",
-        "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
+        "supabase/migrations/20260320130000_codex_review_findings_fixes.sql",
+        "supabase/migrations/20260325123000_restore_projects_select_membership_visibility.sql",
+        "supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql"
       ],
       "tables": [
         "public.profiles",
@@ -1596,9 +1613,10 @@
         "public.notification_preferences.notification_preferences_select",
         "public.notification_preferences.notification_preferences_insert",
         "public.notification_preferences.notification_preferences_update",
-        "public.projects.projects_select",
+        "public.projects.projects_insert",
         "public.projects.projects_delete",
         "public.projects.projects_update",
+        "public.projects.projects_select",
         "public.project_members.project_members_select",
         "public.project_members.project_members_insert",
         "public.project_members.project_members_update",

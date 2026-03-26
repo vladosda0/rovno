@@ -119,6 +119,22 @@
     {
       "path": "supabase/migrations/20260325120000_doc_media_visibility_write_enforcement.sql",
       "sha256": "55508144d70db2e8fcba4897c1aa4822aa56bc6de5414a6b28835c1bd12e6239"
+    },
+    {
+      "path": "supabase/migrations/20260325123000_restore_projects_select_membership_visibility.sql",
+      "sha256": "9a3fd9ed1f67da2a50de460d42566a103ae5a8b8dbdb885ae6b5fe4a6b8246d5"
+    },
+    {
+      "path": "supabase/migrations/20260325126000_fix_project_members_co_owner_policy_recursion.sql",
+      "sha256": "e550e71d3c669d35fe02a132589a7b70792c87ff18ecba33eca9be769108d3a2"
+    },
+    {
+      "path": "supabase/migrations/20260325130000_remove_co_owner_project_members_policy_branch.sql",
+      "sha256": "ad820fbc2ae19571679d71d0dd0cd48e9181a385e58a72b3ea889ab4123b8ba9"
+    },
+    {
+      "path": "supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql",
+      "sha256": "c77bfe0a429490526f5f21b0b9bd6ea686b10341bea6dcffb5b0fede379e83b9"
     }
   ],
   "generated_artifacts": [
@@ -172,6 +188,10 @@
     "sql/20260324140000_project_launch_authority.sql",
     "sql/20260325100000_sensitive_visibility_and_document_classification.sql",
     "sql/20260325120000_doc_media_visibility_write_enforcement.sql",
+    "sql/20260325123000_restore_projects_select_membership_visibility.sql",
+    "sql/20260325126000_fix_project_members_co_owner_policy_recursion.sql",
+    "sql/20260325130000_remove_co_owner_project_members_policy_branch.sql",
+    "sql/20260325133000_break_projects_project_members_rls_cycle.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
