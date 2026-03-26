@@ -948,6 +948,13 @@ function buildTaskInfoByWorkId(tasks: Task[]): Map<string, {
   return taskInfoByWorkId;
 }
 
+function mapChecklistTypeToEstimateLineType(item: ChecklistItem): ResourceLineType {
+  if (item.estimateV2ResourceType) return item.estimateV2ResourceType;
+  if (item.type === "material") return "material";
+  if (item.type === "tool") return "tool";
+  return "labor";
+}
+
 export async function hydrateEstimateV2ProjectFromWorkspace(
   projectId: string,
   input: { profileId: string },
@@ -1009,6 +1016,12 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
     const cachedLinesById = new Map((cached?.lines ?? []).map((line) => [line.id, line]));
     const cachedDependenciesById = new Map((cached?.dependencies ?? []).map((dependency) => [dependency.id, dependency]));
     const taskInfoByWorkId = buildTaskInfoByWorkId(tasks);
+    const hasLinkedEstimateChecklist = tasks.some((task) => task.checklist.some(
+      (item) => Boolean(item.estimateV2WorkId) || Boolean(item.estimateV2LineId),
+    ));
+    const hasStartedTaskExecution = tasks.some(
+      (task) => task.status === "in_progress" || task.status === "blocked" || task.status === "done",
+    );
 
     const stages = draft.stages
       .map((stage) => {
@@ -1025,7 +1038,38 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
       })
       .sort((left, right) => left.order - right.order);
 
-    const works = draft.works
+    const linkedChecklistEntries = tasks.flatMap((task) => task.checklist
+      .filter((item) => Boolean(item.estimateV2WorkId || item.estimateV2LineId))
+      .map((item) => ({ task, item })));
+    const canRebuildStructureFromTasks = draft.works.length === 0
+      && linkedChecklistEntries.length > 0;
+
+    const works = (canRebuildStructureFromTasks
+      ? Array.from(new Set(linkedChecklistEntries
+        .map(({ item }) => item.estimateV2WorkId)
+        .filter((value): value is string => Boolean(value))))
+        .map((workId, index) => {
+          const task = linkedChecklistEntries.find(({ item }) => item.estimateV2WorkId === workId)?.task ?? null;
+          const cachedWork = cachedWorksById.get(workId);
+          const taskInfo = taskInfoByWorkId.get(workId);
+          const stageIdFromTask = task?.stage_id ?? null;
+          const fallbackStageId = stages[0]?.id ?? "";
+          return {
+            id: workId,
+            projectId,
+            stageId: stageIdFromTask || cachedWork?.stageId || fallbackStageId,
+            title: task?.title ?? cachedWork?.title ?? `Work ${index + 1}`,
+            order: cachedWork?.order ?? index + 1,
+            discountBps: cachedWork?.discountBps ?? 0,
+            plannedStart: taskInfo?.plannedStart ?? cachedWork?.plannedStart ?? task?.startDate ?? null,
+            plannedEnd: taskInfo?.plannedEnd ?? cachedWork?.plannedEnd ?? task?.deadline ?? null,
+            taskId: taskInfo?.taskId ?? cachedWork?.taskId ?? task?.id ?? null,
+            status: taskInfo?.status ?? cachedWork?.status ?? mapTaskStatusToWorkStatus(task?.status ?? "not_started"),
+            createdAt: cachedWork?.createdAt ?? task?.created_at ?? nowIso(),
+            updatedAt: cachedWork?.updatedAt ?? task?.created_at ?? nowIso(),
+          } satisfies EstimateV2Work;
+        })
+      : draft.works
       .map((work) => {
         const cachedWork = cachedWorksById.get(work.id);
         const taskInfo = taskInfoByWorkId.get(work.id);
@@ -1043,33 +1087,61 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
           createdAt: cachedWork?.createdAt ?? work.created_at,
           updatedAt: cachedWork?.updatedAt ?? work.created_at,
         } satisfies EstimateV2Work;
-      })
+      }))
       .sort((left, right) => left.order - right.order);
 
     const stageIdByWorkId = new Map(works.map((work) => [work.id, work.stageId]));
-    const lines = draft.lines.map((line) => {
-      const cachedLine = cachedLinesById.get(line.id);
-      return {
-        id: line.id,
-        projectId,
-        stageId: stageIdByWorkId.get(line.estimate_work_id) ?? cachedLine?.stageId ?? "",
-        workId: line.estimate_work_id,
-        title: line.title,
-        type: inferLineTypeFromRemote(line.resource_type, cachedLine?.type),
-        unit: line.unit ?? cachedLine?.unit ?? "unit",
-        qtyMilli: Math.max(1, Math.round(line.quantity * 1_000)),
-        costUnitCents: Math.max(0, Math.round(line.unit_price_cents ?? 0)),
-        markupBps: cachedLine?.markupBps ?? currentState.project.markupBps,
-        discountBpsOverride: cachedLine?.discountBpsOverride ?? null,
-        assigneeId: cachedLine?.assigneeId ?? null,
-        assigneeName: cachedLine?.assigneeName ?? null,
-        assigneeEmail: cachedLine?.assigneeEmail ?? null,
-        receivedCents: cachedLine?.receivedCents ?? 0,
-        pnlPlaceholderCents: cachedLine?.pnlPlaceholderCents ?? 0,
-        createdAt: cachedLine?.createdAt ?? line.created_at,
-        updatedAt: cachedLine?.updatedAt ?? line.created_at,
-      } satisfies EstimateV2ResourceLine;
-    });
+    const lines = canRebuildStructureFromTasks
+      ? linkedChecklistEntries.map(({ task, item }, index) => {
+        const lineId = item.estimateV2LineId ?? `${task.id}-line-${index}`;
+        const workId = item.estimateV2WorkId
+          ?? linkedChecklistEntries.find(({ item: sibling }) => sibling.estimateV2LineId === item.estimateV2LineId)?.item.estimateV2WorkId
+          ?? "";
+        const cachedLine = cachedLinesById.get(lineId);
+        return {
+          id: lineId,
+          projectId,
+          stageId: stageIdByWorkId.get(workId) ?? cachedLine?.stageId ?? task.stage_id ?? "",
+          workId,
+          title: item.text || cachedLine?.title || "Line item",
+          type: mapChecklistTypeToEstimateLineType(item),
+          unit: item.estimateV2Unit ?? cachedLine?.unit ?? "unit",
+          qtyMilli: Math.max(1, Math.round(item.estimateV2QtyMilli ?? cachedLine?.qtyMilli ?? 1_000)),
+          costUnitCents: Math.max(0, Math.round(cachedLine?.costUnitCents ?? 0)),
+          markupBps: cachedLine?.markupBps ?? currentState.project.markupBps,
+          discountBpsOverride: cachedLine?.discountBpsOverride ?? null,
+          assigneeId: cachedLine?.assigneeId ?? null,
+          assigneeName: cachedLine?.assigneeName ?? null,
+          assigneeEmail: cachedLine?.assigneeEmail ?? null,
+          receivedCents: cachedLine?.receivedCents ?? 0,
+          pnlPlaceholderCents: cachedLine?.pnlPlaceholderCents ?? 0,
+          createdAt: cachedLine?.createdAt ?? task.created_at,
+          updatedAt: cachedLine?.updatedAt ?? task.created_at,
+        } satisfies EstimateV2ResourceLine;
+      })
+      : draft.lines.map((line) => {
+        const cachedLine = cachedLinesById.get(line.id);
+        return {
+          id: line.id,
+          projectId,
+          stageId: stageIdByWorkId.get(line.estimate_work_id) ?? cachedLine?.stageId ?? "",
+          workId: line.estimate_work_id,
+          title: line.title,
+          type: inferLineTypeFromRemote(line.resource_type, cachedLine?.type),
+          unit: line.unit ?? cachedLine?.unit ?? "unit",
+          qtyMilli: Math.max(1, Math.round(line.quantity * 1_000)),
+          costUnitCents: Math.max(0, Math.round(line.unit_price_cents ?? 0)),
+          markupBps: cachedLine?.markupBps ?? currentState.project.markupBps,
+          discountBpsOverride: cachedLine?.discountBpsOverride ?? null,
+          assigneeId: cachedLine?.assigneeId ?? null,
+          assigneeName: cachedLine?.assigneeName ?? null,
+          assigneeEmail: cachedLine?.assigneeEmail ?? null,
+          receivedCents: cachedLine?.receivedCents ?? 0,
+          pnlPlaceholderCents: cachedLine?.pnlPlaceholderCents ?? 0,
+          createdAt: cachedLine?.createdAt ?? line.created_at,
+          updatedAt: cachedLine?.updatedAt ?? line.created_at,
+        } satisfies EstimateV2ResourceLine;
+      });
 
     const dependencies = draft.dependencies.map((dependency) => {
       const cachedDependency = cachedDependenciesById.get(dependency.id);
@@ -1087,6 +1159,12 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
 
     const derivedProjectMode = normalizeProjectMode(workspaceProject?.project_mode ?? currentState.project.projectMode);
     const cachedProject = cached?.project ?? null;
+    const inferredEstimateStatus: EstimateExecutionStatus = (
+      hasLinkedEstimateChecklist || hasStartedTaskExecution
+    ) ? "in_work" : "planning";
+    const nextEstimateStatus: EstimateExecutionStatus = cachedProject?.estimateStatus && cachedProject.estimateStatus !== "planning"
+      ? cachedProject.estimateStatus
+      : inferredEstimateStatus;
     const nextProject: EstimateV2Project = {
       ...currentState.project,
       ...cachedProject,
@@ -1097,6 +1175,7 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
       regime: derivedProjectMode === "build_myself" && cachedProject?.regime === "client"
         ? "build_myself"
         : (cachedProject?.regime ?? (derivedProjectMode === "build_myself" ? "build_myself" : "contractor")),
+      estimateStatus: nextEstimateStatus,
       updatedAt: cachedProject?.updatedAt ?? draft.estimate?.updated_at ?? currentState.project.updatedAt,
     };
 

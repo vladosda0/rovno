@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import * as store from "@/data/store";
 import { cacheWorkspaceUsers } from "@/data/workspace-profile-cache";
-import type { Member, Project, User } from "@/types/entities";
+import type { FinanceVisibility, Member, Project, User } from "@/types/entities";
 import { isDemoSessionActive } from "@/lib/auth-state";
 import type { Database as WorkspaceDatabase } from "../../backend-truth/generated/supabase-types";
 
@@ -12,6 +12,7 @@ type ProjectMemberRow = WorkspaceDatabase["public"]["Tables"]["project_members"]
 type ProjectInsert = WorkspaceDatabase["public"]["Tables"]["projects"]["Insert"];
 type ProjectMemberInsert = WorkspaceDatabase["public"]["Tables"]["project_members"]["Insert"];
 type TypedSupabaseClient = SupabaseClient<WorkspaceDatabase>;
+type InternalDocsVisibility = "none" | "view" | "edit";
 
 export type WorkspaceMode =
   | { kind: "demo" }
@@ -575,6 +576,8 @@ export async function updateWorkspaceProjectMemberRole(
     userId: string;
     role: Member["role"];
     viewerRegime?: Member["viewer_regime"];
+    financeVisibility?: FinanceVisibility;
+    internalDocsVisibility?: InternalDocsVisibility;
   },
 ): Promise<Member> {
   if (mode.kind === "guest") {
@@ -592,13 +595,21 @@ export async function updateWorkspaceProjectMemberRole(
     return updated;
   }
 
+  const patch: Record<string, unknown> = {
+    role: input.role,
+    viewer_regime: input.viewerRegime ?? null,
+  };
+  if (input.financeVisibility !== undefined) {
+    patch.finance_visibility = input.financeVisibility;
+  }
+  if (input.internalDocsVisibility !== undefined) {
+    patch.internal_docs_visibility = input.internalDocsVisibility;
+  }
+
   const supabase = await loadSupabaseClient();
   const { data, error } = await supabase
     .from("project_members")
-    .update({
-      role: input.role,
-      viewer_regime: input.viewerRegime ?? null,
-    })
+    .update(patch)
     .eq("project_id", input.projectId)
     .eq("profile_id", input.userId)
     .select("*")
@@ -621,11 +632,18 @@ export async function createWorkspaceProjectInvite(
     viewerRegime: WorkspaceProjectInvite["viewer_regime"];
     creditLimit: number;
     invitedBy: string;
+    financeVisibility?: FinanceVisibility;
+    internalDocsVisibility?: InternalDocsVisibility;
   },
 ): Promise<WorkspaceProjectInvite> {
   if (mode.kind === "guest") {
     throw new Error("An authenticated Supabase session is required.");
   }
+
+  const resolvedFinanceVisibility = input.financeVisibility
+    ?? (input.role === "viewer" ? "none" : "detail");
+  const resolvedInternalDocsVisibility = input.internalDocsVisibility
+    ?? (input.role === "viewer" ? "none" : "view");
 
   if (isBrowserWorkspaceMode(mode)) {
     const invite: WorkspaceProjectInvite = {
@@ -658,6 +676,8 @@ export async function createWorkspaceProjectInvite(
       viewer_regime: input.viewerRegime ?? null,
       credit_limit: input.creditLimit,
       invited_by: input.invitedBy,
+      finance_visibility: resolvedFinanceVisibility,
+      internal_docs_visibility: resolvedInternalDocsVisibility,
     })
     .select("*")
     .single();
