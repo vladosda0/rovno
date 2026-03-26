@@ -12624,14 +12624,6 @@ export const sourceTrace = {
       "key": "public.projects.projects_delete",
       "schema": "public",
       "table": "projects",
-      "name": "projects_delete",
-      "command": "delete",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-    },
-    {
-      "key": "public.projects.projects_update",
-      "schema": "public",
-      "table": "projects",
       "name": "projects_update",
       "command": "update",
       "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
@@ -12715,6 +12707,14 @@ export const sourceTrace = {
       "name": "projects_update",
       "command": "update",
       "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
+    },
+    {
+      "key": "public.projects.projects_select",
+      "schema": "public",
+      "table": "projects",
+      "name": "projects_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260325123000_restore_projects_select_membership_visibility.sql"
     },
     {
       "key": "public.projects.projects_update",
