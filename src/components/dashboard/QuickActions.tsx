@@ -6,7 +6,6 @@ import {
   addMedia,
   addEvent,
   getCurrentUser,
-  getProjectInvites,
   getUserById,
 } from "@/data/store";
 import { createEstimateItemForTask } from "@/data/estimate-store";
@@ -58,14 +57,9 @@ import {
   X,
 } from "lucide-react";
 import { ReceiveOrderPickerModal } from "@/components/procurement/ReceiveOrderPickerModal";
-import { createWorkspaceProjectInvite } from "@/data/workspace-source";
 import type { AIAccess, Member, MemberRole, Stage, Task, TaskStatus } from "@/types/entities";
-import {
-  getInviteAiAccessOptions,
-  getInviteRoleOptions,
-} from "@/lib/participant-role-policy";
 
-type ModalKey = "task" | "document" | "photo" | "participant" | "credits";
+type ModalKey = "task" | "document" | "photo" | "credits";
 
 interface Props {
   projectId: string;
@@ -76,8 +70,8 @@ interface Props {
   canCreateTask: boolean;
   canCreateDocument: boolean;
   canManageParticipants: boolean;
-  actorRole: MemberRole;
-  actorAiAccess: AIAccess;
+  actorRole?: MemberRole;
+  actorAiAccess?: AIAccess;
 }
 
 type TaskChecklistDraft = {
@@ -101,15 +95,12 @@ const DASHBOARD_MODAL_OVERLAY_CLASS = "bg-black/40";
 
 export function QuickActions({
   projectId,
-  projectMode = "contractor",
   members,
   stages,
   tasks,
   canCreateTask,
   canCreateDocument,
   canManageParticipants,
-  actorRole,
-  actorAiAccess,
 }: Props) {
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -117,11 +108,6 @@ export function QuickActions({
   const workspaceMode = useWorkspaceMode();
   const { createDocument } = useProjectDocumentMutations(projectId);
   const isSupabaseMode = workspaceMode.kind === "supabase";
-
-  const inviteRoleOptions = useMemo(
-    () => getInviteRoleOptions(actorRole),
-    [actorRole],
-  );
 
   const [openModal, setOpenModal] = useState<ModalKey | null>(null);
   const [discardModal, setDiscardModal] = useState<ModalKey | null>(null);
@@ -149,26 +135,7 @@ export function QuickActions({
   const [photoCreateTask, setPhotoCreateTask] = useState(false);
   const [photoTaskStageId, setPhotoTaskStageId] = useState(stages[0]?.id ?? "");
 
-  const [participantEmail, setParticipantEmail] = useState("");
-  const [participantRole, setParticipantRole] = useState<MemberRole>("contractor");
-  const [participantViewerRegime, setParticipantViewerRegime] = useState<"contractor" | "client" | "build_myself">(
-    projectMode === "build_myself" ? "build_myself" : "client",
-  );
-  const [participantCredits, setParticipantCredits] = useState("0");
-
   const [creditPack, setCreditPack] = useState<string>("100");
-
-  useEffect(() => {
-    if (projectMode === "build_myself" && participantViewerRegime === "client") {
-      setParticipantViewerRegime("build_myself");
-    }
-  }, [participantViewerRegime, projectMode]);
-
-  useEffect(() => {
-    if (!inviteRoleOptions.includes(participantRole)) {
-      setParticipantRole(inviteRoleOptions[0] ?? "contractor");
-    }
-  }, [inviteRoleOptions, participantRole]);
 
   const memberOptions = useMemo(
     () => members.map((member) => ({ member, user: getUserById(member.user_id) })).filter((item) => !!item.user),
@@ -205,14 +172,6 @@ export function QuickActions({
         || photoTaskStageId !== (stages[0]?.id ?? ""),
       );
     }
-    if (modal === "participant") {
-      return Boolean(
-        participantEmail.trim()
-        || participantRole !== "contractor"
-        || (participantRole === "viewer" && participantViewerRegime !== (projectMode === "build_myself" ? "build_myself" : "client"))
-        || participantCredits !== "0",
-      );
-    }
     return creditPack !== "100";
   };
 
@@ -244,13 +203,6 @@ export function QuickActions({
     setTaskPickerOpen(false);
   };
 
-  const resetParticipantForm = () => {
-    setParticipantEmail("");
-    setParticipantRole("contractor");
-    setParticipantViewerRegime(projectMode === "build_myself" ? "build_myself" : "client");
-    setParticipantCredits("0");
-  };
-
   const resetCreditsForm = () => {
     setCreditPack("100");
   };
@@ -259,7 +211,6 @@ export function QuickActions({
     if (modal === "task") resetTaskForm();
     if (modal === "document") resetDocumentForm();
     if (modal === "photo") resetPhotoForm();
-    if (modal === "participant") resetParticipantForm();
     if (modal === "credits") resetCreditsForm();
   };
 
@@ -471,74 +422,6 @@ export function QuickActions({
     forceClose("photo");
   };
 
-  const handleInviteParticipant = async () => {
-    const trimmedEmail = participantEmail.trim().toLowerCase();
-    if (!trimmedEmail) return;
-
-    // Supabase mode uses the canonical Participants tab flow.
-    if (isSupabaseMode) {
-      navigate(`/project/${projectId}/participants`);
-      forceClose("participant");
-      return;
-    }
-
-    const isAlreadyMember = members.some(
-      (member) => getUserById(member.user_id)?.email?.toLowerCase() === trimmedEmail,
-    );
-    if (isAlreadyMember) {
-      toast({ title: "Already invited", description: "This user is already a project participant.", variant: "destructive" });
-      return;
-    }
-
-    const pendingInvites = getProjectInvites(projectId);
-    const hasPendingInvite = pendingInvites.some(
-      (invite) => invite.status === "pending" && invite.email.toLowerCase() === trimmedEmail,
-    );
-    if (hasPendingInvite) {
-      toast({ title: "Already invited", description: "This user already has a pending invitation.", variant: "destructive" });
-      return;
-    }
-
-    const allowedAiAccess = getInviteAiAccessOptions(actorAiAccess);
-    const inviteAiAccess: AIAccess = participantRole === "viewer"
-      ? "none"
-      : (allowedAiAccess.includes("consult_only") ? "consult_only" : "none");
-
-    const resolvedInviteMode = workspaceMode.kind === "pending-supabase"
-      ? { kind: "local" as const }
-      : workspaceMode;
-
-    const createdInvite = await createWorkspaceProjectInvite(resolvedInviteMode, {
-      projectId,
-      email: trimmedEmail,
-      role: participantRole,
-      aiAccess: inviteAiAccess,
-      viewerRegime: participantRole === "viewer" ? participantViewerRegime : null,
-      creditLimit: parseInt(participantCredits, 10) || 0,
-      invitedBy: currentUser.id,
-    });
-
-    if (resolvedInviteMode.kind !== "supabase") {
-      addEvent({
-        id: `evt-invite-${Date.now()}`,
-        project_id: projectId,
-        actor_id: currentUser.id,
-        type: "member_added",
-        object_type: "member",
-        object_id: createdInvite.id,
-        timestamp: new Date().toISOString(),
-        payload: {
-          email: createdInvite.email,
-          role: createdInvite.role,
-          source: "invite",
-        },
-      });
-    }
-
-    toast({ title: "Invitation sent", description: trimmedEmail });
-    forceClose("participant");
-  };
-
   const handlePurchaseCredits = () => {
     forceClose("credits");
     navigate("/profile/upgrade");
@@ -571,13 +454,7 @@ export function QuickActions({
                 variant="outline"
                 className="text-caption h-7"
                 disabled={!canManageParticipants}
-                onClick={() => {
-                  if (isSupabaseMode) {
-                    navigate(`/project/${projectId}/participants`);
-                    return;
-                  }
-                  setOpenModal("participant");
-                }}
+                onClick={() => navigate(`/project/${projectId}/participants`)}
               >
                 <UserPlus className="h-3 w-3 mr-1" /> Participant
               </Button>
@@ -989,98 +866,6 @@ export function QuickActions({
               disabled={!photoFile && !photoDescription.trim()}
             >
               Upload
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={openModal === "participant"} onOpenChange={(open) => handleModalOpenChange("participant", open)}>
-        <DialogContent
-          className={DASHBOARD_MODAL_CONTENT_CLASS}
-          overlayClassName={DASHBOARD_MODAL_OVERLAY_CLASS}
-          onEscapeKeyDown={(event) => {
-            if (hasDirtyState("participant")) {
-              event.preventDefault();
-              setDiscardModal("participant");
-            }
-          }}
-          onInteractOutside={(event) => {
-            if (hasDirtyState("participant")) {
-              event.preventDefault();
-              setDiscardModal("participant");
-            }
-          }}
-        >
-          <DialogHeader>
-            <DialogTitle>Invite participant</DialogTitle>
-            <DialogDescription>Send a project invitation with role and credits.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3 py-1">
-            <div className="space-y-1">
-              <label className="text-body-sm font-medium text-foreground">Email</label>
-              <Input
-                type="email"
-                value={participantEmail}
-                onChange={(event) => setParticipantEmail(event.target.value)}
-                placeholder="member@example.com"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-body-sm font-medium text-foreground">Role</label>
-              <Select
-                value={participantRole}
-                onValueChange={(value) => {
-                  const nextRole = value as MemberRole;
-                  setParticipantRole(nextRole);
-                  if (nextRole === "viewer" && projectMode === "build_myself") {
-                    setParticipantViewerRegime("build_myself");
-                  }
-                }}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {inviteRoleOptions.map((role) => (
-                    <SelectItem key={role} value={role}>
-                      {role === "co_owner" ? "Co-owner" : role.charAt(0).toUpperCase() + role.slice(1).replace("_", " ")}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {participantRole === "viewer" && (
-              <div className="space-y-1">
-                <label className="text-body-sm font-medium text-foreground">Regime</label>
-                <Select
-                  value={participantViewerRegime}
-                  onValueChange={(value) => setParticipantViewerRegime(value as "contractor" | "client" | "build_myself")}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {projectMode !== "build_myself" && <SelectItem value="client">client</SelectItem>}
-                    <SelectItem value="contractor">contractor</SelectItem>
-                    <SelectItem value="build_myself">build myself</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            <div className="space-y-1">
-              <label className="text-body-sm font-medium text-foreground">Credits grant</label>
-              <Input
-                type="number"
-                value={participantCredits}
-                onChange={(event) => setParticipantCredits(event.target.value)}
-                min={0}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => requestClose("participant")}>Close</Button>
-            <Button
-              className="bg-accent text-accent-foreground hover:bg-accent/90"
-              onClick={handleInviteParticipant}
-              disabled={!participantEmail.trim()}
-            >
-              Send invitation
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -89,4 +89,39 @@ describe("QuickActions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Participant" }));
     expect(screen.getByText("Participants Page")).toBeInTheDocument();
   });
+
+  it("redirects the participant entry point to the Participants tab in local mode", () => {
+    authenticateRuntimeAuth("profile-77");
+
+    render(
+      <QueryClientProvider client={createQueryClient()}>
+        <TooltipProvider>
+          <MemoryRouter initialEntries={["/somewhere"]}>
+            <Routes>
+              <Route path="/project/:id/participants" element={<div>Participants Page</div>} />
+              <Route
+                path="*"
+                element={(
+                  <QuickActions
+                    projectId="project-1"
+                    members={[]}
+                    stages={[]}
+                    tasks={[]}
+                    canCreateTask
+                    canCreateDocument
+                    canManageParticipants
+                    actorRole="owner"
+                    actorAiAccess="project_pool"
+                  />
+                )}
+              />
+            </Routes>
+          </MemoryRouter>
+        </TooltipProvider>
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Participant" }));
+    expect(screen.getByText("Participants Page")).toBeInTheDocument();
+  });
 });
