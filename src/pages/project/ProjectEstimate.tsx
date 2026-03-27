@@ -47,6 +47,7 @@ import { useLocations } from "@/hooks/use-inventory-data";
 import {
   useWorkspaceCurrentUserState,
   useWorkspaceMode,
+  useWorkspaceProjectInvites,
   useWorkspaceProjectMembersState,
   useWorkspaceProjectState,
 } from "@/hooks/use-workspace-source";
@@ -76,6 +77,7 @@ import {
 import { useEstimateV2Project } from "@/hooks/use-estimate-v2-data";
 import { getPlanningSource } from "@/data/planning-source";
 import { addEvent, getUserById } from "@/data/store";
+import { createWorkspaceProjectInvite, sendWorkspaceProjectInviteEmail } from "@/data/workspace-source";
 import { computeLineTotals, computeProjectTotals, computeStageTotals } from "@/lib/estimate-v2/pricing";
 import { resolveProjectEstimateCtaState } from "@/lib/estimate-v2/project-estimate-cta";
 import { resolveSubmitToClientState } from "@/lib/estimate-v2/project-estimate-submit-state";
@@ -469,6 +471,7 @@ export default function ProjectEstimate() {
   const { user: currentUser, isLoading: isCurrentUserLoading } = useWorkspaceCurrentUserState();
   const { project, isLoading: isProjectLoading } = useWorkspaceProjectState(pid);
   const { members, isLoading: isMembersLoading } = useWorkspaceProjectMembersState(pid);
+  const projectInvites = useWorkspaceProjectInvites(pid);
   const tasks = useTasks(pid);
   const procurementItems = useProcurementV2(pid);
   const orders = useOrders(pid);
@@ -666,6 +669,103 @@ export default function ProjectEstimate() {
       })
       .filter((entry): entry is { id: string; name: string; email: string } => Boolean(entry))
   ), [members]);
+  const memberEmailSet = useMemo(
+    () => new Set(participantOptions.map((participant) => participant.email.toLowerCase()).filter(Boolean)),
+    [participantOptions],
+  );
+  const pendingInviteEmailSet = useMemo(
+    () => new Set(projectInvites.filter((invite) => invite.status === "pending").map((invite) => invite.email.toLowerCase())),
+    [projectInvites],
+  );
+  const pendingInviteOptions = useMemo(() => (
+    projectInvites
+      .filter((invite) => invite.status === "pending")
+      .map((invite) => ({
+        id: invite.id,
+        email: invite.email,
+      }))
+  ), [projectInvites]);
+  const projectMode = project?.project_mode === "build_myself" ? "build_myself" : "contractor";
+
+  const handleAssigneeInvite = useCallback(async (identity: { name: string; email: string }) => {
+    if (!canEditEstimate) return;
+    if (workspaceMode.kind === "pending-supabase") {
+      toast({
+        title: "Invite unavailable",
+        description: "Wait for workspace sync to complete, then try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!currentUser.id) {
+      toast({ title: "Unable to create invite", description: "Current user is unavailable.", variant: "destructive" });
+      return;
+    }
+
+    const normalizedEmail = identity.email.trim().toLowerCase();
+    if (memberEmailSet.has(normalizedEmail)) {
+      toast({
+        title: "Already a participant",
+        description: `${normalizedEmail} already has project access.`,
+      });
+      return;
+    }
+    if (pendingInviteEmailSet.has(normalizedEmail)) {
+      toast({
+        title: "Invite already pending",
+        description: `An invite for ${normalizedEmail} already exists.`,
+      });
+      return;
+    }
+
+    try {
+      const createdInvite = await createWorkspaceProjectInvite(workspaceMode, {
+        projectId: pid,
+        email: normalizedEmail,
+        role: "contractor",
+        aiAccess: "consult_only",
+        viewerRegime: projectMode === "build_myself" ? "build_myself" : null,
+        creditLimit: 50,
+        invitedBy: currentUser.id,
+      });
+
+      if (workspaceMode.kind === "supabase") {
+        try {
+          const delivery = await sendWorkspaceProjectInviteEmail(workspaceMode, createdInvite.id);
+          if (delivery.kind === "sent") {
+            toast({
+              title: "Invite sent",
+              description: `Invitation email sent to ${delivery.payload.recipientEmail || normalizedEmail} for ${identity.name}.`,
+            });
+          } else {
+            toast({
+              title: "Invite created",
+              description: `Pending invite created for ${identity.name} (${normalizedEmail}).`,
+            });
+          }
+        } catch (sendErr) {
+          const message = sendErr instanceof Error ? sendErr.message : "Unable to send invite email";
+          toast({
+            title: "Invite created, email not sent",
+            description: message,
+            variant: "destructive",
+          });
+        }
+      } else {
+        toast({
+          title: "Invite created",
+          description: `Pending invite created for ${identity.name} (${normalizedEmail}).`,
+        });
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unable to create invite";
+      toast({
+        title: "Invite failed",
+        description: message,
+        variant: "destructive",
+      });
+    }
+  }, [canEditEstimate, currentUser.id, memberEmailSet, pendingInviteEmailSet, pid, projectMode, toast, workspaceMode]);
 
   const clientRecipients = useMemo<ClientRecipient[]>(() => (
     members
@@ -2248,8 +2348,10 @@ export default function ProjectEstimate() {
                                                     assigneeName={line.assigneeName}
                                                     assigneeEmail={line.assigneeEmail}
                                                     participants={participantOptions}
+                                                    pendingInvites={pendingInviteOptions}
                                                     editable={canEditEstimate}
                                                     clientView={regime === "client"}
+                                                    onInvite={handleAssigneeInvite}
                                                     onCommit={(nextValue) => updateLine(pid, line.id, nextValue)}
                                                   />
                                                 ) : (

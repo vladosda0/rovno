@@ -11,6 +11,11 @@ export interface AssigneeOption {
   email: string;
 }
 
+export interface PendingInviteOption {
+  id: string;
+  email: string;
+}
+
 interface AssigneeValue {
   assigneeId: string | null;
   assigneeName: string | null;
@@ -19,26 +24,32 @@ interface AssigneeValue {
 
 interface AssigneeCellProps extends AssigneeValue {
   participants: AssigneeOption[];
+  pendingInvites?: PendingInviteOption[];
   editable: boolean;
   clientView?: boolean;
   onCommit: (next: AssigneeValue) => void;
+  onInvite?: (identity: { name: string; email: string }) => Promise<void> | void;
 }
 
-const normalizeIdentityName = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ");
+const isValidEmailFormat = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
 export function AssigneeCell({
   assigneeId,
   assigneeName,
   assigneeEmail,
   participants,
+  pendingInvites = [],
   editable,
   clientView = false,
   onCommit,
+  onInvite,
 }: AssigneeCellProps) {
   const [open, setOpen] = useState(false);
   const [selectedParticipantId, setSelectedParticipantId] = useState<string>("");
-  const [customName, setCustomName] = useState("");
-  const [customEmail, setCustomEmail] = useState("");
+  const [nameInput, setNameInput] = useState("");
+  const [emailInput, setEmailInput] = useState("");
+  const [isInviting, setIsInviting] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   const selectedParticipant = useMemo(
     () => (assigneeId ? participants.find((entry) => entry.id === assigneeId) ?? null : null),
@@ -46,24 +57,56 @@ export function AssigneeCell({
   );
 
   const displayName = selectedParticipant?.name ?? assigneeName ?? assigneeEmail ?? "";
+  const normalizedQuery = nameInput.trim().toLowerCase();
+
+  const participantSuggestions = useMemo(() => {
+    if (!normalizedQuery) return [];
+    return participants.filter((participant) => {
+      const name = participant.name.toLowerCase();
+      const email = participant.email.toLowerCase();
+      return name.includes(normalizedQuery) || email.includes(normalizedQuery);
+    });
+  }, [normalizedQuery, participants]);
+
+  const pendingInviteSuggestions = useMemo(() => {
+    if (!normalizedQuery) return [];
+    const participantEmails = new Set(participants.map((participant) => participant.email.toLowerCase()));
+    return pendingInvites.filter((invite) => {
+      const email = invite.email.toLowerCase();
+      return !participantEmails.has(email) && email.includes(normalizedQuery);
+    });
+  }, [normalizedQuery, participants, pendingInvites]);
 
   useEffect(() => {
     if (!open) return;
     setSelectedParticipantId(assigneeId ?? "");
-    if (assigneeId) {
-      setCustomName("");
-      setCustomEmail("");
-      return;
+    if (selectedParticipant) {
+      setNameInput(selectedParticipant.name);
+      setEmailInput(selectedParticipant.email);
+    } else {
+      setNameInput(assigneeName ?? "");
+      setEmailInput(assigneeEmail ?? "");
     }
-    setCustomName(assigneeName ?? "");
-    setCustomEmail(assigneeEmail ?? "");
-  }, [assigneeEmail, assigneeId, assigneeName, open]);
+    setShowSuggestions(false);
+  }, [assigneeEmail, assigneeId, assigneeName, open, selectedParticipant]);
 
   if (clientView || !editable) {
     return <span className="text-xs text-muted-foreground">{displayName || "—"}</span>;
   }
 
-  const canSave = Boolean(selectedParticipantId || customName.trim() || customEmail.trim());
+  const trimmedName = nameInput.trim();
+  const customEmailTrimmed = emailInput.trim();
+  const hasCustomIdentityName = Boolean(trimmedName);
+  const hasEmail = Boolean(customEmailTrimmed);
+  const isEmailValid = !hasEmail || isValidEmailFormat(customEmailTrimmed);
+  const shouldShowEmailSection = !selectedParticipantId;
+  const isInviteEnabled = Boolean(
+    onInvite && shouldShowEmailSection && hasCustomIdentityName && hasEmail && isValidEmailFormat(customEmailTrimmed),
+  );
+  const canSave = Boolean(selectedParticipantId || hasCustomIdentityName);
+  const shouldShowSuggestions = showSuggestions
+    && normalizedQuery.length > 0
+    && (participantSuggestions.length > 0 || pendingInviteSuggestions.length > 0);
 
   return (
     <>
@@ -86,69 +129,126 @@ export function AssigneeCell({
           <DialogHeader>
             <DialogTitle>Assign resource</DialogTitle>
             <DialogDescription>
-              Assign by participant or identity. Assignment does not grant project access.
+              Assignment does not grant project access.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3">
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-muted-foreground">Participants</p>
-              <div className="max-h-40 overflow-auto rounded-md border border-border/70 p-1">
-                {participants.length === 0 ? (
-                  <p className="px-2 py-3 text-xs text-muted-foreground">No participants available.</p>
-                ) : (
-                  participants.map((participant) => {
-                    const selected = selectedParticipantId === participant.id;
-                    return (
-                      <button
-                        key={participant.id}
-                        type="button"
-                        className={cn(
-                          "flex w-full items-start justify-between rounded-sm px-2 py-1.5 text-left transition-colors hover:bg-muted/50",
-                          selected && "bg-muted",
-                        )}
-                        onClick={() => {
-                          setSelectedParticipantId(participant.id);
-                          setCustomName("");
-                          setCustomEmail("");
-                        }}
-                      >
-                        <span className="text-sm text-foreground">{participant.name}</span>
-                        <span className="text-xs text-muted-foreground">{participant.email}</span>
-                      </button>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-
             <div className="space-y-2 rounded-md border border-border/70 p-2">
-              <p className="text-xs font-medium text-muted-foreground">Identity (optional email for invite)</p>
+              <p className="text-xs font-medium text-muted-foreground">Name</p>
               <Input
-                value={customName}
+                value={nameInput}
+                onFocus={() => setShowSuggestions(true)}
                 onChange={(event) => {
-                  setSelectedParticipantId("");
-                  setCustomName(event.target.value);
+                  if (selectedParticipantId) {
+                    setSelectedParticipantId("");
+                    setNameInput("");
+                    setEmailInput("");
+                    setShowSuggestions(false);
+                  } else {
+                    setNameInput(event.target.value);
+                    setShowSuggestions(true);
+                  }
                 }}
                 className="h-8"
-                placeholder="Name"
+                placeholder="Type person name"
               />
-              <p className="text-[11px] text-muted-foreground">
-                Exact name matching links only when one participant has that name.
-              </p>
-              <div className="relative">
-                <Mail className="pointer-events-none absolute left-2 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-                <Input
-                  value={customEmail}
-                  onChange={(event) => {
-                    setSelectedParticipantId("");
-                    setCustomEmail(event.target.value);
-                  }}
-                  className="h-8 pl-7"
-                  placeholder="contractor@example.com"
-                />
-              </div>
+              {shouldShowSuggestions && (
+                <div className="max-h-44 overflow-auto rounded-md border border-border/70 p-1">
+                  {participantSuggestions.map((participant) => (
+                    <button
+                      key={participant.id}
+                      type="button"
+                      className={cn(
+                        "flex w-full items-start justify-between rounded-sm px-2 py-1.5 text-left transition-colors hover:bg-muted/50",
+                        selectedParticipantId === participant.id && "bg-muted",
+                      )}
+                      onClick={() => {
+                        setSelectedParticipantId(participant.id);
+                        setNameInput(participant.name);
+                        setEmailInput(participant.email);
+                        setShowSuggestions(false);
+                      }}
+                    >
+                      <span className="text-sm text-foreground">{participant.name}</span>
+                      <span className="text-xs text-muted-foreground">{participant.email}</span>
+                    </button>
+                  ))}
+                  {pendingInviteSuggestions.map((invite) => (
+                    <button
+                      key={invite.id}
+                      type="button"
+                      className="flex w-full items-start justify-between rounded-sm px-2 py-1.5 text-left transition-colors hover:bg-muted/50"
+                      onClick={() => {
+                        setSelectedParticipantId("");
+                        setEmailInput(invite.email);
+                        if (!nameInput.trim()) {
+                          setNameInput(invite.email.split("@")[0] ?? "");
+                        }
+                        setShowSuggestions(false);
+                      }}
+                    >
+                      <span className="text-sm text-foreground">{invite.email}</span>
+                      <span className="text-xs text-muted-foreground">Pending invite</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {selectedParticipantId && (
+                <p className="text-[11px] text-muted-foreground">
+                  Participant selected. Editing name or email switches to identity assignment.
+                </p>
+              )}
             </div>
+
+            {shouldShowEmailSection && (
+              <div className="space-y-2 rounded-md border border-border/70 p-2">
+                <p className="text-xs font-medium text-muted-foreground">Email (optional)</p>
+                <div className="flex items-start gap-2">
+                  <div className="relative flex-1">
+                    <Mail className="pointer-events-none absolute left-2 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                    <Input
+                      value={emailInput}
+                      onChange={(event) => {
+                        setEmailInput(event.target.value);
+                        if (selectedParticipantId) {
+                          setSelectedParticipantId("");
+                        }
+                      }}
+                      className={cn("h-8 pl-7", hasEmail && !isEmailValid && "border-destructive focus-visible:ring-destructive")}
+                      placeholder="contractor@example.com"
+                    />
+                  </div>
+                  {onInvite && (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={!isInviteEnabled || isInviting}
+                      onClick={async () => {
+                        if (!onInvite || !isInviteEnabled || isInviting) return;
+                        setIsInviting(true);
+                        try {
+                          await onInvite({
+                            name: trimmedName,
+                            email: customEmailTrimmed.toLowerCase(),
+                          });
+                        } finally {
+                          setIsInviting(false);
+                        }
+                      }}
+                    >
+                      Invite
+                    </Button>
+                  )}
+                </div>
+                {hasEmail && !isEmailValid && (
+                  <p className="text-[11px] text-destructive">Invalid email</p>
+                )}
+                <p className="text-[11px] text-muted-foreground">
+                  Invite is optional. You can assign without sending an invite.
+                </p>
+              </div>
+            )}
           </div>
 
           <DialogFooter className="gap-2 sm:justify-between sm:space-x-0">
@@ -178,25 +278,10 @@ export function AssigneeCell({
                     setOpen(false);
                     return;
                   }
-                  const normalizedCustomName = normalizeIdentityName(customName);
-                  const matchedParticipants =
-                    !customEmail.trim() && normalizedCustomName
-                      ? participants.filter((entry) => normalizeIdentityName(entry.name) === normalizedCustomName)
-                      : [];
-                  if (matchedParticipants.length === 1) {
-                    const [matchedParticipant] = matchedParticipants;
-                    onCommit({
-                      assigneeId: matchedParticipant.id,
-                      assigneeName: matchedParticipant.name,
-                      assigneeEmail: matchedParticipant.email,
-                    });
-                    setOpen(false);
-                    return;
-                  }
                   onCommit({
                     assigneeId: null,
-                    assigneeName: customName.trim() || null,
-                    assigneeEmail: customEmail.trim() || null,
+                    assigneeName: trimmedName || null,
+                    assigneeEmail: customEmailTrimmed || null,
                   });
                   setOpen(false);
                 }}
