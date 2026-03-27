@@ -53,7 +53,6 @@ import {
   ImagePlus,
   Info,
   Plus,
-  UserPlus,
   X,
 } from "lucide-react";
 import { ReceiveOrderPickerModal } from "@/components/procurement/ReceiveOrderPickerModal";
@@ -445,25 +444,6 @@ export function QuickActions({
         <Button size="sm" variant="outline" className="text-caption h-7" onClick={() => setReceiveOrderOpen(true)}>
           Receive order
         </Button>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span>
-              <Button
-                size="sm"
-                variant="outline"
-                className="text-caption h-7"
-                disabled={!canManageParticipants}
-                onClick={() => navigate(`/project/${projectId}/participants`)}
-              >
-                <UserPlus className="h-3 w-3 mr-1" /> Participant
-              </Button>
-            </span>
-          </TooltipTrigger>
-          {!canManageParticipants && (
-            <TooltipContent>Only owner or co-owner can invite participants</TooltipContent>
-          )}
-        </Tooltip>
 
         <Tooltip>
           <TooltipTrigger asChild>
