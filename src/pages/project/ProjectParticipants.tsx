@@ -160,6 +160,11 @@ export default function ProjectParticipants() {
   const workspaceKey = workspaceMode.kind === "supabase" ? workspaceMode.profileId : workspaceMode.kind;
   const membersQueryKey = workspaceQueryKeys.projectMembers(workspaceKey, projectId);
   const invitesQueryKey = workspaceQueryKeys.projectInvites(workspaceKey, projectId);
+  const activeParticipants = members;
+  const pendingInvites = useMemo(
+    () => invites.filter((invite) => invite.status === "pending"),
+    [invites],
+  );
 
   const roleTargetCurrentRole = useMemo(() => {
     if (!roleTarget) return null;
@@ -380,15 +385,19 @@ export default function ProjectParticipants() {
   });
 
   const inviteRoleMutation = useMutation({
-    mutationFn: async (input: { inviteId: string; role: MemberRole }) => updateWorkspaceProjectInvite(
-      workspaceMode.kind === "pending-supabase" ? { kind: "local" } : workspaceMode,
-      {
-        id: input.inviteId,
-        projectId,
-        role: input.role,
-        viewerRegime: resolveViewerRegime(input.role, projectMode) ?? null,
-      },
-    ),
+    mutationFn: async (input: { inviteId: string; role: MemberRole }) => {
+      const invite = invites.find((row) => row.id === input.inviteId);
+      return updateWorkspaceProjectInvite(
+        workspaceMode.kind === "pending-supabase" ? { kind: "local" } : workspaceMode,
+        {
+          id: input.inviteId,
+          projectId,
+          role: input.role,
+          status: invite?.status,
+          viewerRegime: resolveViewerRegime(input.role, projectMode) ?? null,
+        },
+      );
+    },
     onMutate: async (input) => {
       if (workspaceMode.kind !== "supabase") return undefined;
       await queryClient.cancelQueries({ queryKey: invitesQueryKey });
@@ -452,12 +461,12 @@ export default function ProjectParticipants() {
     inviteRoleMutation.mutate({ inviteId: roleTarget.inviteId, role: newRole });
   }
 
-  if (members.length === 0 && invites.length === 0) {
+  if (activeParticipants.length === 0 && pendingInvites.length === 0) {
     return (
       <EmptyState
         icon={Users}
         title="Participants"
-        description="No members or invites yet. Invite someone to get started."
+        description="No active participants or pending invites yet. Invite someone to get started."
         actionLabel={canInvite ? "Invite Member" : undefined}
         onAction={canInvite ? () => setInviteOpen(true) : undefined}
       />
@@ -470,7 +479,7 @@ export default function ProjectParticipants() {
         <div>
           <h2 className="text-h3 text-foreground">Participants</h2>
           <p className="text-caption text-muted-foreground">
-            {members.length} members · {invites.length} invitations
+            {activeParticipants.length} active participants · {pendingInvites.length} pending invites
           </p>
         </div>
         {canInvite && (
@@ -483,7 +492,7 @@ export default function ProjectParticipants() {
       <section className="space-y-2">
         <div className="flex items-center gap-2">
           <Users className="h-4 w-4 text-accent" />
-          <h3 className="text-body font-semibold text-foreground">Members</h3>
+          <h3 className="text-body font-semibold text-foreground">Active participants</h3>
         </div>
         <div className="glass overflow-hidden rounded-card">
           <Table>
@@ -497,13 +506,13 @@ export default function ProjectParticipants() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {members.length === 0 ? (
+              {activeParticipants.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={canInvite ? 5 : 4} className="text-center text-muted-foreground">
-                    No members yet.
+                    No active participants yet.
                   </TableCell>
                 </TableRow>
-              ) : members.map((member) => {
+              ) : activeParticipants.map((member) => {
                 const memberUser = getUserById(member.user_id);
                 const RoleIcon = roleIcons[member.role];
                 const isPrivileged = member.role === "owner" || member.role === "co_owner";
@@ -582,7 +591,7 @@ export default function ProjectParticipants() {
       <section className="space-y-2">
         <div className="flex items-center gap-2">
           <Mail className="h-4 w-4 text-accent" />
-          <h3 className="text-body font-semibold text-foreground">Invitations</h3>
+          <h3 className="text-body font-semibold text-foreground">Pending invites</h3>
         </div>
         <div className="glass overflow-hidden rounded-card">
           <Table>
@@ -596,13 +605,13 @@ export default function ProjectParticipants() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {invites.length === 0 ? (
+              {pendingInvites.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5} className="text-center text-muted-foreground">
-                    No invitations yet.
+                    No pending invites.
                   </TableCell>
                 </TableRow>
-              ) : invites.map((invite) => {
+              ) : pendingInvites.map((invite) => {
                 const inviter = getUserById(invite.invited_by);
                 const canEditInvite = canInvite && invite.status === "pending";
                 const showResendEmail =

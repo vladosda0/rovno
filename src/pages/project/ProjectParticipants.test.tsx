@@ -89,7 +89,7 @@ describe("ProjectParticipants", () => {
     }, "local");
   });
 
-  it("renders members and invitations in separate tables and updates invite roles immediately", async () => {
+  it("renders active participants and pending invites in separate tables and updates invite roles immediately", async () => {
     const queryClient = createQueryClient();
 
     render(
@@ -102,8 +102,8 @@ describe("ProjectParticipants", () => {
       </QueryClientProvider>,
     );
 
-    const memberSection = screen.getByRole("heading", { name: "Members" }).closest("section");
-    const inviteSection = screen.getByRole("heading", { name: "Invitations" }).closest("section");
+    const memberSection = screen.getByRole("heading", { name: "Active participants" }).closest("section");
+    const inviteSection = screen.getByRole("heading", { name: "Pending invites" }).closest("section");
     expect(memberSection).not.toBeNull();
     expect(inviteSection).not.toBeNull();
 
@@ -148,7 +148,7 @@ describe("ProjectParticipants", () => {
       </QueryClientProvider>,
     );
 
-    const inviteSection = screen.getByRole("heading", { name: "Invitations" }).closest("section");
+    const inviteSection = screen.getByRole("heading", { name: "Pending invites" }).closest("section");
     const inviteTable = within(inviteSection as HTMLElement).getByRole("table");
     const inviteRow = within(inviteTable).getByText("invitee@example.com").closest("tr");
 
@@ -180,13 +180,82 @@ describe("ProjectParticipants", () => {
       </QueryClientProvider>,
     );
 
-    const inviteSection = screen.getByRole("heading", { name: "Invitations" }).closest("section");
+    const inviteSection = screen.getByRole("heading", { name: "Pending invites" }).closest("section");
     const inviteTable = within(inviteSection as HTMLElement).getByRole("table");
     const inviteRow = within(inviteTable).getByText("invitee@example.com").closest("tr");
 
     fireEvent.pointerDown(within(inviteRow as HTMLElement).getByRole("button"), { button: 0, ctrlKey: false });
     expect(await screen.findByRole("menuitem", { name: "Change role" })).toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: "Resend email" })).not.toBeInTheDocument();
+  });
+
+  it("shows only pending invites in the pending invites table and count", () => {
+    addProjectInvite({
+      id: "invite-accepted",
+      project_id: "project-1",
+      email: "accepted@example.com",
+      role: "viewer",
+      ai_access: "none",
+      viewer_regime: "client",
+      credit_limit: 10,
+      invited_by: profileId,
+      status: "accepted",
+      invite_token: "invite-token-accepted",
+      accepted_profile_id: profileId,
+      created_at: "2026-03-07T10:00:00.000Z",
+      accepted_at: "2026-03-07T12:00:00.000Z",
+    }, "local");
+    addProjectInvite({
+      id: "invite-expired",
+      project_id: "project-1",
+      email: "expired@example.com",
+      role: "contractor",
+      ai_access: "consult_only",
+      viewer_regime: null,
+      credit_limit: 20,
+      invited_by: profileId,
+      status: "expired",
+      invite_token: "invite-token-expired",
+      accepted_profile_id: null,
+      created_at: "2026-03-07T10:00:00.000Z",
+      accepted_at: null,
+    }, "local");
+    addProjectInvite({
+      id: "invite-revoked",
+      project_id: "project-1",
+      email: "revoked@example.com",
+      role: "contractor",
+      ai_access: "consult_only",
+      viewer_regime: null,
+      credit_limit: 20,
+      invited_by: profileId,
+      status: "revoked",
+      invite_token: "invite-token-revoked",
+      accepted_profile_id: null,
+      created_at: "2026-03-07T10:00:00.000Z",
+      accepted_at: null,
+    }, "local");
+
+    const queryClient = createQueryClient();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/project/project-1/participants"]}>
+          <Routes>
+            <Route path="/project/:id/participants" element={<ProjectParticipants />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByText("1 active participants · 1 pending invites")).toBeInTheDocument();
+
+    const inviteSection = screen.getByRole("heading", { name: "Pending invites" }).closest("section");
+    const inviteTable = within(inviteSection as HTMLElement).getByRole("table");
+
+    expect(within(inviteTable).getByText("invitee@example.com")).toBeInTheDocument();
+    expect(within(inviteTable).queryByText("accepted@example.com")).not.toBeInTheDocument();
+    expect(within(inviteTable).queryByText("expired@example.com")).not.toBeInTheDocument();
+    expect(within(inviteTable).queryByText("revoked@example.com")).not.toBeInTheDocument();
   });
 
   describe("Invite email delivery (Supabase)", () => {
@@ -387,7 +456,7 @@ describe("ProjectParticipants", () => {
         </QueryClientProvider>,
       );
 
-      const inviteSection = screen.getByRole("heading", { name: "Invitations" }).closest("section");
+      const inviteSection = screen.getByRole("heading", { name: "Pending invites" }).closest("section");
       const inviteTable = within(inviteSection as HTMLElement).getByRole("table");
       const row = within(inviteTable).getByText("pending@example.com").closest("tr");
       fireEvent.pointerDown(within(row as HTMLElement).getByRole("button"), { button: 0, ctrlKey: false });
@@ -433,7 +502,7 @@ describe("ProjectParticipants", () => {
         </QueryClientProvider>,
       );
 
-      const inviteSection = screen.getByRole("heading", { name: "Invitations" }).closest("section");
+      const inviteSection = screen.getByRole("heading", { name: "Pending invites" }).closest("section");
       const inviteTable = within(inviteSection as HTMLElement).getByRole("table");
       const row = within(inviteTable).getByText("bad@example.com").closest("tr");
       fireEvent.pointerDown(within(row as HTMLElement).getByRole("button"), { button: 0, ctrlKey: false });
