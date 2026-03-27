@@ -2160,7 +2160,10 @@ export default function ProjectEstimate() {
                                         </TableHead>
                                         {showAssignmentColumn && (
                                           <TableHead className="h-9 w-[170px] py-1 pr-2">
-                                            <span className="inline-flex items-center gap-1">
+                                            <span
+                                              className="inline-flex items-center gap-1"
+                                              title="Assignment identifies responsibility only. Project access is managed separately."
+                                            >
                                               <User className="h-3.5 w-3.5" />
                                               <span>Assigned</span>
                                             </span>

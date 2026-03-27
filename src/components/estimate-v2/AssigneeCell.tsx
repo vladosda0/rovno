@@ -24,6 +24,8 @@ interface AssigneeCellProps extends AssigneeValue {
   onCommit: (next: AssigneeValue) => void;
 }
 
+const normalizeIdentityName = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ");
+
 export function AssigneeCell({
   assigneeId,
   assigneeName,
@@ -61,7 +63,7 @@ export function AssigneeCell({
     return <span className="text-xs text-muted-foreground">{displayName || "—"}</span>;
   }
 
-  const canSave = Boolean(selectedParticipantId || customEmail.trim());
+  const canSave = Boolean(selectedParticipantId || customName.trim() || customEmail.trim());
 
   return (
     <>
@@ -83,7 +85,9 @@ export function AssigneeCell({
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Assign resource</DialogTitle>
-            <DialogDescription>Choose a participant or provide contact details to invite.</DialogDescription>
+            <DialogDescription>
+              Assign by participant or identity. Assignment does not grant project access.
+            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3">
@@ -119,7 +123,7 @@ export function AssigneeCell({
             </div>
 
             <div className="space-y-2 rounded-md border border-border/70 p-2">
-              <p className="text-xs font-medium text-muted-foreground">Invite by email (placeholder)</p>
+              <p className="text-xs font-medium text-muted-foreground">Identity (optional email for invite)</p>
               <Input
                 value={customName}
                 onChange={(event) => {
@@ -129,6 +133,9 @@ export function AssigneeCell({
                 className="h-8"
                 placeholder="Name"
               />
+              <p className="text-[11px] text-muted-foreground">
+                Exact name matching links only when one participant has that name.
+              </p>
               <div className="relative">
                 <Mail className="pointer-events-none absolute left-2 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
                 <Input
@@ -167,6 +174,21 @@ export function AssigneeCell({
                       assigneeId: selectedParticipantId,
                       assigneeName: participant?.name ?? null,
                       assigneeEmail: participant?.email ?? null,
+                    });
+                    setOpen(false);
+                    return;
+                  }
+                  const normalizedCustomName = normalizeIdentityName(customName);
+                  const matchedParticipants =
+                    !customEmail.trim() && normalizedCustomName
+                      ? participants.filter((entry) => normalizeIdentityName(entry.name) === normalizedCustomName)
+                      : [];
+                  if (matchedParticipants.length === 1) {
+                    const [matchedParticipant] = matchedParticipants;
+                    onCommit({
+                      assigneeId: matchedParticipant.id,
+                      assigneeName: matchedParticipant.name,
+                      assigneeEmail: matchedParticipant.email,
                     });
                     setOpen(false);
                     return;
