@@ -128,6 +128,8 @@ Important current architecture fact:
 
 Before declaring work complete, run the smallest relevant verification set.
 
+For any non-trivial closeout request such as `done`, `finished`, `ready to commit`, `push`, `PR-ready`, or `what did you verify`, explicitly use the global `$finish-gate` skill at `/Users/vladislavgorlov/.codex/skills/finish-gate/SKILL.md` before responding or taking git actions.
+
 Minimum for most app changes:
 - `git diff --name-only`
 - `git diff`
@@ -159,6 +161,8 @@ Do not:
 - delete branches
 
 unless explicitly asked.
+
+Before any commit or push on a non-trivial task, run `$finish-gate` and summarize its checklist output, including any warning-only lint results and any mismatch between working tree, staged files, and `HEAD`.
 
 When asked to prepare commit guidance:
 - keep commits small
