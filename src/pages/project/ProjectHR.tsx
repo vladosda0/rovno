@@ -32,12 +32,22 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useEstimateV2Project } from "@/hooks/use-estimate-v2-data";
 import { useProjectHRMutations } from "@/hooks/use-hr-source";
 import { useHRItems, useHRPayments, usePermission, useProject, useTasks } from "@/hooks/use-mock-data";
+import { useWorkspaceMode } from "@/hooks/use-workspace-source";
 import { useToast } from "@/hooks/use-toast";
 import { getUserById } from "@/data/store";
 import { isDemoSessionActive } from "@/lib/auth-state";
 import type { TaskStatus } from "@/types/entities";
 import type { HRItemStatus, HRPlannedItem } from "@/types/hr";
 import { Users } from "lucide-react";
+
+const EMPTY_SYNC_STATE = {
+  estimateRevision: null,
+  domains: {
+    tasks: { status: "idle", projectedRevision: null, lastAttemptedAt: null, lastSucceededAt: null, lastError: null },
+    procurement: { status: "idle", projectedRevision: null, lastAttemptedAt: null, lastSucceededAt: null, lastError: null },
+    hr: { status: "idle", projectedRevision: null, lastAttemptedAt: null, lastSucceededAt: null, lastError: null },
+  },
+} as const;
 
 function fmt(value: number): string {
   return value.toLocaleString("ru-RU") + " ₽";
@@ -116,14 +126,26 @@ export default function ProjectHR() {
 
   const { project, members } = useProject(pid);
   const estimateState = useEstimateV2Project(pid);
+  const estimateSync = estimateState.sync ?? EMPTY_SYNC_STATE;
   const { lines } = estimateState;
   const tasks = useTasks(pid);
   const hrItems = useHRItems(pid);
   const hrPayments = useHRPayments(pid);
   const hrMutations = useProjectHRMutations(pid);
   const { can } = usePermission(pid);
+  const workspaceMode = useWorkspaceMode();
   const canEdit = can("hr.edit");
   const isDemoMode = isDemoSessionActive();
+  const isSupabaseMode = workspaceMode.kind === "supabase";
+  const hrSyncState = estimateSync.domains.hr;
+  const isHRSyncing = isSupabaseMode && hrSyncState.status === "syncing";
+  const hasHRSyncError = isSupabaseMode && hrSyncState.status === "error";
+  const isHRProjectionBehind = isSupabaseMode
+    && estimateState.project.estimateStatus !== "planning"
+    && hrSyncState.projectedRevision !== estimateSync.estimateRevision
+    && !isHRSyncing
+    && !hasHRSyncError;
+  const shouldBlockHRLaunchActions = isHRProjectionBehind || hasHRSyncError;
 
   const [paymentDraftByItemId, setPaymentDraftByItemId] = useState<Record<string, string>>({});
   const [searchQuery, setSearchQuery] = useState("");
@@ -252,6 +274,34 @@ export default function ProjectHR() {
 
   return (
     <div className="space-y-sp-2">
+      {(isHRSyncing || isHRProjectionBehind || hasHRSyncError) && (
+        <div className={`rounded-card border px-3 py-2 text-sm flex items-start gap-2 ${
+          hasHRSyncError
+            ? "border-destructive/30 bg-destructive/10 text-destructive"
+            : isHRProjectionBehind
+              ? "border-warning/30 bg-warning/10 text-foreground"
+              : "border-info/30 bg-info/10 text-foreground"
+        }`}>
+          <Users className="mt-0.5 h-4 w-4 shrink-0" />
+          <div className="min-w-0">
+            <p className="font-medium">
+              {isHRSyncing
+                ? "HR is syncing from Estimate"
+                : hasHRSyncError
+                  ? "HR sync failed"
+                  : "HR is behind the latest Estimate"}
+            </p>
+            <p className="text-xs opacity-80">
+              {isHRSyncing
+                ? "Estimate-linked HR demand is being refreshed now."
+                : hasHRSyncError
+                  ? (hrSyncState.lastError ?? "Resolve the sync error before assigning people or adding payments.")
+                  : "Wait for the HR projection to catch up before assigning people or adding payments."}
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="rounded-card border border-border bg-card p-sp-2 space-y-3">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-lg font-semibold text-foreground">Human Resources</h2>
@@ -397,7 +447,7 @@ export default function ProjectHR() {
                               size="sm"
                               variant="outline"
                               className="h-8 max-w-[180px]"
-                              disabled={!canEdit}
+                              disabled={!canEdit || shouldBlockHRLaunchActions}
                             >
                               <span className="truncate">{visibleAssigneeSummary}</span>
                             </Button>
@@ -412,9 +462,9 @@ export default function ProjectHR() {
                                   key={participant.id}
                                   checked={checked}
                                   onSelect={(event) => event.preventDefault()}
-                                  disabled={!canEdit}
+                                  disabled={!canEdit || shouldBlockHRLaunchActions}
                                   onCheckedChange={(nextChecked) => {
-                                    if (!canEdit) return;
+                                    if (!canEdit || shouldBlockHRLaunchActions) return;
                                     const nextIds = nextChecked === true
                                       ? Array.from(new Set([...assigneeIds, participant.id]))
                                       : assigneeIds.filter((id) => id !== participant.id);
@@ -462,12 +512,12 @@ export default function ProjectHR() {
                                 [item.id]: event.target.value,
                               }));
                             }}
-                            disabled={!canEdit}
+                            disabled={!canEdit || shouldBlockHRLaunchActions}
                           />
                           <Button
                             size="sm"
                             variant="outline"
-                            disabled={!canEdit || !paymentDraftByItemId[item.id]}
+                            disabled={!canEdit || shouldBlockHRLaunchActions || !paymentDraftByItemId[item.id]}
                             onClick={() => {
                               const amount = Number(paymentDraftByItemId[item.id] ?? 0);
                               if (!Number.isFinite(amount) || amount <= 0) return;

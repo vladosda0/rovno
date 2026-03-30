@@ -6,6 +6,12 @@ import {
   type WorkspaceMode,
 } from "@/data/workspace-source";
 import type { ChecklistItem, ChecklistItemType, Comment, Stage, Task } from "@/types/entities";
+import type {
+  EstimateExecutionStatus,
+  EstimateV2ResourceLine,
+  EstimateV2Work,
+  ResourceLineType,
+} from "@/types/estimate-v2";
 import type { Database as PlanningDatabase } from "../../backend-truth/generated/supabase-types";
 
 type ProjectStageRow = PlanningDatabase["public"]["Tables"]["project_stages"]["Row"];
@@ -21,10 +27,17 @@ type TaskUpdateRow = PlanningDatabase["public"]["Tables"]["tasks"]["Update"];
 type TypedSupabaseClient = SupabaseClient<PlanningDatabase>;
 
 const PROJECT_STAGE_SELECT = "id, project_id, title, description, sort_order, status";
-const TASK_SELECT = "id, project_id, stage_id, title, description, status, assignee_profile_id, created_at, start_at, due_at";
+const TASK_SELECT = "id, project_id, stage_id, estimate_work_id, title, description, status, assignee_profile_id, created_by, created_at, start_at, due_at";
 const TASK_CHECKLIST_SELECT = "id, task_id, title, is_done, procurement_item_id, estimate_resource_line_id, estimate_work_id, sort_order";
 const TASK_COMMENT_SELECT = "id, task_id, author_profile_id, body, created_at";
 const ESTIMATE_RESOURCE_LINE_SELECT = "id, resource_type, quantity, unit";
+const RESOURCE_TYPE_ORDER: Record<ResourceLineType, number> = {
+  material: 0,
+  tool: 1,
+  labor: 2,
+  subcontractor: 3,
+  other: 4,
+};
 
 export interface CreateProjectStageInput {
   projectId: string;
@@ -90,6 +103,7 @@ export interface HeroTaskUpsertInput {
   id: string;
   projectId: string;
   stageId: string;
+  estimateWorkId?: string | null;
   title: string;
   description?: string;
   status?: Task["status"];
@@ -108,6 +122,14 @@ export interface HeroTaskChecklistItemUpsertInput {
   estimateResourceLineId?: string | null;
   estimateWorkId?: string | null;
   sortOrder: number;
+}
+
+export interface SyncProjectTasksFromEstimateInput {
+  projectId: string;
+  estimateStatus: EstimateExecutionStatus;
+  works: Array<Pick<EstimateV2Work, "id" | "stageId" | "taskId" | "title" | "plannedStart" | "plannedEnd">>;
+  lines: Array<Pick<EstimateV2ResourceLine, "id" | "workId" | "title" | "type">>;
+  profileId: string;
 }
 
 function mapTaskPatchToTaskUpdateRow(patch: UpdateProjectTaskInput): TaskUpdateRow {
@@ -136,6 +158,37 @@ function mapTaskPatchToTaskUpdateRow(patch: UpdateProjectTaskInput): TaskUpdateR
   }
 
   return update;
+}
+
+function getProtectedTaskPatchFields(
+  patch: UpdateProjectTaskInput,
+): Array<keyof UpdateProjectTaskInput> {
+  const protectedFields: Array<keyof UpdateProjectTaskInput> = [];
+  if (patch.title !== undefined) protectedFields.push("title");
+  if (patch.stageId !== undefined) protectedFields.push("stageId");
+  if (patch.startDate !== undefined) protectedFields.push("startDate");
+  if (patch.deadline !== undefined) protectedFields.push("deadline");
+  return protectedFields;
+}
+
+function isEstimateLinkedTaskRow(
+  row: Pick<TaskRow, "estimate_work_id">,
+): boolean {
+  return Boolean(row.estimate_work_id);
+}
+
+function defaultTaskIdForEstimateWork(workId: string): string {
+  return workId;
+}
+
+function sortEstimateLinesForChecklist(
+  lines: Array<Pick<EstimateV2ResourceLine, "id" | "type">>,
+): Array<Pick<EstimateV2ResourceLine, "id" | "type">> {
+  return [...lines].sort((left, right) => {
+    const typeDiff = RESOURCE_TYPE_ORDER[left.type] - RESOURCE_TYPE_ORDER[right.type];
+    if (typeDiff !== 0) return typeDiff;
+    return left.id.localeCompare(right.id);
+  });
 }
 
 function createBrowserPlanningSource(mode: "demo" | "local"): PlanningSource {
@@ -167,6 +220,7 @@ function createBrowserPlanningSource(mode: "demo" | "local"): PlanningSource {
         id: `task-${Date.now()}`,
         project_id: input.projectId,
         stage_id: input.stageId,
+        estimateV2WorkId: undefined,
         title: input.title,
         description: input.description ?? "",
         status: input.status ?? "not_started",
@@ -266,6 +320,7 @@ export function mapTaskRowToTask(row: TaskRow): Task {
     id: row.id,
     project_id: row.project_id,
     stage_id: row.stage_id,
+    estimateV2WorkId: row.estimate_work_id ?? undefined,
     title: row.title,
     description: row.description ?? "",
     status: row.status,
@@ -403,6 +458,7 @@ export async function upsertHeroTasks(
     id: input.id,
     project_id: input.projectId,
     stage_id: input.stageId,
+    estimate_work_id: input.estimateWorkId ?? null,
     title: input.title,
     description: input.description ?? "",
     status: input.status ?? "not_started",
@@ -427,7 +483,7 @@ export async function loadHeroTasksForProject(
 ): Promise<TaskRow[]> {
   const { data, error } = await supabase
     .from("tasks")
-    .select("id, project_id, stage_id, title, description, status, assignee_profile_id, created_by, start_at, due_at, completed_at, created_at, updated_at")
+    .select("id, project_id, stage_id, estimate_work_id, title, description, status, assignee_profile_id, created_by, start_at, due_at, completed_at, created_at, updated_at")
     .eq("project_id", projectId);
 
   if (error) {
@@ -435,6 +491,42 @@ export async function loadHeroTasksForProject(
   }
 
   return data ?? [];
+}
+
+async function loadHeroTaskChecklistItemsByTaskIds(
+  supabase: TypedSupabaseClient,
+  taskIds: string[],
+): Promise<TaskChecklistItemRow[]> {
+  if (taskIds.length === 0) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from("task_checklist_items")
+    .select("id, task_id, title, is_done, procurement_item_id, estimate_resource_line_id, estimate_work_id, sort_order, created_at, updated_at")
+    .in("task_id", taskIds);
+
+  if (error) {
+    throw error;
+  }
+
+  return data ?? [];
+}
+
+async function clearEstimateWorkIdForTasks(
+  supabase: TypedSupabaseClient,
+  ids: string[],
+): Promise<void> {
+  if (ids.length === 0) return;
+
+  const { error } = await supabase
+    .from("tasks")
+    .update({ estimate_work_id: null })
+    .in("id", ids);
+
+  if (error) {
+    throw error;
+  }
 }
 
 export async function upsertTaskChecklistItems(
@@ -513,6 +605,114 @@ export async function deleteHeroTasks(
   if (error) {
     throw error;
   }
+}
+
+export async function syncProjectTasksFromEstimate(
+  input: SyncProjectTasksFromEstimateInput,
+): Promise<Record<string, string>> {
+  if (input.estimateStatus === "planning") {
+    return {};
+  }
+
+  const supabase = await loadSupabaseClient();
+  const taskRows = await loadHeroTasksForProject(supabase, input.projectId);
+  const desiredWorkIds = new Set(input.works.map((work) => work.id));
+  const taskRowByEstimateWorkId = new Map<string, TaskRow>();
+  const taskRowById = new Map(taskRows.map((row) => [row.id, row]));
+
+  taskRows.forEach((row) => {
+    if (!row.estimate_work_id) return;
+    if (!taskRowByEstimateWorkId.has(row.estimate_work_id)) {
+      taskRowByEstimateWorkId.set(row.estimate_work_id, row);
+    }
+  });
+
+  const staleLinkedTaskIds = taskRows
+    .filter((row) => row.estimate_work_id && !desiredWorkIds.has(row.estimate_work_id))
+    .map((row) => row.id);
+
+  if (staleLinkedTaskIds.length > 0) {
+    await clearEstimateWorkIdForTasks(supabase, staleLinkedTaskIds);
+  }
+
+  const taskIdByWorkId: Record<string, string> = {};
+  const taskUpserts: HeroTaskUpsertInput[] = input.works.map((work) => {
+    const existingRow = taskRowByEstimateWorkId.get(work.id)
+      ?? (work.taskId ? taskRowById.get(work.taskId) ?? null : null);
+    const taskId = existingRow?.id ?? work.taskId ?? defaultTaskIdForEstimateWork(work.id);
+    taskIdByWorkId[work.id] = taskId;
+
+    return {
+      id: taskId,
+      projectId: input.projectId,
+      stageId: work.stageId,
+      estimateWorkId: work.id,
+      title: work.title,
+      description: existingRow?.description ?? "Auto-created from Estimate v2 work",
+      status: existingRow?.status ?? "not_started",
+      assigneeId: existingRow?.assignee_profile_id ?? null,
+      createdBy: existingRow?.created_by ?? input.profileId,
+      startAt: work.plannedStart ?? null,
+      dueAt: work.plannedEnd ?? null,
+    };
+  });
+
+  await upsertHeroTasks(supabase, taskUpserts);
+
+  const checklistRows = await loadHeroTaskChecklistItemsByTaskIds(
+    supabase,
+    Array.from(new Set([...Object.values(taskIdByWorkId), ...staleLinkedTaskIds])),
+  );
+  const existingChecklistRowByEstimateLineId = new Map<string, TaskChecklistItemRow>();
+  checklistRows.forEach((row) => {
+    if (!row.estimate_resource_line_id) return;
+    if (!existingChecklistRowByEstimateLineId.has(row.estimate_resource_line_id)) {
+      existingChecklistRowByEstimateLineId.set(row.estimate_resource_line_id, row);
+    }
+  });
+
+  const linesByWorkId = new Map<string, Array<Pick<EstimateV2ResourceLine, "id" | "type" | "title">>>();
+  input.lines.forEach((line) => {
+    const list = linesByWorkId.get(line.workId) ?? [];
+    list.push(line);
+    linesByWorkId.set(line.workId, list);
+  });
+
+  await upsertTaskChecklistItems(
+    supabase,
+    input.works.flatMap((work) => (
+      sortEstimateLinesForChecklist(linesByWorkId.get(work.id) ?? []).map((line, index) => {
+        const existingChecklistRow = existingChecklistRowByEstimateLineId.get(line.id) ?? null;
+        return {
+          id: existingChecklistRow?.id ?? line.id,
+          taskId: taskIdByWorkId[work.id],
+          title: line.title,
+          isDone: existingChecklistRow?.is_done ?? false,
+          procurementItemId: existingChecklistRow?.procurement_item_id ?? null,
+          estimateResourceLineId: line.id,
+          estimateWorkId: work.id,
+          sortOrder: index + 1,
+        } satisfies HeroTaskChecklistItemUpsertInput;
+      })
+    )),
+  );
+
+  const desiredLineIds = new Set(input.lines.map((line) => line.id));
+  const checklistIdsToDelete = checklistRows
+    .filter((row) => row.estimate_work_id || row.estimate_resource_line_id)
+    .filter((row) => {
+      if (!row.estimate_work_id || !desiredWorkIds.has(row.estimate_work_id)) {
+        return true;
+      }
+      return !row.estimate_resource_line_id || !desiredLineIds.has(row.estimate_resource_line_id);
+    })
+    .map((row) => row.id);
+
+  if (checklistIdsToDelete.length > 0) {
+    await deleteHeroTaskChecklistItems(supabase, checklistIdsToDelete);
+  }
+
+  return taskIdByWorkId;
 }
 
 function createSupabasePlanningSource(
@@ -638,6 +838,7 @@ function createSupabasePlanningSource(
       const insert: TaskInsert = {
         project_id: input.projectId,
         stage_id: input.stageId,
+        estimate_work_id: null,
         title: input.title,
         description: input.description ?? "",
         status: input.status ?? "not_started",
@@ -660,6 +861,23 @@ function createSupabasePlanningSource(
     },
 
     async updateProjectTask(taskId: string, patch: UpdateProjectTaskInput) {
+      const protectedFields = getProtectedTaskPatchFields(patch);
+      if (protectedFields.length > 0) {
+        const { data: currentRow, error: currentRowError } = await supabase
+          .from("tasks")
+          .select("id, estimate_work_id")
+          .eq("id", taskId)
+          .maybeSingle();
+
+        if (currentRowError) {
+          throw currentRowError;
+        }
+
+        if (currentRow && isEstimateLinkedTaskRow(currentRow)) {
+          throw new Error("Estimate-linked task planning fields are read-only in Supabase mode.");
+        }
+      }
+
       const { data, error } = await supabase
         .from("tasks")
         .update(mapTaskPatchToTaskUpdateRow(patch))
@@ -674,6 +892,21 @@ function createSupabasePlanningSource(
       return mapTaskRowToTask(data);
     },
     async updateTaskChecklistItem(taskId: string, itemId: string, patch: { done?: boolean; text?: string }) {
+      if (patch.text !== undefined) {
+        const { data: currentRow, error: currentRowError } = await supabase
+          .from("task_checklist_items")
+          .select("id, estimate_resource_line_id, estimate_work_id")
+          .eq("id", itemId)
+          .eq("task_id", taskId)
+          .maybeSingle();
+
+        if (currentRowError) throw currentRowError;
+
+        if (currentRow?.estimate_resource_line_id || currentRow?.estimate_work_id) {
+          throw new Error("Estimate-linked checklist text is read-only in Supabase mode.");
+        }
+      }
+
       const rowPatch: PlanningDatabase["public"]["Tables"]["task_checklist_items"]["Update"] = {};
       if (patch.done !== undefined) rowPatch.is_done = patch.done;
       if (patch.text !== undefined) rowPatch.title = patch.text;
@@ -705,6 +938,17 @@ function createSupabasePlanningSource(
       if (error) throw error;
     },
     async deleteTaskChecklistItem(taskId: string, itemId: string) {
+      const { data: currentRow, error: currentRowError } = await supabase
+        .from("task_checklist_items")
+        .select("id, estimate_resource_line_id, estimate_work_id")
+        .eq("id", itemId)
+        .eq("task_id", taskId)
+        .maybeSingle();
+      if (currentRowError) throw currentRowError;
+      if (currentRow?.estimate_resource_line_id || currentRow?.estimate_work_id) {
+        throw new Error("Estimate-linked checklist items cannot be deleted in Supabase mode.");
+      }
+
       const { error } = await supabase
         .from("task_checklist_items")
         .delete()

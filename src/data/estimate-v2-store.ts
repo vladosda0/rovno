@@ -2,7 +2,8 @@ import { getAuthRole } from "@/lib/auth-state";
 import { getStageEstimateItems } from "@/data/estimate-store";
 import { persistEstimateV2HeroTransition, EstimateV2HeroTransitionError } from "@/data/estimate-v2-hero-transition";
 import { loadCurrentEstimateDraft, saveCurrentEstimateDraft } from "@/data/estimate-source";
-import { getPlanningSource } from "@/data/planning-source";
+import { getPlanningSource, syncProjectTasksFromEstimate } from "@/data/planning-source";
+import { syncProjectProcurementFromEstimate } from "@/data/procurement-source";
 import { getWorkspaceSource, resolveRuntimeWorkspaceMode } from "@/data/workspace-source";
 import { trackEvent } from "@/lib/analytics";
 import {
@@ -67,6 +68,23 @@ interface EstimateV2ProjectState {
   dependencies: EstimateV2Dependency[];
   versions: EstimateV2Version[];
   scheduleBaseline: ScheduleBaseline | null;
+  sync: EstimateV2ProjectSyncState;
+}
+
+type EstimateV2SyncDomain = "tasks" | "procurement" | "hr";
+type EstimateV2SyncStatus = "idle" | "syncing" | "synced" | "error";
+
+export interface EstimateV2ProjectSyncDomainState {
+  status: EstimateV2SyncStatus;
+  projectedRevision: string | null;
+  lastAttemptedAt: string | null;
+  lastSucceededAt: string | null;
+  lastError: string | null;
+}
+
+export interface EstimateV2ProjectSyncState {
+  estimateRevision: string | null;
+  domains: Record<EstimateV2SyncDomain, EstimateV2ProjectSyncDomainState>;
 }
 
 export interface EstimateV2ProjectView {
@@ -77,6 +95,7 @@ export interface EstimateV2ProjectView {
   dependencies: EstimateV2Dependency[];
   versions: EstimateV2Version[];
   scheduleBaseline: ScheduleBaseline | null;
+  sync: EstimateV2ProjectSyncState;
 }
 
 export interface EstimateV2ProjectAccessContext {
@@ -171,6 +190,8 @@ const remoteDraftSyncTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const remoteDraftSyncErrorSignatureByProjectId = new Map<string, string>();
 const heroTransitionInFlightByProjectId = new Set<string>();
 const deferredDraftSyncByProjectId = new Set<string>();
+const remoteProjectionSyncInFlightByProjectId = new Set<string>();
+const retainedSupabaseSyncProfileIdByProjectId = new Map<string, string>();
 
 function notify() {
   listeners.forEach((listener) => listener());
@@ -337,6 +358,136 @@ function cloneSnapshot(snapshot: EstimateV2Snapshot): EstimateV2Snapshot {
   };
 }
 
+function createEmptySyncDomainState(): EstimateV2ProjectSyncDomainState {
+  return {
+    status: "idle",
+    projectedRevision: null,
+    lastAttemptedAt: null,
+    lastSucceededAt: null,
+    lastError: null,
+  };
+}
+
+function createEmptyProjectSyncState(): EstimateV2ProjectSyncState {
+  return {
+    estimateRevision: null,
+    domains: {
+      tasks: createEmptySyncDomainState(),
+      procurement: createEmptySyncDomainState(),
+      hr: createEmptySyncDomainState(),
+    },
+  };
+}
+
+function cloneProjectSyncState(sync?: EstimateV2ProjectSyncState | null): EstimateV2ProjectSyncState {
+  const source = sync ?? createEmptyProjectSyncState();
+  return {
+    estimateRevision: source.estimateRevision ?? null,
+    domains: {
+      tasks: { ...(source.domains.tasks ?? createEmptySyncDomainState()) },
+      procurement: { ...(source.domains.procurement ?? createEmptySyncDomainState()) },
+      hr: { ...(source.domains.hr ?? createEmptySyncDomainState()) },
+    },
+  };
+}
+
+function isNonPlanningEstimateStatus(status: EstimateExecutionStatus): boolean {
+  return status === "in_work" || status === "paused" || status === "finished";
+}
+
+function buildEstimateProjectionRevision(state: Pick<EstimateV2ProjectState, "project" | "stages" | "works" | "lines">): string {
+  const payload = {
+    estimateStatus: state.project.estimateStatus,
+    stages: [...state.stages]
+      .sort((left, right) => left.order - right.order || left.id.localeCompare(right.id))
+      .map((stage) => ({
+        id: stage.id,
+        order: stage.order,
+        title: stage.title,
+      })),
+    works: [...state.works]
+      .sort((left, right) => (
+        left.stageId.localeCompare(right.stageId)
+        || left.order - right.order
+        || left.id.localeCompare(right.id)
+      ))
+      .map((work) => ({
+        id: work.id,
+        stageId: work.stageId,
+        order: work.order,
+        title: work.title,
+        plannedStart: work.plannedStart ?? null,
+        plannedEnd: work.plannedEnd ?? null,
+      })),
+    lines: [...state.lines]
+      .sort((left, right) => (
+        left.workId.localeCompare(right.workId)
+        || RESOURCE_TYPE_ORDER[left.type] - RESOURCE_TYPE_ORDER[right.type]
+        || left.id.localeCompare(right.id)
+      ))
+      .map((line) => ({
+        id: line.id,
+        stageId: line.stageId,
+        workId: line.workId,
+        type: line.type,
+        title: line.title,
+        unit: line.unit,
+        qtyMilli: line.qtyMilli,
+        costUnitCents: line.costUnitCents,
+        assigneeId: line.assigneeId ?? null,
+      })),
+  };
+
+  return deterministicHex(JSON.stringify(payload));
+}
+
+function ensureProjectSyncState(state: EstimateV2ProjectState): EstimateV2ProjectSyncState {
+  const nextSync = cloneProjectSyncState(state.sync);
+  const nextRevision = buildEstimateProjectionRevision(state);
+  const previousRevision = nextSync.estimateRevision;
+  nextSync.estimateRevision = nextRevision;
+
+  (["tasks", "procurement", "hr"] as const).forEach((domain) => {
+    const domainState = nextSync.domains[domain];
+    if (isNonPlanningEstimateStatus(state.project.estimateStatus)) {
+      if (previousRevision !== nextRevision && domainState.projectedRevision !== nextRevision && domainState.status !== "syncing") {
+        domainState.status = "idle";
+        domainState.lastError = null;
+      }
+      return;
+    }
+
+    domainState.status = "synced";
+    domainState.projectedRevision = nextRevision;
+    domainState.lastError = null;
+  });
+
+  state.sync = nextSync;
+  return nextSync;
+}
+
+function setProjectSyncDomainStatus(
+  state: EstimateV2ProjectState,
+  domain: EstimateV2SyncDomain,
+  patch: Partial<EstimateV2ProjectSyncDomainState>,
+) {
+  const sync = ensureProjectSyncState(state);
+  sync.domains[domain] = {
+    ...sync.domains[domain],
+    ...patch,
+  };
+}
+
+function getRetainedSupabaseSyncProfileId(projectId: string): string | null {
+  const context = accessContextByProjectId.get(projectId);
+  if (context?.mode === "supabase" && context.profileId) {
+    retainedSupabaseSyncProfileIdByProjectId.set(projectId, context.profileId);
+    return context.profileId;
+  }
+
+  return retainedSupabaseSyncProfileIdByProjectId.get(projectId) ?? null;
+}
+
 function cloneState(state: EstimateV2ProjectState): EstimateV2ProjectView {
   return {
     project: { ...state.project },
@@ -355,6 +506,7 @@ function cloneState(state: EstimateV2ProjectState): EstimateV2ProjectView {
         works: state.scheduleBaseline.works.map((work) => ({ ...work })),
       }
       : null,
+    sync: cloneProjectSyncState(state.sync),
   };
 }
 
@@ -472,7 +624,10 @@ function normalizeStateForWorkspace(projectId: string, state: EstimateV2ProjectS
         })),
       }
       : null,
+    sync: cloneProjectSyncState(state.sync),
   };
+
+  ensureProjectSyncState(normalizedState);
 
   return normalizedState;
 }
@@ -480,13 +635,19 @@ function normalizeStateForWorkspace(projectId: string, state: EstimateV2ProjectS
 function queueProjectDraftSync(projectId: string) {
   const context = accessContextByProjectId.get(projectId);
   const state = statesByProjectId.get(projectId);
-  if (!context || !state || context.mode !== "supabase" || !context.profileId) {
+  const profileId = getRetainedSupabaseSyncProfileId(projectId);
+  if (!state || !profileId) {
     return;
   }
 
-  saveWorkspaceEstimateCache(projectId, context.profileId, state);
+  ensureProjectSyncState(state);
+  saveWorkspaceEstimateCache(projectId, profileId, state);
 
-  if (heroTransitionInFlightByProjectId.has(projectId)) {
+  if (context && context.mode !== "supabase") {
+    return;
+  }
+
+  if (heroTransitionInFlightByProjectId.has(projectId) || remoteProjectionSyncInFlightByProjectId.has(projectId)) {
     deferredDraftSyncByProjectId.add(projectId);
     return;
   }
@@ -498,46 +659,17 @@ function queueProjectDraftSync(projectId: string) {
 
   const timer = setTimeout(() => {
     remoteDraftSyncTimers.delete(projectId);
-    void (async () => {
-      const latestState = statesByProjectId.get(projectId);
-      const latestContext = accessContextByProjectId.get(projectId);
-      if (!latestState || latestContext?.mode !== "supabase" || !latestContext.profileId) {
-        return;
-      }
-
-      try {
-        const normalized = normalizeStateForWorkspace(projectId, latestState);
-        saveWorkspaceEstimateCache(projectId, latestContext.profileId, normalized);
-        await saveCurrentEstimateDraft(projectId, getSnapshotFromState(normalized), {
-          profileId: latestContext.profileId,
-        });
-        await syncProjectHRFromEstimate(
-          { kind: "supabase", profileId: latestContext.profileId },
-          {
-            projectId,
-            estimateStatus: normalized.project.estimateStatus,
-            works: normalized.works,
-            lines: normalized.lines,
-          },
-        );
-        remoteDraftSyncErrorSignatureByProjectId.delete(projectId);
-      } catch (error) {
-        const signature = error instanceof Error
-          ? `${error.name}:${error.message}`
-          : String(error);
-        if (remoteDraftSyncErrorSignatureByProjectId.get(projectId) === signature) {
-          return;
-        }
-        remoteDraftSyncErrorSignatureByProjectId.set(projectId, signature);
-        console.error("Failed to sync estimate v2 draft", error);
-      }
-    })();
+    void runProjectDraftSync(projectId);
   }, ESTIMATE_V2_REMOTE_SYNC_DEBOUNCE_MS);
 
   remoteDraftSyncTimers.set(projectId, timer);
 }
 
 function commitProjectStateChange(projectId: string) {
+  const state = statesByProjectId.get(projectId);
+  if (state) {
+    ensureProjectSyncState(state);
+  }
   queueProjectDraftSync(projectId);
   notify();
 }
@@ -550,6 +682,218 @@ function syncExternalDomainsFromEstimate(projectId: string, state: EstimateV2Pro
   };
   syncProcurementFromEstimateV2(projectId, syncState);
   syncHRFromEstimateV2(projectId, syncState);
+}
+
+function applyTaskIdsToState(
+  projectId: string,
+  taskIdByWorkId: Record<string, string>,
+): EstimateV2Work[] {
+  const state = statesByProjectId.get(projectId);
+  if (!state) {
+    return [];
+  }
+
+  let changed = false;
+  state.works = state.works.map((work) => {
+    const nextTaskId = taskIdByWorkId[work.id] ?? work.taskId;
+    if (nextTaskId === work.taskId) {
+      return work;
+    }
+
+    changed = true;
+    return {
+      ...work,
+      taskId: nextTaskId,
+    };
+  });
+
+  if (changed) {
+    state.project.updatedAt = nowIso();
+    ensureProjectSyncState(state);
+  }
+
+  return state.works.map((work) => ({ ...work }));
+}
+
+async function runProjectDraftSync(projectId: string) {
+  const state = statesByProjectId.get(projectId);
+  const profileId = getRetainedSupabaseSyncProfileId(projectId);
+  if (!state || !profileId) {
+    return;
+  }
+
+  const accessContext = accessContextByProjectId.get(projectId);
+  if (accessContext && accessContext.mode !== "supabase") {
+    return;
+  }
+
+  remoteProjectionSyncInFlightByProjectId.add(projectId);
+  const attemptedAt = nowIso();
+  const shouldProject = isNonPlanningEstimateStatus(state.project.estimateStatus);
+
+  try {
+    const sync = ensureProjectSyncState(state);
+    if (shouldProject) {
+      (["tasks", "procurement", "hr"] as const).forEach((domain) => {
+        setProjectSyncDomainStatus(state, domain, {
+          status: "syncing",
+          lastAttemptedAt: attemptedAt,
+          lastError: null,
+        });
+      });
+      notify();
+    }
+
+    const normalized = normalizeStateForWorkspace(projectId, state);
+    saveWorkspaceEstimateCache(projectId, profileId, normalized);
+
+    await saveCurrentEstimateDraft(projectId, getSnapshotFromState(normalized), {
+      profileId,
+    });
+
+    remoteDraftSyncErrorSignatureByProjectId.delete(projectId);
+
+    if (!shouldProject) {
+      const latestState = statesByProjectId.get(projectId);
+      if (latestState) {
+        ensureProjectSyncState(latestState);
+        saveWorkspaceEstimateCache(projectId, profileId, latestState);
+        notify();
+      }
+      return;
+    }
+
+    let worksForDownstream = normalized.works.map((work) => ({ ...work }));
+
+    try {
+      const taskIdByWorkId = await syncProjectTasksFromEstimate({
+        projectId,
+        estimateStatus: normalized.project.estimateStatus,
+        works: normalized.works,
+        lines: normalized.lines,
+        profileId,
+      });
+      const syncedWorks = applyTaskIdsToState(projectId, taskIdByWorkId);
+      worksForDownstream = syncedWorks.length > 0
+        ? syncedWorks
+        : worksForDownstream.map((work) => ({
+          ...work,
+          taskId: taskIdByWorkId[work.id] ?? work.taskId,
+        }));
+      const latestState = statesByProjectId.get(projectId);
+      if (latestState) {
+        setProjectSyncDomainStatus(latestState, "tasks", {
+          status: "synced",
+          projectedRevision: sync.estimateRevision,
+          lastSucceededAt: nowIso(),
+          lastError: null,
+        });
+        saveWorkspaceEstimateCache(projectId, profileId, latestState);
+      }
+    } catch (error) {
+      const latestState = statesByProjectId.get(projectId);
+      if (latestState) {
+        setProjectSyncDomainStatus(latestState, "tasks", {
+          status: "error",
+          lastError: error instanceof Error ? error.message : "Unable to sync tasks from estimate.",
+        });
+        saveWorkspaceEstimateCache(projectId, profileId, latestState);
+      }
+      console.error("Failed to sync estimate v2 tasks projection", error);
+    } finally {
+      notify();
+    }
+
+    try {
+      await syncProjectProcurementFromEstimate({
+        projectId,
+        estimateStatus: normalized.project.estimateStatus,
+        works: worksForDownstream,
+        lines: normalized.lines,
+        profileId,
+      });
+      const latestState = statesByProjectId.get(projectId);
+      if (latestState) {
+        setProjectSyncDomainStatus(latestState, "procurement", {
+          status: "synced",
+          projectedRevision: sync.estimateRevision,
+          lastSucceededAt: nowIso(),
+          lastError: null,
+        });
+        saveWorkspaceEstimateCache(projectId, profileId, latestState);
+      }
+    } catch (error) {
+      const latestState = statesByProjectId.get(projectId);
+      if (latestState) {
+        setProjectSyncDomainStatus(latestState, "procurement", {
+          status: "error",
+          lastError: error instanceof Error ? error.message : "Unable to sync procurement from estimate.",
+        });
+        saveWorkspaceEstimateCache(projectId, profileId, latestState);
+      }
+      console.error("Failed to sync estimate v2 procurement projection", error);
+    } finally {
+      notify();
+    }
+
+    try {
+      await syncProjectHRFromEstimate(
+        { kind: "supabase", profileId },
+        {
+          projectId,
+          estimateStatus: normalized.project.estimateStatus,
+          works: worksForDownstream,
+          lines: normalized.lines,
+        },
+      );
+      const latestState = statesByProjectId.get(projectId);
+      if (latestState) {
+        setProjectSyncDomainStatus(latestState, "hr", {
+          status: "synced",
+          projectedRevision: sync.estimateRevision,
+          lastSucceededAt: nowIso(),
+          lastError: null,
+        });
+        saveWorkspaceEstimateCache(projectId, profileId, latestState);
+      }
+    } catch (error) {
+      const latestState = statesByProjectId.get(projectId);
+      if (latestState) {
+        setProjectSyncDomainStatus(latestState, "hr", {
+          status: "error",
+          lastError: error instanceof Error ? error.message : "Unable to sync HR from estimate.",
+        });
+        saveWorkspaceEstimateCache(projectId, profileId, latestState);
+      }
+      console.error("Failed to sync estimate v2 HR projection", error);
+    } finally {
+      notify();
+    }
+  } catch (error) {
+    const signature = error instanceof Error
+      ? `${error.name}:${error.message}`
+      : String(error);
+    if (remoteDraftSyncErrorSignatureByProjectId.get(projectId) !== signature) {
+      remoteDraftSyncErrorSignatureByProjectId.set(projectId, signature);
+      console.error("Failed to sync estimate v2 draft", error);
+    }
+    const latestState = statesByProjectId.get(projectId);
+    if (latestState) {
+      (["tasks", "procurement", "hr"] as const).forEach((domain) => {
+        setProjectSyncDomainStatus(latestState, domain, {
+          status: "error",
+          lastError: error instanceof Error ? error.message : "Unable to save estimate draft before sync.",
+        });
+      });
+      saveWorkspaceEstimateCache(projectId, profileId, latestState);
+      notify();
+    }
+  } finally {
+    remoteProjectionSyncInFlightByProjectId.delete(projectId);
+    if (deferredDraftSyncByProjectId.delete(projectId)) {
+      queueProjectDraftSync(projectId);
+    }
+  }
 }
 
 function createEntityId(projectId: string, prefix: string): string {
@@ -565,6 +909,9 @@ export function registerEstimateV2ProjectAccessContext(
   context: EstimateV2ProjectAccessContext,
 ) {
   accessContextByProjectId.set(projectId, context);
+  if (context.mode === "supabase" && context.profileId) {
+    retainedSupabaseSyncProfileIdByProjectId.set(projectId, context.profileId);
+  }
   const state = statesByProjectId.get(projectId);
   if (state && context.mode === "supabase" && context.profileId) {
     saveWorkspaceEstimateCache(projectId, context.profileId, state);
@@ -573,14 +920,6 @@ export function registerEstimateV2ProjectAccessContext(
 
 export function clearEstimateV2ProjectAccessContext(projectId: string) {
   accessContextByProjectId.delete(projectId);
-  remoteDraftSyncErrorSignatureByProjectId.delete(projectId);
-  heroTransitionInFlightByProjectId.delete(projectId);
-  deferredDraftSyncByProjectId.delete(projectId);
-  const timer = remoteDraftSyncTimers.get(projectId);
-  if (timer) {
-    clearTimeout(timer);
-    remoteDraftSyncTimers.delete(projectId);
-  }
 }
 
 function isOwnerActionAllowed(
@@ -812,6 +1151,9 @@ function syncFromMainTaskStore() {
   const changedProjectIds = new Set<string>();
 
   statesByProjectId.forEach((state, projectId) => {
+    if (accessContextByProjectId.get(projectId)?.mode === "supabase") {
+      return;
+    }
     const tasksById = new Map(getTasks(projectId).map((task) => [task.id, task]));
     let stateChanged = false;
 
@@ -959,6 +1301,7 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
   projectId: string,
   input: { profileId: string },
 ): Promise<void> {
+  retainedSupabaseSyncProfileIdByProjectId.set(projectId, input.profileId);
   const cacheKey = `${projectId}:${input.profileId}`;
   const pending = remoteHydrationPromises.get(cacheKey);
   if (pending) {
@@ -1004,10 +1347,15 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
             works: cached.scheduleBaseline.works.map((work) => ({ ...work })),
           }
           : null,
+        sync: cloneProjectSyncState(cached.sync),
       };
+      ensureProjectSyncState(cachedState);
       statesByProjectId.set(projectId, cachedState);
       ensureMainStoreSubscription();
       notify();
+      if (isNonPlanningEstimateStatus(cachedState.project.estimateStatus)) {
+        queueProjectDraftSync(projectId);
+      }
       return;
     }
 
@@ -1196,12 +1544,17 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
           works: cached.scheduleBaseline.works.map((work) => ({ ...work })),
         }
         : null,
+      sync: cloneProjectSyncState(cached?.sync),
     };
 
+    ensureProjectSyncState(nextState);
     statesByProjectId.set(projectId, nextState);
     ensureMainStoreSubscription();
     saveWorkspaceEstimateCache(projectId, input.profileId, nextState);
     notify();
+    if (isNonPlanningEstimateStatus(nextState.project.estimateStatus)) {
+      queueProjectDraftSync(projectId);
+    }
   })().finally(() => {
     remoteHydrationPromises.delete(cacheKey);
   });
@@ -1316,8 +1669,10 @@ function ensureProjectState(projectId: string): EstimateV2ProjectState {
     dependencies: [],
     versions: [],
     scheduleBaseline: null,
+    sync: createEmptyProjectSyncState(),
   };
 
+  ensureProjectSyncState(state);
   ensureMainStoreSubscription();
   statesByProjectId.set(projectId, state);
   return state;
@@ -1409,6 +1764,7 @@ function buildPlanningToInWorkDraft(
     dependencies: state.dependencies.map((dependency) => ({ ...dependency })),
     versions: state.versions,
     scheduleBaseline: state.scheduleBaseline,
+    sync: cloneProjectSyncState(state.sync),
   };
 
   return {
@@ -2855,6 +3211,7 @@ export function computeVersionDiff(
 export function __unsafeResetEstimateV2ForTests() {
   statesByProjectId.clear();
   accessContextByProjectId.clear();
+  retainedSupabaseSyncProfileIdByProjectId.clear();
   if (mainStoreUnsubscribe) {
     mainStoreUnsubscribe();
     mainStoreUnsubscribe = null;
@@ -2865,6 +3222,7 @@ export function __unsafeResetEstimateV2ForTests() {
   remoteDraftSyncErrorSignatureByProjectId.clear();
   heroTransitionInFlightByProjectId.clear();
   deferredDraftSyncByProjectId.clear();
+  remoteProjectionSyncInFlightByProjectId.clear();
   listeners.clear();
   crossSyncInProgress = false;
 }

@@ -30,6 +30,7 @@ function taskRow(overrides: Partial<Parameters<typeof mapTaskRowToTask>[0]> = {}
     description: "Wire and install outlets",
     status: "in_progress" as const,
     assignee_profile_id: "profile-2",
+    estimate_work_id: "work-1",
     created_by: "profile-1",
     start_at: "2026-03-02T00:00:00.000Z",
     due_at: "2026-03-05T00:00:00.000Z",
@@ -60,6 +61,7 @@ describe("planning-source helpers", () => {
   it("maps task rows to the frontend Task contract with empty-safe defaults", () => {
     const task = mapTaskRowToTask(taskRow({
       assignee_profile_id: null,
+      estimate_work_id: "work-99",
       start_at: null,
       due_at: null,
     }));
@@ -78,6 +80,7 @@ describe("planning-source helpers", () => {
       photos: [],
       linked_estimate_item_ids: [],
       created_at: "2026-03-01T00:00:00.000Z",
+      estimateV2WorkId: "work-99",
       startDate: undefined,
       deadline: undefined,
     });

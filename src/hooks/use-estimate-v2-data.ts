@@ -4,10 +4,38 @@ import {
   getEstimateV2ProjectState,
   hydrateEstimateV2ProjectFromWorkspace,
   subscribeEstimateV2,
+  type EstimateV2ProjectSyncState,
   type EstimateV2ProjectView,
 } from "@/data/estimate-v2-store";
 import { useWorkspaceMode } from "@/hooks/use-workspace-source";
 import type { EstimateV2Version } from "@/types/estimate-v2";
+
+export const EMPTY_ESTIMATE_V2_PROJECT_SYNC_STATE: EstimateV2ProjectSyncState = {
+  estimateRevision: null,
+  domains: {
+    tasks: {
+      status: "idle",
+      projectedRevision: null,
+      lastAttemptedAt: null,
+      lastSucceededAt: null,
+      lastError: null,
+    },
+    procurement: {
+      status: "idle",
+      projectedRevision: null,
+      lastAttemptedAt: null,
+      lastSucceededAt: null,
+      lastError: null,
+    },
+    hr: {
+      status: "idle",
+      projectedRevision: null,
+      lastAttemptedAt: null,
+      lastSucceededAt: null,
+      lastError: null,
+    },
+  },
+};
 
 export function useEstimateV2Project(projectId: string): EstimateV2ProjectView & { isLoading: boolean } {
   const workspaceMode = useWorkspaceMode();
@@ -65,8 +93,13 @@ export function useEstimateV2Project(projectId: string): EstimateV2ProjectView &
 
   return {
     ...value,
+    sync: value.sync ?? EMPTY_ESTIMATE_V2_PROJECT_SYNC_STATE,
     isLoading,
   };
+}
+
+export function useEstimateV2ProjectSync(projectId: string): EstimateV2ProjectSyncState {
+  return useEstimateV2Project(projectId).sync ?? EMPTY_ESTIMATE_V2_PROJECT_SYNC_STATE;
 }
 
 export function useEstimateV2Share(shareId: string): { projectId: string; version: EstimateV2Version } | null {

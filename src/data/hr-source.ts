@@ -396,6 +396,7 @@ export function shapeHRItemsWithAssignees(input: {
   return input.itemRows.map((row) => {
     const assigneeIds = assigneeIdsByItemId.get(row.id) ?? [];
     const plannedCost = Math.max(0, row.planned_cost_cents ?? 0) / 100;
+    const linkedEstimateLineId = input.estimateLineIdByItemId?.get(row.id) ?? null;
 
     return {
       id: row.id,
@@ -411,8 +412,8 @@ export function shapeHRItemsWithAssignees(input: {
       assignee: assigneeIds[0] ?? null,
       assigneeIds,
       status: mapHRItemStatus(row.status),
-      lockedFromEstimate: false,
-      sourceEstimateV2LineId: input.estimateLineIdByItemId?.get(row.id) ?? null,
+      lockedFromEstimate: Boolean(row.estimate_work_id),
+      sourceEstimateV2LineId: linkedEstimateLineId,
       orphaned: false,
       orphanedAt: null,
       orphanedReason: null,
@@ -476,6 +477,27 @@ export async function deleteHeroHRItems(
   const { error } = await supabase
     .from("hr_items")
     .delete()
+    .in("id", ids);
+
+  if (error) {
+    throw error;
+  }
+}
+
+async function unlinkHeroHRItems(
+  supabase: TypedSupabaseClient,
+  ids: string[],
+): Promise<void> {
+  if (ids.length === 0) {
+    return;
+  }
+
+  const { error } = await supabase
+    .from("hr_items")
+    .update({
+      estimate_work_id: null,
+      task_id: null,
+    })
     .in("id", ids);
 
   if (error) {
@@ -607,7 +629,7 @@ export async function syncProjectHRFromEstimate(
   mode: WorkspaceMode,
   input: SyncProjectHRFromEstimateInput,
 ): Promise<void> {
-  if (mode.kind !== "supabase" || input.estimateStatus !== "in_work") {
+  if (mode.kind !== "supabase" || input.estimateStatus === "planning") {
     return;
   }
 
@@ -622,6 +644,21 @@ export async function syncProjectHRFromEstimate(
       work: workById.get(line.workId) ?? null,
     }))
     .filter((entry) => Boolean(entry.work?.taskId));
+  const syncableLineIdSet = new Set(syncableLines.map(({ line }) => line.id));
+
+  const staleKnownHrItemIds = Array.from(
+    new Set(
+      Object.entries(heroIds?.hrItemIdByLocalLineId ?? {})
+        .filter(([localLineId]) => {
+          const estimateLineId = heroIds?.lineIdByLocalLineId[localLineId] ?? localLineId;
+          return !syncableLineIdSet.has(estimateLineId);
+        })
+        .map(([, hrItemId]) => hrItemId)
+        .filter(Boolean),
+    ),
+  );
+
+  await unlinkHeroHRItems(supabase, staleKnownHrItemIds);
 
   if (syncableLines.length === 0) {
     return;
@@ -643,10 +680,7 @@ export async function syncProjectHRFromEstimate(
       const existingRow = existingHrRowsByLocalLineId.get(line.id) ?? null;
       const hrItemId = existingRow?.id
         ?? hrItemIdByEstimateLineId.get(line.id)
-        ?? null;
-      if (!hrItemId) {
-        return null;
-      }
+        ?? line.id;
 
       return {
         id: hrItemId,
@@ -676,10 +710,17 @@ export async function syncProjectHRFromEstimate(
     rowsToUpsert,
   );
 
+  const hrItemIdByLineId = new Map(
+    syncableLines.map(({ line }, index) => [line.id, rowsToUpsert[index]?.id ?? line.id]),
+  );
+
   const linesWithParticipantAssignees = syncableLines
     .filter(({ line }) => Boolean(line.assigneeId))
     .map(({ line }) => ({
-      hrItemId: existingHrRowsByLocalLineId.get(line.id)?.id ?? hrItemIdByEstimateLineId.get(line.id) ?? "",
+      hrItemId: existingHrRowsByLocalLineId.get(line.id)?.id
+        ?? hrItemIdByEstimateLineId.get(line.id)
+        ?? hrItemIdByLineId.get(line.id)
+        ?? line.id,
       assigneeId: line.assigneeId as string,
     }))
     .filter((entry) => Boolean(entry.hrItemId));

@@ -45,6 +45,9 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   canEdit: boolean;
+  estimateLinkedPlanningReadOnly?: boolean;
+  blockEstimateLinkedDelete?: boolean;
+  disableStatusChanges?: boolean;
   onStatusChange?: (taskId: string, newStatus: TaskStatus) => void;
   projectMedia?: MediaType[];
   onChecklistToggle?: (taskId: string, itemId: string, done: boolean) => Promise<void> | void;
@@ -58,6 +61,9 @@ export function TaskDetailModal({
   open,
   onOpenChange,
   canEdit,
+  estimateLinkedPlanningReadOnly = false,
+  blockEstimateLinkedDelete = false,
+  disableStatusChanges = false,
   onStatusChange,
   projectMedia,
   onChecklistToggle,
@@ -104,10 +110,11 @@ export function TaskDetailModal({
 
   const handleStatusChange = useCallback((status: TaskStatus) => {
     if (!task) return;
+    if (disableStatusChanges) return;
     if (onStatusChange) {
       onStatusChange(task.id, status);
     }
-  }, [task, onStatusChange]);
+  }, [task, disableStatusChanges, onStatusChange]);
 
   // Title inline edit
   const handleTitleSave = useCallback(() => {
@@ -116,12 +123,17 @@ export function TaskDetailModal({
       setEditingTitle(false);
       return;
     }
+    if (estimateLinkedPlanningReadOnly) {
+      setTitleDraft(task.title);
+      setEditingTitle(false);
+      return;
+    }
     if (titleDraft.trim() !== task.title) {
       updateTask(task.id, { title: titleDraft.trim() });
       syncEstimateItemName(task.id, titleDraft.trim());
     }
     setEditingTitle(false);
-  }, [task, titleDraft]);
+  }, [task, titleDraft, estimateLinkedPlanningReadOnly]);
 
   const handleTitleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === "Enter") { e.preventDefault(); handleTitleSave(); }
@@ -196,16 +208,25 @@ export function TaskDetailModal({
 
   const handleDelete = useCallback(() => {
     if (!task) return;
+    if (estimateLinkedPlanningReadOnly && blockEstimateLinkedDelete) {
+      toast({
+        title: "Estimate-linked tasks cannot be deleted right now",
+        description: "Wait for task sync to recover before deleting estimate-linked tasks.",
+        variant: "destructive",
+      });
+      return;
+    }
     deleteTask(task.id);
     setDeleteOpen(false);
     onOpenChange(false);
     toast({ title: "Task deleted" });
-  }, [task, onOpenChange, toast]);
+  }, [task, estimateLinkedPlanningReadOnly, blockEstimateLinkedDelete, onOpenChange, toast]);
 
   const handleDeadlineChange = useCallback((date: Date | undefined) => {
     if (!task) return;
+    if (estimateLinkedPlanningReadOnly) return;
     updateTaskDeadline(task.id, date?.toISOString());
-  }, [task]);
+  }, [task, estimateLinkedPlanningReadOnly]);
 
   if (!task) return null;
 
@@ -230,7 +251,7 @@ export function TaskDetailModal({
           {/* Header */}
           <div className="flex items-start justify-between p-sp-3 pb-0">
             <div className="flex-1 min-w-0 pr-2">
-              {editingTitle && canEdit ? (
+              {editingTitle && canEdit && !estimateLinkedPlanningReadOnly ? (
                 <input
                   ref={titleInputRef}
                   value={titleDraft}
@@ -242,15 +263,20 @@ export function TaskDetailModal({
                 />
               ) : (
                 <h2
-                  className={`text-lg font-semibold text-foreground truncate ${canEdit ? "cursor-text hover:text-accent transition-colors" : ""}`}
-                  onClick={() => { if (canEdit) { setEditingTitle(true); setTimeout(() => titleInputRef.current?.focus(), 0); } }}
+                  className={`text-lg font-semibold text-foreground truncate ${canEdit && !estimateLinkedPlanningReadOnly ? "cursor-text hover:text-accent transition-colors" : ""}`}
+                  onClick={() => {
+                    if (canEdit && !estimateLinkedPlanningReadOnly) {
+                      setEditingTitle(true);
+                      setTimeout(() => titleInputRef.current?.focus(), 0);
+                    }
+                  }}
                 >
                   {task.title}
                 </h2>
               )}
             </div>
             <div className="flex items-center gap-1 shrink-0 mt-0.5">
-              {canEdit && (
+              {canEdit && !estimateLinkedPlanningReadOnly && (
                 <button
                   onClick={() => setDeleteOpen(true)}
                   className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
@@ -276,7 +302,7 @@ export function TaskDetailModal({
                 {statuses.map((s) => (
                   <button
                     key={s}
-                    disabled={!canEdit}
+                    disabled={!canEdit || disableStatusChanges}
                     onClick={() => handleStatusChange(s)}
                     className={`rounded-full px-2.5 py-0.5 text-caption font-medium transition-colors ${
                       task.status === s
@@ -335,7 +361,7 @@ export function TaskDetailModal({
               </div>
               <div>
                 <p className="text-caption text-muted-foreground mb-1">Deadline</p>
-                {canEdit ? (
+                {canEdit && !estimateLinkedPlanningReadOnly ? (
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button

@@ -129,6 +129,7 @@ export interface Task {
   id: string;
   project_id: string;
   stage_id: string;
+  estimateV2WorkId?: string;
   title: string;
   description: string;
   status: TaskStatus;

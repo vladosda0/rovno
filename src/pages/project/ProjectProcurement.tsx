@@ -93,6 +93,15 @@ type ProcurementListState = {
   scrollY: number;
 };
 
+const EMPTY_SYNC_STATE = {
+  estimateRevision: null,
+  domains: {
+    tasks: { status: "idle", projectedRevision: null, lastAttemptedAt: null, lastSucceededAt: null, lastError: null },
+    procurement: { status: "idle", projectedRevision: null, lastAttemptedAt: null, lastSucceededAt: null, lastError: null },
+    hr: { status: "idle", projectedRevision: null, lastAttemptedAt: null, lastSucceededAt: null, lastError: null },
+  },
+} as const;
+
 const TABS: ProcurementTab[] = ["requested", "ordered", "in_stock"];
 
 const TAB_META: Record<ProcurementTab, { label: string; className: string }> = {
@@ -215,9 +224,19 @@ export default function ProjectProcurement() {
   const stockRows = useInventoryStock(pid);
   const { project, members, stages } = useProject(pid);
   const estimateState = useEstimateV2Project(pid);
+  const estimateSync = estimateState.sync ?? EMPTY_SYNC_STATE;
   const perm = usePermission(pid);
   const canEdit = perm.can("procurement.edit");
   const canUseFromStock = canEdit && !isSupabaseMode;
+  const procurementSyncState = estimateSync.domains.procurement;
+  const isProcurementSyncing = isSupabaseMode && procurementSyncState.status === "syncing";
+  const hasProcurementSyncError = isSupabaseMode && procurementSyncState.status === "error";
+  const isProcurementProjectionBehind = isSupabaseMode
+    && estimateState.project.estimateStatus !== "planning"
+    && procurementSyncState.projectedRevision !== estimateSync.estimateRevision
+    && !isProcurementSyncing
+    && !hasProcurementSyncError;
+  const shouldBlockProcurementLaunchActions = isProcurementProjectionBehind || hasProcurementSyncError;
 
   const items = useMemo(() => {
     const workById = new Map(estimateState.works.map((work) => [work.id, work]));
@@ -861,6 +880,16 @@ export default function ProjectProcurement() {
 
   const openCreateOrder = (itemIds: string[]) => {
     if (itemIds.length === 0) return;
+    if (shouldBlockProcurementLaunchActions) {
+      toast({
+        title: hasProcurementSyncError ? "Procurement sync needs attention" : "Procurement is still syncing",
+        description: hasProcurementSyncError
+          ? (procurementSyncState.lastError ?? "Resolve the sync error before creating orders.")
+          : "Wait for estimate-driven Procurement sync to finish before creating orders.",
+        variant: "destructive",
+      });
+      return;
+    }
     setCreateOrderItemIds(itemIds);
     setCreateOrderOpen(true);
   };
@@ -894,6 +923,16 @@ export default function ProjectProcurement() {
 
   const openReceiveItemsModal = useCallback((targets: OrderedReceivableTarget[]) => {
     if (targets.length === 0) return;
+    if (shouldBlockProcurementLaunchActions) {
+      toast({
+        title: hasProcurementSyncError ? "Procurement sync needs attention" : "Procurement is still syncing",
+        description: hasProcurementSyncError
+          ? (procurementSyncState.lastError ?? "Resolve the sync error before receiving items.")
+          : "Wait for estimate-driven Procurement sync to finish before receiving items.",
+        variant: "destructive",
+      });
+      return;
+    }
     const nextQtyByKey: Record<string, number> = {};
     const nextLocationByKey: Record<string, string> = {};
     targets.forEach((target) => {
@@ -905,7 +944,7 @@ export default function ProjectProcurement() {
     setReceiveModalQtyByKey(nextQtyByKey);
     setReceiveModalLocationByKey(nextLocationByKey);
     setReceiveModalOpen(true);
-  }, [defaultLocationId]);
+  }, [defaultLocationId, shouldBlockProcurementLaunchActions, hasProcurementSyncError, procurementSyncState.lastError, toast]);
 
   const openReceiveModalForSelection = () => {
     const targets = Array.from(selectedOrderedLineKeys)
@@ -1266,6 +1305,16 @@ export default function ProjectProcurement() {
       : `Use (${selectionCount})`;
 
   const runSelectionPrimaryAction = () => {
+    if (shouldBlockProcurementLaunchActions) {
+      toast({
+        title: hasProcurementSyncError ? "Procurement sync needs attention" : "Procurement is still syncing",
+        description: hasProcurementSyncError
+          ? (procurementSyncState.lastError ?? "Resolve the sync error before using launch-critical procurement actions.")
+          : "Wait for estimate-driven Procurement sync to finish before creating orders or receiving items.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (activeTab === "requested") {
       openCreateOrder(Array.from(selectedRequestedIds));
       return;
@@ -1364,6 +1413,35 @@ export default function ProjectProcurement() {
 
   return (
     <div className={cn("space-y-sp-2", showStickySelectionBar && "pb-24")}>
+      {(isProcurementSyncing || isProcurementProjectionBehind || hasProcurementSyncError) && (
+        <div className={cn(
+          "rounded-card border px-3 py-2 text-sm flex items-start gap-2",
+          hasProcurementSyncError
+            ? "border-destructive/30 bg-destructive/10 text-destructive"
+            : isProcurementProjectionBehind
+              ? "border-warning/30 bg-warning/10 text-foreground"
+              : "border-info/30 bg-info/10 text-foreground",
+        )}>
+          {isProcurementSyncing ? <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" /> : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />}
+          <div className="min-w-0">
+            <p className="font-medium">
+              {isProcurementSyncing
+                ? "Procurement is syncing from Estimate"
+                : hasProcurementSyncError
+                  ? "Procurement sync failed"
+                  : "Procurement is behind the latest Estimate"}
+            </p>
+            <p className="text-xs opacity-80">
+              {isProcurementSyncing
+                ? "Estimate-linked procurement requests are being refreshed now."
+                : hasProcurementSyncError
+                  ? (procurementSyncState.lastError ?? "Resolve the sync error before creating orders or receiving items.")
+                  : "Wait for the procurement projection to catch up before creating orders or receiving items."}
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="glass-elevated rounded-card p-sp-3 space-y-sp-3">
         <h2 className="text-h3 text-foreground">Procurement</h2>
 
@@ -1474,7 +1552,7 @@ export default function ProjectProcurement() {
                 size="sm"
                 className="h-8"
                 onClick={runSelectionPrimaryAction}
-                disabled={!canEdit || (isSupabaseMode && activeTab === "in_stock")}
+                disabled={!canEdit || shouldBlockProcurementLaunchActions || (isSupabaseMode && activeTab === "in_stock")}
               >
                 {selectionPrimaryLabel}
               </Button>
@@ -1566,7 +1644,7 @@ export default function ProjectProcurement() {
                                           size="sm"
                                           className="h-7"
                                           onClick={() => openCreateOrder([item.id])}
-                                          disabled={!canEdit}
+                                          disabled={!canEdit || shouldBlockProcurementLaunchActions}
                                         >
                                           Order
                                         </Button>
@@ -1638,7 +1716,7 @@ export default function ProjectProcurement() {
                                       size="sm"
                                       className="h-7"
                                       onClick={() => openCreateOrder([item.id])}
-                                      disabled={!canEdit}
+                                      disabled={!canEdit || shouldBlockProcurementLaunchActions}
                                     >
                                       Order
                                     </Button>
@@ -1807,7 +1885,7 @@ export default function ProjectProcurement() {
                                       size="sm"
                                       className="h-7"
                                       onClick={() => receivableTarget && openReceiveItemsModal([receivableTarget])}
-                                      disabled={!canEdit || !receivableTarget}
+                                      disabled={!canEdit || shouldBlockProcurementLaunchActions || !receivableTarget}
                                     >
                                       Receive
                                     </Button>
@@ -2270,7 +2348,7 @@ export default function ProjectProcurement() {
                     <div className="mt-1">
                       <ItemTypePicker
                         value={(editForm.type ?? "material") as ProcurementItemType}
-                        disabled={!canEdit || activeTab === "ordered"}
+                        disabled={!canEdit || activeTab === "ordered" || !!detailItem.lockedFromEstimate}
                         onChange={(nextType) => patchEditForm((prev) => ({ ...prev, type: nextType }), "immediate")}
                       />
                     </div>
@@ -2308,12 +2386,12 @@ export default function ProjectProcurement() {
                 <div>
                   <label className="text-xs text-muted-foreground">Name</label>
                   <Input
-                    value={editForm.name ?? ""}
-                    onChange={(event) => patchEditForm((prev) => ({ ...prev, name: event.target.value }))}
-                    onBlur={() => persistDraftNowIfChanged(draftRef.current)}
-                    className="h-9"
-                    disabled={!canEdit || activeTab === "ordered"}
-                  />
+                  value={editForm.name ?? ""}
+                  onChange={(event) => patchEditForm((prev) => ({ ...prev, name: event.target.value }))}
+                  onBlur={() => persistDraftNowIfChanged(draftRef.current)}
+                  className="h-9"
+                  disabled={!canEdit || activeTab === "ordered" || !!detailItem.lockedFromEstimate}
+                />
                 </div>
 
                 <div>
@@ -2471,7 +2549,12 @@ export default function ProjectProcurement() {
                 <div className="rounded-lg border border-border p-3 space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-sm font-medium text-foreground">Fulfillment</p>
-                    <Button type="button" size="sm" onClick={() => openCreateOrder([detailItem.id])} disabled={!canEdit}>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => openCreateOrder([detailItem.id])}
+                      disabled={!canEdit || shouldBlockProcurementLaunchActions}
+                    >
                       Create order
                     </Button>
                   </div>

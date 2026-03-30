@@ -6,6 +6,8 @@ const {
   getWorkspaceSourceMock,
   getPlanningSourceMock,
   persistEstimateV2HeroTransitionMock,
+  syncProjectTasksFromEstimateMock,
+  syncProjectProcurementFromEstimateMock,
   syncProjectHRFromEstimateMock,
 } = vi.hoisted(() => ({
   loadCurrentEstimateDraftMock: vi.fn(),
@@ -13,6 +15,8 @@ const {
   getWorkspaceSourceMock: vi.fn(),
   getPlanningSourceMock: vi.fn(),
   persistEstimateV2HeroTransitionMock: vi.fn(),
+  syncProjectTasksFromEstimateMock: vi.fn(),
+  syncProjectProcurementFromEstimateMock: vi.fn(),
   syncProjectHRFromEstimateMock: vi.fn(),
 }));
 
@@ -38,6 +42,15 @@ vi.mock("@/data/planning-source", async () => {
   return {
     ...actual,
     getPlanningSource: getPlanningSourceMock,
+    syncProjectTasksFromEstimate: syncProjectTasksFromEstimateMock,
+  };
+});
+
+vi.mock("@/data/procurement-source", async () => {
+  const actual = await vi.importActual<typeof import("@/data/procurement-source")>("@/data/procurement-source");
+  return {
+    ...actual,
+    syncProjectProcurementFromEstimate: syncProjectProcurementFromEstimateMock,
   };
 });
 
@@ -107,6 +120,8 @@ describe("estimate-v2 workspace drafts", () => {
         hrItemIdByLocalLineId: {},
       },
     });
+    syncProjectTasksFromEstimateMock.mockResolvedValue({});
+    syncProjectProcurementFromEstimateMock.mockResolvedValue(undefined);
     syncProjectHRFromEstimateMock.mockResolvedValue(undefined);
     saveCurrentEstimateDraftMock.mockResolvedValue(undefined);
     loadCurrentEstimateDraftMock.mockResolvedValue({
@@ -413,6 +428,8 @@ describe("estimate-v2 workspace drafts", () => {
       await vi.advanceTimersByTimeAsync(350);
 
       expect(saveCurrentEstimateDraftMock).toHaveBeenCalledTimes(1);
+      expect(syncProjectTasksFromEstimateMock).toHaveBeenCalledTimes(1);
+      expect(syncProjectProcurementFromEstimateMock).toHaveBeenCalledTimes(1);
       expect(syncProjectHRFromEstimateMock).toHaveBeenCalledTimes(1);
     } finally {
       vi.useRealTimers();

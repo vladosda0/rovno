@@ -4,6 +4,7 @@ import { buildReceivedQtyByOrderLineId } from "@/data/orders-source";
 import type { WorkspaceMode } from "@/data/workspace-source";
 import { resolveWorkspaceMode } from "@/data/workspace-source";
 import type { ProcurementItemV2 } from "@/types/entities";
+import type { EstimateExecutionStatus, EstimateV2ResourceLine, EstimateV2Work } from "@/types/estimate-v2";
 import type { Database as ProcurementDatabase } from "../../backend-truth/generated/supabase-types";
 
 type ProcurementItemRow = ProcurementDatabase["public"]["Tables"]["procurement_items"]["Row"];
@@ -55,6 +56,19 @@ export interface HeroProcurementLineageRow {
   status: ProcurementItemRow["status"];
   createdBy: string;
 }
+
+export interface SyncProjectProcurementFromEstimateInput {
+  projectId: string;
+  estimateStatus: EstimateExecutionStatus;
+  works: Array<Pick<EstimateV2Work, "id" | "taskId" | "plannedStart" | "stageId">>;
+  lines: Array<Pick<
+    EstimateV2ResourceLine,
+    "id" | "stageId" | "workId" | "title" | "type" | "qtyMilli" | "unit" | "costUnitCents"
+  >>;
+  profileId: string;
+}
+
+const PROCUREMENT_RESOURCE_TYPES = new Set<EstimateV2ResourceLine["type"]>(["material", "tool"]);
 
 function createBrowserProcurementSource(mode: "demo" | "local"): ProcurementSource {
   return {
@@ -140,7 +154,7 @@ export function shapeProcurementItemsWithOrderContext(
         supplier: latestRelatedOrder?.supplier_name ?? null,
         supplierPreferred: null,
         locationPreferredId: null,
-        lockedFromEstimate: false,
+        lockedFromEstimate: Boolean(row.estimate_resource_line_id),
         sourceEstimateItemId: null,
         sourceEstimateV2LineId: row.estimate_resource_line_id ?? null,
         orphaned: false,
@@ -165,6 +179,18 @@ export function shapeProcurementItemsWithOrderContext(
 async function loadSupabaseClient(): Promise<TypedSupabaseClient> {
   const { supabase } = await import("@/integrations/supabase/client");
   return supabase as unknown as TypedSupabaseClient;
+}
+
+function procurementQuantityFromLine(
+  line: Pick<EstimateV2ResourceLine, "qtyMilli">,
+): number {
+  return Math.max(0, line.qtyMilli / 1_000);
+}
+
+function procurementPlannedUnitPriceCentsFromLine(
+  line: Pick<EstimateV2ResourceLine, "costUnitCents">,
+): number {
+  return Math.max(0, Math.round(line.costUnitCents));
 }
 
 export async function upsertHeroProcurementItems(
@@ -258,6 +284,115 @@ export async function loadHeroProcurementItemsByEstimateLineId(
   });
 
   return result;
+}
+
+async function loadHeroProcurementItemsByProject(
+  supabase: TypedSupabaseClient,
+  projectId: string,
+): Promise<HeroProcurementLineageRow[]> {
+  const { data, error } = await supabase
+    .from("procurement_items")
+    .select("id, estimate_resource_line_id, task_id, title, description, category, quantity, unit, planned_unit_price_cents, planned_total_price_cents, status, created_by")
+    .eq("project_id", projectId)
+    .not("estimate_resource_line_id", "is", null);
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? [])
+    .filter((row): row is ProcurementItemRow & { estimate_resource_line_id: string } => Boolean(row.estimate_resource_line_id))
+    .map((row) => ({
+      id: row.id,
+      estimateResourceLineId: row.estimate_resource_line_id,
+      taskId: row.task_id ?? null,
+      title: row.title,
+      description: row.description ?? null,
+      category: row.category ?? null,
+      quantity: row.quantity,
+      unit: row.unit ?? null,
+      plannedUnitPriceCents: row.planned_unit_price_cents ?? null,
+      plannedTotalPriceCents: row.planned_total_price_cents ?? null,
+      status: row.status,
+      createdBy: row.created_by,
+    }));
+}
+
+async function unlinkHeroProcurementItems(
+  supabase: TypedSupabaseClient,
+  ids: string[],
+): Promise<void> {
+  if (ids.length === 0) {
+    return;
+  }
+
+  const { error } = await supabase
+    .from("procurement_items")
+    .update({
+      estimate_resource_line_id: null,
+      task_id: null,
+    })
+    .in("id", ids);
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function syncProjectProcurementFromEstimate(
+  input: SyncProjectProcurementFromEstimateInput,
+): Promise<void> {
+  if (input.estimateStatus === "planning") {
+    return;
+  }
+
+  const supabase = await loadSupabaseClient();
+  const syncableLines = input.lines.filter((line) => PROCUREMENT_RESOURCE_TYPES.has(line.type));
+  const syncableLineIdSet = new Set(syncableLines.map((line) => line.id));
+  const existingRows = await loadHeroProcurementItemsByProject(supabase, input.projectId);
+  const existingByLineId = new Map<string, HeroProcurementLineageRow>();
+
+  existingRows.forEach((row) => {
+    if (existingByLineId.has(row.estimateResourceLineId)) {
+      throw new Error(`Ambiguous remote procurement mapping for estimate line "${row.estimateResourceLineId}"`);
+    }
+    existingByLineId.set(row.estimateResourceLineId, row);
+  });
+
+  const staleIds = existingRows
+    .filter((row) => !syncableLineIdSet.has(row.estimateResourceLineId))
+    .map((row) => row.id);
+  await unlinkHeroProcurementItems(supabase, staleIds);
+
+  if (syncableLines.length === 0) {
+    return;
+  }
+
+  const workById = new Map(input.works.map((work) => [work.id, work]));
+  const rowsToUpsert: HeroProcurementItemUpsertInput[] = syncableLines.map((line) => {
+    const existing = existingByLineId.get(line.id) ?? null;
+    const work = workById.get(line.workId) ?? null;
+    const plannedUnitPriceCents = procurementPlannedUnitPriceCentsFromLine(line);
+    const quantity = procurementQuantityFromLine(line);
+
+    return {
+      id: existing?.id ?? line.id,
+      projectId: input.projectId,
+      estimateResourceLineId: line.id,
+      taskId: work?.taskId ?? null,
+      title: line.title,
+      description: existing?.description ?? null,
+      category: existing?.category ?? null,
+      quantity,
+      unit: line.unit ?? existing?.unit ?? null,
+      plannedUnitPriceCents,
+      plannedTotalPriceCents: Math.round(plannedUnitPriceCents * quantity),
+      status: existing?.status ?? "requested",
+      createdBy: existing?.createdBy ?? input.profileId,
+    };
+  });
+
+  await upsertHeroProcurementItems(supabase, rowsToUpsert);
 }
 
 export async function deleteHeroProcurementItems(

@@ -5,6 +5,7 @@ import {
   subscribeProcurement,
 } from "@/data/procurement-store";
 import { getProcurementSource } from "@/data/procurement-source";
+import { useEstimateV2ProjectSync } from "@/hooks/use-estimate-v2-data";
 import { useWorkspaceMode } from "@/hooks/use-workspace-source";
 import type { ProcurementItemV2 } from "@/types/entities";
 
@@ -35,6 +36,7 @@ function useStoreValue<T>(getter: () => T, enabled: boolean, fallback: T): T {
 
 export function useProjectProcurementItems(projectId: string): ProcurementItemV2[] {
   const mode = useWorkspaceMode();
+  const estimateSync = useEstimateV2ProjectSync(projectId);
   const supabaseMode = mode.kind === "supabase" ? mode : null;
   const getItems = useCallback(() => getProcurementItems(projectId), [projectId]);
   const browserItems = useStoreValue(
@@ -44,7 +46,7 @@ export function useProjectProcurementItems(projectId: string): ProcurementItemV2
   );
   const itemsQuery = useQuery({
     queryKey: supabaseMode
-      ? procurementQueryKeys.projectItems(supabaseMode.profileId, projectId)
+      ? [...procurementQueryKeys.projectItems(supabaseMode.profileId, projectId), estimateSync.domains.procurement.projectedRevision ?? "initial"]
       : procurementQueryKeys.projectItems("browser", projectId),
     queryFn: async () => {
       const source = await getProcurementSource(supabaseMode ?? undefined);

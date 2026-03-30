@@ -12,6 +12,7 @@ import {
   setProjectHRAssignees as setProjectHRAssigneesSource,
   setProjectHRItemStatus as setProjectHRItemStatusSource,
 } from "@/data/hr-source";
+import { useEstimateV2ProjectSync } from "@/hooks/use-estimate-v2-data";
 import { useWorkspaceMode } from "@/hooks/use-workspace-source";
 import type { HRItemStatus, HRPayment, HRPlannedItem } from "@/types/hr";
 
@@ -45,6 +46,7 @@ function useStoreValue<T>(getter: () => T, enabled: boolean, fallback: T): T {
 
 export function useProjectHRItems(projectId: string): HRPlannedItem[] {
   const mode = useWorkspaceMode();
+  const estimateSync = useEstimateV2ProjectSync(projectId);
   const supabaseMode = mode.kind === "supabase" ? mode : null;
   const getItems = useCallback(() => getHRItems(projectId), [projectId]);
   const browserItems = useStoreValue(
@@ -54,7 +56,7 @@ export function useProjectHRItems(projectId: string): HRPlannedItem[] {
   );
   const itemsQuery = useQuery({
     queryKey: supabaseMode
-      ? hrQueryKeys.projectItems(supabaseMode.profileId, projectId)
+      ? [...hrQueryKeys.projectItems(supabaseMode.profileId, projectId), estimateSync.domains.hr.projectedRevision ?? "initial"]
       : hrQueryKeys.projectItems("browser", projectId),
     queryFn: async () => {
       const source = await getHRSource(supabaseMode ?? undefined);
@@ -73,6 +75,7 @@ export function useProjectHRItems(projectId: string): HRPlannedItem[] {
 
 export function useProjectHRPayments(projectId: string): HRPayment[] {
   const mode = useWorkspaceMode();
+  const estimateSync = useEstimateV2ProjectSync(projectId);
   const supabaseMode = mode.kind === "supabase" ? mode : null;
   const getPayments = useCallback(() => getHRPayments(projectId), [projectId]);
   const browserPayments = useStoreValue(
@@ -82,7 +85,7 @@ export function useProjectHRPayments(projectId: string): HRPayment[] {
   );
   const paymentsQuery = useQuery({
     queryKey: supabaseMode
-      ? hrQueryKeys.projectPayments(supabaseMode.profileId, projectId)
+      ? [...hrQueryKeys.projectPayments(supabaseMode.profileId, projectId), estimateSync.domains.hr.projectedRevision ?? "initial"]
       : hrQueryKeys.projectPayments("browser", projectId),
     queryFn: async () => {
       const source = await getHRSource(supabaseMode ?? undefined);

@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
 import * as store from "@/data/store";
 import { getPlanningSource } from "@/data/planning-source";
+import { useEstimateV2ProjectSync } from "@/hooks/use-estimate-v2-data";
 import { useWorkspaceMode } from "@/hooks/use-workspace-source";
 import type { Stage, Task } from "@/types/entities";
 
@@ -35,6 +36,7 @@ function useStoreValue<T>(getter: () => T, enabled: boolean, fallback: T): T {
 
 export function usePlanningProjectStages(projectId: string): Stage[] {
   const mode = useWorkspaceMode();
+  const estimateSync = useEstimateV2ProjectSync(projectId);
   const supabaseMode = mode.kind === "supabase" ? mode : null;
   const getStages = useCallback(() => store.getStages(projectId), [projectId]);
   const demoStages = useStoreValue(
@@ -44,7 +46,7 @@ export function usePlanningProjectStages(projectId: string): Stage[] {
   );
   const stagesQuery = useQuery({
     queryKey: supabaseMode
-      ? planningQueryKeys.projectStages(supabaseMode.profileId, projectId)
+      ? [...planningQueryKeys.projectStages(supabaseMode.profileId, projectId), estimateSync.domains.tasks.projectedRevision ?? "initial"]
       : planningQueryKeys.projectStages("demo", projectId),
     queryFn: async () => {
       const source = await getPlanningSource(supabaseMode ?? undefined);
@@ -63,6 +65,7 @@ export function usePlanningProjectStages(projectId: string): Stage[] {
 
 export function usePlanningProjectTasks(projectId: string): Task[] {
   const mode = useWorkspaceMode();
+  const estimateSync = useEstimateV2ProjectSync(projectId);
   const supabaseMode = mode.kind === "supabase" ? mode : null;
   const getTasks = useCallback(() => store.getTasks(projectId), [projectId]);
   const demoTasks = useStoreValue(
@@ -72,7 +75,7 @@ export function usePlanningProjectTasks(projectId: string): Task[] {
   );
   const tasksQuery = useQuery({
     queryKey: supabaseMode
-      ? planningQueryKeys.projectTasks(supabaseMode.profileId, projectId)
+      ? [...planningQueryKeys.projectTasks(supabaseMode.profileId, projectId), estimateSync.domains.tasks.projectedRevision ?? "initial"]
       : planningQueryKeys.projectTasks("demo", projectId),
     queryFn: async () => {
       const source = await getPlanningSource(supabaseMode ?? undefined);

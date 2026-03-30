@@ -25,7 +25,7 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import {
   ListTodo, Plus, CheckCircle2, Circle, Clock,
-  AlertTriangle, Trash2, Check, User, Calendar as CalendarIcon, GripVertical, Camera,
+  AlertTriangle, Trash2, Check, User, Calendar as CalendarIcon, GripVertical, Camera, Loader2,
 } from "lucide-react";
 import { planningQueryKeys } from "@/hooks/use-planning-source";
 import type { TaskStatus } from "@/types/entities";
@@ -42,6 +42,15 @@ const statusMeta: Record<TaskStatus, { label: string; Icon: typeof Circle; color
 
 const allStatuses: TaskStatus[] = ["not_started", "in_progress", "done", "blocked"];
 
+const EMPTY_SYNC_STATE = {
+  estimateRevision: null,
+  domains: {
+    tasks: { status: "idle", projectedRevision: null, lastAttemptedAt: null, lastSucceededAt: null, lastError: null },
+    procurement: { status: "idle", projectedRevision: null, lastAttemptedAt: null, lastSucceededAt: null, lastError: null },
+    hr: { status: "idle", projectedRevision: null, lastAttemptedAt: null, lastSucceededAt: null, lastError: null },
+  },
+} as const;
+
 export default function ProjectTasks() {
   const { id: projectId } = useParams<{ id: string }>();
   const pid = projectId!;
@@ -49,7 +58,9 @@ export default function ProjectTasks() {
   const tasks = useTasks(pid);
   const media = useMedia(pid);
   const { role, can: userCan } = usePermission(pid);
-  const { project: estimateProject } = useEstimateV2Project(pid);
+  const estimateState = useEstimateV2Project(pid);
+  const estimateSync = estimateState.sync ?? EMPTY_SYNC_STATE;
+  const { project: estimateProject } = estimateState;
   const workspaceMode = useWorkspaceMode();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -58,6 +69,16 @@ export default function ProjectTasks() {
   const isClientRegime = estimateProject.regime === "client";
   const canCreateTask = !isClientRegime && userCan("task.create");
   const canEditTask = !isClientRegime && userCan("task.edit");
+  const taskSyncState = estimateSync.domains.tasks;
+  const isSupabaseMode = workspaceMode.kind === "supabase";
+  const isTaskSyncing = isSupabaseMode && taskSyncState.status === "syncing";
+  const hasTaskSyncError = isSupabaseMode && taskSyncState.status === "error";
+  const isTaskProjectionBehind = isSupabaseMode
+    && estimateProject.estimateStatus !== "planning"
+    && taskSyncState.projectedRevision !== estimateSync.estimateRevision
+    && !isTaskSyncing
+    && !hasTaskSyncError;
+  const shouldBlockTaskLaunchActions = isTaskProjectionBehind || hasTaskSyncError;
   const { prepareUpload, uploadBytes, finalizeUpload } = useMediaUploadMutations(pid);
 
   const location = useLocation();
@@ -144,6 +165,16 @@ export default function ProjectTasks() {
   // --- Central status change handler (intercepts Done / Blocked) ---
   const handleStatusChange = useCallback((taskId: string, newStatus: TaskStatus) => {
     if (!canEditTask) return;
+    if (shouldBlockTaskLaunchActions) {
+      toast({
+        title: hasTaskSyncError ? "Tasks sync needs attention" : "Tasks are still syncing",
+        description: hasTaskSyncError
+          ? (taskSyncState.lastError ?? "Resolve the sync error before changing task status.")
+          : "Wait for estimate-driven Tasks sync to finish before changing task status.",
+        variant: "destructive",
+      });
+      return;
+    }
     const task = tasks.find((t) => t.id === taskId);
     if (!task || task.status === newStatus) return;
 
@@ -187,11 +218,21 @@ export default function ProjectTasks() {
         });
       }
     })();
-  }, [canEditTask, tasks, toast, workspaceMode, invalidateProjectTasks]);
+  }, [canEditTask, shouldBlockTaskLaunchActions, hasTaskSyncError, taskSyncState.lastError, tasks, toast, workspaceMode, invalidateProjectTasks]);
 
   // Confirm Done
   const handleConfirmDone = useCallback(async () => {
     if (!donePrompt) return;
+    if (shouldBlockTaskLaunchActions) {
+      toast({
+        title: hasTaskSyncError ? "Tasks sync needs attention" : "Tasks are still syncing",
+        description: hasTaskSyncError
+          ? (taskSyncState.lastError ?? "Resolve the sync error before completing tasks.")
+          : "Wait for estimate-driven Tasks sync to finish before completing tasks.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     const task = tasks.find((entry) => entry.id === donePrompt.taskId);
     if (!task) return;
@@ -263,11 +304,24 @@ export default function ProjectTasks() {
     invalidateProjectTasks,
     toast,
     currentUser.id,
+    shouldBlockTaskLaunchActions,
+    hasTaskSyncError,
+    taskSyncState.lastError,
   ]);
 
   // Confirm Blocked
   const handleConfirmBlocked = useCallback(async () => {
     if (!blockedPrompt) return;
+    if (shouldBlockTaskLaunchActions) {
+      toast({
+        title: hasTaskSyncError ? "Tasks sync needs attention" : "Tasks are still syncing",
+        description: hasTaskSyncError
+          ? (taskSyncState.lastError ?? "Resolve the sync error before marking tasks blocked.")
+          : "Wait for estimate-driven Tasks sync to finish before changing task status.",
+        variant: "destructive",
+      });
+      return;
+    }
     try {
       const source = await getPlanningSource(
         workspaceMode.kind === "pending-supabase" ? undefined : workspaceMode,
@@ -286,7 +340,7 @@ export default function ProjectTasks() {
         variant: "destructive",
       });
     }
-  }, [blockedPrompt, blockedReason, workspaceMode, currentUser.id, invalidateProjectTasks, toast]);
+  }, [blockedPrompt, blockedReason, workspaceMode, currentUser.id, invalidateProjectTasks, toast, shouldBlockTaskLaunchActions, hasTaskSyncError, taskSyncState.lastError]);
 
   const handleChecklistToggle = useCallback(async (
     taskId: string,
@@ -554,6 +608,34 @@ export default function ProjectTasks() {
       {isClientRegime && (
         <p className="mb-2 text-caption text-muted-foreground">Client regime: tasks are read-only.</p>
       )}
+      {(isTaskSyncing || isTaskProjectionBehind || hasTaskSyncError) && (
+        <div className={cn(
+          "mb-2 flex items-start gap-2 rounded-lg border px-3 py-2 text-sm",
+          hasTaskSyncError
+            ? "border-destructive/30 bg-destructive/10 text-destructive"
+            : isTaskProjectionBehind
+              ? "border-warning/30 bg-warning/10 text-foreground"
+              : "border-info/30 bg-info/10 text-foreground",
+        )}>
+          {isTaskSyncing ? <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" /> : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />}
+          <div className="min-w-0">
+            <p className="font-medium">
+              {isTaskSyncing
+                ? "Tasks are syncing from Estimate"
+                : hasTaskSyncError
+                  ? "Tasks sync failed"
+                  : "Tasks are behind the latest Estimate"}
+            </p>
+            <p className="text-xs opacity-80">
+              {isTaskSyncing
+                ? "Estimate-linked task updates are being projected now."
+                : hasTaskSyncError
+                  ? (taskSyncState.lastError ?? "Resolve the sync error before using launch-critical task actions.")
+                  : "Wait for the task projection to catch up before changing task statuses."}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Stage Tabs */}
       <div className="flex gap-1 overflow-x-auto pb-sp-1 mb-sp-2 shrink-0">
@@ -708,6 +790,9 @@ export default function ProjectTasks() {
         open={!!selectedTaskId}
         onOpenChange={(open) => { if (!open) setSelectedTaskId(null); }}
         canEdit={canEditTask}
+        estimateLinkedPlanningReadOnly={workspaceMode.kind === "supabase" && Boolean(selectedTask?.estimateV2WorkId)}
+        blockEstimateLinkedDelete={shouldBlockTaskLaunchActions}
+        disableStatusChanges={shouldBlockTaskLaunchActions}
         onStatusChange={handleStatusChange}
         projectMedia={media}
         onChecklistToggle={handleChecklistToggle}
