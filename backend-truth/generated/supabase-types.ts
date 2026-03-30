@@ -996,6 +996,7 @@ export type Database = {
           "created_by": string
           "created_at": string
           "updated_at": string
+          "estimate_resource_line_id": string | null
           }
           Insert: {
           "id"?: string
@@ -1014,6 +1015,7 @@ export type Database = {
           "created_by": string
           "created_at"?: string
           "updated_at"?: string
+          "estimate_resource_line_id"?: string | null
           }
           Update: {
           "id"?: string
@@ -1032,6 +1034,7 @@ export type Database = {
           "created_by"?: string
           "created_at"?: string
           "updated_at"?: string
+          "estimate_resource_line_id"?: string | null
           }
           Relationships: []
         }

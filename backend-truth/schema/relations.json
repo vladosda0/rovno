@@ -1381,6 +1381,22 @@
         "id"
       ],
       "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql",
+      "sourceKind": "alter_table",
+      "fromSchema": "public",
+      "fromTable": "hr_items",
+      "fromColumns": [
+        "estimate_resource_line_id"
+      ],
+      "toSchema": "public",
+      "toTable": "estimate_resource_lines",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
     }
   ]
 }

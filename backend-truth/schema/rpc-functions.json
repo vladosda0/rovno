@@ -1189,6 +1189,26 @@
       "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql",
       "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "enforce_hr_item_estimate_lineage_scope",
+      "signature": "public.enforce_hr_item_estimate_lineage_scope()",
+      "args": [],
+      "returnType": "trigger",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql",
+      "triggerUsages": [
+        {
+          "table": "public.hr_items",
+          "triggerName": "enforce_hr_item_estimate_lineage_scope",
+          "activation": "before insert or update of project_id, estimate_work_id, estimate_resource_line_id, task_id"
+        }
+      ]
     }
   ]
 }
