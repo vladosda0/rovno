@@ -11,6 +11,8 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 - `supabase/migrations/20260306162500_estimates_core.sql`
 - `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql`
 - `supabase/migrations/20260306164000_hr_domain.sql`
+- `supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql`
+- `supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql`
 - `supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql`
 - `supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql`
 - `supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql`
@@ -137,10 +139,12 @@ Indexes:
 | `public.estimate_dependencies(estimate_version_id)` | `public.estimate_versions(id)` | `cascade` | `supabase/migrations/20260306162500_estimates_core.sql` |
 | `public.estimate_dependencies(from_work_id)` | `public.estimate_works(id)` | `cascade` | `supabase/migrations/20260306162500_estimates_core.sql` |
 | `public.estimate_dependencies(to_work_id)` | `public.estimate_works(id)` | `cascade` | `supabase/migrations/20260306162500_estimates_core.sql` |
-| `public.procurement_items(estimate_resource_line_id)` | `public.estimate_resource_lines(id)` | `set` | `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql` |
-| `public.task_checklist_items(estimate_resource_line_id)` | `public.estimate_resource_lines(id)` | `set` | `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql` |
-| `public.task_checklist_items(estimate_work_id)` | `public.estimate_works(id)` | `set` | `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql` |
-| `public.hr_items(estimate_work_id)` | `public.estimate_works(id)` | `set` | `supabase/migrations/20260306164000_hr_domain.sql` |
+| `public.procurement_items(estimate_resource_line_id)` | `public.estimate_resource_lines(id)` | `set null` | `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql` |
+| `public.task_checklist_items(estimate_resource_line_id)` | `public.estimate_resource_lines(id)` | `set null` | `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql` |
+| `public.task_checklist_items(estimate_work_id)` | `public.estimate_works(id)` | `set null` | `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql` |
+| `public.hr_items(estimate_work_id)` | `public.estimate_works(id)` | `set null` | `supabase/migrations/20260306164000_hr_domain.sql` |
+| `public.tasks(estimate_work_id)` | `public.estimate_works(id)` | `set null` | `supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql` |
+| `public.hr_items(estimate_resource_line_id)` | `public.estimate_resource_lines(id)` | `set null` | `supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql` |
 
 ## Functions
 

@@ -621,6 +621,16 @@
           "where": null,
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+        },
+        {
+          "name": "idx_procurement_items_estimate_resource_line_id_unique",
+          "unique": true,
+          "expressions": [
+            "estimate_resource_line_id"
+          ],
+          "where": "estimate_resource_line_id is not null",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql"
         }
       ],
       "triggers": [

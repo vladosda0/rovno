@@ -9,6 +9,7 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 ## Source Migrations
 
 - `supabase/migrations/20260306164000_hr_domain.sql`
+- `supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql`
 - `supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql`
 - `supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql`
 
@@ -34,6 +35,7 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 | `created_by` | `uuid` | no |   | no |
 | `created_at` | `timestamptz` | no | `now()` | no |
 | `updated_at` | `timestamptz` | no | `now()` | no |
+| `estimate_resource_line_id` | `uuid` | yes |   | no |
 
 Constraints:
 - unnamed check (expression `compensation_type in ('hourly', 'daily', 'fixed')`)
@@ -46,9 +48,11 @@ Indexes:
 - `idx_hr_items_project_stage_id` on (`project_stage_id`)
 - `idx_hr_items_estimate_work_id` on (`estimate_work_id`)
 - `idx_hr_items_task_id` on (`task_id`)
+- `idx_hr_items_estimate_resource_line_id_unique` on (`estimate_resource_line_id`), unique, where `estimate_resource_line_id is not null`
 
 Triggers:
 - `set_hr_items_updated_at`: before update, executes `public.set_updated_at()`
+- `enforce_hr_item_estimate_lineage_scope`: before insert or update of project_id, estimate_work_id, estimate_resource_line_id, task_id, executes `public.enforce_hr_item_estimate_lineage_scope()`
 
 ### public.hr_item_assignees
 
@@ -103,9 +107,10 @@ Indexes:
 | `public.hr_item_assignees(hr_item_id)` | `public.hr_items(id)` | `cascade` | `supabase/migrations/20260306164000_hr_domain.sql` |
 | `public.hr_item_assignees(profile_id)` | `public.profiles(id)` | `cascade` | `supabase/migrations/20260306164000_hr_domain.sql` |
 | `public.hr_payments(project_id)` | `public.projects(id)` | `cascade` | `supabase/migrations/20260306164000_hr_domain.sql` |
-| `public.hr_payments(hr_item_id)` | `public.hr_items(id)` | `set` | `supabase/migrations/20260306164000_hr_domain.sql` |
-| `public.hr_payments(paid_to_profile_id)` | `public.profiles(id)` | `set` | `supabase/migrations/20260306164000_hr_domain.sql` |
-| `public.hr_payments(created_by)` | `public.profiles(id)` | `set` | `supabase/migrations/20260306164000_hr_domain.sql` |
+| `public.hr_payments(hr_item_id)` | `public.hr_items(id)` | `set null` | `supabase/migrations/20260306164000_hr_domain.sql` |
+| `public.hr_payments(paid_to_profile_id)` | `public.profiles(id)` | `set null` | `supabase/migrations/20260306164000_hr_domain.sql` |
+| `public.hr_payments(created_by)` | `public.profiles(id)` | `set null` | `supabase/migrations/20260306164000_hr_domain.sql` |
+| `public.hr_items(estimate_resource_line_id)` | `public.estimate_resource_lines(id)` | `set null` | `supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql` |
 
 ## Functions
 

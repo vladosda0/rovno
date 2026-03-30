@@ -3781,6 +3781,16 @@
           "where": null,
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+        },
+        {
+          "name": "idx_procurement_items_estimate_resource_line_id_unique",
+          "unique": true,
+          "expressions": [
+            "estimate_resource_line_id"
+          ],
+          "where": "estimate_resource_line_id is not null",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql"
         }
       ],
       "triggers": [
@@ -4758,6 +4768,23 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "estimate_resource_line_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "estimate_resource_lines",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
         }
       ],
       "constraints": [
@@ -4842,6 +4869,16 @@
           "where": null,
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql"
+        },
+        {
+          "name": "idx_hr_items_estimate_resource_line_id_unique",
+          "unique": true,
+          "expressions": [
+            "estimate_resource_line_id"
+          ],
+          "where": "estimate_resource_line_id is not null",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql"
         }
       ],
       "triggers": [
@@ -4852,6 +4889,14 @@
           "functionName": "set_updated_at",
           "functionSignature": "public.set_updated_at()",
           "sourceMigration": "supabase/migrations/20260306164000_hr_domain.sql"
+        },
+        {
+          "name": "enforce_hr_item_estimate_lineage_scope",
+          "activation": "before insert or update of project_id, estimate_work_id, estimate_resource_line_id, task_id",
+          "functionSchema": "public",
+          "functionName": "enforce_hr_item_estimate_lineage_scope",
+          "functionSignature": "public.enforce_hr_item_estimate_lineage_scope()",
+          "sourceMigration": "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql"
         }
       ]
     },

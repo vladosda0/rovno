@@ -147,6 +147,10 @@
     {
       "path": "supabase/migrations/20260326213000_internal_visibility_write_boundary.sql",
       "sha256": "8fc6861bf2b643243b4be618c3d13dafaa0bbf3c7e4a094cce0cba0385b57d11"
+    },
+    {
+      "path": "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql",
+      "sha256": "d90759f1b10ab371fc5431576b1db32c1dc2749a07e311f6329c372555f7076f"
     }
   ],
   "generated_artifacts": [
@@ -207,6 +211,7 @@
     "sql/20260326190000_restore_co_owner_project_members_rls_subset.sql",
     "sql/20260326203000_owner_transfer_and_member_identity_guard.sql",
     "sql/20260326213000_internal_visibility_write_boundary.sql",
+    "sql/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],

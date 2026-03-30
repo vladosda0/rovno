@@ -100,6 +100,7 @@ Indexes:
 - `idx_procurement_items_project_id` on (`project_id`)
 - `idx_procurement_items_estimate_resource_line_id` on (`estimate_resource_line_id`)
 - `idx_procurement_items_task_id` on (`task_id`)
+- `idx_procurement_items_estimate_resource_line_id_unique` on (`estimate_resource_line_id`), unique, where `estimate_resource_line_id is not null`
 
 Triggers:
 - `set_procurement_items_updated_at`: before update, executes `public.set_updated_at()`
