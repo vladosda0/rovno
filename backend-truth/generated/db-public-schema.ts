@@ -12732,9 +12732,9 @@ export const sourceTrace = {
       "key": "public.projects.projects_delete",
       "schema": "public",
       "table": "projects",
-      "name": "projects_update",
-      "command": "update",
-      "sourceMigration": "supabase/migrations/20260320130000_codex_review_findings_fixes.sql"
+      "name": "projects_delete",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql"
     },
     {
       "key": "public.projects.projects_update",
