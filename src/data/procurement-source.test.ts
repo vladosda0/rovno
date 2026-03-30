@@ -152,7 +152,7 @@ describe("procurement-source helpers", () => {
         supplier: "BuildMart",
         supplierPreferred: null,
         locationPreferredId: null,
-        lockedFromEstimate: false,
+        lockedFromEstimate: true,
         sourceEstimateItemId: null,
         sourceEstimateV2LineId: "estimate-line-1",
         orphaned: false,
