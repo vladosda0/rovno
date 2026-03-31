@@ -1,5 +1,126 @@
-import { describe, expect, it } from "vitest";
-import { shapeProcurementItemsWithOrderContext } from "@/data/procurement-source";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const PROCUREMENT_LINEAGE_SELECT = "id, estimate_resource_line_id, task_id, title, description, category, quantity, unit, planned_unit_price_cents, planned_total_price_cents, status, created_by";
+
+type MockProcurementItemRow = {
+  id: string;
+  project_id: string;
+  estimate_resource_line_id: string | null;
+  task_id: string | null;
+  title: string;
+  description: string | null;
+  category: string | null;
+  quantity: number;
+  unit: string | null;
+  planned_unit_price_cents: number | null;
+  planned_total_price_cents: number | null;
+  status: "requested" | "ordered" | "cancelled";
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+};
+
+const state = vi.hoisted(() => ({
+  procurementRows: [] as MockProcurementItemRow[],
+  upsertProcurementItemsMock: vi.fn(),
+  unlinkProcurementItemsMock: vi.fn(),
+  loadEstimateV2HeroTransitionCacheMock: vi.fn(),
+  getLatestHeroTransitionEventMock: vi.fn(),
+}));
+
+vi.mock("@/integrations/supabase/client", () => ({
+  supabase: {
+    from(table: string) {
+      if (table !== "procurement_items") {
+        throw new Error(`Unexpected table: ${table}`);
+      }
+
+      return {
+        select(selection: string) {
+          if (selection !== PROCUREMENT_LINEAGE_SELECT) {
+            throw new Error(`Unexpected procurement_items select: ${selection}`);
+          }
+
+          return {
+            eq(field: string, projectId: string) {
+              if (field !== "project_id") {
+                throw new Error(`Unexpected eq field: ${field}`);
+              }
+
+              return {
+                in(nextField: string, ids: string[]) {
+                  if (nextField !== "estimate_resource_line_id") {
+                    throw new Error(`Unexpected in field after eq: ${nextField}`);
+                  }
+
+                  return Promise.resolve({
+                    data: state.procurementRows.filter((row) => (
+                      row.project_id === projectId
+                      && !!row.estimate_resource_line_id
+                      && ids.includes(row.estimate_resource_line_id)
+                    )),
+                    error: null,
+                  });
+                },
+                not(nextField: string, operator: string, value: null) {
+                  if (
+                    nextField !== "estimate_resource_line_id"
+                    || operator !== "is"
+                    || value !== null
+                  ) {
+                    throw new Error(`Unexpected not chain: ${nextField} ${operator}`);
+                  }
+
+                  return Promise.resolve({
+                    data: state.procurementRows.filter((row) => (
+                      row.project_id === projectId && row.estimate_resource_line_id != null
+                    )),
+                    error: null,
+                  });
+                },
+              };
+            },
+            in(field: string, ids: string[]) {
+              if (field !== "id") {
+                throw new Error(`Unexpected in field: ${field}`);
+              }
+
+              return Promise.resolve({
+                data: state.procurementRows.filter((row) => ids.includes(row.id)),
+                error: null,
+              });
+            },
+          };
+        },
+        upsert(rows: unknown, options: unknown) {
+          state.upsertProcurementItemsMock(rows, options);
+          return Promise.resolve({ error: null });
+        },
+        update(patch: unknown) {
+          return {
+            in(field: string, ids: string[]) {
+              state.unlinkProcurementItemsMock(patch, field, ids);
+              return Promise.resolve({ error: null });
+            },
+          };
+        },
+      };
+    },
+  },
+}));
+
+vi.mock("@/data/estimate-v2-transition-cache", () => ({
+  loadEstimateV2HeroTransitionCache: state.loadEstimateV2HeroTransitionCacheMock,
+}));
+
+vi.mock("@/data/activity-source", () => ({
+  getLatestHeroTransitionEvent: state.getLatestHeroTransitionEventMock,
+}));
+
+import {
+  shapeProcurementItemsWithOrderContext,
+  syncProjectProcurementFromEstimate,
+} from "@/data/procurement-source";
 
 function procurementItemRow(
   overrides: Partial<Parameters<typeof shapeProcurementItemsWithOrderContext>[0]["itemRows"][number]> = {},
@@ -79,6 +200,16 @@ function movementRow(
 }
 
 describe("procurement-source helpers", () => {
+  beforeEach(() => {
+    state.procurementRows = [];
+    state.upsertProcurementItemsMock.mockReset();
+    state.unlinkProcurementItemsMock.mockReset();
+    state.loadEstimateV2HeroTransitionCacheMock.mockReset();
+    state.getLatestHeroTransitionEventMock.mockReset();
+    state.loadEstimateV2HeroTransitionCacheMock.mockReturnValue(null);
+    state.getLatestHeroTransitionEventMock.mockResolvedValue(null);
+  });
+
   it("maps procurement rows with derived order context and safe defaults", () => {
     const items = shapeProcurementItemsWithOrderContext({
       itemRows: [
@@ -201,5 +332,89 @@ describe("procurement-source helpers", () => {
         updatedAt: "2026-03-04T00:00:00.000Z",
       },
     ]);
+  });
+
+  it("relinks a cached legacy tool row so repeated estimate updates keep the same persisted procurement item id", async () => {
+    state.loadEstimateV2HeroTransitionCacheMock.mockReturnValue({
+      version: 1,
+      projectId: "project-1",
+      fingerprint: "fingerprint-1",
+      status: "completed",
+      updatedAt: "2026-03-05T00:00:00.000Z",
+      ids: {
+        estimateId: "estimate-1",
+        versionId: "version-1",
+        eventId: "event-1",
+        stageIdByLocalStageId: {},
+        workIdByLocalWorkId: {},
+        lineIdByLocalLineId: {
+          "line-local-tool": "line-tool",
+        },
+        taskIdByLocalWorkId: {},
+        checklistItemIdByLocalLineId: {},
+        procurementItemIdByLocalLineId: {
+          "line-local-tool": "proc-tool-legacy",
+        },
+        hrItemIdByLocalLineId: {},
+      },
+    });
+    state.procurementRows = [
+      procurementItemRow({
+        id: "proc-tool-legacy",
+        estimate_resource_line_id: null,
+        task_id: "task-1",
+        title: "Laser level v1",
+        description: "Keep history",
+        category: "tools",
+        quantity: 1,
+        unit: "day",
+        planned_unit_price_cents: 3200,
+        planned_total_price_cents: 3200,
+        status: "ordered",
+        created_by: "creator-1",
+      }),
+    ];
+
+    await syncProjectProcurementFromEstimate({
+      projectId: "project-1",
+      estimateStatus: "in_work",
+      works: [
+        {
+          id: "work-1",
+          taskId: "task-1",
+          plannedStart: "2026-03-10T00:00:00.000Z",
+          stageId: "stage-1",
+        },
+      ],
+      lines: [
+        {
+          id: "line-tool",
+          stageId: "stage-1",
+          workId: "work-1",
+          title: "Laser level v2",
+          type: "tool",
+          qtyMilli: 1000,
+          unit: "day",
+          costUnitCents: 3200,
+        },
+      ],
+      profileId: "profile-9",
+    });
+
+    expect(state.unlinkProcurementItemsMock).not.toHaveBeenCalled();
+    expect(state.upsertProcurementItemsMock).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          id: "proc-tool-legacy",
+          project_id: "project-1",
+          estimate_resource_line_id: "line-tool",
+          task_id: "task-1",
+          title: "Laser level v2",
+          status: "ordered",
+          created_by: "creator-1",
+        }),
+      ],
+      { onConflict: "id" },
+    );
   });
 });

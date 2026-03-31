@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({
   existingHRRows: [] as Array<{
     id: string;
+    estimate_resource_line_id: string | null;
     estimate_work_id: string | null;
     task_id: string | null;
     title: string;
@@ -48,7 +49,45 @@ vi.mock("@/integrations/supabase/client", () => ({
               return {
                 eq(_field: string, _projectId: string) {
                   return Promise.resolve({
+                    data: state.existingHRRows.map((row) => ({
+                      id: row.id,
+                      estimate_work_id: row.estimate_work_id,
+                      task_id: row.task_id,
+                      title: row.title,
+                      description: row.description,
+                      compensation_type: row.compensation_type,
+                      planned_cost_cents: row.planned_cost_cents,
+                      actual_cost_cents: row.actual_cost_cents,
+                      status: row.status,
+                      start_at: row.start_at,
+                      end_at: row.end_at,
+                      created_by: row.created_by,
+                    })),
+                    error: null,
+                  });
+                },
+              };
+            }
+
+            if (selection === "id, estimate_resource_line_id, estimate_work_id, task_id, title, description, compensation_type, planned_cost_cents, actual_cost_cents, status, start_at, end_at, created_by") {
+              return {
+                eq(_field: string, _projectId: string) {
+                  return Promise.resolve({
                     data: state.existingHRRows,
+                    error: null,
+                  });
+                },
+              };
+            }
+
+            if (selection === "id, estimate_resource_line_id") {
+              return {
+                eq(_field: string, _projectId: string) {
+                  return Promise.resolve({
+                    data: state.existingHRRows.map((row) => ({
+                      id: row.id,
+                      estimate_resource_line_id: row.estimate_resource_line_id,
+                    })),
                     error: null,
                   });
                 },
@@ -153,6 +192,7 @@ function hrItemRow(
     id: "hr-item-1",
     project_id: "project-1",
     project_stage_id: "stage-1",
+    estimate_resource_line_id: null,
     estimate_work_id: "work-1",
     task_id: "task-1",
     title: "Electrical crew",
@@ -284,6 +324,26 @@ describe("hr-source helpers", () => {
     ]);
   });
 
+  it("prefers backend estimate line lineage over fallback cache recovery", () => {
+    const items = shapeHRItemsWithAssignees({
+      itemRows: [
+        hrItemRow({
+          estimate_resource_line_id: "estimate-line-backend",
+          estimate_work_id: null,
+        }),
+      ],
+      assigneeRows: [],
+      estimateLineIdByItemId: new Map([["hr-item-1", "estimate-line-fallback"]]),
+    });
+
+    expect(items).toEqual([
+      expect.objectContaining({
+        lockedFromEstimate: true,
+        sourceEstimateV2LineId: "estimate-line-backend",
+      }),
+    ]);
+  });
+
   it("maps HR payments into the frontend contract with safe fallbacks", () => {
     const payment = mapHRPaymentRowToHRPayment(hrPaymentRow({
       hr_item_id: null,
@@ -331,6 +391,7 @@ describe("hr-source helpers", () => {
     state.existingHRRows = [
       {
         id: "hr-item-1",
+        estimate_resource_line_id: null,
         estimate_work_id: "work-1",
         task_id: "task-1",
         title: "Crew hours",
@@ -345,6 +406,7 @@ describe("hr-source helpers", () => {
       },
       {
         id: "hr-item-2",
+        estimate_resource_line_id: null,
         estimate_work_id: "work-1",
         task_id: "task-1",
         title: "Scaffold team",
@@ -408,6 +470,7 @@ describe("hr-source helpers", () => {
           id: "hr-item-1",
           project_id: "project-1",
           project_stage_id: "stage-1",
+          estimate_resource_line_id: "line-1",
           estimate_work_id: "work-1",
           task_id: "task-1",
           title: "Crew hours",
@@ -416,6 +479,7 @@ describe("hr-source helpers", () => {
         }),
         expect.objectContaining({
           id: "hr-item-2",
+          estimate_resource_line_id: "line-2",
           title: "Scaffold team",
           planned_cost_cents: 90000,
           created_by: "creator-2",

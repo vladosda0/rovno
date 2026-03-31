@@ -481,6 +481,7 @@ describe("persistEstimateV2HeroTransition", () => {
         id: result.ids.hrItemIdByLocalLineId["line-labor"],
         projectId: "project-1",
         projectStageId: stageId,
+        estimateResourceLineId: result.ids.lineIdByLocalLineId["line-labor"],
         estimateWorkId: workId,
         taskId,
         title: "Crew hours",
@@ -490,6 +491,7 @@ describe("persistEstimateV2HeroTransition", () => {
         id: result.ids.hrItemIdByLocalLineId["line-subcontractor"],
         projectId: "project-1",
         projectStageId: stageId,
+        estimateResourceLineId: result.ids.lineIdByLocalLineId["line-subcontractor"],
         estimateWorkId: workId,
         taskId,
         title: "Scaffold team",
@@ -890,6 +892,7 @@ describe("persistEstimateV2HeroTransition", () => {
       {},
       [
         expect.objectContaining({
+          estimateResourceLineId: "line-labor-existing",
           taskId: "task-existing",
           estimateWorkId: "work-existing",
           title: "Crew",

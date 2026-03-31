@@ -37,6 +37,7 @@ export interface HeroHRItemUpsertInput {
   id: string;
   projectId: string;
   projectStageId?: string | null;
+  estimateResourceLineId?: string | null;
   estimateWorkId?: string | null;
   taskId?: string | null;
   title: string;
@@ -52,6 +53,7 @@ export interface HeroHRItemUpsertInput {
 
 export interface ResolveExistingHeroHRItemInput {
   localLineId: string;
+  estimateResourceLineId?: string | null;
   estimateWorkId?: string | null;
   taskId?: string | null;
   title: string;
@@ -60,6 +62,7 @@ export interface ResolveExistingHeroHRItemInput {
 
 export interface ExistingHeroHRLineageRow {
   id: string;
+  estimateResourceLineId: string | null;
   estimateWorkId: string | null;
   taskId: string | null;
   title: string;
@@ -273,7 +276,7 @@ export async function resolveExistingHeroHRItemsByLineage(
 
   const { data, error } = await supabase
     .from("hr_items")
-    .select("id, estimate_work_id, task_id, title, description, compensation_type, planned_cost_cents, actual_cost_cents, status, start_at, end_at, created_by")
+    .select("id, estimate_resource_line_id, estimate_work_id, task_id, title, description, compensation_type, planned_cost_cents, actual_cost_cents, status, start_at, end_at, created_by")
     .eq("project_id", input.projectId);
 
   if (error) {
@@ -282,27 +285,49 @@ export async function resolveExistingHeroHRItemsByLineage(
 
   const rows = data ?? [];
   const rowById = new Map(rows.map((row) => [row.id, row]));
+  const rowByEstimateLineId = new Map<string, HRItemRow>();
+  rows.forEach((row) => {
+    if (!row.estimate_resource_line_id) {
+      return;
+    }
+    if (rowByEstimateLineId.has(row.estimate_resource_line_id)) {
+      throw new Error(`Ambiguous remote HR mapping for estimate line "${row.estimate_resource_line_id}"`);
+    }
+    rowByEstimateLineId.set(row.estimate_resource_line_id, row);
+  });
   const result = new Map<string, ExistingHeroHRLineageRow>();
 
   input.items.forEach((item) => {
+    const requestedEstimateLineId = item.estimateResourceLineId ?? null;
+    const estimateLineMatch = requestedEstimateLineId
+      ? rowByEstimateLineId.get(requestedEstimateLineId) ?? null
+      : null;
     const directMatch = item.knownHrItemId ? rowById.get(item.knownHrItemId) ?? null : null;
+    const eligibleDirectMatch = directMatch && (
+      directMatch.estimate_resource_line_id == null
+      || directMatch.estimate_resource_line_id === requestedEstimateLineId
+    )
+      ? directMatch
+      : null;
     const lineageMatches = rows.filter((row) => (
-      row.estimate_work_id === (item.estimateWorkId ?? null)
+      row.estimate_resource_line_id == null
+      && row.estimate_work_id === (item.estimateWorkId ?? null)
       && row.task_id === (item.taskId ?? null)
       && row.title === item.title
     ));
 
-    if (!directMatch && lineageMatches.length > 1) {
+    if (!estimateLineMatch && !eligibleDirectMatch && lineageMatches.length > 1) {
       throw new Error(`Ambiguous remote HR mapping for "${item.title}"`);
     }
 
-    const resolved = directMatch ?? lineageMatches[0] ?? null;
+    const resolved = estimateLineMatch ?? eligibleDirectMatch ?? lineageMatches[0] ?? null;
     if (!resolved) {
       return;
     }
 
     result.set(item.localLineId, {
       id: resolved.id,
+      estimateResourceLineId: resolved.estimate_resource_line_id ?? null,
       estimateWorkId: resolved.estimate_work_id ?? null,
       taskId: resolved.task_id ?? null,
       title: resolved.title,
@@ -396,7 +421,8 @@ export function shapeHRItemsWithAssignees(input: {
   return input.itemRows.map((row) => {
     const assigneeIds = assigneeIdsByItemId.get(row.id) ?? [];
     const plannedCost = Math.max(0, row.planned_cost_cents ?? 0) / 100;
-    const linkedEstimateLineId = input.estimateLineIdByItemId?.get(row.id) ?? null;
+    const fallbackEstimateLineId = input.estimateLineIdByItemId?.get(row.id) ?? null;
+    const linkedEstimateLineId = row.estimate_resource_line_id ?? fallbackEstimateLineId;
 
     return {
       id: row.id,
@@ -412,7 +438,7 @@ export function shapeHRItemsWithAssignees(input: {
       assignee: assigneeIds[0] ?? null,
       assigneeIds,
       status: mapHRItemStatus(row.status),
-      lockedFromEstimate: Boolean(row.estimate_work_id),
+      lockedFromEstimate: Boolean(row.estimate_resource_line_id) || Boolean(row.estimate_work_id),
       sourceEstimateV2LineId: linkedEstimateLineId,
       orphaned: false,
       orphanedAt: null,
@@ -443,6 +469,7 @@ export async function upsertHeroHRItems(
     };
 
     row.project_stage_id = input.projectStageId ?? null;
+    row.estimate_resource_line_id = input.estimateResourceLineId ?? null;
     row.estimate_work_id = input.estimateWorkId ?? null;
     row.task_id = input.taskId ?? null;
     row.description = input.description ?? null;
@@ -495,6 +522,7 @@ async function unlinkHeroHRItems(
   const { error } = await supabase
     .from("hr_items")
     .update({
+      estimate_resource_line_id: null,
       estimate_work_id: null,
       task_id: null,
     })
@@ -503,6 +531,22 @@ async function unlinkHeroHRItems(
   if (error) {
     throw error;
   }
+}
+
+async function loadHeroHRItemsByProject(
+  supabase: TypedSupabaseClient,
+  projectId: string,
+): Promise<Array<Pick<HRItemRow, "id" | "estimate_resource_line_id">>> {
+  const { data, error } = await supabase
+    .from("hr_items")
+    .select("id, estimate_resource_line_id")
+    .eq("project_id", projectId);
+
+  if (error) {
+    throw error;
+  }
+
+  return data ?? [];
 }
 
 export async function setProjectHRAssignees(
@@ -645,20 +689,32 @@ export async function syncProjectHRFromEstimate(
     }))
     .filter((entry) => Boolean(entry.work?.taskId));
   const syncableLineIdSet = new Set(syncableLines.map(({ line }) => line.id));
+  const existingProjectRows = await loadHeroHRItemsByProject(supabase, input.projectId);
+  const existingProjectRowsById = new Map(existingProjectRows.map((row) => [row.id, row]));
 
-  const staleKnownHrItemIds = Array.from(
+  const staleBackendLinkedHrItemIds = existingProjectRows
+    .filter((row) => row.estimate_resource_line_id && !syncableLineIdSet.has(row.estimate_resource_line_id))
+    .map((row) => row.id);
+
+  const staleLegacyHrItemIds = Array.from(
     new Set(
       Object.entries(heroIds?.hrItemIdByLocalLineId ?? {})
         .filter(([localLineId]) => {
           const estimateLineId = heroIds?.lineIdByLocalLineId[localLineId] ?? localLineId;
           return !syncableLineIdSet.has(estimateLineId);
         })
-        .map(([, hrItemId]) => hrItemId)
+        .map(([, hrItemId]) => {
+          const row = existingProjectRowsById.get(hrItemId);
+          return row?.estimate_resource_line_id == null ? hrItemId : null;
+        })
         .filter(Boolean),
     ),
   );
 
-  await unlinkHeroHRItems(supabase, staleKnownHrItemIds);
+  await unlinkHeroHRItems(
+    supabase,
+    Array.from(new Set([...staleBackendLinkedHrItemIds, ...staleLegacyHrItemIds])),
+  );
 
   if (syncableLines.length === 0) {
     return;
@@ -668,6 +724,7 @@ export async function syncProjectHRFromEstimate(
     projectId: input.projectId,
     items: syncableLines.map(({ line, work }) => ({
       localLineId: line.id,
+      estimateResourceLineId: line.id,
       estimateWorkId: line.workId,
       taskId: work?.taskId ?? null,
       title: line.title,
@@ -686,6 +743,7 @@ export async function syncProjectHRFromEstimate(
         id: hrItemId,
         projectId: input.projectId,
         projectStageId: line.stageId,
+        estimateResourceLineId: line.id,
         estimateWorkId: line.workId,
         taskId: work?.taskId ?? null,
         title: line.title,

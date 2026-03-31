@@ -1,4 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { getLatestHeroTransitionEvent } from "@/data/activity-source";
+import { loadEstimateV2HeroTransitionCache } from "@/data/estimate-v2-transition-cache";
 import { getProcurementItems } from "@/data/procurement-store";
 import { buildReceivedQtyByOrderLineId } from "@/data/orders-source";
 import type { WorkspaceMode } from "@/data/workspace-source";
@@ -13,6 +15,10 @@ type OrderRow = ProcurementDatabase["public"]["Tables"]["orders"]["Row"];
 type OrderLineRow = ProcurementDatabase["public"]["Tables"]["order_lines"]["Row"];
 type InventoryMovementRow = ProcurementDatabase["public"]["Tables"]["inventory_movements"]["Row"];
 type TypedSupabaseClient = SupabaseClient<ProcurementDatabase>;
+type HeroTransitionIds = {
+  lineIdByLocalLineId: Record<string, string>;
+  procurementItemIdByLocalLineId: Record<string, string>;
+};
 
 interface ShapeProcurementItemsInput {
   itemRows: ProcurementItemRow[];
@@ -45,6 +51,21 @@ export interface HeroProcurementItemUpsertInput {
 export interface HeroProcurementLineageRow {
   id: string;
   estimateResourceLineId: string;
+  taskId: string | null;
+  title: string;
+  description: string | null;
+  category: string | null;
+  quantity: number;
+  unit: string | null;
+  plannedUnitPriceCents: number | null;
+  plannedTotalPriceCents: number | null;
+  status: ProcurementItemRow["status"];
+  createdBy: string;
+}
+
+interface ExistingHeroProcurementRow {
+  id: string;
+  estimateResourceLineId: string | null;
   taskId: string | null;
   title: string;
   description: string | null;
@@ -193,6 +214,65 @@ function procurementPlannedUnitPriceCentsFromLine(
   return Math.max(0, Math.round(line.costUnitCents));
 }
 
+function buildProcurementItemIdByEstimateLineId(
+  ids: HeroTransitionIds | null,
+): Map<string, string> {
+  const map = new Map<string, string>();
+  if (!ids) return map;
+
+  Object.entries(ids.procurementItemIdByLocalLineId).forEach(([localLineId, procurementItemId]) => {
+    map.set(localLineId, procurementItemId);
+    const estimateLineId = ids.lineIdByLocalLineId[localLineId];
+    if (estimateLineId) {
+      map.set(estimateLineId, procurementItemId);
+    }
+  });
+
+  return map;
+}
+
+async function resolveHeroTransitionIds(
+  supabase: TypedSupabaseClient,
+  projectId: string,
+): Promise<HeroTransitionIds | null> {
+  const cache = loadEstimateV2HeroTransitionCache(projectId);
+  if (cache?.ids) {
+    return {
+      lineIdByLocalLineId: { ...cache.ids.lineIdByLocalLineId },
+      procurementItemIdByLocalLineId: { ...cache.ids.procurementItemIdByLocalLineId },
+    };
+  }
+
+  const latestEvent = await getLatestHeroTransitionEvent(supabase, projectId);
+  if (!latestEvent) {
+    return null;
+  }
+
+  return {
+    lineIdByLocalLineId: { ...latestEvent.payload.ids.lineIdByLocalLineId },
+    procurementItemIdByLocalLineId: { ...latestEvent.payload.ids.procurementItemIdByLocalLineId },
+  };
+}
+
+function mapProcurementLineageRow(
+  row: ProcurementItemRow,
+): ExistingHeroProcurementRow {
+  return {
+    id: row.id,
+    estimateResourceLineId: row.estimate_resource_line_id ?? null,
+    taskId: row.task_id ?? null,
+    title: row.title,
+    description: row.description ?? null,
+    category: row.category ?? null,
+    quantity: row.quantity,
+    unit: row.unit ?? null,
+    plannedUnitPriceCents: row.planned_unit_price_cents ?? null,
+    plannedTotalPriceCents: row.planned_total_price_cents ?? null,
+    status: row.status,
+    createdBy: row.created_by,
+  };
+}
+
 export async function upsertHeroProcurementItems(
   supabase: TypedSupabaseClient,
   inputs: HeroProcurementItemUpsertInput[],
@@ -246,44 +326,42 @@ export async function loadHeroProcurementItemsByEstimateLineId(
     throw error;
   }
 
-  const rowsByEstimateLineId = new Map<string, ProcurementItemRow[]>();
+  const result = new Map<string, HeroProcurementLineageRow>();
   (data ?? []).forEach((row) => {
     if (!row.estimate_resource_line_id) {
       return;
     }
-    const rows = rowsByEstimateLineId.get(row.estimate_resource_line_id) ?? [];
-    rows.push(row);
-    rowsByEstimateLineId.set(row.estimate_resource_line_id, rows);
-  });
-
-  const result = new Map<string, HeroProcurementLineageRow>();
-  rowsByEstimateLineId.forEach((rows, estimateResourceLineId) => {
-    if (rows.length > 1) {
-      throw new Error(`Ambiguous remote procurement mapping for estimate line "${estimateResourceLineId}"`);
+    if (result.has(row.estimate_resource_line_id)) {
+      throw new Error(`Ambiguous remote procurement mapping for estimate line "${row.estimate_resource_line_id}"`);
     }
-
-    const row = rows[0];
-    if (!row) {
-      return;
-    }
-
-    result.set(estimateResourceLineId, {
-      id: row.id,
-      estimateResourceLineId,
-      taskId: row.task_id ?? null,
-      title: row.title,
-      description: row.description ?? null,
-      category: row.category ?? null,
-      quantity: row.quantity,
-      unit: row.unit ?? null,
-      plannedUnitPriceCents: row.planned_unit_price_cents ?? null,
-      plannedTotalPriceCents: row.planned_total_price_cents ?? null,
-      status: row.status,
-      createdBy: row.created_by,
+    result.set(row.estimate_resource_line_id, {
+      ...mapProcurementLineageRow(row),
+      estimateResourceLineId: row.estimate_resource_line_id,
     });
   });
 
   return result;
+}
+
+async function loadHeroProcurementItemsByIds(
+  supabase: TypedSupabaseClient,
+  ids: string[],
+): Promise<Map<string, ExistingHeroProcurementRow>> {
+  const uniqueIds = Array.from(new Set(ids.filter(Boolean)));
+  if (uniqueIds.length === 0) {
+    return new Map();
+  }
+
+  const { data, error } = await supabase
+    .from("procurement_items")
+    .select("id, estimate_resource_line_id, task_id, title, description, category, quantity, unit, planned_unit_price_cents, planned_total_price_cents, status, created_by")
+    .in("id", uniqueIds);
+
+  if (error) {
+    throw error;
+  }
+
+  return new Map((data ?? []).map((row) => [row.id, mapProcurementLineageRow(row)]));
 }
 
 async function loadHeroProcurementItemsByProject(
@@ -347,17 +425,19 @@ export async function syncProjectProcurementFromEstimate(
   }
 
   const supabase = await loadSupabaseClient();
+  const heroIds = await resolveHeroTransitionIds(supabase, input.projectId);
+  const procurementItemIdByEstimateLineId = buildProcurementItemIdByEstimateLineId(heroIds);
   const syncableLines = input.lines.filter((line) => PROCUREMENT_RESOURCE_TYPES.has(line.type));
   const syncableLineIdSet = new Set(syncableLines.map((line) => line.id));
   const existingRows = await loadHeroProcurementItemsByProject(supabase, input.projectId);
-  const existingByLineId = new Map<string, HeroProcurementLineageRow>();
-
-  existingRows.forEach((row) => {
-    if (existingByLineId.has(row.estimateResourceLineId)) {
-      throw new Error(`Ambiguous remote procurement mapping for estimate line "${row.estimateResourceLineId}"`);
-    }
-    existingByLineId.set(row.estimateResourceLineId, row);
-  });
+  const existingByLineId = new Map(existingRows.map((row) => [row.estimateResourceLineId, row]));
+  const legacyKnownRowsById = await loadHeroProcurementItemsByIds(
+    supabase,
+    syncableLines.flatMap((line) => {
+      const knownItemId = procurementItemIdByEstimateLineId.get(line.id);
+      return knownItemId && !existingByLineId.has(line.id) ? [knownItemId] : [];
+    }),
+  );
 
   const staleIds = existingRows
     .filter((row) => !syncableLineIdSet.has(row.estimateResourceLineId))
@@ -370,7 +450,19 @@ export async function syncProjectProcurementFromEstimate(
 
   const workById = new Map(input.works.map((work) => [work.id, work]));
   const rowsToUpsert: HeroProcurementItemUpsertInput[] = syncableLines.map((line) => {
-    const existing = existingByLineId.get(line.id) ?? null;
+    const activeExisting = existingByLineId.get(line.id) ?? null;
+    const knownLegacyItemId = procurementItemIdByEstimateLineId.get(line.id) ?? null;
+    const legacyExisting = !activeExisting && knownLegacyItemId
+      ? legacyKnownRowsById.get(knownLegacyItemId) ?? null
+      : null;
+    const existing = activeExisting ?? (
+      legacyExisting && (
+        legacyExisting.estimateResourceLineId == null
+        || legacyExisting.estimateResourceLineId === line.id
+      )
+        ? legacyExisting
+        : null
+    );
     const work = workById.get(line.workId) ?? null;
     const plannedUnitPriceCents = procurementPlannedUnitPriceCentsFromLine(line);
     const quantity = procurementQuantityFromLine(line);

@@ -862,6 +862,7 @@ export async function persistEstimateV2HeroTransition(
         .filter((line) => line.type === "labor" || line.type === "subcontractor")
         .map((line) => ({
           localLineId: line.localLineId,
+          estimateResourceLineId: ids.lineIdByLocalLineId[line.localLineId],
           estimateWorkId: ids.workIdByLocalWorkId[line.localWorkId] ?? null,
           taskId: ids.taskIdByLocalWorkId[line.localWorkId] ?? null,
           title: line.title,
@@ -897,6 +898,7 @@ export async function persistEstimateV2HeroTransition(
             id: ids.hrItemIdByLocalLineId[line.localLineId],
             projectId: plan.projectId,
             projectStageId: ids.stageIdByLocalStageId[line.localStageId] ?? null,
+            estimateResourceLineId: ids.lineIdByLocalLineId[line.localLineId],
             estimateWorkId: ids.workIdByLocalWorkId[line.localWorkId] ?? null,
             taskId: ids.taskIdByLocalWorkId[line.localWorkId] ?? null,
             title: line.title,
