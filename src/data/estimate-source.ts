@@ -47,6 +47,7 @@ export type EnsureEstimateCurrentVersionResult =
 
 export interface SaveCurrentEstimateDraftActor {
   profileId: string;
+  shouldAbort?: () => boolean;
 }
 
 export interface CurrentEstimateDraft {
@@ -65,6 +66,12 @@ export interface EstimateDraftResolvedIds {
   workIdByLocalWorkId: Record<string, string>;
   lineIdByLocalLineId: Record<string, string>;
   dependencyIdByLocalDependencyId: Record<string, string>;
+}
+
+function shouldAbortCurrentEstimateDraftSave(
+  actor: SaveCurrentEstimateDraftActor,
+): boolean {
+  return actor.shouldAbort?.() === true;
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -479,13 +486,23 @@ export async function saveCurrentEstimateDraft(
   snapshot: EstimateV2Snapshot,
   actor: SaveCurrentEstimateDraftActor,
 ): Promise<void> {
+  if (shouldAbortCurrentEstimateDraftSave(actor)) {
+    return;
+  }
+
   const supabase = await loadSupabaseClient();
   const existingDraft = await loadCurrentEstimateDraft(projectId);
+  if (shouldAbortCurrentEstimateDraftSave(actor)) {
+    return;
+  }
   const resolvedIds = resolveEstimateDraftRemoteIds({
     projectId,
     snapshot,
     existingDraft,
   });
+  if (shouldAbortCurrentEstimateDraftSave(actor)) {
+    return;
+  }
 
   const estimateResult = await ensureProjectEstimateRoot(supabase, {
     projectId,
@@ -496,6 +513,9 @@ export async function saveCurrentEstimateDraft(
   if (!estimateResult.ok) {
     throw new Error(`Unable to ensure estimate root: ${estimateResult.reason}`);
   }
+  if (shouldAbortCurrentEstimateDraftSave(actor)) {
+    return;
+  }
 
   const versionResult = await ensureEstimateCurrentVersion(supabase, {
     estimateId: estimateResult.row.id,
@@ -504,6 +524,9 @@ export async function saveCurrentEstimateDraft(
   });
   if (!versionResult.ok) {
     throw new Error(`Unable to ensure estimate current version: ${versionResult.reason}`);
+  }
+  if (shouldAbortCurrentEstimateDraftSave(actor)) {
+    return;
   }
 
   const rootPatch: ProjectEstimateUpdate = {
@@ -517,6 +540,9 @@ export async function saveCurrentEstimateDraft(
 
   if (rootUpdateError) {
     throw rootUpdateError;
+  }
+  if (shouldAbortCurrentEstimateDraftSave(actor)) {
+    return;
   }
 
   const stageIdByLocalId = new Map(Object.entries(resolvedIds.stageIdByLocalStageId));
@@ -535,12 +561,18 @@ export async function saveCurrentEstimateDraft(
   }));
 
   if (stageRows.length > 0) {
+    if (shouldAbortCurrentEstimateDraftSave(actor)) {
+      return;
+    }
     const { error: stageUpsertError } = await supabase
       .from("project_stages")
       .upsert(stageRows, { onConflict: "id" });
 
     if (stageUpsertError) {
       throw stageUpsertError;
+    }
+    if (shouldAbortCurrentEstimateDraftSave(actor)) {
+      return;
     }
   }
 
@@ -564,7 +596,13 @@ export async function saveCurrentEstimateDraft(
     ),
   }));
 
+  if (shouldAbortCurrentEstimateDraftSave(actor)) {
+    return;
+  }
   await upsertEstimateWorks(supabase, workRows);
+  if (shouldAbortCurrentEstimateDraftSave(actor)) {
+    return;
+  }
 
   const lineRows: EstimateResourceLineInsert[] = snapshot.lines.map((line) => ({
     id: lineIdByLocalId.get(line.id),
@@ -577,7 +615,13 @@ export async function saveCurrentEstimateDraft(
     total_price_cents: totalPriceCents(line.costUnitCents, line.qtyMilli),
   }));
 
+  if (shouldAbortCurrentEstimateDraftSave(actor)) {
+    return;
+  }
   await upsertEstimateResourceLines(supabase, lineRows);
+  if (shouldAbortCurrentEstimateDraftSave(actor)) {
+    return;
+  }
 
   const dependencyRows: EstimateDependencyInsert[] = snapshot.dependencies.map((dependency) => ({
     id: dependencyIdByLocalId.get(dependency.id),
@@ -588,12 +632,18 @@ export async function saveCurrentEstimateDraft(
   }));
 
   if (dependencyRows.length > 0) {
+    if (shouldAbortCurrentEstimateDraftSave(actor)) {
+      return;
+    }
     const { error: dependencyUpsertError } = await supabase
       .from("estimate_dependencies")
       .upsert(dependencyRows, { onConflict: "id" });
 
     if (dependencyUpsertError) {
       throw dependencyUpsertError;
+    }
+    if (shouldAbortCurrentEstimateDraftSave(actor)) {
+      return;
     }
   }
 
@@ -606,6 +656,9 @@ export async function saveCurrentEstimateDraft(
     .map((row) => row.id)
     .filter((id) => !dependencyIdsToKeep.has(id));
   if (staleDependencyIds.length > 0) {
+    if (shouldAbortCurrentEstimateDraftSave(actor)) {
+      return;
+    }
     const { error } = await supabase
       .from("estimate_dependencies")
       .delete()
@@ -620,6 +673,9 @@ export async function saveCurrentEstimateDraft(
     .map((row) => row.id)
     .filter((id) => !lineIdsToKeep.has(id));
   if (staleLineIds.length > 0) {
+    if (shouldAbortCurrentEstimateDraftSave(actor)) {
+      return;
+    }
     const { error } = await supabase
       .from("estimate_resource_lines")
       .delete()
@@ -633,6 +689,9 @@ export async function saveCurrentEstimateDraft(
     .map((row) => row.id)
     .filter((id) => !workIdsToKeep.has(id));
   if (staleWorkIds.length > 0) {
+    if (shouldAbortCurrentEstimateDraftSave(actor)) {
+      return;
+    }
     const { error } = await supabase
       .from("estimate_works")
       .delete()
@@ -647,6 +706,9 @@ export async function saveCurrentEstimateDraft(
     .map((row) => row.id)
     .filter((id) => !stageIdsToKeep.has(id));
   if (staleStageIds.length > 0) {
+    if (shouldAbortCurrentEstimateDraftSave(actor)) {
+      return;
+    }
     const { error } = await supabase
       .from("project_stages")
       .delete()

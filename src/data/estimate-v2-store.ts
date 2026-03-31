@@ -665,6 +665,29 @@ function queueProjectDraftSync(projectId: string) {
   remoteDraftSyncTimers.set(projectId, timer);
 }
 
+function hasProjectDraftProjectionDrift(
+  projectId: string,
+  estimateRevision: string | null,
+): boolean {
+  if (!estimateRevision) {
+    return false;
+  }
+
+  const latestState = statesByProjectId.get(projectId);
+  if (!latestState) {
+    return true;
+  }
+
+  return ensureProjectSyncState(latestState).estimateRevision !== estimateRevision;
+}
+
+function hasPendingProjectDraftSync(projectId: string): boolean {
+  return heroTransitionInFlightByProjectId.has(projectId)
+    || remoteProjectionSyncInFlightByProjectId.has(projectId)
+    || deferredDraftSyncByProjectId.has(projectId)
+    || remoteDraftSyncTimers.has(projectId);
+}
+
 function commitProjectStateChange(projectId: string) {
   const state = statesByProjectId.get(projectId);
   if (state) {
@@ -733,6 +756,7 @@ async function runProjectDraftSync(projectId: string) {
 
   try {
     const sync = ensureProjectSyncState(state);
+    const projectionRevision = sync.estimateRevision;
     if (shouldProject) {
       (["tasks", "procurement", "hr"] as const).forEach((domain) => {
         setProjectSyncDomainStatus(state, domain, {
@@ -747,8 +771,15 @@ async function runProjectDraftSync(projectId: string) {
     const normalized = normalizeStateForWorkspace(projectId, state);
     saveWorkspaceEstimateCache(projectId, profileId, normalized);
 
+    // Do not let an older in-flight run overwrite the remote estimate draft
+    // once a newer local revision has already been committed.
+    if (hasProjectDraftProjectionDrift(projectId, projectionRevision)) {
+      return;
+    }
+
     await saveCurrentEstimateDraft(projectId, getSnapshotFromState(normalized), {
       profileId,
+      shouldAbort: () => hasProjectDraftProjectionDrift(projectId, projectionRevision),
     });
 
     remoteDraftSyncErrorSignatureByProjectId.delete(projectId);
@@ -763,9 +794,18 @@ async function runProjectDraftSync(projectId: string) {
       return;
     }
 
+    // Let the deferred rerun project the freshest estimate snapshot instead of
+    // overwriting downstream domains with an older in-flight revision.
+    if (hasProjectDraftProjectionDrift(projectId, projectionRevision)) {
+      return;
+    }
+
     let worksForDownstream = normalized.works.map((work) => ({ ...work }));
 
     try {
+      if (hasProjectDraftProjectionDrift(projectId, projectionRevision)) {
+        return;
+      }
       const taskIdByWorkId = await syncProjectTasksFromEstimate({
         projectId,
         estimateStatus: normalized.project.estimateStatus,
@@ -773,6 +813,9 @@ async function runProjectDraftSync(projectId: string) {
         lines: normalized.lines,
         profileId,
       });
+      if (hasProjectDraftProjectionDrift(projectId, projectionRevision)) {
+        return;
+      }
       const syncedWorks = applyTaskIdsToState(projectId, taskIdByWorkId);
       worksForDownstream = syncedWorks.length > 0
         ? syncedWorks
@@ -805,6 +848,9 @@ async function runProjectDraftSync(projectId: string) {
     }
 
     try {
+      if (hasProjectDraftProjectionDrift(projectId, projectionRevision)) {
+        return;
+      }
       await syncProjectProcurementFromEstimate({
         projectId,
         estimateStatus: normalized.project.estimateStatus,
@@ -812,6 +858,9 @@ async function runProjectDraftSync(projectId: string) {
         lines: normalized.lines,
         profileId,
       });
+      if (hasProjectDraftProjectionDrift(projectId, projectionRevision)) {
+        return;
+      }
       const latestState = statesByProjectId.get(projectId);
       if (latestState) {
         setProjectSyncDomainStatus(latestState, "procurement", {
@@ -837,6 +886,9 @@ async function runProjectDraftSync(projectId: string) {
     }
 
     try {
+      if (hasProjectDraftProjectionDrift(projectId, projectionRevision)) {
+        return;
+      }
       await syncProjectHRFromEstimate(
         { kind: "supabase", profileId },
         {
@@ -846,6 +898,9 @@ async function runProjectDraftSync(projectId: string) {
           lines: normalized.lines,
         },
       );
+      if (hasProjectDraftProjectionDrift(projectId, projectionRevision)) {
+        return;
+      }
       const latestState = statesByProjectId.get(projectId);
       if (latestState) {
         setProjectSyncDomainStatus(latestState, "hr", {
@@ -1309,6 +1364,7 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
   }
 
   const hydration = (async () => {
+    const hadExistingState = statesByProjectId.has(projectId);
     const currentState = ensureProjectState(projectId);
     const cached = loadWorkspaceEstimateCache(projectId, input.profileId)?.state ?? null;
     const [workspaceSource, planningSource, draft] = await Promise.all([
@@ -1324,6 +1380,20 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
       || draft.works.length > 0
       || draft.lines.length > 0
       || draft.dependencies.length > 0;
+
+    if (
+      hadExistingState
+      && hasPendingProjectDraftSync(projectId)
+      && (
+        currentState.lines.length > 0
+        || currentState.works.length > 0
+        || currentState.stages.length > 0
+      )
+    ) {
+      saveWorkspaceEstimateCache(projectId, input.profileId, currentState);
+      notify();
+      return;
+    }
 
     if (!remoteHasStructure && cached) {
       const cachedState: EstimateV2ProjectState = {

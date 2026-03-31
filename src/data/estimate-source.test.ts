@@ -337,4 +337,94 @@ describe("saveCurrentEstimateDraft", () => {
     ]);
     expect(database?.tables.estimate_works.map((work) => work.title)).toEqual(["Framing", "Roof"]);
   });
+
+  it("aborts before stale line writes when a newer revision lands mid-save", async () => {
+    const snapshot: EstimateV2Snapshot = {
+      project: {
+        id: "project-remote-1",
+        projectId: "project-remote-1",
+        title: "Remote Project",
+        projectMode: "contractor",
+        currency: "RUB",
+        regime: "contractor",
+        taxBps: 2000,
+        discountBps: 0,
+        markupBps: 0,
+        estimateStatus: "in_work",
+        receivedCents: 0,
+        pnlPlaceholderCents: 0,
+        createdAt: "2026-03-01T00:00:00.000Z",
+        updatedAt: "2026-03-02T00:00:00.000Z",
+      },
+      stages: [
+        {
+          id: "33333333-3333-4333-8333-333333333333",
+          projectId: "project-remote-1",
+          title: "Shell",
+          order: 1,
+          discountBps: 0,
+          createdAt: "2026-03-01T00:00:00.000Z",
+          updatedAt: "2026-03-02T00:00:00.000Z",
+        },
+      ],
+      works: [
+        {
+          id: "44444444-4444-4444-8444-444444444444",
+          projectId: "project-remote-1",
+          stageId: "33333333-3333-4333-8333-333333333333",
+          title: "Framing",
+          order: 1,
+          discountBps: 0,
+          plannedStart: null,
+          plannedEnd: null,
+          taskId: null,
+          status: "not_started",
+          createdAt: "2026-03-01T00:00:00.000Z",
+          updatedAt: "2026-03-02T00:00:00.000Z",
+        },
+      ],
+      lines: [
+        {
+          id: "66666666-6666-4666-8666-666666666666",
+          projectId: "project-remote-1",
+          stageId: "33333333-3333-4333-8333-333333333333",
+          workId: "44444444-4444-4444-8444-444444444444",
+          title: "Laser level v2",
+          type: "tool",
+          unit: "day",
+          qtyMilli: 1000,
+          costUnitCents: 3200,
+          markupBps: 0,
+          discountBpsOverride: null,
+          assigneeId: null,
+          assigneeName: null,
+          assigneeEmail: null,
+          receivedCents: 0,
+          pnlPlaceholderCents: 0,
+          createdAt: "2026-03-03T00:00:00.000Z",
+          updatedAt: "2026-03-03T00:00:00.000Z",
+        },
+      ],
+      dependencies: [],
+    };
+
+    let checkCount = 0;
+
+    await expect(
+      saveCurrentEstimateDraft("project-remote-1", snapshot, {
+        profileId: "profile-1",
+        // Allow the existing stage/work mutations to run, then simulate a
+        // newer revision landing right before estimate-resource-line writes.
+        shouldAbort: () => {
+          checkCount += 1;
+          return checkCount >= 11;
+        },
+      }),
+    ).resolves.toBeUndefined();
+
+    const database = mockDatabaseRef.current;
+    expect(database?.tables.project_estimates[0]?.title).toBe("Remote Project");
+    expect(database?.tables.estimate_works).toHaveLength(1);
+    expect(database?.tables.estimate_resource_lines).toHaveLength(0);
+  });
 });

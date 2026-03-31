@@ -78,6 +78,7 @@ import {
   hydrateEstimateV2ProjectFromWorkspace,
   registerEstimateV2ProjectAccessContext,
   transitionEstimateV2ProjectToInWork,
+  updateLine,
 } from "@/data/estimate-v2-store";
 import { __unsafeResetStoreForTests } from "@/data/store";
 
@@ -366,7 +367,7 @@ describe("estimate-v2 workspace drafts", () => {
             expect.objectContaining({ title: "Roof" }),
           ]),
         }),
-        { profileId: "profile-1" },
+        expect.objectContaining({ profileId: "profile-1" }),
       );
       expect(consoleErrorSpy).not.toHaveBeenCalled();
     } finally {
@@ -431,6 +432,287 @@ describe("estimate-v2 workspace drafts", () => {
       expect(syncProjectTasksFromEstimateMock).toHaveBeenCalledTimes(1);
       expect(syncProjectProcurementFromEstimateMock).toHaveBeenCalledTimes(1);
       expect(syncProjectHRFromEstimateMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("skips stale HR projection writes when a newer estimate edit lands mid-sync", async () => {
+    vi.useFakeTimers();
+    const projectId = "project-remote-1";
+    let resolveFirstTaskSync: ((value: Record<string, string>) => void) | null = null;
+
+    loadCurrentEstimateDraftMock.mockResolvedValue({
+      estimate: {
+        id: "estimate-1",
+        project_id: projectId,
+        title: "Remote Estimate",
+        description: null,
+        status: "in_work",
+        created_by: "profile-1",
+        created_at: "2026-03-01T00:00:00.000Z",
+        updated_at: "2026-03-02T00:00:00.000Z",
+      },
+      currentVersion: {
+        id: "version-existing",
+        estimate_id: "estimate-1",
+        version_number: 1,
+        is_current: true,
+        created_by: "profile-1",
+        created_at: "2026-03-01T00:00:00.000Z",
+      },
+      stages: [
+        {
+          id: "stage-1",
+          project_id: projectId,
+          title: "Shell",
+          description: "",
+          sort_order: 1,
+          status: "open",
+          discount_bps: 0,
+          created_at: "2026-03-01T00:00:00.000Z",
+          updated_at: "2026-03-02T00:00:00.000Z",
+        },
+      ],
+      works: [
+        {
+          id: "work-1",
+          estimate_version_id: "version-existing",
+          project_stage_id: "stage-1",
+          title: "Framing",
+          description: null,
+          sort_order: 1,
+          planned_cost_cents: 30000,
+          created_at: "2026-03-01T00:00:00.000Z",
+        },
+      ],
+      lines: [
+        {
+          id: "line-1",
+          estimate_work_id: "work-1",
+          resource_type: "labor",
+          title: "чел 1",
+          quantity: 1,
+          unit: "смена",
+          unit_price_cents: 100000,
+          total_price_cents: 100000,
+          created_at: "2026-03-01T00:00:00.000Z",
+        },
+      ],
+      dependencies: [],
+    });
+    getPlanningSourceMock.mockResolvedValue({
+      getProjectTasks: vi.fn().mockResolvedValue([
+        {
+          id: "task-1",
+          project_id: projectId,
+          stage_id: "stage-1",
+          title: "Framing task",
+          description: "",
+          status: "in_progress",
+          assignee_id: "",
+          checklist: [],
+          comments: [],
+          attachments: [],
+          photos: [],
+          linked_estimate_item_ids: [],
+          created_at: "2026-03-01T00:00:00.000Z",
+          startDate: null,
+          deadline: null,
+        },
+      ]),
+    });
+
+    syncProjectTasksFromEstimateMock
+      .mockImplementationOnce(() => new Promise((resolve) => {
+        resolveFirstTaskSync = resolve;
+      }))
+      .mockResolvedValue({ "work-1": "task-1" });
+
+    try {
+      await hydrateEstimateV2ProjectFromWorkspace(projectId, { profileId: "profile-1" });
+      registerEstimateV2ProjectAccessContext(projectId, {
+        mode: "supabase",
+        profileId: "profile-1",
+        projectOwnerProfileId: "profile-1",
+        membershipRole: "owner",
+      });
+
+      await vi.advanceTimersByTimeAsync(350);
+      expect(syncProjectTasksFromEstimateMock).toHaveBeenCalledTimes(1);
+
+      updateLine(projectId, "line-1", {
+        title: "чел 111",
+        costUnitCents: 130000,
+      });
+
+      resolveFirstTaskSync?.({ "work-1": "task-1" });
+      await Promise.resolve();
+      await Promise.resolve();
+      await vi.advanceTimersByTimeAsync(350);
+
+      expect(syncProjectHRFromEstimateMock).toHaveBeenCalledTimes(1);
+      expect(syncProjectHRFromEstimateMock).toHaveBeenCalledWith(
+        { kind: "supabase", profileId: "profile-1" },
+        expect.objectContaining({
+          projectId,
+          lines: expect.arrayContaining([
+            expect.objectContaining({
+              title: "чел 111",
+              costUnitCents: 130000,
+            }),
+          ]),
+        }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not let stale remote hydration overwrite a newer local line title while sync is in flight", async () => {
+    vi.useFakeTimers();
+    const projectId = "project-remote-1";
+    let resolveFirstTaskSync: ((value: Record<string, string>) => void) | null = null;
+
+    loadCurrentEstimateDraftMock.mockResolvedValue({
+      estimate: {
+        id: "estimate-1",
+        project_id: projectId,
+        title: "Remote Estimate",
+        description: null,
+        status: "in_work",
+        created_by: "profile-1",
+        created_at: "2026-03-01T00:00:00.000Z",
+        updated_at: "2026-03-02T00:00:00.000Z",
+      },
+      currentVersion: {
+        id: "version-existing",
+        estimate_id: "estimate-1",
+        version_number: 1,
+        is_current: true,
+        created_by: "profile-1",
+        created_at: "2026-03-01T00:00:00.000Z",
+      },
+      stages: [
+        {
+          id: "stage-1",
+          project_id: projectId,
+          title: "Shell",
+          description: "",
+          sort_order: 1,
+          status: "open",
+          discount_bps: 0,
+          created_at: "2026-03-01T00:00:00.000Z",
+          updated_at: "2026-03-02T00:00:00.000Z",
+        },
+      ],
+      works: [
+        {
+          id: "work-1",
+          estimate_version_id: "version-existing",
+          project_stage_id: "stage-1",
+          title: "Framing",
+          description: null,
+          sort_order: 1,
+          planned_cost_cents: 30000,
+          created_at: "2026-03-01T00:00:00.000Z",
+        },
+      ],
+      lines: [
+        {
+          id: "line-1",
+          estimate_work_id: "work-1",
+          resource_type: "equipment",
+          title: "Laser level v1",
+          quantity: 1,
+          unit: "day",
+          unit_price_cents: 3200,
+          total_price_cents: 3200,
+          created_at: "2026-03-01T00:00:00.000Z",
+        },
+      ],
+      dependencies: [],
+    });
+    getPlanningSourceMock.mockResolvedValue({
+      getProjectTasks: vi.fn().mockResolvedValue([
+        {
+          id: "task-1",
+          project_id: projectId,
+          stage_id: "stage-1",
+          title: "Framing task",
+          description: "",
+          status: "in_progress",
+          assignee_id: "",
+          checklist: [],
+          comments: [],
+          attachments: [],
+          photos: [],
+          linked_estimate_item_ids: [],
+          created_at: "2026-03-01T00:00:00.000Z",
+          startDate: null,
+          deadline: null,
+        },
+      ]),
+    });
+
+    syncProjectTasksFromEstimateMock
+      .mockImplementationOnce(() => new Promise((resolve) => {
+        resolveFirstTaskSync = resolve;
+      }))
+      .mockResolvedValue({ "work-1": "task-1" });
+
+    try {
+      await hydrateEstimateV2ProjectFromWorkspace(projectId, { profileId: "profile-1" });
+      registerEstimateV2ProjectAccessContext(projectId, {
+        mode: "supabase",
+        profileId: "profile-1",
+        projectOwnerProfileId: "profile-1",
+        membershipRole: "owner",
+      });
+
+      await vi.advanceTimersByTimeAsync(350);
+      expect(syncProjectTasksFromEstimateMock).toHaveBeenCalledTimes(1);
+
+      updateLine(projectId, "line-1", {
+        title: "Laser level v2",
+      });
+
+      await hydrateEstimateV2ProjectFromWorkspace(projectId, { profileId: "profile-1" });
+
+      expect(getEstimateV2ProjectState(projectId).lines).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: "line-1",
+            title: "Laser level v2",
+          }),
+        ]),
+      );
+
+      resolveFirstTaskSync?.({ "work-1": "task-1" });
+      await Promise.resolve();
+      await Promise.resolve();
+      await vi.advanceTimersByTimeAsync(350);
+
+      expect(syncProjectProcurementFromEstimateMock).toHaveBeenLastCalledWith(expect.objectContaining({
+        projectId,
+        lines: expect.arrayContaining([
+          expect.objectContaining({
+            title: "Laser level v2",
+            type: "tool",
+          }),
+        ]),
+      }));
+      expect(syncProjectHRFromEstimateMock).toHaveBeenLastCalledWith(
+        { kind: "supabase", profileId: "profile-1" },
+        expect.objectContaining({
+          projectId,
+          lines: expect.arrayContaining([
+            expect.objectContaining({
+              title: "Laser level v2",
+            }),
+          ]),
+        }),
+      );
     } finally {
       vi.useRealTimers();
     }
