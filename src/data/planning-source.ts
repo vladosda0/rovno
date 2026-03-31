@@ -678,6 +678,21 @@ export async function syncProjectTasksFromEstimate(
     linesByWorkId.set(line.workId, list);
   });
 
+  const desiredLineIds = new Set(input.lines.map((line) => line.id));
+  const checklistIdsToDelete = checklistRows
+    .filter((row) => row.estimate_work_id || row.estimate_resource_line_id)
+    .filter((row) => {
+      if (!row.estimate_work_id || !desiredWorkIds.has(row.estimate_work_id)) {
+        return true;
+      }
+      return !row.estimate_resource_line_id || !desiredLineIds.has(row.estimate_resource_line_id);
+    })
+    .map((row) => row.id);
+
+  if (checklistIdsToDelete.length > 0) {
+    await deleteHeroTaskChecklistItems(supabase, checklistIdsToDelete);
+  }
+
   await upsertTaskChecklistItems(
     supabase,
     input.works.flatMap((work) => (
@@ -696,21 +711,6 @@ export async function syncProjectTasksFromEstimate(
       })
     )),
   );
-
-  const desiredLineIds = new Set(input.lines.map((line) => line.id));
-  const checklistIdsToDelete = checklistRows
-    .filter((row) => row.estimate_work_id || row.estimate_resource_line_id)
-    .filter((row) => {
-      if (!row.estimate_work_id || !desiredWorkIds.has(row.estimate_work_id)) {
-        return true;
-      }
-      return !row.estimate_resource_line_id || !desiredLineIds.has(row.estimate_resource_line_id);
-    })
-    .map((row) => row.id);
-
-  if (checklistIdsToDelete.length > 0) {
-    await deleteHeroTaskChecklistItems(supabase, checklistIdsToDelete);
-  }
 
   return taskIdByWorkId;
 }
