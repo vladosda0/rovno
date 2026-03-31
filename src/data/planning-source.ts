@@ -22,6 +22,7 @@ type EstimateResourceLineRow = PlanningDatabase["public"]["Tables"]["estimate_re
 type ProjectStageInsert = PlanningDatabase["public"]["Tables"]["project_stages"]["Insert"];
 type TaskInsert = PlanningDatabase["public"]["Tables"]["tasks"]["Insert"];
 type TaskChecklistItemInsert = PlanningDatabase["public"]["Tables"]["task_checklist_items"]["Insert"];
+type TaskChecklistItemUpdate = PlanningDatabase["public"]["Tables"]["task_checklist_items"]["Update"];
 type TaskCommentInsert = PlanningDatabase["public"]["Tables"]["task_comments"]["Insert"];
 type TaskUpdateRow = PlanningDatabase["public"]["Tables"]["tasks"]["Update"];
 type TypedSupabaseClient = SupabaseClient<PlanningDatabase>;
@@ -132,6 +133,12 @@ export interface SyncProjectTasksFromEstimateInput {
   profileId: string;
 }
 
+interface ChecklistSortOrderUpdate {
+  id: string;
+  taskId: string;
+  sortOrder: number;
+}
+
 function mapTaskPatchToTaskUpdateRow(patch: UpdateProjectTaskInput): TaskUpdateRow {
   const update: TaskUpdateRow = {};
 
@@ -175,6 +182,12 @@ function isEstimateLinkedTaskRow(
   row: Pick<TaskRow, "estimate_work_id">,
 ): boolean {
   return Boolean(row.estimate_work_id);
+}
+
+function isEstimateLinkedChecklistRow(
+  row: Pick<TaskChecklistItemRow, "estimate_resource_line_id" | "estimate_work_id">,
+): boolean {
+  return Boolean(row.estimate_resource_line_id || row.estimate_work_id);
 }
 
 function defaultTaskIdForEstimateWork(workId: string): string {
@@ -591,6 +604,26 @@ export async function deleteHeroTaskChecklistItems(
   }
 }
 
+async function updateTaskChecklistSortOrders(
+  supabase: TypedSupabaseClient,
+  updates: ChecklistSortOrderUpdate[],
+): Promise<void> {
+  for (const update of updates) {
+    const patch: TaskChecklistItemUpdate = {
+      sort_order: update.sortOrder,
+    };
+    const { error } = await supabase
+      .from("task_checklist_items")
+      .update(patch)
+      .eq("id", update.id)
+      .eq("task_id", update.taskId);
+
+    if (error) {
+      throw error;
+    }
+  }
+}
+
 export async function deleteHeroTasks(
   supabase: TypedSupabaseClient,
   ids: string[],
@@ -663,8 +696,13 @@ export async function syncProjectTasksFromEstimate(
     supabase,
     Array.from(new Set([...Object.values(taskIdByWorkId), ...staleLinkedTaskIds])),
   );
+  const activeTaskIds = new Set(Object.values(taskIdByWorkId));
   const existingChecklistRowByEstimateLineId = new Map<string, TaskChecklistItemRow>();
+  const checklistRowsByTaskId = new Map<string, TaskChecklistItemRow[]>();
   checklistRows.forEach((row) => {
+    const rowsForTask = checklistRowsByTaskId.get(row.task_id) ?? [];
+    rowsForTask.push(row);
+    checklistRowsByTaskId.set(row.task_id, rowsForTask);
     if (!row.estimate_resource_line_id) return;
     if (!existingChecklistRowByEstimateLineId.has(row.estimate_resource_line_id)) {
       existingChecklistRowByEstimateLineId.set(row.estimate_resource_line_id, row);
@@ -678,9 +716,31 @@ export async function syncProjectTasksFromEstimate(
     linesByWorkId.set(line.workId, list);
   });
 
+  const checklistUpserts = input.works.flatMap((work) => (
+    sortEstimateLinesForChecklist(linesByWorkId.get(work.id) ?? []).map((line, index) => {
+      const existingChecklistRow = existingChecklistRowByEstimateLineId.get(line.id) ?? null;
+      return {
+        id: existingChecklistRow?.id ?? line.id,
+        taskId: taskIdByWorkId[work.id],
+        title: line.title,
+        isDone: existingChecklistRow?.is_done ?? false,
+        procurementItemId: existingChecklistRow?.procurement_item_id ?? null,
+        estimateResourceLineId: line.id,
+        estimateWorkId: work.id,
+        sortOrder: index + 1,
+      } satisfies HeroTaskChecklistItemUpsertInput;
+    })
+  ));
+  const checklistUpsertsByTaskId = new Map<string, HeroTaskChecklistItemUpsertInput[]>();
+  checklistUpserts.forEach((input) => {
+    const rowsForTask = checklistUpsertsByTaskId.get(input.taskId) ?? [];
+    rowsForTask.push(input);
+    checklistUpsertsByTaskId.set(input.taskId, rowsForTask);
+  });
+
   const desiredLineIds = new Set(input.lines.map((line) => line.id));
   const checklistIdsToDelete = checklistRows
-    .filter((row) => row.estimate_work_id || row.estimate_resource_line_id)
+    .filter(isEstimateLinkedChecklistRow)
     .filter((row) => {
       if (!row.estimate_work_id || !desiredWorkIds.has(row.estimate_work_id)) {
         return true;
@@ -688,29 +748,53 @@ export async function syncProjectTasksFromEstimate(
       return !row.estimate_resource_line_id || !desiredLineIds.has(row.estimate_resource_line_id);
     })
     .map((row) => row.id);
+  const checklistIdsToDeleteSet = new Set(checklistIdsToDelete);
 
   if (checklistIdsToDelete.length > 0) {
     await deleteHeroTaskChecklistItems(supabase, checklistIdsToDelete);
   }
 
-  await upsertTaskChecklistItems(
-    supabase,
-    input.works.flatMap((work) => (
-      sortEstimateLinesForChecklist(linesByWorkId.get(work.id) ?? []).map((line, index) => {
-        const existingChecklistRow = existingChecklistRowByEstimateLineId.get(line.id) ?? null;
-        return {
-          id: existingChecklistRow?.id ?? line.id,
-          taskId: taskIdByWorkId[work.id],
-          title: line.title,
-          isDone: existingChecklistRow?.is_done ?? false,
-          procurementItemId: existingChecklistRow?.procurement_item_id ?? null,
-          estimateResourceLineId: line.id,
-          estimateWorkId: work.id,
-          sortOrder: index + 1,
-        } satisfies HeroTaskChecklistItemUpsertInput;
-      })
-    )),
-  );
+  const temporarySortOrderUpdates: ChecklistSortOrderUpdate[] = [];
+  const finalManualSortOrderUpdates: ChecklistSortOrderUpdate[] = [];
+
+  activeTaskIds.forEach((taskId) => {
+    const desiredRows = checklistUpsertsByTaskId.get(taskId) ?? [];
+    if (desiredRows.length === 0) {
+      return;
+    }
+
+    const retainedRows = (checklistRowsByTaskId.get(taskId) ?? [])
+      .filter((row) => !checklistIdsToDeleteSet.has(row.id))
+      .sort((left, right) => left.sort_order - right.sort_order || left.id.localeCompare(right.id));
+
+    if (retainedRows.length === 0) {
+      return;
+    }
+
+    const maxSortOrder = retainedRows.reduce((max, row) => Math.max(max, row.sort_order), 0);
+    const temporaryBase = maxSortOrder + desiredRows.length;
+    retainedRows.forEach((row, index) => {
+      temporarySortOrderUpdates.push({
+        id: row.id,
+        taskId,
+        sortOrder: temporaryBase + index + 1,
+      });
+    });
+
+    retainedRows
+      .filter((row) => !isEstimateLinkedChecklistRow(row))
+      .forEach((row, index) => {
+        finalManualSortOrderUpdates.push({
+          id: row.id,
+          taskId,
+          sortOrder: desiredRows.length + index + 1,
+        });
+      });
+  });
+
+  await updateTaskChecklistSortOrders(supabase, temporarySortOrderUpdates);
+  await upsertTaskChecklistItems(supabase, checklistUpserts);
+  await updateTaskChecklistSortOrders(supabase, finalManualSortOrderUpdates);
 
   return taskIdByWorkId;
 }
