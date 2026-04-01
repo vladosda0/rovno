@@ -21,6 +21,11 @@ import { useToast } from "@/hooks/use-toast";
 import { getAuthRole } from "@/lib/auth-state";
 import { trackEvent } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
+import {
+  getProjectDomainAccess,
+  projectDomainAllowsContribute,
+  projectDomainAllowsManage,
+} from "@/lib/permissions";
 import { format } from "date-fns";
 import {
   ListTodo, Plus, CheckCircle2, Circle, Clock,
@@ -95,7 +100,8 @@ export default function ProjectTasks() {
   const { project, stages, members } = useProject(pid);
   const tasks = useTasks(pid);
   const media = useMedia(pid);
-  const { role, can: userCan } = usePermission(pid);
+  const perm = usePermission(pid);
+  const { role } = perm;
   const estimateState = useEstimateV2Project(pid);
   const estimateSync = estimateState.sync ?? EMPTY_SYNC_STATE;
   const { project: estimateProject } = estimateState;
@@ -105,8 +111,14 @@ export default function ProjectTasks() {
   const authRole = getAuthRole();
   const currentUser = getCurrentUser();
   const isClientRegime = estimateProject.regime === "client";
-  const canCreateTask = !isClientRegime && userCan("task.create");
-  const canEditTask = !isClientRegime && userCan("task.edit");
+  const tasksAccess = getProjectDomainAccess(perm.seam, "tasks");
+  const canManageTasks = !isClientRegime && projectDomainAllowsManage(tasksAccess);
+  const canContributeTasks = !isClientRegime && projectDomainAllowsContribute(tasksAccess);
+  const canCreateTask = canManageTasks;
+  const canChangeTaskStatus = canContributeTasks;
+  const canEditChecklist = canContributeTasks;
+  const canCommentOnTasks = canContributeTasks;
+  const canUploadTaskMedia = canContributeTasks;
   const taskSyncState = estimateSync.domains.tasks;
   const isSupabaseMode = workspaceMode.kind === "supabase";
   const isTaskSyncing = isSupabaseMode && taskSyncState.status === "syncing";
@@ -214,7 +226,7 @@ export default function ProjectTasks() {
 
   // --- Central status change handler (intercepts Done / Blocked) ---
   const handleStatusChange = useCallback((taskId: string, newStatus: TaskStatus) => {
-    if (!canEditTask) return;
+    if (!canChangeTaskStatus) return;
     if (shouldBlockTaskLaunchActions) {
       toast({
         title: hasTaskSyncError ? "Tasks sync needs attention" : "Tasks are still syncing",
@@ -268,7 +280,7 @@ export default function ProjectTasks() {
         });
       }
     })();
-  }, [canEditTask, shouldBlockTaskLaunchActions, hasTaskSyncError, taskSyncState.lastError, tasks, toast, workspaceMode, invalidateProjectTasks]);
+  }, [canChangeTaskStatus, shouldBlockTaskLaunchActions, hasTaskSyncError, taskSyncState.lastError, tasks, toast, workspaceMode, invalidateProjectTasks]);
 
   // Confirm Done
   const handleConfirmDone = useCallback(async () => {
@@ -397,6 +409,7 @@ export default function ProjectTasks() {
     itemId: string,
     done: boolean,
   ) => {
+    if (!canEditChecklist) return;
     try {
       const source = await getPlanningSource(
         workspaceMode.kind === "pending-supabase" ? undefined : workspaceMode,
@@ -411,9 +424,10 @@ export default function ProjectTasks() {
       });
       throw error;
     }
-  }, [workspaceMode, invalidateProjectTasks, toast]);
+  }, [canEditChecklist, workspaceMode, invalidateProjectTasks, toast]);
 
   const handleAddChecklistItem = useCallback(async (taskId: string, text: string) => {
+    if (!canEditChecklist) return;
     try {
       const source = await getPlanningSource(
         workspaceMode.kind === "pending-supabase" ? undefined : workspaceMode,
@@ -427,9 +441,10 @@ export default function ProjectTasks() {
         variant: "destructive",
       });
     }
-  }, [workspaceMode, invalidateProjectTasks, toast]);
+  }, [canEditChecklist, workspaceMode, invalidateProjectTasks, toast]);
 
   const handleDeleteChecklistItem = useCallback(async (taskId: string, itemId: string) => {
+    if (!canEditChecklist) return;
     try {
       const source = await getPlanningSource(
         workspaceMode.kind === "pending-supabase" ? undefined : workspaceMode,
@@ -443,9 +458,10 @@ export default function ProjectTasks() {
         variant: "destructive",
       });
     }
-  }, [workspaceMode, invalidateProjectTasks, toast]);
+  }, [canEditChecklist, workspaceMode, invalidateProjectTasks, toast]);
 
   const handleTaskCommentCreate = useCallback(async (taskId: string, body: string) => {
+    if (!canCommentOnTasks) return;
     try {
       const source = await getPlanningSource(
         workspaceMode.kind === "pending-supabase" ? undefined : workspaceMode,
@@ -461,7 +477,7 @@ export default function ProjectTasks() {
         variant: "destructive",
       });
     }
-  }, [workspaceMode, currentUser.id, invalidateProjectTasks, toast]);
+  }, [canCommentOnTasks, workspaceMode, currentUser.id, invalidateProjectTasks, toast]);
 
   const handleTaskTitleChange = useCallback(async (taskId: string, title: string) => {
     await updateTaskFact(taskId, { title });
@@ -806,7 +822,7 @@ export default function ProjectTasks() {
                   return (
                     <div
                       key={task.id}
-                      draggable={canEditTask}
+                      draggable={canChangeTaskStatus}
                       onDragStart={(e) => handleDragStart(e, task.id)}
                       onClick={() => setSelectedTaskId(task.id)}
                       className={`bg-card border border-border rounded-lg p-2 px-2.5 cursor-pointer hover:shadow-md transition-all ${
@@ -814,7 +830,7 @@ export default function ProjectTasks() {
                       }`}
                     >
                       <div className="flex items-center gap-1.5 mb-0.5">
-                        {canEditTask && (
+                        {canChangeTaskStatus && (
                           <GripVertical className="h-3 w-3 text-muted-foreground shrink-0 cursor-grab" />
                         )}
                         <span className="text-caption font-medium text-foreground flex-1 truncate">{task.title}</span>
@@ -877,7 +893,11 @@ export default function ProjectTasks() {
         task={selectedTask}
         open={!!selectedTaskId}
         onOpenChange={(open) => { if (!open) setSelectedTaskId(null); }}
-        canEdit={canEditTask}
+        canManageTask={canManageTasks}
+        canChangeStatus={canChangeTaskStatus}
+        canEditChecklist={canEditChecklist}
+        canComment={canCommentOnTasks}
+        canUploadMedia={canUploadTaskMedia}
         estimateLinkedPlanningReadOnly={workspaceMode.kind === "supabase" && Boolean(selectedTask?.estimateV2WorkId)}
         taskStructureReadOnly={isSupabaseMode}
         blockEstimateLinkedDelete={isSupabaseMode || shouldBlockTaskLaunchActions}

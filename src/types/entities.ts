@@ -5,6 +5,8 @@ export type MemberRole = "owner" | "co_owner" | "contractor" | "viewer";
 export type AIAccess = "none" | "consult_only" | "project_pool";
 /** Mirrors `project_members.finance_visibility` / `project_invites.finance_visibility` in generated DB types. */
 export type FinanceVisibility = "none" | "summary" | "detail";
+export type InternalDocsVisibility = "none" | "view" | "edit";
+export type ViewerRegime = "contractor" | "client" | "build_myself";
 export type StageStatus = "open" | "completed" | "archived";
 export type TaskStatus = "not_started" | "in_progress" | "done" | "blocked";
 export type EstimateVersionStatus = "draft" | "approved" | "archived";
@@ -89,7 +91,7 @@ export interface Member {
   project_id: string;
   user_id: string;
   role: MemberRole;
-  viewer_regime?: "contractor" | "client" | "build_myself";
+  viewer_regime?: ViewerRegime;
   ai_access: AIAccess;
   finance_visibility?: FinanceVisibility;
   credit_limit: number;

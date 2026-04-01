@@ -37,6 +37,8 @@ describe("QuickActions", () => {
               tasks={[]}
               canCreateTask
               canCreateDocument
+              canCreatePhoto
+              canManageProcurement
               canManageParticipants
               actorRole="owner"
               actorAiAccess="project_pool"
@@ -68,6 +70,8 @@ describe("QuickActions", () => {
               tasks={[]}
               canCreateTask
               canCreateDocument
+              canCreatePhoto
+              canManageProcurement
               canManageParticipants
               actorRole="owner"
               actorAiAccess="project_pool"

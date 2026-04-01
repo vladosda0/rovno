@@ -1,7 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Users, Plus, MoreVertical, Shield, Eye, Wrench, Crown, Mail, Send } from "lucide-react";
+import {
+  AlertTriangle,
+  BrainCircuit,
+  Coins,
+  Crown,
+  Eye,
+  FileText,
+  History,
+  Mail,
+  MoreVertical,
+  Plus,
+  Send,
+  Shield,
+  SlidersHorizontal,
+  Users,
+  Wrench,
+} from "lucide-react";
 import { useCurrentUser, useProject, useProjectInvites, useWorkspaceMode } from "@/hooks/use-mock-data";
 import { usePermission } from "@/lib/permissions";
 import { addEvent, getUserById } from "@/data/store";
@@ -14,8 +30,23 @@ import {
 } from "@/data/workspace-source";
 import { workspaceQueryKeys } from "@/hooks/use-workspace-source";
 import { EmptyState } from "@/components/EmptyState";
-import { ConfirmModal } from "@/components/ConfirmModal";
+import { SettingsSection } from "@/components/settings/SettingsSection";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -26,18 +57,33 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
-import type { Member, MemberRole, AIAccess } from "@/types/entities";
+import type {
+  AIAccess,
+  FinanceVisibility,
+  InternalDocsVisibility,
+  Member,
+  MemberRole,
+  ViewerRegime,
+} from "@/types/entities";
 import {
+  aiAccessLabels,
+  canEditParticipantRole,
+  describePermissionSummary,
+  financeVisibilityLabels,
+  getDefaultFinanceVisibility,
+  getDefaultInternalDocsVisibility,
+  getFinanceVisibilityOptions,
+  getInternalDocsVisibilityOptions,
   getInviteAiAccessOptions,
   getInviteRoleOptions,
+  getPermissionWarnings,
   getReassignRoleOptions,
+  internalDocsVisibilityLabels,
+  roleDescriptions,
+  roleLabels,
+  viewerRegimeLabels,
 } from "@/lib/participant-role-policy";
 
 const roleIcons: Record<MemberRole, typeof Crown> = {
@@ -47,30 +93,54 @@ const roleIcons: Record<MemberRole, typeof Crown> = {
   viewer: Eye,
 };
 
-const roleLabels: Record<MemberRole, string> = {
-  owner: "Owner",
-  co_owner: "Co-owner",
-  contractor: "Contractor",
-  viewer: "Viewer",
-};
-
-const aiLabels: Record<AIAccess, string> = {
-  none: "No AI",
-  consult_only: "Consult only",
-  project_pool: "Project pool",
-};
-
-type ViewerRegime = "contractor" | "client" | "build_myself";
+type ParticipantTab = "members" | "invitations" | "permissions";
 type RoleTarget =
   | { kind: "member"; userId: string }
   | { kind: "invite"; inviteId: string };
 
+type InviteEmailDeliveryOutcome =
+  | { kind: "not_applicable" }
+  | { kind: "sent"; recipientEmail: string }
+  | { kind: "failed"; message: string };
+
+type CreateInviteWithDeliveryResult = {
+  createdInvite: WorkspaceProjectInvite;
+  emailDelivery: InviteEmailDeliveryOutcome;
+};
+
+type PermissionFormState = {
+  role: MemberRole;
+  aiAccess: AIAccess;
+  financeVisibility: FinanceVisibility;
+  internalDocsVisibility: InternalDocsVisibility;
+  viewerRegime: ViewerRegime;
+  creditLimit: string;
+};
+
+type ParticipantPermissionRecord = {
+  target: RoleTarget;
+  key: string;
+  displayName: string;
+  secondaryLabel: string;
+  targetKindLabel: string;
+  role: MemberRole;
+  aiAccess: AIAccess;
+  financeVisibility: FinanceVisibility;
+  internalDocsVisibility: InternalDocsVisibility;
+  viewerRegime?: ViewerRegime;
+  creditLimit: number;
+  usedCredits?: number;
+  inviteStatus?: WorkspaceProjectInvite["status"];
+};
+
 function resolveViewerRegime(
   role: MemberRole,
   projectMode: "contractor" | "build_myself",
+  currentViewerRegime?: ViewerRegime,
 ): ViewerRegime | undefined {
   if (role !== "viewer") return undefined;
-  return projectMode === "build_myself" ? "build_myself" : "client";
+  return currentViewerRegime
+    ?? (projectMode === "build_myself" ? "build_myself" : "client");
 }
 
 function inviteStatusLabel(status: WorkspaceProjectInvite["status"]) {
@@ -87,15 +157,276 @@ function inviteStatusClassName(status: WorkspaceProjectInvite["status"]) {
   return "bg-muted text-muted-foreground";
 }
 
-type InviteEmailDeliveryOutcome =
-  | { kind: "not_applicable" }
-  | { kind: "sent"; recipientEmail: string }
-  | { kind: "failed"; message: string };
+function readInternalDocsVisibility(record: unknown): InternalDocsVisibility | undefined {
+  if (!record || typeof record !== "object") return undefined;
+  const candidate = (record as { internal_docs_visibility?: unknown }).internal_docs_visibility;
+  return candidate === "none" || candidate === "view" || candidate === "edit" ? candidate : undefined;
+}
 
-type CreateInviteWithDeliveryResult = {
-  createdInvite: WorkspaceProjectInvite;
-  emailDelivery: InviteEmailDeliveryOutcome;
-};
+function buildPermissionForm(
+  input: {
+    role: MemberRole;
+    aiAccess: AIAccess;
+    financeVisibility?: FinanceVisibility;
+    internalDocsVisibility?: InternalDocsVisibility;
+    viewerRegime?: ViewerRegime;
+    creditLimit: number;
+  },
+  projectMode: "contractor" | "build_myself",
+): PermissionFormState {
+  return {
+    role: input.role,
+    aiAccess: input.aiAccess,
+    financeVisibility: input.financeVisibility ?? getDefaultFinanceVisibility(input.role),
+    internalDocsVisibility: input.internalDocsVisibility ?? getDefaultInternalDocsVisibility(input.role),
+    viewerRegime: resolveViewerRegime(input.role, projectMode, input.viewerRegime)
+      ?? (projectMode === "build_myself" ? "build_myself" : "client"),
+    creditLimit: String(input.creditLimit),
+  };
+}
+
+function applyPermissionFormToMember(member: Member, form: PermissionFormState, projectMode: "contractor" | "build_myself"): Member {
+  return {
+    ...member,
+    role: form.role,
+    ai_access: form.aiAccess,
+    viewer_regime: resolveViewerRegime(form.role, projectMode, form.viewerRegime),
+    credit_limit: Math.max(0, parseInt(form.creditLimit, 10) || 0),
+    finance_visibility: form.financeVisibility,
+    internal_docs_visibility: form.internalDocsVisibility,
+  } as Member;
+}
+
+function applyPermissionFormToInvite(
+  invite: WorkspaceProjectInvite,
+  form: PermissionFormState,
+  projectMode: "contractor" | "build_myself",
+): WorkspaceProjectInvite {
+  return {
+    ...invite,
+    role: form.role,
+    ai_access: form.aiAccess,
+    viewer_regime: resolveViewerRegime(form.role, projectMode, form.viewerRegime) ?? null,
+    credit_limit: Math.max(0, parseInt(form.creditLimit, 10) || 0),
+    finance_visibility: form.financeVisibility,
+    internal_docs_visibility: form.internalDocsVisibility,
+  } as WorkspaceProjectInvite;
+}
+
+function PermissionFormSections(props: {
+  form: PermissionFormState;
+  onFormChange: (updater: (current: PermissionFormState) => PermissionFormState) => void;
+  roleOptions: MemberRole[];
+  aiOptions: AIAccess[];
+  financeOptions: FinanceVisibility[];
+  internalDocsOptions: InternalDocsVisibility[];
+  availableViewerRegimes: readonly ViewerRegime[];
+  projectMode: "contractor" | "build_myself";
+}) {
+  const {
+    form,
+    onFormChange,
+    roleOptions,
+    aiOptions,
+    financeOptions,
+    internalDocsOptions,
+    availableViewerRegimes,
+    projectMode,
+  } = props;
+
+  const summary = describePermissionSummary({
+    role: form.role,
+    aiAccess: form.aiAccess,
+    financeVisibility: form.financeVisibility,
+    internalDocsVisibility: form.internalDocsVisibility,
+    viewerRegime: form.role === "viewer" ? form.viewerRegime : undefined,
+    creditLimit: Math.max(0, parseInt(form.creditLimit, 10) || 0),
+  });
+  const warnings = getPermissionWarnings({
+    role: form.role,
+    aiAccess: form.aiAccess,
+    financeVisibility: form.financeVisibility,
+    internalDocsVisibility: form.internalDocsVisibility,
+    viewerRegime: form.role === "viewer" ? form.viewerRegime : undefined,
+    creditLimit: Math.max(0, parseInt(form.creditLimit, 10) || 0),
+  });
+
+  const financeDanger = form.financeVisibility === "detail";
+  const docsDanger = form.internalDocsVisibility === "edit";
+  const aiDanger = form.aiAccess === "project_pool";
+
+  return (
+    <div className="space-y-sp-2">
+      <SettingsSection
+        title="Role preset"
+        description="Choose the closest access preset first, then refine the bounded fields below."
+      >
+        <div className="space-y-3">
+          <div>
+            <label className="text-caption font-medium text-foreground">Role preset</label>
+            <Select
+              value={form.role}
+              onValueChange={(value) => {
+                const nextRole = value as MemberRole;
+                onFormChange((current) => ({
+                  ...current,
+                  role: nextRole,
+                  viewerRegime: resolveViewerRegime(nextRole, projectMode, current.viewerRegime)
+                    ?? current.viewerRegime,
+                }));
+              }}
+            >
+              <SelectTrigger className="mt-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {roleOptions.map((role) => (
+                  <SelectItem key={role} value={role}>
+                    {roleLabels[role]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="mt-2 text-caption text-muted-foreground">{roleDescriptions[form.role]}</p>
+          </div>
+
+          <div className="rounded-card border border-border/70 bg-background/70 p-3">
+            <p className="text-caption font-medium text-foreground">Current bounded summary</p>
+            <ul className="mt-2 space-y-1">
+              {summary.map((line) => (
+                <li key={line} className="text-caption text-muted-foreground">
+                  {line}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </SettingsSection>
+
+      <SettingsSection
+        title="Bounded overrides"
+        description="Only fields already supported by the current project authority model are editable here."
+      >
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className={`rounded-card border p-3 ${aiDanger ? "border-warning/40 bg-warning/10" : "border-border/70 bg-background/70"}`}>
+            <label className="text-caption font-medium text-foreground">AI access</label>
+            <Select
+              value={form.aiAccess}
+              onValueChange={(value) => {
+                onFormChange((current) => ({ ...current, aiAccess: value as AIAccess }));
+              }}
+            >
+              <SelectTrigger className="mt-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {aiOptions.map((aiAccess) => (
+                  <SelectItem key={aiAccess} value={aiAccess}>
+                    {aiAccessLabels[aiAccess]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className={`rounded-card border p-3 ${financeDanger ? "border-warning/40 bg-warning/10" : "border-border/70 bg-background/70"}`}>
+            <label className="text-caption font-medium text-foreground">Finance visibility</label>
+            <Select
+              value={form.financeVisibility}
+              onValueChange={(value) => {
+                onFormChange((current) => ({ ...current, financeVisibility: value as FinanceVisibility }));
+              }}
+            >
+              <SelectTrigger className="mt-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {financeOptions.map((visibility) => (
+                  <SelectItem key={visibility} value={visibility}>
+                    {financeVisibilityLabels[visibility]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className={`rounded-card border p-3 ${docsDanger ? "border-warning/40 bg-warning/10" : "border-border/70 bg-background/70"}`}>
+            <label className="text-caption font-medium text-foreground">Internal docs visibility</label>
+            <Select
+              value={form.internalDocsVisibility}
+              onValueChange={(value) => {
+                onFormChange((current) => ({ ...current, internalDocsVisibility: value as InternalDocsVisibility }));
+              }}
+            >
+              <SelectTrigger className="mt-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {internalDocsOptions.map((visibility) => (
+                  <SelectItem key={visibility} value={visibility}>
+                    {internalDocsVisibilityLabels[visibility]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {form.role === "viewer" && (
+            <div className="rounded-card border border-border/70 bg-background/70 p-3">
+              <label className="text-caption font-medium text-foreground">Viewer regime</label>
+              <Select
+                value={form.viewerRegime}
+                onValueChange={(value) => {
+                  onFormChange((current) => ({ ...current, viewerRegime: value as ViewerRegime }));
+                }}
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableViewerRegimes.map((regime) => (
+                    <SelectItem key={regime} value={regime}>
+                      {viewerRegimeLabels[regime]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          <div className="rounded-card border border-border/70 bg-background/70 p-3">
+            <label className="text-caption font-medium text-foreground">Credit limit</label>
+            <Input
+              type="number"
+              min={0}
+              value={form.creditLimit}
+              onChange={(event) => {
+                onFormChange((current) => ({ ...current, creditLimit: event.target.value }));
+              }}
+              className="mt-1"
+            />
+          </div>
+        </div>
+      </SettingsSection>
+
+      {warnings.length > 0 && (
+        <SettingsSection title="Sensitive access" description="These settings grant broader access in the current app flow.">
+          <Alert className="border-warning/40 bg-warning/10 text-foreground [&>svg]:text-warning-foreground">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Review before saving</AlertTitle>
+            <AlertDescription>
+              <ul className="space-y-1">
+                {warnings.map((warning) => (
+                  <li key={warning}>{warning}</li>
+                ))}
+              </ul>
+            </AlertDescription>
+          </Alert>
+        </SettingsSection>
+      )}
+    </div>
+  );
+}
 
 export default function ProjectParticipants() {
   const { id } = useParams<{ id: string }>();
@@ -107,76 +438,65 @@ export default function ProjectParticipants() {
   const queryClient = useQueryClient();
   const currentUser = useCurrentUser();
 
-  const actorRole = perm.seam.membership?.role ?? "viewer";
-  const actorAiAccess = perm.seam.membership?.ai_access ?? "none";
-  const inviteRoleOptions = useMemo(() => getInviteRoleOptions(actorRole), [actorRole]);
-  const inviteAiAccessOptions = useMemo(
-    () => getInviteAiAccessOptions(actorAiAccess),
-    [actorAiAccess],
-  );
-
   const projectMode = project?.project_mode === "build_myself" ? "build_myself" : "contractor";
-  const defaultViewerRegime = projectMode === "build_myself" ? "build_myself" : "client";
   const availableViewerRegimes = projectMode === "build_myself"
     ? (["build_myself", "contractor"] as const)
     : (["client", "contractor", "build_myself"] as const);
+  const defaultViewerRegime = projectMode === "build_myself" ? "build_myself" : "client";
 
+  const [activeTab, setActiveTab] = useState<ParticipantTab>("members");
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<MemberRole>("contractor");
-  const [inviteViewerRegime, setInviteViewerRegime] = useState<ViewerRegime>(defaultViewerRegime);
-  const [inviteAI, setInviteAI] = useState<AIAccess>("consult_only");
-  const [inviteLimit, setInviteLimit] = useState("50");
+  const [inviteForm, setInviteForm] = useState<PermissionFormState>(() => buildPermissionForm({
+    role: "contractor",
+    aiAccess: "consult_only",
+    financeVisibility: "detail",
+    internalDocsVisibility: "view",
+    viewerRegime: defaultViewerRegime,
+    creditLimit: 50,
+  }, projectMode));
+  const [permissionDialogOpen, setPermissionDialogOpen] = useState(false);
+  const [permissionTarget, setPermissionTarget] = useState<RoleTarget | null>(null);
+  const [permissionForm, setPermissionForm] = useState<PermissionFormState>(() => buildPermissionForm({
+    role: "contractor",
+    aiAccess: "consult_only",
+    financeVisibility: "detail",
+    internalDocsVisibility: "view",
+    viewerRegime: defaultViewerRegime,
+    creditLimit: 50,
+  }, projectMode));
 
-  const [changeRoleOpen, setChangeRoleOpen] = useState(false);
-  const [roleTarget, setRoleTarget] = useState<RoleTarget | null>(null);
-  const [newRole, setNewRole] = useState<MemberRole>("contractor");
+  const actorRole = perm.seam.membership?.role ?? "viewer";
+  const actorMember = members.find((member) => member.user_id === currentUser.id) ?? null;
+  const actorAiAccess = actorMember?.ai_access ?? perm.seam.membership?.ai_access ?? "none";
+  const actorFinanceVisibility = actorMember?.finance_visibility
+    ?? (actorRole === "owner" || actorRole === "co_owner" ? "detail" : "none");
+  const actorInternalDocsVisibility = readInternalDocsVisibility(actorMember)
+    ?? (actorRole === "owner" ? "edit" : actorRole === "co_owner" ? "view" : "none");
+  const inviteRoleOptions = useMemo(() => getInviteRoleOptions(actorRole), [actorRole]);
+  const aiOptions = useMemo(() => getInviteAiAccessOptions(actorAiAccess), [actorAiAccess]);
+  const financeOptions = useMemo(
+    () => getFinanceVisibilityOptions(actorRole, actorFinanceVisibility),
+    [actorFinanceVisibility, actorRole],
+  );
+  const internalDocsOptions = useMemo(
+    () => getInternalDocsVisibilityOptions(actorRole, actorInternalDocsVisibility),
+    [actorInternalDocsVisibility, actorRole],
+  );
 
-  useEffect(() => {
-    if (projectMode === "build_myself" && inviteViewerRegime === "client") {
-      setInviteViewerRegime("build_myself");
-    }
-  }, [inviteViewerRegime, projectMode]);
-
-  useEffect(() => {
-    if (!inviteOpen) return;
-
-    if (!inviteRoleOptions.includes(inviteRole)) {
-      setInviteRole(inviteRoleOptions[0] ?? "contractor");
-    }
-
-    if (!inviteAiAccessOptions.includes(inviteAI)) {
-      setInviteAI(inviteAiAccessOptions[0] ?? "none");
-    }
-  }, [
-    inviteOpen,
-    inviteRoleOptions,
-    inviteRole,
-    inviteAiAccessOptions,
-    inviteAI,
-  ]);
-
-  const canInvite = perm.can("member.invite") && workspaceMode.kind !== "pending-supabase";
+  const canManageAccess = perm.can("member.invite") && workspaceMode.kind !== "pending-supabase";
   const workspaceKey = workspaceMode.kind === "supabase" ? workspaceMode.profileId : workspaceMode.kind;
   const membersQueryKey = workspaceQueryKeys.projectMembers(workspaceKey, projectId);
   const invitesQueryKey = workspaceQueryKeys.projectInvites(workspaceKey, projectId);
-  const activeParticipants = members;
+
   const pendingInvites = useMemo(
     () => invites.filter((invite) => invite.status === "pending"),
     [invites],
   );
-
-  const roleTargetCurrentRole = useMemo(() => {
-    if (!roleTarget) return null;
-    if (roleTarget.kind === "member") {
-      return members.find((m) => m.user_id === roleTarget.userId)?.role ?? null;
-    }
-    return invites.find((i) => i.id === roleTarget.inviteId)?.role ?? null;
-  }, [roleTarget, members, invites]);
-
-  const reassignRoleOptions: MemberRole[] = roleTargetCurrentRole
-    ? getReassignRoleOptions(actorRole, roleTargetCurrentRole)
-    : [];
+  const inviteHistory = useMemo(
+    () => invites.filter((invite) => invite.status !== "pending"),
+    [invites],
+  );
 
   const memberEmailById = useMemo(
     () =>
@@ -185,11 +505,124 @@ export default function ProjectParticipants() {
       ),
     [members],
   );
-
   const pendingInviteEmailSet = useMemo(
-    () => new Set(invites.filter((invite) => invite.status === "pending").map((invite) => invite.email.toLowerCase())),
-    [invites],
+    () => new Set(pendingInvites.map((invite) => invite.email.toLowerCase())),
+    [pendingInvites],
   );
+
+  const permissionMemberRecords = useMemo<ParticipantPermissionRecord[]>(() => (
+    members.map((member) => {
+      const user = getUserById(member.user_id);
+      return {
+        target: { kind: "member", userId: member.user_id },
+        key: `member-${member.user_id}`,
+        displayName: user?.name ?? member.user_id,
+        secondaryLabel: user?.email ?? "No email",
+        targetKindLabel: "Member",
+        role: member.role,
+        aiAccess: member.ai_access,
+        financeVisibility: member.finance_visibility ?? getDefaultFinanceVisibility(member.role),
+        internalDocsVisibility: readInternalDocsVisibility(member) ?? getDefaultInternalDocsVisibility(member.role),
+        viewerRegime: member.viewer_regime,
+        creditLimit: member.credit_limit,
+        usedCredits: member.used_credits,
+      };
+    })
+  ), [members]);
+
+  const permissionInviteRecords = useMemo<ParticipantPermissionRecord[]>(() => (
+    pendingInvites.map((invite) => ({
+      target: { kind: "invite", inviteId: invite.id },
+      key: `invite-${invite.id}`,
+      displayName: invite.email,
+      secondaryLabel: `Invited by ${getUserById(invite.invited_by)?.name ?? invite.invited_by}`,
+      targetKindLabel: "Pending invite",
+      role: invite.role,
+      aiAccess: invite.ai_access,
+      financeVisibility: invite.finance_visibility ?? getDefaultFinanceVisibility(invite.role),
+      internalDocsVisibility: readInternalDocsVisibility(invite) ?? getDefaultInternalDocsVisibility(invite.role),
+      viewerRegime: invite.viewer_regime ?? undefined,
+      creditLimit: invite.credit_limit,
+      inviteStatus: invite.status,
+    }))
+  ), [pendingInvites]);
+
+  const permissionTargetRecord = useMemo(() => {
+    if (!permissionTarget) return null;
+    const allRecords = [...permissionMemberRecords, ...permissionInviteRecords];
+    return allRecords.find((record) => (
+      permissionTarget.kind === "member"
+        ? record.target.kind === "member" && record.target.userId === permissionTarget.userId
+        : record.target.kind === "invite" && record.target.inviteId === permissionTarget.inviteId
+    )) ?? null;
+  }, [permissionInviteRecords, permissionMemberRecords, permissionTarget]);
+
+  const editRoleOptions = useMemo(() => {
+    if (!permissionTargetRecord) return [];
+    return getReassignRoleOptions(actorRole, permissionTargetRecord.role);
+  }, [actorRole, permissionTargetRecord]);
+
+  useEffect(() => {
+    if (!inviteOpen) return;
+    if (!inviteRoleOptions.includes(inviteForm.role)) {
+      const nextRole = inviteRoleOptions[0] ?? "contractor";
+      setInviteForm((current) => ({
+        ...current,
+        role: nextRole,
+        viewerRegime: resolveViewerRegime(nextRole, projectMode, current.viewerRegime) ?? current.viewerRegime,
+      }));
+    }
+    if (!aiOptions.includes(inviteForm.aiAccess)) {
+      setInviteForm((current) => ({ ...current, aiAccess: aiOptions[0] ?? "none" }));
+    }
+    if (!financeOptions.includes(inviteForm.financeVisibility)) {
+      setInviteForm((current) => ({ ...current, financeVisibility: financeOptions[0] ?? "none" }));
+    }
+    if (!internalDocsOptions.includes(inviteForm.internalDocsVisibility)) {
+      setInviteForm((current) => ({ ...current, internalDocsVisibility: internalDocsOptions[0] ?? "none" }));
+    }
+  }, [aiOptions, financeOptions, internalDocsOptions, inviteForm.aiAccess, inviteForm.financeVisibility, inviteForm.internalDocsVisibility, inviteForm.role, inviteOpen, inviteRoleOptions, projectMode]);
+
+  useEffect(() => {
+    if (!permissionDialogOpen || !permissionTargetRecord) return;
+    if (!editRoleOptions.includes(permissionForm.role)) {
+      setPermissionForm((current) => ({
+        ...current,
+        role: editRoleOptions[0] ?? permissionTargetRecord.role,
+      }));
+    }
+  }, [editRoleOptions, permissionDialogOpen, permissionForm.role, permissionTargetRecord]);
+
+  function resetInviteDialog() {
+    setInviteEmail("");
+    setInviteForm(buildPermissionForm({
+      role: "contractor",
+      aiAccess: "consult_only",
+      financeVisibility: "detail",
+      internalDocsVisibility: "view",
+      viewerRegime: defaultViewerRegime,
+      creditLimit: 50,
+    }, projectMode));
+  }
+
+  function openPermissionEditor(record: ParticipantPermissionRecord) {
+    setPermissionTarget(record.target);
+    setPermissionForm(buildPermissionForm({
+      role: record.role,
+      aiAccess: record.aiAccess,
+      financeVisibility: record.financeVisibility,
+      internalDocsVisibility: record.internalDocsVisibility,
+      viewerRegime: record.viewerRegime,
+      creditLimit: record.creditLimit,
+    }, projectMode));
+    setPermissionDialogOpen(true);
+  }
+
+  function canEditPermissionRecord(record: ParticipantPermissionRecord) {
+    if (!canManageAccess) return false;
+    if (record.target.kind === "member" && record.target.userId === currentUser.id) return false;
+    return canEditParticipantRole(actorRole, record.role);
+  }
 
   const createInviteMutation = useMutation({
     mutationFn: async (): Promise<CreateInviteWithDeliveryResult> => {
@@ -200,11 +633,13 @@ export default function ProjectParticipants() {
       const createdInvite = await createWorkspaceProjectInvite(modeForInvite, {
         projectId,
         email: trimmedEmail,
-        role: inviteRole,
-        aiAccess: inviteAI,
-        viewerRegime: inviteRole === "viewer" ? inviteViewerRegime : null,
-        creditLimit: parseInt(inviteLimit, 10) || 50,
+        role: inviteForm.role,
+        aiAccess: inviteForm.aiAccess,
+        viewerRegime: resolveViewerRegime(inviteForm.role, projectMode, inviteForm.viewerRegime) ?? null,
+        creditLimit: Math.max(0, parseInt(inviteForm.creditLimit, 10) || 0),
         invitedBy: currentUser.id,
+        financeVisibility: inviteForm.financeVisibility,
+        internalDocsVisibility: inviteForm.internalDocsVisibility,
       });
 
       if (workspaceMode.kind !== "supabase") {
@@ -235,21 +670,23 @@ export default function ProjectParticipants() {
       if (workspaceMode.kind !== "supabase") return undefined;
       await queryClient.cancelQueries({ queryKey: invitesQueryKey });
       const previousInvites = queryClient.getQueryData<WorkspaceProjectInvite[]>(invitesQueryKey) ?? [];
-      const optimisticInvite: WorkspaceProjectInvite = {
+      const optimisticInvite = {
         id: `invite-optimistic-${Date.now()}`,
         project_id: projectId,
         email: inviteEmail.trim().toLowerCase(),
-        role: inviteRole,
-        ai_access: inviteAI,
-        viewer_regime: inviteRole === "viewer" ? inviteViewerRegime : null,
-        credit_limit: parseInt(inviteLimit, 10) || 50,
+        role: inviteForm.role,
+        ai_access: inviteForm.aiAccess,
+        viewer_regime: resolveViewerRegime(inviteForm.role, projectMode, inviteForm.viewerRegime) ?? null,
+        credit_limit: Math.max(0, parseInt(inviteForm.creditLimit, 10) || 0),
         invited_by: currentUser.id,
         status: "pending",
         invite_token: `invite-token-optimistic-${Date.now()}`,
         accepted_profile_id: null,
         created_at: new Date().toISOString(),
         accepted_at: null,
-      };
+        finance_visibility: inviteForm.financeVisibility,
+        internal_docs_visibility: inviteForm.internalDocsVisibility,
+      } as WorkspaceProjectInvite;
       queryClient.setQueryData<WorkspaceProjectInvite[]>(invitesQueryKey, [optimisticInvite, ...previousInvites]);
       return { previousInvites };
     },
@@ -286,11 +723,7 @@ export default function ProjectParticipants() {
       }
 
       setInviteOpen(false);
-      setInviteEmail("");
-      setInviteRole("contractor");
-      setInviteViewerRegime(defaultViewerRegime);
-      setInviteAI("consult_only");
-      setInviteLimit("50");
+      resetInviteDialog();
     },
     onError: (error, _variables, context) => {
       if (workspaceMode.kind === "supabase" && context?.previousInvites) {
@@ -341,95 +774,90 @@ export default function ProjectParticipants() {
     },
   });
 
-  const memberRoleMutation = useMutation({
-    mutationFn: async (input: { userId: string; role: MemberRole }) => updateWorkspaceProjectMemberRole(
-      workspaceMode.kind === "pending-supabase" ? { kind: "local" } : workspaceMode,
-      {
-        projectId,
-        userId: input.userId,
-        role: input.role,
-        viewerRegime: resolveViewerRegime(input.role, projectMode),
-      },
-    ),
-    onMutate: async (input) => {
-      if (workspaceMode.kind !== "supabase") return undefined;
-      await queryClient.cancelQueries({ queryKey: membersQueryKey });
-      const previousMembers = queryClient.getQueryData<Member[]>(membersQueryKey) ?? [];
-      queryClient.setQueryData<Member[]>(membersQueryKey, previousMembers.map((member) =>
-        member.project_id === projectId && member.user_id === input.userId
-          ? { ...member, role: input.role, viewer_regime: resolveViewerRegime(input.role, projectMode) }
-          : member,
-      ));
-      return { previousMembers };
-    },
-    onSuccess: (member) => {
-      toast({ title: "Role updated", description: `${getUserById(member.user_id)?.name ?? "Member"} is now ${roleLabels[member.role]}.` });
-      setChangeRoleOpen(false);
-      setRoleTarget(null);
-    },
-    onError: (error, _variables, context) => {
-      if (workspaceMode.kind === "supabase" && context?.previousMembers) {
-        queryClient.setQueryData(membersQueryKey, context.previousMembers);
+  const savePermissionsMutation = useMutation({
+    mutationFn: async (input: { target: RoleTarget; form: PermissionFormState }) => {
+      if (input.target.kind === "member") {
+        return updateWorkspaceProjectMemberRole(
+          workspaceMode.kind === "pending-supabase" ? { kind: "local" } : workspaceMode,
+          {
+            projectId,
+            userId: input.target.userId,
+            role: input.form.role,
+            aiAccess: input.form.aiAccess,
+            viewerRegime: resolveViewerRegime(input.form.role, projectMode, input.form.viewerRegime),
+            creditLimit: Math.max(0, parseInt(input.form.creditLimit, 10) || 0),
+            financeVisibility: input.form.financeVisibility,
+            internalDocsVisibility: input.form.internalDocsVisibility,
+          },
+        );
       }
-      toast({
-        title: "Role update failed",
-        description: error instanceof Error ? error.message : "Unable to update member role.",
-        variant: "destructive",
-      });
-    },
-    onSettled: async () => {
-      if (workspaceMode.kind === "supabase") {
-        await queryClient.invalidateQueries({ queryKey: membersQueryKey });
-      }
-    },
-  });
 
-  const inviteRoleMutation = useMutation({
-    mutationFn: async (input: { inviteId: string; role: MemberRole }) => {
-      const invite = invites.find((row) => row.id === input.inviteId);
+      const invite = invites.find((row) => row.id === input.target.inviteId);
       return updateWorkspaceProjectInvite(
         workspaceMode.kind === "pending-supabase" ? { kind: "local" } : workspaceMode,
         {
-          id: input.inviteId,
+          id: input.target.inviteId,
           projectId,
-          role: input.role,
+          role: input.form.role,
+          aiAccess: input.form.aiAccess,
+          viewerRegime: resolveViewerRegime(input.form.role, projectMode, input.form.viewerRegime) ?? null,
+          creditLimit: Math.max(0, parseInt(input.form.creditLimit, 10) || 0),
+          financeVisibility: input.form.financeVisibility,
+          internalDocsVisibility: input.form.internalDocsVisibility,
           status: invite?.status,
-          viewerRegime: resolveViewerRegime(input.role, projectMode) ?? null,
         },
       );
     },
     onMutate: async (input) => {
       if (workspaceMode.kind !== "supabase") return undefined;
+
+      if (input.target.kind === "member") {
+        await queryClient.cancelQueries({ queryKey: membersQueryKey });
+        const previousMembers = queryClient.getQueryData<Member[]>(membersQueryKey) ?? [];
+        queryClient.setQueryData<Member[]>(membersQueryKey, previousMembers.map((member) => (
+          member.project_id === projectId && member.user_id === input.target.userId
+            ? applyPermissionFormToMember(member, input.form, projectMode)
+            : member
+        )));
+        return { previousMembers };
+      }
+
       await queryClient.cancelQueries({ queryKey: invitesQueryKey });
       const previousInvites = queryClient.getQueryData<WorkspaceProjectInvite[]>(invitesQueryKey) ?? [];
-      queryClient.setQueryData<WorkspaceProjectInvite[]>(invitesQueryKey, previousInvites.map((invite) =>
-        invite.id === input.inviteId
-          ? {
-              ...invite,
-              role: input.role,
-              viewer_regime: resolveViewerRegime(input.role, projectMode) ?? null,
-            }
-          : invite,
-      ));
+      queryClient.setQueryData<WorkspaceProjectInvite[]>(invitesQueryKey, previousInvites.map((invite) => (
+        invite.id === input.target.inviteId
+          ? applyPermissionFormToInvite(invite, input.form, projectMode)
+          : invite
+      )));
       return { previousInvites };
     },
-    onSuccess: (invite) => {
-      toast({ title: "Role updated", description: `${invite.email} is now ${roleLabels[invite.role]}.` });
-      setChangeRoleOpen(false);
-      setRoleTarget(null);
+    onSuccess: (_result, variables) => {
+      const name = permissionTargetRecord?.displayName ?? "Participant";
+      toast({
+        title: "Access updated",
+        description: `${name} is now ${roleLabels[variables.form.role]}.`,
+      });
+      setPermissionDialogOpen(false);
+      setPermissionTarget(null);
     },
     onError: (error, _variables, context) => {
+      if (workspaceMode.kind === "supabase" && context?.previousMembers) {
+        queryClient.setQueryData(membersQueryKey, context.previousMembers);
+      }
       if (workspaceMode.kind === "supabase" && context?.previousInvites) {
         queryClient.setQueryData(invitesQueryKey, context.previousInvites);
       }
       toast({
-        title: "Role update failed",
-        description: error instanceof Error ? error.message : "Unable to update invite role.",
+        title: "Access update failed",
+        description: error instanceof Error ? error.message : "Unable to update access.",
         variant: "destructive",
       });
     },
-    onSettled: async () => {
-      if (workspaceMode.kind === "supabase") {
+    onSettled: async (_result, _error, variables) => {
+      if (workspaceMode.kind !== "supabase") return;
+      if (variables.target.kind === "member") {
+        await queryClient.invalidateQueries({ queryKey: membersQueryKey });
+      } else {
         await queryClient.invalidateQueries({ queryKey: invitesQueryKey });
       }
     },
@@ -439,38 +867,29 @@ export default function ProjectParticipants() {
     const trimmedEmail = inviteEmail.trim().toLowerCase();
     if (!trimmedEmail) return;
     if (pendingInviteEmailSet.has(trimmedEmail)) {
-      toast({ title: "Already invited", description: "This email already has a pending invitation.", variant: "destructive" });
+      toast({
+        title: "Already invited",
+        description: "This email already has a pending invitation.",
+        variant: "destructive",
+      });
       return;
     }
     const existingMember = Array.from(memberEmailById.values()).some((email) => email === trimmedEmail);
     if (existingMember) {
-      toast({ title: "Already added", description: "This user is already a project participant.", variant: "destructive" });
+      toast({
+        title: "Already added",
+        description: "This user is already a project participant.",
+        variant: "destructive",
+      });
       return;
     }
 
     createInviteMutation.mutate();
   }
 
-  function handleChangeRole() {
-    if (!roleTarget) return;
-    if (roleTarget.kind === "member") {
-      memberRoleMutation.mutate({ userId: roleTarget.userId, role: newRole });
-      return;
-    }
-
-    inviteRoleMutation.mutate({ inviteId: roleTarget.inviteId, role: newRole });
-  }
-
-  if (activeParticipants.length === 0 && pendingInvites.length === 0) {
-    return (
-      <EmptyState
-        icon={Users}
-        title="Participants"
-        description="No active participants or pending invites yet. Invite someone to get started."
-        actionLabel={canInvite ? "Invite Member" : undefined}
-        onAction={canInvite ? () => setInviteOpen(true) : undefined}
-      />
-    );
+  function handleSavePermissions() {
+    if (!permissionTarget) return;
+    savePermissionsMutation.mutate({ target: permissionTarget, form: permissionForm });
   }
 
   return (
@@ -479,301 +898,509 @@ export default function ProjectParticipants() {
         <div>
           <h2 className="text-h3 text-foreground">Participants</h2>
           <p className="text-caption text-muted-foreground">
-            {activeParticipants.length} active participants · {pendingInvites.length} pending invites
+            {members.length} active participants · {pendingInvites.length} pending invites
           </p>
         </div>
-        {canInvite && (
-          <Button onClick={() => setInviteOpen(true)} className="bg-accent text-accent-foreground hover:bg-accent/90">
+        {canManageAccess && (
+          <Button
+            onClick={() => {
+              resetInviteDialog();
+              setInviteOpen(true);
+            }}
+            className="bg-accent text-accent-foreground hover:bg-accent/90"
+          >
             <Plus className="mr-1 h-4 w-4" /> Invite
           </Button>
         )}
       </div>
 
-      <section className="space-y-2">
-        <div className="flex items-center gap-2">
-          <Users className="h-4 w-4 text-accent" />
-          <h3 className="text-body font-semibold text-foreground">Active participants</h3>
-        </div>
-        <div className="glass overflow-hidden rounded-card">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Member</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>AI Access</TableHead>
-                <TableHead className="text-right">Credits</TableHead>
-                {canInvite && <TableHead className="w-10" />}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {activeParticipants.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={canInvite ? 5 : 4} className="text-center text-muted-foreground">
-                    No active participants yet.
-                  </TableCell>
-                </TableRow>
-              ) : activeParticipants.map((member) => {
-                const memberUser = getUserById(member.user_id);
-                const RoleIcon = roleIcons[member.role];
-                const isPrivileged = member.role === "owner" || member.role === "co_owner";
-                const isSelf = member.user_id === currentUser.id;
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as ParticipantTab)}>
+        <TabsList className="h-auto w-full justify-start gap-1 bg-transparent p-0">
+          <TabsTrigger value="members">Members</TabsTrigger>
+          <TabsTrigger value="invitations">Invitations</TabsTrigger>
+          <TabsTrigger value="permissions">Permissions</TabsTrigger>
+        </TabsList>
 
-                return (
-                  <TableRow key={member.user_id}>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-accent/10 text-caption font-semibold text-accent">
-                          {(memberUser?.name ?? "?").charAt(0)}
-                        </div>
-                        <div>
-                          <p className="text-body-sm font-medium text-foreground">
-                            {memberUser?.name ?? member.user_id}
-                            {isSelf && <span className="ml-1 text-caption text-muted-foreground">(you)</span>}
-                          </p>
-                          <p className="text-caption text-muted-foreground">{memberUser?.email || "No email"}</p>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1.5">
-                        <RoleIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span className="text-body-sm">{roleLabels[member.role]}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <span className={`rounded-pill px-2 py-0.5 text-caption font-medium ${
-                        member.ai_access === "project_pool"
-                          ? "bg-accent/10 text-accent"
-                          : member.ai_access === "consult_only"
-                            ? "bg-info/10 text-info"
-                            : "bg-muted text-muted-foreground"
-                      }`}>
-                        {aiLabels[member.ai_access]}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <span className="text-body-sm">{member.used_credits}</span>
-                      <span className="text-caption text-muted-foreground">/{member.credit_limit}</span>
-                    </TableCell>
-                    {canInvite && (
-                      <TableCell>
-                        {!isPrivileged && !isSelf && (
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-7 w-7">
-                                <MoreVertical className="h-3.5 w-3.5" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="glass-elevated rounded-card">
-                              <DropdownMenuItem
-                                onClick={() => {
-                                  setRoleTarget({ kind: "member", userId: member.user_id });
-                                  const options = getReassignRoleOptions(actorRole, member.role);
-                                  setNewRole(options.includes(member.role) ? member.role : (options[0] ?? "contractor"));
-                                  setChangeRoleOpen(true);
-                                }}
-                              >
-                                <Shield className="mr-2 h-3.5 w-3.5" /> Change role
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        )}
-                      </TableCell>
-                    )}
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
-      </section>
-
-      <section className="space-y-2">
-        <div className="flex items-center gap-2">
-          <Mail className="h-4 w-4 text-accent" />
-          <h3 className="text-body font-semibold text-foreground">Pending invites</h3>
-        </div>
-        <div className="glass overflow-hidden rounded-card">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Email</TableHead>
-                <TableHead>Invited by</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {pendingInvites.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground">
-                    No pending invites.
-                  </TableCell>
-                </TableRow>
-              ) : pendingInvites.map((invite) => {
-                const inviter = getUserById(invite.invited_by);
-                const canEditInvite = canInvite && invite.status === "pending";
-                const showResendEmail =
-                  workspaceMode.kind === "supabase" && canInvite && invite.status === "pending";
-                return (
-                  <TableRow key={invite.id}>
-                    <TableCell className="text-body-sm text-foreground">{invite.email}</TableCell>
-                    <TableCell className="text-body-sm text-muted-foreground">
-                      {inviter?.name ?? inviter?.email ?? invite.invited_by}
-                    </TableCell>
-                    <TableCell className="text-body-sm text-foreground">{roleLabels[invite.role]}</TableCell>
-                    <TableCell>
-                      <span className={`rounded-pill px-2 py-0.5 text-caption font-medium ${inviteStatusClassName(invite.status)}`}>
-                        {inviteStatusLabel(invite.status)}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      {canEditInvite ? (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-7 w-7">
-                              <MoreVertical className="h-3.5 w-3.5" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="glass-elevated rounded-card">
-                            {showResendEmail && (
-                              <DropdownMenuItem
-                                disabled={
-                                  resendInviteEmailMutation.isPending
-                                  && resendInviteEmailMutation.variables === invite.id
-                                }
-                                onClick={() => {
-                                  resendInviteEmailMutation.mutate(invite.id);
-                                }}
-                              >
-                                <Send className="mr-2 h-3.5 w-3.5" /> Resend email
-                              </DropdownMenuItem>
-                            )}
-                            <DropdownMenuItem
-                              onClick={() => {
-                                setRoleTarget({ kind: "invite", inviteId: invite.id });
-                              const options = getReassignRoleOptions(actorRole, invite.role);
-                              setNewRole(options.includes(invite.role) ? invite.role : (options[0] ?? "contractor"));
-                                setChangeRoleOpen(true);
-                              }}
-                            >
-                              <Shield className="mr-2 h-3.5 w-3.5" /> Change role
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      ) : (
-                        <span className="text-caption text-muted-foreground">No actions</span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
-      </section>
-
-      <ConfirmModal
-        open={inviteOpen}
-        onOpenChange={setInviteOpen}
-        title="Invite Member"
-        description="Send a project invitation with role, AI access, and credit limits."
-        confirmLabel={createInviteMutation.isPending ? "Sending..." : "Send Invite"}
-        onConfirm={handleInvite}
-        onCancel={() => setInviteOpen(false)}
-      >
-        <div className="space-y-3 py-2">
-          <div>
-            <label className="text-caption font-medium text-foreground">Email</label>
-            <Input
-              placeholder="member@example.com"
-              value={inviteEmail}
-              onChange={(event) => setInviteEmail(event.target.value)}
-              className="mt-1"
-            />
-          </div>
-          <div>
-            <label className="text-caption font-medium text-foreground">Role</label>
-            <Select
-              value={inviteRole}
-              onValueChange={(value) => {
-                const nextRole = value as MemberRole;
-                setInviteRole(nextRole);
-                if (nextRole === "viewer" && projectMode === "build_myself") {
-                  setInviteViewerRegime("build_myself");
-                }
-              }}
-            >
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {inviteRoleOptions.map((role) => (
-                  <SelectItem key={role} value={role}>{roleLabels[role]}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          {inviteRole === "viewer" && (
-            <div>
-              <label className="text-caption font-medium text-foreground">Regime</label>
-              <Select
-                value={inviteViewerRegime}
-                onValueChange={(value) => setInviteViewerRegime(value as ViewerRegime)}
-              >
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {availableViewerRegimes.map((regime) => (
-                    <SelectItem key={regime} value={regime}>
-                      {regime.replace("_", " ")}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+        <TabsContent value="members" className="mt-3">
+          <section className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-accent" />
+              <h3 className="text-body font-semibold text-foreground">Active members</h3>
             </div>
-          )}
-          <div>
-            <label className="text-caption font-medium text-foreground">AI Access</label>
-            <Select value={inviteAI} onValueChange={(value) => setInviteAI(value as AIAccess)}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {inviteAiAccessOptions.map((aiAccess) => (
-                  <SelectItem key={aiAccess} value={aiAccess}>{aiLabels[aiAccess]}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <label className="text-caption font-medium text-foreground">Credit Limit</label>
-            <Input
-              type="number"
-              value={inviteLimit}
-              onChange={(event) => setInviteLimit(event.target.value)}
-              className="mt-1"
-            />
-          </div>
-        </div>
-      </ConfirmModal>
+            <div className="glass overflow-hidden rounded-card">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Member</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>AI Access</TableHead>
+                    <TableHead className="text-right">Credits</TableHead>
+                    {canManageAccess && <TableHead className="w-10" />}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {members.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={canManageAccess ? 5 : 4} className="text-center text-muted-foreground">
+                        No active participants yet.
+                      </TableCell>
+                    </TableRow>
+                  ) : members.map((member) => {
+                    const memberUser = getUserById(member.user_id);
+                    const record = permissionMemberRecords.find((entry) => entry.target.kind === "member" && entry.target.userId === member.user_id);
+                    const RoleIcon = roleIcons[member.role];
+                    const isSelf = member.user_id === currentUser.id;
 
-      <ConfirmModal
-        open={changeRoleOpen}
-        onOpenChange={setChangeRoleOpen}
-        title="Change Role"
-        description="Update the role for this member or pending invitation."
-        confirmLabel={memberRoleMutation.isPending || inviteRoleMutation.isPending ? "Updating..." : "Update"}
-        onConfirm={handleChangeRole}
-        onCancel={() => setChangeRoleOpen(false)}
+                    return (
+                      <TableRow key={member.user_id}>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-accent/10 text-caption font-semibold text-accent">
+                              {(memberUser?.name ?? "?").charAt(0)}
+                            </div>
+                            <div>
+                              <p className="text-body-sm font-medium text-foreground">
+                                {memberUser?.name ?? member.user_id}
+                                {isSelf && <span className="ml-1 text-caption text-muted-foreground">(you)</span>}
+                              </p>
+                              <p className="text-caption text-muted-foreground">{memberUser?.email || "No email"}</p>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1.5">
+                            <RoleIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                            <span className="text-body-sm">{roleLabels[member.role]}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <span className={`rounded-pill px-2 py-0.5 text-caption font-medium ${
+                            member.ai_access === "project_pool"
+                              ? "bg-accent/10 text-accent"
+                              : member.ai_access === "consult_only"
+                                ? "bg-info/10 text-info"
+                                : "bg-muted text-muted-foreground"
+                          }`}>
+                            {aiAccessLabels[member.ai_access]}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <span className="text-body-sm">{member.used_credits}</span>
+                          <span className="text-caption text-muted-foreground">/{member.credit_limit}</span>
+                        </TableCell>
+                        {canManageAccess && (
+                          <TableCell>
+                            {record && canEditPermissionRecord(record) ? (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7">
+                                    <MoreVertical className="h-3.5 w-3.5" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="glass-elevated rounded-card">
+                                  <DropdownMenuItem onClick={() => openPermissionEditor(record)}>
+                                    <Shield className="mr-2 h-3.5 w-3.5" /> Edit access
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            ) : (
+                              <span className="text-caption text-muted-foreground">No actions</span>
+                            )}
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </section>
+        </TabsContent>
+
+        <TabsContent value="invitations" className="mt-3 space-y-sp-3">
+          <section className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Mail className="h-4 w-4 text-accent" />
+              <h3 className="text-body font-semibold text-foreground">Pending invitations</h3>
+            </div>
+            <div className="glass overflow-hidden rounded-card">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Invited by</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {pendingInvites.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center text-muted-foreground">
+                        No pending invites.
+                      </TableCell>
+                    </TableRow>
+                  ) : pendingInvites.map((invite) => {
+                    const inviter = getUserById(invite.invited_by);
+                    const record = permissionInviteRecords.find((entry) => entry.target.kind === "invite" && entry.target.inviteId === invite.id);
+                    const canEditInvite = Boolean(record) && canEditPermissionRecord(record);
+                    const showResendEmail = workspaceMode.kind === "supabase" && canManageAccess;
+
+                    return (
+                      <TableRow key={invite.id}>
+                        <TableCell className="text-body-sm text-foreground">{invite.email}</TableCell>
+                        <TableCell className="text-body-sm text-muted-foreground">
+                          {inviter?.name ?? inviter?.email ?? invite.invited_by}
+                        </TableCell>
+                        <TableCell className="text-body-sm text-foreground">{roleLabels[invite.role]}</TableCell>
+                        <TableCell>
+                          <span className={`rounded-pill px-2 py-0.5 text-caption font-medium ${inviteStatusClassName(invite.status)}`}>
+                            {inviteStatusLabel(invite.status)}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          {canManageAccess ? (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-7 w-7">
+                                  <MoreVertical className="h-3.5 w-3.5" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="glass-elevated rounded-card">
+                                {showResendEmail && (
+                                  <DropdownMenuItem
+                                    disabled={
+                                      resendInviteEmailMutation.isPending
+                                      && resendInviteEmailMutation.variables === invite.id
+                                    }
+                                    onClick={() => {
+                                      resendInviteEmailMutation.mutate(invite.id);
+                                    }}
+                                  >
+                                    <Send className="mr-2 h-3.5 w-3.5" /> Resend email
+                                  </DropdownMenuItem>
+                                )}
+                                {record && canEditInvite && (
+                                  <DropdownMenuItem onClick={() => openPermissionEditor(record)}>
+                                    <Shield className="mr-2 h-3.5 w-3.5" /> Edit access
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          ) : (
+                            <span className="text-caption text-muted-foreground">No actions</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </section>
+
+          {inviteHistory.length > 0 && (
+            <section className="space-y-2">
+              <div className="flex items-center gap-2">
+                <History className="h-4 w-4 text-muted-foreground" />
+                <h3 className="text-body font-semibold text-foreground">Invite history</h3>
+              </div>
+              <div className="glass overflow-hidden rounded-card">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Created</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {inviteHistory.map((invite) => (
+                      <TableRow key={invite.id}>
+                        <TableCell className="text-body-sm text-foreground">{invite.email}</TableCell>
+                        <TableCell className="text-body-sm text-foreground">{roleLabels[invite.role]}</TableCell>
+                        <TableCell>
+                          <span className={`rounded-pill px-2 py-0.5 text-caption font-medium ${inviteStatusClassName(invite.status)}`}>
+                            {inviteStatusLabel(invite.status)}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-body-sm text-muted-foreground">
+                          {new Date(invite.created_at).toLocaleDateString()}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </section>
+          )}
+        </TabsContent>
+
+        <TabsContent value="permissions" className="mt-3 space-y-sp-3">
+          <section className="space-y-2">
+            <div className="flex items-center gap-2">
+              <SlidersHorizontal className="h-4 w-4 text-accent" />
+              <h3 className="text-body font-semibold text-foreground">Member permissions</h3>
+            </div>
+            {permissionMemberRecords.length === 0 ? (
+              <EmptyState
+                icon={Users}
+                title="No members yet"
+                description="Active members will appear here for access review."
+              />
+            ) : (
+              <div className="space-y-2">
+                {permissionMemberRecords.map((record) => {
+                  const warnings = getPermissionWarnings({
+                    role: record.role,
+                    aiAccess: record.aiAccess,
+                    financeVisibility: record.financeVisibility,
+                    internalDocsVisibility: record.internalDocsVisibility,
+                    viewerRegime: record.viewerRegime,
+                    creditLimit: record.creditLimit,
+                  });
+
+                  return (
+                    <div key={record.key} className="glass rounded-card border border-border/70 p-4">
+                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div className="space-y-2">
+                          <div>
+                            <p className="text-body font-medium text-foreground">{record.displayName}</p>
+                            <p className="text-caption text-muted-foreground">{record.secondaryLabel}</p>
+                          </div>
+                          <div className="flex flex-wrap gap-2 text-caption">
+                            <span className="rounded-pill bg-muted px-2 py-0.5 text-muted-foreground">{record.targetKindLabel}</span>
+                            <span className="rounded-pill bg-accent/10 px-2 py-0.5 text-accent">{roleLabels[record.role]}</span>
+                            <span className="rounded-pill bg-muted px-2 py-0.5 text-muted-foreground">{aiAccessLabels[record.aiAccess]}</span>
+                            <span className="rounded-pill bg-muted px-2 py-0.5 text-muted-foreground">{financeVisibilityLabels[record.financeVisibility]}</span>
+                          </div>
+                          <div className="grid gap-1 text-caption text-muted-foreground md:grid-cols-2">
+                            <div className="flex items-center gap-1.5">
+                              <BrainCircuit className="h-3.5 w-3.5" />
+                              {aiAccessLabels[record.aiAccess]}
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <Coins className="h-3.5 w-3.5" />
+                              Credit limit: {record.creditLimit}
+                              {typeof record.usedCredits === "number" ? ` · Used ${record.usedCredits}` : ""}
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <Shield className="h-3.5 w-3.5" />
+                              {financeVisibilityLabels[record.financeVisibility]}
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <FileText className="h-3.5 w-3.5" />
+                              {internalDocsVisibilityLabels[record.internalDocsVisibility]}
+                            </div>
+                            {record.role === "viewer" && record.viewerRegime && (
+                              <div className="flex items-center gap-1.5 md:col-span-2">
+                                <Eye className="h-3.5 w-3.5" />
+                                Viewer regime: {viewerRegimeLabels[record.viewerRegime]}
+                              </div>
+                            )}
+                          </div>
+                          {warnings.length > 0 && (
+                            <div className="rounded-card border border-warning/40 bg-warning/10 p-3">
+                              <p className="text-caption font-medium text-foreground">Sensitive access</p>
+                              <ul className="mt-1 space-y-1 text-caption text-muted-foreground">
+                                {warnings.map((warning) => (
+                                  <li key={warning}>{warning}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                        {canEditPermissionRecord(record) && (
+                          <Button variant="outline" onClick={() => openPermissionEditor(record)}>
+                            Edit access
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
+          <section className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Mail className="h-4 w-4 text-accent" />
+              <h3 className="text-body font-semibold text-foreground">Pending invite permissions</h3>
+            </div>
+            {permissionInviteRecords.length === 0 ? (
+              <EmptyState
+                icon={Mail}
+                title="No pending invites"
+                description="Pending invites appear here when they need access review."
+              />
+            ) : (
+              <div className="space-y-2">
+                {permissionInviteRecords.map((record) => {
+                  const warnings = getPermissionWarnings({
+                    role: record.role,
+                    aiAccess: record.aiAccess,
+                    financeVisibility: record.financeVisibility,
+                    internalDocsVisibility: record.internalDocsVisibility,
+                    viewerRegime: record.viewerRegime,
+                    creditLimit: record.creditLimit,
+                  });
+
+                  return (
+                    <div key={record.key} className="glass rounded-card border border-border/70 p-4">
+                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div className="space-y-2">
+                          <div>
+                            <p className="text-body font-medium text-foreground">{record.displayName}</p>
+                            <p className="text-caption text-muted-foreground">{record.secondaryLabel}</p>
+                          </div>
+                          <div className="flex flex-wrap gap-2 text-caption">
+                            <span className="rounded-pill bg-muted px-2 py-0.5 text-muted-foreground">{record.targetKindLabel}</span>
+                            <span className="rounded-pill bg-accent/10 px-2 py-0.5 text-accent">{roleLabels[record.role]}</span>
+                            {record.inviteStatus && (
+                              <span className={`rounded-pill px-2 py-0.5 ${inviteStatusClassName(record.inviteStatus)}`}>
+                                {inviteStatusLabel(record.inviteStatus)}
+                              </span>
+                            )}
+                          </div>
+                          <div className="grid gap-1 text-caption text-muted-foreground md:grid-cols-2">
+                            <div className="flex items-center gap-1.5">
+                              <BrainCircuit className="h-3.5 w-3.5" />
+                              {aiAccessLabels[record.aiAccess]}
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <Coins className="h-3.5 w-3.5" />
+                              Credit limit: {record.creditLimit}
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <Shield className="h-3.5 w-3.5" />
+                              {financeVisibilityLabels[record.financeVisibility]}
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <FileText className="h-3.5 w-3.5" />
+                              {internalDocsVisibilityLabels[record.internalDocsVisibility]}
+                            </div>
+                          </div>
+                          {warnings.length > 0 && (
+                            <div className="rounded-card border border-warning/40 bg-warning/10 p-3">
+                              <p className="text-caption font-medium text-foreground">Sensitive access</p>
+                              <ul className="mt-1 space-y-1 text-caption text-muted-foreground">
+                                {warnings.map((warning) => (
+                                  <li key={warning}>{warning}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                        {canEditPermissionRecord(record) && (
+                          <Button variant="outline" onClick={() => openPermissionEditor(record)}>
+                            Edit access
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        </TabsContent>
+      </Tabs>
+
+      <Dialog
+        open={inviteOpen}
+        onOpenChange={(open) => {
+          setInviteOpen(open);
+          if (!open) resetInviteDialog();
+        }}
       >
-        <div className="py-2">
-          <Select value={newRole} onValueChange={(value) => setNewRole(value as MemberRole)}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {(reassignRoleOptions.length > 0 ? reassignRoleOptions : (["contractor"] as MemberRole[])).map((role) => (
-                <SelectItem key={role} value={role}>{roleLabels[role]}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </ConfirmModal>
+        <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Invite participant</DialogTitle>
+            <DialogDescription>
+              Choose a role preset, review the current bounded access summary, and adjust only the supported overrides.
+            </DialogDescription>
+          </DialogHeader>
+
+          <SettingsSection title="Invitation target" description="Send access to a specific email address.">
+            <div>
+              <label className="text-caption font-medium text-foreground">Email</label>
+              <Input
+                placeholder="member@example.com"
+                value={inviteEmail}
+                onChange={(event) => setInviteEmail(event.target.value)}
+                className="mt-1"
+              />
+            </div>
+          </SettingsSection>
+
+          <PermissionFormSections
+            form={inviteForm}
+            onFormChange={(updater) => setInviteForm((current) => updater(current))}
+            roleOptions={inviteRoleOptions}
+            aiOptions={aiOptions}
+            financeOptions={financeOptions}
+            internalDocsOptions={internalDocsOptions}
+            availableViewerRegimes={availableViewerRegimes}
+            projectMode={projectMode}
+          />
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setInviteOpen(false)}>Cancel</Button>
+            <Button onClick={handleInvite} disabled={createInviteMutation.isPending}>
+              {createInviteMutation.isPending ? "Sending..." : "Send Invite"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={permissionDialogOpen}
+        onOpenChange={(open) => {
+          setPermissionDialogOpen(open);
+          if (!open) setPermissionTarget(null);
+        }}
+      >
+        <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{permissionTargetRecord?.displayName ? `Edit access: ${permissionTargetRecord.displayName}` : "Edit access"}</DialogTitle>
+            <DialogDescription>
+              This is the canonical Participants access editor. Role presets and bounded overrides are managed here together.
+            </DialogDescription>
+          </DialogHeader>
+
+          {permissionTargetRecord && (
+            <>
+              <SettingsSection title="Access target" description="The same editor is used from Members, Invitations, and Permissions.">
+                <div className="flex flex-wrap gap-2 text-caption">
+                  <span className="rounded-pill bg-muted px-2 py-0.5 text-muted-foreground">{permissionTargetRecord.targetKindLabel}</span>
+                  <span className="rounded-pill bg-muted px-2 py-0.5 text-muted-foreground">{permissionTargetRecord.secondaryLabel}</span>
+                </div>
+              </SettingsSection>
+
+              <PermissionFormSections
+                form={permissionForm}
+                onFormChange={(updater) => setPermissionForm((current) => updater(current))}
+                roleOptions={editRoleOptions.length > 0 ? editRoleOptions : [permissionTargetRecord.role]}
+                aiOptions={aiOptions}
+                financeOptions={financeOptions}
+                internalDocsOptions={internalDocsOptions}
+                availableViewerRegimes={availableViewerRegimes}
+                projectMode={projectMode}
+              />
+            </>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPermissionDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleSavePermissions} disabled={savePermissionsMutation.isPending || !permissionTargetRecord}>
+              {savePermissionsMutation.isPending ? "Saving..." : "Save access"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

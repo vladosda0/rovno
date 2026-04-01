@@ -20,6 +20,10 @@ const HR_QUERY_STALE_TIME_MS = 60_000;
 const EMPTY_HR_ITEMS: HRPlannedItem[] = [];
 const EMPTY_HR_PAYMENTS: HRPayment[] = [];
 
+interface HRQueryOptions {
+  enabled?: boolean;
+}
+
 export const hrQueryKeys = {
   projectItems: (profileId: string, projectId: string) =>
     ["hr", "project-items", profileId, projectId] as const,
@@ -44,14 +48,15 @@ function useStoreValue<T>(getter: () => T, enabled: boolean, fallback: T): T {
   return enabled ? value : fallback;
 }
 
-export function useProjectHRItems(projectId: string): HRPlannedItem[] {
+export function useProjectHRItems(projectId: string, options?: HRQueryOptions): HRPlannedItem[] {
   const mode = useWorkspaceMode();
   const estimateSync = useEstimateV2ProjectSync(projectId);
   const supabaseMode = mode.kind === "supabase" ? mode : null;
+  const queriesEnabled = options?.enabled ?? true;
   const getItems = useCallback(() => getHRItems(projectId), [projectId]);
   const browserItems = useStoreValue(
     getItems,
-    mode.kind === "demo" || mode.kind === "local",
+    queriesEnabled && (mode.kind === "demo" || mode.kind === "local"),
     EMPTY_HR_ITEMS,
   );
   const itemsQuery = useQuery({
@@ -62,7 +67,7 @@ export function useProjectHRItems(projectId: string): HRPlannedItem[] {
       const source = await getHRSource(supabaseMode ?? undefined);
       return source.getProjectHRItems(projectId);
     },
-    enabled: Boolean(supabaseMode && projectId),
+    enabled: queriesEnabled && Boolean(supabaseMode && projectId),
     staleTime: HR_QUERY_STALE_TIME_MS,
   });
 
@@ -73,14 +78,15 @@ export function useProjectHRItems(projectId: string): HRPlannedItem[] {
   return itemsQuery.data ?? EMPTY_HR_ITEMS;
 }
 
-export function useProjectHRPayments(projectId: string): HRPayment[] {
+export function useProjectHRPayments(projectId: string, options?: HRQueryOptions): HRPayment[] {
   const mode = useWorkspaceMode();
   const estimateSync = useEstimateV2ProjectSync(projectId);
   const supabaseMode = mode.kind === "supabase" ? mode : null;
+  const queriesEnabled = options?.enabled ?? true;
   const getPayments = useCallback(() => getHRPayments(projectId), [projectId]);
   const browserPayments = useStoreValue(
     getPayments,
-    mode.kind === "demo" || mode.kind === "local",
+    queriesEnabled && (mode.kind === "demo" || mode.kind === "local"),
     EMPTY_HR_PAYMENTS,
   );
   const paymentsQuery = useQuery({
@@ -91,7 +97,7 @@ export function useProjectHRPayments(projectId: string): HRPayment[] {
       const source = await getHRSource(supabaseMode ?? undefined);
       return source.getProjectHRPayments(projectId);
     },
-    enabled: Boolean(supabaseMode && projectId),
+    enabled: queriesEnabled && Boolean(supabaseMode && projectId),
     staleTime: HR_QUERY_STALE_TIME_MS,
   });
 

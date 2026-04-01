@@ -41,10 +41,10 @@ describe("participant-role-policy", () => {
       assertRolesEqual(getReassignRoleOptions("owner", "viewer"), ["co_owner", "contractor", "viewer"]);
     });
 
-    it("co_owner can assign contractor/viewer only", () => {
+    it("co_owner can assign contractor/viewer only for contractor or viewer targets", () => {
       assertRolesEqual(getReassignRoleOptions("co_owner", "contractor"), ["contractor", "viewer"]);
       assertRolesEqual(getReassignRoleOptions("co_owner", "viewer"), ["contractor", "viewer"]);
-      assertRolesEqual(getReassignRoleOptions("co_owner", "co_owner"), ["contractor", "viewer"]);
+      assertRolesEqual(getReassignRoleOptions("co_owner", "co_owner"), []);
     });
 
     it("contractor/viewer cannot reassign", () => {
@@ -67,4 +67,3 @@ describe("participant-role-policy", () => {
     });
   });
 });
-

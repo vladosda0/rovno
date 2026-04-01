@@ -8,6 +8,8 @@ import {
   mapProjectRowToProject,
   selectWorkspaceMode,
   sendWorkspaceProjectInviteEmail,
+  updateWorkspaceProjectInvite,
+  updateWorkspaceProjectMemberRole,
 } from "@/data/workspace-source";
 
 const { invokeMock } = vi.hoisted(() => ({
@@ -296,6 +298,91 @@ describe("workspace-source helpers", () => {
       finance_visibility: "detail",
       credit_limit: 500,
       used_credits: 0,
+    });
+  });
+
+  it("updates local project members with bounded permission fields", async () => {
+    store.__unsafeResetStoreForTests();
+    store.addMember({
+      project_id: "project-1",
+      user_id: "profile-2",
+      role: "contractor",
+      ai_access: "consult_only",
+      finance_visibility: "summary",
+      credit_limit: 50,
+      used_credits: 10,
+      internal_docs_visibility: "view",
+    } as never);
+
+    const updated = await updateWorkspaceProjectMemberRole(
+      { kind: "local" },
+      {
+        projectId: "project-1",
+        userId: "profile-2",
+        role: "viewer",
+        aiAccess: "none",
+        viewerRegime: "client",
+        creditLimit: 0,
+        financeVisibility: "none",
+        internalDocsVisibility: "none",
+      },
+    );
+
+    expect(updated).toMatchObject({
+      project_id: "project-1",
+      user_id: "profile-2",
+      role: "viewer",
+      ai_access: "none",
+      viewer_regime: "client",
+      finance_visibility: "none",
+      credit_limit: 0,
+      internal_docs_visibility: "none",
+    });
+  });
+
+  it("updates local project invites with bounded permission fields", async () => {
+    store.__unsafeResetStoreForTests();
+    store.addProjectInvite({
+      id: "invite-1",
+      project_id: "project-1",
+      email: "invitee@example.com",
+      role: "contractor",
+      ai_access: "consult_only",
+      viewer_regime: null,
+      credit_limit: 50,
+      invited_by: "profile-1",
+      status: "pending",
+      invite_token: "token-1",
+      accepted_profile_id: null,
+      created_at: "2026-03-01T00:00:00.000Z",
+      accepted_at: null,
+      finance_visibility: "detail",
+      internal_docs_visibility: "view",
+    } as never, "local");
+
+    const updated = await updateWorkspaceProjectInvite(
+      { kind: "local" },
+      {
+        id: "invite-1",
+        projectId: "project-1",
+        role: "viewer",
+        aiAccess: "none",
+        viewerRegime: "client",
+        creditLimit: 5,
+        financeVisibility: "summary",
+        internalDocsVisibility: "none",
+        status: "pending",
+      },
+    );
+
+    expect(updated).toMatchObject({
+      id: "invite-1",
+      role: "viewer",
+      ai_access: "none",
+      viewer_regime: "client",
+      credit_limit: 5,
+      finance_visibility: "summary",
+      internal_docs_visibility: "none",
     });
   });
 });

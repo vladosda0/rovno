@@ -67,7 +67,11 @@ function renderTaskDetail(props: Partial<ComponentProps<typeof TaskDetailModal>>
         task={task()}
         open
         onOpenChange={vi.fn()}
-        canEdit
+        canManageTask
+        canChangeStatus
+        canEditChecklist
+        canComment
+        canUploadMedia
         onTitleChange={vi.fn()}
         onDescriptionChange={vi.fn()}
         onDeadlineChange={vi.fn()}
@@ -101,6 +105,25 @@ describe("TaskDetailModal", () => {
     expect(screen.getByPlaceholderText("Click to add description…")).toBeInTheDocument();
   });
 
+  it("provides an accessible dialog name and description", () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      renderTaskDetail();
+
+      expect(screen.getByRole("dialog", { name: "Task One" })).toBeInTheDocument();
+
+      const consoleOutput = consoleErrorSpy.mock.calls
+        .flat()
+        .map((value) => String(value))
+        .join("\n");
+      expect(consoleOutput).not.toContain("DialogContent requires a DialogTitle");
+      expect(consoleOutput).not.toContain("Missing `Description` or `aria-describedby={undefined}`");
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
   it("routes title and description edits through callbacks", async () => {
     const onTitleChange = vi.fn().mockResolvedValue(undefined);
     const onDescriptionChange = vi.fn().mockResolvedValue(undefined);
@@ -111,7 +134,7 @@ describe("TaskDetailModal", () => {
       onDescriptionChange,
     });
 
-    fireEvent.click(screen.getByText("Task One"));
+    fireEvent.click(screen.getAllByText("Task One")[1]);
     const titleInput = screen.getByDisplayValue("Task One");
     fireEvent.change(titleInput, { target: { value: "Updated task" } });
     fireEvent.blur(titleInput);

@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Dialog, DialogContent,
+  Dialog, DialogContent, DialogDescription, DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,7 +40,11 @@ interface Props {
   task: Task | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  canEdit: boolean;
+  canManageTask: boolean;
+  canChangeStatus: boolean;
+  canEditChecklist: boolean;
+  canComment: boolean;
+  canUploadMedia: boolean;
   estimateLinkedPlanningReadOnly?: boolean;
   taskStructureReadOnly?: boolean;
   blockEstimateLinkedDelete?: boolean;
@@ -61,7 +65,11 @@ export function TaskDetailModal({
   task,
   open,
   onOpenChange,
-  canEdit,
+  canManageTask,
+  canChangeStatus,
+  canEditChecklist,
+  canComment,
+  canUploadMedia,
   estimateLinkedPlanningReadOnly = false,
   taskStructureReadOnly = false,
   blockEstimateLinkedDelete = false,
@@ -312,10 +320,14 @@ export function TaskDetailModal({
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="bg-card border border-border rounded-modal max-w-lg max-h-[85vh] overflow-y-auto shadow-xl p-0 [&>button.absolute]:hidden">
+          <DialogTitle className="sr-only">{task.title}</DialogTitle>
+          <DialogDescription className="sr-only">
+            Review task details, update checklist progress, manage comments, and browse attached media.
+          </DialogDescription>
           {/* Header */}
           <div className="flex items-start justify-between p-sp-3 pb-0">
             <div className="flex-1 min-w-0 pr-2">
-              {editingTitle && canEdit && !estimateLinkedPlanningReadOnly ? (
+              {editingTitle && canManageTask && !estimateLinkedPlanningReadOnly ? (
                 <input
                   ref={titleInputRef}
                   value={titleDraft}
@@ -327,9 +339,9 @@ export function TaskDetailModal({
                 />
               ) : (
                 <h2
-                  className={`text-lg font-semibold text-foreground truncate ${canEdit && !structureReadOnly ? "cursor-text hover:text-accent transition-colors" : ""}`}
+                  className={`text-lg font-semibold text-foreground truncate ${canManageTask && !structureReadOnly ? "cursor-text hover:text-accent transition-colors" : ""}`}
                   onClick={() => {
-                    if (canEdit && !structureReadOnly) {
+                    if (canManageTask && !structureReadOnly) {
                       setEditingTitle(true);
                       setTimeout(() => titleInputRef.current?.focus(), 0);
                     }
@@ -340,7 +352,7 @@ export function TaskDetailModal({
               )}
             </div>
             <div className="flex items-center gap-1 shrink-0 mt-0.5">
-              {canEdit && !structureReadOnly && onDeleteTask && (
+              {canManageTask && !structureReadOnly && onDeleteTask && (
                 <button
                   onClick={() => setDeleteOpen(true)}
                   className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
@@ -366,7 +378,7 @@ export function TaskDetailModal({
                 {statuses.map((s) => (
                   <button
                     key={s}
-                    disabled={!canEdit || disableStatusChanges}
+                    disabled={!canChangeStatus || disableStatusChanges}
                     onClick={() => handleStatusChange(s)}
                     className={`rounded-full px-2.5 py-0.5 text-caption font-medium transition-colors ${
                       task.status === s
@@ -386,7 +398,7 @@ export function TaskDetailModal({
             {/* Description */}
             <div>
               <p className="text-caption text-muted-foreground mb-1">Description</p>
-              {canEdit ? (
+              {canManageTask ? (
                 <Textarea
                   value={descDraft}
                   onChange={(e) => handleDescChange(e.target.value)}
@@ -429,7 +441,7 @@ export function TaskDetailModal({
               </div>
               <div>
                 <p className="text-caption text-muted-foreground mb-1">Deadline</p>
-                {canEdit && !structureReadOnly ? (
+                {canManageTask && !structureReadOnly ? (
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button
@@ -479,7 +491,7 @@ export function TaskDetailModal({
                     >
                       <Checkbox
                         checked={item.done}
-                        disabled={!canEdit || isPending}
+                        disabled={!canEditChecklist || isPending}
                         onCheckedChange={() => handleChecklistToggle(item.id)}
                       />
                       <span className={`text-caption flex-1 ${item.done ? "line-through text-muted-foreground" : "text-foreground"}`}>
@@ -493,7 +505,7 @@ export function TaskDetailModal({
                           <Loader2 className="h-3 w-3 animate-spin" />
                         </span>
                       )}
-                      {canEdit && !structureReadOnly && !isLinked && (
+                      {canEditChecklist && !structureReadOnly && !isLinked && (
                         <button
                           onClick={() => void onChecklistDelete?.(task.id, item.id)}
                           className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
@@ -505,7 +517,7 @@ export function TaskDetailModal({
                   );
                 })}
               </div>
-              {canEdit && !structureReadOnly && (
+              {canEditChecklist && !structureReadOnly && (
                 <div className="flex gap-1.5 mt-1.5">
                   <Input
                     value={newCheckItem}
@@ -544,7 +556,7 @@ export function TaskDetailModal({
               {taskMedia.length === 0 && (
                 <p className="text-[11px] text-muted-foreground mb-1">No photos attached to this task.</p>
               )}
-              {canEdit && (
+              {canUploadMedia && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -559,7 +571,7 @@ export function TaskDetailModal({
             {/* Comments */}
             <div>
               <p className="text-caption text-muted-foreground mb-1">Comments ({task.comments.length})</p>
-              {canEdit && (
+              {canComment && (
                 <div className="flex gap-1.5 mb-2">
                   <Input
                     value={commentText}

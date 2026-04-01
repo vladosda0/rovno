@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import ProjectGallery from "@/pages/project/ProjectGallery";
-import type { Media } from "@/types/entities";
+import type { Media, MemberRole } from "@/types/entities";
 
 const {
   mockUseMedia,
@@ -30,9 +30,13 @@ vi.mock("@/hooks/use-documents-media-source", () => ({
   useMediaUploadMutations: (projectId: string) => mockUseMediaUploadMutations(projectId),
 }));
 
-vi.mock("@/lib/permissions", () => ({
-  usePermission: (projectId: string) => mockUsePermission(projectId),
-}));
+vi.mock("@/lib/permissions", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/permissions")>("@/lib/permissions");
+  return {
+    ...actual,
+    usePermission: (projectId: string) => mockUsePermission(projectId),
+  };
+});
 
 vi.mock("@/data/store", () => ({
   addMedia: vi.fn(),
@@ -62,6 +66,29 @@ function renderProjectGallery() {
   );
 }
 
+function buildPermission(role: MemberRole) {
+  return {
+    seam: {
+      projectId: "project-1",
+      profileId: "user-1",
+      membership: {
+        project_id: "project-1",
+        user_id: "user-1",
+        role,
+        viewer_regime: null,
+        ai_access: "consult_only",
+        finance_visibility: "summary",
+        credit_limit: 0,
+        used_credits: 0,
+      },
+      project: undefined,
+    },
+    role,
+    can: () => true,
+    isLoading: false,
+  };
+}
+
 describe("ProjectGallery", () => {
   beforeEach(() => {
     mockUseMedia.mockReset();
@@ -72,7 +99,7 @@ describe("ProjectGallery", () => {
     mockUseMediaUploadMutations.mockReset();
     mockGetCurrentUser.mockReturnValue({ id: "user-1" });
     mockUseTasks.mockReturnValue([]);
-    mockUsePermission.mockReturnValue({ role: "owner", can: () => true });
+    mockUsePermission.mockReturnValue(buildPermission("owner"));
     mockUseMediaUploadMutations.mockReturnValue({
       prepareUpload: vi.fn(),
       uploadBytes: vi.fn(),
@@ -126,5 +153,15 @@ describe("ProjectGallery", () => {
       (btn) => btn.closest("[role='alertdialog']"),
     );
     expect(uploadButton).toBeDisabled();
+  });
+
+  it("hides upload affordances for viewers", () => {
+    mockUseWorkspaceMode.mockReturnValue({ kind: "local" });
+    mockUsePermission.mockReturnValue(buildPermission("viewer"));
+    mockUseMedia.mockReturnValue([createMedia()]);
+
+    renderProjectGallery();
+
+    expect(screen.queryByRole("button", { name: /^Upload$/i })).not.toBeInTheDocument();
   });
 });

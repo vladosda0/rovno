@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -124,18 +124,43 @@ describe("ProjectProcurement Ordered tab", () => {
   it("renders per-line location picker in Receive items modal with create-location flow", async () => {
     const projectId = "project-1";
     seedPartialOrderedLine(projectId);
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      renderProjectProcurement(projectId);
+
+      fireEvent.click(screen.getByRole("button", { name: /^Ordered \(/i }));
+      fireEvent.click(screen.getByRole("button", { name: "Receive" }));
+
+      const dialog = await screen.findByRole("dialog", { name: "Receive items" });
+      expect(within(dialog).getByText("Receive items")).toBeInTheDocument();
+
+      const locationPickerButton = within(dialog).getAllByRole("button", { name: /to the site/i })[0];
+      fireEvent.click(locationPickerButton);
+
+      expect(await screen.findByText("+ Create location")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Add location" })).toBeInTheDocument();
+
+      const consoleOutput = consoleErrorSpy.mock.calls
+        .flat()
+        .map((value) => String(value))
+        .join("\n");
+      expect(consoleOutput).not.toContain("DialogContent requires a DialogTitle");
+      expect(consoleOutput).not.toContain("Missing `Description` or `aria-describedby={undefined}`");
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  it("suppresses receive controls for contractors in summary mode", () => {
+    const projectId = "project-1";
+    seedPartialOrderedLine(projectId);
+    setAuthRole("contractor");
+
     renderProjectProcurement(projectId);
 
     fireEvent.click(screen.getByRole("button", { name: /^Ordered \(/i }));
-    fireEvent.click(screen.getByRole("button", { name: "Receive" }));
 
-    const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByText("Receive items")).toBeInTheDocument();
-
-    const locationPickerButton = within(dialog).getAllByRole("button", { name: /to the site/i })[0];
-    fireEvent.click(locationPickerButton);
-
-    expect(await screen.findByText("+ Create location")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Add location" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Receive" })).not.toBeInTheDocument();
   });
 });

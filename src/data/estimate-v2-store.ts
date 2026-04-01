@@ -1,4 +1,8 @@
 import { getAuthRole } from "@/lib/auth-state";
+import {
+  getProjectDomainAccessForRole,
+  projectDomainAllowsManage,
+} from "@/lib/permissions";
 import { getStageEstimateItems } from "@/data/estimate-store";
 import { persistEstimateV2HeroTransition, EstimateV2HeroTransitionError } from "@/data/estimate-v2-hero-transition";
 import { loadCurrentEstimateDraft, saveCurrentEstimateDraft } from "@/data/estimate-source";
@@ -632,10 +636,43 @@ function normalizeStateForWorkspace(projectId: string, state: EstimateV2ProjectS
   return normalizedState;
 }
 
-function queueProjectDraftSync(projectId: string) {
+function clearScheduledProjectDraftSync(projectId: string) {
+  const existingTimer = remoteDraftSyncTimers.get(projectId);
+  if (existingTimer) {
+    clearTimeout(existingTimer);
+    remoteDraftSyncTimers.delete(projectId);
+  }
+  deferredDraftSyncByProjectId.delete(projectId);
+}
+
+function resolveEstimateSyncRole(context: EstimateV2ProjectAccessContext): MemberRole {
+  if (context.membershipRole) return context.membershipRole;
+  if (context.profileId && context.projectOwnerProfileId && context.profileId === context.projectOwnerProfileId) {
+    return "owner";
+  }
+  return "viewer";
+}
+
+function getManagedEstimateRemoteSyncContext(projectId: string): { profileId: string } | null {
   const context = accessContextByProjectId.get(projectId);
+  if (!context || context.mode !== "supabase" || !context.profileId) {
+    return null;
+  }
+
+  const estimateAccess = getProjectDomainAccessForRole(resolveEstimateSyncRole(context), "estimate");
+  if (!projectDomainAllowsManage(estimateAccess)) {
+    return null;
+  }
+
+  return {
+    profileId: context.profileId,
+  };
+}
+
+function queueProjectDraftSync(projectId: string) {
   const state = statesByProjectId.get(projectId);
   const profileId = getRetainedSupabaseSyncProfileId(projectId);
+  const managedSyncContext = getManagedEstimateRemoteSyncContext(projectId);
   if (!state || !profileId) {
     return;
   }
@@ -643,7 +680,8 @@ function queueProjectDraftSync(projectId: string) {
   ensureProjectSyncState(state);
   saveWorkspaceEstimateCache(projectId, profileId, state);
 
-  if (context && context.mode !== "supabase") {
+  if (!managedSyncContext) {
+    clearScheduledProjectDraftSync(projectId);
     return;
   }
 
@@ -740,15 +778,11 @@ function applyTaskIdsToState(
 
 async function runProjectDraftSync(projectId: string) {
   const state = statesByProjectId.get(projectId);
-  const profileId = getRetainedSupabaseSyncProfileId(projectId);
-  if (!state || !profileId) {
+  const managedSyncContext = getManagedEstimateRemoteSyncContext(projectId);
+  if (!state || !managedSyncContext) {
     return;
   }
-
-  const accessContext = accessContextByProjectId.get(projectId);
-  if (accessContext && accessContext.mode !== "supabase") {
-    return;
-  }
+  const { profileId } = managedSyncContext;
 
   remoteProjectionSyncInFlightByProjectId.add(projectId);
   const attemptedAt = nowIso();
@@ -970,10 +1004,12 @@ export function registerEstimateV2ProjectAccessContext(
   const state = statesByProjectId.get(projectId);
   if (state && context.mode === "supabase" && context.profileId) {
     saveWorkspaceEstimateCache(projectId, context.profileId, state);
+    queueProjectDraftSync(projectId);
   }
 }
 
 export function clearEstimateV2ProjectAccessContext(projectId: string) {
+  clearScheduledProjectDraftSync(projectId);
   accessContextByProjectId.delete(projectId);
 }
 

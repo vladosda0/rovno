@@ -437,6 +437,33 @@ describe("estimate-v2 workspace drafts", () => {
     }
   });
 
+  it.each(["viewer", "contractor"] as const)(
+    "suppresses remote draft and projection sync for %s estimate access",
+    async (membershipRole) => {
+      vi.useFakeTimers();
+      const projectId = "project-remote-1";
+
+      try {
+        await hydrateEstimateV2ProjectFromWorkspace(projectId, { profileId: "profile-1" });
+        registerEstimateV2ProjectAccessContext(projectId, {
+          mode: "supabase",
+          profileId: "profile-1",
+          projectOwnerProfileId: "profile-owner",
+          membershipRole,
+        });
+
+        await vi.advanceTimersByTimeAsync(350);
+
+        expect(saveCurrentEstimateDraftMock).not.toHaveBeenCalled();
+        expect(syncProjectTasksFromEstimateMock).not.toHaveBeenCalled();
+        expect(syncProjectProcurementFromEstimateMock).not.toHaveBeenCalled();
+        expect(syncProjectHRFromEstimateMock).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
+
   it("skips stale HR projection writes when a newer estimate edit lands mid-sync", async () => {
     vi.useFakeTimers();
     const projectId = "project-remote-1";

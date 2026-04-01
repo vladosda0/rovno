@@ -1,9 +1,19 @@
-import { Outlet, Navigate, useParams, useLocation } from "react-router-dom";
+import { Outlet, Navigate, useParams, useLocation, useNavigate } from "react-router-dom";
 import { AlertTriangle } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useWorkspaceMode, useWorkspaceProjectState } from "@/hooks/use-workspace-source";
-import { usePermission } from "@/lib/permissions";
+import { projectDomainAllowsRoute, usePermission, type ProjectDomain } from "@/lib/permissions";
+
+const ROUTE_DOMAIN_BY_SEGMENT: Partial<Record<string, ProjectDomain>> = {
+  estimate: "estimate",
+  tasks: "tasks",
+  procurement: "procurement",
+  hr: "hr",
+  gallery: "gallery",
+  documents: "documents",
+  participants: "participants",
+};
 
 function ProjectLayoutSkeleton() {
   return (
@@ -26,9 +36,12 @@ function ProjectLayoutSkeleton() {
 export default function ProjectLayout() {
   const { id } = useParams();
   const location = useLocation();
+  const navigate = useNavigate();
   const workspaceMode = useWorkspaceMode();
   const perm = usePermission(id ?? "");
   const { project, isLoading: isProjectLoading } = useWorkspaceProjectState(id ?? "");
+  const routeSegment = location.pathname.split("/")[3] ?? null;
+  const routeDomain = routeSegment ? (ROUTE_DOMAIN_BY_SEGMENT[routeSegment] ?? null) : null;
 
   // Redirect /project/:id to /project/:id/dashboard
   if (location.pathname === `/project/${id}`) {
@@ -39,7 +52,7 @@ export default function ProjectLayout() {
     return <Navigate to="/auth/login" replace />;
   }
 
-  if (workspaceMode.kind === "pending-supabase" || (workspaceMode.kind === "supabase" && isProjectLoading)) {
+  if (workspaceMode.kind === "pending-supabase" || (workspaceMode.kind === "supabase" && (isProjectLoading || perm.isLoading))) {
     return <ProjectLayoutSkeleton />;
   }
 
@@ -50,6 +63,20 @@ export default function ProjectLayout() {
           icon={AlertTriangle}
           title="Project not found"
           description="This project does not exist."
+        />
+      </div>
+    );
+  }
+
+  if (!projectDomainAllowsRoute(perm.seam, routeDomain)) {
+    return (
+      <div className="flex-1 p-sp-3">
+        <EmptyState
+          icon={AlertTriangle}
+          title="No access"
+          description="You do not have access to this project section."
+          actionLabel="Back to dashboard"
+          onAction={() => navigate(`/project/${id}/dashboard`)}
         />
       </div>
     );

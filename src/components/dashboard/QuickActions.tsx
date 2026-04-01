@@ -68,6 +68,8 @@ interface Props {
   tasks: Task[];
   canCreateTask: boolean;
   canCreateDocument: boolean;
+  canCreatePhoto: boolean;
+  canManageProcurement: boolean;
   canManageParticipants: boolean;
   actorRole?: MemberRole;
   actorAiAccess?: AIAccess;
@@ -99,6 +101,8 @@ export function QuickActions({
   tasks,
   canCreateTask,
   canCreateDocument,
+  canCreatePhoto,
+  canManageProcurement,
   canManageParticipants,
 }: Props) {
   const { toast } = useToast();
@@ -438,31 +442,34 @@ export function QuickActions({
         <Button size="sm" variant="outline" className="text-caption h-7" disabled={!canCreateDocument} onClick={() => setOpenModal("document")}>
           <FileText className="h-3 w-3 mr-1" /> Document
         </Button>
-        <Button size="sm" variant="outline" className="text-caption h-7" onClick={() => setOpenModal("photo")}>
-          <ImagePlus className="h-3 w-3 mr-1" /> Photo
-        </Button>
-        <Button size="sm" variant="outline" className="text-caption h-7" onClick={() => setReceiveOrderOpen(true)}>
-          Receive order
-        </Button>
+        {canCreatePhoto && (
+          <Button size="sm" variant="outline" className="text-caption h-7" onClick={() => setOpenModal("photo")}>
+            <ImagePlus className="h-3 w-3 mr-1" /> Photo
+          </Button>
+        )}
+        {canManageProcurement && (
+          <Button size="sm" variant="outline" className="text-caption h-7" onClick={() => setReceiveOrderOpen(true)}>
+            Receive order
+          </Button>
+        )}
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span>
-              <Button
-                size="sm"
-                variant="outline"
-                className="text-caption h-7"
-                disabled={!canManageParticipants}
-                onClick={() => setOpenModal("credits")}
-              >
-                <Coins className="h-3 w-3 mr-1" /> Credits
-              </Button>
-            </span>
-          </TooltipTrigger>
-          {!canManageParticipants && (
+        {canManageParticipants && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-caption h-7"
+                  onClick={() => setOpenModal("credits")}
+                >
+                  <Coins className="h-3 w-3 mr-1" /> Credits
+                </Button>
+              </span>
+            </TooltipTrigger>
             <TooltipContent>Only owner or co-owner can grant or purchase credits</TooltipContent>
-          )}
-        </Tooltip>
+          </Tooltip>
+        )}
       </div>
 
       <Dialog open={openModal === "task"} onOpenChange={(open) => handleModalOpenChange("task", open)}>

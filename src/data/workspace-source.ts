@@ -1,7 +1,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import * as store from "@/data/store";
 import { cacheWorkspaceUsers } from "@/data/workspace-profile-cache";
-import type { FinanceVisibility, Member, Project, User } from "@/types/entities";
+import type {
+  AIAccess,
+  FinanceVisibility,
+  InternalDocsVisibility,
+  Member,
+  Project,
+  User,
+  ViewerRegime,
+} from "@/types/entities";
 import { isDemoSessionActive } from "@/lib/auth-state";
 import type { Database as WorkspaceDatabase } from "../../backend-truth/generated/supabase-types";
 
@@ -12,8 +20,6 @@ type ProjectMemberRow = WorkspaceDatabase["public"]["Tables"]["project_members"]
 type ProjectInsert = WorkspaceDatabase["public"]["Tables"]["projects"]["Insert"];
 type ProjectMemberInsert = WorkspaceDatabase["public"]["Tables"]["project_members"]["Insert"];
 type TypedSupabaseClient = SupabaseClient<WorkspaceDatabase>;
-type InternalDocsVisibility = "none" | "view" | "edit";
-
 export type WorkspaceMode =
   | { kind: "demo" }
   | { kind: "local" }
@@ -178,6 +184,10 @@ export function mapProjectRowToProject(row: ProjectRow): Project {
 }
 
 export function mapProjectMemberRowToMember(row: ProjectMemberRow): Member {
+  const internalDocsVisibility = (row as ProjectMemberRow & {
+    internal_docs_visibility?: InternalDocsVisibility | null;
+  }).internal_docs_visibility;
+
   return {
     project_id: row.project_id,
     user_id: row.profile_id,
@@ -187,7 +197,10 @@ export function mapProjectMemberRowToMember(row: ProjectMemberRow): Member {
     finance_visibility: row.finance_visibility,
     credit_limit: row.credit_limit,
     used_credits: row.used_credits,
-  };
+    ...(internalDocsVisibility !== undefined
+      ? { internal_docs_visibility: internalDocsVisibility ?? undefined }
+      : {}),
+  } as Member;
 }
 
 export function filterActiveProjectRows(rows: ProjectRow[]): ProjectRow[] {
@@ -575,7 +588,9 @@ export async function updateWorkspaceProjectMemberRole(
     projectId: string;
     userId: string;
     role: Member["role"];
-    viewerRegime?: Member["viewer_regime"];
+    aiAccess?: AIAccess;
+    viewerRegime?: ViewerRegime;
+    creditLimit?: number;
     financeVisibility?: FinanceVisibility;
     internalDocsVisibility?: InternalDocsVisibility;
   },
@@ -587,7 +602,13 @@ export async function updateWorkspaceProjectMemberRole(
   if (isBrowserWorkspaceMode(mode)) {
     const updated = store.updateMember(input.projectId, input.userId, {
       role: input.role,
+      ai_access: input.aiAccess,
       viewer_regime: input.viewerRegime,
+      credit_limit: input.creditLimit,
+      finance_visibility: input.financeVisibility,
+      ...(input.internalDocsVisibility !== undefined
+        ? { internal_docs_visibility: input.internalDocsVisibility }
+        : {}),
     }, mode.kind);
     if (!updated) {
       throw new Error("Project member not found");
@@ -597,7 +618,9 @@ export async function updateWorkspaceProjectMemberRole(
 
   const patch: Record<string, unknown> = {
     role: input.role,
+    ai_access: input.aiAccess,
     viewer_regime: input.viewerRegime ?? null,
+    credit_limit: input.creditLimit,
   };
   if (input.financeVisibility !== undefined) {
     patch.finance_visibility = input.financeVisibility;
@@ -646,7 +669,7 @@ export async function createWorkspaceProjectInvite(
     ?? (input.role === "viewer" ? "none" : "view");
 
   if (isBrowserWorkspaceMode(mode)) {
-    const invite: WorkspaceProjectInvite = {
+    const invite = {
       id: `invite-${Date.now()}`,
       project_id: input.projectId,
       email: input.email.trim(),
@@ -660,7 +683,9 @@ export async function createWorkspaceProjectInvite(
       accepted_profile_id: null,
       created_at: new Date().toISOString(),
       accepted_at: null,
-    };
+      finance_visibility: resolvedFinanceVisibility,
+      internal_docs_visibility: resolvedInternalDocsVisibility,
+    } as WorkspaceProjectInvite;
     store.addProjectInvite(invite, mode.kind);
     return invite;
   }
@@ -698,6 +723,8 @@ export async function updateWorkspaceProjectInvite(
     aiAccess?: WorkspaceProjectInvite["ai_access"];
     viewerRegime?: WorkspaceProjectInvite["viewer_regime"];
     creditLimit?: number;
+    financeVisibility?: FinanceVisibility;
+    internalDocsVisibility?: InternalDocsVisibility;
     status?: WorkspaceProjectInvite["status"];
   },
 ): Promise<WorkspaceProjectInvite> {
@@ -711,6 +738,10 @@ export async function updateWorkspaceProjectInvite(
       ai_access: input.aiAccess,
       viewer_regime: input.viewerRegime,
       credit_limit: input.creditLimit,
+      finance_visibility: input.financeVisibility,
+      ...(input.internalDocsVisibility !== undefined
+        ? { internal_docs_visibility: input.internalDocsVisibility }
+        : {}),
       status: input.status,
     }, mode.kind);
     if (!updated) {
@@ -727,6 +758,8 @@ export async function updateWorkspaceProjectInvite(
       ai_access: input.aiAccess,
       viewer_regime: input.viewerRegime ?? null,
       credit_limit: input.creditLimit,
+      finance_visibility: input.financeVisibility,
+      internal_docs_visibility: input.internalDocsVisibility,
       status: input.status,
     })
     .eq("id", input.id)

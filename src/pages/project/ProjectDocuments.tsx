@@ -50,7 +50,12 @@ import {
   useProjectDocumentsState,
   useDocumentUploadMutations,
 } from "@/hooks/use-documents-media-source";
-import { usePermission, isOwnerOrCoOwner } from "@/lib/permissions";
+import {
+  getProjectDomainAccess,
+  projectDomainAllowsContribute,
+  projectDomainAllowsManage,
+  usePermission,
+} from "@/lib/permissions";
 import {
   addDocument,
   addDocumentVersion,
@@ -103,9 +108,12 @@ export default function ProjectDocuments() {
     uploadBytes,
     finalizeUpload,
   } = useDocumentUploadMutations(pid);
-  const isOwner = isOwnerOrCoOwner(perm.role);
-  const isContractor = perm.role === "contractor";
   const isSupabaseMode = workspaceMode.kind === "supabase";
+  const documentsAccess = getProjectDomainAccess(perm.seam, "documents");
+  const commentsAccess = getProjectDomainAccess(perm.seam, "comments");
+  const canManageDocuments = projectDomainAllowsManage(documentsAccess);
+  const canContributeDocuments = projectDomainAllowsContribute(documentsAccess);
+  const canCommentOnDocuments = !isSupabaseMode && projectDomainAllowsContribute(commentsAccess);
 
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadTitle, setUploadTitle] = useState("");
@@ -447,7 +455,7 @@ export default function ProjectDocuments() {
         <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setViewDoc(document)} title="Preview">
           <Eye className="h-3.5 w-3.5" />
         </Button>
-        {isOwner && (
+        {canManageDocuments && (
           <>
             <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setArchiveDocId(document.id)} title="Archive">
               <Archive className="h-3.5 w-3.5" />
@@ -526,12 +534,12 @@ export default function ProjectDocuments() {
             {documents.length > 0 && (
               <DocumentsViewModeToggle value={viewMode} onValueChange={setViewMode} />
             )}
-            {perm.can("document.create") && (
+            {canContributeDocuments && (
               <div className="flex gap-1.5">
                 <Button size="sm" variant="outline" onClick={() => setUploadOpen(true)}>
                   <Upload className="h-4 w-4 mr-1.5" /> Upload
                 </Button>
-                {!isSupabaseMode && (
+                {!isSupabaseMode && canManageDocuments && (
                   <Button size="sm" className="bg-accent text-accent-foreground hover:bg-accent/90" onClick={() => setGenerateOpen(true)}>
                     <Plus className="h-4 w-4 mr-1.5" /> Generate
                   </Button>
@@ -551,8 +559,8 @@ export default function ProjectDocuments() {
           description={isSupabaseMode
             ? "Upload a document to this project."
             : "Upload a document or generate one with AI."}
-          actionLabel={perm.can("document.create") ? "Upload a document" : undefined}
-          onAction={perm.can("document.create") ? () => setUploadOpen(true) : undefined}
+          actionLabel={canContributeDocuments ? "Upload a document" : undefined}
+          onAction={canContributeDocuments ? () => setUploadOpen(true) : undefined}
         />
       ) : (
         <>
@@ -731,7 +739,7 @@ export default function ProjectDocuments() {
               </div>
               <DialogFooter className="border-t border-border px-5 py-4 flex-wrap gap-2 sm:justify-between sm:space-x-0">
                 <div className="flex flex-wrap gap-2">
-                  {!isSupabaseMode && isContractor && (
+                  {canCommentOnDocuments && !viewedDocumentIsArchived && (
                     <>
                       <Button size="sm" onClick={() => handleAcknowledge(viewDoc)} className="bg-accent text-accent-foreground hover:bg-accent/90">
                         <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Confirm acknowledgement
@@ -741,7 +749,7 @@ export default function ProjectDocuments() {
                       </Button>
                     </>
                   )}
-                  {isOwner && viewedDocumentIsArchived && (
+                  {canManageDocuments && viewedDocumentIsArchived && (
                     <Button size="sm" variant="outline" onClick={() => setDeleteDocId(viewDoc.id)} className="text-destructive hover:text-destructive">
                       <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete
                     </Button>

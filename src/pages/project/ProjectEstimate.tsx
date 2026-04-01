@@ -52,7 +52,6 @@ import {
   useWorkspaceProjectState,
 } from "@/hooks/use-workspace-source";
 import { trackEvent } from "@/lib/analytics";
-import { getAuthRole } from "@/lib/auth-state";
 import {
   approveVersion,
   clearEstimateV2ProjectAccessContext,
@@ -92,6 +91,12 @@ import { activityQueryKeys } from "@/hooks/use-activity-source";
 import { hrQueryKeys } from "@/hooks/use-hr-source";
 import { planningQueryKeys } from "@/hooks/use-planning-source";
 import { procurementQueryKeys } from "@/hooks/use-procurement-source";
+import {
+  getProjectDomainAccess,
+  projectDomainAllowsView,
+  projectDomainAllowsManage,
+  usePermission,
+} from "@/lib/permissions";
 import { ApprovalStampCard } from "@/components/estimate-v2/ApprovalStampCard";
 import { ApprovalStampFormModal } from "@/components/estimate-v2/ApprovalStampFormModal";
 import { VersionBanner } from "@/components/estimate-v2/VersionBanner";
@@ -468,6 +473,9 @@ export default function ProjectEstimate() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const workspaceMode = useWorkspaceMode();
+  const perm = usePermission(pid);
+  const hrAccess = getProjectDomainAccess(perm.seam, "hr");
+  const hrReadsEnabled = projectDomainAllowsView(hrAccess);
   const { user: currentUser, isLoading: isCurrentUserLoading } = useWorkspaceCurrentUserState();
   const { project, isLoading: isProjectLoading } = useWorkspaceProjectState(pid);
   const { members, isLoading: isMembersLoading } = useWorkspaceProjectMembersState(pid);
@@ -475,8 +483,8 @@ export default function ProjectEstimate() {
   const tasks = useTasks(pid);
   const procurementItems = useProcurementV2(pid);
   const orders = useOrders(pid);
-  const hrItems = useHRItems(pid);
-  const hrPayments = useHRPayments(pid);
+  const hrItems = useHRItems(pid, { enabled: hrReadsEnabled });
+  const hrPayments = useHRPayments(pid, { enabled: hrReadsEnabled });
   const locations = useLocations(pid);
 
   const {
@@ -490,18 +498,13 @@ export default function ProjectEstimate() {
     isLoading: isEstimateLoading,
   } = useEstimateV2Project(pid);
 
-  const authRole = getAuthRole();
   const currentMembership = members.find((member) => member.user_id === currentUser.id) ?? null;
-  const isSupabaseWorkspace = workspaceMode.kind === "supabase";
-  const isOwner = project?.owner_id === currentUser.id
-    && (isSupabaseWorkspace ? true : authRole === "owner");
-  const canSubmitByRole = isSupabaseWorkspace
-    ? currentMembership?.role === "owner" || currentMembership?.role === "co_owner"
-    : authRole === "owner" || authRole === "co_owner";
   const canSubmitByMembership = currentMembership?.role === "owner" || currentMembership?.role === "co_owner";
   const regime = estimateProject.regime;
-  const canEditEstimate = isOwner && regime !== "client";
-  const canSubmitToClient = canSubmitByRole && canSubmitByMembership && regime !== "client";
+  const estimateAccess = getProjectDomainAccess(perm.seam, "estimate");
+  const canManageEstimate = projectDomainAllowsManage(estimateAccess) && regime !== "client";
+  const canEditEstimate = canManageEstimate;
+  const canSubmitToClient = canManageEstimate && canSubmitByMembership;
 
   const [activeTab, setActiveTab] = useState("estimate");
   const [approvalModalOpen, setApprovalModalOpen] = useState(false);
@@ -1012,7 +1015,7 @@ export default function ProjectEstimate() {
     hasProposedVersion: Boolean(latestProposed),
   });
   const showEstimateWorkspace = estimateEditorStarted || estimateHasSavedContent;
-  const reviewExpandedByDefault = regime === "client" && !isOwner;
+  const reviewExpandedByDefault = regime === "client" && !canManageEstimate;
   const approvedVersionWithStamp = latestApproved?.approvalStamp ? latestApproved : null;
   const latestVersionNumber = useMemo(
     () => versions.reduce((max, version) => Math.max(max, version.number), 1),
@@ -2084,7 +2087,7 @@ export default function ProjectEstimate() {
           isOpenByDefault={reviewExpandedByDefault}
           title="New version submitted"
           secondaryActions={(
-            !isOwner && regime === "client" ? (
+            !canManageEstimate && regime === "client" ? (
               <Button variant="outline" size="sm" onClick={handleAskQuestions}>Ask questions</Button>
             ) : undefined
           )}

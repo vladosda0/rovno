@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ProjectTasks from "@/pages/project/ProjectTasks";
+import type { MemberRole } from "@/types/entities";
 
 const mocks = vi.hoisted(() => ({
   useProject: vi.fn(),
@@ -80,6 +81,29 @@ function renderProjectTasks() {
   );
 }
 
+function buildPermission(role: MemberRole) {
+  return {
+    seam: {
+      projectId: "project-1",
+      profileId: "user-1",
+      membership: {
+        project_id: "project-1",
+        user_id: "user-1",
+        role,
+        viewer_regime: null,
+        ai_access: "consult_only",
+        finance_visibility: "summary",
+        credit_limit: 0,
+        used_credits: 0,
+      },
+      project: undefined,
+    },
+    role,
+    can: () => true,
+    isLoading: false,
+  };
+}
+
 describe("ProjectTasks", () => {
   beforeEach(() => {
     mocks.useProject.mockReturnValue({
@@ -133,7 +157,7 @@ describe("ProjectTasks", () => {
         created_at: "2026-03-01T00:00:00.000Z",
       },
     ]);
-    mocks.usePermission.mockReturnValue({ role: "owner", can: () => true });
+    mocks.usePermission.mockReturnValue(buildPermission("owner"));
     mocks.useMedia.mockReturnValue([]);
     mocks.useWorkspaceMode.mockReturnValue({ kind: "supabase", profileId: "user-1" });
     mocks.useEstimateV2Project.mockReturnValue({
@@ -171,5 +195,36 @@ describe("ProjectTasks", () => {
     expect(screen.queryByRole("button", { name: /Complete stage/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Delete$/i })).not.toBeInTheDocument();
     expect(screen.getByText("Estimate task")).toBeInTheDocument();
+  });
+
+  it("keeps contractor in contribute mode without structure controls", () => {
+    mocks.usePermission.mockReturnValue(buildPermission("contractor"));
+    mocks.useWorkspaceMode.mockReturnValue({ kind: "local" });
+
+    renderProjectTasks();
+
+    expect(screen.queryByRole("button", { name: /New task/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /New stage/i })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Estimate task"));
+
+    expect(screen.getByRole("button", { name: "In progress" })).toBeEnabled();
+    expect(screen.getByPlaceholderText("Add a comment...")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Add photos/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Delete task/i })).not.toBeInTheDocument();
+  });
+
+  it("keeps viewer fully read-only in task detail", () => {
+    mocks.usePermission.mockReturnValue(buildPermission("viewer"));
+    mocks.useWorkspaceMode.mockReturnValue({ kind: "local" });
+
+    renderProjectTasks();
+
+    fireEvent.click(screen.getByText("Estimate task"));
+
+    expect(screen.getByRole("button", { name: "In progress" })).toBeDisabled();
+    expect(screen.queryByPlaceholderText("Add a comment...")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Add photos/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /New task/i })).not.toBeInTheDocument();
   });
 });

@@ -2,18 +2,25 @@ import { NavLink } from "@/components/NavLink";
 import { useParams } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import {
+  getProjectDomainAccess,
+  projectDomainAllowsView,
+  usePermission,
+  type ProjectDomain,
+} from "@/lib/permissions";
+import {
   LayoutDashboard, Calculator, ShoppingCart,
-  Image, FileText, Users, HardHat,
+  Image, FileText, Users, HardHat, ListTodo,
 } from "lucide-react";
 
 const tabs = [
   { label: "Dashboard", path: "dashboard", icon: LayoutDashboard },
-  { label: "Estimate", path: "estimate", icon: Calculator },
-  { label: "Procurement", path: "procurement", icon: ShoppingCart },
-  { label: "HR", path: "hr", icon: HardHat },
-  { label: "Gallery", path: "gallery", icon: Image },
-  { label: "Documents", path: "documents", icon: FileText },
-  { label: "Participants", path: "participants", icon: Users },
+  { label: "Tasks", path: "tasks", icon: ListTodo, domain: "tasks" as ProjectDomain },
+  { label: "Estimate", path: "estimate", icon: Calculator, domain: "estimate" as ProjectDomain },
+  { label: "Procurement", path: "procurement", icon: ShoppingCart, domain: "procurement" as ProjectDomain },
+  { label: "HR", path: "hr", icon: HardHat, domain: "hr" as ProjectDomain },
+  { label: "Gallery", path: "gallery", icon: Image, domain: "gallery" as ProjectDomain },
+  { label: "Documents", path: "documents", icon: FileText, domain: "documents" as ProjectDomain },
+  { label: "Participants", path: "participants", icon: Users, domain: "participants" as ProjectDomain },
 ];
 
 interface ProjectTabsProps {
@@ -24,12 +31,18 @@ interface ProjectTabsProps {
 export function ProjectTabs({ className, projectId }: ProjectTabsProps) {
   const { id } = useParams();
   const resolvedProjectId = projectId ?? id;
+  const perm = usePermission(resolvedProjectId ?? "");
 
   if (!resolvedProjectId) return null;
 
+  const visibleTabs = tabs.filter((tab) => {
+    if (!("domain" in tab) || !tab.domain) return true;
+    return projectDomainAllowsView(getProjectDomainAccess(perm.seam, tab.domain));
+  });
+
   return (
     <nav className={cn("flex items-center gap-0.5 overflow-x-auto whitespace-nowrap border-b border-border px-sp-2 py-1", className)}>
-      {tabs.map((tab) => (
+      {visibleTabs.map((tab) => (
         <NavLink
           key={tab.path}
           to={`/project/${resolvedProjectId}/${tab.path}`}

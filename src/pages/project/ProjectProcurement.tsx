@@ -27,6 +27,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -44,7 +45,11 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { useProject, useProcurementV2 } from "@/hooks/use-mock-data";
 import { useOrders } from "@/hooks/use-order-data";
 import { useInventoryStock, useLocations } from "@/hooks/use-inventory-data";
-import { usePermission } from "@/lib/permissions";
+import {
+  getProjectDomainAccess,
+  projectDomainAllowsManage,
+  usePermission,
+} from "@/lib/permissions";
 import {
   archiveProcurementItem,
   updateProcurementItem,
@@ -226,8 +231,14 @@ export default function ProjectProcurement() {
   const estimateState = useEstimateV2Project(pid);
   const estimateSync = estimateState.sync ?? EMPTY_SYNC_STATE;
   const perm = usePermission(pid);
-  const canEdit = perm.can("procurement.edit");
-  const canUseFromStock = canEdit && !isSupabaseMode;
+  const procurementAccess = getProjectDomainAccess(perm.seam, "procurement");
+  const canManageProcurement = projectDomainAllowsManage(procurementAccess);
+  const canEdit = canManageProcurement;
+  const canUseFromStock = canManageProcurement && !isSupabaseMode;
+  const visibleTabs = useMemo<ProcurementTab[]>(
+    () => (canManageProcurement ? TABS : ["ordered", "in_stock"]),
+    [canManageProcurement],
+  );
   const procurementSyncState = estimateSync.domains.procurement;
   const isProcurementSyncing = isSupabaseMode && procurementSyncState.status === "syncing";
   const hasProcurementSyncError = isSupabaseMode && procurementSyncState.status === "error";
@@ -346,7 +357,11 @@ export default function ProjectProcurement() {
   }, [baseItems, estimateState.lines, estimateState.works, estimateState.stages, isSupabaseMode]);
 
   const [search, setSearch] = useState(savedListState?.search ?? "");
-  const [activeTab, setActiveTab] = useState<ProcurementTab>(savedListState?.activeTab ?? "requested");
+  const [activeTab, setActiveTab] = useState<ProcurementTab>(() => {
+    const savedTab = savedListState?.activeTab;
+    if (savedTab && visibleTabs.includes(savedTab)) return savedTab;
+    return canManageProcurement ? "requested" : "ordered";
+  });
   const [collapsedStages, setCollapsedStages] = useState<Set<string>>(new Set(savedListState?.collapsedStageIds ?? []));
   const [collapsedOrderIds, setCollapsedOrderIds] = useState<Set<string>>(new Set());
   const [selectedRequestedIds, setSelectedRequestedIds] = useState<Set<string>>(new Set());
@@ -413,6 +428,17 @@ export default function ProjectProcurement() {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, [persistListState]);
+
+  useEffect(() => {
+    if (visibleTabs.includes(activeTab)) return;
+    setActiveTab(canManageProcurement ? "requested" : "ordered");
+  }, [activeTab, canManageProcurement, visibleTabs]);
+
+  useEffect(() => {
+    if (canManageProcurement) return;
+    if (!itemId && !orderId) return;
+    navigate(`/project/${pid}/procurement`, { replace: true });
+  }, [canManageProcurement, itemId, navigate, orderId, pid]);
 
   useEffect(() => {
     if (!savedListState) return;
@@ -739,11 +765,18 @@ export default function ProjectProcurement() {
   };
 
   const openDetail = (item: ProcurementItemV2) => {
+    if (!canManageProcurement) return;
     persistListState({ scrollY: window.scrollY });
     navigate(`/project/${pid}/procurement/${item.id}`);
   };
 
+  const openInStockDetail = (row: InStockTableRow) => {
+    setInStockDetailTarget(row);
+    setInStockDetailOpen(true);
+  };
+
   const openOrderDetail = (id: string) => {
+    if (!canManageProcurement) return;
     persistListState({ scrollY: window.scrollY });
     navigate(`/project/${pid}/procurement/order/${id}`);
   };
@@ -879,6 +912,7 @@ export default function ProjectProcurement() {
   }, [clearAutosaveTimer, persistDraftNowIfChanged, flushPendingRevokes]);
 
   const openCreateOrder = (itemIds: string[]) => {
+    if (!canManageProcurement) return;
     if (itemIds.length === 0) return;
     if (shouldBlockProcurementLaunchActions) {
       toast({
@@ -1230,11 +1264,6 @@ export default function ProjectProcurement() {
     toast({ title: "Task created", description: task.title });
   };
 
-  const openInStockDetail = (row: InStockTableRow) => {
-    setInStockDetailTarget(row);
-    setInStockDetailOpen(true);
-  };
-
   const addUrlAttachment = () => {
     const url = attachmentUrl.trim();
     if (!url) return;
@@ -1296,7 +1325,7 @@ export default function ProjectProcurement() {
     : activeTab === "ordered"
       ? selectedOrderedLineKeys.size
       : selectedInStockRowKeys.size;
-  const showStickySelectionBar = selectionCount > 0;
+  const showStickySelectionBar = canManageProcurement && selectionCount > 0;
 
   const selectionPrimaryLabel = activeTab === "requested"
     ? `Create order (${selectionCount})`
@@ -1371,13 +1400,13 @@ export default function ProjectProcurement() {
   const renderRequestedTableHeader = () => (
     <thead className="bg-muted/30 border-b border-border">
       <tr>
-        <th className="w-10 text-left px-2 py-2 text-xs font-medium text-muted-foreground" />
+        {canManageProcurement && <th className="w-10 text-left px-2 py-2 text-xs font-medium text-muted-foreground" />}
         <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Name / Spec</th>
         <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">When needed</th>
         <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Amount</th>
         <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Unit</th>
         <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Planned</th>
-        <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Action</th>
+        {canManageProcurement && <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Action</th>}
       </tr>
     </thead>
   );
@@ -1385,7 +1414,7 @@ export default function ProjectProcurement() {
   const renderOrderedTableHeader = () => (
     <thead className="bg-muted/30 border-b border-border">
       <tr>
-        <th className="w-10 text-left px-2 py-2 text-xs font-medium text-muted-foreground" />
+        {canManageProcurement && <th className="w-10 text-left px-2 py-2 text-xs font-medium text-muted-foreground" />}
         <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Name / Spec</th>
         <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">When needed</th>
         <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Delivery scheduled</th>
@@ -1393,7 +1422,7 @@ export default function ProjectProcurement() {
         <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Unit</th>
         <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Unit price</th>
         <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Total</th>
-        <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Action</th>
+        {canManageProcurement && <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Action</th>}
       </tr>
     </thead>
   );
@@ -1401,12 +1430,12 @@ export default function ProjectProcurement() {
   const renderInStockTableHeader = () => (
     <thead className="bg-muted/30 border-b border-border">
       <tr>
-        <th className="w-10 text-left px-2 py-2 text-xs font-medium text-muted-foreground" />
+        {canManageProcurement && <th className="w-10 text-left px-2 py-2 text-xs font-medium text-muted-foreground" />}
         <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Name / Spec</th>
         <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Location</th>
         <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Qty available</th>
         <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Date last received</th>
-        <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Actions</th>
+        {canManageProcurement && <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Actions</th>}
       </tr>
     </thead>
   );
@@ -1505,7 +1534,7 @@ export default function ProjectProcurement() {
       <div className="glass rounded-card p-2">
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div className="flex flex-wrap gap-2">
-            {TABS.map((tab) => {
+            {visibleTabs.map((tab) => {
               const stat = tab === "requested"
                 ? chipTotals.requested
                 : tab === "ordered"
@@ -1570,7 +1599,7 @@ export default function ProjectProcurement() {
         </div>
       )}
 
-      {activeTab === "requested" && (
+      {canManageProcurement && activeTab === "requested" && (
         <div className="glass rounded-card p-2 space-y-2">
           {requestedItems.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">No requested items.</p>
@@ -1610,26 +1639,43 @@ export default function ProjectProcurement() {
 
                                 return (
                                   <tr key={item.id} className="border-b border-border/70 last:border-0 hover:bg-muted/20">
-                                    <td className="px-2 py-2">
-                                      <Checkbox
-                                        checked={selected}
-                                        onCheckedChange={(checked) => toggleSelected(item.id, !!checked)}
-                                        disabled={!canEdit}
-                                      />
-                                    </td>
+                                    {canManageProcurement && (
+                                      <td className="px-2 py-2">
+                                        <Checkbox
+                                          checked={selected}
+                                          onCheckedChange={(checked) => toggleSelected(item.id, !!checked)}
+                                          disabled={!canEdit}
+                                        />
+                                      </td>
+                                    )}
                                     <td className="px-2 py-2 min-w-[220px]">
-                                      <button type="button" onClick={() => openDetail(item)} className="text-left hover:underline">
-                                        <div className="flex min-w-0 items-center gap-2">
-                                          <ResourceTypeBadge type={item.type} className="shrink-0 border-transparent" />
-                                          <p className="font-medium text-foreground truncate">{item.name}</p>
+                                      {canManageProcurement ? (
+                                        <button type="button" onClick={() => openDetail(item)} className="text-left hover:underline">
+                                          <div className="flex min-w-0 items-center gap-2">
+                                            <ResourceTypeBadge type={item.type} className="shrink-0 border-transparent" />
+                                            <p className="font-medium text-foreground truncate">{item.name}</p>
+                                          </div>
+                                          {item.orphaned && (
+                                            <span className="inline-flex rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] text-destructive">
+                                              Orphaned
+                                            </span>
+                                          )}
+                                          {item.spec && <p className="text-xs text-muted-foreground truncate">{item.spec}</p>}
+                                        </button>
+                                      ) : (
+                                        <div className="text-left">
+                                          <div className="flex min-w-0 items-center gap-2">
+                                            <ResourceTypeBadge type={item.type} className="shrink-0 border-transparent" />
+                                            <p className="font-medium text-foreground truncate">{item.name}</p>
+                                          </div>
+                                          {item.orphaned && (
+                                            <span className="inline-flex rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] text-destructive">
+                                              Orphaned
+                                            </span>
+                                          )}
+                                          {item.spec && <p className="text-xs text-muted-foreground truncate">{item.spec}</p>}
                                         </div>
-                                        {item.orphaned && (
-                                          <span className="inline-flex rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] text-destructive">
-                                            Orphaned
-                                          </span>
-                                        )}
-                                        {item.spec && <p className="text-xs text-muted-foreground truncate">{item.spec}</p>}
-                                      </button>
+                                      )}
                                     </td>
                                     <td className={cn("px-2 py-2 text-xs", isOverdue(item.requiredByDate) && "text-destructive")}>
                                       {formatDate(item.requiredByDate)}
@@ -1637,19 +1683,21 @@ export default function ProjectProcurement() {
                                     <td className="px-2 py-2 text-right tabular-nums text-foreground">{remaining}</td>
                                     <td className="px-2 py-2 text-foreground">{item.unit}</td>
                                     <td className="px-2 py-2 text-right tabular-nums text-foreground">{fmtCost(item.plannedUnitPrice ?? 0)}</td>
-                                    <td className="px-2 py-2">
-                                      <div className="flex justify-end">
-                                        <Button
-                                          type="button"
-                                          size="sm"
-                                          className="h-7"
-                                          onClick={() => openCreateOrder([item.id])}
-                                          disabled={!canEdit || shouldBlockProcurementLaunchActions}
-                                        >
-                                          Order
-                                        </Button>
-                                      </div>
-                                    </td>
+                                    {canManageProcurement && (
+                                      <td className="px-2 py-2">
+                                        <div className="flex justify-end">
+                                          <Button
+                                            type="button"
+                                            size="sm"
+                                            className="h-7"
+                                            onClick={() => openCreateOrder([item.id])}
+                                            disabled={!canEdit || shouldBlockProcurementLaunchActions}
+                                          >
+                                            Order
+                                          </Button>
+                                        </div>
+                                      </td>
+                                    )}
                                   </tr>
                                 );
                               })}
@@ -1684,44 +1732,63 @@ export default function ProjectProcurement() {
 
                             return (
                               <tr key={item.id} className="border-b border-border/70 last:border-0 hover:bg-muted/20">
-                                <td className="px-2 py-2">
-                                  <Checkbox
-                                    checked={selected}
-                                    onCheckedChange={(checked) => toggleSelected(item.id, !!checked)}
-                                    disabled={!canEdit}
-                                  />
-                                </td>
+                                {canManageProcurement && (
+                                  <td className="px-2 py-2">
+                                    <Checkbox
+                                      checked={selected}
+                                      onCheckedChange={(checked) => toggleSelected(item.id, !!checked)}
+                                      disabled={!canEdit}
+                                    />
+                                  </td>
+                                )}
                                 <td className="px-2 py-2 min-w-[220px]">
-                                  <button type="button" onClick={() => openDetail(item)} className="text-left hover:underline">
-                                    <div className="flex min-w-0 items-center gap-2">
-                                      <ResourceTypeBadge type={item.type} className="shrink-0 border-transparent" />
-                                      <p className="font-medium text-foreground truncate">{item.name}</p>
+                                  {canManageProcurement ? (
+                                    <button type="button" onClick={() => openDetail(item)} className="text-left hover:underline">
+                                      <div className="flex min-w-0 items-center gap-2">
+                                        <ResourceTypeBadge type={item.type} className="shrink-0 border-transparent" />
+                                        <p className="font-medium text-foreground truncate">{item.name}</p>
+                                      </div>
+                                      {item.orphaned && (
+                                        <span className="inline-flex rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] text-destructive">
+                                          Orphaned
+                                        </span>
+                                      )}
+                                      {item.spec && <p className="text-xs text-muted-foreground truncate">{item.spec}</p>}
+                                    </button>
+                                  ) : (
+                                    <div className="text-left">
+                                      <div className="flex min-w-0 items-center gap-2">
+                                        <ResourceTypeBadge type={item.type} className="shrink-0 border-transparent" />
+                                        <p className="font-medium text-foreground truncate">{item.name}</p>
+                                      </div>
+                                      {item.orphaned && (
+                                        <span className="inline-flex rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] text-destructive">
+                                          Orphaned
+                                        </span>
+                                      )}
+                                      {item.spec && <p className="text-xs text-muted-foreground truncate">{item.spec}</p>}
                                     </div>
-                                    {item.orphaned && (
-                                      <span className="inline-flex rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] text-destructive">
-                                        Orphaned
-                                      </span>
-                                    )}
-                                    {item.spec && <p className="text-xs text-muted-foreground truncate">{item.spec}</p>}
-                                  </button>
+                                  )}
                                 </td>
                                 <td className={cn("px-2 py-2 text-xs", isOverdue(item.requiredByDate) && "text-destructive")}>{formatDate(item.requiredByDate)}</td>
                                 <td className="px-2 py-2 text-right tabular-nums text-foreground">{remaining}</td>
                                 <td className="px-2 py-2 text-foreground">{item.unit}</td>
                                 <td className="px-2 py-2 text-right tabular-nums text-foreground">{fmtCost(item.plannedUnitPrice ?? 0)}</td>
-                                <td className="px-2 py-2">
-                                  <div className="flex justify-end">
-                                    <Button
-                                      type="button"
-                                      size="sm"
-                                      className="h-7"
-                                      onClick={() => openCreateOrder([item.id])}
-                                      disabled={!canEdit || shouldBlockProcurementLaunchActions}
-                                    >
-                                      Order
-                                    </Button>
-                                  </div>
-                                </td>
+                                {canManageProcurement && (
+                                  <td className="px-2 py-2">
+                                    <div className="flex justify-end">
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        className="h-7"
+                                        onClick={() => openCreateOrder([item.id])}
+                                        disabled={!canEdit || shouldBlockProcurementLaunchActions}
+                                      >
+                                        Order
+                                      </Button>
+                                    </div>
+                                  </td>
+                                )}
                               </tr>
                             );
                           })}
@@ -1762,13 +1829,19 @@ export default function ProjectProcurement() {
                     >
                       {collapsed ? <ChevronRight className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
                     </button>
-                    <button
-                      type="button"
-                      className="text-sm font-semibold text-foreground hover:underline"
-                      onClick={() => openOrderDetail(order.id)}
-                    >
-                      {`Supplier order #${orderNumber}`}
-                    </button>
+                    {canManageProcurement ? (
+                      <button
+                        type="button"
+                        className="text-sm font-semibold text-foreground hover:underline"
+                        onClick={() => openOrderDetail(order.id)}
+                      >
+                        {`Supplier order #${orderNumber}`}
+                      </button>
+                    ) : (
+                      <span className="text-sm font-semibold text-foreground">
+                        {`Supplier order #${orderNumber}`}
+                      </span>
+                    )}
                     {order.supplierName && (
                       <span className="text-xs text-muted-foreground truncate">{order.supplierName}</span>
                     )}
@@ -1793,37 +1866,56 @@ export default function ProjectProcurement() {
 
                             return (
                               <tr key={line.id} className="border-b border-border/70 last:border-0 hover:bg-muted/20">
-                                <td className="px-2 py-2">
-                                  <Checkbox
-                                    checked={selected}
-                                    onCheckedChange={(checked) => {
-                                      if (!receivableTarget) return;
-                                      toggleSelectedOrderedLine(receivableTarget.selectionKey, !!checked);
-                                    }}
-                                    disabled={!canEdit || !receivableTarget}
-                                  />
-                                </td>
+                                {canManageProcurement && (
+                                  <td className="px-2 py-2">
+                                    <Checkbox
+                                      checked={selected}
+                                      onCheckedChange={(checked) => {
+                                        if (!receivableTarget) return;
+                                        toggleSelectedOrderedLine(receivableTarget.selectionKey, !!checked);
+                                      }}
+                                      disabled={!canEdit || !receivableTarget}
+                                    />
+                                  </td>
+                                )}
                                 <td className="px-2 py-2 min-w-[220px]">
-                                  <button type="button" className="text-left hover:underline" onClick={() => openDetail(item)}>
-                                    <div className="flex min-w-0 items-start gap-2">
-                                      <ResourceTypeBadge type={item.type} className="shrink-0 border-transparent" />
-                                      <div className="min-w-0">
-                                        <p className="font-medium text-foreground truncate">{item.name}</p>
-                                        {item.spec && <p className="text-xs text-muted-foreground truncate">{item.spec}</p>}
+                                  {canManageProcurement ? (
+                                    <button type="button" className="text-left hover:underline" onClick={() => openDetail(item)}>
+                                      <div className="flex min-w-0 items-start gap-2">
+                                        <ResourceTypeBadge type={item.type} className="shrink-0 border-transparent" />
+                                        <div className="min-w-0">
+                                          <p className="font-medium text-foreground truncate">{item.name}</p>
+                                          {item.spec && <p className="text-xs text-muted-foreground truncate">{item.spec}</p>}
+                                        </div>
                                       </div>
+                                      {item.orphaned && (
+                                        <span className="inline-flex rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] text-destructive">
+                                          Orphaned
+                                        </span>
+                                      )}
+                                    </button>
+                                  ) : (
+                                    <div className="text-left">
+                                      <div className="flex min-w-0 items-start gap-2">
+                                        <ResourceTypeBadge type={item.type} className="shrink-0 border-transparent" />
+                                        <div className="min-w-0">
+                                          <p className="font-medium text-foreground truncate">{item.name}</p>
+                                          {item.spec && <p className="text-xs text-muted-foreground truncate">{item.spec}</p>}
+                                        </div>
+                                      </div>
+                                      {item.orphaned && (
+                                        <span className="inline-flex rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] text-destructive">
+                                          Orphaned
+                                        </span>
+                                      )}
                                     </div>
-                                    {item.orphaned && (
-                                      <span className="inline-flex rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] text-destructive">
-                                        Orphaned
-                                      </span>
-                                    )}
-                                  </button>
+                                  )}
                                 </td>
                                 <td className={cn("px-2 py-2 text-xs", isOverdue(item.requiredByDate) && "text-destructive")}>
                                   {formatDate(item.requiredByDate)}
                                 </td>
                                 <td className="px-2 py-2">
-                                  {isSupabaseMode ? (
+                                  {isSupabaseMode || !canManageProcurement ? (
                                     <span className="text-xs text-muted-foreground">
                                       {order.deliveryDeadline ? formatDate(order.deliveryDeadline) : "-"}
                                     </span>
@@ -1878,19 +1970,21 @@ export default function ProjectProcurement() {
                                 <td className="px-2 py-2">{line.unit}</td>
                                 <td className="px-2 py-2 text-right">{fmtCost(unitPrice)}</td>
                                 <td className="px-2 py-2 text-right">{fmtCost(unitPrice * openQty)}</td>
-                                <td className="px-2 py-2">
-                                  <div className="flex justify-end">
-                                    <Button
-                                      type="button"
-                                      size="sm"
-                                      className="h-7"
-                                      onClick={() => receivableTarget && openReceiveItemsModal([receivableTarget])}
-                                      disabled={!canEdit || shouldBlockProcurementLaunchActions || !receivableTarget}
-                                    >
-                                      Receive
-                                    </Button>
-                                  </div>
-                                </td>
+                                {canManageProcurement && (
+                                  <td className="px-2 py-2">
+                                    <div className="flex justify-end">
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        className="h-7"
+                                        onClick={() => receivableTarget && openReceiveItemsModal([receivableTarget])}
+                                        disabled={!canEdit || shouldBlockProcurementLaunchActions || !receivableTarget}
+                                      >
+                                        Receive
+                                      </Button>
+                                    </div>
+                                  </td>
+                                )}
                               </tr>
                             );
                           })}
@@ -1916,15 +2010,21 @@ export default function ProjectProcurement() {
                 <tbody>
                   {inStockRows.map((row) => (
                     <tr key={row.key} className="border-b border-border/70 last:border-0 hover:bg-muted/20">
-                      <td className="px-2 py-2">
-                        <Checkbox
-                          checked={selectedInStockRowKeys.has(row.key)}
-                          onCheckedChange={(checked) => toggleSelectedInStockRow(row.key, !!checked)}
-                          disabled={!canUseFromStock}
-                        />
-                      </td>
+                      {canManageProcurement && (
+                        <td className="px-2 py-2">
+                          <Checkbox
+                            checked={selectedInStockRowKeys.has(row.key)}
+                            onCheckedChange={(checked) => toggleSelectedInStockRow(row.key, !!checked)}
+                            disabled={!canUseFromStock}
+                          />
+                        </td>
+                      )}
                       <td className="px-2 py-2 min-w-[240px]">
-                        <button type="button" className="text-left hover:underline" onClick={() => openInStockDetail(row)}>
+                        <button
+                          type="button"
+                          className="text-left hover:underline"
+                          onClick={() => openInStockDetail(row)}
+                        >
                           <p className="font-medium text-foreground truncate">{row.item.name}</p>
                           {row.item.spec && <p className="text-xs text-muted-foreground truncate">{row.item.spec}</p>}
                           <div className="mt-1">
@@ -1935,29 +2035,31 @@ export default function ProjectProcurement() {
                       <td className="px-2 py-2 text-muted-foreground">{row.locationName}</td>
                       <td className="px-2 py-2 text-right tabular-nums">{row.qty} {row.item.unit}</td>
                       <td className="px-2 py-2 text-xs text-muted-foreground">{formatDate(row.lastReceivedAt)}</td>
-                      <td className="px-2 py-2">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            type="button"
-                            size="sm"
-                            className="h-7"
-                            onClick={() => openUseFromStockModal([row])}
-                            disabled={!canUseFromStock}
-                          >
-                            Use
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            className="h-7"
-                            onClick={() => handleRequestMore(row)}
-                            disabled={!canEdit}
-                          >
-                            Request more
-                          </Button>
-                        </div>
-                      </td>
+                      {canManageProcurement && (
+                        <td className="px-2 py-2">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="h-7"
+                              onClick={() => openUseFromStockModal([row])}
+                              disabled={!canUseFromStock}
+                            >
+                              Use
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="h-7"
+                              onClick={() => handleRequestMore(row)}
+                              disabled={!canEdit}
+                            >
+                              Request more
+                            </Button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -1983,6 +2085,9 @@ export default function ProjectProcurement() {
         <DialogContent className="w-[95vw] max-w-3xl max-h-[90vh] p-0 gap-0 overflow-hidden">
           <DialogHeader className="px-5 py-4 border-b border-border">
             <DialogTitle>Use from stock</DialogTitle>
+            <DialogDescription className="sr-only">
+              Allocate available stock quantities to the selected procurement items and capture who used them.
+            </DialogDescription>
           </DialogHeader>
 
           {useFromStockTargets.length === 0 ? (
@@ -2094,6 +2199,9 @@ export default function ProjectProcurement() {
         <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] p-0 gap-0 overflow-hidden">
           <DialogHeader className="px-5 py-4 border-b border-border">
             <DialogTitle>Stock details</DialogTitle>
+            <DialogDescription className="sr-only">
+              Review receipt and usage history for the selected stock item across project locations.
+            </DialogDescription>
           </DialogHeader>
 
           {!inStockDetailTarget ? (
@@ -2208,6 +2316,9 @@ export default function ProjectProcurement() {
         <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col">
           <DialogHeader className="px-5 py-4 border-b border-border">
             <DialogTitle>Receive items</DialogTitle>
+            <DialogDescription className="sr-only">
+              Confirm received quantities for the selected procurement items and assign each receipt to a location.
+            </DialogDescription>
           </DialogHeader>
 
           {receiveModalTargets.length === 0 ? (
@@ -2299,27 +2410,34 @@ export default function ProjectProcurement() {
         </DialogContent>
       </Dialog>
 
-      <OrderModal
-        open={createOrderOpen}
-        onOpenChange={setCreateOrderOpen}
-        projectId={pid}
-        initialItemIds={createOrderItemIds}
-      />
+      {canManageProcurement && (
+        <OrderModal
+          open={createOrderOpen}
+          onOpenChange={setCreateOrderOpen}
+          projectId={pid}
+          initialItemIds={createOrderItemIds}
+        />
+      )}
 
-      <OrderDetailModal
-        open={!!orderId}
-        onOpenChange={(nextOpen) => !nextOpen && closeOrderDetail()}
-        projectId={pid}
-        orderId={orderId ?? ""}
-        onOpenRequest={(requestId) => {
-          navigate(`/project/${pid}/procurement/${requestId}`);
-        }}
-      />
+      {canManageProcurement && (
+        <OrderDetailModal
+          open={!!orderId}
+          onOpenChange={(nextOpen) => !nextOpen && closeOrderDetail()}
+          projectId={pid}
+          orderId={orderId ?? ""}
+          onOpenRequest={(requestId) => {
+            navigate(`/project/${pid}/procurement/${requestId}`);
+          }}
+        />
+      )}
 
-      <Dialog open={!!itemId && !orderId} onOpenChange={(nextOpen) => !nextOpen && closeDetail()}>
+      <Dialog open={canManageProcurement && !!itemId && !orderId} onOpenChange={(nextOpen) => !nextOpen && closeDetail()}>
         <DialogContent className="h-[95vh] w-[100vw] max-w-none rounded-none p-0 gap-0 overflow-hidden flex flex-col sm:h-auto sm:w-[75vw] sm:max-w-6xl sm:max-h-[90vh] sm:rounded-xl">
           <DialogHeader className="border-b border-border px-4 py-3 pr-12 sm:px-6 sm:py-4">
             <DialogTitle>Procurement request</DialogTitle>
+            <DialogDescription className="sr-only">
+              Review and update the selected procurement request, including quantities, suppliers, dates, and related details.
+            </DialogDescription>
           </DialogHeader>
 
           {!detailItem ? (
@@ -2567,11 +2685,9 @@ export default function ProjectProcurement() {
                           ? `${line.receivedQty}/${line.qty} ${line.unit}`
                           : `${line.qty} ${line.unit}`;
                         return (
-                          <button
-                            type="button"
+                          <div
                             key={`${order.id}-${line.id}`}
-                            onClick={() => openOrderDetail(order.id)}
-                            className="w-full rounded-md border border-border p-2 text-left hover:bg-muted/40 transition-colors"
+                            className="w-full rounded-md border border-border p-2 text-left"
                           >
                             <div className="flex items-center justify-between gap-2">
                               <div className="min-w-0">
@@ -2589,7 +2705,7 @@ export default function ProjectProcurement() {
                                 <p className="text-[11px] text-muted-foreground mt-1">{qtyInfo}</p>
                               </div>
                             </div>
-                          </button>
+                          </div>
                         );
                       })}
                     </div>

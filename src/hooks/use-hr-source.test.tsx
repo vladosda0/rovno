@@ -60,9 +60,9 @@ function hrPayment(partial: Partial<HRPayment> = {}): HRPayment {
   };
 }
 
-function HRProbe({ projectId }: { projectId: string }) {
-  const items = useProjectHRItems(projectId);
-  const payments = useProjectHRPayments(projectId);
+function HRProbe({ projectId, enabled = true }: { projectId: string; enabled?: boolean }) {
+  const items = useProjectHRItems(projectId, { enabled });
+  const payments = useProjectHRPayments(projectId, { enabled });
 
   return (
     <div>
@@ -206,6 +206,33 @@ describe("useProjectHRItems/useProjectHRPayments", () => {
     expect(screen.getByTestId("payment-ids")).toHaveTextContent("supabase-payment-1");
     expect(source.getProjectHRItems).toHaveBeenCalledWith("project-1");
     expect(source.getProjectHRPayments).toHaveBeenCalledWith("project-1");
+  });
+
+  it("does not mount supabase HR reads when disabled", async () => {
+    vi.stubEnv("VITE_WORKSPACE_SOURCE", "supabase");
+
+    const queryClient = createQueryClient();
+    const source = {
+      mode: "supabase" as const,
+      getProjectHRItems: vi.fn(),
+      getProjectHRPayments: vi.fn(),
+    };
+
+    authenticateRuntimeAuth();
+    vi.spyOn(hrSource, "getHRSource").mockResolvedValue(source);
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <HRProbe projectId="project-1" enabled={false} />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("item-count")).toHaveTextContent("0");
+    });
+    expect(screen.getByTestId("payment-count")).toHaveTextContent("0");
+    expect(source.getProjectHRItems).not.toHaveBeenCalled();
+    expect(source.getProjectHRPayments).not.toHaveBeenCalled();
   });
 
   it("invalidates the relevant HR queries after Supabase mutations", async () => {

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, within, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import ProjectParticipants from "@/pages/project/ProjectParticipants";
@@ -12,7 +12,12 @@ import {
   addProjectInvite,
   updateMember,
 } from "@/data/store";
-import { clearDemoSession, clearStoredAuthProfile, setAuthRole, setStoredAuthProfile } from "@/lib/auth-state";
+import {
+  clearDemoSession,
+  clearStoredAuthProfile,
+  setAuthRole,
+  setStoredAuthProfile,
+} from "@/lib/auth-state";
 import * as useMockData from "@/hooks/use-mock-data";
 import * as toastModule from "@/hooks/use-toast";
 import * as permissions from "@/lib/permissions";
@@ -24,6 +29,28 @@ function createQueryClient() {
         retry: false,
       },
     },
+  });
+}
+
+function renderParticipants() {
+  const queryClient = createQueryClient();
+  render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={["/project/project-1/participants"]}>
+        <Routes>
+          <Route path="/project/:id/participants" element={<ProjectParticipants />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
+
+async function activateTab(name: "Members" | "Invitations" | "Permissions") {
+  const tab = screen.getByRole("tab", { name });
+  fireEvent.mouseDown(tab, { button: 0, ctrlKey: false });
+  fireEvent.click(tab);
+  await waitFor(() => {
+    expect(tab).toHaveAttribute("data-state", "active");
   });
 }
 
@@ -41,11 +68,14 @@ describe("ProjectParticipants", () => {
       writable: true,
       value: () => {},
     });
+
+    vi.restoreAllMocks();
     localStorage.clear();
     sessionStorage.clear();
     setAuthRole("guest");
     clearStoredAuthProfile();
     clearDemoSession();
+
     const profile = setStoredAuthProfile({
       email: "owner@example.com",
       name: "Owner User",
@@ -69,9 +99,20 @@ describe("ProjectParticipants", () => {
       user_id: profile.id,
       role: "owner",
       ai_access: "project_pool",
+      finance_visibility: "detail",
       credit_limit: 500,
       used_credits: 0,
     });
+    addMember({
+      project_id: "project-1",
+      user_id: "member-2",
+      role: "contractor",
+      ai_access: "consult_only",
+      finance_visibility: "summary",
+      credit_limit: 100,
+      used_credits: 10,
+      internal_docs_visibility: "view",
+    } as never);
     addProjectInvite({
       id: "invite-1",
       project_id: "project-1",
@@ -86,110 +127,22 @@ describe("ProjectParticipants", () => {
       accepted_profile_id: null,
       created_at: "2026-03-07T10:00:00.000Z",
       accepted_at: null,
-    }, "local");
+      finance_visibility: "detail",
+      internal_docs_visibility: "view",
+    } as WorkspaceProjectInvite, "local");
   });
 
-  it("renders active participants and pending invites in separate tables and updates invite roles immediately", async () => {
-    const queryClient = createQueryClient();
+  it("renders Members, Invitations, and Permissions tabs with Members open by default", () => {
+    renderParticipants();
 
-    render(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={["/project/project-1/participants"]}>
-          <Routes>
-            <Route path="/project/:id/participants" element={<ProjectParticipants />} />
-          </Routes>
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
-
-    const memberSection = screen.getByRole("heading", { name: "Active participants" }).closest("section");
-    const inviteSection = screen.getByRole("heading", { name: "Pending invites" }).closest("section");
-    expect(memberSection).not.toBeNull();
-    expect(inviteSection).not.toBeNull();
-
-    const inviteTable = within(inviteSection as HTMLElement).getByRole("table");
-    const inviteHeaders = within(inviteTable).getAllByRole("columnheader").map((header) => header.textContent);
-    expect(inviteHeaders).toEqual(["Email", "Invited by", "Role", "Status", "Actions"]);
-    expect(within(inviteTable).getByText("invitee@example.com")).toBeInTheDocument();
-
-    const inviteRow = within(inviteTable).getByText("invitee@example.com").closest("tr");
-    expect(inviteRow).not.toBeNull();
-    fireEvent.pointerDown(within(inviteRow as HTMLElement).getByRole("button"), { button: 0, ctrlKey: false });
-    fireEvent.click(await screen.findByRole("menuitem", { name: "Change role" }));
-
-    fireEvent.click(screen.getByRole("combobox"));
-    fireEvent.click(await screen.findByText("Viewer"));
-    fireEvent.click(screen.getByRole("button", { name: "Update" }));
-
-    expect(await within(inviteTable).findByText("Viewer")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Members" })).toHaveAttribute("data-state", "active");
+    expect(screen.getByRole("tab", { name: "Invitations" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Permissions" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Active members" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Pending invitations" })).not.toBeInTheDocument();
   });
 
-  it("does not offer co_owner as a role option when the actor is co_owner", async () => {
-    const queryClient = createQueryClient();
-
-    // Adjust existing store membership to a co_owner actor.
-    const profile = setStoredAuthProfile({
-      email: "owner@example.com",
-      name: "Owner User",
-    });
-    setAuthRole("co_owner");
-    updateMember("project-1", profile.id, {
-      role: "co_owner",
-      ai_access: "project_pool",
-    });
-
-    render(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={["/project/project-1/participants"]}>
-          <Routes>
-            <Route path="/project/:id/participants" element={<ProjectParticipants />} />
-          </Routes>
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
-
-    const inviteSection = screen.getByRole("heading", { name: "Pending invites" }).closest("section");
-    const inviteTable = within(inviteSection as HTMLElement).getByRole("table");
-    const inviteRow = within(inviteTable).getByText("invitee@example.com").closest("tr");
-
-    fireEvent.pointerDown(within(inviteRow as HTMLElement).getByRole("button"), { button: 0, ctrlKey: false });
-    fireEvent.click(await screen.findByRole("menuitem", { name: "Change role" }));
-
-    const coOwnerCountBefore = screen.queryAllByText("Co-owner").length;
-    const contractorCountBefore = screen.queryAllByText("Contractor").length;
-    const viewerCountBefore = screen.queryAllByText("Viewer").length;
-    fireEvent.click(screen.getByRole("combobox"));
-
-    // Co-owner should not be available for role change by a co_owner actor.
-    const coOwnerCountAfter = screen.queryAllByText("Co-owner").length;
-    expect(coOwnerCountAfter).toBe(coOwnerCountBefore);
-    expect(screen.queryAllByText("Contractor").length).toBeGreaterThan(contractorCountBefore);
-    expect(screen.queryAllByText("Viewer").length).toBeGreaterThan(viewerCountBefore);
-  });
-
-  it("does not show Resend email for pending invites in local workspace mode", async () => {
-    const queryClient = createQueryClient();
-
-    render(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={["/project/project-1/participants"]}>
-          <Routes>
-            <Route path="/project/:id/participants" element={<ProjectParticipants />} />
-          </Routes>
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
-
-    const inviteSection = screen.getByRole("heading", { name: "Pending invites" }).closest("section");
-    const inviteTable = within(inviteSection as HTMLElement).getByRole("table");
-    const inviteRow = within(inviteTable).getByText("invitee@example.com").closest("tr");
-
-    fireEvent.pointerDown(within(inviteRow as HTMLElement).getByRole("button"), { button: 0, ctrlKey: false });
-    expect(await screen.findByRole("menuitem", { name: "Change role" })).toBeInTheDocument();
-    expect(screen.queryByRole("menuitem", { name: "Resend email" })).not.toBeInTheDocument();
-  });
-
-  it("shows only pending invites in the pending invites table and count", () => {
+  it("keeps pending invites primary and invite history secondary in Invitations", async () => {
     addProjectInvite({
       id: "invite-accepted",
       project_id: "project-1",
@@ -204,58 +157,122 @@ describe("ProjectParticipants", () => {
       accepted_profile_id: profileId,
       created_at: "2026-03-07T10:00:00.000Z",
       accepted_at: "2026-03-07T12:00:00.000Z",
-    }, "local");
-    addProjectInvite({
-      id: "invite-expired",
-      project_id: "project-1",
-      email: "expired@example.com",
-      role: "contractor",
-      ai_access: "consult_only",
-      viewer_regime: null,
-      credit_limit: 20,
-      invited_by: profileId,
-      status: "expired",
-      invite_token: "invite-token-expired",
-      accepted_profile_id: null,
-      created_at: "2026-03-07T10:00:00.000Z",
-      accepted_at: null,
-    }, "local");
-    addProjectInvite({
-      id: "invite-revoked",
-      project_id: "project-1",
-      email: "revoked@example.com",
-      role: "contractor",
-      ai_access: "consult_only",
-      viewer_regime: null,
-      credit_limit: 20,
-      invited_by: profileId,
-      status: "revoked",
-      invite_token: "invite-token-revoked",
-      accepted_profile_id: null,
-      created_at: "2026-03-07T10:00:00.000Z",
-      accepted_at: null,
-    }, "local");
+      finance_visibility: "none",
+      internal_docs_visibility: "none",
+    } as WorkspaceProjectInvite, "local");
 
-    const queryClient = createQueryClient();
-    render(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={["/project/project-1/participants"]}>
-          <Routes>
-            <Route path="/project/:id/participants" element={<ProjectParticipants />} />
-          </Routes>
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
+    renderParticipants();
 
-    expect(screen.getByText("1 active participants · 1 pending invites")).toBeInTheDocument();
+    await activateTab("Invitations");
 
-    const inviteSection = screen.getByRole("heading", { name: "Pending invites" }).closest("section");
+    const pendingSection = screen.getByRole("heading", { name: "Pending invitations" }).closest("section");
+    const historySection = screen.getByRole("heading", { name: "Invite history" }).closest("section");
+    expect(pendingSection).not.toBeNull();
+    expect(historySection).not.toBeNull();
+
+    const pendingTable = within(pendingSection as HTMLElement).getByRole("table");
+    const historyTable = within(historySection as HTMLElement).getByRole("table");
+    expect(within(pendingTable).getByText("invitee@example.com")).toBeInTheDocument();
+    expect(within(historyTable).getByText("accepted@example.com")).toBeInTheDocument();
+    expect(within(pendingTable).queryByText("accepted@example.com")).not.toBeInTheDocument();
+  });
+
+  it("opens the same canonical access dialog from Members and Invitations", async () => {
+    renderParticipants();
+
+    const membersTable = screen.getByRole("table");
+    const memberRow = within(membersTable).getByText("member-2").closest("tr");
+    fireEvent.pointerDown(within(memberRow as HTMLElement).getByRole("button"), { button: 0, ctrlKey: false });
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Edit access" }));
+
+    let dialog = screen.getByRole("dialog", { name: "Edit access: member-2" });
+    expect(within(dialog).getByText("This is the canonical Participants access editor. Role presets and bounded overrides are managed here together.")).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+
+    await activateTab("Invitations");
+    const inviteSection = screen.getByRole("heading", { name: "Pending invitations" }).closest("section");
     const inviteTable = within(inviteSection as HTMLElement).getByRole("table");
+    const inviteRow = within(inviteTable).getByText("invitee@example.com").closest("tr");
+    fireEvent.pointerDown(within(inviteRow as HTMLElement).getByRole("button"), { button: 0, ctrlKey: false });
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Edit access" }));
 
-    expect(within(inviteTable).getByText("invitee@example.com")).toBeInTheDocument();
-    expect(within(inviteTable).queryByText("accepted@example.com")).not.toBeInTheDocument();
-    expect(within(inviteTable).queryByText("expired@example.com")).not.toBeInTheDocument();
-    expect(within(inviteTable).queryByText("revoked@example.com")).not.toBeInTheDocument();
+    dialog = screen.getByRole("dialog", { name: "Edit access: invitee@example.com" });
+    expect(within(dialog).getByText("This is the canonical Participants access editor. Role presets and bounded overrides are managed here together.")).toBeInTheDocument();
+  });
+
+  it("updates access from the shared dialog", async () => {
+    renderParticipants();
+
+    await activateTab("Permissions");
+    fireEvent.click(screen.getAllByRole("button", { name: "Edit access" })[0]);
+
+    const dialog = screen.getByRole("dialog", { name: "Edit access: member-2" });
+    const roleSelect = within(dialog).getAllByRole("combobox")[0];
+    fireEvent.click(roleSelect);
+    fireEvent.click(await screen.findByText("Viewer"));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save access" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Viewer")).toBeInTheDocument();
+    });
+  });
+
+  it("removes unsupported role transitions for co_owner", async () => {
+    const profile = setStoredAuthProfile({
+      email: "owner@example.com",
+      name: "Owner User",
+    });
+    setAuthRole("co_owner");
+    updateMember("project-1", profile.id, {
+      role: "co_owner",
+      ai_access: "project_pool",
+      finance_visibility: "detail",
+      internal_docs_visibility: "view",
+    } as never);
+
+    renderParticipants();
+
+    await activateTab("Permissions");
+    fireEvent.click(screen.getAllByRole("button", { name: "Edit access" })[0]);
+
+    const dialog = screen.getByRole("dialog", { name: /Edit access:/ });
+    fireEvent.click(within(dialog).getAllByRole("combobox")[0]);
+    const listbox = await screen.findByRole("listbox");
+    expect(within(listbox).getByText("Contractor")).toBeInTheDocument();
+    expect(within(listbox).getByText("Viewer")).toBeInTheDocument();
+    expect(within(listbox).queryByText("Co-owner")).not.toBeInTheDocument();
+    expect(within(listbox).queryByText("Owner")).not.toBeInTheDocument();
+  });
+
+  it("shows no permission edit entry points for contractor actors", () => {
+    const profile = setStoredAuthProfile({
+      email: "owner@example.com",
+      name: "Owner User",
+    });
+    setAuthRole("contractor");
+    updateMember("project-1", profile.id, {
+      role: "contractor",
+      ai_access: "consult_only",
+      finance_visibility: "none",
+    } as never);
+
+    renderParticipants();
+
+    expect(screen.queryByRole("button", { name: "Invite" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Edit access" })).not.toBeInTheDocument();
+  });
+
+  it("does not show Resend email for pending invites in local workspace mode", async () => {
+    renderParticipants();
+
+    await activateTab("Invitations");
+    const inviteSection = screen.getByRole("heading", { name: "Pending invitations" }).closest("section");
+    const inviteTable = within(inviteSection as HTMLElement).getByRole("table");
+    const inviteRow = within(inviteTable).getByText("invitee@example.com").closest("tr");
+    fireEvent.pointerDown(within(inviteRow as HTMLElement).getByRole("button"), { button: 0, ctrlKey: false });
+
+    expect(await screen.findByRole("menuitem", { name: "Edit access" })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Resend email" })).not.toBeInTheDocument();
   });
 
   describe("Invite email delivery (Supabase)", () => {
@@ -289,9 +306,11 @@ describe("ProjectParticipants", () => {
           user_id: profileId,
           role: "owner",
           ai_access: "project_pool",
+          finance_visibility: "detail",
           credit_limit: 500,
           used_credits: 0,
-        }],
+          internal_docs_visibility: "edit",
+        } as never],
       });
       vi.spyOn(permissions, "usePermission").mockReturnValue({
         seam: {
@@ -302,9 +321,11 @@ describe("ProjectParticipants", () => {
             user_id: profileId,
             role: "owner",
             ai_access: "project_pool",
+            finance_visibility: "detail",
             credit_limit: 500,
             used_credits: 0,
-          },
+            internal_docs_visibility: "edit",
+          } as never,
           project: undefined,
         },
         can: () => true,
@@ -329,7 +350,9 @@ describe("ProjectParticipants", () => {
         accepted_profile_id: null,
         created_at: new Date().toISOString(),
         accepted_at: null,
-      };
+        finance_visibility: "detail",
+        internal_docs_visibility: "view",
+      } as WorkspaceProjectInvite;
       const createSpy = vi.spyOn(workspaceSource, "createWorkspaceProjectInvite").mockResolvedValue(created);
       const sendSpy = vi.spyOn(workspaceSource, "sendWorkspaceProjectInviteEmail").mockResolvedValue({
         kind: "sent",
@@ -341,16 +364,7 @@ describe("ProjectParticipants", () => {
         },
       });
 
-      const queryClient = createQueryClient();
-      render(
-        <QueryClientProvider client={queryClient}>
-          <MemoryRouter initialEntries={["/project/project-1/participants"]}>
-            <Routes>
-              <Route path="/project/:id/participants" element={<ProjectParticipants />} />
-            </Routes>
-          </MemoryRouter>
-        </QueryClientProvider>,
-      );
+      renderParticipants();
 
       fireEvent.click(screen.getByRole("button", { name: "Invite" }));
       fireEvent.change(screen.getByPlaceholderText("member@example.com"), { target: { value: "new@example.com" } });
@@ -388,20 +402,13 @@ describe("ProjectParticipants", () => {
         accepted_profile_id: null,
         created_at: new Date().toISOString(),
         accepted_at: null,
-      };
+        finance_visibility: "detail",
+        internal_docs_visibility: "view",
+      } as WorkspaceProjectInvite;
       vi.spyOn(workspaceSource, "createWorkspaceProjectInvite").mockResolvedValue(created);
       vi.spyOn(workspaceSource, "sendWorkspaceProjectInviteEmail").mockRejectedValue(new Error("SMTP unavailable"));
 
-      const queryClient = createQueryClient();
-      render(
-        <QueryClientProvider client={queryClient}>
-          <MemoryRouter initialEntries={["/project/project-1/participants"]}>
-            <Routes>
-              <Route path="/project/:id/participants" element={<ProjectParticipants />} />
-            </Routes>
-          </MemoryRouter>
-        </QueryClientProvider>,
-      );
+      renderParticipants();
 
       fireEvent.click(screen.getByRole("button", { name: "Invite" }));
       fireEvent.change(screen.getByPlaceholderText("member@example.com"), { target: { value: "fail@example.com" } });
@@ -433,7 +440,9 @@ describe("ProjectParticipants", () => {
         accepted_profile_id: null,
         created_at: new Date().toISOString(),
         accepted_at: null,
-      };
+        finance_visibility: "detail",
+        internal_docs_visibility: "view",
+      } as WorkspaceProjectInvite;
       vi.spyOn(useMockData, "useProjectInvites").mockReturnValue([inviteRow]);
       const sendSpy = vi.spyOn(workspaceSource, "sendWorkspaceProjectInviteEmail").mockResolvedValue({
         kind: "sent",
@@ -445,18 +454,10 @@ describe("ProjectParticipants", () => {
         },
       });
 
-      const queryClient = createQueryClient();
-      render(
-        <QueryClientProvider client={queryClient}>
-          <MemoryRouter initialEntries={["/project/project-1/participants"]}>
-            <Routes>
-              <Route path="/project/:id/participants" element={<ProjectParticipants />} />
-            </Routes>
-          </MemoryRouter>
-        </QueryClientProvider>,
-      );
+      renderParticipants();
 
-      const inviteSection = screen.getByRole("heading", { name: "Pending invites" }).closest("section");
+      await activateTab("Invitations");
+      const inviteSection = screen.getByRole("heading", { name: "Pending invitations" }).closest("section");
       const inviteTable = within(inviteSection as HTMLElement).getByRole("table");
       const row = within(inviteTable).getByText("pending@example.com").closest("tr");
       fireEvent.pointerDown(within(row as HTMLElement).getByRole("button"), { button: 0, ctrlKey: false });
@@ -487,22 +488,16 @@ describe("ProjectParticipants", () => {
         accepted_profile_id: null,
         created_at: new Date().toISOString(),
         accepted_at: null,
-      };
+        finance_visibility: "detail",
+        internal_docs_visibility: "view",
+      } as WorkspaceProjectInvite;
       vi.spyOn(useMockData, "useProjectInvites").mockReturnValue([inviteRow]);
       vi.spyOn(workspaceSource, "sendWorkspaceProjectInviteEmail").mockRejectedValue(new Error("Rate limited"));
 
-      const queryClient = createQueryClient();
-      render(
-        <QueryClientProvider client={queryClient}>
-          <MemoryRouter initialEntries={["/project/project-1/participants"]}>
-            <Routes>
-              <Route path="/project/:id/participants" element={<ProjectParticipants />} />
-            </Routes>
-          </MemoryRouter>
-        </QueryClientProvider>,
-      );
+      renderParticipants();
 
-      const inviteSection = screen.getByRole("heading", { name: "Pending invites" }).closest("section");
+      await activateTab("Invitations");
+      const inviteSection = screen.getByRole("heading", { name: "Pending invitations" }).closest("section");
       const inviteTable = within(inviteSection as HTMLElement).getByRole("table");
       const row = within(inviteTable).getByText("bad@example.com").closest("tr");
       fireEvent.pointerDown(within(row as HTMLElement).getByRole("button"), { button: 0, ctrlKey: false });

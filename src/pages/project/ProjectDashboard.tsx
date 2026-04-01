@@ -19,6 +19,12 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
+import {
+  getProjectDomainAccess,
+  projectDomainAllowsContribute,
+  projectDomainAllowsManage,
+  projectDomainAllowsView,
+} from "@/lib/permissions";
 import { Copy, Info, LayoutDashboard, MapPin } from "lucide-react";
 
 export default function ProjectDashboard() {
@@ -36,9 +42,13 @@ export default function ProjectDashboard() {
   const documents = useDocuments(projectId);
   const media = useMedia(projectId);
   const perm = usePermission(projectId);
-  const userCan = perm.can;
   const actorRole = perm.seam.membership?.role ?? "viewer";
   const actorAiAccess = perm.seam.membership?.ai_access ?? "none";
+  const participantsAccess = getProjectDomainAccess(perm.seam, "participants");
+  const tasksAccess = getProjectDomainAccess(perm.seam, "tasks");
+  const documentsAccess = getProjectDomainAccess(perm.seam, "documents");
+  const galleryAccess = getProjectDomainAccess(perm.seam, "gallery");
+  const procurementAccess = getProjectDomainAccess(perm.seam, "procurement");
 
   const doneTasks = useMemo(
     () => tasks.filter((task) => task.status === "done" || (task.status as string) === "completed").length,
@@ -52,7 +62,11 @@ export default function ProjectDashboard() {
   }), [tasks]);
   const totalTasks = tasks.length;
   const progressPct = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
-  const canManageParticipants = perm.can("member.invite");
+  const canManageParticipants = projectDomainAllowsManage(participantsAccess);
+  const canManageTasks = projectDomainAllowsManage(tasksAccess);
+  const canContributeDocuments = projectDomainAllowsContribute(documentsAccess);
+  const canContributeGallery = projectDomainAllowsContribute(galleryAccess);
+  const canManageProcurement = projectDomainAllowsManage(procurementAccess);
 
   const handleCopyAddress = async () => {
     if (!project?.address) return;
@@ -142,8 +156,10 @@ export default function ProjectDashboard() {
         members={members}
         stages={stages}
         tasks={tasks}
-        canCreateTask={userCan("task.create")}
-        canCreateDocument={userCan("document.create")}
+        canCreateTask={canManageTasks}
+        canCreateDocument={canContributeDocuments}
+        canCreatePhoto={canContributeGallery}
+        canManageProcurement={canManageProcurement}
         canManageParticipants={canManageParticipants}
         actorRole={actorRole}
         actorAiAccess={actorAiAccess}
@@ -157,7 +173,9 @@ export default function ProjectDashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-sp-2 items-stretch">
         <DocsWidget documents={documents} projectId={projectId} className="lg:col-span-4 h-full" />
         <GalleryWidget media={media} projectId={projectId} className="lg:col-span-4 h-full" />
-        <ParticipantsWidget members={members} projectId={projectId} className="lg:col-span-4 h-full" />
+        {projectDomainAllowsView(participantsAccess) && (
+          <ParticipantsWidget members={members} projectId={projectId} className="lg:col-span-4 h-full" />
+        )}
       </div>
     </div>
   );

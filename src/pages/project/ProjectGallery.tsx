@@ -15,7 +15,11 @@ import { toast } from "@/hooks/use-toast";
 import { useMedia, useTasks, useWorkspaceMode } from "@/hooks/use-mock-data";
 import { useMediaUploadMutations } from "@/hooks/use-documents-media-source";
 import { trackEvent } from "@/lib/analytics";
-import { usePermission } from "@/lib/permissions";
+import {
+  getProjectDomainAccess,
+  projectDomainAllowsContribute,
+  usePermission,
+} from "@/lib/permissions";
 import { addMedia, addEvent, getCurrentUser } from "@/data/store";
 import type { Media as MediaType } from "@/types/entities";
 
@@ -28,6 +32,8 @@ export default function ProjectGallery() {
   const user = getCurrentUser();
   const workspaceMode = useWorkspaceMode();
   const isSupabaseMode = workspaceMode.kind === "supabase";
+  const galleryAccess = getProjectDomainAccess(perm.seam, "gallery");
+  const canUploadPhotos = projectDomainAllowsContribute(galleryAccess);
   const {
     prepareUpload,
     uploadBytes,
@@ -151,8 +157,8 @@ export default function ProjectGallery() {
         variant="gallery"
         title="No photos yet"
         description="Upload project photos to document progress."
-        actionLabel="Upload a photo"
-        onAction={() => setUploadOpen(true)}
+        actionLabel={canUploadPhotos ? "Upload a photo" : undefined}
+        onAction={canUploadPhotos ? () => setUploadOpen(true) : undefined}
       />
     );
   }
@@ -167,9 +173,11 @@ export default function ProjectGallery() {
             {photos.length} photos · {photos.filter((p) => p.is_final).length} final
           </p>
         </div>
-        <Button size="sm" onClick={() => setUploadOpen(true)} className="bg-accent text-accent-foreground hover:bg-accent/90">
-          <Upload className="h-4 w-4 mr-1.5" /> Upload
-        </Button>
+        {canUploadPhotos && (
+          <Button size="sm" onClick={() => setUploadOpen(true)} className="bg-accent text-accent-foreground hover:bg-accent/90">
+            <Upload className="h-4 w-4 mr-1.5" /> Upload
+          </Button>
+        )}
       </div>
 
       {/* Filters */}

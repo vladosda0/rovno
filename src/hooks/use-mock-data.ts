@@ -79,12 +79,12 @@ export function useProcurementV2(projectId: string) {
   return useProjectProcurementItems(projectId);
 }
 
-export function useHRItems(projectId: string) {
-  return useProjectHRItems(projectId);
+export function useHRItems(projectId: string, options?: { enabled?: boolean }) {
+  return useProjectHRItems(projectId, options);
 }
 
-export function useHRPayments(projectId: string) {
-  return useProjectHRPayments(projectId);
+export function useHRPayments(projectId: string, options?: { enabled?: boolean }) {
+  return useProjectHRPayments(projectId, options);
 }
 
 export function useDocuments(projectId: string) {

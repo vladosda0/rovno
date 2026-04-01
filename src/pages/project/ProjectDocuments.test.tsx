@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import ProjectDocuments from "@/pages/project/ProjectDocuments";
-import type { Document } from "@/types/entities";
+import type { Document, MemberRole } from "@/types/entities";
 
 const {
   mockUseCurrentUser,
@@ -34,10 +34,13 @@ vi.mock("@/hooks/use-documents-media-source", () => ({
   useDocumentUploadMutations: (projectId: string) => mockUseDocumentUploadMutations(projectId),
 }));
 
-vi.mock("@/lib/permissions", () => ({
-  isOwnerOrCoOwner: (role: string) => role === "owner" || role === "co_owner",
-  usePermission: (projectId: string) => mockUsePermission(projectId),
-}));
+vi.mock("@/lib/permissions", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/permissions")>("@/lib/permissions");
+  return {
+    ...actual,
+    usePermission: (projectId: string) => mockUsePermission(projectId),
+  };
+});
 
 function createDocument(partial: Partial<Document> = {}): Document {
   return {
@@ -67,6 +70,29 @@ function renderProjectDocuments() {
   );
 }
 
+function buildPermission(role: MemberRole) {
+  return {
+    seam: {
+      projectId: "project-1",
+      profileId: "user-1",
+      membership: {
+        project_id: "project-1",
+        user_id: "user-1",
+        role,
+        viewer_regime: null,
+        ai_access: "consult_only",
+        finance_visibility: "summary",
+        credit_limit: 0,
+        used_credits: 0,
+      },
+      project: undefined,
+    },
+    role,
+    can: () => true,
+    isLoading: false,
+  };
+}
+
 describe("ProjectDocuments", () => {
   beforeEach(() => {
     mockUseCurrentUser.mockReset();
@@ -78,7 +104,7 @@ describe("ProjectDocuments", () => {
     mockUsePermission.mockReset();
     mockUseCurrentUser.mockReturnValue({ id: "user-1" });
     mockUseProject.mockReturnValue({ project: { title: "Apartment Renovation" } });
-    mockUsePermission.mockReturnValue({ role: "owner", can: () => true });
+    mockUsePermission.mockReturnValue(buildPermission("owner"));
     mockUseProjectDocumentMutations.mockReturnValue({
       createDocument: vi.fn(),
       archiveDocument: vi.fn(),
@@ -203,5 +229,32 @@ describe("ProjectDocuments", () => {
     expect(screen.getByText("Download and sharing are coming soon.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Comment/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Confirm acknowledgement/i })).not.toBeInTheDocument();
+  });
+
+  it("hides upload actions for viewers", () => {
+    mockUseWorkspaceMode.mockReturnValue({ kind: "local" });
+    mockUsePermission.mockReturnValue(buildPermission("viewer"));
+    mockUseProjectDocumentsState.mockReturnValue({ documents: [], isLoading: false });
+
+    renderProjectDocuments();
+
+    expect(screen.queryByRole("button", { name: "Upload a document" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Upload" })).not.toBeInTheDocument();
+  });
+
+  it("shows upload but not generate for contractors", () => {
+    mockUseWorkspaceMode.mockReturnValue({ kind: "local" });
+    mockUsePermission.mockReturnValue(buildPermission("contractor"));
+    mockUseProjectDocumentsState.mockReturnValue({
+      documents: [createDocument({ title: "Contractor Document" })],
+      isLoading: false,
+    });
+
+    renderProjectDocuments();
+
+    expect(screen.getByRole("button", { name: "Upload" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Generate" })).not.toBeInTheDocument();
+    expect(screen.queryByTitle("Archive")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("Delete")).not.toBeInTheDocument();
   });
 });

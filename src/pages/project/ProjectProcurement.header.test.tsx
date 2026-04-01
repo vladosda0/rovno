@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -155,14 +155,38 @@ describe("ProjectProcurement header redesign", () => {
     const projectId = "project-1";
     const lockedItem = seedLockedRequestedItem(projectId);
     const escapedLockedName = lockedItem.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      renderProjectProcurement(projectId);
+
+      fireEvent.click(screen.getByRole("button", { name: /^Requested \(/i }));
+      fireEvent.click(screen.getByRole("button", { name: new RegExp(escapedLockedName) }));
+
+      const dialog = screen.getByRole("dialog", { name: "Procurement request" });
+      expect(within(dialog).getByText("Locked from estimate")).toBeInTheDocument();
+      expect(within(dialog).queryByRole("button", { name: "Archive" })).not.toBeInTheDocument();
+
+      const consoleOutput = consoleErrorSpy.mock.calls
+        .flat()
+        .map((value) => String(value))
+        .join("\n");
+      expect(consoleOutput).not.toContain("DialogContent requires a DialogTitle");
+      expect(consoleOutput).not.toContain("Missing `Description` or `aria-describedby={undefined}`");
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  it("hides Requested tab for contractors and keeps summary tabs visible", () => {
+    const projectId = "project-1";
+    seedRequestedItem(projectId);
+    setAuthRole("contractor");
 
     renderProjectProcurement(projectId);
 
-    fireEvent.click(screen.getByRole("button", { name: /^Requested \(/i }));
-    fireEvent.click(screen.getByRole("button", { name: new RegExp(escapedLockedName) }));
-
-    const dialog = screen.getByRole("dialog");
-    expect(within(dialog).getByText("Locked from estimate")).toBeInTheDocument();
-    expect(within(dialog).queryByRole("button", { name: "Archive" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Requested \(/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Ordered \(/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^In stock \(/i })).toBeInTheDocument();
   });
 });
