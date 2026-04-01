@@ -475,6 +475,7 @@ describe("hr-source helpers", () => {
           task_id: "task-1",
           title: "Crew hours",
           planned_cost_cents: 300000,
+          status: "planned",
           created_by: "creator-1",
         }),
         expect.objectContaining({
@@ -482,6 +483,7 @@ describe("hr-source helpers", () => {
           estimate_resource_line_id: "line-2",
           title: "Scaffold team",
           planned_cost_cents: 90000,
+          status: "planned",
           created_by: "creator-2",
         }),
       ]),
@@ -494,6 +496,56 @@ describe("hr-source helpers", () => {
         role_label: null,
       },
     ]);
+    expect(state.deleteAssigneesMock).not.toHaveBeenCalled();
+  });
+
+  it("defaults new estimate-driven HR rows to planned status", async () => {
+    await syncProjectHRFromEstimate(
+      { kind: "supabase", profileId: "profile-9" },
+      {
+        projectId: "project-1",
+        estimateStatus: "in_work",
+        works: [
+          {
+            id: "work-1",
+            taskId: "task-1",
+            plannedStart: "2026-03-10T00:00:00.000Z",
+            plannedEnd: "2026-03-11T00:00:00.000Z",
+          },
+        ],
+        lines: [
+          {
+            id: "line-1",
+            stageId: "stage-1",
+            workId: "work-1",
+            title: "Fresh labor row",
+            type: "labor",
+            qtyMilli: 2000,
+            costUnitCents: 150000,
+            assigneeId: null,
+          },
+        ],
+      },
+    );
+
+    expect(state.upsertHRItemsMock).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          id: "line-1",
+          project_id: "project-1",
+          project_stage_id: "stage-1",
+          estimate_resource_line_id: "line-1",
+          estimate_work_id: "work-1",
+          task_id: "task-1",
+          title: "Fresh labor row",
+          planned_cost_cents: 300000,
+          status: "planned",
+          created_by: "profile-9",
+        }),
+      ],
+      { onConflict: "id" },
+    );
+    expect(state.insertAssigneesMock).not.toHaveBeenCalled();
     expect(state.deleteAssigneesMock).not.toHaveBeenCalled();
   });
 });

@@ -751,7 +751,7 @@ export async function syncProjectHRFromEstimate(
         compensationType: existingRow?.compensationType ?? "fixed",
         plannedCostCents: linePlannedCostCents(line),
         actualCostCents: existingRow?.actualCostCents ?? null,
-        status: existingRow?.status,
+        status: existingRow?.status ?? "planned",
         startAt: work?.plannedStart ?? existingRow?.startAt ?? null,
         endAt: work?.plannedEnd ?? existingRow?.endAt ?? null,
         createdBy: existingRow?.createdBy ?? mode.profileId,
