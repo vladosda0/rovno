@@ -341,4 +341,20 @@ describe("ProjectHR", () => {
     expect(screen.queryByText("Open in Tasks")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Painter crew" })).not.toBeInTheDocument();
   });
+
+  it("does not recover estimate linkage from task checklist text when source lineage is missing", () => {
+    mocks.useHRItems.mockReturnValue([
+      hrItem({
+        title: "Legacy HR row",
+        sourceEstimateV2LineId: null,
+      }),
+    ]);
+
+    renderProjectHR("project-1");
+
+    expect(screen.getByRole("button", { name: "Legacy HR row" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Painter crew" })).not.toBeInTheDocument();
+    expect(screen.getAllByText("Unassigned").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Alex Crew")).not.toBeInTheDocument();
+  });
 });

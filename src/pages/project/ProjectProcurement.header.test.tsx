@@ -25,6 +25,8 @@ function renderProjectProcurement(projectId: string) {
         <MemoryRouter initialEntries={[`/project/${projectId}/procurement`]}>
           <Routes>
             <Route path="/project/:id/procurement" element={<ProjectProcurement />} />
+            <Route path="/project/:id/procurement/:itemId" element={<ProjectProcurement />} />
+            <Route path="/project/:id/procurement/orders/:orderId" element={<ProjectProcurement />} />
           </Routes>
         </MemoryRouter>
       </TooltipProvider>
@@ -64,6 +66,17 @@ function seedRequestedItem(projectId: string) {
     createdFrom: "estimate",
     linkedTaskIds: [],
     archived: false,
+  });
+}
+
+function seedLockedRequestedItem(projectId: string) {
+  const item = seedRequestedItem(projectId);
+  return addProcurementItem({
+    ...item,
+    id: `${item.id}-locked`,
+    name: `${item.name} locked`,
+    lockedFromEstimate: true,
+    sourceEstimateV2LineId: "estimate-line-locked",
   });
 }
 
@@ -136,5 +149,20 @@ describe("ProjectProcurement header redesign", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Clear" }));
     expect(screen.queryByText("1 selected")).not.toBeInTheDocument();
+  });
+
+  it("hides archive action for estimate-linked requests in the detail dialog", () => {
+    const projectId = "project-1";
+    const lockedItem = seedLockedRequestedItem(projectId);
+    const escapedLockedName = lockedItem.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+    renderProjectProcurement(projectId);
+
+    fireEvent.click(screen.getByRole("button", { name: /^Requested \(/i }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp(escapedLockedName) }));
+
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText("Locked from estimate")).toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: "Archive" })).not.toBeInTheDocument();
   });
 });

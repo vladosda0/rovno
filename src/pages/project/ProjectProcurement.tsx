@@ -342,8 +342,8 @@ export default function ProjectProcurement() {
         } satisfies ProcurementItemV2;
       });
 
-    return [...derivedItems, ...missingDerivedItems];
-  }, [baseItems, estimateState.lines, estimateState.works, estimateState.stages]);
+    return isSupabaseMode ? derivedItems : [...derivedItems, ...missingDerivedItems];
+  }, [baseItems, estimateState.lines, estimateState.works, estimateState.stages, isSupabaseMode]);
 
   const [search, setSearch] = useState(savedListState?.search ?? "");
   const [activeTab, setActiveTab] = useState<ProcurementTab>(savedListState?.activeTab ?? "requested");
@@ -2640,7 +2640,7 @@ export default function ProjectProcurement() {
                 Save
               </Button>
             )}
-            {detailItem && canEdit && (
+            {detailItem && canEdit && !detailItem.lockedFromEstimate && (
               <Button
                 type="button"
                 variant="ghost"

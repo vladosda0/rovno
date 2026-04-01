@@ -193,15 +193,7 @@ export default function ProjectHR() {
     return hrItems
       .map((item) => {
         const task = item.taskId ? taskById.get(item.taskId) ?? null : null;
-        const linkedLineId = item.sourceEstimateV2LineId
-          ?? (task
-            ? task.checklist
-              .filter((checklistItem) => Boolean(checklistItem.estimateV2LineId))
-              .filter((checklistItem) => checklistItem.text === item.title)
-              .map((checklistItem) => checklistItem.estimateV2LineId)
-              .find((lineId): lineId is string => Boolean(lineId))
-            : null)
-          ?? null;
+        const linkedLineId = item.sourceEstimateV2LineId ?? null;
         const linkedLine = linkedLineId ? lineById.get(linkedLineId) ?? null : null;
         const paid = paidByItemId.get(item.id) ?? 0;
         const planned = linkedLine
