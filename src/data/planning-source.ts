@@ -1,11 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import * as store from "@/data/store";
+import { syncEstimateItemName } from "@/data/estimate-store";
 import {
   resolveRuntimeWorkspaceMode,
   type RuntimeWorkspaceMode,
   type WorkspaceMode,
 } from "@/data/workspace-source";
-import type { ChecklistItem, ChecklistItemType, Comment, Stage, Task } from "@/types/entities";
+import type { ChecklistItem, ChecklistItemType, Comment, Stage, Task, TaskAssignee } from "@/types/entities";
 import type {
   EstimateExecutionStatus,
   EstimateV2ResourceLine,
@@ -129,7 +130,7 @@ export interface SyncProjectTasksFromEstimateInput {
   projectId: string;
   estimateStatus: EstimateExecutionStatus;
   works: Array<Pick<EstimateV2Work, "id" | "stageId" | "taskId" | "title" | "plannedStart" | "plannedEnd">>;
-  lines: Array<Pick<EstimateV2ResourceLine, "id" | "workId" | "title" | "type">>;
+  lines: Array<Pick<EstimateV2ResourceLine, "id" | "workId" | "title" | "type" | "assigneeId" | "assigneeName" | "assigneeEmail">>;
   profileId: string;
 }
 
@@ -175,6 +176,7 @@ function getProtectedTaskPatchFields(
   if (patch.stageId !== undefined) protectedFields.push("stageId");
   if (patch.startDate !== undefined) protectedFields.push("startDate");
   if (patch.deadline !== undefined) protectedFields.push("deadline");
+  if (patch.assigneeId !== undefined) protectedFields.push("assigneeId");
   return protectedFields;
 }
 
@@ -202,6 +204,50 @@ function sortEstimateLinesForChecklist(
     if (typeDiff !== 0) return typeDiff;
     return left.id.localeCompare(right.id);
   });
+}
+
+function normalizeTaskAssigneeIdentity(
+  line: Pick<EstimateV2ResourceLine, "assigneeId" | "assigneeName" | "assigneeEmail">,
+): string | null {
+  const assigneeId = line.assigneeId?.trim();
+  if (assigneeId) return `id:${assigneeId}`;
+
+  const assigneeEmail = line.assigneeEmail?.trim().toLowerCase();
+  if (assigneeEmail) return `email:${assigneeEmail}`;
+
+  const assigneeName = line.assigneeName?.trim().toLowerCase();
+  if (assigneeName) return `name:${assigneeName}`;
+
+  return null;
+}
+
+export function deriveEstimateTaskAssignees(
+  lines: Array<Pick<EstimateV2ResourceLine, "assigneeId" | "assigneeName" | "assigneeEmail">>,
+): TaskAssignee[] {
+  const assignees: TaskAssignee[] = [];
+  const seen = new Set<string>();
+
+  lines.forEach((line) => {
+    const identity = normalizeTaskAssigneeIdentity(line);
+    if (!identity || seen.has(identity)) {
+      return;
+    }
+
+    seen.add(identity);
+    assignees.push({
+      id: line.assigneeId?.trim() || null,
+      name: line.assigneeName?.trim() || null,
+      email: line.assigneeEmail?.trim() || null,
+    });
+  });
+
+  return assignees;
+}
+
+export function getPrimaryEstimateTaskAssigneeId(
+  assignees: TaskAssignee[],
+): string | null {
+  return assignees.find((assignee) => Boolean(assignee.id))?.id ?? null;
 }
 
 function createBrowserPlanningSource(mode: "demo" | "local"): PlanningSource {
@@ -238,6 +284,7 @@ function createBrowserPlanningSource(mode: "demo" | "local"): PlanningSource {
         description: input.description ?? "",
         status: input.status ?? "not_started",
         assignee_id: input.assigneeId ?? "",
+        assignees: input.assigneeId ? [{ id: input.assigneeId, name: null, email: null }] : [],
         checklist: [],
         comments: [],
         attachments: [],
@@ -268,6 +315,9 @@ function createBrowserPlanningSource(mode: "demo" | "local"): PlanningSource {
       }
       if (patch.assigneeId !== undefined) {
         update.assignee_id = patch.assigneeId ?? "";
+        update.assignees = patch.assigneeId
+          ? [{ id: patch.assigneeId, name: null, email: null }]
+          : [];
       }
       if (patch.deadline !== undefined) {
         update.deadline = patch.deadline ?? undefined;
@@ -277,6 +327,9 @@ function createBrowserPlanningSource(mode: "demo" | "local"): PlanningSource {
       }
 
       store.updateTask(taskId, update);
+      if (patch.title !== undefined) {
+        syncEstimateItemName(taskId, patch.title);
+      }
       const task = store.getTask(taskId);
       if (!task) {
         throw new Error(`Task not found: ${taskId}`);
@@ -338,6 +391,9 @@ export function mapTaskRowToTask(row: TaskRow): Task {
     description: row.description ?? "",
     status: row.status,
     assignee_id: row.assignee_profile_id ?? "",
+    assignees: row.assignee_profile_id
+      ? [{ id: row.assignee_profile_id, name: null, email: null }]
+      : [],
     checklist: [],
     comments: [],
     attachments: [],
@@ -668,11 +724,19 @@ export async function syncProjectTasksFromEstimate(
     await clearEstimateWorkIdForTasks(supabase, staleLinkedTaskIds);
   }
 
+  const linesByWorkId = new Map<string, Array<Pick<EstimateV2ResourceLine, "id" | "type" | "title" | "assigneeId" | "assigneeName" | "assigneeEmail">>>();
+  input.lines.forEach((line) => {
+    const list = linesByWorkId.get(line.workId) ?? [];
+    list.push(line);
+    linesByWorkId.set(line.workId, list);
+  });
+
   const taskIdByWorkId: Record<string, string> = {};
   const taskUpserts: HeroTaskUpsertInput[] = input.works.map((work) => {
     const existingRow = taskRowByEstimateWorkId.get(work.id)
       ?? (work.taskId ? taskRowById.get(work.taskId) ?? null : null);
     const taskId = existingRow?.id ?? work.taskId ?? defaultTaskIdForEstimateWork(work.id);
+    const derivedAssignees = deriveEstimateTaskAssignees(linesByWorkId.get(work.id) ?? []);
     taskIdByWorkId[work.id] = taskId;
 
     return {
@@ -683,7 +747,7 @@ export async function syncProjectTasksFromEstimate(
       title: work.title,
       description: existingRow?.description ?? "Auto-created from Estimate v2 work",
       status: existingRow?.status ?? "not_started",
-      assigneeId: existingRow?.assignee_profile_id ?? null,
+      assigneeId: getPrimaryEstimateTaskAssigneeId(derivedAssignees) ?? null,
       createdBy: existingRow?.created_by ?? input.profileId,
       startAt: work.plannedStart ?? null,
       dueAt: work.plannedEnd ?? null,
@@ -707,13 +771,6 @@ export async function syncProjectTasksFromEstimate(
     if (!existingChecklistRowByEstimateLineId.has(row.estimate_resource_line_id)) {
       existingChecklistRowByEstimateLineId.set(row.estimate_resource_line_id, row);
     }
-  });
-
-  const linesByWorkId = new Map<string, Array<Pick<EstimateV2ResourceLine, "id" | "type" | "title">>>();
-  input.lines.forEach((line) => {
-    const list = linesByWorkId.get(line.workId) ?? [];
-    list.push(line);
-    linesByWorkId.set(line.workId, list);
   });
 
   const checklistUpserts = input.works.flatMap((work) => (
@@ -958,7 +1015,7 @@ function createSupabasePlanningSource(
         }
 
         if (currentRow && isEstimateLinkedTaskRow(currentRow)) {
-          throw new Error("Estimate-linked task planning fields are read-only in Supabase mode.");
+          throw new Error("Estimate-derived task structure and assignees are read-only in Supabase mode.");
         }
       }
 
@@ -1002,6 +1059,16 @@ function createSupabasePlanningSource(
       if (error) throw error;
     },
     async createTaskChecklistItem(taskId: string, input: { text: string; done?: boolean; sortOrder?: number }) {
+      const { data: taskRow, error: taskRowError } = await supabase
+        .from("tasks")
+        .select("id, estimate_work_id")
+        .eq("id", taskId)
+        .maybeSingle();
+      if (taskRowError) throw taskRowError;
+      if (taskRow && isEstimateLinkedTaskRow(taskRow)) {
+        throw new Error("Estimate-derived checklist structure is read-only in Supabase mode.");
+      }
+
       const { data: lastRow, error: lastRowError } = await supabase
         .from("task_checklist_items")
         .select("sort_order")
@@ -1022,6 +1089,16 @@ function createSupabasePlanningSource(
       if (error) throw error;
     },
     async deleteTaskChecklistItem(taskId: string, itemId: string) {
+      const { data: taskRow, error: taskRowError } = await supabase
+        .from("tasks")
+        .select("id, estimate_work_id")
+        .eq("id", taskId)
+        .maybeSingle();
+      if (taskRowError) throw taskRowError;
+      if (taskRow && isEstimateLinkedTaskRow(taskRow)) {
+        throw new Error("Estimate-derived checklist structure is read-only in Supabase mode.");
+      }
+
       const { data: currentRow, error: currentRowError } = await supabase
         .from("task_checklist_items")
         .select("id, estimate_resource_line_id, estimate_work_id")

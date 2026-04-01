@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import * as store from "@/data/store";
-import { getPlanningSource } from "@/data/planning-source";
-import { useEstimateV2ProjectSync } from "@/hooks/use-estimate-v2-data";
+import { deriveEstimateTaskAssignees, getPlanningSource, getPrimaryEstimateTaskAssigneeId } from "@/data/planning-source";
+import { useEstimateV2Project } from "@/hooks/use-estimate-v2-data";
 import { useWorkspaceMode } from "@/hooks/use-workspace-source";
 import type { Stage, Task } from "@/types/entities";
 
@@ -36,7 +36,8 @@ function useStoreValue<T>(getter: () => T, enabled: boolean, fallback: T): T {
 
 export function usePlanningProjectStages(projectId: string): Stage[] {
   const mode = useWorkspaceMode();
-  const estimateSync = useEstimateV2ProjectSync(projectId);
+  const estimateState = useEstimateV2Project(projectId);
+  const estimateSync = estimateState.sync;
   const supabaseMode = mode.kind === "supabase" ? mode : null;
   const getStages = useCallback(() => store.getStages(projectId), [projectId]);
   const demoStages = useStoreValue(
@@ -65,7 +66,8 @@ export function usePlanningProjectStages(projectId: string): Stage[] {
 
 export function usePlanningProjectTasks(projectId: string): Task[] {
   const mode = useWorkspaceMode();
-  const estimateSync = useEstimateV2ProjectSync(projectId);
+  const estimateState = useEstimateV2Project(projectId);
+  const estimateSync = estimateState.sync;
   const supabaseMode = mode.kind === "supabase" ? mode : null;
   const getTasks = useCallback(() => store.getTasks(projectId), [projectId]);
   const demoTasks = useStoreValue(
@@ -85,9 +87,40 @@ export function usePlanningProjectTasks(projectId: string): Task[] {
     staleTime: PLANNING_QUERY_STALE_TIME_MS,
   });
 
-  if (mode.kind === "demo" || mode.kind === "local") {
-    return demoTasks;
-  }
+  const remoteTasks = tasksQuery.data ?? EMPTY_PLANNING_TASKS;
+  const derivedTasks = useMemo(() => {
+    const rawTasks = mode.kind === "demo" || mode.kind === "local"
+      ? demoTasks
+      : remoteTasks;
 
-  return tasksQuery.data ?? EMPTY_PLANNING_TASKS;
+    if (!supabaseMode || rawTasks.length === 0) {
+      return rawTasks;
+    }
+
+    const linesByWorkId = new Map<string, typeof estimateState.lines>();
+    estimateState.lines.forEach((line) => {
+      const rows = linesByWorkId.get(line.workId) ?? [];
+      rows.push(line);
+      linesByWorkId.set(line.workId, rows);
+    });
+
+    return rawTasks.map((task) => {
+      if (!task.estimateV2WorkId) {
+        return task;
+      }
+
+      const assignees = deriveEstimateTaskAssignees(linesByWorkId.get(task.estimateV2WorkId) ?? []);
+      if (assignees.length === 0) {
+        return task;
+      }
+
+      return {
+        ...task,
+        assignee_id: getPrimaryEstimateTaskAssigneeId(assignees) ?? task.assignee_id,
+        assignees,
+      };
+    });
+  }, [demoTasks, estimateState.lines, mode.kind, remoteTasks, supabaseMode]);
+
+  return derivedTasks;
 }

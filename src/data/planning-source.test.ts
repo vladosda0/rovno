@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  deriveEstimateTaskAssignees,
   mapProjectStageRowToStage,
   mapTaskRowToTask,
   syncProjectTasksFromEstimate,
@@ -91,6 +92,7 @@ function createTaskSyncSupabaseMock(input: {
   const state = {
     taskRows: input.taskRows ?? [taskRow()],
     checklistRows: [...(input.checklistRows ?? [])],
+    taskUpserts: [] as unknown[],
   };
   const duplicateKeyError = {
     message:
@@ -113,6 +115,7 @@ function createTaskSyncSupabaseMock(input: {
           },
           upsert(rows: unknown[]) {
             input.operations.push(`tasks.upsert:${rows.length}`);
+            state.taskUpserts = rows;
             return Promise.resolve({ error: null });
           },
           update() {
@@ -267,6 +270,7 @@ describe("planning-source helpers", () => {
       description: "Wire and install outlets",
       status: "in_progress",
       assignee_id: "",
+      assignees: [],
       checklist: [],
       comments: [],
       attachments: [],
@@ -277,6 +281,20 @@ describe("planning-source helpers", () => {
       startDate: undefined,
       deadline: undefined,
     });
+  });
+
+  it("derives estimate task assignees with stable dedupe order", () => {
+    expect(deriveEstimateTaskAssignees([
+      { assigneeId: "user-1", assigneeName: "Alex", assigneeEmail: "alex@example.com" },
+      { assigneeId: "user-1", assigneeName: "Alex Duplicate", assigneeEmail: "alex@example.com" },
+      { assigneeId: null, assigneeName: "Crew Two", assigneeEmail: "crew2@example.com" },
+      { assigneeId: null, assigneeName: "Crew Two", assigneeEmail: "crew2@example.com" },
+      { assigneeId: null, assigneeName: "Crew Three", assigneeEmail: null },
+    ])).toEqual([
+      { id: "user-1", name: "Alex", email: "alex@example.com" },
+      { id: null, name: "Crew Two", email: "crew2@example.com" },
+      { id: null, name: "Crew Three", email: null },
+    ]);
   });
 
   it("deletes stale estimate-linked checklist rows before reusing sort order", async () => {
@@ -439,6 +457,64 @@ describe("planning-source helpers", () => {
         estimate_resource_line_id: null,
         estimate_work_id: null,
         sort_order: 3,
+      }),
+    ]);
+  });
+
+  it("writes the deterministic primary assignee from estimate-owned assignee data", async () => {
+    const operations: string[] = [];
+    const { client, state } = createTaskSyncSupabaseMock({
+      operations,
+      taskRows: [
+        taskRow({
+          assignee_profile_id: "legacy-user",
+        }),
+      ],
+    });
+
+    mockSupabase = client;
+
+    await syncProjectTasksFromEstimate({
+      projectId: "project-1",
+      estimateStatus: "in_work",
+      works: [
+        {
+          id: "work-1",
+          stageId: "stage-1",
+          taskId: "task-1",
+          title: "Install outlets",
+          plannedStart: null,
+          plannedEnd: null,
+        },
+      ],
+      lines: [
+        {
+          id: "line-1",
+          workId: "work-1",
+          title: "Labor line",
+          type: "labor",
+          assigneeId: "user-2",
+          assigneeName: "Crew lead",
+          assigneeEmail: "lead@example.com",
+        },
+        {
+          id: "line-2",
+          workId: "work-1",
+          title: "Labor line 2",
+          type: "labor",
+          assigneeId: null,
+          assigneeName: "Helper",
+          assigneeEmail: "helper@example.com",
+        },
+      ],
+      profileId: "profile-1",
+    });
+
+    expect(operations[0]).toBe("tasks.upsert:1");
+    expect(state.taskUpserts).toEqual([
+      expect.objectContaining({
+        id: "task-1",
+        assignee_profile_id: "user-2",
       }),
     ]);
   });

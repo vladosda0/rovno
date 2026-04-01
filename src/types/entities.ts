@@ -125,6 +125,12 @@ export interface Comment {
   created_at: string;
 }
 
+export interface TaskAssignee {
+  id: string | null;
+  name: string | null;
+  email: string | null;
+}
+
 export interface Task {
   id: string;
   project_id: string;
@@ -134,6 +140,7 @@ export interface Task {
   description: string;
   status: TaskStatus;
   assignee_id: string;
+  assignees?: TaskAssignee[];
   checklist: ChecklistItem[];
   comments: Comment[];
   attachments: string[];

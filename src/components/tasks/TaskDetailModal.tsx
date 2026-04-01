@@ -9,10 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { PhotoViewer } from "@/components/PhotoViewer";
-import {
-  getUserById, deleteTask, updateTaskDescription,
-  updateTaskDeadline, updateTask,
-} from "@/data/store";
+import { getUserById } from "@/data/store";
 import { useToast } from "@/hooks/use-toast";
 import {
   Send, CheckSquare, Trash2, Plus, X, Calendar, Camera, Image, Upload, Loader2,
@@ -22,7 +19,6 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel,
 } from "@/components/ui/alert-dialog";
 import type { Task, TaskStatus, Media as MediaType } from "@/types/entities";
-import { syncEstimateItemName } from "@/data/estimate-store";
 import { useMediaUploadMutations } from "@/hooks/use-documents-media-source";
 import { ResourceTypeBadge } from "@/components/estimate-v2/ResourceTypeBadge";
 import { format } from "date-fns";
@@ -46,9 +42,14 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   canEdit: boolean;
   estimateLinkedPlanningReadOnly?: boolean;
+  taskStructureReadOnly?: boolean;
   blockEstimateLinkedDelete?: boolean;
   disableStatusChanges?: boolean;
   onStatusChange?: (taskId: string, newStatus: TaskStatus) => void;
+  onTitleChange?: (taskId: string, title: string) => Promise<void> | void;
+  onDescriptionChange?: (taskId: string, description: string) => Promise<void> | void;
+  onDeadlineChange?: (taskId: string, deadline?: string) => Promise<void> | void;
+  onDeleteTask?: (taskId: string) => Promise<void> | void;
   projectMedia?: MediaType[];
   onChecklistToggle?: (taskId: string, itemId: string, done: boolean) => Promise<void> | void;
   onChecklistAdd?: (taskId: string, text: string) => Promise<void> | void;
@@ -62,9 +63,14 @@ export function TaskDetailModal({
   onOpenChange,
   canEdit,
   estimateLinkedPlanningReadOnly = false,
+  taskStructureReadOnly = false,
   blockEstimateLinkedDelete = false,
   disableStatusChanges = false,
   onStatusChange,
+  onTitleChange,
+  onDescriptionChange,
+  onDeadlineChange,
+  onDeleteTask,
   projectMedia,
   onChecklistToggle,
   onChecklistAdd,
@@ -88,6 +94,7 @@ export function TaskDetailModal({
   const [titleDraft, setTitleDraft] = useState("");
   const descTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const structureReadOnly = estimateLinkedPlanningReadOnly || taskStructureReadOnly;
 
   // PhotoViewer
   const [viewerPhoto, setViewerPhoto] = useState<MediaType | null>(null);
@@ -123,17 +130,23 @@ export function TaskDetailModal({
       setEditingTitle(false);
       return;
     }
-    if (estimateLinkedPlanningReadOnly) {
+    if (structureReadOnly) {
       setTitleDraft(task.title);
       setEditingTitle(false);
       return;
     }
     if (titleDraft.trim() !== task.title) {
-      updateTask(task.id, { title: titleDraft.trim() });
-      syncEstimateItemName(task.id, titleDraft.trim());
+      void Promise.resolve(onTitleChange?.(task.id, titleDraft.trim())).catch((error) => {
+        toast({
+          title: "Unable to rename task",
+          description: error instanceof Error ? error.message : "Task title was not updated.",
+          variant: "destructive",
+        });
+        setTitleDraft(task.title);
+      });
     }
     setEditingTitle(false);
-  }, [task, titleDraft, estimateLinkedPlanningReadOnly]);
+  }, [onTitleChange, structureReadOnly, task, titleDraft, toast]);
 
   const handleTitleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === "Enter") { e.preventDefault(); handleTitleSave(); }
@@ -144,17 +157,32 @@ export function TaskDetailModal({
     if (!task) return;
     if (descTimerRef.current) clearTimeout(descTimerRef.current);
     if (descDraft !== task.description) {
-      updateTaskDescription(task.id, descDraft);
+      void Promise.resolve(onDescriptionChange?.(task.id, descDraft)).catch((error) => {
+        toast({
+          title: "Unable to update description",
+          description: error instanceof Error ? error.message : "Task description was not updated.",
+          variant: "destructive",
+        });
+        setDescDraft(task.description);
+      });
     }
-  }, [task, descDraft]);
+  }, [descDraft, onDescriptionChange, task, toast]);
 
   const handleDescChange = useCallback((val: string) => {
     setDescDraft(val);
     if (descTimerRef.current) clearTimeout(descTimerRef.current);
     descTimerRef.current = setTimeout(() => {
-      if (task) updateTaskDescription(task.id, val);
+      if (!task) return;
+      void Promise.resolve(onDescriptionChange?.(task.id, val)).catch((error) => {
+        toast({
+          title: "Unable to update description",
+          description: error instanceof Error ? error.message : "Task description was not updated.",
+          variant: "destructive",
+        });
+        setDescDraft(task.description);
+      });
     }, 800);
-  }, [task]);
+  }, [onDescriptionChange, task, toast]);
 
   const getChecklistResourceType = useCallback((item: Task["checklist"][number]): ResourceLineType => {
     if (item.estimateV2ResourceType === "material") return "material";
@@ -208,29 +236,65 @@ export function TaskDetailModal({
 
   const handleDelete = useCallback(() => {
     if (!task) return;
-    if (estimateLinkedPlanningReadOnly && blockEstimateLinkedDelete) {
+    if (structureReadOnly && blockEstimateLinkedDelete) {
       toast({
-        title: "Estimate-linked tasks cannot be deleted right now",
-        description: "Wait for task sync to recover before deleting estimate-linked tasks.",
+        title: "Task structure is managed from Estimate",
+        description: "Delete task structure from Estimate in Supabase mode.",
         variant: "destructive",
       });
       return;
     }
-    deleteTask(task.id);
-    setDeleteOpen(false);
-    onOpenChange(false);
-    toast({ title: "Task deleted" });
-  }, [task, estimateLinkedPlanningReadOnly, blockEstimateLinkedDelete, onOpenChange, toast]);
+    void Promise.resolve(onDeleteTask?.(task.id))
+      .then(() => {
+        setDeleteOpen(false);
+        onOpenChange(false);
+        toast({ title: "Task deleted" });
+      })
+      .catch((error) => {
+        toast({
+          title: "Unable to delete task",
+          description: error instanceof Error ? error.message : "Task was not deleted.",
+          variant: "destructive",
+        });
+      });
+  }, [blockEstimateLinkedDelete, onDeleteTask, onOpenChange, structureReadOnly, task, toast]);
 
   const handleDeadlineChange = useCallback((date: Date | undefined) => {
     if (!task) return;
-    if (estimateLinkedPlanningReadOnly) return;
-    updateTaskDeadline(task.id, date?.toISOString());
-  }, [task, estimateLinkedPlanningReadOnly]);
+    if (structureReadOnly) return;
+    void Promise.resolve(onDeadlineChange?.(task.id, date?.toISOString())).catch((error) => {
+      toast({
+        title: "Unable to update deadline",
+        description: error instanceof Error ? error.message : "Task deadline was not updated.",
+        variant: "destructive",
+      });
+    });
+  }, [onDeadlineChange, structureReadOnly, task, toast]);
 
   if (!task) return null;
 
-  const assignee = getUserById(task.assignee_id);
+  const assignees = (task.assignees ?? [])
+    .map((assignee, index) => {
+      const user = assignee.id ? getUserById(assignee.id) : null;
+      const label = assignee.name?.trim() || user?.name || assignee.email?.trim() || null;
+      const initial = (label ?? user?.name ?? "").trim().charAt(0).toUpperCase() || "?";
+      return {
+        key: assignee.id ?? assignee.email ?? assignee.name ?? `assignee-${index}`,
+        label: label ?? "Unassigned",
+        initial,
+      };
+    })
+    .filter((assignee, index, list) => list.findIndex((entry) => entry.key === assignee.key) === index);
+  const legacyAssignee = task.assignee_id ? getUserById(task.assignee_id) : null;
+  const visibleAssignees = assignees.length > 0
+    ? assignees
+    : legacyAssignee
+      ? [{
+          key: legacyAssignee.id,
+          label: legacyAssignee.name,
+          initial: legacyAssignee.name.charAt(0).toUpperCase(),
+        }]
+      : [];
   const checkDone = task.checklist.filter((c) => c.done).length;
   const sortedComments = [...task.comments].sort(
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
@@ -263,9 +327,9 @@ export function TaskDetailModal({
                 />
               ) : (
                 <h2
-                  className={`text-lg font-semibold text-foreground truncate ${canEdit && !estimateLinkedPlanningReadOnly ? "cursor-text hover:text-accent transition-colors" : ""}`}
+                  className={`text-lg font-semibold text-foreground truncate ${canEdit && !structureReadOnly ? "cursor-text hover:text-accent transition-colors" : ""}`}
                   onClick={() => {
-                    if (canEdit && !estimateLinkedPlanningReadOnly) {
+                    if (canEdit && !structureReadOnly) {
                       setEditingTitle(true);
                       setTimeout(() => titleInputRef.current?.focus(), 0);
                     }
@@ -276,7 +340,7 @@ export function TaskDetailModal({
               )}
             </div>
             <div className="flex items-center gap-1 shrink-0 mt-0.5">
-              {canEdit && !estimateLinkedPlanningReadOnly && (
+              {canEdit && !structureReadOnly && onDeleteTask && (
                 <button
                   onClick={() => setDeleteOpen(true)}
                   className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
@@ -339,14 +403,18 @@ export function TaskDetailModal({
             </div>
 
             {/* Assignee */}
-            {assignee && (
+            {visibleAssignees.length > 0 && (
               <div>
-                <p className="text-caption text-muted-foreground mb-1">Assignee</p>
-                <div className="flex items-center gap-2">
-                  <div className="h-6 w-6 rounded-full bg-accent/20 flex items-center justify-center">
-                    <span className="text-[10px] font-semibold text-accent">{assignee.name.charAt(0)}</span>
-                  </div>
-                  <span className="text-sm text-foreground">{assignee.name}</span>
+                <p className="text-caption text-muted-foreground mb-1">Assignees</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  {visibleAssignees.map((assignee) => (
+                    <div key={assignee.key} className="inline-flex items-center gap-2 rounded-full bg-muted/40 px-2 py-1">
+                      <div className="h-6 w-6 rounded-full bg-accent/20 flex items-center justify-center">
+                        <span className="text-[10px] font-semibold text-accent">{assignee.initial}</span>
+                      </div>
+                      <span className="text-sm text-foreground">{assignee.label}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
@@ -361,7 +429,7 @@ export function TaskDetailModal({
               </div>
               <div>
                 <p className="text-caption text-muted-foreground mb-1">Deadline</p>
-                {canEdit && !estimateLinkedPlanningReadOnly ? (
+                {canEdit && !structureReadOnly ? (
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button
@@ -425,7 +493,7 @@ export function TaskDetailModal({
                           <Loader2 className="h-3 w-3 animate-spin" />
                         </span>
                       )}
-                      {canEdit && !isLinked && (
+                      {canEdit && !structureReadOnly && !isLinked && (
                         <button
                           onClick={() => void onChecklistDelete?.(task.id, item.id)}
                           className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
@@ -437,7 +505,7 @@ export function TaskDetailModal({
                   );
                 })}
               </div>
-              {canEdit && (
+              {canEdit && !structureReadOnly && (
                 <div className="flex gap-1.5 mt-1.5">
                   <Input
                     value={newCheckItem}

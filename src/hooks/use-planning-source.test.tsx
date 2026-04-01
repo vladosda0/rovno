@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as planningSource from "@/data/planning-source";
 import * as store from "@/data/store";
+import * as estimateV2Data from "@/hooks/use-estimate-v2-data";
 import { usePlanningProjectStages, usePlanningProjectTasks } from "@/hooks/use-planning-source";
 import { authenticateRuntimeAuth } from "@/test/runtime-auth";
 import type { Stage, Task } from "@/types/entities";
@@ -58,8 +59,34 @@ function PlanningProbe({ projectId }: { projectId: string }) {
       <span data-testid="task-count">{tasks.length}</span>
       <span data-testid="stage-titles">{stages.map((item) => item.title).join("|")}</span>
       <span data-testid="task-titles">{tasks.map((item) => item.title).join("|")}</span>
+      <span data-testid="task-assignees">
+        {tasks.map((item) => (item.assignees ?? []).map((assignee) => assignee.id ?? assignee.email ?? assignee.name ?? "unknown").join(",")).join("|")}
+      </span>
     </div>
   );
+}
+
+function mockEstimateProject(lines: Array<Record<string, unknown>> = []) {
+  vi.spyOn(estimateV2Data, "useEstimateV2Project").mockReturnValue({
+    project: { estimateStatus: "in_work" },
+    stages: [],
+    works: [],
+    lines,
+    versions: [],
+    selectedVersionId: null,
+    selectedVersion: null,
+    dependencies: [],
+    baseline: null,
+    sync: {
+      estimateRevision: null,
+      domains: {
+        tasks: { status: "idle", projectedRevision: null, lastAttemptedAt: null, lastSucceededAt: null, lastError: null },
+        procurement: { status: "idle", projectedRevision: null, lastAttemptedAt: null, lastSucceededAt: null, lastError: null },
+        hr: { status: "idle", projectedRevision: null, lastAttemptedAt: null, lastSucceededAt: null, lastError: null },
+      },
+    },
+    isLoading: false,
+  } as never);
 }
 
 describe("usePlanningProjectStages/usePlanningProjectTasks", () => {
@@ -70,6 +97,7 @@ describe("usePlanningProjectStages/usePlanningProjectTasks", () => {
 
   it("returns demo store data and reacts to store subscription updates", async () => {
     const queryClient = createQueryClient();
+    mockEstimateProject();
     let currentStages = [stage({ title: "Stage One" })];
     let currentTasks = [task({ title: "Task One" })];
     const listeners = new Set<() => void>();
@@ -129,6 +157,7 @@ describe("usePlanningProjectStages/usePlanningProjectTasks", () => {
     };
 
     authenticateRuntimeAuth();
+    mockEstimateProject();
     vi.spyOn(planningSource, "getPlanningSource").mockResolvedValue(source);
 
     render(
@@ -156,5 +185,77 @@ describe("usePlanningProjectStages/usePlanningProjectTasks", () => {
     expect(screen.getByTestId("task-titles")).toHaveTextContent("Supabase Task");
     expect(source.getProjectStages).toHaveBeenCalledWith("project-1");
     expect(source.getProjectTasks).toHaveBeenCalledWith("project-1");
+  });
+
+  it("derives multi-assignee task view data from estimate-owned assignees in Supabase mode", async () => {
+    vi.stubEnv("VITE_WORKSPACE_SOURCE", "supabase");
+
+    const queryClient = createQueryClient();
+    authenticateRuntimeAuth();
+    mockEstimateProject([
+        {
+          id: "line-1",
+          projectId: "project-1",
+          stageId: "stage-1",
+          workId: "work-1",
+          title: "Crew lead",
+          type: "labor",
+          unit: "shift",
+          qtyMilli: 1000,
+          costUnitCents: 0,
+          markupBps: 0,
+          discountBpsOverride: null,
+          assigneeId: "user-1",
+          assigneeName: "Crew Lead",
+          assigneeEmail: "lead@example.com",
+          receivedCents: 0,
+          pnlPlaceholderCents: 0,
+          createdAt: "2026-03-01T00:00:00.000Z",
+          updatedAt: "2026-03-01T00:00:00.000Z",
+        },
+        {
+          id: "line-2",
+          projectId: "project-1",
+          stageId: "stage-1",
+          workId: "work-1",
+          title: "Helper",
+          type: "labor",
+          unit: "shift",
+          qtyMilli: 1000,
+          costUnitCents: 0,
+          markupBps: 0,
+          discountBpsOverride: null,
+          assigneeId: null,
+          assigneeName: "Helper",
+          assigneeEmail: "helper@example.com",
+          receivedCents: 0,
+          pnlPlaceholderCents: 0,
+          createdAt: "2026-03-01T00:00:00.000Z",
+          updatedAt: "2026-03-01T00:00:00.000Z",
+        },
+      ],
+    );
+    vi.spyOn(planningSource, "getPlanningSource").mockResolvedValue({
+      mode: "supabase",
+      getProjectStages: vi.fn().mockResolvedValue([]),
+      getProjectTasks: vi.fn().mockResolvedValue([
+        task({
+          estimateV2WorkId: "work-1",
+          assignee_id: "",
+        }),
+      ]),
+    } as never);
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PlanningProbe projectId="project-1" />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("task-count")).toHaveTextContent("1");
+    });
+
+    expect(screen.getByTestId("task-assignees")).toHaveTextContent("user-1,helper@example.com");
   });
 });
