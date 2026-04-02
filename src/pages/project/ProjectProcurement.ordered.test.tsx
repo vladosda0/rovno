@@ -14,7 +14,13 @@ import { __unsafeResetInventoryForTests, ensureDefaultLocation } from "@/data/in
 import { TooltipProvider } from "@/components/ui/tooltip";
 import ProjectProcurement from "@/pages/project/ProjectProcurement";
 import { clearDemoSession, enterDemoSession, setAuthRole } from "@/lib/auth-state";
-import { setProjectEstimateStatus } from "@/data/estimate-v2-store";
+import {
+  createLine,
+  createStage,
+  createWork,
+  getEstimateV2ProjectState,
+  setProjectEstimateStatus,
+} from "@/data/estimate-v2-store";
 
 function renderProjectProcurement(projectId: string) {
   const queryClient = new QueryClient({
@@ -31,6 +37,7 @@ function renderProjectProcurement(projectId: string) {
         <MemoryRouter initialEntries={[`/project/${projectId}/procurement`]}>
           <Routes>
             <Route path="/project/:id/procurement" element={<ProjectProcurement />} />
+            <Route path="/project/:id/procurement/order/:orderId" element={<ProjectProcurement />} />
           </Routes>
         </MemoryRouter>
       </TooltipProvider>
@@ -39,6 +46,21 @@ function renderProjectProcurement(projectId: string) {
 }
 
 function seedPartialOrderedLine(projectId: string) {
+  let linkedLineId = getEstimateV2ProjectState(projectId).lines[0]?.id ?? null;
+  if (!linkedLineId) {
+    const stage = createStage(projectId, { title: "Linked stage" });
+    const work = stage ? createWork(projectId, { stageId: stage.id, title: "Linked work" }) : null;
+    const line = stage && work ? createLine(projectId, {
+      stageId: stage.id,
+      workId: work.id,
+      title: "Linked material",
+      type: "material",
+      qtyMilli: 1_000,
+      costUnitCents: 12_000,
+    }) : null;
+    linkedLineId = line?.id ?? null;
+  }
+
   const itemId = `ordered-item-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   const item = addProcurementItem({
     id: itemId,
@@ -60,7 +82,7 @@ function seedPartialOrderedLine(projectId: string) {
     locationPreferredId: null,
     lockedFromEstimate: false,
     sourceEstimateItemId: "estimate-line-ordered",
-    sourceEstimateV2LineId: null,
+    sourceEstimateV2LineId: linkedLineId,
     orphaned: false,
     orphanedAt: null,
     orphanedReason: null,
@@ -162,5 +184,20 @@ describe("ProjectProcurement Ordered tab", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Ordered \(/i }));
 
     expect(screen.queryByRole("button", { name: "Receive" })).not.toBeInTheDocument();
+  });
+
+  it("shows client-safe price while redacting internal ordered value details for contractor summary mode", () => {
+    const projectId = "project-1";
+    seedPartialOrderedLine(projectId);
+    setAuthRole("contractor");
+
+    renderProjectProcurement(projectId);
+
+    fireEvent.click(screen.getByRole("button", { name: /^Ordered \(/i }));
+
+    expect(screen.getByText("Client price")).toBeInTheDocument();
+    expect(screen.queryByText("Unit price")).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Total$/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/₽/)).toBeInTheDocument();
   });
 });

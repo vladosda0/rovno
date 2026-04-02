@@ -12,6 +12,7 @@ import {
   createWork,
   getEstimateV2ProjectState,
   setProjectEstimateStatus,
+  updateLine,
 } from "@/data/estimate-v2-store";
 import { __unsafeResetHrForTests } from "@/data/hr-store";
 import { createDraftOrder, placeOrder, receiveOrder, __unsafeResetOrdersForTests } from "@/data/order-store";
@@ -204,7 +205,10 @@ async function expectSelection(input: HTMLInputElement, value: string) {
   expect(input.selectionEnd).toBe(value.length);
 }
 
-function setupLocalProject(projectId: string) {
+function setupLocalProject(
+  projectId: string,
+  membershipOverrides: Partial<Parameters<typeof addMember>[0]> = {},
+) {
   const profile = setStoredAuthProfile({
     email: `${projectId}@example.com`,
     name: "Owner User",
@@ -228,6 +232,7 @@ function setupLocalProject(projectId: string) {
     ai_access: "project_pool",
     credit_limit: 500,
     used_credits: 0,
+    ...membershipOverrides,
   });
 }
 
@@ -589,6 +594,40 @@ describe("ProjectEstimate", () => {
     expect(within(planPanel).getByText("Planned")).toBeInTheDocument();
     expect(within(planPanel).getByText("Actual")).toBeInTheDocument();
     expect(within(planPanel).queryByRole("columnheader")).not.toBeInTheDocument();
+  });
+
+  it("redacts internal financial detail for non-detail viewers while keeping client totals", async () => {
+    const projectId = "project-estimate-redacted-finance";
+    setupLocalProject(projectId, { finance_visibility: "summary" });
+    const seeded = seedEstimateLine(projectId);
+    expect(seeded).not.toBeNull();
+    if (!seeded?.line) return;
+
+    updateLine(projectId, seeded.line.id, {
+      type: "labor",
+      assigneeName: "Alex Mason",
+      assigneeEmail: "alex@example.com",
+    });
+
+    const statusResult = setProjectEstimateStatus(projectId, "in_work", { skipSetup: true });
+    expect(statusResult.ok).toBe(true);
+    setAuthRole("viewer");
+
+    await act(async () => {
+      renderProjectEstimate(projectId);
+      await flushUi();
+    });
+
+    expect(screen.queryByRole("button", { name: /Detailed cost overview/i })).not.toBeInTheDocument();
+    expect(screen.queryByText("Financial breakdown")).not.toBeInTheDocument();
+    expect(screen.queryByText("Plan vs actual")).not.toBeInTheDocument();
+    expect(screen.queryByText("Cost unit")).not.toBeInTheDocument();
+    expect(screen.queryByText("Cost total")).not.toBeInTheDocument();
+    expect(screen.queryByText("Markup %")).not.toBeInTheDocument();
+    expect(screen.queryByText("Discount %")).not.toBeInTheDocument();
+    expect(screen.queryByText("Total cost")).not.toBeInTheDocument();
+    expect(screen.getByText("Client total")).toBeInTheDocument();
+    expect(screen.getByText("Alex Mason")).toBeInTheDocument();
   });
 
   it("marks all project tasks done from the finish blocker and then finishes the estimate after confirmation", async () => {

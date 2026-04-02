@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { AIAccess, MemberRole } from "@/types/entities";
 import {
+  getDefaultFinanceVisibility,
   getInviteAiAccessOptions,
   getInviteRoleOptions,
+  getNonStandardAccessSummary,
   getReassignRoleOptions,
+  hasNonStandardSupportedAccess,
 } from "@/lib/participant-role-policy";
 
 function assertRolesEqual(actual: MemberRole[], expected: MemberRole[]) {
@@ -64,6 +67,33 @@ describe("participant-role-policy", () => {
 
     it("project_pool allows all", () => {
       assertAiEqual(getInviteAiAccessOptions("project_pool"), ["none", "consult_only", "project_pool"]);
+    });
+  });
+
+  describe("finance visibility defaults", () => {
+    it("keeps viewer and contractor fail-safe by default", () => {
+      expect(getDefaultFinanceVisibility("viewer")).toBe("none");
+      expect(getDefaultFinanceVisibility("contractor")).toBe("none");
+    });
+
+    it("keeps co_owner and owner on detail defaults", () => {
+      expect(getDefaultFinanceVisibility("co_owner")).toBe("detail");
+      expect(getDefaultFinanceVisibility("owner")).toBe("detail");
+    });
+  });
+
+  describe("non-standard supported access summary", () => {
+    it("flags non-default finance expansion for viewer and contractor", () => {
+      expect(hasNonStandardSupportedAccess({ role: "viewer", financeVisibility: "summary" })).toBe(true);
+      expect(hasNonStandardSupportedAccess({ role: "contractor", financeVisibility: "summary" })).toBe(true);
+    });
+
+    it("returns a readable review summary when expanded", () => {
+      const viewerSummary = getNonStandardAccessSummary({ role: "viewer", financeVisibility: "summary" });
+      expect(viewerSummary?.title).toContain("нестандартные параметры доступа");
+
+      const contractorSummary = getNonStandardAccessSummary({ role: "contractor", financeVisibility: "summary" });
+      expect(contractorSummary?.title).toContain("подрядчика");
     });
   });
 });

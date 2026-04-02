@@ -8,6 +8,10 @@ export interface InventoryStockRow {
   locationId: string;
   inventoryKey: string;
   qty: number;
+  inventoryItemId?: string;
+  title?: string;
+  spec?: string | null;
+  unit?: string;
 }
 
 type Listener = () => void;
@@ -156,10 +160,31 @@ export function adjustStock(
 
 export function listStockByProject(projectId: string): InventoryStockRow[] {
   const stock = ensureStockMap(projectId);
+  const metadataByInventoryKey = new Map(
+    getAllProcurementItemsV2(true)
+      .filter((item) => item.projectId === projectId)
+      .map((item) => [
+        computeInventoryKey(item.name, item.spec, item.unit),
+        {
+          title: item.name,
+          spec: item.spec ?? null,
+          unit: item.unit,
+        },
+      ]),
+  );
   const rows: InventoryStockRow[] = [];
   stock.forEach((qty, key) => {
     const [locationId, inventoryKey] = key.split("::");
-    rows.push({ projectId, locationId, inventoryKey, qty });
+    const metadata = metadataByInventoryKey.get(inventoryKey);
+    rows.push({
+      projectId,
+      locationId,
+      inventoryKey,
+      qty,
+      title: metadata?.title,
+      spec: metadata?.spec ?? null,
+      unit: metadata?.unit,
+    });
   });
   return rows;
 }

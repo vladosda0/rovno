@@ -6,6 +6,7 @@ interface VersionDiffListProps {
   regime: Regime;
   currency: string;
   compactLimit?: number;
+  showSensitiveDetail?: boolean;
 }
 
 interface WorkGroup {
@@ -37,9 +38,14 @@ function changeTypeLabel(type: EstimateV2StructuredChange["changeType"]): string
   return "edited";
 }
 
-function shouldShowField(field: string, regime: Regime): boolean {
+function isSensitiveField(field: string): boolean {
+  return field === "costUnitCents" || field === "markupBps" || field === "discountBpsOverride";
+}
+
+function shouldShowField(field: string, regime: Regime, showSensitiveDetail: boolean): boolean {
+  if (!showSensitiveDetail && isSensitiveField(field)) return false;
   if (regime === "client") {
-    if (field === "costUnitCents" || field === "markupBps" || field === "discountBpsOverride") return false;
+    if (isSensitiveField(field)) return false;
   }
   if (regime === "build_myself" && field === "markupBps") return false;
   return true;
@@ -99,6 +105,7 @@ export function VersionDiffList({
   regime,
   currency,
   compactLimit = 12,
+  showSensitiveDetail = true,
 }: VersionDiffListProps) {
   const [showAll, setShowAll] = useState(false);
   const visible = showAll ? changes : changes.slice(0, compactLimit);
@@ -153,10 +160,10 @@ export function VersionDiffList({
               <p className="text-caption text-foreground">
                 {change.title} ({changeTypeLabel(change.changeType)})
               </p>
-              {change.fieldChanges.filter((field) => shouldShowField(field.field, regime)).length > 0 && (
+              {change.fieldChanges.filter((field) => shouldShowField(field.field, regime, showSensitiveDetail)).length > 0 && (
                 <p className="text-caption text-muted-foreground">
                   {change.fieldChanges
-                    .filter((field) => shouldShowField(field.field, regime))
+                    .filter((field) => shouldShowField(field.field, regime, showSensitiveDetail))
                     .map((field) => `${field.label} changed ${formatFieldValue(field.field, field.before, currency)} → ${formatFieldValue(field.field, field.after, currency)}`)
                     .join(" · ")}
                 </p>
@@ -172,10 +179,10 @@ export function VersionDiffList({
                   <p className="text-caption text-foreground">
                     {change.entityKind === "line" ? `Resource: ${change.title}` : change.title} ({changeTypeLabel(change.changeType)})
                   </p>
-                  {change.fieldChanges.filter((field) => shouldShowField(field.field, regime)).length > 0 && (
+                  {change.fieldChanges.filter((field) => shouldShowField(field.field, regime, showSensitiveDetail)).length > 0 && (
                     <p className="text-caption text-muted-foreground">
                       {change.fieldChanges
-                        .filter((field) => shouldShowField(field.field, regime))
+                        .filter((field) => shouldShowField(field.field, regime, showSensitiveDetail))
                         .map((field) => `${field.label} changed ${formatFieldValue(field.field, field.before, currency)} → ${formatFieldValue(field.field, field.after, currency)}`)
                         .join(" · ")}
                     </p>

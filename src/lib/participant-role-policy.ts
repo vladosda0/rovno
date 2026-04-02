@@ -66,6 +66,11 @@ export type PermissionSummaryInput = {
   creditLimit: number;
 };
 
+export type NonStandardAccessSummary = {
+  title: string;
+  lines: string[];
+};
+
 export function getInviteRoleOptions(actorRole: MemberRole): MemberRole[] {
   return INVITE_ROLE_OPTIONS_BY_ACTOR[actorRole];
 }
@@ -131,6 +136,21 @@ export function describePermissionSummary(input: PermissionSummaryInput): string
 
 export function getPermissionWarnings(input: PermissionSummaryInput): string[] {
   const warnings: string[] = [];
+  const financeVisibility = input.financeVisibility ?? getDefaultFinanceVisibility(input.role);
+
+  if (input.role === "viewer" && financeVisibility !== getDefaultFinanceVisibility("viewer")) {
+    warnings.push("Вы открываете пользователю нестандартный доступ.");
+    warnings.push("Пользователь получит доступ к важным разделам или чувствительным данным проекта.");
+    warnings.push("Перепроверьте параметры перед сохранением / отправкой инвайта.");
+    return warnings;
+  }
+
+  if (input.role === "contractor" && financeVisibility !== getDefaultFinanceVisibility("contractor")) {
+    warnings.push("Вы расширяете доступ подрядчика за пределы стандартной роли.");
+    warnings.push("Пользователь сможет видеть или изменять дополнительные разделы проекта.");
+    warnings.push("Перепроверьте параметры перед сохранением / отправкой инвайта.");
+    return warnings;
+  }
 
   if (input.role === "co_owner") {
     warnings.push("Co-owners can manage the project in the current app flow.");
@@ -140,7 +160,7 @@ export function getPermissionWarnings(input: PermissionSummaryInput): string[] {
     warnings.push("Project pool AI access can spend project credits.");
   }
 
-  if ((input.financeVisibility ?? "none") === "detail") {
+  if (financeVisibility === "detail") {
     warnings.push("Full finance detail exposes budget and cost line items.");
   }
 
@@ -152,11 +172,43 @@ export function getPermissionWarnings(input: PermissionSummaryInput): string[] {
 }
 
 export function getDefaultFinanceVisibility(role: MemberRole): FinanceVisibility {
-  return role === "viewer" ? "none" : "detail";
+  if (role === "owner" || role === "co_owner") return "detail";
+  return "none";
 }
 
 export function getDefaultInternalDocsVisibility(role: MemberRole): InternalDocsVisibility {
   return role === "viewer" ? "none" : "view";
+}
+
+export function hasNonStandardSupportedAccess(input: Pick<PermissionSummaryInput, "role" | "financeVisibility">): boolean {
+  if (input.role !== "viewer" && input.role !== "contractor") return false;
+  return (input.financeVisibility ?? getDefaultFinanceVisibility(input.role)) !== getDefaultFinanceVisibility(input.role);
+}
+
+export function getNonStandardAccessSummary(
+  input: Pick<PermissionSummaryInput, "role" | "financeVisibility">,
+): NonStandardAccessSummary | null {
+  if (!hasNonStandardSupportedAccess(input)) return null;
+
+  if (input.role === "viewer") {
+    return {
+      title: "Участнику заданы нестандартные параметры доступа",
+      lines: [
+        "Проверьте расширение финансовой видимости перед сохранением / отправкой инвайта.",
+      ],
+    };
+  }
+
+  if (input.role === "contractor") {
+    return {
+      title: "Для подрядчика заданы нестандартные параметры доступа",
+      lines: [
+        "Проверьте расширение финансовой видимости перед сохранением / отправкой инвайта.",
+      ],
+    };
+  }
+
+  return null;
 }
 
 function sliceRank<T extends string>(rank: readonly T[], current: T, fallback: T[]): T[] {

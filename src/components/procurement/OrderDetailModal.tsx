@@ -16,6 +16,7 @@ interface OrderDetailModalProps {
   onOpenChange: (open: boolean) => void;
   projectId: string;
   orderId: string;
+  showSensitiveDetail?: boolean;
   onOpenRequest?: (requestId: string) => void;
 }
 
@@ -31,6 +32,7 @@ export function OrderDetailModal({
   onOpenChange,
   projectId,
   orderId,
+  showSensitiveDetail = true,
   onOpenRequest,
 }: OrderDetailModalProps) {
   const order = useOrder(orderId);
@@ -146,12 +148,16 @@ export function OrderDetailModal({
                 <div className="rounded-lg border border-border p-3 space-y-1">
                   <p className="text-xs text-muted-foreground">Invoice</p>
                   <p className="text-foreground">{order.invoiceAttachment?.name ?? "—"}</p>
-                  <p className="text-xs text-muted-foreground pt-1">Planned total</p>
-                  <p className="text-foreground">{fmtCost(plannedTotal)}</p>
-                  <p className="text-xs text-muted-foreground pt-1">Factual total</p>
-                  <p className="text-foreground">{fmtCost(factualTotal)}</p>
-                  <p className="text-xs text-muted-foreground pt-1">Open value</p>
-                  <p className="text-foreground">{fmtCost(total)}</p>
+                  {showSensitiveDetail && (
+                    <>
+                      <p className="text-xs text-muted-foreground pt-1">Planned total</p>
+                      <p className="text-foreground">{fmtCost(plannedTotal)}</p>
+                      <p className="text-xs text-muted-foreground pt-1">Factual total</p>
+                      <p className="text-foreground">{fmtCost(factualTotal)}</p>
+                      <p className="text-xs text-muted-foreground pt-1">Open value</p>
+                      <p className="text-foreground">{fmtCost(total)}</p>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -169,10 +175,10 @@ export function OrderDetailModal({
                       <th className="text-left px-3 py-2">Item</th>
                       <th className="text-right px-3 py-2">Qty</th>
                       <th className="text-left px-3 py-2">Unit</th>
-                      <th className="text-right px-3 py-2">Planned unit</th>
-                      <th className="text-right px-3 py-2">Factual unit</th>
-                      <th className="text-right px-3 py-2">Planned total</th>
-                      <th className="text-right px-3 py-2">Factual total</th>
+                      {showSensitiveDetail && <th className="text-right px-3 py-2">Planned unit</th>}
+                      {showSensitiveDetail && <th className="text-right px-3 py-2">Factual unit</th>}
+                      {showSensitiveDetail && <th className="text-right px-3 py-2">Planned total</th>}
+                      {showSensitiveDetail && <th className="text-right px-3 py-2">Factual total</th>}
                       <th className="text-right px-3 py-2">Received</th>
                     </tr>
                   </thead>
@@ -202,10 +208,10 @@ export function OrderDetailModal({
                           </td>
                           <td className="px-3 py-2 text-right">{line.qty}</td>
                           <td className="px-3 py-2">{line.unit}</td>
-                          <td className="px-3 py-2 text-right">{fmtCost(plannedUnit)}</td>
-                          <td className="px-3 py-2 text-right">{fmtCost(factualUnit)}</td>
-                          <td className="px-3 py-2 text-right">{fmtCost(plannedUnit * line.qty)}</td>
-                          <td className="px-3 py-2 text-right">{fmtCost(factualUnit * line.qty)}</td>
+                          {showSensitiveDetail && <td className="px-3 py-2 text-right">{fmtCost(plannedUnit)}</td>}
+                          {showSensitiveDetail && <td className="px-3 py-2 text-right">{fmtCost(factualUnit)}</td>}
+                          {showSensitiveDetail && <td className="px-3 py-2 text-right">{fmtCost(plannedUnit * line.qty)}</td>}
+                          {showSensitiveDetail && <td className="px-3 py-2 text-right">{fmtCost(factualUnit * line.qty)}</td>}
                           <td className="px-3 py-2 text-right">{line.receivedQty}</td>
                         </tr>
                       );

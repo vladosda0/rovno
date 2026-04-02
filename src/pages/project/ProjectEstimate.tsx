@@ -95,6 +95,7 @@ import {
   getProjectDomainAccess,
   projectDomainAllowsView,
   projectDomainAllowsManage,
+  seamCanViewSensitiveDetail,
   usePermission,
 } from "@/lib/permissions";
 import { ApprovalStampCard } from "@/components/estimate-v2/ApprovalStampCard";
@@ -502,9 +503,12 @@ export default function ProjectEstimate() {
   const canSubmitByMembership = currentMembership?.role === "owner" || currentMembership?.role === "co_owner";
   const regime = estimateProject.regime;
   const estimateAccess = getProjectDomainAccess(perm.seam, "estimate");
+  const canViewSensitiveDetail = seamCanViewSensitiveDetail(perm.seam);
   const canManageEstimate = projectDomainAllowsManage(estimateAccess) && regime !== "client";
   const canEditEstimate = canManageEstimate;
   const canSubmitToClient = canManageEstimate && canSubmitByMembership;
+  const showEstimateInternalPricing = canViewSensitiveDetail && regime !== "client";
+  const showEstimateMarkup = canViewSensitiveDetail && regime === "contractor";
 
   const [activeTab, setActiveTab] = useState("estimate");
   const [approvalModalOpen, setApprovalModalOpen] = useState(false);
@@ -1050,6 +1054,12 @@ export default function ProjectEstimate() {
     setDetailedCostOverviewOpen(false);
   }, [estimateProject.estimateStatus]);
 
+  useEffect(() => {
+    if (canViewSensitiveDetail) return;
+    setDetailedCostOverviewOpen(false);
+    setFinancialResourcesExpanded(false);
+  }, [canViewSensitiveDetail]);
+
   const handleEstimateStatusChange = async (
     nextStatus: EstimateExecutionStatus,
     options?: { skipSetup?: boolean; projectTasks?: Task[] },
@@ -1363,13 +1373,11 @@ export default function ProjectEstimate() {
     rows.push(["Regime", regime]);
     rows.push([]);
 
-    if (regime === "client") {
+    if (regime === "client" || !canViewSensitiveDetail) {
       rows.push(["Stage", "Work", "Line", "Qty", "Unit", "Client unit", "Client total"]);
-    }
-    if (regime === "contractor") {
+    } else if (regime === "contractor") {
       rows.push(["Stage", "Work", "Line", "Type", "Qty", "Unit", "Cost unit", "Cost total", "Markup %", "Discount %", "Client unit", "Client total"]);
-    }
-    if (regime === "build_myself") {
+    } else if (regime === "build_myself") {
       rows.push(["Stage", "Work", "Line", "Type", "Qty", "Unit", "Cost unit", "Cost total", "Discount %", "Client unit", "Client total"]);
     }
 
@@ -1381,7 +1389,7 @@ export default function ProjectEstimate() {
           const lineTotals = lineTotalsById.get(line.id);
           if (!lineTotals) return;
 
-          if (regime === "client") {
+          if (regime === "client" || !canViewSensitiveDetail) {
             rows.push([
               stage.title,
               work.title,
@@ -1430,9 +1438,11 @@ export default function ProjectEstimate() {
     });
 
     rows.push([]);
-    rows.push(["Subtotal (ex VAT)", money(totals.subtotalBeforeDiscountCents, estimateProject.currency)]);
-    rows.push(["Discount", money(totals.discountTotalCents, estimateProject.currency)]);
-    rows.push(["Taxable base (ex VAT)", money(totals.taxableBaseCents, estimateProject.currency)]);
+    if (canViewSensitiveDetail) {
+      rows.push(["Subtotal (ex VAT)", money(totals.subtotalBeforeDiscountCents, estimateProject.currency)]);
+      rows.push(["Discount", money(totals.discountTotalCents, estimateProject.currency)]);
+      rows.push(["Taxable base (ex VAT)", money(totals.taxableBaseCents, estimateProject.currency)]);
+    }
     rows.push(["Tax", `${(estimateProject.taxBps / 100).toFixed(2)}%`]);
     rows.push(["Tax amount", money(totals.taxAmountCents, estimateProject.currency)]);
     rows.push(["Total (inc VAT)", money(totals.totalCents, estimateProject.currency)]);
@@ -1442,7 +1452,7 @@ export default function ProjectEstimate() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `estimate-v2-${pid}-${regime}.csv`;
+    link.download = `estimate-v2-${pid}-${canViewSensitiveDetail ? regime : "client"}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -1878,7 +1888,8 @@ export default function ProjectEstimate() {
                   </div>
                 </div>
 
-                <div className="border-t border-border/60 pt-3">
+                {canViewSensitiveDetail && (
+                  <div className="border-t border-border/60 pt-3">
                   <Collapsible open={detailedCostOverviewOpen} onOpenChange={setDetailedCostOverviewOpen}>
                     <div className="rounded-lg border border-border/70">
                       <CollapsibleTrigger asChild>
@@ -1972,7 +1983,8 @@ export default function ProjectEstimate() {
                       </CollapsibleContent>
                     </div>
                   </Collapsible>
-                </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -2004,7 +2016,7 @@ export default function ProjectEstimate() {
 
             <div className="rounded-lg border border-border p-3">
               <p className="text-sm font-semibold text-foreground">Financial</p>
-              {regime === "client" ? (
+              {regime === "client" || !canViewSensitiveDetail ? (
                 <div className="mt-2 rounded-md border border-border/70 p-2">
                   <p className="text-xs text-muted-foreground">Total (inc VAT)</p>
                   <p className="text-2xl font-semibold text-foreground">{money(totals.totalCents, estimateProject.currency)}</p>
@@ -2093,7 +2105,12 @@ export default function ProjectEstimate() {
           )}
         >
           <p className="mb-2 text-caption font-medium text-foreground">Changed items</p>
-          <VersionDiffList changes={diff.changes} regime={regime} currency={estimateProject.currency} />
+          <VersionDiffList
+            changes={diff.changes}
+            regime={regime}
+            currency={estimateProject.currency}
+            showSensitiveDetail={canViewSensitiveDetail}
+          />
         </VersionBanner>}
 
         <Tabs value={activeTab} onValueChange={handleTabChange}>
@@ -2177,21 +2194,23 @@ export default function ProjectEstimate() {
                         </div>
 
                         <div className="flex items-center gap-2">
-                          <div className="flex items-center gap-1">
-                            <span className="text-caption text-muted-foreground">Stage discount:</span>
-                            {canEditEstimate ? (
-                              <InlineEditableNumber
-                                value={stage.discountBps}
-                                onCommit={(nextValue) => updateStage(pid, stage.id, { discountBps: nextValue })}
-                                formatDisplay={(value) => `${fromBpsToPercent(value)}%`}
-                                formatInput={(value) => fromBpsToPercent(value)}
-                                parseInput={(raw) => toBpsFromPercent(raw)}
-                                className="w-20"
-                              />
-                            ) : (
-                              <span className="text-sm tabular-nums text-foreground">{fromBpsToPercent(stage.discountBps)}%</span>
-                            )}
-                          </div>
+                          {canViewSensitiveDetail && (
+                            <div className="flex items-center gap-1">
+                              <span className="text-caption text-muted-foreground">Stage discount:</span>
+                              {canEditEstimate ? (
+                                <InlineEditableNumber
+                                  value={stage.discountBps}
+                                  onCommit={(nextValue) => updateStage(pid, stage.id, { discountBps: nextValue })}
+                                  formatDisplay={(value) => `${fromBpsToPercent(value)}%`}
+                                  formatInput={(value) => fromBpsToPercent(value)}
+                                  parseInput={(raw) => toBpsFromPercent(raw)}
+                                  className="w-20"
+                                />
+                              ) : (
+                                <span className="text-sm tabular-nums text-foreground">{fromBpsToPercent(stage.discountBps)}%</span>
+                              )}
+                            </div>
+                          )}
                           <div className="flex items-center gap-1">
                             <span className="text-caption text-muted-foreground">Stage total:</span>
                             <span className="text-sm font-semibold tabular-nums text-foreground">
@@ -2221,9 +2240,9 @@ export default function ProjectEstimate() {
                             const showAssignmentColumn = workLines.some((line) => isAssignableResourceType(line.type));
                             const tableColumnCount = 5
                               + (showAssignmentColumn ? 1 : 0)
-                              + (regime !== "client" ? 2 : 0)
-                              + (regime === "contractor" ? 1 : 0)
-                              + (regime !== "client" ? 1 : 0)
+                              + (showEstimateInternalPricing ? 2 : 0)
+                              + (showEstimateMarkup ? 1 : 0)
+                              + (showEstimateInternalPricing ? 1 : 0)
                               + (canEditEstimate ? 1 : 0);
 
                             return (
@@ -2274,12 +2293,12 @@ export default function ProjectEstimate() {
                                         )}
                                         <TableHead className="h-9 w-[92px] py-1 pr-2 text-right tabular-nums">Qty</TableHead>
                                         <TableHead className="h-9 w-[128px] py-1 pr-2">Unit</TableHead>
-                                        {regime !== "client" && <TableHead className="h-9 w-[120px] py-1 pr-2 text-right tabular-nums">Cost unit</TableHead>}
-                                        {regime !== "client" && <TableHead className="h-9 w-[120px] py-1 pr-2 text-right tabular-nums">Cost total</TableHead>}
-                                        {regime === "contractor" && (
+                                        {showEstimateInternalPricing && <TableHead className="h-9 w-[120px] py-1 pr-2 text-right tabular-nums">Cost unit</TableHead>}
+                                        {showEstimateInternalPricing && <TableHead className="h-9 w-[120px] py-1 pr-2 text-right tabular-nums">Cost total</TableHead>}
+                                        {showEstimateMarkup && (
                                           <TableHead className="h-9 w-[92px] whitespace-nowrap py-1 pr-2 text-right tabular-nums">Markup %</TableHead>
                                         )}
-                                        {regime !== "client" && (
+                                        {showEstimateInternalPricing && (
                                           <TableHead className="h-9 w-[92px] whitespace-nowrap py-1 pr-2 text-right tabular-nums">Discount %</TableHead>
                                         )}
                                         <TableHead className="h-9 w-[120px] py-1 pr-2 text-right tabular-nums">Client unit</TableHead>
@@ -2456,7 +2475,7 @@ export default function ProjectEstimate() {
                                               )}
                                             </TableCell>
 
-                                            {regime !== "client" && (
+                                            {showEstimateInternalPricing && (
                                               <TableCell className="w-[120px] py-1.5 pr-2 align-top">
                                                 <InlineEditableNumber
                                                   value={line.costUnitCents}
@@ -2469,13 +2488,13 @@ export default function ProjectEstimate() {
                                               </TableCell>
                                             )}
 
-                                            {regime !== "client" && (
+                                            {showEstimateInternalPricing && (
                                               <TableCell className="w-[120px] py-1.5 pr-2 text-right text-sm tabular-nums align-top">
                                                 {money(computed.costTotalCents, estimateProject.currency)}
                                               </TableCell>
                                             )}
 
-                                            {regime === "contractor" && (
+                                            {showEstimateMarkup && (
                                               <TableCell className="w-[92px] py-1.5 pr-2 align-top">
                                                 <InlineEditableNumber
                                                   value={line.markupBps}
@@ -2488,7 +2507,7 @@ export default function ProjectEstimate() {
                                               </TableCell>
                                             )}
 
-                                            {regime !== "client" && (
+                                            {showEstimateInternalPricing && (
                                               <TableCell className="w-[92px] py-1.5 pr-2 align-top">
                                                 {canEditEstimate ? (
                                                   <InlineEditableNumber
@@ -2633,7 +2652,7 @@ export default function ProjectEstimate() {
                   </Tooltip>
                 </div>
 
-                {regime !== "client" && (
+                {showEstimateInternalPricing && (
                   <div className="flex items-center justify-between gap-2 whitespace-nowrap text-sm md:min-w-[170px] md:justify-end">
                     <span className="text-muted-foreground">Total cost</span>
                     <span className="font-semibold tabular-nums text-foreground">
@@ -2674,7 +2693,7 @@ export default function ProjectEstimate() {
                   </span>
                 </div>
 
-                {regime !== "client" && <div aria-hidden="true" className="hidden md:block" />}
+                {showEstimateInternalPricing && <div aria-hidden="true" className="hidden md:block" />}
                 <div aria-hidden="true" className="hidden md:block" />
               </div>
             </div>

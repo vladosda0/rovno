@@ -24,6 +24,7 @@ import {
   projectDomainAllowsContribute,
   projectDomainAllowsManage,
   projectDomainAllowsView,
+  seamCanViewSensitiveDetail,
 } from "@/lib/permissions";
 import { Copy, Info, LayoutDashboard, MapPin } from "lucide-react";
 
@@ -49,6 +50,7 @@ export default function ProjectDashboard() {
   const documentsAccess = getProjectDomainAccess(perm.seam, "documents");
   const galleryAccess = getProjectDomainAccess(perm.seam, "gallery");
   const procurementAccess = getProjectDomainAccess(perm.seam, "procurement");
+  const canViewSensitiveDetail = seamCanViewSensitiveDetail(perm.seam);
 
   const doneTasks = useMemo(
     () => tasks.filter((task) => task.status === "done" || (task.status as string) === "completed").length,
@@ -167,7 +169,9 @@ export default function ProjectDashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-6 gap-sp-2 items-stretch">
         <TaskSummaryWidget tasks={tasks} projectId={projectId} className="lg:col-span-4 h-full" />
-        <BudgetWidget estimate={estimate} projectId={projectId} className="lg:col-span-2 h-full" />
+        {canViewSensitiveDetail && (
+          <BudgetWidget estimate={estimate} projectId={projectId} className="lg:col-span-2 h-full" />
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-sp-2 items-stretch">

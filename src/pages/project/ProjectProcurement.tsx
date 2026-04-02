@@ -48,6 +48,7 @@ import { useInventoryStock, useLocations } from "@/hooks/use-inventory-data";
 import {
   getProjectDomainAccess,
   projectDomainAllowsManage,
+  seamCanViewSensitiveDetail,
   usePermission,
 } from "@/lib/permissions";
 import {
@@ -79,7 +80,7 @@ import { inventoryQueryKeys } from "@/hooks/use-inventory-data";
 import { orderQueryKeys } from "@/hooks/use-order-data";
 import { procurementQueryKeys } from "@/hooks/use-procurement-source";
 import { useWorkspaceMode } from "@/hooks/use-workspace-source";
-import { computeProjectTotals } from "@/lib/estimate-v2/pricing";
+import { computeLineTotals, computeProjectTotals } from "@/lib/estimate-v2/pricing";
 import type {
   Event,
   OrderWithLines,
@@ -114,6 +115,19 @@ const TAB_META: Record<ProcurementTab, { label: string; className: string }> = {
   ordered: { label: "Ordered", className: "bg-info/15 text-info border-info/25" },
   in_stock: { label: "In stock", className: "bg-success/15 text-success border-success/25" },
 };
+
+function decodeInventoryKeyParts(inventoryKey: string): {
+  title: string;
+  spec: string | null;
+  unit: string;
+} {
+  const [rawTitle = "", rawSpec = "", rawUnit = ""] = inventoryKey.split("|");
+  return {
+    title: rawTitle || "Inventory item",
+    spec: rawSpec || null,
+    unit: rawUnit || "unit",
+  };
+}
 
 function listStateKey(projectId: string): string {
   return `procurement-v3:list-state:${projectId}`;
@@ -209,6 +223,8 @@ type InStockTableRow = {
   qty: number;
   orderIds: string[];
   lastReceivedAt: string | null;
+  receiverName: string | null;
+  clientUnitPrice: number | null;
 };
 
 export default function ProjectProcurement() {
@@ -232,8 +248,10 @@ export default function ProjectProcurement() {
   const estimateSync = estimateState.sync ?? EMPTY_SYNC_STATE;
   const perm = usePermission(pid);
   const procurementAccess = getProjectDomainAccess(perm.seam, "procurement");
+  const canViewSensitiveDetail = seamCanViewSensitiveDetail(perm.seam);
   const canManageProcurement = projectDomainAllowsManage(procurementAccess);
   const canEdit = canManageProcurement;
+  const canLaunchOrderFlows = canManageProcurement && canViewSensitiveDetail;
   const canUseFromStock = canManageProcurement && !isSupabaseMode;
   const visibleTabs = useMemo<ProcurementTab[]>(
     () => (canManageProcurement ? TABS : ["ordered", "in_stock"]),
@@ -517,6 +535,37 @@ export default function ProjectProcurement() {
     });
     return map;
   }, [members]);
+  const estimateLineById = useMemo(
+    () => new Map(estimateState.lines.map((line) => [line.id, line])),
+    [estimateState.lines],
+  );
+  const estimateStageById = useMemo(
+    () => new Map(estimateState.stages.map((stage) => [stage.id, stage])),
+    [estimateState.stages],
+  );
+  const clientUnitPriceByItemId = useMemo(() => {
+    const map = new Map<string, number | null>();
+
+    items.forEach((item) => {
+      const lineId = item.sourceEstimateV2LineId ?? null;
+      if (!lineId) {
+        map.set(item.id, null);
+        return;
+      }
+
+      const line = estimateLineById.get(lineId);
+      const stage = line ? estimateStageById.get(line.stageId) ?? null : null;
+      if (!line || !stage) {
+        map.set(item.id, null);
+        return;
+      }
+
+      const lineTotals = computeLineTotals(line, stage, estimateState.project, estimateState.project.regime);
+      map.set(item.id, lineTotals.clientUnitCents / 100);
+    });
+
+    return map;
+  }, [estimateLineById, estimateStageById, estimateState.project, items]);
 
   const participantOptions = useMemo(() => (
     members
@@ -682,6 +731,12 @@ export default function ProjectProcurement() {
         group.items.map((entry) => {
           const item = itemById.get(entry.procurementItemId);
           if (!item) return null;
+          const receiptHistory = collectItemLocationEventHistory(entry.procurementItemId, group.locationId, orders);
+          const latestReceipt = receiptHistory.receiptEvents[0] ?? null;
+          const receiverName = latestReceipt?.event.receiverName
+            ?? (latestReceipt?.event.receiverParticipantId
+              ? participantNameById.get(latestReceipt.event.receiverParticipantId) ?? null
+              : null);
           return {
             key: `${group.locationId}-${entry.procurementItemId}`,
             procurementItemId: entry.procurementItemId,
@@ -691,6 +746,8 @@ export default function ProjectProcurement() {
             qty: entry.qty,
             orderIds: entry.orderIds,
             lastReceivedAt: computeLastReceivedAt(entry.procurementItemId, group.locationId, orders),
+            receiverName,
+            clientUnitPrice: clientUnitPriceByItemId.get(entry.procurementItemId) ?? null,
           } satisfies InStockTableRow;
         }).filter((row): row is InStockTableRow => !!row)
       ))
@@ -706,21 +763,114 @@ export default function ProjectProcurement() {
       || (row.item.spec?.toLowerCase().includes(q) ?? false)
       || row.locationName.toLowerCase().includes(q)
     ));
-  }, [pid, items, orders, locations, search, itemById]);
+  }, [pid, items, orders, locations, search, itemById, participantNameById, clientUnitPriceByItemId]);
+
+  const summaryFallbackInStockRows = useMemo(() => {
+    if (canManageProcurement) {
+      return [] as InStockTableRow[];
+    }
+
+    const q = search.trim().toLowerCase();
+    const locationById = new Map(locations.map((location) => [location.id, location]));
+    const rows = stockRows
+      .filter((row) => row.qty > 0)
+      .map((row) => {
+        const decoded = decodeInventoryKeyParts(row.inventoryKey);
+        const location = locationById.get(row.locationId);
+        const name = row.title ?? decoded.title;
+        const spec = row.spec ?? decoded.spec;
+        const unit = row.unit ?? decoded.unit;
+        const syntheticId = row.inventoryItemId ?? row.inventoryKey;
+
+        return {
+          key: `${row.locationId}-${syntheticId}`,
+          procurementItemId: syntheticId,
+          item: {
+            id: syntheticId,
+            projectId: pid,
+            stageId: null,
+            categoryId: null,
+            type: "material",
+            name,
+            spec,
+            unit,
+            requiredByDate: null,
+            requiredQty: row.qty,
+            orderedQty: 0,
+            receivedQty: row.qty,
+            plannedUnitPrice: null,
+            actualUnitPrice: null,
+            supplier: null,
+            supplierPreferred: null,
+            locationPreferredId: row.locationId,
+            lockedFromEstimate: false,
+            sourceEstimateItemId: null,
+            sourceEstimateV2LineId: null,
+            orphaned: false,
+            orphanedAt: null,
+            orphanedReason: null,
+            linkUrl: null,
+            notes: null,
+            attachments: [],
+            createdFrom: "manual",
+            linkedTaskIds: [],
+            archived: false,
+            createdAt: estimateState.project.updatedAt,
+            updatedAt: estimateState.project.updatedAt,
+          } satisfies ProcurementItemV2,
+          locationId: row.locationId,
+          locationName: location?.name ?? "Unknown location",
+          qty: row.qty,
+          orderIds: [],
+          lastReceivedAt: null,
+          receiverName: null,
+          clientUnitPrice: null,
+        } satisfies InStockTableRow;
+      })
+      .sort((left, right) => {
+        const nameDelta = left.item.name.localeCompare(right.item.name);
+        if (nameDelta !== 0) return nameDelta;
+        return left.locationName.localeCompare(right.locationName);
+      });
+
+    if (!q) return rows;
+    return rows.filter((row) => (
+      row.item.name.toLowerCase().includes(q)
+      || (row.item.spec?.toLowerCase().includes(q) ?? false)
+      || row.locationName.toLowerCase().includes(q)
+    ));
+  }, [canManageProcurement, estimateState.project.updatedAt, locations, pid, search, stockRows]);
+
+  const visibleInStockRows = inStockRows.length > 0 ? inStockRows : summaryFallbackInStockRows;
 
   const inStockRowByKey = useMemo(
-    () => new Map(inStockRows.map((row) => [row.key, row])),
-    [inStockRows],
+    () => new Map(visibleInStockRows.map((row) => [row.key, row])),
+    [visibleInStockRows],
   );
 
   useEffect(() => {
     setSelectedInStockRowKeys((prev) => {
       if (prev.size === 0) return prev;
-      const visibleKeys = new Set(inStockRows.map((row) => row.key));
+      const visibleKeys = new Set(visibleInStockRows.map((row) => row.key));
       const next = new Set(Array.from(prev).filter((key) => visibleKeys.has(key)));
       return next.size === prev.size ? prev : next;
     });
-  }, [inStockRows]);
+  }, [visibleInStockRows]);
+
+  useEffect(() => {
+    if (canManageProcurement) return;
+    if (activeTab !== "ordered") return;
+    if (placedSupplierOrders.length > 0) return;
+    if (visibleInStockRows.length === 0) return;
+    setActiveTab("in_stock");
+  }, [activeTab, canManageProcurement, placedSupplierOrders.length, visibleInStockRows.length]);
+
+  const effectiveActiveTab: ProcurementTab = !canManageProcurement
+    && activeTab === "ordered"
+    && placedSupplierOrders.length === 0
+    && visibleInStockRows.length > 0
+    ? "in_stock"
+    : activeTab;
 
   const inStockDetailHistory = useMemo(() => {
     if (!inStockDetailTarget) {
@@ -912,7 +1062,7 @@ export default function ProjectProcurement() {
   }, [clearAutosaveTimer, persistDraftNowIfChanged, flushPendingRevokes]);
 
   const openCreateOrder = (itemIds: string[]) => {
-    if (!canManageProcurement) return;
+    if (!canLaunchOrderFlows) return;
     if (itemIds.length === 0) return;
     if (shouldBlockProcurementLaunchActions) {
       toast({
@@ -1320,16 +1470,20 @@ export default function ProjectProcurement() {
   };
 
   const formatMetric = (value: number | null) => (value === null ? "—" : fmtCost(value));
-  const selectionCount = activeTab === "requested"
+  const selectionCount = effectiveActiveTab === "requested"
     ? selectedRequestedIds.size
-    : activeTab === "ordered"
+    : effectiveActiveTab === "ordered"
       ? selectedOrderedLineKeys.size
       : selectedInStockRowKeys.size;
-  const showStickySelectionBar = canManageProcurement && selectionCount > 0;
+  const showStickySelectionBar = (
+    effectiveActiveTab === "requested"
+      ? canLaunchOrderFlows
+      : canManageProcurement
+  ) && selectionCount > 0;
 
-  const selectionPrimaryLabel = activeTab === "requested"
+  const selectionPrimaryLabel = effectiveActiveTab === "requested"
     ? `Create order (${selectionCount})`
-    : activeTab === "ordered"
+    : effectiveActiveTab === "ordered"
       ? `Items received (${selectionCount})`
       : `Use (${selectionCount})`;
 
@@ -1344,11 +1498,11 @@ export default function ProjectProcurement() {
       });
       return;
     }
-    if (activeTab === "requested") {
+    if (effectiveActiveTab === "requested") {
       openCreateOrder(Array.from(selectedRequestedIds));
       return;
     }
-    if (activeTab === "ordered") {
+    if (effectiveActiveTab === "ordered") {
       openReceiveModalForSelection();
       return;
     }
@@ -1364,11 +1518,11 @@ export default function ProjectProcurement() {
   };
 
   const clearSelectionForActiveTab = () => {
-    if (activeTab === "requested") {
+    if (effectiveActiveTab === "requested") {
       setSelectedRequestedIds(new Set());
       return;
     }
-    if (activeTab === "ordered") {
+    if (effectiveActiveTab === "ordered") {
       setSelectedOrderedLineKeys(new Set());
       return;
     }
@@ -1387,7 +1541,7 @@ export default function ProjectProcurement() {
     );
   }
 
-  if (items.length === 0) {
+  if (items.length === 0 && visibleInStockRows.length === 0) {
     return (
       <EmptyState
         icon={ShoppingCart}
@@ -1400,13 +1554,13 @@ export default function ProjectProcurement() {
   const renderRequestedTableHeader = () => (
     <thead className="bg-muted/30 border-b border-border">
       <tr>
-        {canManageProcurement && <th className="w-10 text-left px-2 py-2 text-xs font-medium text-muted-foreground" />}
+        {canLaunchOrderFlows && <th className="w-10 text-left px-2 py-2 text-xs font-medium text-muted-foreground" />}
         <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Name / Spec</th>
         <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">When needed</th>
         <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Amount</th>
         <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Unit</th>
-        <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Planned</th>
-        {canManageProcurement && <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Action</th>}
+        {canViewSensitiveDetail && <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Planned</th>}
+        {canLaunchOrderFlows && <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Action</th>}
       </tr>
     </thead>
   );
@@ -1420,8 +1574,9 @@ export default function ProjectProcurement() {
         <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Delivery scheduled</th>
         <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Amount</th>
         <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Unit</th>
-        <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Unit price</th>
-        <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Total</th>
+        {canViewSensitiveDetail && <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Unit price</th>}
+        {canViewSensitiveDetail && <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Total</th>}
+        {!canViewSensitiveDetail && <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Client price</th>}
         {canManageProcurement && <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Action</th>}
       </tr>
     </thead>
@@ -1434,6 +1589,8 @@ export default function ProjectProcurement() {
         <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Name / Spec</th>
         <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Location</th>
         <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Qty available</th>
+        {!canManageProcurement && <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Receiver</th>}
+        {!canManageProcurement && <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Client price</th>}
         <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Date last received</th>
         {canManageProcurement && <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Actions</th>}
       </tr>
@@ -1474,61 +1631,65 @@ export default function ProjectProcurement() {
       <div className="glass-elevated rounded-card p-sp-3 space-y-sp-3">
         <h2 className="text-h3 text-foreground">Procurement</h2>
 
-        <div className="grid grid-cols-2 xl:grid-cols-4 gap-2">
-          {[
-            { key: "planned", label: "Planned", value: formatMetric(headerKpis.planned), hint: "Estimate-linked qty" },
-            { key: "committed", label: "Committed", value: formatMetric(headerKpis.committed), hint: "Open ordered value" },
-            { key: "received", label: "Received", value: formatMetric(headerKpis.received), hint: "Received value" },
-            { key: "variance", label: "Variance", value: formatMetric(headerKpis.variance), hint: "Planned - used" },
-          ].map((kpi) => (
-            <div key={kpi.key} className="rounded-lg border border-border bg-background/60 p-3 min-h-[96px] flex flex-col justify-between">
-              <p className="text-xs text-muted-foreground">{kpi.label}</p>
-              <p className="text-lg font-semibold text-foreground tabular-nums">{kpi.value}</p>
-              <p className="text-[11px] text-muted-foreground">{kpi.hint}</p>
+        {canViewSensitiveDetail && (
+          <>
+            <div className="grid grid-cols-2 xl:grid-cols-4 gap-2">
+              {[
+                { key: "planned", label: "Planned", value: formatMetric(headerKpis.planned), hint: "Estimate-linked qty" },
+                { key: "committed", label: "Committed", value: formatMetric(headerKpis.committed), hint: "Open ordered value" },
+                { key: "received", label: "Received", value: formatMetric(headerKpis.received), hint: "Received value" },
+                { key: "variance", label: "Variance", value: formatMetric(headerKpis.variance), hint: "Planned - used" },
+              ].map((kpi) => (
+                <div key={kpi.key} className="rounded-lg border border-border bg-background/60 p-3 min-h-[96px] flex flex-col justify-between">
+                  <p className="text-xs text-muted-foreground">{kpi.label}</p>
+                  <p className="text-lg font-semibold text-foreground tabular-nums">{kpi.value}</p>
+                  <p className="text-[11px] text-muted-foreground">{kpi.hint}</p>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(220px,280px)_1fr] gap-3">
-          <div className="rounded-lg border border-border bg-background/60 p-3">
-            <label className="text-xs text-muted-foreground">Budget</label>
-            <Input
-              type="text"
-              readOnly
-              value={fmtCost(normalizedBudget)}
-              className="h-9 mt-1"
-            />
-          </div>
-
-          <div className="rounded-lg border border-border bg-background/60 p-3 space-y-2">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-xs text-muted-foreground">Used</p>
-                <p className="text-base font-semibold text-foreground tabular-nums">
-                  {formatMetric(usedBudgetMetric)}
-                </p>
+            <div className="grid grid-cols-1 lg:grid-cols-[minmax(220px,280px)_1fr] gap-3">
+              <div className="rounded-lg border border-border bg-background/60 p-3">
+                <label className="text-xs text-muted-foreground">Budget</label>
+                <Input
+                  type="text"
+                  readOnly
+                  value={fmtCost(normalizedBudget)}
+                  className="h-9 mt-1"
+                />
               </div>
-              <div className="text-right">
-                <p className="text-xs text-muted-foreground">Remaining</p>
-                <p className={cn(
-                  "text-base font-semibold tabular-nums",
-                  remainingBudgetMetric !== null && remainingBudgetMetric < 0 ? "text-destructive" : "text-foreground",
+
+              <div className="rounded-lg border border-border bg-background/60 p-3 space-y-2">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Used</p>
+                    <p className="text-base font-semibold text-foreground tabular-nums">
+                      {formatMetric(usedBudgetMetric)}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-muted-foreground">Remaining</p>
+                    <p className={cn(
+                      "text-base font-semibold tabular-nums",
+                      remainingBudgetMetric !== null && remainingBudgetMetric < 0 ? "text-destructive" : "text-foreground",
+                    )}
+                    >
+                      {formatMetric(remainingBudgetMetric)}
+                    </p>
+                  </div>
+                </div>
+                <Progress value={budgetProgressPct} className="h-2 bg-muted/60 [&>div]:rounded-full" />
+                <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                  <span>Used = Committed + Received</span>
+                  <span>{Math.round(budgetProgressPct)}%</span>
+                </div>
+                {headerDataStateHint && (
+                  <p className="text-[11px] text-muted-foreground">{headerDataStateHint}</p>
                 )}
-                >
-                  {formatMetric(remainingBudgetMetric)}
-                </p>
               </div>
             </div>
-            <Progress value={budgetProgressPct} className="h-2 bg-muted/60 [&>div]:rounded-full" />
-            <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
-              <span>Used = Committed + Received</span>
-              <span>{Math.round(budgetProgressPct)}%</span>
-            </div>
-            {headerDataStateHint && (
-              <p className="text-[11px] text-muted-foreground">{headerDataStateHint}</p>
-            )}
-          </div>
-        </div>
+          </>
+        )}
       </div>
 
       <div className="glass rounded-card p-2">
@@ -1548,7 +1709,7 @@ export default function ProjectProcurement() {
                   onClick={() => setActiveTab(tab)}
                   className={cn(
                     "rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
-                    activeTab === tab
+                    effectiveActiveTab === tab
                       ? TAB_META[tab].className
                       : "border-border bg-background hover:bg-muted/30",
                   )}
@@ -1581,7 +1742,7 @@ export default function ProjectProcurement() {
                 size="sm"
                 className="h-8"
                 onClick={runSelectionPrimaryAction}
-                disabled={!canEdit || shouldBlockProcurementLaunchActions || (isSupabaseMode && activeTab === "in_stock")}
+                disabled={!canEdit || shouldBlockProcurementLaunchActions || (isSupabaseMode && effectiveActiveTab === "in_stock")}
               >
                 {selectionPrimaryLabel}
               </Button>
@@ -1599,7 +1760,7 @@ export default function ProjectProcurement() {
         </div>
       )}
 
-      {canManageProcurement && activeTab === "requested" && (
+      {canManageProcurement && effectiveActiveTab === "requested" && (
         <div className="glass rounded-card p-2 space-y-2">
           {requestedItems.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">No requested items.</p>
@@ -1625,7 +1786,9 @@ export default function ProjectProcurement() {
                       >
                         {collapsed ? <ChevronRight className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
                         <span className="text-sm font-semibold text-foreground">{stage?.title ?? "Unknown stage"}</span>
-                        <span className="ml-auto text-xs text-muted-foreground">{stageItems.length} · {fmtCost(stageTotal)}</span>
+                        <span className="ml-auto text-xs text-muted-foreground">
+                          {canViewSensitiveDetail ? `${stageItems.length} · ${fmtCost(stageTotal)}` : `${stageItems.length} items`}
+                        </span>
                       </button>
 
                       {!collapsed && (
@@ -1639,7 +1802,7 @@ export default function ProjectProcurement() {
 
                                 return (
                                   <tr key={item.id} className="border-b border-border/70 last:border-0 hover:bg-muted/20">
-                                    {canManageProcurement && (
+                                    {canLaunchOrderFlows && (
                                       <td className="px-2 py-2">
                                         <Checkbox
                                           checked={selected}
@@ -1682,8 +1845,10 @@ export default function ProjectProcurement() {
                                     </td>
                                     <td className="px-2 py-2 text-right tabular-nums text-foreground">{remaining}</td>
                                     <td className="px-2 py-2 text-foreground">{item.unit}</td>
-                                    <td className="px-2 py-2 text-right tabular-nums text-foreground">{fmtCost(item.plannedUnitPrice ?? 0)}</td>
-                                    {canManageProcurement && (
+                                    {canViewSensitiveDetail && (
+                                      <td className="px-2 py-2 text-right tabular-nums text-foreground">{fmtCost(item.plannedUnitPrice ?? 0)}</td>
+                                    )}
+                                    {canLaunchOrderFlows && (
                                       <td className="px-2 py-2">
                                         <div className="flex justify-end">
                                           <Button
@@ -1732,7 +1897,7 @@ export default function ProjectProcurement() {
 
                             return (
                               <tr key={item.id} className="border-b border-border/70 last:border-0 hover:bg-muted/20">
-                                {canManageProcurement && (
+                                {canLaunchOrderFlows && (
                                   <td className="px-2 py-2">
                                     <Checkbox
                                       checked={selected}
@@ -1773,8 +1938,10 @@ export default function ProjectProcurement() {
                                 <td className={cn("px-2 py-2 text-xs", isOverdue(item.requiredByDate) && "text-destructive")}>{formatDate(item.requiredByDate)}</td>
                                 <td className="px-2 py-2 text-right tabular-nums text-foreground">{remaining}</td>
                                 <td className="px-2 py-2 text-foreground">{item.unit}</td>
-                                <td className="px-2 py-2 text-right tabular-nums text-foreground">{fmtCost(item.plannedUnitPrice ?? 0)}</td>
-                                {canManageProcurement && (
+                                {canViewSensitiveDetail && (
+                                  <td className="px-2 py-2 text-right tabular-nums text-foreground">{fmtCost(item.plannedUnitPrice ?? 0)}</td>
+                                )}
+                                {canLaunchOrderFlows && (
                                   <td className="px-2 py-2">
                                     <div className="flex justify-end">
                                       <Button
@@ -1803,7 +1970,7 @@ export default function ProjectProcurement() {
         </div>
       )}
 
-      {activeTab === "ordered" && (
+      {effectiveActiveTab === "ordered" && (
         <div className="glass rounded-card p-2 space-y-2">
           {placedSupplierOrders.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">No placed supplier orders.</p>
@@ -1845,19 +2012,27 @@ export default function ProjectProcurement() {
                     {order.supplierName && (
                       <span className="text-xs text-muted-foreground truncate">{order.supplierName}</span>
                     )}
-                    <span className="ml-auto text-xs text-muted-foreground">{fmtCost(total)}</span>
+                    {canViewSensitiveDetail && (
+                      <span className="ml-auto text-xs text-muted-foreground">{fmtCost(total)}</span>
+                    )}
                   </div>
 
                   {!collapsed && (
                     <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        {renderOrderedTableHeader()}
-                        <tbody>
-                          {order.lines.map((line) => {
+                      {order.lines.length === 0 && !canViewSensitiveDetail ? (
+                        <div className="px-3 py-6 text-sm text-muted-foreground">
+                          Ordered line details are unavailable for your current access.
+                        </div>
+                      ) : (
+                        <table className="w-full text-sm">
+                          {renderOrderedTableHeader()}
+                          <tbody>
+                            {order.lines.map((line) => {
                             const item = itemById.get(line.procurementItemId);
                             if (!item) return null;
                             const openQty = Math.max(line.qty - line.receivedQty, 0);
                             const unitPrice = line.actualUnitPrice ?? line.plannedUnitPrice ?? item.actualUnitPrice ?? item.plannedUnitPrice ?? 0;
+                            const clientUnitPrice = clientUnitPriceByItemId.get(item.id) ?? null;
                             const selectionKey = `${order.id}:${line.id}`;
                             const receivableTarget = orderedReceivableTargetByKey.get(selectionKey);
                             const selected = !!receivableTarget && selectedOrderedLineKeys.has(selectionKey);
@@ -1968,8 +2143,15 @@ export default function ProjectProcurement() {
                                   </div>
                                 </td>
                                 <td className="px-2 py-2">{line.unit}</td>
-                                <td className="px-2 py-2 text-right">{fmtCost(unitPrice)}</td>
-                                <td className="px-2 py-2 text-right">{fmtCost(unitPrice * openQty)}</td>
+                                {canViewSensitiveDetail && (
+                                  <td className="px-2 py-2 text-right">{fmtCost(unitPrice)}</td>
+                                )}
+                                {canViewSensitiveDetail && (
+                                  <td className="px-2 py-2 text-right">{fmtCost(unitPrice * openQty)}</td>
+                                )}
+                                {!canViewSensitiveDetail && (
+                                  <td className="px-2 py-2 text-right">{clientUnitPrice === null ? "—" : fmtCost(clientUnitPrice)}</td>
+                                )}
                                 {canManageProcurement && (
                                   <td className="px-2 py-2">
                                     <div className="flex justify-end">
@@ -1987,9 +2169,10 @@ export default function ProjectProcurement() {
                                 )}
                               </tr>
                             );
-                          })}
-                        </tbody>
-                      </table>
+                            })}
+                          </tbody>
+                        </table>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1999,16 +2182,16 @@ export default function ProjectProcurement() {
         </div>
       )}
 
-      {activeTab === "in_stock" && (
+      {effectiveActiveTab === "in_stock" && (
         <div className="glass rounded-card p-2 space-y-2">
-          {inStockRows.length === 0 ? (
+          {visibleInStockRows.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">No inventory placements yet.</p>
           ) : (
             <div className="rounded-lg border border-border overflow-x-auto">
               <table className="w-full text-sm">
                 {renderInStockTableHeader()}
                 <tbody>
-                  {inStockRows.map((row) => (
+                  {visibleInStockRows.map((row) => (
                     <tr key={row.key} className="border-b border-border/70 last:border-0 hover:bg-muted/20">
                       {canManageProcurement && (
                         <td className="px-2 py-2">
@@ -2034,6 +2217,12 @@ export default function ProjectProcurement() {
                       </td>
                       <td className="px-2 py-2 text-muted-foreground">{row.locationName}</td>
                       <td className="px-2 py-2 text-right tabular-nums">{row.qty} {row.item.unit}</td>
+                      {!canManageProcurement && (
+                        <td className="px-2 py-2 text-xs text-muted-foreground">{row.receiverName ?? "—"}</td>
+                      )}
+                      {!canManageProcurement && (
+                        <td className="px-2 py-2 text-right">{row.clientUnitPrice === null ? "—" : fmtCost(row.clientUnitPrice)}</td>
+                      )}
                       <td className="px-2 py-2 text-xs text-muted-foreground">{formatDate(row.lastReceivedAt)}</td>
                       {canManageProcurement && (
                         <td className="px-2 py-2">
@@ -2416,6 +2605,7 @@ export default function ProjectProcurement() {
           onOpenChange={setCreateOrderOpen}
           projectId={pid}
           initialItemIds={createOrderItemIds}
+          showSensitiveDetail={canViewSensitiveDetail}
         />
       )}
 
@@ -2425,6 +2615,7 @@ export default function ProjectProcurement() {
           onOpenChange={(nextOpen) => !nextOpen && closeOrderDetail()}
           projectId={pid}
           orderId={orderId ?? ""}
+          showSensitiveDetail={canViewSensitiveDetail}
           onOpenRequest={(requestId) => {
             navigate(`/project/${pid}/procurement/${requestId}`);
           }}
@@ -2545,30 +2736,32 @@ export default function ProjectProcurement() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs text-muted-foreground">Planned unit price</label>
-                    <p className="mt-1 h-9 flex items-center justify-end tabular-nums text-sm text-foreground">
-                      {fmtCost(editForm.plannedUnitPrice ?? 0)}
-                    </p>
+                {canViewSensitiveDetail && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-muted-foreground">Planned unit price</label>
+                      <p className="mt-1 h-9 flex items-center justify-end tabular-nums text-sm text-foreground">
+                        {fmtCost(editForm.plannedUnitPrice ?? 0)}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground">Actual unit price</label>
+                      <Input
+                        type="number"
+                        min="0"
+                        value={editForm.actualUnitPrice ?? ""}
+                        onChange={(event) => {
+                          const actualUnitPrice = event.target.value ? Number(event.target.value) : null;
+                          patchEditForm((prev) => ({ ...prev, actualUnitPrice }));
+                        }}
+                        onBlur={() => persistDraftNowIfChanged(draftRef.current)}
+                        className="h-9"
+                        placeholder="RUB"
+                        disabled={!canEdit || activeTab === "ordered"}
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground">Actual unit price</label>
-                    <Input
-                      type="number"
-                      min="0"
-                      value={editForm.actualUnitPrice ?? ""}
-                      onChange={(event) => {
-                        const actualUnitPrice = event.target.value ? Number(event.target.value) : null;
-                        patchEditForm((prev) => ({ ...prev, actualUnitPrice }));
-                      }}
-                      onBlur={() => persistDraftNowIfChanged(draftRef.current)}
-                      className="h-9"
-                      placeholder="RUB"
-                      disabled={!canEdit || activeTab === "ordered"}
-                    />
-                  </div>
-                </div>
+                )}
 
                 <div>
                   <label className="text-xs text-muted-foreground">Supplier preferred</label>
@@ -2667,14 +2860,16 @@ export default function ProjectProcurement() {
                 <div className="rounded-lg border border-border p-3 space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-sm font-medium text-foreground">Fulfillment</p>
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() => openCreateOrder([detailItem.id])}
-                      disabled={!canEdit || shouldBlockProcurementLaunchActions}
-                    >
-                      Create order
-                    </Button>
+                    {canLaunchOrderFlows && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => openCreateOrder([detailItem.id])}
+                        disabled={!canEdit || shouldBlockProcurementLaunchActions}
+                      >
+                        Create order
+                      </Button>
+                    )}
                   </div>
                   {(relatedOrdersByItemId.get(detailItem.id) ?? []).length > 0 ? (
                     <div className="space-y-2">

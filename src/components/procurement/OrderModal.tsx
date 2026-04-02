@@ -30,6 +30,7 @@ interface OrderModalProps {
   onOpenChange: (open: boolean) => void;
   projectId: string;
   initialItemIds: string[];
+  showSensitiveDetail?: boolean;
   onCompleted?: (orderId: string) => void;
 }
 
@@ -50,6 +51,7 @@ export function OrderModal({
   onOpenChange,
   projectId,
   initialItemIds,
+  showSensitiveDetail = true,
   onCompleted,
 }: OrderModalProps) {
   const baseItems = useProcurementV2(projectId);
@@ -354,6 +356,19 @@ export function OrderModal({
           <DialogTitle>Create order</DialogTitle>
         </DialogHeader>
 
+        {!showSensitiveDetail ? (
+          <>
+            <div className="flex-1 px-5 py-4">
+              <p className="text-sm text-muted-foreground">
+                Supplier pricing detail is unavailable for your current access level.
+              </p>
+            </div>
+            <DialogFooter className="px-5 py-4 border-t border-border">
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+            </DialogFooter>
+          </>
+        ) : (
+        <>
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
           <div className="flex items-center gap-2">
             <Button
@@ -613,6 +628,8 @@ export function OrderModal({
             {orderActionInFlight === "place" ? "Placing..." : "Place order"}
           </Button>
         </DialogFooter>
+        </>
+        )}
       </DialogContent>
     </Dialog>
   );
