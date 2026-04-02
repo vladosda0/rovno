@@ -96,7 +96,7 @@ function addStockItem(projectId: string, overrides?: {
     supplierPreferred: null,
     locationPreferredId: null,
     lockedFromEstimate: false,
-    sourceEstimateItemId: linkedLineId ? "estimate-in-stock" : null,
+    sourceEstimateItemId: null,
     sourceEstimateV2LineId: linkedLineId,
     orphaned: false,
     orphanedAt: null,

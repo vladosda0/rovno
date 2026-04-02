@@ -176,7 +176,7 @@ function buildDeleteGuardContext(input: DeleteGuardSourceData): DeleteGuardConte
   input.procurementItems
     .filter((item) => !item.archived && !item.orphaned)
     .forEach((item) => {
-      const lineId = item.sourceEstimateV2LineId ?? item.sourceEstimateItemId ?? null;
+      const lineId = item.sourceEstimateV2LineId ?? null;
       if (!lineId) return;
       const list = procurementByLineId.get(lineId) ?? [];
       list.push(item);

@@ -201,6 +201,12 @@ describe("delete-safeguards", () => {
       name: "Ignored",
       sourceEstimateV2LineId: "another-line",
     });
+    const legacyOnlyProcurement = procurementItem({
+      id: "proc-legacy-only",
+      name: "Legacy only",
+      sourceEstimateV2LineId: null,
+      sourceEstimateItemId: materialLine.id,
+    });
 
     const assessment = assessResourceDelete(materialLine, {
       projectId,
@@ -208,7 +214,7 @@ describe("delete-safeguards", () => {
       works: [work()],
       lines: [materialLine],
       tasks: [],
-      procurementItems: [linkedProcurement, unlinkedProcurement],
+      procurementItems: [linkedProcurement, unlinkedProcurement, legacyOnlyProcurement],
       orders: [
         order({
           lines: [{

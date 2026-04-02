@@ -55,7 +55,7 @@ function buildTestRequestLine(
 }
 
 describe("procurement fulfillment utils", () => {
-  it("detects estimate-linked procurement requests by active linkage keys", () => {
+  it("detects estimate-linked procurement requests by active v2 linkage only", () => {
     expect(isEstimateLinkedProcurementItem({
       sourceEstimateV2LineId: "line-1",
       sourceEstimateItemId: null,
@@ -63,7 +63,7 @@ describe("procurement fulfillment utils", () => {
     expect(isEstimateLinkedProcurementItem({
       sourceEstimateV2LineId: null,
       sourceEstimateItemId: "legacy-1",
-    } as ProcurementItemV2)).toBe(true);
+    } as ProcurementItemV2)).toBe(false);
     expect(isEstimateLinkedProcurementItem({
       sourceEstimateV2LineId: null,
       sourceEstimateItemId: null,

@@ -47,14 +47,9 @@ function requiredByDateFromWorkStart(
 
 function isEstimateV2Linked(
   item: ProcurementItemV2,
-  knownLineIds: Set<string>,
 ): { linked: boolean; lineId: string | null } {
   if (item.sourceEstimateV2LineId) {
     return { linked: true, lineId: item.sourceEstimateV2LineId };
-  }
-
-  if (item.sourceEstimateItemId && knownLineIds.has(item.sourceEstimateItemId)) {
-    return { linked: true, lineId: item.sourceEstimateItemId };
   }
 
   return { linked: false, lineId: null };
@@ -109,7 +104,6 @@ function findBackfillCandidate(
       if (item.createdFrom !== "estimate") return false;
       if (item.orphaned) return false;
       if (item.sourceEstimateV2LineId) return false;
-      if (item.sourceEstimateItemId) return false;
       const itemKey = matchingKey(item.name, item.spec, item.unit, item.stageId);
       return itemKey === lineKey;
     }) ?? null
@@ -227,7 +221,6 @@ export function syncProcurementFromEstimateV2(
 ) {
   const nowInWork = (estimateState.project.estimateStatus as EstimateExecutionStatus) === "in_work";
   const lines = estimateState.lines.filter((line) => line.projectId === projectId);
-  const allLineIds = new Set(lines.map((line) => line.id));
   const linesById = new Map(lines.map((line) => [line.id, line]));
   const procurementLines = lines.filter((line) => PROCUREMENT_TYPES.has(line.type));
   const workStartByWorkId = new Map(
@@ -259,7 +252,7 @@ export function syncProcurementFromEstimateV2(
 
   const byLinkedLineId = new Map<string, ProcurementItemV2>();
   items.forEach((item) => {
-    const linked = isEstimateV2Linked(item, allLineIds);
+    const linked = isEstimateV2Linked(item);
     if (!linked.linked || !linked.lineId) return;
 
     if (!item.sourceEstimateV2LineId) {

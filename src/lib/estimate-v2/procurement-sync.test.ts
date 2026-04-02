@@ -242,4 +242,52 @@ describe("estimate-v2 procurement sync", () => {
     expect(projectItems[0].id).toBe(existing.id);
     expect(projectItems[0].sourceEstimateV2LineId).toBe(lineId);
   });
+
+  it("does not treat legacy estimate item ids as active procurement linkage", () => {
+    const projectId = `proc-sync-legacy-ignore-${Date.now()}`;
+    const lineId = `line-${Date.now()}`;
+
+    addProcurementItem({
+      id: `proc-legacy-${Date.now()}`,
+      projectId,
+      stageId: "stage-1",
+      categoryId: null,
+      type: "material",
+      name: "Legacy-only row",
+      spec: null,
+      unit: "pcs",
+      requiredByDate: null,
+      requiredQty: 1,
+      orderedQty: 0,
+      receivedQty: 0,
+      plannedUnitPrice: 10,
+      actualUnitPrice: null,
+      supplier: null,
+      supplierPreferred: null,
+      locationPreferredId: null,
+      lockedFromEstimate: false,
+      sourceEstimateItemId: lineId,
+      sourceEstimateV2LineId: null,
+      orphaned: false,
+      orphanedAt: null,
+      orphanedReason: null,
+      linkUrl: null,
+      notes: null,
+      attachments: [],
+      createdFrom: "estimate",
+      linkedTaskIds: [],
+      archived: false,
+    });
+
+    syncProcurementFromEstimateV2(projectId, {
+      project: { estimateStatus: "in_work" },
+      lines: [line({ id: lineId, projectId, stageId: "stage-1", title: "Fresh linked line", unit: "pcs", type: "material" })],
+      works: [],
+    });
+
+    const projectItems = getProcurementItems(projectId, true);
+    expect(projectItems).toHaveLength(2);
+    expect(projectItems.find((item) => item.name === "Legacy-only row")?.sourceEstimateV2LineId).toBeNull();
+    expect(projectItems.find((item) => item.sourceEstimateV2LineId === lineId)?.name).toBe("Fresh linked line");
+  });
 });

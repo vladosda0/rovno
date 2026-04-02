@@ -74,7 +74,7 @@ function unitPriceForItem(item: ProcurementItemV2): number {
 export function isEstimateLinkedProcurementItem(
   item: Pick<ProcurementItemV2, "sourceEstimateV2LineId" | "sourceEstimateItemId">,
 ): boolean {
-  return Boolean(item.sourceEstimateV2LineId || item.sourceEstimateItemId);
+  return Boolean(item.sourceEstimateV2LineId);
 }
 
 export function toInventoryKey(item: Pick<ProcurementItemV2, "name" | "spec" | "unit">): string {
