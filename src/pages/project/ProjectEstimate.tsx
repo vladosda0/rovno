@@ -80,6 +80,7 @@ import { createWorkspaceProjectInvite, sendWorkspaceProjectInviteEmail } from "@
 import { computeLineTotals, computeProjectTotals, computeStageTotals } from "@/lib/estimate-v2/pricing";
 import { resolveProjectEstimateCtaState } from "@/lib/estimate-v2/project-estimate-cta";
 import { resolveSubmitToClientState } from "@/lib/estimate-v2/project-estimate-submit-state";
+import { getDefaultFinanceVisibility } from "@/lib/participant-role-policy";
 import {
   combinePlanFact,
   computeFactFromDataSources,
@@ -95,6 +96,7 @@ import {
   getProjectDomainAccess,
   projectDomainAllowsView,
   projectDomainAllowsManage,
+  seamCanViewSensitiveDetail,
   usePermission,
 } from "@/lib/permissions";
 import { ApprovalStampCard } from "@/components/estimate-v2/ApprovalStampCard";
@@ -127,6 +129,19 @@ import type {
 } from "@/types/estimate-v2";
 import type { Task, UserPlan } from "@/types/entities";
 import { Checkbox } from "@/components/ui/checkbox";
+
+type ChecklistFallbackEstimateRow = {
+  id: string;
+  workId: string;
+  title: string;
+  type: ResourceLineType;
+  typeLabel: string | null;
+  qtyMilli: number | null;
+  unit: string | null;
+  assigneeId: string | null;
+  assigneeName: string | null;
+  assigneeEmail: string | null;
+};
 
 function money(cents: number, currency: string): string {
   return new Intl.NumberFormat("ru-RU", {
@@ -173,6 +188,47 @@ function labelForType(type: ResourceLineType): string {
 
 function isAssignableResourceType(type: ResourceLineType): boolean {
   return type === "labor" || type === "subcontractor";
+}
+
+function resolveChecklistFallbackRowType(task: Task, checklistIndex: number): ResourceLineType | null {
+  const checklistItem = task.checklist[checklistIndex];
+  if (!checklistItem) return null;
+  if (checklistItem.estimateV2ResourceType) return checklistItem.estimateV2ResourceType;
+  if (checklistItem.type === "material") return "material";
+  if (checklistItem.type === "tool") return "tool";
+  if (checklistItem.estimateV2LineId || checklistItem.estimateV2WorkId) return "other";
+  return null;
+}
+
+function resolveChecklistFallbackRowLabel(task: Task, checklistIndex: number): string | null {
+  const checklistItem = task.checklist[checklistIndex];
+  if (!checklistItem) return null;
+  if (checklistItem.estimateV2ResourceType) return null;
+  if (checklistItem.type === "material" || checklistItem.type === "tool") return null;
+  if (checklistItem.estimateV2LineId || checklistItem.estimateV2WorkId) return "Estimate item";
+  return null;
+}
+
+function resolveTaskAssignee(task: Task): {
+  assigneeId: string | null;
+  assigneeName: string | null;
+  assigneeEmail: string | null;
+} {
+  const taskAssignee = task.assignees?.find((entry) => entry.id === task.assignee_id) ?? null;
+  if (taskAssignee) {
+    return {
+      assigneeId: taskAssignee.id ?? null,
+      assigneeName: taskAssignee.name ?? null,
+      assigneeEmail: taskAssignee.email ?? null,
+    };
+  }
+
+  const user = task.assignee_id ? getUserById(task.assignee_id) : null;
+  return {
+    assigneeId: task.assignee_id || null,
+    assigneeName: user?.name ?? null,
+    assigneeEmail: user?.email ?? null,
+  };
 }
 
 function buildHierarchyNumbers(
@@ -502,9 +558,12 @@ export default function ProjectEstimate() {
   const canSubmitByMembership = currentMembership?.role === "owner" || currentMembership?.role === "co_owner";
   const regime = estimateProject.regime;
   const estimateAccess = getProjectDomainAccess(perm.seam, "estimate");
+  const canViewSensitiveDetail = seamCanViewSensitiveDetail(perm.seam);
   const canManageEstimate = projectDomainAllowsManage(estimateAccess) && regime !== "client";
   const canEditEstimate = canManageEstimate;
   const canSubmitToClient = canManageEstimate && canSubmitByMembership;
+  const showEstimateInternalPricing = canViewSensitiveDetail && regime !== "client";
+  const showEstimateMarkup = canViewSensitiveDetail && regime === "contractor";
 
   const [activeTab, setActiveTab] = useState("estimate");
   const [approvalModalOpen, setApprovalModalOpen] = useState(false);
@@ -599,6 +658,7 @@ export default function ProjectEstimate() {
         profileId: workspaceMode.profileId,
         projectOwnerProfileId: project.owner_id,
         membershipRole: currentMembership?.role ?? null,
+        financeVisibility: currentMembership?.finance_visibility ?? null,
       });
       return () => {
         clearEstimateV2ProjectAccessContext(pid);
@@ -611,6 +671,7 @@ export default function ProjectEstimate() {
         profileId: currentUser.id || undefined,
         projectOwnerProfileId: project?.owner_id,
         membershipRole: currentMembership?.role ?? null,
+        financeVisibility: currentMembership?.finance_visibility ?? null,
       });
       return () => {
         clearEstimateV2ProjectAccessContext(pid);
@@ -620,6 +681,7 @@ export default function ProjectEstimate() {
     clearEstimateV2ProjectAccessContext(pid);
     return undefined;
   }, [
+    currentMembership?.finance_visibility,
     currentMembership?.role,
     currentUser.id,
     pid,
@@ -653,6 +715,41 @@ export default function ProjectEstimate() {
     });
     return map;
   }, [lines]);
+
+  const checklistFallbackRowsByWork = useMemo(() => {
+    const map = new Map<string, ChecklistFallbackEstimateRow[]>();
+
+    tasks.forEach((task) => {
+      const taskAssignee = resolveTaskAssignee(task);
+
+      task.checklist.forEach((item, index) => {
+        const workId = item.estimateV2WorkId ?? task.estimateV2WorkId ?? null;
+        if (!workId) return;
+
+        const type = resolveChecklistFallbackRowType(task, index);
+        if (!type) return;
+
+        const list = map.get(workId) ?? [];
+        list.push({
+          id: item.estimateV2LineId ?? `checklist-${task.id}-${item.id}`,
+          workId,
+          title: item.text || "Checklist item",
+          type,
+          typeLabel: resolveChecklistFallbackRowLabel(task, index),
+          qtyMilli: Number.isFinite(item.estimateV2QtyMilli)
+            ? Math.max(1, Math.round(item.estimateV2QtyMilli as number))
+            : null,
+          unit: item.estimateV2Unit?.trim() || null,
+          assigneeId: taskAssignee.assigneeId,
+          assigneeName: taskAssignee.assigneeName,
+          assigneeEmail: taskAssignee.assigneeEmail,
+        });
+        map.set(workId, list);
+      });
+    });
+
+    return map;
+  }, [tasks]);
 
   const hierarchyNumbers = useMemo(
     () => buildHierarchyNumbers(sortedStages, worksByStage),
@@ -730,6 +827,7 @@ export default function ProjectEstimate() {
         viewerRegime: projectMode === "build_myself" ? "build_myself" : null,
         creditLimit: 50,
         invitedBy: currentUser.id,
+        financeVisibility: getDefaultFinanceVisibility("contractor"),
       });
 
       if (workspaceMode.kind === "supabase") {
@@ -1050,6 +1148,12 @@ export default function ProjectEstimate() {
     setDetailedCostOverviewOpen(false);
   }, [estimateProject.estimateStatus]);
 
+  useEffect(() => {
+    if (canViewSensitiveDetail) return;
+    setDetailedCostOverviewOpen(false);
+    setFinancialResourcesExpanded(false);
+  }, [canViewSensitiveDetail]);
+
   const handleEstimateStatusChange = async (
     nextStatus: EstimateExecutionStatus,
     options?: { skipSetup?: boolean; projectTasks?: Task[] },
@@ -1363,13 +1467,11 @@ export default function ProjectEstimate() {
     rows.push(["Regime", regime]);
     rows.push([]);
 
-    if (regime === "client") {
+    if (regime === "client" || !canViewSensitiveDetail) {
       rows.push(["Stage", "Work", "Line", "Qty", "Unit", "Client unit", "Client total"]);
-    }
-    if (regime === "contractor") {
+    } else if (regime === "contractor") {
       rows.push(["Stage", "Work", "Line", "Type", "Qty", "Unit", "Cost unit", "Cost total", "Markup %", "Discount %", "Client unit", "Client total"]);
-    }
-    if (regime === "build_myself") {
+    } else if (regime === "build_myself") {
       rows.push(["Stage", "Work", "Line", "Type", "Qty", "Unit", "Cost unit", "Cost total", "Discount %", "Client unit", "Client total"]);
     }
 
@@ -1381,7 +1483,7 @@ export default function ProjectEstimate() {
           const lineTotals = lineTotalsById.get(line.id);
           if (!lineTotals) return;
 
-          if (regime === "client") {
+          if (regime === "client" || !canViewSensitiveDetail) {
             rows.push([
               stage.title,
               work.title,
@@ -1430,9 +1532,11 @@ export default function ProjectEstimate() {
     });
 
     rows.push([]);
-    rows.push(["Subtotal (ex VAT)", money(totals.subtotalBeforeDiscountCents, estimateProject.currency)]);
-    rows.push(["Discount", money(totals.discountTotalCents, estimateProject.currency)]);
-    rows.push(["Taxable base (ex VAT)", money(totals.taxableBaseCents, estimateProject.currency)]);
+    if (canViewSensitiveDetail) {
+      rows.push(["Subtotal (ex VAT)", money(totals.subtotalBeforeDiscountCents, estimateProject.currency)]);
+      rows.push(["Discount", money(totals.discountTotalCents, estimateProject.currency)]);
+      rows.push(["Taxable base (ex VAT)", money(totals.taxableBaseCents, estimateProject.currency)]);
+    }
     rows.push(["Tax", `${(estimateProject.taxBps / 100).toFixed(2)}%`]);
     rows.push(["Tax amount", money(totals.taxAmountCents, estimateProject.currency)]);
     rows.push(["Total (inc VAT)", money(totals.totalCents, estimateProject.currency)]);
@@ -1442,7 +1546,7 @@ export default function ProjectEstimate() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `estimate-v2-${pid}-${regime}.csv`;
+    link.download = `estimate-v2-${pid}-${canViewSensitiveDetail ? regime : "client"}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -1878,7 +1982,8 @@ export default function ProjectEstimate() {
                   </div>
                 </div>
 
-                <div className="border-t border-border/60 pt-3">
+                {canViewSensitiveDetail && (
+                  <div className="border-t border-border/60 pt-3">
                   <Collapsible open={detailedCostOverviewOpen} onOpenChange={setDetailedCostOverviewOpen}>
                     <div className="rounded-lg border border-border/70">
                       <CollapsibleTrigger asChild>
@@ -1972,7 +2077,8 @@ export default function ProjectEstimate() {
                       </CollapsibleContent>
                     </div>
                   </Collapsible>
-                </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -2004,7 +2110,7 @@ export default function ProjectEstimate() {
 
             <div className="rounded-lg border border-border p-3">
               <p className="text-sm font-semibold text-foreground">Financial</p>
-              {regime === "client" ? (
+              {regime === "client" || !canViewSensitiveDetail ? (
                 <div className="mt-2 rounded-md border border-border/70 p-2">
                   <p className="text-xs text-muted-foreground">Total (inc VAT)</p>
                   <p className="text-2xl font-semibold text-foreground">{money(totals.totalCents, estimateProject.currency)}</p>
@@ -2093,7 +2199,12 @@ export default function ProjectEstimate() {
           )}
         >
           <p className="mb-2 text-caption font-medium text-foreground">Changed items</p>
-          <VersionDiffList changes={diff.changes} regime={regime} currency={estimateProject.currency} />
+          <VersionDiffList
+            changes={diff.changes}
+            regime={regime}
+            currency={estimateProject.currency}
+            showSensitiveDetail={canViewSensitiveDetail}
+          />
         </VersionBanner>}
 
         <Tabs value={activeTab} onValueChange={handleTabChange}>
@@ -2177,21 +2288,23 @@ export default function ProjectEstimate() {
                         </div>
 
                         <div className="flex items-center gap-2">
-                          <div className="flex items-center gap-1">
-                            <span className="text-caption text-muted-foreground">Stage discount:</span>
-                            {canEditEstimate ? (
-                              <InlineEditableNumber
-                                value={stage.discountBps}
-                                onCommit={(nextValue) => updateStage(pid, stage.id, { discountBps: nextValue })}
-                                formatDisplay={(value) => `${fromBpsToPercent(value)}%`}
-                                formatInput={(value) => fromBpsToPercent(value)}
-                                parseInput={(raw) => toBpsFromPercent(raw)}
-                                className="w-20"
-                              />
-                            ) : (
-                              <span className="text-sm tabular-nums text-foreground">{fromBpsToPercent(stage.discountBps)}%</span>
-                            )}
-                          </div>
+                          {canViewSensitiveDetail && (
+                            <div className="flex items-center gap-1">
+                              <span className="text-caption text-muted-foreground">Stage discount:</span>
+                              {canEditEstimate ? (
+                                <InlineEditableNumber
+                                  value={stage.discountBps}
+                                  onCommit={(nextValue) => updateStage(pid, stage.id, { discountBps: nextValue })}
+                                  formatDisplay={(value) => `${fromBpsToPercent(value)}%`}
+                                  formatInput={(value) => fromBpsToPercent(value)}
+                                  parseInput={(raw) => toBpsFromPercent(raw)}
+                                  className="w-20"
+                                />
+                              ) : (
+                                <span className="text-sm tabular-nums text-foreground">{fromBpsToPercent(stage.discountBps)}%</span>
+                              )}
+                            </div>
+                          )}
                           <div className="flex items-center gap-1">
                             <span className="text-caption text-muted-foreground">Stage total:</span>
                             <span className="text-sm font-semibold tabular-nums text-foreground">
@@ -2217,13 +2330,23 @@ export default function ProjectEstimate() {
                         <div className="mt-2 space-y-2 pl-6">
                           {stageWorks.map((work) => {
                             const workLines = linesByWork.get(work.id) ?? [];
+                            const fallbackChecklistRows = !canViewSensitiveDetail && workLines.length === 0
+                              ? (checklistFallbackRowsByWork.get(work.id) ?? [])
+                              : [];
+                            const hasChecklistFallbackRows = fallbackChecklistRows.length > 0;
                             const workNumber = hierarchyNumbers.workNumberById.get(work.id) ?? `${stageNumber}.1`;
-                            const showAssignmentColumn = workLines.some((line) => isAssignableResourceType(line.type));
-                            const tableColumnCount = 5
+                            const showAssignmentColumn = workLines.some((line) => isAssignableResourceType(line.type))
+                              || fallbackChecklistRows.some((row) => (
+                                isAssignableResourceType(row.type)
+                                && Boolean(row.assigneeId || row.assigneeName || row.assigneeEmail)
+                              ));
+                            const showClientPricingColumns = !hasChecklistFallbackRows;
+                            const tableColumnCount = 3
                               + (showAssignmentColumn ? 1 : 0)
-                              + (regime !== "client" ? 2 : 0)
-                              + (regime === "contractor" ? 1 : 0)
-                              + (regime !== "client" ? 1 : 0)
+                              + (showEstimateInternalPricing ? 2 : 0)
+                              + (showEstimateMarkup ? 1 : 0)
+                              + (showEstimateInternalPricing ? 1 : 0)
+                              + (showClientPricingColumns ? 2 : 0)
                               + (canEditEstimate ? 1 : 0);
 
                             return (
@@ -2274,16 +2397,20 @@ export default function ProjectEstimate() {
                                         )}
                                         <TableHead className="h-9 w-[92px] py-1 pr-2 text-right tabular-nums">Qty</TableHead>
                                         <TableHead className="h-9 w-[128px] py-1 pr-2">Unit</TableHead>
-                                        {regime !== "client" && <TableHead className="h-9 w-[120px] py-1 pr-2 text-right tabular-nums">Cost unit</TableHead>}
-                                        {regime !== "client" && <TableHead className="h-9 w-[120px] py-1 pr-2 text-right tabular-nums">Cost total</TableHead>}
-                                        {regime === "contractor" && (
+                                        {showEstimateInternalPricing && <TableHead className="h-9 w-[120px] py-1 pr-2 text-right tabular-nums">Cost unit</TableHead>}
+                                        {showEstimateInternalPricing && <TableHead className="h-9 w-[120px] py-1 pr-2 text-right tabular-nums">Cost total</TableHead>}
+                                        {showEstimateMarkup && (
                                           <TableHead className="h-9 w-[92px] whitespace-nowrap py-1 pr-2 text-right tabular-nums">Markup %</TableHead>
                                         )}
-                                        {regime !== "client" && (
+                                        {showEstimateInternalPricing && (
                                           <TableHead className="h-9 w-[92px] whitespace-nowrap py-1 pr-2 text-right tabular-nums">Discount %</TableHead>
                                         )}
-                                        <TableHead className="h-9 w-[120px] py-1 pr-2 text-right tabular-nums">Client unit</TableHead>
-                                        <TableHead className="h-9 w-[126px] py-1 pr-2 text-right tabular-nums">Client total</TableHead>
+                                        {showClientPricingColumns && (
+                                          <TableHead className="h-9 w-[120px] py-1 pr-2 text-right tabular-nums">Client unit</TableHead>
+                                        )}
+                                        {showClientPricingColumns && (
+                                          <TableHead className="h-9 w-[126px] py-1 pr-2 text-right tabular-nums">Client total</TableHead>
+                                        )}
                                         {canEditEstimate && <TableHead className="h-9 w-10 py-1 pr-0" />}
                                       </TableRow>
                                     </TableHeader>
@@ -2456,7 +2583,7 @@ export default function ProjectEstimate() {
                                               )}
                                             </TableCell>
 
-                                            {regime !== "client" && (
+                                            {showEstimateInternalPricing && (
                                               <TableCell className="w-[120px] py-1.5 pr-2 align-top">
                                                 <InlineEditableNumber
                                                   value={line.costUnitCents}
@@ -2469,13 +2596,13 @@ export default function ProjectEstimate() {
                                               </TableCell>
                                             )}
 
-                                            {regime !== "client" && (
+                                            {showEstimateInternalPricing && (
                                               <TableCell className="w-[120px] py-1.5 pr-2 text-right text-sm tabular-nums align-top">
                                                 {money(computed.costTotalCents, estimateProject.currency)}
                                               </TableCell>
                                             )}
 
-                                            {regime === "contractor" && (
+                                            {showEstimateMarkup && (
                                               <TableCell className="w-[92px] py-1.5 pr-2 align-top">
                                                 <InlineEditableNumber
                                                   value={line.markupBps}
@@ -2488,7 +2615,7 @@ export default function ProjectEstimate() {
                                               </TableCell>
                                             )}
 
-                                            {regime !== "client" && (
+                                            {showEstimateInternalPricing && (
                                               <TableCell className="w-[92px] py-1.5 pr-2 align-top">
                                                 {canEditEstimate ? (
                                                   <InlineEditableNumber
@@ -2506,12 +2633,16 @@ export default function ProjectEstimate() {
                                               </TableCell>
                                             )}
 
-                                            <TableCell className="w-[120px] py-1.5 pr-2 text-right text-sm tabular-nums align-top">
-                                              {money(computed.clientUnitCents, estimateProject.currency)}
-                                            </TableCell>
-                                            <TableCell className="w-[126px] py-1.5 pr-2 text-right text-sm tabular-nums align-top">
-                                              {money(computed.clientTotalCents, estimateProject.currency)}
-                                            </TableCell>
+                                            {showClientPricingColumns && (
+                                              <TableCell className="w-[120px] py-1.5 pr-2 text-right text-sm tabular-nums align-top">
+                                                {money(computed.clientUnitCents, estimateProject.currency)}
+                                              </TableCell>
+                                            )}
+                                            {showClientPricingColumns && (
+                                              <TableCell className="w-[126px] py-1.5 pr-2 text-right text-sm tabular-nums align-top">
+                                                {money(computed.clientTotalCents, estimateProject.currency)}
+                                              </TableCell>
+                                            )}
 
                                             {canEditEstimate && (
                                               <TableCell className="w-10 py-1.5 pr-0 align-top">
@@ -2527,6 +2658,48 @@ export default function ProjectEstimate() {
                                                 </Button>
                                               </TableCell>
                                             )}
+                                          </TableRow>
+                                        );
+                                      })}
+
+                                      {fallbackChecklistRows.map((row) => {
+                                        const typeLabel = row.typeLabel ?? labelForType(row.type);
+                                        return (
+                                          <TableRow key={row.id}>
+                                            <TableCell className="sticky left-0 z-20 w-[360px] border-r border-border bg-card py-1.5 pr-2 align-top shadow-[6px_0_10px_-10px_hsl(var(--foreground)/0.35)]">
+                                              <div className="flex min-w-0 items-start gap-2">
+                                                <span title={typeLabel}>
+                                                  <ResourceTypeBadge type={row.type} iconOnly labelOverride={row.typeLabel ?? undefined} />
+                                                </span>
+                                                <div className="min-w-0 flex-1 whitespace-normal break-words leading-5 font-medium">
+                                                  {row.title}
+                                                </div>
+                                              </div>
+                                            </TableCell>
+
+                                            {showAssignmentColumn && (
+                                              <TableCell className="w-[170px] py-1.5 pr-2 align-top">
+                                                {isAssignableResourceType(row.type) && (row.assigneeName || row.assigneeEmail) ? (
+                                                  <div className="min-h-7 px-1 py-0.5 text-sm text-foreground">
+                                                    {row.assigneeName || row.assigneeEmail}
+                                                  </div>
+                                                ) : (
+                                                  <span className="text-xs text-muted-foreground">—</span>
+                                                )}
+                                              </TableCell>
+                                            )}
+
+                                            <TableCell className="w-[92px] py-1.5 pr-2 align-top">
+                                              <div className="min-h-7 px-1 py-0.5 text-sm text-foreground">
+                                                {row.qtyMilli != null ? qtyFromMilli(row.qtyMilli) : "—"}
+                                              </div>
+                                            </TableCell>
+
+                                            <TableCell className="w-[128px] py-1.5 pr-2 align-top">
+                                              <div className="min-h-7 px-1 py-0.5 text-sm text-foreground">
+                                                {row.unit || "—"}
+                                              </div>
+                                            </TableCell>
                                           </TableRow>
                                         );
                                       })}
@@ -2633,7 +2806,7 @@ export default function ProjectEstimate() {
                   </Tooltip>
                 </div>
 
-                {regime !== "client" && (
+                {showEstimateInternalPricing && (
                   <div className="flex items-center justify-between gap-2 whitespace-nowrap text-sm md:min-w-[170px] md:justify-end">
                     <span className="text-muted-foreground">Total cost</span>
                     <span className="font-semibold tabular-nums text-foreground">
@@ -2674,7 +2847,7 @@ export default function ProjectEstimate() {
                   </span>
                 </div>
 
-                {regime !== "client" && <div aria-hidden="true" className="hidden md:block" />}
+                {showEstimateInternalPricing && <div aria-hidden="true" className="hidden md:block" />}
                 <div aria-hidden="true" className="hidden md:block" />
               </div>
             </div>

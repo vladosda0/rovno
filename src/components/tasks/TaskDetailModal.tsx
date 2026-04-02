@@ -202,6 +202,13 @@ export function TaskDetailModal({
     return "other";
   }, []);
 
+  const getChecklistResourceLabel = useCallback((item: Task["checklist"][number]): string | null => {
+    if (item.estimateV2ResourceType) return null;
+    if (item.type === "material" || item.type === "tool") return null;
+    if (item.estimateV2LineId || item.estimateV2WorkId) return "Estimate item";
+    return null;
+  }, []);
+
   const toggleChecklistItem = useCallback(async (itemId: string, nextDone: boolean) => {
     if (!task || !onChecklistToggle) return;
     setPendingChecklistItemIds((prev) => ({ ...prev, [itemId]: true }));
@@ -482,6 +489,7 @@ export function TaskDetailModal({
                <div className="space-y-1">
                 {task.checklist.map((item) => {
                   const resourceType = getChecklistResourceType(item);
+                  const resourceLabel = getChecklistResourceLabel(item);
                   const isLinked = Boolean(item.procurementItemId || item.estimateV2LineId || item.estimateV2WorkId);
                   const isPending = Boolean(pendingChecklistItemIds[item.id]);
                   return (
@@ -497,8 +505,12 @@ export function TaskDetailModal({
                       <span className={`text-caption flex-1 ${item.done ? "line-through text-muted-foreground" : "text-foreground"}`}>
                         {item.text}
                       </span>
-                      {resourceType !== "other" && (
-                        <ResourceTypeBadge type={resourceType} className="h-5 px-1.5 text-[10px]" />
+                      {(resourceType !== "other" || resourceLabel) && (
+                        <ResourceTypeBadge
+                          type={resourceType}
+                          className="h-5 px-1.5 text-[10px]"
+                          labelOverride={resourceLabel ?? undefined}
+                        />
                       )}
                       {isPending && (
                         <span className="inline-flex items-center text-[10px] text-muted-foreground">
