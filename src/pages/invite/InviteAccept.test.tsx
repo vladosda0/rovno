@@ -73,7 +73,10 @@ describe("InviteAccept", () => {
       expect(acceptProjectInviteMock).toHaveBeenCalledWith("token-123");
     });
 
-    expect(await screen.findByText("Project dashboard")).toBeInTheDocument();
+    expect(await screen.findByText(/Invitation accepted successfully/i)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText("Project dashboard")).toBeInTheDocument();
+    }, { timeout: 3000 });
   });
 
   it("shows backend error message when acceptance fails", async () => {

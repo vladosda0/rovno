@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import * as store from "@/data/store";
 import { cacheWorkspaceUsers } from "@/data/workspace-profile-cache";
+import { getDefaultFinanceVisibility } from "@/lib/participant-role-policy";
 import type {
   AIAccess,
   FinanceVisibility,
@@ -664,7 +665,7 @@ export async function createWorkspaceProjectInvite(
   }
 
   const resolvedFinanceVisibility = input.financeVisibility
-    ?? (input.role === "viewer" ? "none" : "detail");
+    ?? getDefaultFinanceVisibility(input.role);
   const resolvedInternalDocsVisibility = input.internalDocsVisibility
     ?? (input.role === "viewer" ? "none" : "view");
 

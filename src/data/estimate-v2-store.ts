@@ -3,7 +3,6 @@ import {
   getProjectDomainAccessForRole,
   projectDomainAllowsManage,
 } from "@/lib/permissions";
-import { getStageEstimateItems } from "@/data/estimate-store";
 import { persistEstimateV2HeroTransition, EstimateV2HeroTransitionError } from "@/data/estimate-v2-hero-transition";
 import { loadCurrentEstimateDraft, saveCurrentEstimateDraft } from "@/data/estimate-source";
 import { getPlanningSource, syncProjectTasksFromEstimate } from "@/data/planning-source";
@@ -27,7 +26,6 @@ import {
 } from "@/data/store";
 import {
   computeLineTotals,
-  roundHalfUpDiv,
 } from "@/lib/estimate-v2/pricing";
 import {
   applyFSConstraints,
@@ -40,7 +38,7 @@ import {
 import { syncProcurementFromEstimateV2 } from "@/lib/estimate-v2/procurement-sync";
 import { syncProjectHRFromEstimate } from "@/data/hr-source";
 import { syncHRFromEstimateV2 } from "@/data/hr-store";
-import type { ChecklistItem, ChecklistItemType, MemberRole, Task, TaskStatus } from "@/types/entities";
+import type { ChecklistItem, ChecklistItemType, FinanceVisibility, MemberRole, Task, TaskStatus } from "@/types/entities";
 import type {
   ApprovalStamp,
   EstimateExecutionStatus,
@@ -107,6 +105,7 @@ export interface EstimateV2ProjectAccessContext {
   profileId?: string;
   projectOwnerProfileId?: string;
   membershipRole?: MemberRole | null;
+  financeVisibility?: FinanceVisibility | null;
 }
 
 interface EstimateV2WorkspaceCache {
@@ -333,23 +332,6 @@ function resolveCurrency(): string {
   const normalized = raw.trim().toUpperCase();
   if (!/^[A-Z]{3}$/.test(normalized)) return "RUB";
   return normalized;
-}
-
-function mapLegacyType(type: "work" | "material" | "other"): ResourceLineType {
-  if (type === "material") return "material";
-  if (type === "work") return "labor";
-  return "other";
-}
-
-function toQtyMilli(qty: number | null): number {
-  if (qty == null || !Number.isFinite(qty) || qty <= 0) return 1_000;
-  return Math.max(1, Math.round(qty * 1_000));
-}
-
-function toCostUnitCents(plannedMajor: number, qtyMilli: number): number {
-  const totalCents = Math.max(0, Math.round((Number.isFinite(plannedMajor) ? plannedMajor : 0) * 100));
-  if (qtyMilli <= 0) return totalCents;
-  return roundHalfUpDiv(totalCents * 1_000, qtyMilli);
 }
 
 function cloneSnapshot(snapshot: EstimateV2Snapshot): EstimateV2Snapshot {
@@ -645,12 +627,41 @@ function clearScheduledProjectDraftSync(projectId: string) {
   deferredDraftSyncByProjectId.delete(projectId);
 }
 
+function getEstimateV2ProjectRuntimeSessionKey(
+  context: Pick<EstimateV2ProjectAccessContext, "mode" | "profileId"> | null | undefined,
+): string {
+  if (!context) return "";
+  return `${context.mode}:${context.profileId ?? ""}`;
+}
+
+function clearEstimateV2ProjectRuntimeState(projectId: string) {
+  clearScheduledProjectDraftSync(projectId);
+  statesByProjectId.delete(projectId);
+  remoteDraftSyncErrorSignatureByProjectId.delete(projectId);
+  heroTransitionInFlightByProjectId.delete(projectId);
+  remoteProjectionSyncInFlightByProjectId.delete(projectId);
+  retainedSupabaseSyncProfileIdByProjectId.delete(projectId);
+}
+
+function isCurrentSupabaseProjectProfile(projectId: string, profileId: string): boolean {
+  return getRetainedSupabaseSyncProfileId(projectId) === profileId;
+}
+
 function resolveEstimateSyncRole(context: EstimateV2ProjectAccessContext): MemberRole {
   if (context.membershipRole) return context.membershipRole;
   if (context.profileId && context.projectOwnerProfileId && context.profileId === context.projectOwnerProfileId) {
     return "owner";
   }
   return "viewer";
+}
+
+function canAccessSensitiveEstimateRows(
+  context: EstimateV2ProjectAccessContext | null | undefined,
+): boolean {
+  if (!context) return false;
+  const role = resolveEstimateSyncRole(context);
+  if (role === "owner") return true;
+  return context.financeVisibility === "detail";
 }
 
 function getManagedEstimateRemoteSyncContext(projectId: string): { profileId: string } | null {
@@ -791,6 +802,9 @@ async function runProjectDraftSync(projectId: string) {
   try {
     const sync = ensureProjectSyncState(state);
     const projectionRevision = sync.estimateRevision;
+    if (!isCurrentSupabaseProjectProfile(projectId, profileId)) {
+      return;
+    }
     if (shouldProject) {
       (["tasks", "procurement", "hr"] as const).forEach((domain) => {
         setProjectSyncDomainStatus(state, domain, {
@@ -815,6 +829,10 @@ async function runProjectDraftSync(projectId: string) {
       profileId,
       shouldAbort: () => hasProjectDraftProjectionDrift(projectId, projectionRevision),
     });
+
+    if (!isCurrentSupabaseProjectProfile(projectId, profileId)) {
+      return;
+    }
 
     remoteDraftSyncErrorSignatureByProjectId.delete(projectId);
 
@@ -847,6 +865,9 @@ async function runProjectDraftSync(projectId: string) {
         lines: normalized.lines,
         profileId,
       });
+      if (!isCurrentSupabaseProjectProfile(projectId, profileId)) {
+        return;
+      }
       if (hasProjectDraftProjectionDrift(projectId, projectionRevision)) {
         return;
       }
@@ -892,6 +913,9 @@ async function runProjectDraftSync(projectId: string) {
         lines: normalized.lines,
         profileId,
       });
+      if (!isCurrentSupabaseProjectProfile(projectId, profileId)) {
+        return;
+      }
       if (hasProjectDraftProjectionDrift(projectId, projectionRevision)) {
         return;
       }
@@ -932,6 +956,9 @@ async function runProjectDraftSync(projectId: string) {
           lines: normalized.lines,
         },
       );
+      if (!isCurrentSupabaseProjectProfile(projectId, profileId)) {
+        return;
+      }
       if (hasProjectDraftProjectionDrift(projectId, projectionRevision)) {
         return;
       }
@@ -997,6 +1024,14 @@ export function registerEstimateV2ProjectAccessContext(
   projectId: string,
   context: EstimateV2ProjectAccessContext,
 ) {
+  const previousContext = accessContextByProjectId.get(projectId);
+  if (
+    previousContext
+    && getEstimateV2ProjectRuntimeSessionKey(previousContext) !== getEstimateV2ProjectRuntimeSessionKey(context)
+  ) {
+    clearEstimateV2ProjectRuntimeState(projectId);
+  }
+
   accessContextByProjectId.set(projectId, context);
   if (context.mode === "supabase" && context.profileId) {
     retainedSupabaseSyncProfileIdByProjectId.set(projectId, context.profileId);
@@ -1381,11 +1416,15 @@ function buildTaskInfoByWorkId(tasks: Task[]): Map<string, {
   return taskInfoByWorkId;
 }
 
-function mapChecklistTypeToEstimateLineType(item: ChecklistItem): ResourceLineType {
+function mapChecklistTypeToEstimateLineType(
+  item: ChecklistItem,
+  fallbackType?: ResourceLineType | null,
+): ResourceLineType | null {
   if (item.estimateV2ResourceType) return item.estimateV2ResourceType;
+  if (fallbackType) return fallbackType;
   if (item.type === "material") return "material";
   if (item.type === "tool") return "tool";
-  return "labor";
+  return null;
 }
 
 export async function hydrateEstimateV2ProjectFromWorkspace(
@@ -1412,6 +1451,9 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
       workspaceSource.getProjectById(projectId),
       planningSource.getProjectTasks(projectId),
     ]);
+    if (!isCurrentSupabaseProjectProfile(projectId, input.profileId)) {
+      return;
+    }
     const remoteHasStructure = draft.stages.length > 0
       || draft.works.length > 0
       || draft.lines.length > 0
@@ -1469,6 +1511,7 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
     const cachedWorksById = new Map((cached?.works ?? []).map((work) => [work.id, work]));
     const cachedLinesById = new Map((cached?.lines ?? []).map((line) => [line.id, line]));
     const cachedDependenciesById = new Map((cached?.dependencies ?? []).map((dependency) => [dependency.id, dependency]));
+    const currentLinesById = new Map(currentState.lines.map((line) => [line.id, line]));
     const taskInfoByWorkId = buildTaskInfoByWorkId(tasks);
     const hasLinkedEstimateChecklist = tasks.some((task) => task.checklist.some(
       (item) => Boolean(item.estimateV2WorkId) || Boolean(item.estimateV2LineId),
@@ -1476,6 +1519,7 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
     const hasStartedTaskExecution = tasks.some(
       (task) => task.status === "in_progress" || task.status === "blocked" || task.status === "done",
     );
+    const allowSensitiveEstimateHydrate = canAccessSensitiveEstimateRows(accessContextByProjectId.get(projectId));
 
     const stages = draft.stages
       .map((stage) => {
@@ -1495,10 +1539,14 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
     const linkedChecklistEntries = tasks.flatMap((task) => task.checklist
       .filter((item) => Boolean(item.estimateV2WorkId || item.estimateV2LineId))
       .map((item) => ({ task, item })));
-    const canRebuildStructureFromTasks = draft.works.length === 0
+    const canRebuildWorksFromTasks = draft.works.length === 0
+      && linkedChecklistEntries.length > 0;
+    const canRebuildLinesFromTasks = allowSensitiveEstimateHydrate
+      && draft.lines.length === 0
+      && draft.works.length === 0
       && linkedChecklistEntries.length > 0;
 
-    const works = (canRebuildStructureFromTasks
+    const works = (canRebuildWorksFromTasks
       ? Array.from(new Set(linkedChecklistEntries
         .map(({ item }) => item.estimateV2WorkId)
         .filter((value): value is string => Boolean(value))))
@@ -1545,20 +1593,28 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
       .sort((left, right) => left.order - right.order);
 
     const stageIdByWorkId = new Map(works.map((work) => [work.id, work.stageId]));
-    const lines = canRebuildStructureFromTasks
+    const lines = canRebuildLinesFromTasks
       ? linkedChecklistEntries.map(({ task, item }, index) => {
         const lineId = item.estimateV2LineId ?? `${task.id}-line-${index}`;
         const workId = item.estimateV2WorkId
           ?? linkedChecklistEntries.find(({ item: sibling }) => sibling.estimateV2LineId === item.estimateV2LineId)?.item.estimateV2WorkId
           ?? "";
         const cachedLine = cachedLinesById.get(lineId);
+        const currentLine = currentLinesById.get(lineId);
+        const resolvedType = mapChecklistTypeToEstimateLineType(
+          item,
+          cachedLine?.type ?? currentLine?.type ?? null,
+        );
+        if (!resolvedType) {
+          return null;
+        }
         return {
           id: lineId,
           projectId,
           stageId: stageIdByWorkId.get(workId) ?? cachedLine?.stageId ?? task.stage_id ?? "",
           workId,
           title: item.text || cachedLine?.title || "Line item",
-          type: mapChecklistTypeToEstimateLineType(item),
+          type: resolvedType,
           unit: item.estimateV2Unit ?? cachedLine?.unit ?? "unit",
           qtyMilli: Math.max(1, Math.round(item.estimateV2QtyMilli ?? cachedLine?.qtyMilli ?? 1_000)),
           costUnitCents: Math.max(0, Math.round(cachedLine?.costUnitCents ?? 0)),
@@ -1572,7 +1628,7 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
           createdAt: cachedLine?.createdAt ?? task.created_at,
           updatedAt: cachedLine?.updatedAt ?? task.created_at,
         } satisfies EstimateV2ResourceLine;
-      })
+      }).filter((line): line is EstimateV2ResourceLine => Boolean(line))
       : draft.lines.map((line) => {
         const cachedLine = cachedLinesById.get(line.id);
         return {
@@ -1613,8 +1669,9 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
 
     const derivedProjectMode = normalizeProjectMode(workspaceProject?.project_mode ?? currentState.project.projectMode);
     const cachedProject = cached?.project ?? null;
+    const remoteRootIndicatesInWork = draft.estimate?.status === "approved";
     const inferredEstimateStatus: EstimateExecutionStatus = (
-      hasLinkedEstimateChecklist || hasStartedTaskExecution
+      remoteRootIndicatesInWork || hasLinkedEstimateChecklist || hasStartedTaskExecution
     ) ? "in_work" : "planning";
     const nextEstimateStatus: EstimateExecutionStatus = cachedProject?.estimateStatus && cachedProject.estimateStatus !== "planning"
       ? cachedProject.estimateStatus
@@ -1676,25 +1733,7 @@ function ensureProjectState(projectId: string): EstimateV2ProjectState {
   const createdAt = nowIso();
   const projectEntity = getProject(projectId);
   const storeStages = getStages(projectId);
-  const legacyItems = getStageEstimateItems(projectId);
-
-  const fallbackStageIds = Array.from(new Set(legacyItems.map((item) => item.stageId)));
-  const fallbackStages = fallbackStageIds.map((stageId, index) => ({
-    id: stageId,
-    project_id: projectId,
-    title: `Stage ${index + 1}`,
-    description: "",
-    order: index + 1,
-    status: "open" as const,
-  }));
-
-  const mergedStagesById = new Map<string, (typeof fallbackStages)[number]>();
-  storeStages.forEach((stage) => mergedStagesById.set(stage.id, stage));
-  fallbackStages.forEach((stage) => {
-    if (!mergedStagesById.has(stage.id)) mergedStagesById.set(stage.id, stage);
-  });
-
-  const orderedStages = [...mergedStagesById.values()].sort((a, b) => a.order - b.order);
+  const orderedStages = [...storeStages].sort((a, b) => a.order - b.order);
 
   const stages: EstimateV2Stage[] = orderedStages.map((stage) => ({
     id: stage.id,
@@ -1721,34 +1760,7 @@ function ensureProjectState(projectId: string): EstimateV2ProjectState {
     updatedAt: createdAt,
   }));
 
-  const workIdByStageId = new Map(works.map((work) => [work.stageId, work.id]));
-  const lines: EstimateV2ResourceLine[] = legacyItems.map((item, index) => {
-    const qtyMilli = toQtyMilli(item.qty);
-    const costUnitCents = toCostUnitCents(item.planned, qtyMilli);
-    const stageId = item.stageId;
-    const workId = workIdByStageId.get(stageId) ?? works[0]?.id ?? id("work-fallback");
-
-    return {
-      id: `line-${projectId}-${index}-${item.id}`,
-      projectId,
-      stageId,
-      workId,
-      title: item.itemName,
-      type: mapLegacyType(item.type),
-      unit: item.unit ?? "unit",
-      qtyMilli,
-      costUnitCents,
-      markupBps: 0,
-      discountBpsOverride: null,
-      assigneeId: null,
-      assigneeName: null,
-      assigneeEmail: null,
-      receivedCents: Math.max(0, Math.round((item.paid ?? 0) * 100)),
-      pnlPlaceholderCents: 0,
-      createdAt: item.createdAt,
-      updatedAt: item.updatedAt,
-    };
-  });
+  const lines: EstimateV2ResourceLine[] = [];
 
   const project: EstimateV2Project = {
     id: `estimate-v2-${projectId}`,

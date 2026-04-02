@@ -104,16 +104,16 @@ export function seamAllowsAction(seam: ProjectAuthoritySeam, action: Action): bo
  *
  * Backend RLS uses `public.can_view_sensitive_detail(project_id)`, which is derived
  * from `effective_finance_visibility(project_id)` and therefore:
- * - owner always has access
+ * - owner always has access, even when the owner membership row has not hydrated yet
  * - others have access iff their stored `finance_visibility` is `detail`
  *
  * Phase 6.1 must fail closed:
- * - when membership is unknown (no membership row) return `false`
+ * - when membership is unknown for non-owners return `false`
  * - when `finance_visibility` is missing or unknown return `false`
  */
 export function seamCanViewSensitiveDetail(seam: ProjectAuthoritySeam): boolean {
+  if (getProjectRole(seam) === "owner") return true;
   if (!seam.membership) return false;
-  if (seam.membership.role === "owner") return true;
 
   const financeVisibility = seam.membership.finance_visibility;
   if (financeVisibility == null) return false;

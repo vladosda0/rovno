@@ -4,6 +4,7 @@ import {
   approveVersion,
   addDependency,
   computeVersionDiff,
+  createLine,
   createVersionSnapshot,
   deleteLine,
   getEstimateV2ProjectState,
@@ -17,9 +18,10 @@ import {
   updateEstimateV2Project,
   updateLine,
 } from "@/data/estimate-v2-store";
+import * as estimateStore from "@/data/estimate-store";
 import { getHRItems } from "@/data/hr-store";
 import { getProcurementItems } from "@/data/procurement-store";
-import { __unsafeResetStoreForTests, addTask, getEvents, getProject, getTask, getTasks, updateChecklist, updateProject, updateTask } from "@/data/store";
+import { __unsafeResetStoreForTests, addTask, getEvents, getProject, getStages, getTask, getTasks, updateChecklist, updateProject, updateTask } from "@/data/store";
 import { clearDemoSession, enterDemoSession, setAuthRole } from "@/lib/auth-state";
 import { toDayIndex } from "@/lib/estimate-v2/schedule";
 import type {
@@ -211,6 +213,29 @@ describe("estimate-v2 store computeVersionDiff", () => {
   });
 });
 
+describe("estimate-v2 bootstrap", () => {
+  it("initializes from current stages/work shells and does not read legacy stage estimate items", () => {
+    __unsafeResetStoreForTests();
+    __unsafeResetEstimateV2ForTests();
+    clearDemoSession();
+    enterDemoSession("project-1");
+    setAuthRole("owner");
+
+    const legacyReadSpy = vi.spyOn(estimateStore, "getStageEstimateItems");
+    const state = getEstimateV2ProjectState("project-1");
+    const currentStages = [...getStages("project-1")].sort((a, b) => a.order - b.order);
+
+    expect(legacyReadSpy).not.toHaveBeenCalled();
+    expect(state.lines).toHaveLength(0);
+    expect(state.stages.map((stageItem) => stageItem.id)).toEqual(currentStages.map((stageItem) => stageItem.id));
+    expect(state.works).toHaveLength(state.stages.length);
+    expect(state.works.every((workItem) => workItem.title === "General work" && workItem.order === 1)).toBe(true);
+    expect(state.lines.some((lineItem) => lineItem.type === "labor")).toBe(false);
+
+    legacyReadSpy.mockRestore();
+  });
+});
+
 describe("estimate-v2 regime switching", () => {
   afterEach(() => {
     setAuthRole("owner");
@@ -253,13 +278,31 @@ describe("estimate-v2 regime switching", () => {
   it("rejects estimate mutations in client regime", () => {
     const projectId = "project-1";
     setAuthRole("owner");
+    const initial = getEstimateV2ProjectState(projectId);
+    const initialFirstWork = initial.works[0];
+    const initialSecondWork = initial.works[1];
+    expect(initialFirstWork).toBeDefined();
+    expect(initialSecondWork).toBeDefined();
+    if (!initialFirstWork || !initialSecondWork) return;
+
+    const seededLine = createLine(projectId, {
+      stageId: initialFirstWork.stageId,
+      workId: initialFirstWork.id,
+      title: "Client-regime mutation guard line",
+      type: "material",
+      unit: "pcs",
+      qtyMilli: 1_000,
+      costUnitCents: 1_000,
+    });
+    expect(seededLine).toBeTruthy();
+
     const switched = setRegimeDev(projectId, "client");
     expect(switched).toBe(true);
 
     const before = getEstimateV2ProjectState(projectId);
-    const firstLine = before.lines[0];
-    const firstWork = before.works[0];
-    const secondWork = before.works[1];
+    const firstLine = before.lines.find((lineItem) => lineItem.id === seededLine?.id);
+    const firstWork = before.works.find((workItem) => workItem.id === initialFirstWork.id);
+    const secondWork = before.works.find((workItem) => workItem.id === initialSecondWork.id);
     expect(firstLine).toBeDefined();
     expect(firstWork).toBeDefined();
     expect(secondWork).toBeDefined();
@@ -444,6 +487,16 @@ describe("estimate-v2 execution foundation", () => {
     const state = getEstimateV2ProjectState(projectId);
     const workToSync = state.works[0];
     expect(workToSync.taskId).toBeTruthy();
+    const seededLine = createLine(projectId, {
+      stageId: workToSync.stageId,
+      workId: workToSync.id,
+      title: "Line to sync",
+      type: "material",
+      unit: "unit",
+      qtyMilli: 1_000,
+      costUnitCents: 1_000,
+    });
+    expect(seededLine).toBeTruthy();
 
     updateTask(workToSync.taskId as string, {
       title: "Renamed from task side",
@@ -455,7 +508,7 @@ describe("estimate-v2 execution foundation", () => {
     expect(syncedWork?.title).toBe("Renamed from task side");
     expect(syncedWork?.status).toBe("in_progress");
 
-    const lineToSync = afterTaskUpdate.lines.find((line) => line.workId === workToSync.id);
+    const lineToSync = afterTaskUpdate.lines.find((line) => line.id === seededLine?.id);
     expect(lineToSync).toBeDefined();
     updateLine(projectId, lineToSync!.id, {
       title: "Updated line title",
@@ -495,9 +548,33 @@ describe("estimate-v2 execution foundation", () => {
     setAuthRole("owner");
 
     setProjectEstimateStatus(projectId, "in_work", { skipSetup: true });
+    const baseState = getEstimateV2ProjectState(projectId);
+    const firstWork = baseState.works[0];
+    const secondWork = baseState.works[1] ?? baseState.works[0];
+    const createdMaterial = createLine(projectId, {
+      stageId: firstWork.stageId,
+      workId: firstWork.id,
+      title: "Procurement linked line",
+      type: "material",
+      unit: "m2",
+      qtyMilli: 2_000,
+      costUnitCents: 2_000,
+    });
+    const createdLabor = createLine(projectId, {
+      stageId: secondWork.stageId,
+      workId: secondWork.id,
+      title: "HR linked line",
+      type: "labor",
+      unit: "h",
+      qtyMilli: 3_000,
+      costUnitCents: 3_000,
+    });
+    expect(createdMaterial).toBeTruthy();
+    expect(createdLabor).toBeTruthy();
+
     const state = getEstimateV2ProjectState(projectId);
-    const materialLine = state.lines.find((line) => line.type === "material");
-    const laborLine = state.lines.find((line) => line.type === "labor");
+    const materialLine = state.lines.find((line) => line.id === createdMaterial?.id);
+    const laborLine = state.lines.find((line) => line.id === createdLabor?.id);
 
     expect(materialLine).toBeDefined();
     expect(laborLine).toBeDefined();
@@ -608,6 +685,18 @@ describe("estimate-v2 execution foundation", () => {
     setProjectEstimateStatus(projectId, "planning");
     const transitioned = setProjectEstimateStatus(projectId, "in_work", { skipSetup: true });
     expect(transitioned.ok).toBe(true);
+    const inWorkState = getEstimateV2ProjectState(projectId);
+    const firstWork = inWorkState.works[0];
+    const seededLine = createLine(projectId, {
+      stageId: firstWork.stageId,
+      workId: firstWork.id,
+      title: "Linked procurement date line",
+      type: "material",
+      unit: "m2",
+      qtyMilli: 1_000,
+      costUnitCents: 500,
+    });
+    expect(seededLine).toBeTruthy();
 
     const before = getEstimateV2ProjectState(projectId);
     const linkedProcurement = getProcurementItems(projectId, true).find((item) => Boolean(item.sourceEstimateV2LineId));
@@ -756,6 +845,18 @@ describe("estimate-v2 execution foundation", () => {
     const projectId = "project-2";
     setAuthRole("owner");
     setRegimeDev(projectId, "contractor");
+    const seededState = getEstimateV2ProjectState(projectId);
+    const seededWork = seededState.works[0];
+    const seededLine = createLine(projectId, {
+      stageId: seededWork.stageId,
+      workId: seededWork.id,
+      title: "Version refresh line",
+      type: "material",
+      unit: "pcs",
+      qtyMilli: 1_000,
+      costUnitCents: 1_000,
+    });
+    expect(seededLine).toBeTruthy();
 
     const initial = createVersionSnapshot(projectId, "user-1");
     expect(submitVersion(projectId, initial.versionId)).toBe(true);

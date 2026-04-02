@@ -179,11 +179,28 @@ describe("seamCanViewSensitiveDetail", () => {
     };
   }
 
-  it("fails closed when membership is missing", () => {
+  it("fails closed when membership is missing for non-owners", () => {
     expect(seamCanViewSensitiveDetail(seam({ membership: null }))).toBe(false);
   });
 
-  it("fails closed when finance visibility is missing or unknown for non-owners", () => {
+  it("allows the project owner even before the owner membership row hydrates", () => {
+    expect(seamCanViewSensitiveDetail(seam({
+      profileId: "profile-owner",
+      project: {
+        id: "project-1",
+        owner_id: "profile-owner",
+        title: "Workspace Project",
+        type: "residential",
+        project_mode: "contractor",
+        automation_level: "assisted",
+        current_stage_id: "",
+        progress_pct: 0,
+      },
+      membership: null,
+    }))).toBe(true);
+  });
+
+  it("fails closed when finance visibility is missing or summary-only for non-owners", () => {
     expect(seamCanViewSensitiveDetail(seam({
       membership: member({ role: "co_owner", finance_visibility: undefined }),
     }))).toBe(false);

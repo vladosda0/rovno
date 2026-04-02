@@ -936,6 +936,8 @@ describe("ProjectEstimate", () => {
   it("updates the footer VAT summary totals", async () => {
     const projectId = "project-1";
     enterDemoSession(projectId);
+    const seeded = seedEstimateLine(projectId);
+    expect(seeded).not.toBeNull();
 
     await act(async () => {
       renderProjectEstimate(projectId);

@@ -7,6 +7,7 @@ const {
   insertHeroTransitionEventMock,
   ensureProjectEstimateRootMock,
   ensureEstimateCurrentVersionMock,
+  updateProjectEstimateRootStatusMock,
   loadCurrentEstimateDraftMock,
   upsertEstimateWorksMock,
   upsertEstimateResourceLinesMock,
@@ -30,6 +31,7 @@ const {
   insertHeroTransitionEventMock: vi.fn(),
   ensureProjectEstimateRootMock: vi.fn(),
   ensureEstimateCurrentVersionMock: vi.fn(),
+  updateProjectEstimateRootStatusMock: vi.fn(),
   loadCurrentEstimateDraftMock: vi.fn(),
   upsertEstimateWorksMock: vi.fn(),
   upsertEstimateResourceLinesMock: vi.fn(),
@@ -68,6 +70,7 @@ vi.mock("@/data/estimate-source", async () => {
     ...actual,
     ensureProjectEstimateRoot: ensureProjectEstimateRootMock,
     ensureEstimateCurrentVersion: ensureEstimateCurrentVersionMock,
+    updateProjectEstimateRootStatus: updateProjectEstimateRootStatusMock,
     loadCurrentEstimateDraft: loadCurrentEstimateDraftMock,
     upsertEstimateWorks: upsertEstimateWorksMock,
     upsertEstimateResourceLines: upsertEstimateResourceLinesMock,
@@ -131,6 +134,7 @@ describe("persistEstimateV2HeroTransition", () => {
         id: "version-existing",
       },
     });
+    updateProjectEstimateRootStatusMock.mockResolvedValue(undefined);
     loadCurrentEstimateDraftMock.mockResolvedValue({
       estimate: {
         id: "estimate-existing",
@@ -285,6 +289,13 @@ describe("persistEstimateV2HeroTransition", () => {
         }),
       ]),
     );
+    expect(updateProjectEstimateRootStatusMock).toHaveBeenCalledWith(
+      {},
+      {
+        estimateId: "estimate-existing",
+        status: "approved",
+      },
+    );
     expect(insertHeroTransitionEventMock).toHaveBeenCalledWith(
       {},
       expect.objectContaining({
@@ -298,6 +309,60 @@ describe("persistEstimateV2HeroTransition", () => {
     expect(result.ids.versionId).toBe("version-existing");
     expect(result.ids.workIdByLocalWorkId["work-existing"]).toBe("work-existing");
     expect(result.ids.lineIdByLocalLineId["line-existing"]).toBe("line-existing");
+  });
+
+  it("promotes the remote estimate root before downstream reconciliation can fail", async () => {
+    upsertHeroTasksMock.mockRejectedValue(new Error("task write blocked"));
+
+    await expect(persistEstimateV2HeroTransition({
+      projectId: "project-1",
+      projectTitle: "Project 1",
+      previousStatus: "planning",
+      autoScheduled: false,
+      stages: [
+        {
+          localStageId: "stage-existing",
+          title: "Shell",
+          order: 1,
+          discountBps: 0,
+        },
+      ],
+      works: [
+        {
+          localWorkId: "work-existing",
+          localStageId: "stage-existing",
+          title: "Framing",
+          order: 1,
+          plannedStart: "2026-03-10T00:00:00.000Z",
+          plannedEnd: "2026-03-11T00:00:00.000Z",
+        },
+      ],
+      lines: [
+        {
+          localLineId: "line-existing",
+          localStageId: "stage-existing",
+          localWorkId: "work-existing",
+          title: "Concrete",
+          type: "material",
+          unit: "bag",
+          qtyMilli: 1000,
+          costUnitCents: 12500,
+        },
+      ],
+    })).rejects.toMatchObject({
+      code: "TASK_WRITE_FAILED",
+    });
+
+    expect(updateProjectEstimateRootStatusMock).toHaveBeenCalledWith(
+      {},
+      {
+        estimateId: "estimate-existing",
+        status: "approved",
+      },
+    );
+    expect(updateProjectEstimateRootStatusMock.mock.invocationCallOrder[0]).toBeLessThan(
+      upsertHeroTasksMock.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
+    );
   });
 
   it("creates task, checklist, procurement, and HR descendants with estimate lineage on first generation", async () => {

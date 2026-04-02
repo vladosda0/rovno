@@ -290,6 +290,45 @@ describe("estimate-v2 workspace drafts", () => {
     });
   });
 
+  it("treats an approved remote estimate root as in_work without requiring downstream bootstrap rows", async () => {
+    const projectId = "project-remote-approved-root";
+
+    loadCurrentEstimateDraftMock.mockResolvedValue({
+      estimate: {
+        id: "estimate-approved",
+        project_id: projectId,
+        title: "Approved Remote Estimate",
+        description: null,
+        status: "approved",
+        created_by: "profile-1",
+        created_at: "2026-03-01T00:00:00.000Z",
+        updated_at: "2026-03-02T00:00:00.000Z",
+      },
+      currentVersion: {
+        id: "version-approved",
+        estimate_id: "estimate-approved",
+        version_number: 1,
+        is_current: true,
+        created_by: "profile-1",
+        created_at: "2026-03-01T00:00:00.000Z",
+      },
+      stages: [],
+      works: [],
+      lines: [],
+      dependencies: [],
+    });
+    getPlanningSourceMock.mockResolvedValue({
+      getProjectTasks: vi.fn().mockResolvedValue([]),
+    });
+
+    await hydrateEstimateV2ProjectFromWorkspace(projectId, { profileId: "profile-1" });
+
+    const state = getEstimateV2ProjectState(projectId);
+    expect(state.project.estimateStatus).toBe("in_work");
+    expect(state.works).toEqual([]);
+    expect(state.lines).toEqual([]);
+  });
+
   it("syncs a second work for an existing hydrated current version without repeated errors", async () => {
     vi.useFakeTimers();
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -463,6 +502,372 @@ describe("estimate-v2 workspace drafts", () => {
       }
     },
   );
+
+  it("does not collapse unresolved checklist-derived lines into labor during task-based hydration", async () => {
+    const projectId = "project-remote-1";
+
+    loadCurrentEstimateDraftMock.mockResolvedValue({
+      estimate: {
+        id: "estimate-1",
+        project_id: projectId,
+        title: "Remote Estimate",
+        description: null,
+        status: "draft",
+        created_by: "profile-1",
+        created_at: "2026-03-01T00:00:00.000Z",
+        updated_at: "2026-03-02T00:00:00.000Z",
+      },
+      currentVersion: {
+        id: "version-1",
+        estimate_id: "estimate-1",
+        version_number: 1,
+        is_current: true,
+        created_by: "profile-1",
+        created_at: "2026-03-01T00:00:00.000Z",
+      },
+      stages: [],
+      works: [],
+      lines: [],
+      dependencies: [],
+    });
+    getPlanningSourceMock.mockResolvedValue({
+      getProjectTasks: vi.fn().mockResolvedValue([
+        {
+          id: "task-1",
+          project_id: projectId,
+          stage_id: "stage-1",
+          title: "Checklist task",
+          description: "",
+          status: "todo",
+          assignee_id: "",
+          checklist: [
+            {
+              id: "checklist-1",
+              text: "Imported row",
+              done: false,
+              type: "work",
+              estimateV2LineId: "line-unknown",
+              estimateV2WorkId: "work-unknown",
+              estimateV2QtyMilli: 1000,
+              estimateV2Unit: "pcs",
+            },
+          ],
+          comments: [],
+          attachments: [],
+          photos: [],
+          linked_estimate_item_ids: [],
+          created_at: "2026-03-01T00:00:00.000Z",
+          startDate: null,
+          deadline: null,
+        },
+      ]),
+    });
+
+    await hydrateEstimateV2ProjectFromWorkspace(projectId, { profileId: "profile-1" });
+
+    expect(getEstimateV2ProjectState(projectId).lines).toEqual([]);
+  });
+
+  it("rebuilds non-sensitive work structure without recreating checklist-derived pseudo-lines for non-detail viewers", async () => {
+    const projectId = "project-remote-summary-1";
+
+    registerEstimateV2ProjectAccessContext(projectId, {
+      mode: "supabase",
+      profileId: "profile-2",
+      projectOwnerProfileId: "profile-owner",
+      membershipRole: "contractor",
+      financeVisibility: "summary",
+    });
+
+    loadCurrentEstimateDraftMock.mockResolvedValue({
+      estimate: {
+        id: "estimate-1",
+        project_id: projectId,
+        title: "Remote Estimate",
+        description: null,
+        status: "draft",
+        created_by: "profile-owner",
+        created_at: "2026-03-01T00:00:00.000Z",
+        updated_at: "2026-03-02T00:00:00.000Z",
+      },
+      currentVersion: {
+        id: "version-1",
+        estimate_id: "estimate-1",
+        version_number: 1,
+        is_current: true,
+        created_by: "profile-owner",
+        created_at: "2026-03-01T00:00:00.000Z",
+      },
+      stages: [
+        {
+          id: "stage-1",
+          project_id: projectId,
+          title: "Shell",
+          description: "",
+          sort_order: 1,
+          status: "open",
+          discount_bps: 0,
+          created_at: "2026-03-01T00:00:00.000Z",
+          updated_at: "2026-03-02T00:00:00.000Z",
+        },
+      ],
+      works: [],
+      lines: [],
+      dependencies: [],
+    });
+    getPlanningSourceMock.mockResolvedValue({
+      getProjectTasks: vi.fn().mockResolvedValue([
+        {
+          id: "task-1",
+          project_id: projectId,
+          stage_id: "stage-1",
+          title: "Checklist task",
+          description: "",
+          status: "todo",
+          assignee_id: "",
+          checklist: [
+            {
+              id: "checklist-1",
+              text: "Imported row",
+              done: false,
+              type: "work",
+              estimateV2LineId: "line-1",
+              estimateV2WorkId: "work-1",
+              estimateV2QtyMilli: 4_000,
+              estimateV2Unit: "pcs",
+            },
+          ],
+          comments: [],
+          attachments: [],
+          photos: [],
+          linked_estimate_item_ids: [],
+          created_at: "2026-03-01T00:00:00.000Z",
+          startDate: null,
+          deadline: null,
+        },
+      ]),
+    });
+
+    await hydrateEstimateV2ProjectFromWorkspace(projectId, { profileId: "profile-2" });
+
+    const state = getEstimateV2ProjectState(projectId);
+    expect(state.stages).toEqual([
+      expect.objectContaining({
+        id: "stage-1",
+        title: "Shell",
+      }),
+    ]);
+    expect(state.works).toEqual([
+      expect.objectContaining({
+        id: "work-1",
+        stageId: "stage-1",
+        title: "Checklist task",
+      }),
+    ]);
+    expect(state.lines).toEqual([]);
+  });
+
+  it("rebuilds missing work containers so reduced-access viewers can still render remote lines", async () => {
+    const projectId = "project-remote-summary-2";
+
+    registerEstimateV2ProjectAccessContext(projectId, {
+      mode: "supabase",
+      profileId: "profile-2",
+      projectOwnerProfileId: "profile-owner",
+      membershipRole: "contractor",
+      financeVisibility: "summary",
+    });
+
+    loadCurrentEstimateDraftMock.mockResolvedValue({
+      estimate: {
+        id: "estimate-2",
+        project_id: projectId,
+        title: "Remote Estimate",
+        description: null,
+        status: "draft",
+        created_by: "profile-owner",
+        created_at: "2026-03-01T00:00:00.000Z",
+        updated_at: "2026-03-02T00:00:00.000Z",
+      },
+      currentVersion: {
+        id: "version-2",
+        estimate_id: "estimate-2",
+        version_number: 1,
+        is_current: true,
+        created_by: "profile-owner",
+        created_at: "2026-03-01T00:00:00.000Z",
+      },
+      stages: [
+        {
+          id: "stage-1",
+          project_id: projectId,
+          title: "Shell",
+          description: "",
+          sort_order: 1,
+          status: "open",
+          discount_bps: 0,
+          created_at: "2026-03-01T00:00:00.000Z",
+          updated_at: "2026-03-02T00:00:00.000Z",
+        },
+      ],
+      works: [],
+      lines: [
+        {
+          id: "line-1",
+          estimate_work_id: "work-1",
+          resource_type: "material",
+          title: "Remote line",
+          quantity: 3,
+          unit: "pcs",
+          unit_price_cents: 12500,
+          total_price_cents: 37500,
+          created_at: "2026-03-01T00:00:00.000Z",
+        },
+      ],
+      dependencies: [],
+    });
+    getPlanningSourceMock.mockResolvedValue({
+      getProjectTasks: vi.fn().mockResolvedValue([
+        {
+          id: "task-1",
+          project_id: projectId,
+          stage_id: "stage-1",
+          title: "Checklist task",
+          description: "",
+          status: "todo",
+          assignee_id: "",
+          checklist: [
+            {
+              id: "checklist-1",
+              text: "Imported row",
+              done: false,
+              type: "material",
+              estimateV2LineId: "line-1",
+              estimateV2WorkId: "work-1",
+              estimateV2QtyMilli: 3_000,
+              estimateV2Unit: "pcs",
+            },
+          ],
+          comments: [],
+          attachments: [],
+          photos: [],
+          linked_estimate_item_ids: [],
+          created_at: "2026-03-01T00:00:00.000Z",
+          startDate: null,
+          deadline: null,
+        },
+      ]),
+    });
+
+    await hydrateEstimateV2ProjectFromWorkspace(projectId, { profileId: "profile-2" });
+
+    const state = getEstimateV2ProjectState(projectId);
+    expect(state.works).toEqual([
+      expect.objectContaining({
+        id: "work-1",
+        stageId: "stage-1",
+        title: "Checklist task",
+      }),
+    ]);
+    expect(state.lines).toEqual([
+      expect.objectContaining({
+        id: "line-1",
+        workId: "work-1",
+        title: "Remote line",
+        qtyMilli: 3_000,
+      }),
+    ]);
+  });
+
+  it("clears stale estimate runtime state when the active supabase profile changes", async () => {
+    const projectId = "project-remote-1";
+
+    loadCurrentEstimateDraftMock.mockResolvedValue({
+      estimate: {
+        id: "estimate-1",
+        project_id: projectId,
+        title: "Remote Estimate",
+        description: null,
+        status: "draft",
+        created_by: "profile-1",
+        created_at: "2026-03-01T00:00:00.000Z",
+        updated_at: "2026-03-02T00:00:00.000Z",
+      },
+      currentVersion: {
+        id: "version-1",
+        estimate_id: "estimate-1",
+        version_number: 1,
+        is_current: true,
+        created_by: "profile-1",
+        created_at: "2026-03-01T00:00:00.000Z",
+      },
+      stages: [
+        {
+          id: "stage-1",
+          project_id: projectId,
+          title: "Shell",
+          description: "",
+          sort_order: 1,
+          status: "open",
+          discount_bps: 0,
+          created_at: "2026-03-01T00:00:00.000Z",
+          updated_at: "2026-03-02T00:00:00.000Z",
+        },
+      ],
+      works: [
+        {
+          id: "work-1",
+          estimate_version_id: "version-1",
+          project_stage_id: "stage-1",
+          title: "Framing",
+          description: null,
+          sort_order: 1,
+          planned_cost_cents: 30000,
+          created_at: "2026-03-01T00:00:00.000Z",
+        },
+      ],
+      lines: [
+        {
+          id: "line-1",
+          estimate_work_id: "work-1",
+          resource_type: "equipment",
+          title: "Laser level",
+          quantity: 1,
+          unit: "day",
+          unit_price_cents: 3200,
+          total_price_cents: 3200,
+          created_at: "2026-03-01T00:00:00.000Z",
+        },
+      ],
+      dependencies: [],
+    });
+
+    await hydrateEstimateV2ProjectFromWorkspace(projectId, { profileId: "profile-1" });
+    expect(getEstimateV2ProjectState(projectId).lines).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "line-1",
+          type: "tool",
+          title: "Laser level",
+        }),
+      ]),
+    );
+
+    registerEstimateV2ProjectAccessContext(projectId, {
+      mode: "supabase",
+      profileId: "profile-1",
+      projectOwnerProfileId: "profile-1",
+      membershipRole: "owner",
+    });
+    registerEstimateV2ProjectAccessContext(projectId, {
+      mode: "supabase",
+      profileId: "profile-2",
+      projectOwnerProfileId: "profile-2",
+      membershipRole: "owner",
+    });
+
+    expect(getEstimateV2ProjectState(projectId).lines).toEqual([]);
+  });
 
   it("skips stale HR projection writes when a newer estimate edit lands mid-sync", async () => {
     vi.useFakeTimers();
