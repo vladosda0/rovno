@@ -152,7 +152,8 @@ export function getPermissionWarnings(input: PermissionSummaryInput): string[] {
 }
 
 export function getDefaultFinanceVisibility(role: MemberRole): FinanceVisibility {
-  return role === "viewer" ? "none" : "detail";
+  if (role === "owner" || role === "co_owner") return "detail";
+  return "none";
 }
 
 export function getDefaultInternalDocsVisibility(role: MemberRole): InternalDocsVisibility {

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as store from "@/data/store";
 import {
+  createWorkspaceProjectInvite,
   filterActiveProjectRows,
   getWorkspaceSource,
   mapProfileRowToUser,
@@ -384,5 +385,24 @@ describe("workspace-source helpers", () => {
       finance_visibility: "summary",
       internal_docs_visibility: "none",
     });
+  });
+
+  it("defaults contractor invite finance visibility to the role baseline", async () => {
+    store.__unsafeResetStoreForTests();
+
+    const created = await createWorkspaceProjectInvite(
+      { kind: "local" },
+      {
+        projectId: "project-1",
+        email: "contractor@example.com",
+        role: "contractor",
+        aiAccess: "consult_only",
+        viewerRegime: null,
+        creditLimit: 50,
+        invitedBy: "profile-1",
+      },
+    );
+
+    expect(created.finance_visibility).toBe("none");
   });
 });

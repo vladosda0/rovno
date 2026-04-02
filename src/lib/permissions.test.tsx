@@ -2,10 +2,17 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as store from "@/data/store";
-import { usePermission } from "@/lib/permissions";
+import { seamCanViewSensitiveDetail, usePermission } from "@/lib/permissions";
 import { workspaceQueryKeys } from "@/hooks/use-workspace-source";
 import { authenticateRuntimeAuth } from "@/test/runtime-auth";
 import type { Member, User } from "@/types/entities";
+import type { ProjectAuthoritySeam } from "@/lib/project-authority-seam";
+import {
+  clearDemoSession,
+  clearStoredAuthProfile,
+  setAuthRole,
+  setStoredAuthProfile,
+} from "@/lib/auth-state";
 
 function createQueryClient() {
   return new QueryClient({
@@ -25,6 +32,7 @@ function PermissionProbe({ projectId }: { projectId: string }) {
       <span data-testid="role">{permission.role}</span>
       <span data-testid="can-ai">{String(permission.can("ai.generate"))}</span>
       <span data-testid="can-invite">{String(permission.can("member.invite"))}</span>
+      <span data-testid="can-sensitive">{String(seamCanViewSensitiveDetail(permission.seam))}</span>
     </div>
   );
 }
@@ -58,6 +66,8 @@ describe("usePermission", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
     vi.restoreAllMocks();
+    clearStoredAuthProfile();
+    clearDemoSession();
   });
 
   it("reads role and AI access from the workspace query cache instead of demo store getters", async () => {
@@ -100,5 +110,113 @@ describe("usePermission", () => {
     });
     expect(screen.getByTestId("can-ai")).toHaveTextContent("true");
     expect(screen.getByTestId("can-invite")).toHaveTextContent("true");
+  });
+
+  it("applies fail-safe finance visibility when simulating local viewer and contractor roles", async () => {
+    vi.stubEnv("VITE_WORKSPACE_SOURCE", "local");
+    store.__unsafeResetStoreForTests();
+
+    const profile = setStoredAuthProfile({
+      email: "owner@example.com",
+      name: "Owner User",
+    });
+
+    store.addProject({
+      id: "project-1",
+      owner_id: profile.id,
+      title: "Workspace Project",
+      type: "residential",
+      project_mode: "contractor",
+      automation_level: "assisted",
+      current_stage_id: "",
+      progress_pct: 0,
+    });
+    store.addMember({
+      project_id: "project-1",
+      user_id: profile.id,
+      role: "owner",
+      ai_access: "project_pool",
+      finance_visibility: "detail",
+      credit_limit: 500,
+      used_credits: 0,
+    });
+
+    setAuthRole("viewer");
+    const firstClient = createQueryClient();
+    const first = render(
+      <QueryClientProvider client={firstClient}>
+        <PermissionProbe projectId="project-1" />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId("role")).toHaveTextContent("viewer");
+    });
+    expect(screen.getByTestId("can-sensitive")).toHaveTextContent("false");
+    first.unmount();
+
+    setAuthRole("contractor");
+    const secondClient = createQueryClient();
+    render(
+      <QueryClientProvider client={secondClient}>
+        <PermissionProbe projectId="project-1" />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId("role")).toHaveTextContent("contractor");
+    });
+    expect(screen.getByTestId("can-sensitive")).toHaveTextContent("false");
+  });
+});
+
+describe("seamCanViewSensitiveDetail", () => {
+  function seam(partial: Partial<ProjectAuthoritySeam>): ProjectAuthoritySeam {
+    return {
+      projectId: "project-1",
+      profileId: "profile-1",
+      project: null,
+      membership: null,
+      ...partial,
+    };
+  }
+
+  it("fails closed when membership is missing for non-owners", () => {
+    expect(seamCanViewSensitiveDetail(seam({ membership: null }))).toBe(false);
+  });
+
+  it("allows the project owner even before the owner membership row hydrates", () => {
+    expect(seamCanViewSensitiveDetail(seam({
+      profileId: "profile-owner",
+      project: {
+        id: "project-1",
+        owner_id: "profile-owner",
+        title: "Workspace Project",
+        type: "residential",
+        project_mode: "contractor",
+        automation_level: "assisted",
+        current_stage_id: "",
+        progress_pct: 0,
+      },
+      membership: null,
+    }))).toBe(true);
+  });
+
+  it("fails closed when finance visibility is missing or summary-only for non-owners", () => {
+    expect(seamCanViewSensitiveDetail(seam({
+      membership: member({ role: "co_owner", finance_visibility: undefined }),
+    }))).toBe(false);
+
+    expect(seamCanViewSensitiveDetail(seam({
+      membership: member({ role: "co_owner", finance_visibility: "summary" }),
+    }))).toBe(false);
+  });
+
+  it("allows owners and explicit detail visibility", () => {
+    expect(seamCanViewSensitiveDetail(seam({
+      membership: member({ role: "owner", finance_visibility: undefined }),
+    }))).toBe(true);
+
+    expect(seamCanViewSensitiveDetail(seam({
+      membership: member({ role: "co_owner", finance_visibility: "detail" }),
+    }))).toBe(true);
   });
 });

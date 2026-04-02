@@ -11,6 +11,7 @@ import {
   type ProjectAuthoritySeam,
 } from "@/lib/project-authority-seam";
 import { getAuthRole } from "@/lib/auth-state";
+import { getDefaultFinanceVisibility } from "@/lib/participant-role-policy";
 import type { MemberRole } from "@/types/entities";
 
 export type { Action } from "@/lib/permission-matrix";
@@ -103,20 +104,19 @@ export function seamAllowsAction(seam: ProjectAuthoritySeam, action: Action): bo
  *
  * Backend RLS uses `public.can_view_sensitive_detail(project_id)`, which is derived
  * from `effective_finance_visibility(project_id)` and therefore:
- * - owner always has access
+ * - owner always has access, even when the owner membership row has not hydrated yet
  * - others have access iff their stored `finance_visibility` is `detail`
  *
- * Contract drift / UX safety:
- * - when membership is unknown (no membership row) return `true` (avoid over-hiding)
- * - when `finance_visibility` is missing in demo/local data, return `true`
- *   so we don't hide modules due to incomplete local seeding.
+ * Phase 6.1 must fail closed:
+ * - when membership is unknown for non-owners return `false`
+ * - when `finance_visibility` is missing or unknown return `false`
  */
 export function seamCanViewSensitiveDetail(seam: ProjectAuthoritySeam): boolean {
-  if (!seam.membership) return true;
-  if (seam.membership.role === "owner") return true;
+  if (getProjectRole(seam) === "owner") return true;
+  if (!seam.membership) return false;
 
   const financeVisibility = seam.membership.finance_visibility;
-  if (financeVisibility == null) return true;
+  if (financeVisibility == null) return false;
 
   return financeVisibility === "detail";
 }
@@ -153,6 +153,7 @@ export function usePermission(projectId: string) {
       membership: {
         ...seam.membership,
         role: simulatedRole,
+        finance_visibility: getDefaultFinanceVisibility(simulatedRole),
       },
     };
   }, [seam, workspaceMode.kind]);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AIAccess, MemberRole } from "@/types/entities";
 import {
+  getDefaultFinanceVisibility,
   getInviteAiAccessOptions,
   getInviteRoleOptions,
   getReassignRoleOptions,
@@ -64,6 +65,18 @@ describe("participant-role-policy", () => {
 
     it("project_pool allows all", () => {
       assertAiEqual(getInviteAiAccessOptions("project_pool"), ["none", "consult_only", "project_pool"]);
+    });
+  });
+
+  describe("getDefaultFinanceVisibility", () => {
+    it("keeps viewer and contractor fail-safe by default", () => {
+      expect(getDefaultFinanceVisibility("viewer")).toBe("none");
+      expect(getDefaultFinanceVisibility("contractor")).toBe("none");
+    });
+
+    it("keeps owner and co_owner on detail defaults", () => {
+      expect(getDefaultFinanceVisibility("owner")).toBe("detail");
+      expect(getDefaultFinanceVisibility("co_owner")).toBe("detail");
     });
   });
 });

@@ -37,6 +37,11 @@ export interface EnsureEstimateCurrentVersionInput {
   createdBy: string;
 }
 
+export interface UpdateProjectEstimateRootStatusInput {
+  estimateId: string;
+  status: NonNullable<ProjectEstimateUpdate["status"]>;
+}
+
 export type EnsureProjectEstimateRootResult =
   | { ok: true; row: ProjectEstimateRow }
   | { ok: false; reason: "multiple_roots" | "root_id_mismatch" };
@@ -246,6 +251,24 @@ export async function ensureEstimateCurrentVersion(
   }
 
   return { ok: true, row: inserted };
+}
+
+export async function updateProjectEstimateRootStatus(
+  supabase: TypedSupabaseClient,
+  input: UpdateProjectEstimateRootStatusInput,
+): Promise<void> {
+  const patch: ProjectEstimateUpdate = {
+    status: input.status,
+  };
+
+  const { error } = await supabase
+    .from("project_estimates")
+    .update(patch)
+    .eq("id", input.estimateId);
+
+  if (error) {
+    throw error;
+  }
 }
 
 export async function upsertEstimateWorks(

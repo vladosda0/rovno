@@ -19,6 +19,7 @@ import {
   ensureProjectEstimateRoot,
   loadCurrentEstimateDraft,
   resolveEstimateDraftRemoteIds,
+  updateProjectEstimateRootStatus,
   upsertEstimateResourceLines,
   upsertEstimateWorks,
 } from "@/data/estimate-source";
@@ -693,6 +694,11 @@ export async function persistEstimateV2HeroTransition(
         total_price_cents: totalPriceCentsFromLine(line),
       })),
     );
+
+    await updateProjectEstimateRootStatus(supabase, {
+      estimateId: ids.estimateId,
+      status: "approved",
+    });
   } catch (error) {
     if (error instanceof EstimateV2HeroTransitionError) {
       throw error;
