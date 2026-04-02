@@ -45,10 +45,6 @@ vi.mock("@/data/planning-source", () => ({
   getPlanningSource: vi.fn(),
 }));
 
-vi.mock("@/data/estimate-store", () => ({
-  createEstimateItemForTask: vi.fn(),
-}));
-
 vi.mock("@/lib/auth-state", () => ({
   getAuthRole: () => "owner",
 }));

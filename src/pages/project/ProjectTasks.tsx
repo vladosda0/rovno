@@ -33,7 +33,6 @@ import {
 } from "lucide-react";
 import { planningQueryKeys } from "@/hooks/use-planning-source";
 import type { TaskStatus } from "@/types/entities";
-import { createEstimateItemForTask } from "@/data/estimate-store";
 import { useEstimateV2Project } from "@/hooks/use-estimate-v2-data";
 import { useMediaUploadMutations } from "@/hooks/use-documents-media-source";
 import type { Task } from "@/types/entities";
@@ -529,7 +528,6 @@ export default function ProjectTasks() {
           createdBy: workspaceMode.kind === "supabase" ? workspaceMode.profileId : currentUser.id,
           deadline: taskDeadline?.toISOString(),
         });
-        createEstimateItemForTask(createdTask);
         await invalidateProjectTasks();
         setTaskModalOpen(false);
         toast({ title: "Task created", description: createdTask.title });
@@ -596,7 +594,6 @@ export default function ProjectTasks() {
               created_at: new Date().toISOString(),
             };
             addTask(aiTask);
-            createEstimateItemForTask(aiTask);
           });
         }
 
