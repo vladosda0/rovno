@@ -8,7 +8,6 @@ import {
   getCurrentUser,
   getUserById,
 } from "@/data/store";
-import { createEstimateItemForTask } from "@/data/estimate-store";
 import { useProjectDocumentMutations } from "@/hooks/use-documents-media-source";
 import { useWorkspaceMode } from "@/hooks/use-mock-data";
 import { useToast } from "@/hooks/use-toast";
@@ -267,7 +266,6 @@ export function QuickActions({
       created_at: new Date().toISOString(),
     };
     addTask(task);
-    createEstimateItemForTask(task);
     toast({ title: "Task created", description: task.title });
     forceClose("task");
   };
@@ -390,7 +388,6 @@ export function QuickActions({
         created_at: new Date().toISOString(),
       };
       addTask(generatedTask);
-      createEstimateItemForTask(generatedTask);
       linkedTaskId = taskId;
     }
 

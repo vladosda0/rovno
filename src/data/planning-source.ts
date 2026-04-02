@@ -1,6 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import * as store from "@/data/store";
-import { syncEstimateItemName } from "@/data/estimate-store";
 import {
   resolveRuntimeWorkspaceMode,
   type RuntimeWorkspaceMode,
@@ -327,9 +326,6 @@ function createBrowserPlanningSource(mode: "demo" | "local"): PlanningSource {
       }
 
       store.updateTask(taskId, update);
-      if (patch.title !== undefined) {
-        syncEstimateItemName(taskId, patch.title);
-      }
       const task = store.getTask(taskId);
       if (!task) {
         throw new Error(`Task not found: ${taskId}`);
