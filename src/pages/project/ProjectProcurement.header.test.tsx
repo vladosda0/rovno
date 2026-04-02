@@ -26,7 +26,7 @@ function renderProjectProcurement(projectId: string) {
           <Routes>
             <Route path="/project/:id/procurement" element={<ProjectProcurement />} />
             <Route path="/project/:id/procurement/:itemId" element={<ProjectProcurement />} />
-            <Route path="/project/:id/procurement/orders/:orderId" element={<ProjectProcurement />} />
+            <Route path="/project/:id/procurement/order/:orderId" element={<ProjectProcurement />} />
           </Routes>
         </MemoryRouter>
       </TooltipProvider>
@@ -188,5 +188,20 @@ describe("ProjectProcurement header redesign", () => {
     expect(screen.queryByRole("button", { name: /^Requested \(/i })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^Ordered \(/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^In stock \(/i })).toBeInTheDocument();
+  });
+
+  it("redacts procurement money surfaces for contractors in summary mode", () => {
+    const projectId = "project-1";
+    seedRequestedItem(projectId);
+    setAuthRole("contractor");
+
+    renderProjectProcurement(projectId);
+
+    expect(screen.queryByText("Budget")).not.toBeInTheDocument();
+    expect(screen.queryByText("Committed")).not.toBeInTheDocument();
+    expect(screen.queryByText("Variance")).not.toBeInTheDocument();
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Order" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Requested \(/i })).not.toBeInTheDocument();
   });
 });

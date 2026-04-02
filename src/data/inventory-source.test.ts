@@ -234,8 +234,12 @@ describe("inventory-source helpers", () => {
       {
         projectId: "project-1",
         locationId: "location-1",
+        inventoryItemId: "inventory-item-1",
         inventoryKey: "copper cable|3x2.5|m",
         qty: 7,
+        title: "Copper Cable",
+        spec: "3x2.5",
+        unit: "m",
       },
     ]);
   });
@@ -301,8 +305,12 @@ describe("supabase inventory source", () => {
       {
         projectId: "project-1",
         locationId: "location-seed",
+        inventoryItemId: "inventory-item-1",
         inventoryKey: "copper cable|3x2.5|m",
         qty: 11,
+        title: "Copper cable",
+        spec: "3x2.5",
+        unit: "m",
       },
     ]);
   });

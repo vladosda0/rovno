@@ -21,7 +21,13 @@ import {
 import { toInventoryKey } from "@/lib/procurement-fulfillment";
 import { getEvents, getTasks } from "@/data/store";
 import { clearDemoSession, enterDemoSession, setAuthRole } from "@/lib/auth-state";
-import { setProjectEstimateStatus } from "@/data/estimate-v2-store";
+import {
+  createLine,
+  createStage,
+  createWork,
+  getEstimateV2ProjectState,
+  setProjectEstimateStatus,
+} from "@/data/estimate-v2-store";
 
 function renderProjectProcurement(projectId: string) {
   const queryClient = new QueryClient({
@@ -45,7 +51,31 @@ function renderProjectProcurement(projectId: string) {
   );
 }
 
-function addStockItem(projectId: string, overrides?: { name?: string; type?: "material" | "tool" | "other" }) {
+function ensureLinkedEstimateLine(projectId: string) {
+  let linkedLineId = getEstimateV2ProjectState(projectId).lines[0]?.id ?? null;
+  if (!linkedLineId) {
+    const stage = createStage(projectId, { title: "Linked stage" });
+    const work = stage ? createWork(projectId, { stageId: stage.id, title: "Linked work" }) : null;
+    const line = stage && work ? createLine(projectId, {
+      stageId: stage.id,
+      workId: work.id,
+      title: "Linked material",
+      type: "material",
+      qtyMilli: 1_000,
+      costUnitCents: 9_000,
+    }) : null;
+    linkedLineId = line?.id ?? null;
+  }
+  return linkedLineId;
+}
+
+function addStockItem(projectId: string, overrides?: {
+  name?: string;
+  type?: "material" | "tool" | "other";
+  linkEstimate?: boolean;
+}) {
+  const linkedLineId = overrides?.linkEstimate ? ensureLinkedEstimateLine(projectId) : null;
+
   const itemId = `in-stock-item-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   return addProcurementItem({
     id: itemId,
@@ -66,8 +96,8 @@ function addStockItem(projectId: string, overrides?: { name?: string; type?: "ma
     supplierPreferred: null,
     locationPreferredId: null,
     lockedFromEstimate: false,
-    sourceEstimateItemId: "estimate-in-stock",
-    sourceEstimateV2LineId: null,
+    sourceEstimateItemId: linkedLineId ? "estimate-in-stock" : null,
+    sourceEstimateV2LineId: linkedLineId,
     orphaned: false,
     orphanedAt: null,
     orphanedReason: null,
@@ -80,8 +110,8 @@ function addStockItem(projectId: string, overrides?: { name?: string; type?: "ma
   });
 }
 
-function seedSupplierInStock(projectId: string, name: string) {
-  const item = addStockItem(projectId, { name, type: "material" });
+function seedSupplierInStock(projectId: string, name: string, options?: { linkEstimate?: boolean }) {
+  const item = addStockItem(projectId, { name, type: "material", linkEstimate: options?.linkEstimate === true });
   const site = ensureDefaultLocation(projectId);
 
   const draft = createDraftOrder({
@@ -246,5 +276,44 @@ describe("ProjectProcurement In stock tab", () => {
     expect(within(dialog).getByText("Receipt history")).toBeInTheDocument();
     expect(within(dialog).getByText(`Source location: ${site.name}`)).toBeInTheDocument();
     expect(within(dialog).getByRole("link", { name: "Consignment note.pdf" })).toBeInTheDocument();
+  });
+
+  it("shows receiver and client-safe price in contractor summary mode", () => {
+    const projectId = "project-1";
+    seedSupplierInStock(projectId, `Summary mode ${Date.now()}`, { linkEstimate: true });
+    setAuthRole("contractor");
+
+    renderProjectProcurement(projectId);
+    fireEvent.click(screen.getByRole("button", { name: /^In stock \(/i }));
+
+    const table = screen.getByRole("table");
+    const tableScope = within(table);
+    expect(tableScope.getByText("Receiver")).toBeInTheDocument();
+    expect(tableScope.getByText("Client price")).toBeInTheDocument();
+    expect(tableScope.queryByText("Actions")).not.toBeInTheDocument();
+
+    const rows = tableScope.getAllByRole("row");
+    const row = rows[1] ?? null;
+    expect(row).toBeTruthy();
+    if (!row) return;
+    expect(within(row).getByText("—")).toBeInTheDocument();
+    expect(within(row).getByText(/₽/)).toBeInTheDocument();
+  });
+
+  it("falls back to stock snapshot rows for contractor summary mode when procurement items are hidden", async () => {
+    const projectId = "project-1";
+    const site = ensureDefaultLocation(projectId);
+    adjustStock(projectId, site.id, "fallback cable||m", 6);
+    setAuthRole("contractor");
+
+    renderProjectProcurement(projectId);
+
+    expect(screen.queryByText("No procurement items")).not.toBeInTheDocument();
+
+    const table = await screen.findByRole("table");
+    const tableScope = within(table);
+    expect(tableScope.getByText("fallback cable")).toBeInTheDocument();
+    expect(tableScope.getByText(site.name)).toBeInTheDocument();
+    expect(tableScope.getByText("6 m")).toBeInTheDocument();
   });
 });

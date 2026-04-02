@@ -83,8 +83,12 @@ export function mapInventoryBalanceRowsToStockRows(input: {
       return {
         projectId: row.project_id,
         locationId: row.inventory_location_id,
+        inventoryItemId: inventoryItem.id,
         inventoryKey: mapInventoryItemRowToStockKey(inventoryItem),
         qty: row.quantity,
+        title: inventoryItem.title,
+        spec: inventoryItem.notes ?? null,
+        unit: inventoryItem.unit,
       } satisfies InventoryStockRow;
     })
     .filter((row): row is InventoryStockRow => !!row);
