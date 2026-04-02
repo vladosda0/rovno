@@ -151,4 +151,22 @@ describe("TaskDetailModal", () => {
       expect(onDescriptionChange).toHaveBeenCalledWith("task-1", "Updated description");
     });
   });
+
+  it("shows an estimate-item badge when linked checklist metadata is redacted", () => {
+    renderTaskDetail({
+      task: task({
+        checklist: [
+          {
+            id: "check-1",
+            text: "Linked line",
+            done: false,
+            type: "subtask",
+            estimateV2LineId: "line-1",
+          },
+        ],
+      }),
+    });
+
+    expect(screen.getByText("Estimate item")).toBeInTheDocument();
+  });
 });

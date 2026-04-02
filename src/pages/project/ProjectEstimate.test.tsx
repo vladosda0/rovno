@@ -19,6 +19,7 @@ import { createDraftOrder, placeOrder, receiveOrder, __unsafeResetOrdersForTests
 import { __unsafeResetInventoryForTests } from "@/data/inventory-store";
 import { getProcurementItems } from "@/data/procurement-store";
 import { computeProjectTotals } from "@/lib/estimate-v2/pricing";
+import * as workspaceSource from "@/data/workspace-source";
 import {
   clearDemoSession,
   clearStoredAuthProfile,
@@ -236,6 +237,24 @@ function setupLocalProject(
   });
 }
 
+function setupLocalProjectWithoutMembership(projectId: string) {
+  const profile = setStoredAuthProfile({
+    email: `${projectId}@example.com`,
+    name: "Owner User",
+  });
+
+  addProject({
+    id: projectId,
+    owner_id: profile.id,
+    title: "Workspace Project",
+    type: "residential",
+    project_mode: "contractor",
+    automation_level: "assisted",
+    current_stage_id: "",
+    progress_pct: 0,
+  });
+}
+
 function seedEstimateLine(projectId: string) {
   const stage = createStage(projectId, { title: "Shell" });
   expect(stage).not.toBeNull();
@@ -359,6 +378,7 @@ describe("ProjectEstimate", () => {
     clearDemoSession();
     clearStoredAuthProfile();
     setAuthRole("owner");
+    vi.restoreAllMocks();
   });
 
   it("shows the empty estimate intro and immediately edits new stage, work and resource titles", async () => {
@@ -630,6 +650,203 @@ describe("ProjectEstimate", () => {
     expect(screen.getByText("Alex Mason")).toBeInTheDocument();
   });
 
+  it("keeps contractor estimate view redacted by default", async () => {
+    const projectId = "project-estimate-contractor-redacted";
+    setupLocalProject(projectId);
+    const seeded = seedEstimateLine(projectId);
+    expect(seeded).not.toBeNull();
+    if (!seeded?.line) return;
+
+    updateLine(projectId, seeded.line.id, {
+      costUnitCents: 14_000,
+      markupBps: 1_500,
+    });
+    setAuthRole("contractor");
+
+    await act(async () => {
+      renderProjectEstimate(projectId);
+      await flushUi();
+    });
+
+    expect(screen.queryByText("Cost unit")).not.toBeInTheDocument();
+    expect(screen.queryByText("Cost total")).not.toBeInTheDocument();
+    expect(screen.queryByText("Markup %")).not.toBeInTheDocument();
+    expect(screen.getByText("Client unit")).toBeInTheDocument();
+    expect(screen.getByText("Client total")).toBeInTheDocument();
+  });
+
+  it("renders checklist-linked resources for reduced-access viewers when estimate lines are unavailable", async () => {
+    const projectId = "project-estimate-checklist-resource-fallback";
+    setupLocalProject(projectId, { finance_visibility: "summary" });
+    const stage = createStage(projectId, { title: "Shell" });
+    expect(stage).not.toBeNull();
+    if (!stage) return;
+
+    const work = createWork(projectId, { stageId: stage.id, title: "Framing" });
+    expect(work).not.toBeNull();
+    if (!work) return;
+
+    addTask({
+      id: "task-fallback-resource",
+      project_id: projectId,
+      stage_id: stage.id,
+      title: "Framing task",
+      description: "",
+      status: "not_started",
+      assignee_id: "",
+      checklist: [
+        {
+          id: "checklist-fallback-resource",
+          text: "Concrete blocks",
+          done: false,
+          type: "material",
+          estimateV2LineId: "missing-line-1",
+          estimateV2WorkId: work.id,
+          estimateV2QtyMilli: 4_000,
+          estimateV2Unit: "pcs",
+        },
+      ],
+      comments: [],
+      attachments: [],
+      photos: [],
+      linked_estimate_item_ids: [],
+      created_at: "2026-03-01T00:00:00.000Z",
+    });
+    setAuthRole("viewer");
+
+    await act(async () => {
+      renderProjectEstimate(projectId);
+      await flushUi();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Concrete blocks")).toBeInTheDocument();
+    });
+    expect(screen.getByText("4")).toBeInTheDocument();
+    expect(screen.getByText("pcs")).toBeInTheDocument();
+    expect(screen.queryByText("Client unit")).not.toBeInTheDocument();
+    expect(screen.queryByText("Client total")).not.toBeInTheDocument();
+  });
+
+  it("renders linked checklist resources even when restricted users cannot recover resource metadata", async () => {
+    const projectId = "project-estimate-linked-resource-fallback";
+    setupLocalProject(projectId, { finance_visibility: "summary" });
+    const stage = createStage(projectId, { title: "Shell" });
+    expect(stage).not.toBeNull();
+    if (!stage) return;
+
+    const work = createWork(projectId, { stageId: stage.id, title: "Finishes" });
+    expect(work).not.toBeNull();
+    if (!work) return;
+
+    addTask({
+      id: "task-linked-resource-fallback",
+      project_id: projectId,
+      stage_id: stage.id,
+      title: "Finishes task",
+      description: "",
+      status: "not_started",
+      assignee_id: "",
+      checklist: [
+        {
+          id: "checklist-linked-resource-fallback",
+          text: "Hidden line item",
+          done: false,
+          type: "subtask",
+          estimateV2LineId: "restricted-line-1",
+          estimateV2WorkId: work.id,
+        },
+      ],
+      comments: [],
+      attachments: [],
+      photos: [],
+      linked_estimate_item_ids: [],
+      created_at: "2026-03-01T00:00:00.000Z",
+    });
+    setAuthRole("viewer");
+
+    await act(async () => {
+      renderProjectEstimate(projectId);
+      await flushUi();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Hidden line item")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("Client unit")).not.toBeInTheDocument();
+    expect(screen.queryByText("Client total")).not.toBeInTheDocument();
+  });
+
+  it("restores markup for the project owner even before the owner membership row hydrates", async () => {
+    const projectId = "project-estimate-owner-fallback-markup";
+    setupLocalProjectWithoutMembership(projectId);
+    const seeded = seedEstimateLine(projectId);
+    expect(seeded).not.toBeNull();
+    if (!seeded?.line) return;
+
+    await act(async () => {
+      renderProjectEstimate(projectId);
+      await flushUi();
+    });
+
+    expect(screen.getByText("Markup %")).toBeInTheDocument();
+  });
+
+  it("creates contractor assignee invites with baseline finance visibility", async () => {
+    const projectId = "project-estimate-assignee-invite";
+    setupLocalProject(projectId);
+    const seeded = seedEstimateLine(projectId);
+    expect(seeded).not.toBeNull();
+    if (!seeded?.line) return;
+
+    updateLine(projectId, seeded.line.id, {
+      type: "labor",
+      assigneeName: null,
+      assigneeEmail: null,
+    });
+
+    const createInviteSpy = vi.spyOn(workspaceSource, "createWorkspaceProjectInvite").mockResolvedValue({
+      id: "invite-1",
+      project_id: projectId,
+      email: "contractor@example.com",
+      role: "contractor",
+      ai_access: "consult_only",
+      viewer_regime: null,
+      credit_limit: 50,
+      invited_by: "profile-1",
+      status: "pending",
+      invite_token: "token-1",
+      accepted_profile_id: null,
+      created_at: "2026-03-01T00:00:00.000Z",
+      accepted_at: null,
+      finance_visibility: "none",
+    } as never);
+    const sendInviteSpy = vi.spyOn(workspaceSource, "sendWorkspaceProjectInviteEmail").mockResolvedValue({
+      kind: "skipped",
+    });
+
+    await act(async () => {
+      renderProjectEstimate(projectId);
+      await flushUi();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Assign" }));
+    fireEvent.change(screen.getByPlaceholderText("Type person name"), { target: { value: "Manual Person" } });
+    fireEvent.change(screen.getByPlaceholderText("contractor@example.com"), { target: { value: "contractor@example.com" } });
+    fireEvent.click(screen.getByRole("button", { name: "Invite" }));
+
+    await waitFor(() => {
+      expect(createInviteSpy).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          projectId,
+          role: "contractor",
+          financeVisibility: "none",
+        }),
+      );
+    });
+    expect(sendInviteSpy).not.toHaveBeenCalled();
+  });
   it("marks all project tasks done from the finish blocker and then finishes the estimate after confirmation", async () => {
     const projectId = "project-estimate-finish-bulk-done";
     setupLocalProject(projectId);
