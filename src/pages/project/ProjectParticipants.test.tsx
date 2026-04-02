@@ -275,6 +275,30 @@ describe("ProjectParticipants", () => {
     expect(screen.queryByRole("menuitem", { name: "Resend email" })).not.toBeInTheDocument();
   });
 
+  it("defaults contractor invite finance visibility to non-detail and requires unlock for non-standard expansion", async () => {
+    renderParticipants();
+
+    fireEvent.click(screen.getByRole("button", { name: "Invite" }));
+    const dialog = screen.getByRole("dialog", { name: "Invite participant" });
+
+    expect(within(dialog).getByText("No finance visibility")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Unlock non-standard finance access" })).toBeInTheDocument();
+  });
+
+  it("shows non-standard customization summary after unlocking contractor finance expansion", async () => {
+    renderParticipants();
+
+    fireEvent.click(screen.getByRole("button", { name: "Invite" }));
+    const dialog = screen.getByRole("dialog", { name: "Invite participant" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Unlock non-standard finance access" }));
+
+    const comboBoxes = within(dialog).getAllByRole("combobox");
+    fireEvent.click(comboBoxes[2]);
+    fireEvent.click(await screen.findByText("Finance summary"));
+
+    expect(within(dialog).getByText("Для подрядчика заданы нестандартные параметры доступа")).toBeInTheDocument();
+  });
+
   describe("Invite email delivery (Supabase)", () => {
     beforeEach(() => {
       vi.restoreAllMocks();

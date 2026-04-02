@@ -9,6 +9,7 @@ import {
   Eye,
   FileText,
   History,
+  Lock,
   Mail,
   MoreVertical,
   Plus,
@@ -78,8 +79,10 @@ import {
   getInternalDocsVisibilityOptions,
   getInviteAiAccessOptions,
   getInviteRoleOptions,
+  getNonStandardAccessSummary,
   getPermissionWarnings,
   getReassignRoleOptions,
+  hasNonStandardSupportedAccess,
   internalDocsVisibilityLabels,
   roleDescriptions,
   roleLabels,
@@ -254,6 +257,26 @@ function PermissionFormSections(props: {
   const financeDanger = form.financeVisibility === "detail";
   const docsDanger = form.internalDocsVisibility === "edit";
   const aiDanger = form.aiAccess === "project_pool";
+  const presetFinanceVisibility = getDefaultFinanceVisibility(form.role);
+  const hasNonStandardFinanceAccess = hasNonStandardSupportedAccess({
+    role: form.role,
+    financeVisibility: form.financeVisibility,
+  });
+  const nonStandardSummary = getNonStandardAccessSummary({
+    role: form.role,
+    financeVisibility: form.financeVisibility,
+  });
+  const financeExpansionOptions = financeOptions.filter((visibility) => visibility !== presetFinanceVisibility);
+  const financeCanUnlock = (form.role === "viewer" || form.role === "contractor") && financeExpansionOptions.length > 0;
+  const [financeUnlocked, setFinanceUnlocked] = useState(hasNonStandardFinanceAccess);
+
+  useEffect(() => {
+    if (hasNonStandardFinanceAccess) {
+      setFinanceUnlocked(true);
+      return;
+    }
+    setFinanceUnlocked(false);
+  }, [form.role, hasNonStandardFinanceAccess]);
 
   return (
     <div className="space-y-sp-2">
@@ -331,23 +354,61 @@ function PermissionFormSections(props: {
 
           <div className={`rounded-card border p-3 ${financeDanger ? "border-warning/40 bg-warning/10" : "border-border/70 bg-background/70"}`}>
             <label className="text-caption font-medium text-foreground">Finance visibility</label>
-            <Select
-              value={form.financeVisibility}
-              onValueChange={(value) => {
-                onFormChange((current) => ({ ...current, financeVisibility: value as FinanceVisibility }));
-              }}
-            >
-              <SelectTrigger className="mt-1">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {financeOptions.map((visibility) => (
-                  <SelectItem key={visibility} value={visibility}>
-                    {financeVisibilityLabels[visibility]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {financeCanUnlock && !financeUnlocked && !hasNonStandardFinanceAccess ? (
+              <div className="mt-2 space-y-3">
+                <div className="flex items-start justify-between gap-3 rounded-lg border border-border/70 bg-background/80 p-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-foreground">
+                      {financeVisibilityLabels[presetFinanceVisibility]}
+                    </p>
+                    <p className="mt-1 text-caption text-muted-foreground">
+                      Broader finance visibility is non-standard for this role.
+                    </p>
+                  </div>
+                  <Lock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {financeExpansionOptions.map((visibility) => (
+                    <span
+                      key={visibility}
+                      className="inline-flex items-center gap-1 rounded-pill border border-border/70 bg-muted/40 px-2 py-1 text-caption text-muted-foreground"
+                    >
+                      <Lock className="h-3 w-3" />
+                      {financeVisibilityLabels[visibility]}
+                    </span>
+                  ))}
+                </div>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8"
+                  onClick={() => setFinanceUnlocked(true)}
+                >
+                  Unlock non-standard finance access
+                </Button>
+              </div>
+            ) : (
+              <Select
+                value={form.financeVisibility}
+                onValueChange={(value) => {
+                  onFormChange((current) => ({ ...current, financeVisibility: value as FinanceVisibility }));
+                }}
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {financeOptions.map((visibility) => (
+                    <SelectItem key={visibility} value={visibility}>
+                      {financeVisibilityLabels[visibility]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
           <div className={`rounded-card border p-3 ${docsDanger ? "border-warning/40 bg-warning/10" : "border-border/70 bg-background/70"}`}>
@@ -409,6 +470,22 @@ function PermissionFormSections(props: {
         </div>
       </SettingsSection>
 
+      {nonStandardSummary && (
+        <SettingsSection title="Customization summary" description="Non-standard finance access stays highlighted until you save or send the invite.">
+          <Alert className="border-info/30 bg-info/10 text-foreground [&>svg]:text-info">
+            <SlidersHorizontal className="h-4 w-4" />
+            <AlertTitle>{nonStandardSummary.title}</AlertTitle>
+            <AlertDescription>
+              <ul className="space-y-1">
+                {nonStandardSummary.lines.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            </AlertDescription>
+          </Alert>
+        </SettingsSection>
+      )}
+
       {warnings.length > 0 && (
         <SettingsSection title="Sensitive access" description="These settings grant broader access in the current app flow.">
           <Alert className="border-warning/40 bg-warning/10 text-foreground [&>svg]:text-warning-foreground">
@@ -450,8 +527,8 @@ export default function ProjectParticipants() {
   const [inviteForm, setInviteForm] = useState<PermissionFormState>(() => buildPermissionForm({
     role: "contractor",
     aiAccess: "consult_only",
-    financeVisibility: "detail",
-    internalDocsVisibility: "view",
+    financeVisibility: getDefaultFinanceVisibility("contractor"),
+    internalDocsVisibility: getDefaultInternalDocsVisibility("contractor"),
     viewerRegime: defaultViewerRegime,
     creditLimit: 50,
   }, projectMode));
@@ -460,8 +537,8 @@ export default function ProjectParticipants() {
   const [permissionForm, setPermissionForm] = useState<PermissionFormState>(() => buildPermissionForm({
     role: "contractor",
     aiAccess: "consult_only",
-    financeVisibility: "detail",
-    internalDocsVisibility: "view",
+    financeVisibility: getDefaultFinanceVisibility("contractor"),
+    internalDocsVisibility: getDefaultInternalDocsVisibility("contractor"),
     viewerRegime: defaultViewerRegime,
     creditLimit: 50,
   }, projectMode));
@@ -598,8 +675,8 @@ export default function ProjectParticipants() {
     setInviteForm(buildPermissionForm({
       role: "contractor",
       aiAccess: "consult_only",
-      financeVisibility: "detail",
-      internalDocsVisibility: "view",
+      financeVisibility: getDefaultFinanceVisibility("contractor"),
+      internalDocsVisibility: getDefaultInternalDocsVisibility("contractor"),
       viewerRegime: defaultViewerRegime,
       creditLimit: 50,
     }, projectMode));

@@ -2,13 +2,14 @@ import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
-import type { AIAccess, MemberRole } from "@/types/entities";
+import type { AIAccess, FinanceVisibility, MemberRole } from "@/types/entities";
 import type { AuthRole } from "@/lib/auth-state";
 import { getAuthRole, setAuthRole } from "@/lib/auth-state";
 import { addMember, updateMember } from "@/data/store";
 import type { BrowserWorkspaceKind } from "@/data/store";
 import { useCurrentUser, useProjects, useWorkspaceMode } from "@/hooks/use-mock-data";
 import { useLocation, useMatch } from "react-router-dom";
+import { getDefaultFinanceVisibility } from "@/lib/participant-role-policy";
 
 export function AuthSimulator() {
   const projects = useProjects();
@@ -40,23 +41,24 @@ export function AuthSimulator() {
   const mapRoleToMembership = (selectedRole: AuthRole): {
     memberRole: MemberRole;
     aiAccess: AIAccess;
+    financeVisibility: FinanceVisibility;
     creditLimit: number;
     usedCredits: number;
   } => {
     switch (selectedRole) {
       case "owner":
-        return { memberRole: "owner", aiAccess: "project_pool", creditLimit: 500, usedCredits: 0 };
+        return { memberRole: "owner", aiAccess: "project_pool", financeVisibility: getDefaultFinanceVisibility("owner"), creditLimit: 500, usedCredits: 0 };
       case "co_owner":
-        return { memberRole: "co_owner", aiAccess: "project_pool", creditLimit: 500, usedCredits: 0 };
+        return { memberRole: "co_owner", aiAccess: "project_pool", financeVisibility: getDefaultFinanceVisibility("co_owner"), creditLimit: 500, usedCredits: 0 };
       case "contractor":
-        return { memberRole: "contractor", aiAccess: "consult_only", creditLimit: 100, usedCredits: 0 };
+        return { memberRole: "contractor", aiAccess: "consult_only", financeVisibility: getDefaultFinanceVisibility("contractor"), creditLimit: 100, usedCredits: 0 };
       case "viewer":
-        return { memberRole: "viewer", aiAccess: "none", creditLimit: 0, usedCredits: 0 };
+        return { memberRole: "viewer", aiAccess: "none", financeVisibility: getDefaultFinanceVisibility("viewer"), creditLimit: 0, usedCredits: 0 };
       case "guest":
         // Guest has no auth, but membership is updated to viewer+no-AI so project permission matrix stays strict.
-        return { memberRole: "viewer", aiAccess: "none", creditLimit: 0, usedCredits: 0 };
+        return { memberRole: "viewer", aiAccess: "none", financeVisibility: getDefaultFinanceVisibility("viewer"), creditLimit: 0, usedCredits: 0 };
       default:
-        return { memberRole: "viewer", aiAccess: "none", creditLimit: 0, usedCredits: 0 };
+        return { memberRole: "viewer", aiAccess: "none", financeVisibility: getDefaultFinanceVisibility("viewer"), creditLimit: 0, usedCredits: 0 };
     }
   };
 
@@ -83,7 +85,7 @@ export function AuthSimulator() {
     const updated = updateMember(
       effectiveProjectId,
       currentUser.id,
-      { role: membership.memberRole, ai_access: membership.aiAccess },
+      { role: membership.memberRole, ai_access: membership.aiAccess, finance_visibility: membership.financeVisibility },
       mutationMode,
     );
 
@@ -93,6 +95,7 @@ export function AuthSimulator() {
         user_id: currentUser.id,
         role: membership.memberRole,
         ai_access: membership.aiAccess,
+        finance_visibility: membership.financeVisibility,
         credit_limit: membership.creditLimit,
         used_credits: membership.usedCredits,
       });
