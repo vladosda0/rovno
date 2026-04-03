@@ -13,8 +13,13 @@ import { getStock } from "@/data/inventory-store";
 import { useProcurementV2 } from "@/hooks/use-mock-data";
 import { useLocations } from "@/hooks/use-inventory-data";
 import { inventoryQueryKeys } from "@/hooks/use-inventory-data";
-import { orderQueryKeys, useOrders } from "@/hooks/use-order-data";
-import { procurementQueryKeys } from "@/hooks/use-procurement-source";
+import {
+  orderPlacedSupplierOrdersQueryRoot,
+  orderProjectOrdersQueryRoot,
+  orderQueryKeys,
+  useOrders,
+} from "@/hooks/use-order-data";
+import { procurementProjectItemsQueryRoot } from "@/hooks/use-procurement-source";
 import { computeRemainingRequestedQty, toInventoryKey } from "@/lib/procurement-fulfillment";
 import { fmtCost } from "@/lib/procurement-utils";
 import { cn } from "@/lib/utils";
@@ -308,10 +313,10 @@ export function OrderModal({
       if (supabaseMode) {
         await Promise.all([
           queryClient.invalidateQueries({
-            queryKey: orderQueryKeys.projectOrders(supabaseMode.profileId, projectId),
+            queryKey: orderProjectOrdersQueryRoot(supabaseMode.profileId, projectId),
           }),
           queryClient.invalidateQueries({
-            queryKey: orderQueryKeys.placedSupplierOrders(supabaseMode.profileId, projectId),
+            queryKey: orderPlacedSupplierOrdersQueryRoot(supabaseMode.profileId, projectId),
           }),
           queryClient.invalidateQueries({
             queryKey: orderQueryKeys.placedSupplierOrdersAllProjects(supabaseMode.profileId),
@@ -320,7 +325,7 @@ export function OrderModal({
             queryKey: orderQueryKeys.orderById(supabaseMode.profileId, finalOrderId),
           }),
           queryClient.invalidateQueries({
-            queryKey: procurementQueryKeys.projectItems(supabaseMode.profileId, projectId),
+            queryKey: procurementProjectItemsQueryRoot(supabaseMode.profileId, projectId),
           }),
           queryClient.invalidateQueries({
             queryKey: inventoryQueryKeys.projectLocations(supabaseMode.profileId, projectId),

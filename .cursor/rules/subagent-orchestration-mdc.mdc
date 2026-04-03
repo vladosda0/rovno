@@ -1,10 +1,6 @@
 ---
-alwaysApply: true
----
-
----
 description: Use Rovno subagents consistently for audit, contract inspection, planning, implementation, and independent verification.
-globs:
+alwaysApply: true
 ---
 
 # Rovno subagent orchestration
@@ -26,18 +22,21 @@ Prefer this sequence:
 ## Invocation rules
 
 Invoke `repo-auditor` when:
+
 - the request starts from product intent, symptoms, screenshots, or vague behavior
 - the relevant files or flow are not already clear
 - the change likely spans multiple files or layers
 - the current implementation may differ from what the user assumes
 
 Invoke `backend-contract-truth-inspector` when:
+
 - the task touches schema, Supabase, generated DB types, `backend-truth/`, adapters, or contract assumptions
 - the request implies a field, relation, enum, RPC, policy, or permission
 - the task spans `rovno` and `rovno-db`
 - UI code might be inventing backend shape
 
 Invoke `implementation-planner` when:
+
 - the task is not trivial
 - more than one file is likely to change
 - there are multiple possible implementation paths
@@ -45,6 +44,7 @@ Invoke `implementation-planner` when:
 - the parent is about to delegate write work
 
 Invoke `frontend-flow-implementer` only when:
+
 - the repo is `rovno`
 - audit is complete
 - contract inspection is complete if relevant
@@ -52,31 +52,52 @@ Invoke `frontend-flow-implementer` only when:
 - the task is actually frontend/runtime wiring rather than backend truth work
 
 Invoke `schema-migration-implementer` only when:
+
 - the repo is `rovno-db`
 - backend truth must change first
 - audit and contract inspection are complete
 - there is a grounded plan
 - the change belongs in migrations, RLS, grants, RPCs, triggers, or generator-related backend work
 
+Invoke `sensitive-zone-reviewer` when:
+
+- work touches sensitive-zone paths (estimate, tasks, procurement, HR, AI sidebar, sync, stores, `backend-truth/`, migrations, RLS, RPCs) or cross-domain mapping
+- the user asks for extra safety on a high-blast-radius change
+- after an implementer finishes on sensitive surfaces, before calling the work verified
+
+Invoke `security-quick-pass` when:
+
+- changes touch auth, session, RLS, secrets, env vars, uploads, new API boundaries, or broad user input handling
+- before shipping a feature that exposes or mutates tenant data
+
+Invoke `ai-product-reviewer` when:
+
+- the repo is `rovno` and AI sidebar, prompts, tool use, model-backed flows, or commit proposals change
+- reviewing failure modes, empty states, injection surfaces, or permission boundaries for AI features
+
 Invoke `independent-verifier` after every non-trivial implementation.
 
 ## Handoff rules
 
 `repo-auditor` may hand off to:
+
 - `backend-contract-truth-inspector` if backend truth matters
 - `implementation-planner` if repo reality is already clear
 - `sensitive-zone-reviewer` if the area is obviously high risk
 
 `backend-contract-truth-inspector` may hand off to:
+
 - `implementation-planner` when the contract direction is clear
 - `frontend-flow-implementer` if frontend-only wiring is safe
 - `schema-migration-implementer` if backend truth must change first
 
 `implementation-planner` may hand off to:
+
 - `frontend-flow-implementer` for `rovno`
 - `schema-migration-implementer` for `rovno-db`
 
 Implementers must hand off to:
+
 - `independent-verifier` by default
 - `sensitive-zone-reviewer` first if the task touches a sensitive zone, then `independent-verifier`
 
@@ -93,6 +114,9 @@ Backend truth task:
 
 High-risk task:
 `repo-auditor` -> `backend-contract-truth-inspector` -> `implementation-planner` -> implementer -> `sensitive-zone-reviewer` -> `independent-verifier`
+
+Optional before merge or release:
+`security-quick-pass` and/or (in `rovno`) `ai-product-reviewer`
 
 ## Conflict-of-interest rule
 

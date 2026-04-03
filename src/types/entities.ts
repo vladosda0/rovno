@@ -285,6 +285,8 @@ export interface OrderLine {
   id: string;
   orderId: string;
   procurementItemId: string;
+  title?: string | null;
+  itemType?: ProcurementItemType | null;
   qty: number;
   receivedQty: number;
   unit: string;

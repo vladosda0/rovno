@@ -8,17 +8,29 @@ alwaysApply: true
 ## Generated / local-noise examples
 
 Treat these carefully:
+
 - `backend-truth/**`
 - temp output folders
-- `.cursor/**`
+- `.cursor/debug*.log`, `.cursor/plans/**`, scratch files, `.DS_Store`
 - debug logs
 - ad hoc verification files
 - stash conflict leftovers
 
+## Intentional repo config
+
+These may be **committed on purpose** as team/agent conventions:
+
+- `.cursor/rules/**`
+- `.cursor/skills/**`
+- `.cursor/commands/**`
+- `.cursor/agents/**`
+
+Do not tell the user to strip those from the repo unless they ask to revert tooling commits.
+
 ## Rules
 
 - Do not mistake untracked local artifacts for source-of-truth changes.
-- Do not include `.cursor/`, temp folders, debug logs, or scratch outputs in implementation commits unless explicitly intended.
+- Do not commit temp folders, debug logs, ad hoc scratch outputs, or local-only noise mixed into feature work unless explicitly intended.
 - If a stash exists and generated files are conflicted, report it as local Git-state corruption/mixed state, not backend drift.
 - If the repo is dirty due to generated artifacts, recommend cleanup before coding.
 
@@ -27,6 +39,7 @@ Treat these carefully:
 One commit = one intention.
 
 Do not mix:
+
 - migration history edits
 - generator updates
 - generated snapshots

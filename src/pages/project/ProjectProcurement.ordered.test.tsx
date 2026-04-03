@@ -350,7 +350,7 @@ describe("ProjectProcurement Ordered tab — non-detail operational visibility",
 
     const table = screen.getByRole("table");
     const tableScope = within(table);
-    expect(tableScope.getByText("Item details unavailable")).toBeInTheDocument();
+    expect(tableScope.getByText("Ordered item")).toBeInTheDocument();
     expect(tableScope.getByText("m")).toBeInTheDocument();
     expect(tableScope.queryByText(/₽/)).not.toBeInTheDocument();
     expect(tableScope.queryByText("Unit price")).not.toBeInTheDocument();

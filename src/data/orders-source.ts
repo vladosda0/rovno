@@ -8,6 +8,8 @@ import {
   placeOrder,
   receiveOrder,
 } from "@/data/order-store";
+import { parseProcurementOperationalSummaryPayload } from "@/data/procurement-operational-summary-payload";
+import type { FinanceRowLoadAccess } from "@/lib/permissions";
 import { normalizeName } from "@/lib/procurement-utils";
 import type { WorkspaceMode } from "@/data/workspace-source";
 import { resolveWorkspaceMode } from "@/data/workspace-source";
@@ -71,9 +73,15 @@ export interface ReceiveSupplierOrderInput {
 
 export interface OrdersSource {
   mode: WorkspaceMode["kind"];
-  getProjectOrders: (projectId: string) => Promise<OrderWithLines[]>;
+  getProjectOrders: (
+    projectId: string,
+    financeLoadAccess?: FinanceRowLoadAccess,
+  ) => Promise<OrderWithLines[]>;
   getOrderById: (orderId: string) => Promise<OrderWithLines | null>;
-  getPlacedSupplierOrders: (projectId: string) => Promise<OrderWithLines[]>;
+  getPlacedSupplierOrders: (
+    projectId: string,
+    financeLoadAccess?: FinanceRowLoadAccess,
+  ) => Promise<OrderWithLines[]>;
   getPlacedSupplierOrdersAllProjects: () => Promise<OrderWithLines[]>;
   createDraftSupplierOrder: (input: CreateSupplierDraftOrderInput) => Promise<OrderWithLines>;
   placeSupplierOrder: (orderId: string) => Promise<OrderWithLines>;
@@ -83,13 +91,13 @@ export interface OrdersSource {
 function createBrowserOrdersSource(mode: "demo" | "local"): OrdersSource {
   return {
     mode,
-    async getProjectOrders(projectId: string) {
+    async getProjectOrders(projectId: string, _financeLoadAccess?: FinanceRowLoadAccess) {
       return listOrdersByProject(projectId);
     },
     async getOrderById(orderId: string) {
       return getOrder(orderId) ?? null;
     },
-    async getPlacedSupplierOrders(projectId: string) {
+    async getPlacedSupplierOrders(projectId: string, _financeLoadAccess?: FinanceRowLoadAccess) {
       return listPlacedSupplierOrders(projectId);
     },
     async getPlacedSupplierOrdersAllProjects() {
@@ -362,6 +370,62 @@ async function loadSupabaseClient(): Promise<TypedSupabaseClient> {
   return supabase as unknown as TypedSupabaseClient;
 }
 
+async function mergeOperationalSummaryLinesIntoOrders(
+  supabase: TypedSupabaseClient,
+  projectId: string,
+  orders: OrderWithLines[],
+): Promise<OrderWithLines[]> {
+  const { data, error } = await supabase.rpc("get_procurement_operational_summary", {
+    p_project_id: projectId,
+    p_limit: 500,
+    p_offset: 0,
+  });
+
+  if (error || data == null) {
+    return orders;
+  }
+
+  const parsed = parseProcurementOperationalSummaryPayload(data);
+  if (!parsed || parsed.orderedLines.length === 0) {
+    return orders;
+  }
+
+  const byOrderId = new Map<string, typeof parsed.orderedLines>();
+  for (const ol of parsed.orderedLines) {
+    const list = byOrderId.get(ol.order_id) ?? [];
+    list.push(ol);
+    byOrderId.set(ol.order_id, list);
+  }
+
+  return orders.map((order) => {
+    if (order.projectId !== projectId) {
+      return order;
+    }
+    const rpcLines = byOrderId.get(order.id);
+    if (!rpcLines || rpcLines.length === 0) {
+      return order;
+    }
+    const sorted = [...rpcLines].sort((a, b) => a.order_line_id.localeCompare(b.order_line_id));
+    const deliveryFromRpc = sorted.find((line) => line.delivery_due_at)?.delivery_due_at ?? null;
+    return {
+      ...order,
+      deliveryDeadline: order.deliveryDeadline ?? deliveryFromRpc,
+      lines: sorted.map((ol) => ({
+        id: ol.order_line_id,
+        orderId: ol.order_id,
+        procurementItemId: ol.procurement_item_id ?? "",
+        title: ol.title || ol.procurement_item_title || null,
+        itemType: "material",
+        qty: ol.quantity,
+        receivedQty: 0,
+        unit: ol.unit ?? "",
+        plannedUnitPrice: null,
+        actualUnitPrice: null,
+      })),
+    };
+  });
+}
+
 async function loadShapedOrders(
   supabase: TypedSupabaseClient,
   options: {
@@ -369,6 +433,7 @@ async function loadShapedOrders(
     orderId?: string;
     statuses?: OrderRow["status"][];
   },
+  financeLoadAccess: FinanceRowLoadAccess = "full",
 ): Promise<OrderWithLines[]> {
   let query = supabase
     .from("orders")
@@ -443,12 +508,19 @@ async function loadShapedOrders(
     movementRows = data ?? [];
   }
 
-  return shapeOrdersWithDetails({
+  let shaped = shapeOrdersWithDetails({
     orderRows: rows,
     lineRows: lines,
     movementRows,
     procurementItemRows,
   });
+
+  const projectIdForRpc = options.projectId ?? shaped[0]?.projectId;
+  if (financeLoadAccess === "operational_summary" && projectIdForRpc) {
+    shaped = await mergeOperationalSummaryLinesIntoOrders(supabase, projectIdForRpc, shaped);
+  }
+
+  return shaped;
 }
 
 function quantityToPriceCents(value: number | null | undefined): number | null {
@@ -567,20 +639,27 @@ export function createSupabaseOrdersSource(
 ): OrdersSource {
   return {
     mode: "supabase",
-    async getProjectOrders(projectId: string) {
-      return loadShapedOrders(supabase, { projectId });
+    async getProjectOrders(projectId: string, financeLoadAccess: FinanceRowLoadAccess = "full") {
+      return loadShapedOrders(supabase, { projectId }, financeLoadAccess);
     },
 
     async getOrderById(orderId: string) {
-      const orders = await loadShapedOrders(supabase, { orderId });
+      const orders = await loadShapedOrders(supabase, { orderId }, "full");
       return orders[0] ?? null;
     },
 
-    async getPlacedSupplierOrders(projectId: string) {
-      const orders = await loadShapedOrders(supabase, {
-        projectId,
-        statuses: ["placed", "partially_received"],
-      });
+    async getPlacedSupplierOrders(
+      projectId: string,
+      financeLoadAccess: FinanceRowLoadAccess = "full",
+    ) {
+      const orders = await loadShapedOrders(
+        supabase,
+        {
+          projectId,
+          statuses: ["placed", "partially_received"],
+        },
+        financeLoadAccess,
+      );
 
       return orders.filter((order) => order.kind === "supplier" && order.status === "placed");
     },

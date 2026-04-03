@@ -11,6 +11,16 @@ Before proposing edits or making edits, classify the task first:
 - backend/schema
 - server/deployment
 
+## Trivial tasks (lighter gate)
+
+If **all** are true, you may skip a full audit/delegate pipeline unless the user asks for it:
+
+- narrow scope: single file or a tiny, localized edit (including docs/copy), or read-only explanation with no edits
+- no sensitive-zone paths, no `backend-truth/` edits, no migrations/RLS/RPC/auth contract concerns
+- no cross-domain estimate/procurement/HR/AI/sync blast radius
+
+If there is any doubt, treat the task as **non-trivial** and follow the full workflow.
+
 For any non-trivial task, separate these three things explicitly:
 1. product intent
 2. repo reality

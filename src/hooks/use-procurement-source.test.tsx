@@ -139,6 +139,6 @@ describe("useProjectProcurementItems", () => {
       expect(screen.getByTestId("item-count")).toHaveTextContent("1");
     });
     expect(screen.getByTestId("item-names")).toHaveTextContent("Supabase procurement item");
-    expect(source.getProjectProcurementItems).toHaveBeenCalledWith("project-1");
+    expect(source.getProjectProcurementItems).toHaveBeenCalledWith("project-1", expect.any(String));
   });
 });

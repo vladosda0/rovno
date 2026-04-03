@@ -48,6 +48,7 @@ import { useInventoryStock, useLocations } from "@/hooks/use-inventory-data";
 import {
   getProjectDomainAccess,
   projectDomainAllowsManage,
+  seamCanViewOperationalFinanceSummary,
   seamCanViewSensitiveDetail,
   usePermission,
 } from "@/lib/permissions";
@@ -77,8 +78,12 @@ import { LocationPicker } from "@/components/procurement/LocationPicker";
 import { ResourceTypeBadge } from "@/components/estimate-v2/ResourceTypeBadge";
 import { useEstimateV2Project } from "@/hooks/use-estimate-v2-data";
 import { inventoryQueryKeys } from "@/hooks/use-inventory-data";
-import { orderQueryKeys } from "@/hooks/use-order-data";
-import { procurementQueryKeys } from "@/hooks/use-procurement-source";
+import {
+  orderPlacedSupplierOrdersQueryRoot,
+  orderProjectOrdersQueryRoot,
+  orderQueryKeys,
+} from "@/hooks/use-order-data";
+import { procurementProjectItemsQueryRoot, procurementQueryKeys } from "@/hooks/use-procurement-source";
 import { useWorkspaceMode } from "@/hooks/use-workspace-source";
 import { computeProjectTotals } from "@/lib/estimate-v2/pricing";
 import type {
@@ -248,6 +253,7 @@ export default function ProjectProcurement() {
   const perm = usePermission(pid);
   const procurementAccess = getProjectDomainAccess(perm.seam, "procurement");
   const canViewSensitiveDetail = seamCanViewSensitiveDetail(perm.seam);
+  const canViewOperationalFinanceSummary = seamCanViewOperationalFinanceSummary(perm.seam);
   const canManageProcurement = projectDomainAllowsManage(procurementAccess);
   const canEdit = canManageProcurement;
   const canLaunchOrderFlows = canManageProcurement && canViewSensitiveDetail;
@@ -1177,16 +1183,16 @@ export default function ProjectProcurement() {
           ));
           await Promise.all([
             queryClient.invalidateQueries({
-              queryKey: orderQueryKeys.projectOrders(supabaseMode.profileId, pid),
+              queryKey: orderProjectOrdersQueryRoot(supabaseMode.profileId, pid),
             }),
             queryClient.invalidateQueries({
-              queryKey: orderQueryKeys.placedSupplierOrders(supabaseMode.profileId, pid),
+              queryKey: orderPlacedSupplierOrdersQueryRoot(supabaseMode.profileId, pid),
             }),
             queryClient.invalidateQueries({
               queryKey: orderQueryKeys.placedSupplierOrdersAllProjects(supabaseMode.profileId),
             }),
             queryClient.invalidateQueries({
-              queryKey: procurementQueryKeys.projectItems(supabaseMode.profileId, pid),
+              queryKey: procurementProjectItemsQueryRoot(supabaseMode.profileId, pid),
             }),
             queryClient.invalidateQueries({
               queryKey: inventoryQueryKeys.projectLocations(supabaseMode.profileId, pid),
@@ -1993,7 +1999,7 @@ export default function ProjectProcurement() {
                         <table className="w-full text-sm">
                           {renderOrderedTableHeader()}
                           <tbody>
-                            {order.lines.length === 0 && !canViewSensitiveDetail ? (
+                            {order.lines.length === 0 && !canViewSensitiveDetail && !canViewOperationalFinanceSummary ? (
                               <tr>
                                 <td
                                   colSpan={orderedTableColumnCount}
@@ -2024,10 +2030,15 @@ export default function ProjectProcurement() {
                                       <Checkbox checked={false} disabled />
                                     </td>
                                   )}
-                                  <td className="px-2 py-2 min-w-[220px] text-sm text-muted-foreground">
-                                    Item details unavailable
+                                  <td className="px-2 py-2 min-w-[220px]">
+                                    <div className="flex min-w-0 items-start gap-2">
+                                      <ResourceTypeBadge type={line.itemType ?? "material"} className="shrink-0 border-transparent" />
+                                      <div className="min-w-0">
+                                        <p className="font-medium text-foreground truncate">{line.title || "Ordered item"}</p>
+                                      </div>
+                                    </div>
                                   </td>
-                                  <td className="px-2 py-2 text-xs text-muted-foreground">—</td>
+                                  <td className="px-2 py-2 text-xs text-muted-foreground">{formatDate(null)}</td>
                                   <td className="px-2 py-2">
                                     <span className="text-xs text-muted-foreground">
                                       {order.deliveryDeadline ? formatDate(order.deliveryDeadline) : "-"}

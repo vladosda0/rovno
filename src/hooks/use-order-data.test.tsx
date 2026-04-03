@@ -170,8 +170,8 @@ describe("order read hooks", () => {
     expect(screen.getByTestId("placed-count")).toHaveTextContent("1");
     expect(screen.getByTestId("all-placed-count")).toHaveTextContent("1");
     expect(screen.getByTestId("selected-order-id")).toHaveTextContent("order-1");
-    expect(source.getProjectOrders).toHaveBeenCalledWith("project-1");
-    expect(source.getPlacedSupplierOrders).toHaveBeenCalledWith("project-1");
+    expect(source.getProjectOrders).toHaveBeenCalledWith("project-1", expect.any(String));
+    expect(source.getPlacedSupplierOrders).toHaveBeenCalledWith("project-1", expect.any(String));
     expect(source.getPlacedSupplierOrdersAllProjects).toHaveBeenCalledTimes(1);
     expect(source.getOrderById).toHaveBeenCalledWith("order-1");
   });

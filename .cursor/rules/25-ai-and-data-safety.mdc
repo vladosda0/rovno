@@ -1,0 +1,30 @@
+---
+description: Minimize PII and abuse risk around AI features, prompts, tools, and construction-domain data.
+alwaysApply: true
+---
+
+# AI and data safety (Rovno)
+
+Rovno is a construction SaaS; project and people data can be sensitive.
+
+## Data in model context
+
+- Prefer **minimum necessary** text and IDs in prompts, tool payloads, and logs.
+- Do not paste **secrets** (API keys, service role keys, tokens) into chat, prompts, or client-visible errors.
+- Treat **user-authored free text** (notes, descriptions, chat with AI) as **untrusted input** for injection and social engineering.
+
+## AI actions
+
+- **Destructive or irreversible** actions (commits, bulk deletes, permission changes) require explicit human confirmation in product design—do not automate “silent” mutations via AI tools.
+- If adding AI tool calls, ensure **authorization** matches what the UI would allow for that user/role.
+
+## Logging and analytics
+
+- Avoid logging full payloads that may contain PII unless required; prefer redaction or structured fields.
+- When suggesting debug output, warn if it could leak tenant or personal data.
+
+## Failure modes
+
+- Model/API failures should degrade safely: clear UI message, no partial secret leakage, no corrupted domain state without recovery path.
+
+If product requirements conflict with safety, flag the tension for the user instead of silently choosing convenience.

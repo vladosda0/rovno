@@ -1,5 +1,13 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AlertTriangle, ChevronDown, ChevronRight, Download, Info, Plus, Trash2, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -91,7 +99,7 @@ import { useOrders } from "@/hooks/use-order-data";
 import { activityQueryKeys } from "@/hooks/use-activity-source";
 import { hrQueryKeys } from "@/hooks/use-hr-source";
 import { planningQueryKeys } from "@/hooks/use-planning-source";
-import { procurementQueryKeys } from "@/hooks/use-procurement-source";
+import { procurementProjectItemsQueryRoot } from "@/hooks/use-procurement-source";
 import {
   getProjectDomainAccess,
   projectDomainAllowsView,
@@ -649,7 +657,7 @@ export default function ProjectEstimate() {
     };
   }, [pendingLineTitleEditId]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!pid) return undefined;
 
     if (workspaceMode.kind === "supabase" && project?.owner_id && currentUser.id) {
@@ -1199,7 +1207,7 @@ export default function ProjectEstimate() {
           queryKey: planningQueryKeys.projectTasks(workspaceMode.profileId, pid),
         }),
         queryClient.invalidateQueries({
-          queryKey: procurementQueryKeys.projectItems(workspaceMode.profileId, pid),
+          queryKey: procurementProjectItemsQueryRoot(workspaceMode.profileId, pid),
         }),
         queryClient.invalidateQueries({
           queryKey: hrQueryKeys.projectItems(workspaceMode.profileId, pid),
@@ -1467,7 +1475,9 @@ export default function ProjectEstimate() {
     rows.push(["Regime", regime]);
     rows.push([]);
 
-    if (regime === "client" || !canViewSensitiveDetail) {
+    if (!canViewSensitiveDetail) {
+      rows.push(["Stage", "Work", "Line", "Qty", "Unit"]);
+    } else if (regime === "client") {
       rows.push(["Stage", "Work", "Line", "Qty", "Unit", "Client unit", "Client total"]);
     } else if (regime === "contractor") {
       rows.push(["Stage", "Work", "Line", "Type", "Qty", "Unit", "Cost unit", "Cost total", "Markup %", "Discount %", "Client unit", "Client total"]);
@@ -1483,7 +1493,18 @@ export default function ProjectEstimate() {
           const lineTotals = lineTotalsById.get(line.id);
           if (!lineTotals) return;
 
-          if (regime === "client" || !canViewSensitiveDetail) {
+          if (!canViewSensitiveDetail) {
+            rows.push([
+              stage.title,
+              work.title,
+              line.title,
+              qtyFromMilli(line.qtyMilli),
+              line.unit,
+            ]);
+            return;
+          }
+
+          if (regime === "client") {
             rows.push([
               stage.title,
               work.title,
@@ -1546,7 +1567,7 @@ export default function ProjectEstimate() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `estimate-v2-${pid}-${canViewSensitiveDetail ? regime : "client"}.csv`;
+    link.download = `estimate-v2-${pid}-${canViewSensitiveDetail ? regime : "operational"}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

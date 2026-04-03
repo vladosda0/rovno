@@ -5,6 +5,8 @@ alwaysApply: true
 
 # Repo preflight
 
+> **Sync:** Keep this file aligned with `rovno-db` → `.cursor/rules/60-repo-preflight.mdc` (same workflow, different filename).
+
 Before doing any substantive work, perform a preflight check and state the result briefly.
 
 ## Required checks
@@ -29,15 +31,22 @@ Before doing any substantive work, perform a preflight check and state the resul
 ## Hard-stop conditions
 
 Stop implementation and warn the user before making edits if any of these are true:
+
 - there are unmerged files
 - the repo is in mixed/conflict state
 - `backend-truth/` is dirty unexpectedly
-- branch is behind `origin/dev`
+- branch is behind `origin/dev` **and** the user has not explicitly chosen to continue anyway
 - current repo/app/environment is unclear
+
+## User overrides and WIP
+
+- **Intentional dirty tree:** If the user explicitly asks to continue despite a dirty working tree, still report Repo/Branch/State/Risk, note WIP, then proceed **unless** unmerged conflicts exist or environment is still unknown.
+- **Behind `origin/dev`:** If the user explicitly wants to keep working locally without pulling, acknowledge drift and proceed—do not block on “behind” alone when the user overrides.
+- **Trivial read-only** Q&A with no planned edits may omit `git rev-list`; still use `git status -sb` before any write.
 
 ## Behavior
 
-- Do not continue with implementation until preflight is acknowledged.
+- Do not continue with implementation until preflight is acknowledged (or user override applies as above).
 - Do not hide dirty-state findings.
 - Do not assume remote drift explains local modified files.
 - Distinguish clearly between:
@@ -59,4 +68,4 @@ Use this compact structure:
 - Safe next step: ...
 
 If state is clean and current, proceed.
-If not, stop and recommend cleanup/sync first.
+If hard-stops apply and the user has not overridden, stop and recommend cleanup/sync first.

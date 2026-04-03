@@ -1,0 +1,26 @@
+---
+description: State environment assumptions and release-safe behavior; avoid ambiguous prod/staging actions.
+alwaysApply: true
+---
+
+# Environment and release clarity
+
+## Name the target
+
+When discussing runs, migrations, Supabase, deploys, or data fixes, **state explicitly**:
+
+- **local** dev, **staging**, **production**, or **unknown**
+- which **branch** and which **project/ref** when relevant
+
+Do not assume “the server” or “Supabase” without clarifying which environment.
+
+## Production discipline
+
+- Do not describe or implement **destructive production** operations (mass deletes, policy disables, credential rotation) unless the user **explicitly** names production and confirms intent.
+- Prefer **forward migrations** and **reversible** steps; call out irreversible actions.
+
+## Release ordering (conceptual)
+
+- Backend contract changes flow **`rovno-db` first**, then automated mirror/sync to `rovno` per team workflow—do not improvise shortcuts.
+
+If the environment is unknown, say so and ask before acting.

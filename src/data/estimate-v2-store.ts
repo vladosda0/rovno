@@ -4,7 +4,11 @@ import {
   projectDomainAllowsManage,
 } from "@/lib/permissions";
 import { persistEstimateV2HeroTransition, EstimateV2HeroTransitionError } from "@/data/estimate-v2-hero-transition";
-import { loadCurrentEstimateDraft, saveCurrentEstimateDraft } from "@/data/estimate-source";
+import {
+  loadCurrentEstimateDraft,
+  loadEstimateOperationalSummary,
+  saveCurrentEstimateDraft,
+} from "@/data/estimate-source";
 import { getPlanningSource, syncProjectTasksFromEstimate } from "@/data/planning-source";
 import { syncProjectProcurementFromEstimate } from "@/data/procurement-source";
 import { getWorkspaceSource, resolveRuntimeWorkspaceMode } from "@/data/workspace-source";
@@ -662,6 +666,15 @@ function canAccessSensitiveEstimateRows(
   const role = resolveEstimateSyncRole(context);
   if (role === "owner") return true;
   return context.financeVisibility === "detail";
+}
+
+/** Summary finance visibility: use operational estimate RPC instead of table-backed works/lines. */
+function shouldHydrateEstimateViaOperationalRpc(
+  context: EstimateV2ProjectAccessContext | null | undefined,
+): boolean {
+  if (!context) return false;
+  if (canAccessSensitiveEstimateRows(context)) return false;
+  return context.financeVisibility === "summary";
 }
 
 function getManagedEstimateRemoteSyncContext(projectId: string): { profileId: string } | null {
@@ -1520,6 +1533,25 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
       (task) => task.status === "in_progress" || task.status === "blocked" || task.status === "done",
     );
     const allowSensitiveEstimateHydrate = canAccessSensitiveEstimateRows(accessContextByProjectId.get(projectId));
+    const accessSnapshot = accessContextByProjectId.get(projectId);
+    let operationalEstimatePayload: Awaited<ReturnType<typeof loadEstimateOperationalSummary>> = null;
+    if (shouldHydrateEstimateViaOperationalRpc(accessSnapshot)) {
+      try {
+        operationalEstimatePayload = await loadEstimateOperationalSummary(
+          projectId,
+          draft.currentVersion?.id ?? null,
+        );
+      } catch {
+        operationalEstimatePayload = null;
+      }
+    }
+    const useOperationalEstimateShape = Boolean(
+      operationalEstimatePayload
+      && (
+        operationalEstimatePayload.works.length > 0
+        || operationalEstimatePayload.resourceLines.length > 0
+      ),
+    );
 
     const stages = draft.stages
       .map((stage) => {
@@ -1546,39 +1578,14 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
       && draft.works.length === 0
       && linkedChecklistEntries.length > 0;
 
-    const works = (canRebuildWorksFromTasks
-      ? Array.from(new Set(linkedChecklistEntries
-        .map(({ item }) => item.estimateV2WorkId)
-        .filter((value): value is string => Boolean(value))))
-        .map((workId, index) => {
-          const task = linkedChecklistEntries.find(({ item }) => item.estimateV2WorkId === workId)?.task ?? null;
-          const cachedWork = cachedWorksById.get(workId);
-          const taskInfo = taskInfoByWorkId.get(workId);
-          const stageIdFromTask = task?.stage_id ?? null;
-          const fallbackStageId = stages[0]?.id ?? "";
-          return {
-            id: workId,
-            projectId,
-            stageId: stageIdFromTask || cachedWork?.stageId || fallbackStageId,
-            title: task?.title ?? cachedWork?.title ?? `Work ${index + 1}`,
-            order: cachedWork?.order ?? index + 1,
-            discountBps: cachedWork?.discountBps ?? 0,
-            plannedStart: taskInfo?.plannedStart ?? cachedWork?.plannedStart ?? task?.startDate ?? null,
-            plannedEnd: taskInfo?.plannedEnd ?? cachedWork?.plannedEnd ?? task?.deadline ?? null,
-            taskId: taskInfo?.taskId ?? cachedWork?.taskId ?? task?.id ?? null,
-            status: taskInfo?.status ?? cachedWork?.status ?? mapTaskStatusToWorkStatus(task?.status ?? "not_started"),
-            createdAt: cachedWork?.createdAt ?? task?.created_at ?? nowIso(),
-            updatedAt: cachedWork?.updatedAt ?? task?.created_at ?? nowIso(),
-          } satisfies EstimateV2Work;
-        })
-      : draft.works
-      .map((work) => {
-        const cachedWork = cachedWorksById.get(work.id);
-        const taskInfo = taskInfoByWorkId.get(work.id);
+    const works = useOperationalEstimateShape && operationalEstimatePayload
+      ? operationalEstimatePayload.works.map((work) => {
+        const cachedWork = cachedWorksById.get(work.estimate_work_id);
+        const taskInfo = taskInfoByWorkId.get(work.estimate_work_id);
         return {
-          id: work.id,
+          id: work.estimate_work_id,
           projectId,
-          stageId: work.project_stage_id ?? cachedWork?.stageId ?? stages[0]?.id ?? "",
+          stageId: work.project_stage_id,
           title: work.title,
           order: work.sort_order,
           discountBps: cachedWork?.discountBps ?? 0,
@@ -1589,58 +1596,68 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
           createdAt: cachedWork?.createdAt ?? work.created_at,
           updatedAt: cachedWork?.updatedAt ?? work.created_at,
         } satisfies EstimateV2Work;
-      }))
+      }).sort((left, right) => left.order - right.order)
+      : (canRebuildWorksFromTasks
+        ? Array.from(new Set(linkedChecklistEntries
+          .map(({ item }) => item.estimateV2WorkId)
+          .filter((value): value is string => Boolean(value))))
+          .map((workId, index) => {
+            const task = linkedChecklistEntries.find(({ item }) => item.estimateV2WorkId === workId)?.task ?? null;
+            const cachedWork = cachedWorksById.get(workId);
+            const taskInfo = taskInfoByWorkId.get(workId);
+            const stageIdFromTask = task?.stage_id ?? null;
+            const fallbackStageId = stages[0]?.id ?? "";
+            return {
+              id: workId,
+              projectId,
+              stageId: stageIdFromTask || cachedWork?.stageId || fallbackStageId,
+              title: task?.title ?? cachedWork?.title ?? `Work ${index + 1}`,
+              order: cachedWork?.order ?? index + 1,
+              discountBps: cachedWork?.discountBps ?? 0,
+              plannedStart: taskInfo?.plannedStart ?? cachedWork?.plannedStart ?? task?.startDate ?? null,
+              plannedEnd: taskInfo?.plannedEnd ?? cachedWork?.plannedEnd ?? task?.deadline ?? null,
+              taskId: taskInfo?.taskId ?? cachedWork?.taskId ?? task?.id ?? null,
+              status: taskInfo?.status ?? cachedWork?.status ?? mapTaskStatusToWorkStatus(task?.status ?? "not_started"),
+              createdAt: cachedWork?.createdAt ?? task?.created_at ?? nowIso(),
+              updatedAt: cachedWork?.updatedAt ?? task?.created_at ?? nowIso(),
+            } satisfies EstimateV2Work;
+          })
+        : draft.works
+        .map((work) => {
+          const cachedWork = cachedWorksById.get(work.id);
+          const taskInfo = taskInfoByWorkId.get(work.id);
+          return {
+            id: work.id,
+            projectId,
+            stageId: work.project_stage_id ?? cachedWork?.stageId ?? stages[0]?.id ?? "",
+            title: work.title,
+            order: work.sort_order,
+            discountBps: cachedWork?.discountBps ?? 0,
+            plannedStart: taskInfo?.plannedStart ?? cachedWork?.plannedStart ?? null,
+            plannedEnd: taskInfo?.plannedEnd ?? cachedWork?.plannedEnd ?? null,
+            taskId: taskInfo?.taskId ?? cachedWork?.taskId ?? null,
+            status: taskInfo?.status ?? cachedWork?.status ?? "not_started",
+            createdAt: cachedWork?.createdAt ?? work.created_at,
+            updatedAt: cachedWork?.updatedAt ?? work.created_at,
+          } satisfies EstimateV2Work;
+        }))
       .sort((left, right) => left.order - right.order);
 
     const stageIdByWorkId = new Map(works.map((work) => [work.id, work.stageId]));
-    const lines = canRebuildLinesFromTasks
-      ? linkedChecklistEntries.map(({ task, item }, index) => {
-        const lineId = item.estimateV2LineId ?? `${task.id}-line-${index}`;
-        const workId = item.estimateV2WorkId
-          ?? linkedChecklistEntries.find(({ item: sibling }) => sibling.estimateV2LineId === item.estimateV2LineId)?.item.estimateV2WorkId
-          ?? "";
-        const cachedLine = cachedLinesById.get(lineId);
-        const currentLine = currentLinesById.get(lineId);
-        const resolvedType = mapChecklistTypeToEstimateLineType(
-          item,
-          cachedLine?.type ?? currentLine?.type ?? null,
-        );
-        if (!resolvedType) {
-          return null;
-        }
+    const lines = useOperationalEstimateShape && operationalEstimatePayload
+      ? operationalEstimatePayload.resourceLines.map((line) => {
+        const cachedLine = cachedLinesById.get(line.estimate_resource_line_id);
+          const currentLine = currentLinesById.get(line.estimate_resource_line_id);
         return {
-          id: lineId,
-          projectId,
-          stageId: stageIdByWorkId.get(workId) ?? cachedLine?.stageId ?? task.stage_id ?? "",
-          workId,
-          title: item.text || cachedLine?.title || "Line item",
-          type: resolvedType,
-          unit: item.estimateV2Unit ?? cachedLine?.unit ?? "unit",
-          qtyMilli: Math.max(1, Math.round(item.estimateV2QtyMilli ?? cachedLine?.qtyMilli ?? 1_000)),
-          costUnitCents: Math.max(0, Math.round(cachedLine?.costUnitCents ?? 0)),
-          markupBps: cachedLine?.markupBps ?? currentState.project.markupBps,
-          discountBpsOverride: cachedLine?.discountBpsOverride ?? null,
-          assigneeId: cachedLine?.assigneeId ?? null,
-          assigneeName: cachedLine?.assigneeName ?? null,
-          assigneeEmail: cachedLine?.assigneeEmail ?? null,
-          receivedCents: cachedLine?.receivedCents ?? 0,
-          pnlPlaceholderCents: cachedLine?.pnlPlaceholderCents ?? 0,
-          createdAt: cachedLine?.createdAt ?? task.created_at,
-          updatedAt: cachedLine?.updatedAt ?? task.created_at,
-        } satisfies EstimateV2ResourceLine;
-      }).filter((line): line is EstimateV2ResourceLine => Boolean(line))
-      : draft.lines.map((line) => {
-        const cachedLine = cachedLinesById.get(line.id);
-        return {
-          id: line.id,
+          id: line.estimate_resource_line_id,
           projectId,
           stageId: stageIdByWorkId.get(line.estimate_work_id) ?? cachedLine?.stageId ?? "",
           workId: line.estimate_work_id,
           title: line.title,
-          type: inferLineTypeFromRemote(line.resource_type, cachedLine?.type),
+            type: inferLineTypeFromRemote(line.resource_type, cachedLine?.type ?? currentLine?.type),
           unit: line.unit ?? cachedLine?.unit ?? "unit",
           qtyMilli: Math.max(1, Math.round(line.quantity * 1_000)),
-          costUnitCents: Math.max(0, Math.round(line.unit_price_cents ?? 0)),
+          costUnitCents: 0,
           markupBps: cachedLine?.markupBps ?? currentState.project.markupBps,
           discountBpsOverride: cachedLine?.discountBpsOverride ?? null,
           assigneeId: cachedLine?.assigneeId ?? null,
@@ -1651,7 +1668,67 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
           createdAt: cachedLine?.createdAt ?? line.created_at,
           updatedAt: cachedLine?.updatedAt ?? line.created_at,
         } satisfies EstimateV2ResourceLine;
-      });
+      })
+      : canRebuildLinesFromTasks
+        ? linkedChecklistEntries.map(({ task, item }, index) => {
+          const lineId = item.estimateV2LineId ?? `${task.id}-line-${index}`;
+          const workId = item.estimateV2WorkId
+            ?? linkedChecklistEntries.find(({ item: sibling }) => sibling.estimateV2LineId === item.estimateV2LineId)?.item.estimateV2WorkId
+            ?? "";
+          const cachedLine = cachedLinesById.get(lineId);
+          const currentLine = currentLinesById.get(lineId);
+          const resolvedType = mapChecklistTypeToEstimateLineType(
+            item,
+            cachedLine?.type ?? currentLine?.type ?? null,
+          );
+          if (!resolvedType) {
+            return null;
+          }
+          return {
+            id: lineId,
+            projectId,
+            stageId: stageIdByWorkId.get(workId) ?? cachedLine?.stageId ?? task.stage_id ?? "",
+            workId,
+            title: item.text || cachedLine?.title || "Line item",
+            type: resolvedType,
+            unit: item.estimateV2Unit ?? cachedLine?.unit ?? "unit",
+            qtyMilli: Math.max(1, Math.round(item.estimateV2QtyMilli ?? cachedLine?.qtyMilli ?? 1_000)),
+            costUnitCents: Math.max(0, Math.round(cachedLine?.costUnitCents ?? 0)),
+            markupBps: cachedLine?.markupBps ?? currentState.project.markupBps,
+            discountBpsOverride: cachedLine?.discountBpsOverride ?? null,
+            assigneeId: cachedLine?.assigneeId ?? null,
+            assigneeName: cachedLine?.assigneeName ?? null,
+            assigneeEmail: cachedLine?.assigneeEmail ?? null,
+            receivedCents: cachedLine?.receivedCents ?? 0,
+            pnlPlaceholderCents: cachedLine?.pnlPlaceholderCents ?? 0,
+            createdAt: cachedLine?.createdAt ?? task.created_at,
+            updatedAt: cachedLine?.updatedAt ?? task.created_at,
+          } satisfies EstimateV2ResourceLine;
+        }).filter((line): line is EstimateV2ResourceLine => Boolean(line))
+        : draft.lines.map((line) => {
+          const cachedLine = cachedLinesById.get(line.id);
+          const currentLine = currentLinesById.get(line.id);
+          return {
+            id: line.id,
+            projectId,
+            stageId: stageIdByWorkId.get(line.estimate_work_id) ?? cachedLine?.stageId ?? "",
+            workId: line.estimate_work_id,
+            title: line.title,
+            type: inferLineTypeFromRemote(line.resource_type, cachedLine?.type ?? currentLine?.type),
+            unit: line.unit ?? cachedLine?.unit ?? "unit",
+            qtyMilli: Math.max(1, Math.round(line.quantity * 1_000)),
+            costUnitCents: Math.max(0, Math.round(line.unit_price_cents ?? 0)),
+            markupBps: cachedLine?.markupBps ?? currentState.project.markupBps,
+            discountBpsOverride: cachedLine?.discountBpsOverride ?? null,
+            assigneeId: cachedLine?.assigneeId ?? null,
+            assigneeName: cachedLine?.assigneeName ?? null,
+            assigneeEmail: cachedLine?.assigneeEmail ?? null,
+            receivedCents: cachedLine?.receivedCents ?? 0,
+            pnlPlaceholderCents: cachedLine?.pnlPlaceholderCents ?? 0,
+            createdAt: cachedLine?.createdAt ?? line.created_at,
+            updatedAt: cachedLine?.updatedAt ?? line.created_at,
+          } satisfies EstimateV2ResourceLine;
+        });
 
     const dependencies = draft.dependencies.map((dependency) => {
       const cachedDependency = cachedDependenciesById.get(dependency.id);

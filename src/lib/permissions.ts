@@ -123,6 +123,29 @@ export function seamCanViewSensitiveDetail(seam: ProjectAuthoritySeam): boolean 
 }
 
 /**
+ * Backend-aligned gate for loading non-money procurement/estimate rows via operational summary RPCs.
+ * Matches `effective_finance_visibility in ('summary','detail')` for non-owners; owner always true.
+ */
+export function seamCanViewOperationalFinanceSummary(seam: ProjectAuthoritySeam): boolean {
+  if (getProjectRole(seam) === "owner") return true;
+  if (!seam.membership) return false;
+
+  const financeVisibility = seam.membership.finance_visibility;
+  if (financeVisibility == null) return false;
+
+  return financeVisibility === "summary" || financeVisibility === "detail";
+}
+
+/** How Supabase row loads should hydrate money-bearing tables vs operational RPCs. */
+export type FinanceRowLoadAccess = "full" | "operational_summary" | "none";
+
+export function resolveFinanceRowLoadAccess(seam: ProjectAuthoritySeam): FinanceRowLoadAccess {
+  if (seamCanViewSensitiveDetail(seam)) return "full";
+  if (seamCanViewOperationalFinanceSummary(seam)) return "operational_summary";
+  return "none";
+}
+
+/**
  * Demo/local auth simulator: overlay simulated role + default finance visibility on the seam
  * so `seamCanViewSensitiveDetail` matches project pages.
  */

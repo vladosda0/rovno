@@ -7,8 +7,13 @@ import { Input } from "@/components/ui/input";
 import { getOrdersSource } from "@/data/orders-source";
 import { useProcurementV2 } from "@/hooks/use-mock-data";
 import { inventoryQueryKeys, useLocations } from "@/hooks/use-inventory-data";
-import { orderQueryKeys, useOrder } from "@/hooks/use-order-data";
-import { procurementQueryKeys } from "@/hooks/use-procurement-source";
+import {
+  orderPlacedSupplierOrdersQueryRoot,
+  orderProjectOrdersQueryRoot,
+  orderQueryKeys,
+  useOrder,
+} from "@/hooks/use-order-data";
+import { procurementProjectItemsQueryRoot } from "@/hooks/use-procurement-source";
 import { useToast } from "@/hooks/use-toast";
 import { useWorkspaceMode } from "@/hooks/use-workspace-source";
 import { LocationPicker } from "@/components/procurement/LocationPicker";
@@ -92,10 +97,10 @@ export function ReceiveOrderModal({
       if (supabaseMode) {
         await Promise.all([
           queryClient.invalidateQueries({
-            queryKey: orderQueryKeys.projectOrders(supabaseMode.profileId, projectId),
+            queryKey: orderProjectOrdersQueryRoot(supabaseMode.profileId, projectId),
           }),
           queryClient.invalidateQueries({
-            queryKey: orderQueryKeys.placedSupplierOrders(supabaseMode.profileId, projectId),
+            queryKey: orderPlacedSupplierOrdersQueryRoot(supabaseMode.profileId, projectId),
           }),
           queryClient.invalidateQueries({
             queryKey: orderQueryKeys.placedSupplierOrdersAllProjects(supabaseMode.profileId),
@@ -104,7 +109,7 @@ export function ReceiveOrderModal({
             queryKey: orderQueryKeys.orderById(supabaseMode.profileId, order.id),
           }),
           queryClient.invalidateQueries({
-            queryKey: procurementQueryKeys.projectItems(supabaseMode.profileId, projectId),
+            queryKey: procurementProjectItemsQueryRoot(supabaseMode.profileId, projectId),
           }),
           queryClient.invalidateQueries({
             queryKey: inventoryQueryKeys.projectLocations(supabaseMode.profileId, projectId),

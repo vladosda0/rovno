@@ -413,6 +413,132 @@ export async function loadCurrentEstimateDraft(projectId: string): Promise<Curre
   };
 }
 
+export interface EstimateOperationalSummaryWorkRow {
+  estimate_work_id: string;
+  estimate_version_id: string;
+  project_stage_id: string;
+  title: string;
+  description: string | null;
+  sort_order: number;
+  created_at: string;
+}
+
+export interface EstimateOperationalSummaryResourceLineRow {
+  estimate_resource_line_id: string;
+  estimate_work_id: string;
+  estimate_work_title: string;
+  estimate_version_id: string;
+  resource_type: "material" | "labor" | "equipment" | "other";
+  title: string;
+  quantity: number;
+  unit: string | null;
+  created_at: string;
+}
+
+export interface EstimateOperationalSummaryPayload {
+  works: EstimateOperationalSummaryWorkRow[];
+  resourceLines: EstimateOperationalSummaryResourceLineRow[];
+}
+
+function parseEstimateOperationalRpcRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
+function parseEstimateOperationalWork(value: unknown): EstimateOperationalSummaryWorkRow | null {
+  const row = parseEstimateOperationalRpcRecord(value);
+  if (!row) return null;
+  const id = row.estimate_work_id;
+  const versionId = row.estimate_version_id;
+  const stageId = row.project_stage_id;
+  if (typeof id !== "string" || typeof versionId !== "string" || typeof stageId !== "string") {
+    return null;
+  }
+  const sort = row.sort_order;
+  const sortOrder = typeof sort === "number" && Number.isFinite(sort) ? sort : Number(sort);
+  if (!Number.isFinite(sortOrder)) {
+    return null;
+  }
+  return {
+    estimate_work_id: id,
+    estimate_version_id: versionId,
+    project_stage_id: stageId,
+    title: typeof row.title === "string" ? row.title : "",
+    description: typeof row.description === "string" ? row.description : null,
+    sort_order: sortOrder,
+    created_at: typeof row.created_at === "string" ? row.created_at : new Date().toISOString(),
+  };
+}
+
+function parseEstimateOperationalResourceLine(
+  value: unknown,
+): EstimateOperationalSummaryResourceLineRow | null {
+  const row = parseEstimateOperationalRpcRecord(value);
+  if (!row) return null;
+  const lineId = row.estimate_resource_line_id;
+  const workId = row.estimate_work_id;
+  const versionId = row.estimate_version_id;
+  if (typeof lineId !== "string" || typeof workId !== "string" || typeof versionId !== "string") {
+    return null;
+  }
+  const qty = row.quantity;
+  const quantity = typeof qty === "number" && Number.isFinite(qty) ? qty : Number(qty);
+  if (!Number.isFinite(quantity)) {
+    return null;
+  }
+  const rt = row.resource_type;
+  const resourceType = rt === "material" || rt === "labor" || rt === "equipment" || rt === "other"
+    ? rt
+    : "other";
+  return {
+    estimate_resource_line_id: lineId,
+    estimate_work_id: workId,
+    estimate_work_title: typeof row.estimate_work_title === "string" ? row.estimate_work_title : "",
+    estimate_version_id: versionId,
+    resource_type: resourceType,
+    title: typeof row.title === "string" ? row.title : "",
+    quantity,
+    unit: typeof row.unit === "string" ? row.unit : null,
+    created_at: typeof row.created_at === "string" ? row.created_at : new Date().toISOString(),
+  };
+}
+
+export function parseEstimateOperationalSummaryPayload(data: unknown): EstimateOperationalSummaryPayload | null {
+  const root = parseEstimateOperationalRpcRecord(data);
+  if (!root) return null;
+  const worksRaw = root.works;
+  const linesRaw = root.resource_lines;
+  const works = Array.isArray(worksRaw)
+    ? worksRaw.map(parseEstimateOperationalWork).filter((row): row is EstimateOperationalSummaryWorkRow => Boolean(row))
+    : [];
+  const resourceLines = Array.isArray(linesRaw)
+    ? linesRaw.map(parseEstimateOperationalResourceLine)
+      .filter((row): row is EstimateOperationalSummaryResourceLineRow => Boolean(row))
+    : [];
+  return { works, resourceLines };
+}
+
+export async function loadEstimateOperationalSummary(
+  projectId: string,
+  estimateVersionId: string | null,
+): Promise<EstimateOperationalSummaryPayload | null> {
+  const supabase = await loadSupabaseClient();
+  const { data, error } = await supabase.rpc("get_estimate_operational_summary", {
+    p_project_id: projectId,
+    p_estimate_version_id: estimateVersionId,
+    p_limit: 500,
+    p_offset: 0,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return parseEstimateOperationalSummaryPayload(data);
+}
+
 export function resolveEstimateDraftRemoteIds(input: {
   projectId: string;
   snapshot: Pick<EstimateV2Snapshot, "project" | "stages" | "works" | "lines" | "dependencies">;

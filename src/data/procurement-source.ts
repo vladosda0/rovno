@@ -5,9 +5,22 @@ import { getProcurementItems } from "@/data/procurement-store";
 import { buildReceivedQtyByOrderLineId } from "@/data/orders-source";
 import type { WorkspaceMode } from "@/data/workspace-source";
 import { resolveWorkspaceMode } from "@/data/workspace-source";
+import type { FinanceRowLoadAccess } from "@/lib/permissions";
 import type { ProcurementItemV2 } from "@/types/entities";
 import type { EstimateExecutionStatus, EstimateV2ResourceLine, EstimateV2Work } from "@/types/estimate-v2";
 import type { Database as ProcurementDatabase } from "../../backend-truth/generated/supabase-types";
+import {
+  parseProcurementOperationalSummaryPayload,
+  type ProcurementOperationalRpcOrderedLine,
+  type ProcurementOperationalRpcProcurementItem,
+} from "@/data/procurement-operational-summary-payload";
+
+export type {
+  ProcurementOperationalRpcOrderedLine,
+  ProcurementOperationalRpcProcurementItem,
+} from "@/data/procurement-operational-summary-payload";
+
+export { parseProcurementOperationalSummaryPayload } from "@/data/procurement-operational-summary-payload";
 
 type ProcurementItemRow = ProcurementDatabase["public"]["Tables"]["procurement_items"]["Row"];
 type ProcurementItemInsert = ProcurementDatabase["public"]["Tables"]["procurement_items"]["Insert"];
@@ -29,7 +42,10 @@ interface ShapeProcurementItemsInput {
 
 export interface ProcurementSource {
   mode: WorkspaceMode["kind"];
-  getProjectProcurementItems: (projectId: string) => Promise<ProcurementItemV2[]>;
+  getProjectProcurementItems: (
+    projectId: string,
+    financeLoadAccess?: FinanceRowLoadAccess,
+  ) => Promise<ProcurementItemV2[]>;
 }
 
 export interface HeroProcurementItemUpsertInput {
@@ -98,6 +114,139 @@ function createBrowserProcurementSource(mode: "demo" | "local"): ProcurementSour
       return getProcurementItems(projectId);
     },
   };
+}
+
+function baseOperationalProcurementItemV2(
+  projectId: string,
+  input: {
+    id: string;
+    name: string;
+    spec: string | null;
+    unit: string;
+    requiredQty: number;
+    orderedQty: number;
+    categoryId: string | null;
+    estimateResourceLineId: string | null;
+    taskId: string | null;
+    status: string;
+    createdAt: string;
+    updatedAt: string;
+    createdFrom: ProcurementItemV2["createdFrom"];
+  },
+): ProcurementItemV2 {
+  return {
+    id: input.id,
+    projectId,
+    stageId: null,
+    categoryId: input.categoryId,
+    type: "material",
+    name: input.name,
+    spec: input.spec,
+    unit: input.unit,
+    requiredByDate: null,
+    requiredQty: input.requiredQty,
+    orderedQty: input.orderedQty,
+    receivedQty: 0,
+    plannedUnitPrice: null,
+    actualUnitPrice: null,
+    supplier: null,
+    supplierPreferred: null,
+    locationPreferredId: null,
+    lockedFromEstimate: Boolean(input.estimateResourceLineId),
+    sourceEstimateItemId: null,
+    sourceEstimateV2LineId: input.estimateResourceLineId,
+    orphaned: false,
+    orphanedAt: null,
+    orphanedReason: null,
+    linkUrl: null,
+    notes: null,
+    attachments: [],
+    createdFrom: input.createdFrom,
+    linkedTaskIds: input.taskId ? [input.taskId] : [],
+    archived: input.status === "cancelled",
+    createdAt: input.createdAt,
+    updatedAt: input.updatedAt,
+  };
+}
+
+export function mapProcurementOperationalSummaryToItems(
+  projectId: string,
+  data: unknown,
+): ProcurementItemV2[] {
+  const parsed = parseProcurementOperationalSummaryPayload(data);
+  if (!parsed) {
+    return [];
+  }
+
+  const { orderedLines, procurementItems } = parsed;
+  const linesByProcurementItemId = new Map<string, ProcurementOperationalRpcOrderedLine[]>();
+  orderedLines.forEach((line) => {
+    if (!line.procurement_item_id) {
+      return;
+    }
+    const list = linesByProcurementItemId.get(line.procurement_item_id) ?? [];
+    list.push(line);
+    linesByProcurementItemId.set(line.procurement_item_id, list);
+  });
+
+  const itemsById = new Map<string, ProcurementItemV2>();
+
+  procurementItems.forEach((pi) => {
+    if (pi.status === "cancelled") {
+      return;
+    }
+    const related = linesByProcurementItemId.get(pi.procurement_item_id) ?? [];
+    const orderedQty = related.reduce((sum, line) => sum + line.quantity, 0);
+    itemsById.set(
+      pi.procurement_item_id,
+      baseOperationalProcurementItemV2(projectId, {
+        id: pi.procurement_item_id,
+        name: pi.title,
+        spec: pi.description,
+        unit: pi.unit ?? "",
+        requiredQty: pi.quantity,
+        orderedQty,
+        categoryId: pi.category,
+        estimateResourceLineId: pi.estimate_resource_line_id,
+        taskId: pi.task_id,
+        status: pi.status,
+        createdAt: pi.created_at,
+        updatedAt: pi.updated_at,
+        createdFrom: pi.estimate_resource_line_id
+          ? "estimate"
+          : pi.task_id
+            ? "task_material"
+            : "manual",
+      }),
+    );
+  });
+
+  orderedLines.forEach((line) => {
+    if (line.procurement_item_id) {
+      return;
+    }
+    const title = line.title?.trim() || line.procurement_item_title?.trim() || "Ordered item";
+    itemsById.set(
+      line.order_line_id,
+      baseOperationalProcurementItemV2(projectId, {
+        id: line.order_line_id,
+        name: title,
+        spec: null,
+        unit: line.unit ?? "",
+        requiredQty: line.quantity,
+        orderedQty: line.quantity,
+        categoryId: null,
+        estimateResourceLineId: null,
+        taskId: null,
+        status: "",
+        createdAt: line.created_at,
+        updatedAt: line.created_at,
+        createdFrom: "manual",
+      }),
+    );
+  });
+
+  return [...itemsById.values()].filter((item) => !item.archived);
 }
 
 function isAppliedOrderStatus(status: OrderRow["status"]): boolean {
@@ -508,7 +657,28 @@ function createSupabaseProcurementSource(
 ): ProcurementSource {
   return {
     mode: "supabase",
-    async getProjectProcurementItems(projectId: string) {
+    async getProjectProcurementItems(
+      projectId: string,
+      financeLoadAccess: FinanceRowLoadAccess = "full",
+    ) {
+      if (financeLoadAccess === "none") {
+        return [];
+      }
+
+      if (financeLoadAccess === "operational_summary") {
+        const { data, error } = await supabase.rpc("get_procurement_operational_summary", {
+          p_project_id: projectId,
+          p_limit: 500,
+          p_offset: 0,
+        });
+
+        if (error) {
+          throw error;
+        }
+
+        return mapProcurementOperationalSummaryToItems(projectId, data);
+      }
+
       const { data: itemRows, error: itemsError } = await supabase
         .from("procurement_items")
         .select("*")

@@ -1,9 +1,4 @@
 ---
-description: 
-alwaysApply: true
----
-
----
 description: Escalate Rovno sensitive-zone work to stricter subagent review and verification.
 globs:
   - "src/pages/project/**"
@@ -28,6 +23,7 @@ When the task touches them, use stricter delegation and do not treat them like r
 ## Sensitive zones
 
 Frontend-sensitive:
+
 - estimate and estimate-v2 flows
 - tasks and checklist linkage
 - procurement, orders, receiving, inventory movement
@@ -38,6 +34,7 @@ Frontend-sensitive:
 - legacy/v2 bridges
 
 Backend-sensitive:
+
 - migrations changing launch-loop entities
 - RLS, grants, policies
 - RPCs, triggers, auth/bootstrap
@@ -65,6 +62,7 @@ For sensitive backend work:
 ## Stop conditions
 
 Do not implement yet if any of these are true:
+
 - UI appears to assume unsupported backend shape
 - the task would require editing `backend-truth/` manually
 - the smallest safe change surface is still unclear
@@ -74,6 +72,7 @@ Do not implement yet if any of these are true:
 ## Verification standard
 
 Sensitive-zone work is not complete until:
+
 - an independent reviewer has checked acceptance criteria
 - obvious adjacent regressions were considered
 - contract implications were checked when relevant
