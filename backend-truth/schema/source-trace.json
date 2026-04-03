@@ -559,6 +559,20 @@
       "name": "enforce_hr_item_estimate_lineage_scope",
       "signature": "public.enforce_hr_item_estimate_lineage_scope()",
       "sourceMigration": "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql"
+    },
+    {
+      "key": "public.get_procurement_operational_summary",
+      "schema": "public",
+      "name": "get_procurement_operational_summary",
+      "signature": "public.get_procurement_operational_summary(uuid, integer, integer)",
+      "sourceMigration": "supabase/migrations/20260403103000_phase6_operational_summary_read_rpcs.sql"
+    },
+    {
+      "key": "public.get_estimate_operational_summary",
+      "schema": "public",
+      "name": "get_estimate_operational_summary",
+      "signature": "public.get_estimate_operational_summary(uuid, uuid, integer, integer)",
+      "sourceMigration": "supabase/migrations/20260403103000_phase6_operational_summary_read_rpcs.sql"
     }
   ],
   "policies": [
@@ -1882,6 +1896,7 @@
         "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
         "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql",
         "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
+        "supabase/migrations/20260403103000_phase6_operational_summary_read_rpcs.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
@@ -1894,7 +1909,8 @@
       ],
       "functions": [
         "public.get_shared_estimate_version",
-        "public.approve_estimate_version_by_share_token"
+        "public.approve_estimate_version_by_share_token",
+        "public.get_estimate_operational_summary"
       ],
       "policies": [
         "public.project_estimates.project_estimates_select",
@@ -2008,6 +2024,7 @@
       "sourceMigrations": [
         "supabase/migrations/20260306163000_inventory_foundation.sql",
         "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
+        "supabase/migrations/20260403103000_phase6_operational_summary_read_rpcs.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
@@ -2022,7 +2039,8 @@
       ],
       "functions": [
         "public.apply_inventory_balance_delta",
-        "public.sync_inventory_balances"
+        "public.sync_inventory_balances",
+        "public.get_procurement_operational_summary"
       ],
       "policies": [
         "public.inventory_items.inventory_items_select",

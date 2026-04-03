@@ -155,6 +155,10 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql",
       "sha256": "d90759f1b10ab371fc5431576b1db32c1dc2749a07e311f6329c372555f7076f"
+    },
+    {
+      "path": "supabase/migrations/20260403103000_phase6_operational_summary_read_rpcs.sql",
+      "sha256": "0a7b012b5b047af213c9375decd50f3fa84fbfc0c2096352540c8aaedbe734ba"
     }
   ],
   "generated_artifacts": [
@@ -216,6 +220,7 @@ export const manifest = {
     "sql/20260326203000_owner_transfer_and_member_identity_guard.sql",
     "sql/20260326213000_internal_visibility_write_boundary.sql",
     "sql/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql",
+    "sql/20260403103000_phase6_operational_summary_read_rpcs.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -10262,6 +10267,71 @@ export const functions = {
           "activation": "before insert or update of project_id, estimate_work_id, estimate_resource_line_id, task_id"
         }
       ]
+    },
+    {
+      "schema": "public",
+      "name": "get_procurement_operational_summary",
+      "signature": "public.get_procurement_operational_summary(uuid, integer, integer)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_limit",
+          "type": "integer default 200",
+          "identityType": "integer"
+        },
+        {
+          "name": "p_offset",
+          "type": "integer default 0",
+          "identityType": "integer"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260403103000_phase6_operational_summary_read_rpcs.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "get_estimate_operational_summary",
+      "signature": "public.get_estimate_operational_summary(uuid, uuid, integer, integer)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_estimate_version_id",
+          "type": "uuid default null",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_limit",
+          "type": "integer default 500",
+          "identityType": "integer"
+        },
+        {
+          "name": "p_offset",
+          "type": "integer default 0",
+          "identityType": "integer"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260403103000_phase6_operational_summary_read_rpcs.sql",
+      "triggerUsages": []
     }
   ]
 } as const;
@@ -12637,6 +12707,20 @@ export const sourceTrace = {
       "name": "enforce_hr_item_estimate_lineage_scope",
       "signature": "public.enforce_hr_item_estimate_lineage_scope()",
       "sourceMigration": "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql"
+    },
+    {
+      "key": "public.get_procurement_operational_summary",
+      "schema": "public",
+      "name": "get_procurement_operational_summary",
+      "signature": "public.get_procurement_operational_summary(uuid, integer, integer)",
+      "sourceMigration": "supabase/migrations/20260403103000_phase6_operational_summary_read_rpcs.sql"
+    },
+    {
+      "key": "public.get_estimate_operational_summary",
+      "schema": "public",
+      "name": "get_estimate_operational_summary",
+      "signature": "public.get_estimate_operational_summary(uuid, uuid, integer, integer)",
+      "sourceMigration": "supabase/migrations/20260403103000_phase6_operational_summary_read_rpcs.sql"
     }
   ],
   "policies": [
@@ -13960,6 +14044,7 @@ export const sourceTrace = {
         "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
         "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql",
         "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
+        "supabase/migrations/20260403103000_phase6_operational_summary_read_rpcs.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
@@ -13972,7 +14057,8 @@ export const sourceTrace = {
       ],
       "functions": [
         "public.get_shared_estimate_version",
-        "public.approve_estimate_version_by_share_token"
+        "public.approve_estimate_version_by_share_token",
+        "public.get_estimate_operational_summary"
       ],
       "policies": [
         "public.project_estimates.project_estimates_select",
@@ -14086,6 +14172,7 @@ export const sourceTrace = {
       "sourceMigrations": [
         "supabase/migrations/20260306163000_inventory_foundation.sql",
         "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
+        "supabase/migrations/20260403103000_phase6_operational_summary_read_rpcs.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
@@ -14100,7 +14187,8 @@ export const sourceTrace = {
       ],
       "functions": [
         "public.apply_inventory_balance_delta",
-        "public.sync_inventory_balances"
+        "public.sync_inventory_balances",
+        "public.get_procurement_operational_summary"
       ],
       "policies": [
         "public.inventory_items.inventory_items_select",
@@ -14467,11 +14555,12 @@ export const slices = {
         "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
         "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql",
         "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
+        "supabase/migrations/20260403103000_phase6_operational_summary_read_rpcs.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
       "tableCount": 5,
-      "functionCount": 2,
+      "functionCount": 3,
       "rlsTableCount": 5
     },
     {
@@ -14481,11 +14570,12 @@ export const slices = {
       "sourceMigrations": [
         "supabase/migrations/20260306163000_inventory_foundation.sql",
         "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
+        "supabase/migrations/20260403103000_phase6_operational_summary_read_rpcs.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
       "tableCount": 7,
-      "functionCount": 2,
+      "functionCount": 3,
       "rlsTableCount": 7
     },
     {

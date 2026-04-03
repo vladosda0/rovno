@@ -62,6 +62,7 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20260326203000_owner_transfer_and_member_identity_guard.sql`
 - `supabase/migrations/20260326213000_internal_visibility_write_boundary.sql`
 - `supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql`
+- `supabase/migrations/20260403103000_phase6_operational_summary_read_rpcs.sql`
 
 ## Exclusions
 
