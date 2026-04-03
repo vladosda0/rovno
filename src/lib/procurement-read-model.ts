@@ -28,6 +28,8 @@ export interface ProcurementReadRow {
   actualUnitPrice: number;
   inStockPlannedTotal: number;
   inStockActualTotal: number;
+  /** When false, UI must not show price-derived values (Home sensitive-detail gate). */
+  monetaryVisible?: boolean;
 }
 
 export interface ProcurementReadProjectSummary {
@@ -177,6 +179,52 @@ export function getProcurementReadSnapshot(): ProcurementReadSnapshot {
     projects: summaries,
     totals,
   };
+}
+
+/**
+ * Home-only: clear price-derived row fields and project monetary rollups when the viewer lacks
+ * sensitive-detail access; preserve counts. Recomputes snapshot monetary totals from allowed projects only.
+ */
+export function applySensitiveDetailToProcurementReadSnapshot(
+  snapshot: ProcurementReadSnapshot,
+  canViewSensitiveDetail: (projectId: string) => boolean,
+): ProcurementReadSnapshot {
+  const projects = snapshot.projects.map((proj) => {
+    if (canViewSensitiveDetail(proj.projectId)) {
+      return proj;
+    }
+    return {
+      ...proj,
+      requestedTotal: 0,
+      orderedTotal: 0,
+      inStockTotal: 0,
+      inStockPlannedTotal: 0,
+      inStockActualTotal: 0,
+      rows: proj.rows.map((row) => ({
+        ...row,
+        monetaryVisible: false,
+        statusTotal: 0,
+        plannedUnitPrice: 0,
+        actualUnitPrice: 0,
+        inStockPlannedTotal: 0,
+        inStockActualTotal: 0,
+      })),
+    };
+  });
+
+  const totals: ProcurementReadTotals = {
+    totalCount: snapshot.totals.totalCount,
+    requestedCount: snapshot.totals.requestedCount,
+    orderedCount: snapshot.totals.orderedCount,
+    inStockCount: snapshot.totals.inStockCount,
+    requestedTotal: projects.reduce((sum, p) => sum + p.requestedTotal, 0),
+    orderedTotal: projects.reduce((sum, p) => sum + p.orderedTotal, 0),
+    inStockTotal: projects.reduce((sum, p) => sum + p.inStockTotal, 0),
+    inStockPlannedTotal: projects.reduce((sum, p) => sum + p.inStockPlannedTotal, 0),
+    inStockActualTotal: projects.reduce((sum, p) => sum + p.inStockActualTotal, 0),
+  };
+
+  return { projects, totals };
 }
 
 export function getProcurementReadProjectSummary(projectId: string): ProcurementReadProjectSummary | null {

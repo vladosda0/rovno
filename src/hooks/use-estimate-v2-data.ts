@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useWorkspaceProjectsSensitiveDetailMap } from "@/hooks/use-home-sensitive-detail-map";
 import { useProcurementV2, useHRItems, useHRPayments } from "@/hooks/use-mock-data";
 import { useOrders } from "@/hooks/use-order-data";
-import { subscribe as subscribeStore } from "@/data/store";
 import { subscribeHR } from "@/data/hr-store";
 import { subscribeOrders } from "@/data/order-store";
 import { subscribeProcurement } from "@/data/procurement-store";
@@ -16,12 +16,14 @@ import {
 import {
   buildEstimateV2FinanceProjectSummary,
   getEstimateV2FinanceProjectSummary,
+  applySensitiveDetailToEstimateV2FinanceSnapshot,
   getEstimateV2FinanceSnapshot,
   resolveEstimateV2FinanceProjectMeta,
   type EstimateV2FinanceProjectSummary,
   type EstimateV2FinanceSnapshot,
 } from "@/lib/estimate-v2/finance-read-model";
 import { computeFactFromDataSources } from "@/lib/estimate-v2/rollups";
+import * as store from "@/data/store";
 import { useWorkspaceMode, useWorkspaceProjects } from "@/hooks/use-workspace-source";
 import type { Project } from "@/types/entities";
 import type { EstimateV2Version } from "@/types/estimate-v2";
@@ -144,7 +146,7 @@ export function useEstimateV2FinanceProjectSummary(
     const update = () => setValue(getter());
     const unsubs = [
       subscribeEstimateV2(update),
-      subscribeStore(update),
+      store.subscribe(update),
       subscribeProcurement(update),
       subscribeOrders(update),
       subscribeHR(update),
@@ -178,7 +180,7 @@ export function useEstimateV2FinanceProjectSummaryFromWorkspace(
     const bump = () => setRevision((n) => n + 1);
     const unsubs = [
       subscribeEstimateV2(bump),
-      subscribeStore(bump),
+      store.subscribe(bump),
       subscribeProcurement(bump),
       subscribeOrders(bump),
       subscribeHR(bump),
@@ -209,19 +211,36 @@ export function useEstimateV2FinanceProjectSummaryFromWorkspace(
   ]);
 }
 
-export function useEstimateV2FinanceSnapshot(): EstimateV2FinanceSnapshot {
-  const projects = useWorkspaceProjects();
+const EMPTY_HOME_FINANCE_SNAPSHOT: EstimateV2FinanceSnapshot = {
+  projects: [],
+  totals: { plannedBudgetCents: 0, spentCents: 0, toBePaidCents: 0, varianceCents: 0 },
+};
+
+export function useEstimateV2FinanceSnapshot(): {
+  snapshot: EstimateV2FinanceSnapshot;
+  sensitiveDetailLoading: boolean;
+} {
+  const workspaceMode = useWorkspaceMode();
+  const workspaceHookProjects = useWorkspaceProjects();
+  const projects =
+    workspaceMode.kind === "demo" || workspaceMode.kind === "local"
+      ? store.getProjects()
+      : workspaceHookProjects;
+
+  const { canViewSensitiveDetailByProjectId, isLoading: sensitiveDetailLoading } =
+    useWorkspaceProjectsSensitiveDetailMap();
+
   const getter = useCallback(
     () => getEstimateV2FinanceSnapshot(projects),
     [projects],
   );
-  const [value, setValue] = useState(getter);
+  const [raw, setRaw] = useState(getter);
 
   useEffect(() => {
-    const update = () => setValue(getter());
+    const update = () => setRaw(getter());
     const unsubs = [
       subscribeEstimateV2(update),
-      subscribeStore(update),
+      store.subscribe(update),
       subscribeProcurement(update),
       subscribeOrders(update),
       subscribeHR(update),
@@ -230,8 +249,17 @@ export function useEstimateV2FinanceSnapshot(): EstimateV2FinanceSnapshot {
   }, [getter]);
 
   useEffect(() => {
-    setValue(getter());
+    setRaw(getter());
   }, [getter]);
 
-  return value;
+  const snapshot = useMemo(() => {
+    if (sensitiveDetailLoading) {
+      return EMPTY_HOME_FINANCE_SNAPSHOT;
+    }
+    return applySensitiveDetailToEstimateV2FinanceSnapshot(raw, (projectId) =>
+      canViewSensitiveDetailByProjectId.get(projectId) ?? false,
+    );
+  }, [raw, sensitiveDetailLoading, canViewSensitiveDetailByProjectId]);
+
+  return { snapshot, sensitiveDetailLoading };
 }

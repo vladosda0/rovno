@@ -4,6 +4,7 @@ import {
   useWorkspaceMode,
   useWorkspaceProjectState,
   useWorkspaceProjectMembersState,
+  type WorkspaceModeState,
 } from "@/hooks/use-workspace-source";
 import { can, type Action } from "@/lib/permission-matrix";
 import {
@@ -121,6 +122,33 @@ export function seamCanViewSensitiveDetail(seam: ProjectAuthoritySeam): boolean 
   return financeVisibility === "detail";
 }
 
+/**
+ * Demo/local auth simulator: overlay simulated role + default finance visibility on the seam
+ * so `seamCanViewSensitiveDetail` matches project pages.
+ */
+export function applyWorkspaceDemoOverlayToSeam(
+  seam: ProjectAuthoritySeam,
+  workspaceMode: WorkspaceModeState,
+): ProjectAuthoritySeam {
+  if (workspaceMode.kind !== "demo" && workspaceMode.kind !== "local") {
+    return seam;
+  }
+
+  const simulatedRole = getAuthRole();
+  if (simulatedRole === "guest" || !seam.membership) {
+    return seam;
+  }
+
+  return {
+    ...seam,
+    membership: {
+      ...seam.membership,
+      role: simulatedRole,
+      finance_visibility: getDefaultFinanceVisibility(simulatedRole),
+    },
+  };
+}
+
 export function usePermission(projectId: string) {
   const user = useWorkspaceCurrentUser();
   const workspaceMode = useWorkspaceMode();
@@ -138,25 +166,10 @@ export function usePermission(projectId: string) {
     [projectId, user.id, members, project],
   );
 
-  const effectiveSeam = useMemo(() => {
-    if (workspaceMode.kind !== "demo" && workspaceMode.kind !== "local") {
-      return seam;
-    }
-
-    const simulatedRole = getAuthRole();
-    if (simulatedRole === "guest" || !seam.membership) {
-      return seam;
-    }
-
-    return {
-      ...seam,
-      membership: {
-        ...seam.membership,
-        role: simulatedRole,
-        finance_visibility: getDefaultFinanceVisibility(simulatedRole),
-      },
-    };
-  }, [seam, workspaceMode.kind]);
+  const effectiveSeam = useMemo(
+    () => applyWorkspaceDemoOverlayToSeam(seam, workspaceMode),
+    [seam, workspaceMode.kind],
+  );
 
   return {
     seam: effectiveSeam,

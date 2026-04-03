@@ -27,6 +27,11 @@ export interface EstimateV2FinanceProjectSummary {
   percentSpent: number;
   /** Same semantics as ProjectEstimate: margin on pricing totals (taxable base vs cost); null when no revenue base. */
   percentProfitability: number | null;
+  /**
+   * When false, monetary fields are cleared and workspace totals exclude this project (Home sensitive-detail gate).
+   * Omitted means fully visible (legacy callers).
+   */
+  sensitiveFinanceVisible?: boolean;
 }
 
 export interface EstimateV2FinanceSnapshot {
@@ -161,4 +166,43 @@ export function getEstimateV2FinanceSnapshot(
       varianceCents: summaries.reduce((sum, summary) => sum + summary.varianceCents, 0),
     },
   };
+}
+
+/**
+ * Home-only: strip per-project monetary fields when the viewer lacks sensitive-detail access,
+ * and recompute workspace totals from allowed projects only.
+ */
+export function applySensitiveDetailToEstimateV2FinanceSnapshot(
+  snapshot: EstimateV2FinanceSnapshot,
+  canViewSensitiveDetail: (projectId: string) => boolean,
+): EstimateV2FinanceSnapshot {
+  const totals = {
+    plannedBudgetCents: 0,
+    spentCents: 0,
+    toBePaidCents: 0,
+    varianceCents: 0,
+  };
+
+  const projects = snapshot.projects.map((summary) => {
+    const sensitiveFinanceVisible = canViewSensitiveDetail(summary.projectId);
+    if (sensitiveFinanceVisible) {
+      totals.plannedBudgetCents += summary.plannedBudgetCents;
+      totals.spentCents += summary.spentCents;
+      totals.toBePaidCents += summary.toBePaidCents;
+      totals.varianceCents += summary.varianceCents;
+      return { ...summary, sensitiveFinanceVisible: true };
+    }
+    return {
+      ...summary,
+      sensitiveFinanceVisible: false,
+      plannedBudgetCents: 0,
+      spentCents: 0,
+      toBePaidCents: 0,
+      varianceCents: 0,
+      percentSpent: 0,
+      percentProfitability: null,
+    };
+  });
+
+  return { projects, totals };
 }

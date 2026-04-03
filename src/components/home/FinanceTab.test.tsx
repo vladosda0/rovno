@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { FinanceTab } from "@/components/home/FinanceTab";
@@ -93,5 +93,30 @@ describe("FinanceTab", () => {
     expect(screen.getAllByText(expectedBudgetPattern).length).toBeGreaterThan(0);
     expect(screen.getByText("Apartment Renovation")).toBeInTheDocument();
     expect(screen.queryByText(inflatedLegacyText)).not.toBeInTheDocument();
+  });
+
+  it("hides monetary totals for simulated viewer on Home (sensitive-detail gate)", async () => {
+    setAuthRole("viewer");
+
+    const state = getEstimateV2ProjectState("project-1");
+    const work = state.works[0];
+    if (!work) {
+      throw new Error("Expected seeded estimate-v2 work scaffold");
+    }
+
+    createLine("project-1", {
+      stageId: work.stageId,
+      workId: work.id,
+      title: "Viewer finance line",
+      type: "material",
+      qtyMilli: 2_000,
+      costUnitCents: 125_000,
+    });
+
+    renderFinanceTab();
+
+    await waitFor(() => {
+      expect(screen.queryByText(/Budget:\s/)).not.toBeInTheDocument();
+    });
   });
 });

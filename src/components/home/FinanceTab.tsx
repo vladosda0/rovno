@@ -5,6 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { TrendingUp, TrendingDown, DollarSign, ArrowRight, FileDown } from "lucide-react";
 import { useEstimateV2FinanceSnapshot } from "@/hooks/use-estimate-v2-data";
 
+const REDACTED_PLACEHOLDER = "—";
+
 function formatCurrency(valueCents: number, currency = "RUB") {
   return new Intl.NumberFormat("ru-RU", {
     style: "currency",
@@ -14,9 +16,35 @@ function formatCurrency(valueCents: number, currency = "RUB") {
 }
 
 export function FinanceTab() {
-  const snapshot = useEstimateV2FinanceSnapshot();
+  const { snapshot, sensitiveDetailLoading } = useEstimateV2FinanceSnapshot();
   const displayCurrency = snapshot.projects[0]?.currency ?? "RUB";
-  const projectRows = snapshot.projects.filter((summary) => summary.hasEstimate && summary.plannedBudgetCents > 0);
+
+  const projectRows = snapshot.projects.filter((summary) => {
+    if (!summary.hasEstimate) return false;
+    if (summary.sensitiveFinanceVisible === false) return true;
+    return summary.plannedBudgetCents > 0;
+  });
+
+  const hasRedactedFinanceRow = snapshot.projects.some(
+    (s) => s.hasEstimate && s.sensitiveFinanceVisible === false,
+  );
+  const totalsLookEmpty =
+    snapshot.totals.plannedBudgetCents === 0
+    && snapshot.totals.spentCents === 0
+    && snapshot.totals.varianceCents === 0;
+  const obscureTopTotals = !sensitiveDetailLoading && hasRedactedFinanceRow && totalsLookEmpty;
+
+  if (sensitiveDetailLoading) {
+    return (
+      <div className="space-y-4 sm:space-y-6">
+        <Card>
+          <CardContent className="p-4 sm:p-6">
+            <p className="text-body-sm text-muted-foreground animate-pulse">Loading finance access…</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -28,7 +56,9 @@ export function FinanceTab() {
               <DollarSign className="h-4 w-4 text-accent" />
               <span className="text-caption text-muted-foreground">Total Budget</span>
             </div>
-            <p className="text-h3 font-bold text-foreground">{formatCurrency(snapshot.totals.plannedBudgetCents, displayCurrency)}</p>
+            <p className="text-h3 font-bold text-foreground">
+              {obscureTopTotals ? REDACTED_PLACEHOLDER : formatCurrency(snapshot.totals.plannedBudgetCents, displayCurrency)}
+            </p>
           </CardContent>
         </Card>
         <Card>
@@ -37,7 +67,9 @@ export function FinanceTab() {
               <TrendingDown className="h-4 w-4 text-destructive" />
               <span className="text-caption text-muted-foreground">Actual Spend</span>
             </div>
-            <p className="text-h3 font-bold text-foreground">{formatCurrency(snapshot.totals.spentCents, displayCurrency)}</p>
+            <p className="text-h3 font-bold text-foreground">
+              {obscureTopTotals ? REDACTED_PLACEHOLDER : formatCurrency(snapshot.totals.spentCents, displayCurrency)}
+            </p>
           </CardContent>
         </Card>
         <Card>
@@ -46,8 +78,10 @@ export function FinanceTab() {
               <TrendingUp className="h-4 w-4 text-success" />
               <span className="text-caption text-muted-foreground">Variance</span>
             </div>
-            <p className={`text-h3 font-bold ${snapshot.totals.varianceCents >= 0 ? "text-success" : "text-destructive"}`}>
-              {formatCurrency(snapshot.totals.varianceCents, displayCurrency)}
+            <p
+              className={`text-h3 font-bold ${obscureTopTotals ? "text-foreground" : snapshot.totals.varianceCents >= 0 ? "text-success" : "text-destructive"}`}
+            >
+              {obscureTopTotals ? REDACTED_PLACEHOLDER : formatCurrency(snapshot.totals.varianceCents, displayCurrency)}
             </p>
           </CardContent>
         </Card>
@@ -59,14 +93,27 @@ export function FinanceTab() {
           <h3 className="px-4 pt-4 pb-3 text-body font-semibold text-foreground sm:px-6 sm:pt-6 sm:pb-4">Budget by Project</h3>
           <div className="divide-y divide-border px-4 pb-4 sm:px-6 sm:pb-6">
             {projectRows.map((project) => {
+              const redacted = project.sensitiveFinanceVisible === false;
               return (
                 <div key={project.projectId} className="flex items-center gap-3 py-3">
                   <div className="flex-1 min-w-0">
                     <p className="text-body-sm font-medium text-foreground truncate">{project.projectTitle}</p>
-                    <div className="flex items-center gap-3 mt-1">
-                      <span className="text-caption text-muted-foreground">Budget: {formatCurrency(project.plannedBudgetCents, project.currency)}</span>
-                      <span className="text-caption text-muted-foreground">Spent: {formatCurrency(project.spentCents, project.currency)}</span>
-                      <Badge variant={project.percentSpent > 90 ? "destructive" : "secondary"} className="text-[10px]">{project.percentSpent}%</Badge>
+                    <div className="flex items-center gap-3 mt-1 flex-wrap">
+                      {redacted ? (
+                        <span className="text-caption text-muted-foreground">Financial details hidden</span>
+                      ) : (
+                        <>
+                          <span className="text-caption text-muted-foreground">
+                            Budget: {formatCurrency(project.plannedBudgetCents, project.currency)}
+                          </span>
+                          <span className="text-caption text-muted-foreground">
+                            Spent: {formatCurrency(project.spentCents, project.currency)}
+                          </span>
+                          <Badge variant={project.percentSpent > 90 ? "destructive" : "secondary"} className="text-[10px]">
+                            {project.percentSpent}%
+                          </Badge>
+                        </>
+                      )}
                     </div>
                   </div>
                   <Link to={`/project/${project.projectId}/estimate`} className="text-caption text-accent hover:underline flex items-center gap-1 shrink-0">

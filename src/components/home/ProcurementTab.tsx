@@ -3,7 +3,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Package, ArrowRight } from "lucide-react";
 import { fmtCost } from "@/lib/procurement-utils";
-import { useProcurementReadSnapshot } from "@/hooks/use-procurement-read-model";
+import { useHomeProcurementReadSnapshot } from "@/hooks/use-procurement-read-model";
+
+const REDACTED_PLACEHOLDER = "—";
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   requested: { label: "Requested", color: "bg-warning/15 text-warning" },
@@ -12,8 +14,20 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
 };
 
 export function ProcurementTab() {
-  const snapshot = useProcurementReadSnapshot();
+  const { snapshot, sensitiveDetailLoading } = useHomeProcurementReadSnapshot();
   const allItemsCount = snapshot.totals.totalCount;
+
+  if (sensitiveDetailLoading) {
+    return (
+      <div className="space-y-4 sm:space-y-6">
+        <Card>
+          <CardContent className="p-4 sm:p-6">
+            <p className="text-body-sm text-muted-foreground animate-pulse">Loading procurement access…</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -37,12 +51,13 @@ export function ProcurementTab() {
               <div className="divide-y divide-border px-4 pb-4 sm:px-6 sm:pb-6">
                 {project.rows.map((row) => {
                   const st = STATUS_LABELS[row.status] || { label: row.status, color: "bg-muted text-muted-foreground" };
+                  const showMoney = row.monetaryVisible !== false;
                   return (
                     <div key={row.id} className="flex items-center gap-3 py-2">
                       <div className="flex-1 min-w-0">
                         <p className="text-body-sm text-foreground truncate">{row.name}</p>
                         <p className="text-caption text-muted-foreground">
-                          {row.statusQty} {row.unit} · {fmtCost(row.statusTotal)}
+                          {row.statusQty} {row.unit} · {showMoney ? fmtCost(row.statusTotal) : REDACTED_PLACEHOLDER}
                         </p>
                       </div>
                       <span className={`text-caption font-medium px-2 py-0.5 rounded-pill ${st.color}`}>
