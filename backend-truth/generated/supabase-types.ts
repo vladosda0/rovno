@@ -625,35 +625,41 @@ export type Database = {
           Row: {
           "id": string
           "estimate_work_id": string
-          "resource_type": "material" | "labor" | "equipment" | "other"
+          "resource_type": "material" | "labor" | "subcontractor" | "equipment" | "other"
           "title": string
           "quantity": number
           "unit": string | null
           "unit_price_cents": number | null
           "total_price_cents": number | null
           "created_at": string
+          "client_unit_price_cents": number | null
+          "client_total_price_cents": number | null
           }
           Insert: {
           "id"?: string
           "estimate_work_id": string
-          "resource_type": "material" | "labor" | "equipment" | "other"
+          "resource_type": "material" | "labor" | "subcontractor" | "equipment" | "other"
           "title": string
           "quantity": number
           "unit"?: string | null
           "unit_price_cents"?: number | null
           "total_price_cents"?: number | null
           "created_at"?: string
+          "client_unit_price_cents"?: number | null
+          "client_total_price_cents"?: number | null
           }
           Update: {
           "id"?: string
           "estimate_work_id"?: string
-          "resource_type"?: "material" | "labor" | "equipment" | "other"
+          "resource_type"?: "material" | "labor" | "subcontractor" | "equipment" | "other"
           "title"?: string
           "quantity"?: number
           "unit"?: string | null
           "unit_price_cents"?: number | null
           "total_price_cents"?: number | null
           "created_at"?: string
+          "client_unit_price_cents"?: number | null
+          "client_total_price_cents"?: number | null
           }
           Relationships: []
         }

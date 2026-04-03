@@ -15,7 +15,7 @@
     "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
     "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql",
     "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
-    "supabase/migrations/20260403103000_phase6_operational_summary_read_rpcs.sql",
+    "supabase/migrations/20260403191500_phase6_operational_summary_subcontractor_and_client_amounts.sql",
     "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
     "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
   ],
@@ -463,7 +463,7 @@
         {
           "name": "resource_type",
           "sqlType": "text",
-          "tsType": "\"material\" | \"labor\" | \"equipment\" | \"other\"",
+          "tsType": "\"material\" | \"labor\" | \"subcontractor\" | \"equipment\" | \"other\"",
           "nullable": false,
           "defaultSql": null,
           "primaryKey": false,
@@ -529,19 +529,29 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "client_unit_price_cents",
+          "sqlType": "bigint",
+          "tsType": "number",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "client_total_price_cents",
+          "sqlType": "bigint",
+          "tsType": "number",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
-        {
-          "type": "check",
-          "name": null,
-          "columns": [
-            "resource_type"
-          ],
-          "expression": "resource_type in ('material', 'labor', 'equipment', 'other')",
-          "usingIndex": null,
-          "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
-        },
         {
           "type": "check",
           "name": null,
@@ -571,6 +581,36 @@
           "expression": "total_price_cents is null or total_price_cents >= 0",
           "usingIndex": null,
           "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "client_unit_price_cents"
+          ],
+          "expression": "client_unit_price_cents is null or client_unit_price_cents >= 0",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260403191500_phase6_operational_summary_subcontractor_and_client_amounts.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "client_total_price_cents"
+          ],
+          "expression": "client_total_price_cents is null or client_total_price_cents >= 0",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260403191500_phase6_operational_summary_subcontractor_and_client_amounts.sql"
+        },
+        {
+          "type": "check",
+          "name": "estimate_resource_lines_resource_type_check",
+          "columns": [
+            "resource_type"
+          ],
+          "expression": "resource_type in ('material', 'labor', 'subcontractor', 'equipment', 'other')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260403191500_phase6_operational_summary_subcontractor_and_client_amounts.sql"
         }
       ],
       "indexes": [
@@ -1059,7 +1099,7 @@
       "volatility": "stable",
       "securityDefiner": true,
       "searchPath": "public",
-      "sourceMigration": "supabase/migrations/20260403103000_phase6_operational_summary_read_rpcs.sql",
+      "sourceMigration": "supabase/migrations/20260403191500_phase6_operational_summary_subcontractor_and_client_amounts.sql",
       "authenticatedExecute": true,
       "triggerUsages": []
     }

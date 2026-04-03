@@ -14,7 +14,7 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 - `supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql`
 - `supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql`
 - `supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql`
-- `supabase/migrations/20260403103000_phase6_operational_summary_read_rpcs.sql`
+- `supabase/migrations/20260403191500_phase6_operational_summary_subcontractor_and_client_amounts.sql`
 - `supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql`
 - `supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql`
 
@@ -97,12 +97,16 @@ Triggers:
 | `unit_price_cents` | `bigint` | yes |   | no |
 | `total_price_cents` | `bigint` | yes |   | no |
 | `created_at` | `timestamptz` | no | `now()` | no |
+| `client_unit_price_cents` | `bigint` | yes |   | no |
+| `client_total_price_cents` | `bigint` | yes |   | no |
 
 Constraints:
-- unnamed check (expression `resource_type in ('material', 'labor', 'equipment', 'other')`)
 - unnamed check (expression `quantity >= 0`)
 - unnamed check (expression `unit_price_cents is null or unit_price_cents >= 0`)
 - unnamed check (expression `total_price_cents is null or total_price_cents >= 0`)
+- unnamed check (expression `client_unit_price_cents is null or client_unit_price_cents >= 0`)
+- unnamed check (expression `client_total_price_cents is null or client_total_price_cents >= 0`)
+- `estimate_resource_lines_resource_type_check` check (expression `resource_type in ('material', 'labor', 'subcontractor', 'equipment', 'other')`)
 
 Indexes:
 - `idx_estimate_resource_lines_estimate_work_id` on (`estimate_work_id`)
@@ -153,7 +157,7 @@ Indexes:
 | --- | --- | --- | --- | --- |
 | `public.get_shared_estimate_version(text)` | `public.estimate_versions` | yes | `rpc` | `supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql` |
 | `public.approve_estimate_version_by_share_token(text, jsonb)` | `uuid` | yes | `rpc` | `supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql` |
-| `public.get_estimate_operational_summary(uuid, uuid, integer, integer)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260403103000_phase6_operational_summary_read_rpcs.sql` |
+| `public.get_estimate_operational_summary(uuid, uuid, integer, integer)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260403191500_phase6_operational_summary_subcontractor_and_client_amounts.sql` |
 
 ## RLS and Grants
 

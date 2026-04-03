@@ -555,21 +555,6 @@
     {
       "schema": "public",
       "table": "estimate_resource_lines",
-      "column": "resource_type",
-      "constraintName": null,
-      "kind": "enum_like",
-      "allowedValues": [
-        "material",
-        "labor",
-        "equipment",
-        "other"
-      ],
-      "expression": "resource_type in ('material', 'labor', 'equipment', 'other')",
-      "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
-    },
-    {
-      "schema": "public",
-      "table": "estimate_resource_lines",
       "column": "quantity",
       "constraintName": null,
       "kind": "expression",
@@ -596,6 +581,42 @@
       "allowedValues": null,
       "expression": "total_price_cents is null or total_price_cents >= 0",
       "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+    },
+    {
+      "schema": "public",
+      "table": "estimate_resource_lines",
+      "column": "client_unit_price_cents",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "client_unit_price_cents is null or client_unit_price_cents >= 0",
+      "sourceMigration": "supabase/migrations/20260403191500_phase6_operational_summary_subcontractor_and_client_amounts.sql"
+    },
+    {
+      "schema": "public",
+      "table": "estimate_resource_lines",
+      "column": "client_total_price_cents",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "client_total_price_cents is null or client_total_price_cents >= 0",
+      "sourceMigration": "supabase/migrations/20260403191500_phase6_operational_summary_subcontractor_and_client_amounts.sql"
+    },
+    {
+      "schema": "public",
+      "table": "estimate_resource_lines",
+      "column": "resource_type",
+      "constraintName": "estimate_resource_lines_resource_type_check",
+      "kind": "enum_like",
+      "allowedValues": [
+        "material",
+        "labor",
+        "subcontractor",
+        "equipment",
+        "other"
+      ],
+      "expression": "resource_type in ('material', 'labor', 'subcontractor', 'equipment', 'other')",
+      "sourceMigration": "supabase/migrations/20260403191500_phase6_operational_summary_subcontractor_and_client_amounts.sql"
     },
     {
       "schema": "public",
