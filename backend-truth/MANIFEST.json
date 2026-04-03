@@ -151,6 +151,10 @@
     {
       "path": "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql",
       "sha256": "d90759f1b10ab371fc5431576b1db32c1dc2749a07e311f6329c372555f7076f"
+    },
+    {
+      "path": "supabase/migrations/20260403103000_phase6_operational_summary_read_rpcs.sql",
+      "sha256": "0a7b012b5b047af213c9375decd50f3fa84fbfc0c2096352540c8aaedbe734ba"
     }
   ],
   "generated_artifacts": [
@@ -212,6 +216,7 @@
     "sql/20260326203000_owner_transfer_and_member_identity_guard.sql",
     "sql/20260326213000_internal_visibility_write_boundary.sql",
     "sql/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql",
+    "sql/20260403103000_phase6_operational_summary_read_rpcs.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],

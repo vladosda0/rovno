@@ -10,6 +10,7 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 
 - `supabase/migrations/20260306163000_inventory_foundation.sql`
 - `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql`
+- `supabase/migrations/20260403103000_phase6_operational_summary_read_rpcs.sql`
 - `supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql`
 - `supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql`
 
@@ -212,6 +213,7 @@ Triggers:
 | --- | --- | --- | --- | --- |
 | `public.apply_inventory_balance_delta(uuid, uuid, uuid, numeric)` | `void` | no | `helper` | `supabase/migrations/20260306163000_inventory_foundation.sql` |
 | `public.sync_inventory_balances()` | `trigger` | no | `trigger_helper` | `supabase/migrations/20260306163000_inventory_foundation.sql` |
+| `public.get_procurement_operational_summary(uuid, integer, integer)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260403103000_phase6_operational_summary_read_rpcs.sql` |
 
 ## RLS and Grants
 

@@ -1503,6 +1503,23 @@ export type Database = {
           }
           Returns: number
         }
+        "get_estimate_operational_summary": {
+          Args: {
+          "p_project_id": string
+          "p_estimate_version_id": unknown
+          "p_limit": unknown
+          "p_offset": unknown
+          }
+          Returns: Json
+        }
+        "get_procurement_operational_summary": {
+          Args: {
+          "p_project_id": string
+          "p_limit": unknown
+          "p_offset": unknown
+          }
+          Returns: Json
+        }
         "get_shared_estimate_version": {
           Args: {
           "p_share_token": string
