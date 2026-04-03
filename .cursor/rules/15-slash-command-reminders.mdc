@@ -1,0 +1,39 @@
+---
+description: Proactively suggest slash commands when the situation clearly matches a workflow; avoid spamming every reply
+alwaysApply: true
+---
+
+# Slash command reminders
+
+The user has custom slash commands under `~/.cursor/commands/` (global) and project commands under `.cursor/commands/`. **When a reply would benefit from a structured ritual, end with a short suggestion** (one line, optional second line why)—do not suggest more than **two** commands per message unless the user explicitly asked for a full workflow.
+
+**Do not** suggest commands on pure Q&A with no implementation context. **Do** suggest when the moment matches the table below.
+
+## Global commands (`~/.cursor/commands/`)
+
+| Command | Suggest when |
+|---------|----------------|
+| `/preflight` | New feature, vague goal, or before any non-trivial code change—assumptions or risks are unclear. |
+| `/task-breakdown` | Goal is large, ambiguous, or has multiple interpretations; user needs steps and “done when.” |
+| `/where-is-it` | User asks where something lives, is lost in the repo, or you are about to point at many files without a map. |
+| `/debug-triage` | Errors, failing tests, wrong behavior, or “it doesn’t work”—before deep edits. |
+| `/explain-diff` | User should understand what changed (after edits, or before review); they are non-technical or diff-averse. |
+| `/test-plan` | After meaningful behavior/UI/data changes; before calling work “done.” |
+| `/ship-check` | User signals completion, asks “are we good?”, or before merge/share—risks and verification missing. |
+| `/handoff` | Long session, context limit risk, switching chat, or “I’ll continue tomorrow.” |
+
+## Project commands (this workspace: **rovno**)
+
+| Command | Suggest when |
+|---------|----------------|
+| `/rovno-contract-check` | Touching APIs, types vs backend, estimates, procurement, HR, AI sidebar, sync, or mock vs real paths. |
+
+Do **not** suggest `/rovno-db-migration-note` here—that command is for the `rovno-db` repo. If the user must change the database, say the work belongs in `rovno-db` and offer `/rovno-db-migration-note` only after they open that workspace.
+
+## Phrasing
+
+Use this shape (adapt wording):
+
+**Suggestion:** Run **`/command-name`** — [one short reason].
+
+If multiple fit, pick the **single most valuable** command first.
