@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useProcurementV2, useHRItems, useHRPayments } from "@/hooks/use-mock-data";
+import { useOrders } from "@/hooks/use-order-data";
+import { subscribe as subscribeStore } from "@/data/store";
+import { subscribeHR } from "@/data/hr-store";
+import { subscribeOrders } from "@/data/order-store";
+import { subscribeProcurement } from "@/data/procurement-store";
 import {
   findVersionByShareId,
   getEstimateV2ProjectState,
@@ -7,7 +13,17 @@ import {
   type EstimateV2ProjectSyncState,
   type EstimateV2ProjectView,
 } from "@/data/estimate-v2-store";
-import { useWorkspaceMode } from "@/hooks/use-workspace-source";
+import {
+  buildEstimateV2FinanceProjectSummary,
+  getEstimateV2FinanceProjectSummary,
+  getEstimateV2FinanceSnapshot,
+  resolveEstimateV2FinanceProjectMeta,
+  type EstimateV2FinanceProjectSummary,
+  type EstimateV2FinanceSnapshot,
+} from "@/lib/estimate-v2/finance-read-model";
+import { computeFactFromDataSources } from "@/lib/estimate-v2/rollups";
+import { useWorkspaceMode, useWorkspaceProjects } from "@/hooks/use-workspace-source";
+import type { Project } from "@/types/entities";
 import type { EstimateV2Version } from "@/types/estimate-v2";
 
 export const EMPTY_ESTIMATE_V2_PROJECT_SYNC_STATE: EstimateV2ProjectSyncState = {
@@ -109,6 +125,112 @@ export function useEstimateV2Share(shareId: string): { projectId: string; versio
   useEffect(() => {
     const update = () => setValue(getter());
     return subscribeEstimateV2(update);
+  }, [getter]);
+
+  return value;
+}
+
+export function useEstimateV2FinanceProjectSummary(
+  projectId: string,
+  projectInput?: Pick<Project, "id" | "title"> | null,
+): EstimateV2FinanceProjectSummary | null {
+  const getter = useCallback(
+    () => getEstimateV2FinanceProjectSummary(projectId, projectInput),
+    [projectId, projectInput],
+  );
+  const [value, setValue] = useState(getter);
+
+  useEffect(() => {
+    const update = () => setValue(getter());
+    const unsubs = [
+      subscribeEstimateV2(update),
+      subscribeStore(update),
+      subscribeProcurement(update),
+      subscribeOrders(update),
+      subscribeHR(update),
+    ];
+    return () => unsubs.forEach((unsub) => unsub());
+  }, [getter]);
+
+  useEffect(() => {
+    setValue(getter());
+  }, [getter]);
+
+  return value;
+}
+
+/**
+ * Same finance truth as ProjectEstimate: fact rollups from workspace procurement/orders/HR hooks,
+ * not only in-memory store snapshots.
+ */
+export function useEstimateV2FinanceProjectSummaryFromWorkspace(
+  projectId: string,
+  projectInput: Pick<Project, "id" | "title"> | null | undefined,
+  options: { hrReadsEnabled: boolean },
+): EstimateV2FinanceProjectSummary | null {
+  const procurementItems = useProcurementV2(projectId);
+  const orders = useOrders(projectId);
+  const hrItems = useHRItems(projectId, { enabled: options.hrReadsEnabled });
+  const hrPayments = useHRPayments(projectId, { enabled: options.hrReadsEnabled });
+
+  const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    const bump = () => setRevision((n) => n + 1);
+    const unsubs = [
+      subscribeEstimateV2(bump),
+      subscribeStore(bump),
+      subscribeProcurement(bump),
+      subscribeOrders(bump),
+      subscribeHR(bump),
+    ];
+    return () => unsubs.forEach((unsub) => unsub());
+  }, [projectId]);
+
+  return useMemo(() => {
+    const project = resolveEstimateV2FinanceProjectMeta(projectId, projectInput ?? null);
+    if (!project) return null;
+    const state = getEstimateV2ProjectState(projectId);
+    const fact = computeFactFromDataSources({
+      procurementItems,
+      orders,
+      hrItems,
+      hrPayments,
+    });
+    return buildEstimateV2FinanceProjectSummary(project.id, project.title, state, fact);
+  }, [
+    revision,
+    projectId,
+    projectInput,
+    options.hrReadsEnabled,
+    procurementItems,
+    orders,
+    hrItems,
+    hrPayments,
+  ]);
+}
+
+export function useEstimateV2FinanceSnapshot(): EstimateV2FinanceSnapshot {
+  const projects = useWorkspaceProjects();
+  const getter = useCallback(
+    () => getEstimateV2FinanceSnapshot(projects),
+    [projects],
+  );
+  const [value, setValue] = useState(getter);
+
+  useEffect(() => {
+    const update = () => setValue(getter());
+    const unsubs = [
+      subscribeEstimateV2(update),
+      subscribeStore(update),
+      subscribeProcurement(update),
+      subscribeOrders(update),
+      subscribeHR(update),
+    ];
+    return () => unsubs.forEach((unsub) => unsub());
+  }, [getter]);
+
+  useEffect(() => {
+    setValue(getter());
   }, [getter]);
 
   return value;

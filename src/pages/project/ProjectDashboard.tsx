@@ -3,11 +3,11 @@ import { useParams } from "react-router-dom";
 import {
   useProject,
   useTasks,
-  useEstimate,
   useDocuments,
   useMedia,
   usePermission,
 } from "@/hooks/use-mock-data";
+import { useEstimateV2FinanceProjectSummaryFromWorkspace } from "@/hooks/use-estimate-v2-data";
 import { EmptyState } from "@/components/EmptyState";
 import { BudgetWidget } from "@/components/dashboard/BudgetWidget";
 import { TaskSummaryWidget } from "@/components/dashboard/TaskSummaryWidget";
@@ -39,10 +39,13 @@ export default function ProjectDashboard() {
 
   const { project, stages, members } = useProject(projectId);
   const tasks = useTasks(projectId);
-  const estimate = useEstimate(projectId);
   const documents = useDocuments(projectId);
   const media = useMedia(projectId);
   const perm = usePermission(projectId);
+  const hrReadsEnabled = projectDomainAllowsView(getProjectDomainAccess(perm.seam, "hr"));
+  const financeSummary = useEstimateV2FinanceProjectSummaryFromWorkspace(projectId, project ?? null, {
+    hrReadsEnabled,
+  });
   const actorRole = perm.seam.membership?.role ?? "viewer";
   const actorAiAccess = perm.seam.membership?.ai_access ?? "none";
   const participantsAccess = getProjectDomainAccess(perm.seam, "participants");
@@ -170,7 +173,7 @@ export default function ProjectDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-6 gap-sp-2 items-stretch">
         <TaskSummaryWidget tasks={tasks} projectId={projectId} className="lg:col-span-4 h-full" />
         {canViewSensitiveDetail && (
-          <BudgetWidget estimate={estimate} projectId={projectId} className="lg:col-span-2 h-full" />
+          <BudgetWidget summary={financeSummary} projectId={projectId} className="lg:col-span-2 h-full" />
         )}
       </div>
 

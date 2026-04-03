@@ -1,7 +1,8 @@
 import { useCurrentUser, useEvents } from "@/hooks/use-mock-data";
-import { getProject, getStages, getTasks, getEstimate } from "@/data/store";
+import { getProject, getStages, getTasks } from "@/data/store";
+import { useEstimateV2FinanceProjectSummaryFromWorkspace } from "@/hooks/use-estimate-v2-data";
 import { useWorkspaceProjectMembers } from "@/hooks/use-workspace-source";
-import { usePermission } from "@/lib/permissions";
+import { getProjectDomainAccess, projectDomainAllowsView, usePermission } from "@/lib/permissions";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useProcurementReadProjectSummary } from "@/hooks/use-procurement-read-model";
 
@@ -14,11 +15,14 @@ export function ContextInspector({ projectId }: ContextInspectorProps) {
   const project = getProject(projectId);
   const stages = getStages(projectId);
   const tasks = getTasks(projectId);
-  const estimate = getEstimate(projectId);
   const procurementSummary = useProcurementReadProjectSummary(projectId);
   const events = useEvents(projectId).slice(0, 5);
   const members = useWorkspaceProjectMembers(projectId);
   const perm = usePermission(projectId);
+  const hrReadsEnabled = projectDomainAllowsView(getProjectDomainAccess(perm.seam, "hr"));
+  const financeSummary = useEstimateV2FinanceProjectSummaryFromWorkspace(projectId, project ?? null, {
+    hrReadsEnabled,
+  });
 
   if (!project) return null;
 
@@ -26,7 +30,12 @@ export function ContextInspector({ projectId }: ContextInspectorProps) {
     project: { title: project.title, type: project.type, progress: `${project.progress_pct}%` },
     stages: stages.map((s) => ({ title: s.title, status: s.status })),
     tasks: { total: tasks.length, done: tasks.filter((t) => t.status === "done").length, blocked: tasks.filter((t) => t.status === "blocked").length },
-    estimate: { versions: estimate?.versions.length ?? 0, current: estimate?.versions[estimate.versions.length - 1]?.status },
+    estimate: {
+      hasEstimate: financeSummary?.hasEstimate ?? false,
+      current: financeSummary?.status ?? null,
+      stages: financeSummary?.stageCount ?? 0,
+      lines: financeSummary?.lineCount ?? 0,
+    },
     procurement: {
       total: procurementSummary?.totalCount ?? 0,
       requested: procurementSummary?.requestedCount ?? 0,

@@ -1,23 +1,25 @@
 import { Link } from "react-router-dom";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
+import type { EstimateV2FinanceProjectSummary } from "@/lib/estimate-v2/finance-read-model";
 import { cn } from "@/lib/utils";
-import type { Estimate } from "@/types/entities";
 
 interface Props {
-  estimate: Estimate | undefined;
+  summary: EstimateV2FinanceProjectSummary | null;
   projectId: string;
   className?: string;
 }
 
-function formatCurrency(value: number) {
-  return `₽${value.toLocaleString("ru-RU")}`;
+function formatCurrency(valueCents: number, currency: string) {
+  return new Intl.NumberFormat("ru-RU", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 0,
+  }).format(valueCents / 100);
 }
 
-export function BudgetWidget({ estimate, projectId, className }: Props) {
-  const activeVersion = estimate?.versions.find((v) => v.status === "approved") ?? estimate?.versions[0];
-
-  if (!activeVersion) {
+export function BudgetWidget({ summary, projectId, className }: Props) {
+  if (!summary?.hasEstimate) {
     return (
       <div className={cn("glass rounded-card p-sp-2 space-y-3", className)}>
         <h3 className="text-body font-semibold text-foreground">Budget</h3>
@@ -31,20 +33,15 @@ export function BudgetWidget({ estimate, projectId, className }: Props) {
     );
   }
 
-  const totalPlanned = activeVersion.items.reduce((sum, item) => sum + item.planned_cost, 0);
-  const totalSpent = activeVersion.items.reduce((sum, item) => sum + item.paid_cost, 0);
-  const toBePaid = Math.max(totalPlanned - totalSpent, 0);
-  const spentPct = totalPlanned > 0 ? Math.round((totalSpent / totalPlanned) * 100) : 0;
-
-  const urgentUnpaid = activeVersion.items
-    .map((item) => ({
-      id: item.id,
-      title: item.title,
-      remaining: Math.max(item.planned_cost - item.paid_cost, 0),
-    }))
-    .filter((item) => item.remaining > 0)
-    .sort((a, b) => b.remaining - a.remaining)
-    .slice(0, 3);
+  const totalPlanned = summary.plannedBudgetCents;
+  const totalSpent = summary.spentCents;
+  const toBePaid = summary.toBePaidCents;
+  const profitabilityPct = summary.percentProfitability;
+  const profitabilityLabel = profitabilityPct == null ? "—" : `${profitabilityPct.toFixed(1)}%`;
+  const profitabilityProgress = profitabilityPct == null
+    ? 0
+    : Math.max(0, Math.min(100, profitabilityPct));
+  const currency = summary.currency;
 
   return (
     <div className={cn("glass rounded-card p-sp-2", className)}>
@@ -58,35 +55,23 @@ export function BudgetWidget({ estimate, projectId, className }: Props) {
       <div className="grid grid-cols-2 gap-2 mb-2">
         <div className="rounded-panel bg-muted/40 p-2">
           <p className="text-[10px] text-muted-foreground">Planned</p>
-          <p className="text-body-sm font-semibold text-foreground">{formatCurrency(totalPlanned)}</p>
+          <p className="text-body-sm font-semibold text-foreground">{formatCurrency(totalPlanned, currency)}</p>
         </div>
         <div className="rounded-panel bg-muted/40 p-2">
           <p className="text-[10px] text-muted-foreground">Spent</p>
-          <p className="text-body-sm font-semibold text-foreground">{formatCurrency(totalSpent)}</p>
+          <p className="text-body-sm font-semibold text-foreground">{formatCurrency(totalSpent, currency)}</p>
         </div>
         <div className="rounded-panel bg-muted/40 p-2">
           <p className="text-[10px] text-muted-foreground">To be paid</p>
-          <p className="text-body-sm font-semibold text-foreground">{formatCurrency(toBePaid)}</p>
+          <p className="text-body-sm font-semibold text-foreground">{formatCurrency(toBePaid, currency)}</p>
         </div>
         <div className="rounded-panel bg-muted/40 p-2">
-          <p className="text-[10px] text-muted-foreground">% spent</p>
-          <p className="text-body-sm font-semibold text-foreground">{spentPct}%</p>
+          <p className="text-[10px] text-muted-foreground">% profitability</p>
+          <p className="text-body-sm font-semibold text-foreground">{profitabilityLabel}</p>
         </div>
       </div>
 
-      <Progress value={spentPct} className="h-1.5" />
-
-      {urgentUnpaid.length > 0 && (
-        <div className="mt-2 space-y-1">
-          <p className="text-[10px] font-medium text-muted-foreground">Urgent unpaid</p>
-          {urgentUnpaid.map((item) => (
-            <div key={item.id} className="flex items-center gap-2 rounded-panel bg-muted/40 px-2 py-1">
-              <span className="text-caption text-foreground flex-1 truncate">{item.title}</span>
-              <span className="text-[10px] text-muted-foreground">{formatCurrency(item.remaining)}</span>
-            </div>
-          ))}
-        </div>
-      )}
+      <Progress value={profitabilityProgress} className="h-1.5" />
     </div>
   );
 }
