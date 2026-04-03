@@ -1237,7 +1237,7 @@
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260403103000_phase6_operational_summary_read_rpcs.sql",
+      "sourceMigration": "supabase/migrations/20260403191500_phase6_operational_summary_subcontractor_and_client_amounts.sql",
       "triggerUsages": []
     },
     {
@@ -1272,7 +1272,7 @@
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260403103000_phase6_operational_summary_read_rpcs.sql",
+      "sourceMigration": "supabase/migrations/20260403191500_phase6_operational_summary_subcontractor_and_client_amounts.sql",
       "triggerUsages": []
     }
   ]
