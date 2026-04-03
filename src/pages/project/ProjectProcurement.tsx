@@ -80,7 +80,7 @@ import { inventoryQueryKeys } from "@/hooks/use-inventory-data";
 import { orderQueryKeys } from "@/hooks/use-order-data";
 import { procurementQueryKeys } from "@/hooks/use-procurement-source";
 import { useWorkspaceMode } from "@/hooks/use-workspace-source";
-import { computeLineTotals, computeProjectTotals } from "@/lib/estimate-v2/pricing";
+import { computeProjectTotals } from "@/lib/estimate-v2/pricing";
 import type {
   Event,
   OrderWithLines,
@@ -224,7 +224,6 @@ type InStockTableRow = {
   orderIds: string[];
   lastReceivedAt: string | null;
   receiverName: string | null;
-  clientUnitPrice: number | null;
 };
 
 export default function ProjectProcurement() {
@@ -516,6 +515,14 @@ export default function ProjectProcurement() {
     [items],
   );
 
+  const orderedTableColumnCount = useMemo(() => {
+    let n = 5;
+    if (canManageProcurement) n += 1;
+    if (canViewSensitiveDetail) n += 2;
+    if (canManageProcurement) n += 1;
+    return n;
+  }, [canManageProcurement, canViewSensitiveDetail]);
+
   const defaultLocationId = useMemo(
     () => locations.find((location) => location.isDefault)?.id ?? locations[0]?.id ?? null,
     [locations],
@@ -535,38 +542,6 @@ export default function ProjectProcurement() {
     });
     return map;
   }, [members]);
-  const estimateLineById = useMemo(
-    () => new Map(estimateState.lines.map((line) => [line.id, line])),
-    [estimateState.lines],
-  );
-  const estimateStageById = useMemo(
-    () => new Map(estimateState.stages.map((stage) => [stage.id, stage])),
-    [estimateState.stages],
-  );
-  const clientUnitPriceByItemId = useMemo(() => {
-    const map = new Map<string, number | null>();
-
-    items.forEach((item) => {
-      const lineId = item.sourceEstimateV2LineId ?? null;
-      if (!lineId) {
-        map.set(item.id, null);
-        return;
-      }
-
-      const line = estimateLineById.get(lineId);
-      const stage = line ? estimateStageById.get(line.stageId) ?? null : null;
-      if (!line || !stage) {
-        map.set(item.id, null);
-        return;
-      }
-
-      const lineTotals = computeLineTotals(line, stage, estimateState.project, estimateState.project.regime);
-      map.set(item.id, lineTotals.clientUnitCents / 100);
-    });
-
-    return map;
-  }, [estimateLineById, estimateStageById, estimateState.project, items]);
-
   const participantOptions = useMemo(() => (
     members
       .map((member) => {
@@ -747,7 +722,6 @@ export default function ProjectProcurement() {
             orderIds: entry.orderIds,
             lastReceivedAt: computeLastReceivedAt(entry.procurementItemId, group.locationId, orders),
             receiverName,
-            clientUnitPrice: clientUnitPriceByItemId.get(entry.procurementItemId) ?? null,
           } satisfies InStockTableRow;
         }).filter((row): row is InStockTableRow => !!row)
       ))
@@ -763,7 +737,7 @@ export default function ProjectProcurement() {
       || (row.item.spec?.toLowerCase().includes(q) ?? false)
       || row.locationName.toLowerCase().includes(q)
     ));
-  }, [pid, items, orders, locations, search, itemById, participantNameById, clientUnitPriceByItemId]);
+  }, [pid, items, orders, locations, search, itemById, participantNameById]);
 
   const summaryFallbackInStockRows = useMemo(() => {
     if (canManageProcurement) {
@@ -824,7 +798,6 @@ export default function ProjectProcurement() {
           orderIds: [],
           lastReceivedAt: null,
           receiverName: null,
-          clientUnitPrice: null,
         } satisfies InStockTableRow;
       })
       .sort((left, right) => {
@@ -1576,7 +1549,6 @@ export default function ProjectProcurement() {
         <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Unit</th>
         {canViewSensitiveDetail && <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Unit price</th>}
         {canViewSensitiveDetail && <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Total</th>}
-        {!canViewSensitiveDetail && <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Client price</th>}
         {canManageProcurement && <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Action</th>}
       </tr>
     </thead>
@@ -1590,7 +1562,6 @@ export default function ProjectProcurement() {
         <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Location</th>
         <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Qty available</th>
         {!canManageProcurement && <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Receiver</th>}
-        {!canManageProcurement && <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Client price</th>}
         <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Date last received</th>
         {canManageProcurement && <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Actions</th>}
       </tr>
@@ -2019,25 +1990,89 @@ export default function ProjectProcurement() {
 
                   {!collapsed && (
                     <div className="overflow-x-auto">
-                      {order.lines.length === 0 && !canViewSensitiveDetail ? (
-                        <div className="px-3 py-6 text-sm text-muted-foreground">
-                          Ordered line details are unavailable for your current access.
-                        </div>
-                      ) : (
                         <table className="w-full text-sm">
                           {renderOrderedTableHeader()}
                           <tbody>
-                            {order.lines.map((line) => {
+                            {order.lines.length === 0 && !canViewSensitiveDetail ? (
+                              <tr>
+                                <td
+                                  colSpan={orderedTableColumnCount}
+                                  className="px-3 py-6 text-sm text-muted-foreground"
+                                >
+                                  No ordered line items are visible with your current access.
+                                </td>
+                              </tr>
+                            ) : (
+                            order.lines.map((line) => {
                             const item = itemById.get(line.procurementItemId);
-                            if (!item) return null;
+                            if (!item && canViewSensitiveDetail) return null;
                             const openQty = Math.max(line.qty - line.receivedQty, 0);
-                            const unitPrice = line.actualUnitPrice ?? line.plannedUnitPrice ?? item.actualUnitPrice ?? item.plannedUnitPrice ?? 0;
-                            const clientUnitPrice = clientUnitPriceByItemId.get(item.id) ?? null;
+                            const unitPrice = item
+                              ? (line.actualUnitPrice ?? line.plannedUnitPrice ?? item.actualUnitPrice ?? item.plannedUnitPrice ?? 0)
+                              : 0;
                             const selectionKey = `${order.id}:${line.id}`;
                             const receivableTarget = orderedReceivableTargetByKey.get(selectionKey);
                             const selected = !!receivableTarget && selectedOrderedLineKeys.has(selectionKey);
                             const parsedDelivery = order.deliveryDeadline ? new Date(order.deliveryDeadline) : null;
                             const selectedDeliveryDate = parsedDelivery && !Number.isNaN(parsedDelivery.getTime()) ? parsedDelivery : undefined;
+
+                            if (!item) {
+                              return (
+                                <tr key={line.id} className="border-b border-border/70 last:border-0 hover:bg-muted/20">
+                                  {canManageProcurement && (
+                                    <td className="px-2 py-2">
+                                      <Checkbox checked={false} disabled />
+                                    </td>
+                                  )}
+                                  <td className="px-2 py-2 min-w-[220px] text-sm text-muted-foreground">
+                                    Item details unavailable
+                                  </td>
+                                  <td className="px-2 py-2 text-xs text-muted-foreground">—</td>
+                                  <td className="px-2 py-2">
+                                    <span className="text-xs text-muted-foreground">
+                                      {order.deliveryDeadline ? formatDate(order.deliveryDeadline) : "-"}
+                                    </span>
+                                  </td>
+                                  <td className="px-2 py-2 text-right">
+                                    <div className="flex items-center justify-end gap-1">
+                                      <p className="tabular-nums text-foreground">{openQty}</p>
+                                      {line.receivedQty > 0 && openQty > 0 && (
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <button type="button" className="text-warning" aria-label="Partial receive details">
+                                              <AlertTriangle className="h-3.5 w-3.5" />
+                                            </button>
+                                          </TooltipTrigger>
+                                          <TooltipContent className="max-w-xs text-caption">
+                                            <p>{`Received ${line.receivedQty} out of ${line.qty}.`}</p>
+                                            <button
+                                              type="button"
+                                              className="mt-1 text-accent hover:underline"
+                                              onClick={(event) => {
+                                                event.stopPropagation();
+                                                setActiveTab("in_stock");
+                                              }}
+                                            >
+                                              Learn more
+                                            </button>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="px-2 py-2">{line.unit}</td>
+                                  {canManageProcurement && (
+                                    <td className="px-2 py-2">
+                                      <div className="flex justify-end">
+                                        <Button type="button" size="sm" className="h-7" disabled>
+                                          Receive
+                                        </Button>
+                                      </div>
+                                    </td>
+                                  )}
+                                </tr>
+                              );
+                            }
 
                             return (
                               <tr key={line.id} className="border-b border-border/70 last:border-0 hover:bg-muted/20">
@@ -2149,9 +2184,6 @@ export default function ProjectProcurement() {
                                 {canViewSensitiveDetail && (
                                   <td className="px-2 py-2 text-right">{fmtCost(unitPrice * openQty)}</td>
                                 )}
-                                {!canViewSensitiveDetail && (
-                                  <td className="px-2 py-2 text-right">{clientUnitPrice === null ? "—" : fmtCost(clientUnitPrice)}</td>
-                                )}
                                 {canManageProcurement && (
                                   <td className="px-2 py-2">
                                     <div className="flex justify-end">
@@ -2169,10 +2201,10 @@ export default function ProjectProcurement() {
                                 )}
                               </tr>
                             );
-                            })}
+                            })
+                            )}
                           </tbody>
                         </table>
-                      )}
                     </div>
                   )}
                 </div>
@@ -2205,23 +2237,22 @@ export default function ProjectProcurement() {
                       <td className="px-2 py-2 min-w-[240px]">
                         <button
                           type="button"
-                          className="text-left hover:underline"
+                          className="text-left hover:underline w-full min-w-0"
                           onClick={() => openInStockDetail(row)}
                         >
-                          <p className="font-medium text-foreground truncate">{row.item.name}</p>
-                          {row.item.spec && <p className="text-xs text-muted-foreground truncate">{row.item.spec}</p>}
-                          <div className="mt-1">
-                            <ResourceTypeBadge type={row.item.type} className="border-transparent" />
+                          <div className="flex min-w-0 items-center gap-2">
+                            <ResourceTypeBadge type={row.item.type} className="shrink-0 border-transparent" />
+                            <p className="font-medium text-foreground truncate min-w-0">{row.item.name}</p>
                           </div>
+                          {row.item.spec && (
+                            <p className="text-xs text-muted-foreground truncate">{row.item.spec}</p>
+                          )}
                         </button>
                       </td>
                       <td className="px-2 py-2 text-muted-foreground">{row.locationName}</td>
                       <td className="px-2 py-2 text-right tabular-nums">{row.qty} {row.item.unit}</td>
                       {!canManageProcurement && (
                         <td className="px-2 py-2 text-xs text-muted-foreground">{row.receiverName ?? "—"}</td>
-                      )}
-                      {!canManageProcurement && (
-                        <td className="px-2 py-2 text-right">{row.clientUnitPrice === null ? "—" : fmtCost(row.clientUnitPrice)}</td>
                       )}
                       <td className="px-2 py-2 text-xs text-muted-foreground">{formatDate(row.lastReceivedAt)}</td>
                       {canManageProcurement && (

@@ -278,7 +278,7 @@ describe("ProjectProcurement In stock tab", () => {
     expect(within(dialog).getByRole("link", { name: "Consignment note.pdf" })).toBeInTheDocument();
   });
 
-  it("shows receiver and client-safe price in contractor summary mode", () => {
+  it("shows receiver without monetary column in contractor summary mode", () => {
     const projectId = "project-1";
     seedSupplierInStock(projectId, `Summary mode ${Date.now()}`, { linkEstimate: true });
     setAuthRole("contractor");
@@ -289,15 +289,9 @@ describe("ProjectProcurement In stock tab", () => {
     const table = screen.getByRole("table");
     const tableScope = within(table);
     expect(tableScope.getByText("Receiver")).toBeInTheDocument();
-    expect(tableScope.getByText("Client price")).toBeInTheDocument();
+    expect(tableScope.queryByText("Client price")).not.toBeInTheDocument();
     expect(tableScope.queryByText("Actions")).not.toBeInTheDocument();
-
-    const rows = tableScope.getAllByRole("row");
-    const row = rows[1] ?? null;
-    expect(row).toBeTruthy();
-    if (!row) return;
-    expect(within(row).getByText("—")).toBeInTheDocument();
-    expect(within(row).getByText(/₽/)).toBeInTheDocument();
+    expect(tableScope.queryByText(/₽/)).not.toBeInTheDocument();
   });
 
   it("falls back to stock snapshot rows for contractor summary mode when procurement items are hidden", async () => {

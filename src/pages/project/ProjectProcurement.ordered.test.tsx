@@ -1,8 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
+import * as permissions from "@/lib/permissions";
 import { addProcurementItem } from "@/data/procurement-store";
+import type { FinanceVisibility, MemberRole } from "@/types/entities";
 import {
   __unsafeResetOrdersForTests,
   createDraftOrder,
@@ -108,6 +110,93 @@ function seedPartialOrderedLine(projectId: string) {
   return { item };
 }
 
+function buildNonDetailProcurementPermission(role: MemberRole, finance_visibility: FinanceVisibility) {
+  return {
+    seam: {
+      projectId: "project-1",
+      profileId: "user-1",
+      membership: {
+        project_id: "project-1",
+        user_id: "user-1",
+        role,
+        viewer_regime: null,
+        ai_access: "consult_only" as const,
+        finance_visibility,
+        credit_limit: 0,
+        used_credits: 0,
+      },
+      project: undefined,
+    },
+    role,
+    can: () => true,
+    isLoading: false,
+  };
+}
+
+function seedPlacedOrderWithUnresolvedItemLine(projectId: string) {
+  let linkedLineId = getEstimateV2ProjectState(projectId).lines[0]?.id ?? null;
+  if (!linkedLineId) {
+    const stage = createStage(projectId, { title: "Linked stage" });
+    const work = stage ? createWork(projectId, { stageId: stage.id, title: "Linked work" }) : null;
+    const line = stage && work ? createLine(projectId, {
+      stageId: stage.id,
+      workId: work.id,
+      title: "Linked material",
+      type: "material",
+      qtyMilli: 1_000,
+      costUnitCents: 12_000,
+    }) : null;
+    linkedLineId = line?.id ?? null;
+  }
+
+  const itemId = `ordered-item-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const item = addProcurementItem({
+    id: itemId,
+    projectId,
+    stageId: null,
+    categoryId: null,
+    type: "material",
+    name: `Ordered item ${itemId}`,
+    spec: "Spec",
+    unit: "pcs",
+    requiredByDate: "2026-02-02T00:00:00.000Z",
+    requiredQty: 30,
+    orderedQty: 0,
+    receivedQty: 0,
+    plannedUnitPrice: 100,
+    actualUnitPrice: 120,
+    supplier: null,
+    supplierPreferred: null,
+    locationPreferredId: null,
+    lockedFromEstimate: false,
+    sourceEstimateItemId: "estimate-line-ordered",
+    sourceEstimateV2LineId: linkedLineId,
+    orphaned: false,
+    orphanedAt: null,
+    orphanedReason: null,
+    linkUrl: null,
+    notes: null,
+    attachments: [],
+    createdFrom: "estimate",
+    linkedTaskIds: [],
+    archived: false,
+  });
+  const location = ensureDefaultLocation(projectId);
+  const draft = createDraftOrder({
+    projectId,
+    kind: "supplier",
+    supplierName: "Supplier",
+    deliverToLocationId: location.id,
+    deliveryDeadline: "2026-06-10T00:00:00.000Z",
+    lines: [
+      { procurementItemId: item.id, qty: 12, unit: "pcs", plannedUnitPrice: 100, actualUnitPrice: 120 },
+      { procurementItemId: "missing-procurement-item-test-id", qty: 5, unit: "m", plannedUnitPrice: null, actualUnitPrice: null },
+    ],
+  });
+  placeOrder(draft.id);
+  return { item };
+}
+
 describe("ProjectProcurement Ordered tab", () => {
   beforeEach(() => {
     __unsafeResetOrdersForTests();
@@ -186,7 +275,7 @@ describe("ProjectProcurement Ordered tab", () => {
     expect(screen.queryByRole("button", { name: "Receive" })).not.toBeInTheDocument();
   });
 
-  it("shows client-safe price while redacting internal ordered value details for contractor summary mode", () => {
+  it("omits monetary columns while keeping operational ordered rows for contractor summary mode", () => {
     const projectId = "project-1";
     seedPartialOrderedLine(projectId);
     setAuthRole("contractor");
@@ -195,9 +284,75 @@ describe("ProjectProcurement Ordered tab", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /^Ordered \(/i }));
 
-    expect(screen.getByText("Client price")).toBeInTheDocument();
-    expect(screen.queryByText("Unit price")).not.toBeInTheDocument();
-    expect(screen.queryByText(/^Total$/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/₽/)).toBeInTheDocument();
+    const table = screen.getByRole("table");
+    const tableScope = within(table);
+    expect(tableScope.queryByText("Client price")).not.toBeInTheDocument();
+    expect(tableScope.queryByText("Unit price")).not.toBeInTheDocument();
+    expect(tableScope.queryByText(/^Total$/i)).not.toBeInTheDocument();
+    expect(tableScope.queryByText(/₽/)).not.toBeInTheDocument();
+    expect(screen.getByText("Supplier")).toBeInTheDocument();
+    expect(tableScope.getAllByRole("row").length).toBeGreaterThanOrEqual(2);
+    expect(tableScope.getByText("pcs")).toBeInTheDocument();
+  });
+});
+
+describe("ProjectProcurement Ordered tab — non-detail operational visibility", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  beforeEach(() => {
+    __unsafeResetOrdersForTests();
+    __unsafeResetInventoryForTests();
+    window.sessionStorage.clear();
+    clearDemoSession();
+    enterDemoSession("project-1");
+    setAuthRole("owner");
+    setProjectEstimateStatus("project-1", "in_work", { skipSetup: true });
+  });
+
+  it.each([
+    ["contractor", "summary"],
+    ["contractor", "none"],
+    ["viewer", "summary"],
+    ["viewer", "none"],
+  ] as const)("Ordered shows items, qty, and delivery without money for %s + finance %s", (role, finance_visibility) => {
+    const projectId = "project-1";
+    seedPartialOrderedLine(projectId);
+    vi.spyOn(permissions, "usePermission").mockReturnValue(
+      buildNonDetailProcurementPermission(role, finance_visibility),
+    );
+    setAuthRole(role);
+
+    renderProjectProcurement(projectId);
+    fireEvent.click(screen.getByRole("button", { name: /^Ordered \(/i }));
+
+    expect(screen.getByText("Supplier")).toBeInTheDocument();
+    const table = screen.getByRole("table");
+    const tableScope = within(table);
+    expect(tableScope.getByText("pcs")).toBeInTheDocument();
+    expect(tableScope.getByText("20")).toBeInTheDocument();
+    expect(tableScope.queryByText("Unit price")).not.toBeInTheDocument();
+    expect(tableScope.queryByText(/^Total$/i)).not.toBeInTheDocument();
+    expect(tableScope.queryByText(/₽/)).not.toBeInTheDocument();
+  });
+
+  it("shows operational columns for a line without a resolvable procurement item (non-detail)", () => {
+    const projectId = "project-1";
+    seedPlacedOrderWithUnresolvedItemLine(projectId);
+    vi.spyOn(permissions, "usePermission").mockReturnValue(
+      buildNonDetailProcurementPermission("contractor", "none"),
+    );
+    setAuthRole("contractor");
+
+    renderProjectProcurement(projectId);
+    fireEvent.click(screen.getByRole("button", { name: /^Ordered \(/i }));
+
+    const table = screen.getByRole("table");
+    const tableScope = within(table);
+    expect(tableScope.getByText("Item details unavailable")).toBeInTheDocument();
+    expect(tableScope.getByText("m")).toBeInTheDocument();
+    expect(tableScope.queryByText(/₽/)).not.toBeInTheDocument();
+    expect(tableScope.queryByText("Unit price")).not.toBeInTheDocument();
   });
 });

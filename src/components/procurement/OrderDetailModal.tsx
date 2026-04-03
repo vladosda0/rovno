@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cancelDraftOrder, voidOrder } from "@/data/order-store";
 import { useOrder } from "@/hooks/use-order-data";
 import { useProcurementV2 } from "@/hooks/use-mock-data";
@@ -112,6 +112,9 @@ export function OrderDetailModal({
               Order details
               {order && <StatusBadge status={orderStatusLabel(order.status)} variant="procurement" />}
             </DialogTitle>
+            <DialogDescription className="sr-only">
+              Supplier order lines, delivery targets, and receipt progress for this order.
+            </DialogDescription>
           </DialogHeader>
 
           {!order ? (
