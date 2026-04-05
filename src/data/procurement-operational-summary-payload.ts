@@ -19,6 +19,8 @@ export type ProcurementOperationalRpcOrderedLine = {
 export type ProcurementOperationalRpcProcurementItem = {
   procurement_item_id: string;
   estimate_resource_line_id: string | null;
+  /** Joined `estimate_resource_lines.resource_type` when linked to an estimate line. */
+  estimate_resource_line_resource_type: string | null;
   task_id: string | null;
   title: string;
   description: string | null;
@@ -83,6 +85,9 @@ function parseRpcProcurementItem(value: unknown): ProcurementOperationalRpcProcu
     procurement_item_id: id,
     estimate_resource_line_id: typeof row.estimate_resource_line_id === "string"
       ? row.estimate_resource_line_id
+      : null,
+    estimate_resource_line_resource_type: typeof row.estimate_resource_line_resource_type === "string"
+      ? row.estimate_resource_line_resource_type
       : null,
     task_id: typeof row.task_id === "string" ? row.task_id : null,
     title: typeof row.title === "string" ? row.title : "",

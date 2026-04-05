@@ -334,6 +334,24 @@ describe("procurement-source helpers", () => {
     ]);
   });
 
+  it("shapeProcurementItemsWithOrderContext maps linked estimate line resource_type to procurement type", () => {
+    const items = shapeProcurementItemsWithOrderContext({
+      itemRows: [
+        procurementItemRow({
+          id: "pi-tool",
+          estimate_resource_line_id: "erl-tool",
+          title: "Hammer",
+        }),
+      ],
+      orderRows: [],
+      orderLineRows: [],
+      movementRows: [],
+      estimateResourceLineTypeById: new Map([["erl-tool", "equipment"]]),
+    });
+    expect(items).toHaveLength(1);
+    expect(items[0]?.type).toBe("tool");
+  });
+
   it("relinks a cached legacy tool row so repeated estimate updates keep the same persisted procurement item id", async () => {
     state.loadEstimateV2HeroTransitionCacheMock.mockReturnValue({
       version: 1,

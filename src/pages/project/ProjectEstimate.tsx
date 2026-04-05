@@ -85,7 +85,12 @@ import { useEstimateV2Project } from "@/hooks/use-estimate-v2-data";
 import { getPlanningSource } from "@/data/planning-source";
 import { addEvent, getUserById } from "@/data/store";
 import { createWorkspaceProjectInvite, sendWorkspaceProjectInviteEmail } from "@/data/workspace-source";
-import { computeLineTotals, computeProjectTotals, computeStageTotals } from "@/lib/estimate-v2/pricing";
+import {
+  computeLineTotals,
+  computeProjectTotals,
+  computeStageTotals,
+  displayLineClientAmounts,
+} from "@/lib/estimate-v2/pricing";
 import { resolveProjectEstimateCtaState } from "@/lib/estimate-v2/project-estimate-cta";
 import { resolveSubmitToClientState } from "@/lib/estimate-v2/project-estimate-submit-state";
 import { getDefaultFinanceVisibility } from "@/lib/participant-role-policy";
@@ -104,6 +109,7 @@ import {
   getProjectDomainAccess,
   projectDomainAllowsView,
   projectDomainAllowsManage,
+  seamCanViewOperationalFinanceSummary,
   seamCanViewSensitiveDetail,
   usePermission,
 } from "@/lib/permissions";
@@ -567,6 +573,7 @@ export default function ProjectEstimate() {
   const regime = estimateProject.regime;
   const estimateAccess = getProjectDomainAccess(perm.seam, "estimate");
   const canViewSensitiveDetail = seamCanViewSensitiveDetail(perm.seam);
+  const canViewOperationalFinanceSummary = seamCanViewOperationalFinanceSummary(perm.seam);
   const canManageEstimate = projectDomainAllowsManage(estimateAccess) && regime !== "client";
   const canEditEstimate = canManageEstimate;
   const canSubmitToClient = canManageEstimate && canSubmitByMembership;
@@ -982,6 +989,13 @@ export default function ProjectEstimate() {
     });
     return map;
   }, [estimateProject, lines, regime, stageById]);
+
+  const hasSummaryClientPricingOnAnyLine = useMemo(() => (
+    lines.some((line) => (
+      typeof line.summaryClientUnitCents === "number" && Number.isFinite(line.summaryClientUnitCents)
+      && typeof line.summaryClientTotalCents === "number" && Number.isFinite(line.summaryClientTotalCents)
+    ))
+  ), [lines]);
 
   const totals = useMemo(
     () => computeProjectTotals(estimateProject, stages, works, lines, regime),
@@ -1475,8 +1489,15 @@ export default function ProjectEstimate() {
     rows.push(["Regime", regime]);
     rows.push([]);
 
-    if (!canViewSensitiveDetail) {
+    const summaryFinancialExport = !canViewSensitiveDetail
+      && canViewOperationalFinanceSummary
+      && hasSummaryClientPricingOnAnyLine;
+    const requireSummaryRpcForExport = canViewOperationalFinanceSummary && !canViewSensitiveDetail;
+
+    if (!canViewSensitiveDetail && !summaryFinancialExport) {
       rows.push(["Stage", "Work", "Line", "Qty", "Unit"]);
+    } else if (!canViewSensitiveDetail && summaryFinancialExport) {
+      rows.push(["Stage", "Work", "Line", "Qty", "Unit", "Client unit", "Client total"]);
     } else if (regime === "client") {
       rows.push(["Stage", "Work", "Line", "Qty", "Unit", "Client unit", "Client total"]);
     } else if (regime === "contractor") {
@@ -1494,6 +1515,19 @@ export default function ProjectEstimate() {
           if (!lineTotals) return;
 
           if (!canViewSensitiveDetail) {
+            if (summaryFinancialExport) {
+              const clientMoney = displayLineClientAmounts(line, lineTotals, { requireSummaryRpc: requireSummaryRpcForExport });
+              rows.push([
+                stage.title,
+                work.title,
+                line.title,
+                qtyFromMilli(line.qtyMilli),
+                line.unit,
+                clientMoney ? money(clientMoney.clientUnitCents, estimateProject.currency) : "—",
+                clientMoney ? money(clientMoney.clientTotalCents, estimateProject.currency) : "—",
+              ]);
+              return;
+            }
             rows.push([
               stage.title,
               work.title,
@@ -1504,6 +1538,11 @@ export default function ProjectEstimate() {
             return;
           }
 
+          const clientForCsv = displayLineClientAmounts(line, lineTotals)
+            ?? { clientUnitCents: lineTotals.clientUnitCents, clientTotalCents: lineTotals.clientTotalCents };
+          const clientUnitStr = money(clientForCsv.clientUnitCents, estimateProject.currency);
+          const clientTotalStr = money(clientForCsv.clientTotalCents, estimateProject.currency);
+
           if (regime === "client") {
             rows.push([
               stage.title,
@@ -1511,8 +1550,8 @@ export default function ProjectEstimate() {
               line.title,
               qtyFromMilli(line.qtyMilli),
               line.unit,
-              money(lineTotals.clientUnitCents, estimateProject.currency),
-              money(lineTotals.clientTotalCents, estimateProject.currency),
+              clientUnitStr,
+              clientTotalStr,
             ]);
             return;
           }
@@ -1529,8 +1568,8 @@ export default function ProjectEstimate() {
               money(lineTotals.costTotalCents, estimateProject.currency),
               fromBpsToPercent(line.markupBps),
               fromBpsToPercent(effectiveDiscountForDisplay(line, stage, estimateProject.discountBps)),
-              money(lineTotals.clientUnitCents, estimateProject.currency),
-              money(lineTotals.clientTotalCents, estimateProject.currency),
+              clientUnitStr,
+              clientTotalStr,
             ]);
             return;
           }
@@ -1545,8 +1584,8 @@ export default function ProjectEstimate() {
             money(line.costUnitCents, estimateProject.currency),
             money(lineTotals.costTotalCents, estimateProject.currency),
             fromBpsToPercent(effectiveDiscountForDisplay(line, stage, estimateProject.discountBps)),
-            money(lineTotals.clientUnitCents, estimateProject.currency),
-            money(lineTotals.clientTotalCents, estimateProject.currency),
+            clientUnitStr,
+            clientTotalStr,
           ]);
         });
       });
@@ -2361,6 +2400,9 @@ export default function ProjectEstimate() {
                                 isAssignableResourceType(row.type)
                                 && Boolean(row.assigneeId || row.assigneeName || row.assigneeEmail)
                               ));
+                            // Show client money columns whenever we render real estimate lines (not checklist-only fallback).
+                            // Do not gate on `canViewSensitiveDetail`: summary-finance members still need these columns
+                            // (values come from RPC snapshot when present, else computed — often zero for operational hydrate).
                             const showClientPricingColumns = !hasChecklistFallbackRows;
                             const tableColumnCount = 3
                               + (showAssignmentColumn ? 1 : 0)
@@ -2439,6 +2481,7 @@ export default function ProjectEstimate() {
                                       {workLines.map((line) => {
                                         const computed = lineTotalsById.get(line.id);
                                         if (!computed) return null;
+                                        const clientMoney = displayLineClientAmounts(line, computed);
                                         const typeLabel = line.type === "other" && line.title.toLowerCase().includes("overhead")
                                           ? "Overheads"
                                           : labelForType(line.type);
@@ -2656,12 +2699,12 @@ export default function ProjectEstimate() {
 
                                             {showClientPricingColumns && (
                                               <TableCell className="w-[120px] py-1.5 pr-2 text-right text-sm tabular-nums align-top">
-                                                {money(computed.clientUnitCents, estimateProject.currency)}
+                                                {money(clientMoney.clientUnitCents, estimateProject.currency)}
                                               </TableCell>
                                             )}
                                             {showClientPricingColumns && (
                                               <TableCell className="w-[126px] py-1.5 pr-2 text-right text-sm tabular-nums align-top">
-                                                {money(computed.clientTotalCents, estimateProject.currency)}
+                                                {money(clientMoney.clientTotalCents, estimateProject.currency)}
                                               </TableCell>
                                             )}
 

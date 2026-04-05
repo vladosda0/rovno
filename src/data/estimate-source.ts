@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../../backend-truth/generated/supabase-types";
+import { computeLineTotals } from "@/lib/estimate-v2/pricing";
 import type { EstimateV2Snapshot, ResourceLineType } from "@/types/estimate-v2";
 
 type TypedSupabaseClient = SupabaseClient<Database>;
@@ -21,7 +22,7 @@ const PROJECT_ESTIMATE_SELECT = "id, project_id, title, description, status, cre
 const ESTIMATE_VERSION_SELECT = "id, estimate_id, version_number, is_current, created_by, created_at";
 const PROJECT_STAGE_SELECT = "id, project_id, title, description, sort_order, status, discount_bps, created_at, updated_at";
 const ESTIMATE_WORK_SELECT = "id, estimate_version_id, project_stage_id, title, description, sort_order, planned_cost_cents, created_at";
-const ESTIMATE_RESOURCE_LINE_SELECT = "id, estimate_work_id, resource_type, title, quantity, unit, unit_price_cents, total_price_cents, created_at";
+const ESTIMATE_RESOURCE_LINE_SELECT = "id, estimate_work_id, resource_type, title, quantity, unit, unit_price_cents, total_price_cents, client_unit_price_cents, client_total_price_cents, created_at";
 const ESTIMATE_DEPENDENCY_SELECT = "id, estimate_version_id, from_work_id, to_work_id, dependency_type, created_at";
 
 export interface EnsureProjectEstimateRootInput {
@@ -134,10 +135,13 @@ function totalPriceCents(costUnitCents: number, qtyMilli: number): number {
   return Math.max(0, Math.round(costUnitCents * quantityFromQtyMilli(qtyMilli)));
 }
 
-function mapLineTypeToRemote(type: ResourceLineType): "material" | "labor" | "equipment" | "other" {
+function mapLineTypeToRemote(
+  type: ResourceLineType,
+): Database["public"]["Tables"]["estimate_resource_lines"]["Insert"]["resource_type"] {
   if (type === "material") return "material";
   if (type === "tool") return "equipment";
-  if (type === "labor" || type === "subcontractor") return "labor";
+  if (type === "labor") return "labor";
+  if (type === "subcontractor") return "subcontractor";
   return "other";
 }
 
@@ -428,10 +432,12 @@ export interface EstimateOperationalSummaryResourceLineRow {
   estimate_work_id: string;
   estimate_work_title: string;
   estimate_version_id: string;
-  resource_type: "material" | "labor" | "equipment" | "other";
+  resource_type: "material" | "labor" | "subcontractor" | "equipment" | "other";
   title: string;
   quantity: number;
   unit: string | null;
+  client_unit_price_cents: number | null;
+  client_total_price_cents: number | null;
   created_at: string;
 }
 
@@ -489,9 +495,17 @@ function parseEstimateOperationalResourceLine(
     return null;
   }
   const rt = row.resource_type;
-  const resourceType = rt === "material" || rt === "labor" || rt === "equipment" || rt === "other"
+  const resourceType = rt === "material" || rt === "labor" || rt === "subcontractor" || rt === "equipment" || rt === "other"
     ? rt
     : "other";
+  const clientUnit = row.client_unit_price_cents;
+  const clientTotal = row.client_total_price_cents;
+  const clientUnitCents = typeof clientUnit === "number" && Number.isFinite(clientUnit)
+    ? Math.round(clientUnit)
+    : (clientUnit != null ? Math.round(Number(clientUnit)) : NaN);
+  const clientTotalCents = typeof clientTotal === "number" && Number.isFinite(clientTotal)
+    ? Math.round(clientTotal)
+    : (clientTotal != null ? Math.round(Number(clientTotal)) : NaN);
   return {
     estimate_resource_line_id: lineId,
     estimate_work_id: workId,
@@ -501,6 +515,8 @@ function parseEstimateOperationalResourceLine(
     title: typeof row.title === "string" ? row.title : "",
     quantity,
     unit: typeof row.unit === "string" ? row.unit : null,
+    client_unit_price_cents: Number.isFinite(clientUnitCents) ? clientUnitCents : null,
+    client_total_price_cents: Number.isFinite(clientTotalCents) ? clientTotalCents : null,
     created_at: typeof row.created_at === "string" ? row.created_at : new Date().toISOString(),
   };
 }
@@ -588,7 +604,11 @@ export function resolveEstimateDraftRemoteIds(input: {
       existingDraft.lines.filter((row) => (
         row.estimate_work_id === resolvedWorkId
         && row.title === line.title
-        && row.resource_type === mapLineTypeToRemote(line.type)
+        && (
+          row.resource_type === mapLineTypeToRemote(line.type)
+          || (line.type === "subcontractor" && row.resource_type === "labor")
+          || (line.type === "labor" && row.resource_type === "subcontractor")
+        )
         && row.quantity === quantityFromQtyMilli(line.qtyMilli)
         && (row.unit ?? null) === (line.unit || null)
         && (row.unit_price_cents ?? 0) === line.costUnitCents
@@ -753,16 +773,28 @@ export async function saveCurrentEstimateDraft(
     return;
   }
 
-  const lineRows: EstimateResourceLineInsert[] = snapshot.lines.map((line) => ({
-    id: lineIdByLocalId.get(line.id),
-    estimate_work_id: workIdByLocalId.get(line.workId) ?? ensureRemoteUuid(projectId, "work", line.workId),
-    resource_type: mapLineTypeToRemote(line.type),
-    title: line.title,
-    quantity: quantityFromQtyMilli(line.qtyMilli),
-    unit: line.unit || null,
-    unit_price_cents: line.costUnitCents,
-    total_price_cents: totalPriceCents(line.costUnitCents, line.qtyMilli),
-  }));
+  const stageById = new Map(snapshot.stages.map((stage) => [stage.id, stage]));
+  const workById = new Map(snapshot.works.map((work) => [work.id, work]));
+  const lineRows: EstimateResourceLineInsert[] = snapshot.lines.map((line) => {
+    const work = workById.get(line.workId);
+    const stage = work ? stageById.get(work.stageId) : undefined;
+    if (!work || !stage) {
+      throw new Error(`Missing work or stage for estimate line "${line.title}"`);
+    }
+    const pricingTotals = computeLineTotals(line, stage, snapshot.project, snapshot.project.regime);
+    return {
+      id: lineIdByLocalId.get(line.id),
+      estimate_work_id: workIdByLocalId.get(line.workId) ?? ensureRemoteUuid(projectId, "work", line.workId),
+      resource_type: mapLineTypeToRemote(line.type),
+      title: line.title,
+      quantity: quantityFromQtyMilli(line.qtyMilli),
+      unit: line.unit || null,
+      unit_price_cents: line.costUnitCents,
+      total_price_cents: totalPriceCents(line.costUnitCents, line.qtyMilli),
+      client_unit_price_cents: pricingTotals.clientUnitCents,
+      client_total_price_cents: pricingTotals.clientTotalCents,
+    };
+  });
 
   if (shouldAbortCurrentEstimateDraftSave(actor)) {
     return;

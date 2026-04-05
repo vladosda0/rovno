@@ -1384,15 +1384,29 @@ function ensureMainStoreSubscription() {
 }
 
 function inferLineTypeFromRemote(
-  resourceType: "material" | "labor" | "equipment" | "other",
+  resourceType: "material" | "labor" | "subcontractor" | "equipment" | "other",
   cachedType?: ResourceLineType,
 ): ResourceLineType {
   if (resourceType === "material") return "material";
   if (resourceType === "equipment") return "tool";
+  if (resourceType === "subcontractor") return "subcontractor";
   if (resourceType === "labor") {
     return cachedType === "subcontractor" ? "subcontractor" : "labor";
   }
   return cachedType ?? "other";
+}
+
+function summaryClientFieldsFromOptionalCents(
+  unit: number | null | undefined,
+  total: number | null | undefined,
+): Pick<EstimateV2ResourceLine, "summaryClientUnitCents" | "summaryClientTotalCents"> {
+  if (
+    typeof unit === "number" && Number.isFinite(unit)
+    && typeof total === "number" && Number.isFinite(total)
+  ) {
+    return { summaryClientUnitCents: Math.round(unit), summaryClientTotalCents: Math.round(total) };
+  }
+  return {};
 }
 
 function buildTaskInfoByWorkId(tasks: Task[]): Map<string, {
@@ -1658,6 +1672,7 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
           unit: line.unit ?? cachedLine?.unit ?? "unit",
           qtyMilli: Math.max(1, Math.round(line.quantity * 1_000)),
           costUnitCents: 0,
+          ...summaryClientFieldsFromOptionalCents(line.client_unit_price_cents, line.client_total_price_cents),
           markupBps: cachedLine?.markupBps ?? currentState.project.markupBps,
           discountBpsOverride: cachedLine?.discountBpsOverride ?? null,
           assigneeId: cachedLine?.assigneeId ?? null,
@@ -1718,6 +1733,7 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
             unit: line.unit ?? cachedLine?.unit ?? "unit",
             qtyMilli: Math.max(1, Math.round(line.quantity * 1_000)),
             costUnitCents: Math.max(0, Math.round(line.unit_price_cents ?? 0)),
+            ...summaryClientFieldsFromOptionalCents(line.client_unit_price_cents, line.client_total_price_cents),
             markupBps: cachedLine?.markupBps ?? currentState.project.markupBps,
             discountBpsOverride: cachedLine?.discountBpsOverride ?? null,
             assigneeId: cachedLine?.assigneeId ?? null,

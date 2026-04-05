@@ -61,6 +61,9 @@ export interface EstimateV2ResourceLine {
   unit: string;
   qtyMilli: number;
   costUnitCents: number;
+  /** Populated from operational RPC when finance visibility is summary-only (no cost in payload). */
+  summaryClientUnitCents?: number | null;
+  summaryClientTotalCents?: number | null;
   markupBps: number;
   discountBpsOverride: number | null;
   assigneeId: string | null;

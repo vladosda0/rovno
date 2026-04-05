@@ -1,6 +1,7 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import * as estimateV2Store from "@/data/estimate-v2-store";
 import * as procurementStore from "@/data/procurement-store";
 import * as procurementSource from "@/data/procurement-source";
 import { useProjectProcurementItems } from "@/hooks/use-procurement-source";
@@ -66,6 +67,10 @@ function ProcurementProbe({ projectId }: { projectId: string }) {
 }
 
 describe("useProjectProcurementItems", () => {
+  beforeEach(() => {
+    vi.spyOn(estimateV2Store, "hydrateEstimateV2ProjectFromWorkspace").mockResolvedValue(undefined);
+  });
+
   afterEach(() => {
     vi.unstubAllEnvs();
     vi.restoreAllMocks();

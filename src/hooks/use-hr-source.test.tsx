@@ -1,6 +1,7 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import * as estimateV2Store from "@/data/estimate-v2-store";
 import * as hrStore from "@/data/hr-store";
 import * as hrSource from "@/data/hr-source";
 import {
@@ -113,6 +114,10 @@ function HRMutationProbe({ projectId }: { projectId: string }) {
 }
 
 describe("useProjectHRItems/useProjectHRPayments", () => {
+  beforeEach(() => {
+    vi.spyOn(estimateV2Store, "hydrateEstimateV2ProjectFromWorkspace").mockResolvedValue(undefined);
+  });
+
   afterEach(() => {
     vi.unstubAllEnvs();
     vi.restoreAllMocks();

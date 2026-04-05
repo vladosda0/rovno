@@ -105,6 +105,32 @@ export function computeClientUnitCents(
   return Math.max(markedUp - discountAmount, 0);
 }
 
+/**
+ * Client-facing unit/total for tables and CSV: prefer RPC snapshot fields when present (summary finance path).
+ * When `requireSummaryRpc` is true (summary finance seam, no cost payload), omit fallback from computed totals
+ * so zero-cost operational lines do not show misleading client money.
+ */
+export function displayLineClientAmounts(
+  line: EstimateV2ResourceLine,
+  computed: ComputedLineTotals,
+  options?: { requireSummaryRpc?: boolean },
+): Pick<ComputedLineTotals, "clientUnitCents" | "clientTotalCents"> | null {
+  const su = line.summaryClientUnitCents;
+  const st = line.summaryClientTotalCents;
+  if (
+    typeof su === "number"
+    && Number.isFinite(su)
+    && typeof st === "number"
+    && Number.isFinite(st)
+  ) {
+    return { clientUnitCents: su, clientTotalCents: st };
+  }
+  if (options?.requireSummaryRpc) {
+    return null;
+  }
+  return { clientUnitCents: computed.clientUnitCents, clientTotalCents: computed.clientTotalCents };
+}
+
 export function computeLineTotals(
   line: EstimateV2ResourceLine,
   stage: EstimateV2Stage,

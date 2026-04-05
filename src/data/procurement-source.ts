@@ -6,7 +6,7 @@ import { buildReceivedQtyByOrderLineId } from "@/data/orders-source";
 import type { WorkspaceMode } from "@/data/workspace-source";
 import { resolveWorkspaceMode } from "@/data/workspace-source";
 import type { FinanceRowLoadAccess } from "@/lib/permissions";
-import type { ProcurementItemV2 } from "@/types/entities";
+import type { ProcurementItemType, ProcurementItemV2 } from "@/types/entities";
 import type { EstimateExecutionStatus, EstimateV2ResourceLine, EstimateV2Work } from "@/types/estimate-v2";
 import type { Database as ProcurementDatabase } from "../../backend-truth/generated/supabase-types";
 import {
@@ -38,6 +38,8 @@ interface ShapeProcurementItemsInput {
   orderRows: OrderRow[];
   orderLineRows: OrderLineRow[];
   movementRows: InventoryMovementRow[];
+  /** When present, linked procurement rows take type from joined estimate line (full table load path). */
+  estimateResourceLineTypeById?: ReadonlyMap<string, string>;
 }
 
 export interface ProcurementSource {
@@ -107,6 +109,18 @@ export interface SyncProjectProcurementFromEstimateInput {
 
 const PROCUREMENT_RESOURCE_TYPES = new Set<EstimateV2ResourceLine["type"]>(["material", "tool"]);
 
+/** Map DB `estimate_resource_lines.resource_type` to procurement UI `ProcurementItemType`. */
+function procurementItemTypeFromEstimateResourceType(
+  resourceType: string | null | undefined,
+): ProcurementItemType {
+  if (resourceType == null || resourceType === "") {
+    return "material";
+  }
+  if (resourceType === "material") return "material";
+  if (resourceType === "equipment") return "tool";
+  return "other";
+}
+
 function createBrowserProcurementSource(mode: "demo" | "local"): ProcurementSource {
   return {
     mode,
@@ -127,6 +141,7 @@ function baseOperationalProcurementItemV2(
     orderedQty: number;
     categoryId: string | null;
     estimateResourceLineId: string | null;
+    estimateResourceLineResourceType: string | null;
     taskId: string | null;
     status: string;
     createdAt: string;
@@ -134,12 +149,15 @@ function baseOperationalProcurementItemV2(
     createdFrom: ProcurementItemV2["createdFrom"];
   },
 ): ProcurementItemV2 {
+  const typeFromEstimate = input.estimateResourceLineId
+    ? procurementItemTypeFromEstimateResourceType(input.estimateResourceLineResourceType)
+    : "material";
   return {
     id: input.id,
     projectId,
     stageId: null,
     categoryId: input.categoryId,
-    type: "material",
+    type: typeFromEstimate,
     name: input.name,
     spec: input.spec,
     unit: input.unit,
@@ -208,6 +226,7 @@ export function mapProcurementOperationalSummaryToItems(
         orderedQty,
         categoryId: pi.category,
         estimateResourceLineId: pi.estimate_resource_line_id,
+        estimateResourceLineResourceType: pi.estimate_resource_line_resource_type,
         taskId: pi.task_id,
         status: pi.status,
         createdAt: pi.created_at,
@@ -237,6 +256,7 @@ export function mapProcurementOperationalSummaryToItems(
         orderedQty: line.quantity,
         categoryId: null,
         estimateResourceLineId: null,
+        estimateResourceLineResourceType: null,
         taskId: null,
         status: "",
         createdAt: line.created_at,
@@ -301,13 +321,17 @@ export function shapeProcurementItemsWithOrderContext(
         ? orderById.get(sortedRelatedLines[0].order_id)
         : undefined;
 
+      const linkedErlId = row.estimate_resource_line_id ?? null;
+      const erlType = linkedErlId && input.estimateResourceLineTypeById
+        ? input.estimateResourceLineTypeById.get(linkedErlId) ?? null
+        : null;
+
       return {
         id: row.id,
         projectId: row.project_id,
         stageId: null,
         categoryId: row.category ?? null,
-        // Temporary compatibility bucket until backend procurement rows expose a reliable material/tool/other discriminator.
-        type: "material",
+        type: procurementItemTypeFromEstimateResourceType(erlType),
         name: row.title,
         spec: row.description ?? null,
         unit: row.unit ?? "",
@@ -737,11 +761,35 @@ function createSupabaseProcurementSource(
         movementRows = data ?? [];
       }
 
+      const estimateLineIds = Array.from(new Set(
+        rows
+          .map((row) => row.estimate_resource_line_id)
+          .filter((id): id is string => Boolean(id)),
+      ));
+      let estimateResourceLineTypeById = new Map<string, string>();
+      if (estimateLineIds.length > 0) {
+        const { data: erlRows, error: erlError } = await supabase
+          .from("estimate_resource_lines")
+          .select("id, resource_type")
+          .in("id", estimateLineIds);
+
+        if (erlError) {
+          throw erlError;
+        }
+
+        for (const erl of erlRows ?? []) {
+          if (typeof erl.id === "string" && typeof erl.resource_type === "string") {
+            estimateResourceLineTypeById.set(erl.id, erl.resource_type);
+          }
+        }
+      }
+
       return shapeProcurementItemsWithOrderContext({
         itemRows: rows,
         orderRows,
         orderLineRows: lines,
         movementRows,
+        estimateResourceLineTypeById,
       });
     },
   };

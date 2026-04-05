@@ -8,11 +8,12 @@ import type {
 } from "@/types/estimate-v2";
 import {
   computeEffectiveDiscountBps,
+  computeClientUnitCents,
   computeLineTotals,
   computeProjectTotals,
   computeStageSubtotals,
   computeStageTotals,
-  computeClientUnitCents,
+  displayLineClientAmounts,
 } from "@/lib/estimate-v2/pricing";
 
 function createProject(partial: Partial<EstimateV2Project> = {}): EstimateV2Project {
@@ -220,5 +221,27 @@ describe("estimate-v2 pricing", () => {
     expect(totals.breakdownByType.material).toBe(10_000);
     expect(totals.breakdownByType.tool).toBe(8_333);
     expect(procurementSubtotalCents).toBe(18_333);
+  });
+
+  it("displayLineClientAmounts prefers summary RPC cents when both are finite", () => {
+    const project = createProject();
+    const stage = createStage();
+    const line = createLine({
+      costUnitCents: 0,
+      summaryClientUnitCents: 123,
+      summaryClientTotalCents: 456,
+    });
+    const computed = computeLineTotals(line, stage, project, "contractor");
+    const display = displayLineClientAmounts(line, computed);
+    expect(display?.clientUnitCents).toBe(123);
+    expect(display?.clientTotalCents).toBe(456);
+  });
+
+  it("displayLineClientAmounts returns null for requireSummaryRpc when summary is absent", () => {
+    const project = createProject();
+    const stage = createStage();
+    const line = createLine({ costUnitCents: 0 });
+    const computed = computeLineTotals(line, stage, project, "contractor");
+    expect(displayLineClientAmounts(line, computed, { requireSummaryRpc: true })).toBeNull();
   });
 });

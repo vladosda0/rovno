@@ -49,6 +49,34 @@ describe("mapProcurementOperationalSummaryToItems", () => {
     expect(item.sourceEstimateV2LineId).toBe("erl-1");
   });
 
+  it("maps procurement item type from estimate_resource_line_resource_type", () => {
+    const projectId = "p1";
+    const baseItem = {
+      procurement_item_id: "pi-tool",
+      estimate_resource_line_id: "erl-tool",
+      task_id: null,
+      title: "Hammer",
+      description: null,
+      category: null,
+      quantity: 1,
+      unit: "pcs",
+      status: "ordered",
+      created_at: "2026-01-01T00:00:00.000Z",
+      updated_at: "2026-01-01T00:00:00.000Z",
+    };
+    const toolPayload = {
+      ordered_lines: [] as unknown[],
+      procurement_items: [{ ...baseItem, estimate_resource_line_resource_type: "equipment" }],
+    };
+    const subPayload = {
+      ordered_lines: [] as unknown[],
+      procurement_items: [{ ...baseItem, procurement_item_id: "pi-sub", estimate_resource_line_id: "erl-sub", estimate_resource_line_resource_type: "subcontractor" }],
+    };
+
+    expect(mapProcurementOperationalSummaryToItems(projectId, toolPayload)[0]?.type).toBe("tool");
+    expect(mapProcurementOperationalSummaryToItems(projectId, subPayload)[0]?.type).toBe("other");
+  });
+
   it("creates synthetic items for order lines without procurement_item_id", () => {
     const projectId = "p1";
     const payload = {
