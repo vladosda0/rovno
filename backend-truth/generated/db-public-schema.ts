@@ -163,6 +163,10 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260403191500_phase6_operational_summary_subcontractor_and_client_amounts.sql",
       "sha256": "49c785067b819dc8122cde4bc5b348b6446152ad323fd3bdb42aae52c1827531"
+    },
+    {
+      "path": "supabase/migrations/20260405120000_resource_type_operational_visibility_and_hr_rpc.sql",
+      "sha256": "37377092895696d7114cab9e9aa1347790483af5278eb5d132855af55d6d7646"
     }
   ],
   "generated_artifacts": [
@@ -226,6 +230,7 @@ export const manifest = {
     "sql/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql",
     "sql/20260403103000_phase6_operational_summary_read_rpcs.sql",
     "sql/20260403191500_phase6_operational_summary_subcontractor_and_client_amounts.sql",
+    "sql/20260405120000_resource_type_operational_visibility_and_hr_rpc.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -10361,7 +10366,7 @@ export const functions = {
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260403191500_phase6_operational_summary_subcontractor_and_client_amounts.sql",
+      "sourceMigration": "supabase/migrations/20260405120000_resource_type_operational_visibility_and_hr_rpc.sql",
       "triggerUsages": []
     },
     {
@@ -10396,7 +10401,37 @@ export const functions = {
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260403191500_phase6_operational_summary_subcontractor_and_client_amounts.sql",
+      "sourceMigration": "supabase/migrations/20260405120000_resource_type_operational_visibility_and_hr_rpc.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "get_hr_operational_summary",
+      "signature": "public.get_hr_operational_summary(uuid, integer, integer)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_limit",
+          "type": "integer default 200",
+          "identityType": "integer"
+        },
+        {
+          "name": "p_offset",
+          "type": "integer default 0",
+          "identityType": "integer"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260405120000_resource_type_operational_visibility_and_hr_rpc.sql",
       "triggerUsages": []
     }
   ]
@@ -12779,14 +12814,21 @@ export const sourceTrace = {
       "schema": "public",
       "name": "get_procurement_operational_summary",
       "signature": "public.get_procurement_operational_summary(uuid, integer, integer)",
-      "sourceMigration": "supabase/migrations/20260403191500_phase6_operational_summary_subcontractor_and_client_amounts.sql"
+      "sourceMigration": "supabase/migrations/20260405120000_resource_type_operational_visibility_and_hr_rpc.sql"
     },
     {
       "key": "public.get_estimate_operational_summary",
       "schema": "public",
       "name": "get_estimate_operational_summary",
       "signature": "public.get_estimate_operational_summary(uuid, uuid, integer, integer)",
-      "sourceMigration": "supabase/migrations/20260403191500_phase6_operational_summary_subcontractor_and_client_amounts.sql"
+      "sourceMigration": "supabase/migrations/20260405120000_resource_type_operational_visibility_and_hr_rpc.sql"
+    },
+    {
+      "key": "public.get_hr_operational_summary",
+      "schema": "public",
+      "name": "get_hr_operational_summary",
+      "signature": "public.get_hr_operational_summary(uuid, integer, integer)",
+      "sourceMigration": "supabase/migrations/20260405120000_resource_type_operational_visibility_and_hr_rpc.sql"
     }
   ],
   "policies": [
@@ -14110,7 +14152,7 @@ export const sourceTrace = {
         "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
         "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql",
         "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
-        "supabase/migrations/20260403191500_phase6_operational_summary_subcontractor_and_client_amounts.sql",
+        "supabase/migrations/20260405120000_resource_type_operational_visibility_and_hr_rpc.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
@@ -14238,7 +14280,7 @@ export const sourceTrace = {
       "sourceMigrations": [
         "supabase/migrations/20260306163000_inventory_foundation.sql",
         "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
-        "supabase/migrations/20260403191500_phase6_operational_summary_subcontractor_and_client_amounts.sql",
+        "supabase/migrations/20260405120000_resource_type_operational_visibility_and_hr_rpc.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
@@ -14393,6 +14435,7 @@ export const sourceTrace = {
       "sourceMigrations": [
         "supabase/migrations/20260306164000_hr_domain.sql",
         "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql",
+        "supabase/migrations/20260405120000_resource_type_operational_visibility_and_hr_rpc.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
@@ -14401,7 +14444,9 @@ export const sourceTrace = {
         "public.hr_item_assignees",
         "public.hr_payments"
       ],
-      "functions": [],
+      "functions": [
+        "public.get_hr_operational_summary"
+      ],
       "policies": [
         "public.hr_items.hr_items_insert",
         "public.hr_items.hr_items_update",
@@ -14621,7 +14666,7 @@ export const slices = {
         "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
         "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql",
         "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
-        "supabase/migrations/20260403191500_phase6_operational_summary_subcontractor_and_client_amounts.sql",
+        "supabase/migrations/20260405120000_resource_type_operational_visibility_and_hr_rpc.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
@@ -14636,7 +14681,7 @@ export const slices = {
       "sourceMigrations": [
         "supabase/migrations/20260306163000_inventory_foundation.sql",
         "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
-        "supabase/migrations/20260403191500_phase6_operational_summary_subcontractor_and_client_amounts.sql",
+        "supabase/migrations/20260405120000_resource_type_operational_visibility_and_hr_rpc.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
@@ -14651,11 +14696,12 @@ export const slices = {
       "sourceMigrations": [
         "supabase/migrations/20260306164000_hr_domain.sql",
         "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql",
+        "supabase/migrations/20260405120000_resource_type_operational_visibility_and_hr_rpc.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
       "tableCount": 3,
-      "functionCount": 0,
+      "functionCount": 1,
       "rlsTableCount": 3
     },
     {

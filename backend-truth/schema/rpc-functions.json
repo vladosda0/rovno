@@ -1237,7 +1237,7 @@
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260403191500_phase6_operational_summary_subcontractor_and_client_amounts.sql",
+      "sourceMigration": "supabase/migrations/20260405120000_resource_type_operational_visibility_and_hr_rpc.sql",
       "triggerUsages": []
     },
     {
@@ -1272,7 +1272,37 @@
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260403191500_phase6_operational_summary_subcontractor_and_client_amounts.sql",
+      "sourceMigration": "supabase/migrations/20260405120000_resource_type_operational_visibility_and_hr_rpc.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "get_hr_operational_summary",
+      "signature": "public.get_hr_operational_summary(uuid, integer, integer)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_limit",
+          "type": "integer default 200",
+          "identityType": "integer"
+        },
+        {
+          "name": "p_offset",
+          "type": "integer default 0",
+          "identityType": "integer"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260405120000_resource_type_operational_visibility_and_hr_rpc.sql",
       "triggerUsages": []
     }
   ]

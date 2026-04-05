@@ -11,6 +11,7 @@
   "sourceMigrations": [
     "supabase/migrations/20260306164000_hr_domain.sql",
     "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql",
+    "supabase/migrations/20260405120000_resource_type_operational_visibility_and_hr_rpc.sql",
     "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
     "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
   ],
@@ -839,7 +840,39 @@
       "onDelete": "set null"
     }
   ],
-  "functions": [],
+  "functions": [
+    {
+      "schema": "public",
+      "name": "get_hr_operational_summary",
+      "key": "public.get_hr_operational_summary",
+      "signature": "public.get_hr_operational_summary(uuid, integer, integer)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_limit",
+          "type": "integer default 200",
+          "identityType": "integer"
+        },
+        {
+          "name": "p_offset",
+          "type": "integer default 0",
+          "identityType": "integer"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "sourceMigration": "supabase/migrations/20260405120000_resource_type_operational_visibility_and_hr_rpc.sql",
+      "authenticatedExecute": true,
+      "triggerUsages": []
+    }
+  ],
   "rls": [
     {
       "schema": "public",
