@@ -766,7 +766,7 @@ function createSupabaseProcurementSource(
           .map((row) => row.estimate_resource_line_id)
           .filter((id): id is string => Boolean(id)),
       ));
-      let estimateResourceLineTypeById = new Map<string, string>();
+      const estimateResourceLineTypeById = new Map<string, string>();
       if (estimateLineIds.length > 0) {
         const { data: erlRows, error: erlError } = await supabase
           .from("estimate_resource_lines")

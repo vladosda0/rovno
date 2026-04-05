@@ -26,3 +26,6 @@ dist-ssr
 # Cursor local noise
 .cursor/plans/
 .cursor/debug*.log
+
+# Supabase CLI local cache (do not commit)
+supabase/.temp/
