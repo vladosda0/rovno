@@ -429,18 +429,41 @@ export interface EstimateOperationalSummaryResourceLineRow {
   estimate_work_id: string;
   estimate_work_title: string;
   estimate_version_id: string;
+  /** Stage title from RPC join (operational read path). */
+  project_stage_title: string | null;
   resource_type: "material" | "labor" | "subcontractor" | "equipment" | "other";
   title: string;
   quantity: number;
   unit: string | null;
   client_unit_price_cents: number | null;
   client_total_price_cents: number | null;
+  discounted_client_total_price_cents: number | null;
+  assignee_profile_id: string | null;
   created_at: string;
+}
+
+/** `get_estimate_operational_summary` → `upper_block` (Track 1 Phase C). */
+export type EstimateOperationalFinanceVisibility = "none" | "summary" | "detail";
+
+export interface EstimateOperationalUpperBlockTiming {
+  estimate_version_id: string | null;
+  estimate_version_number: number | null;
+  estimate_version_created_at: string | null;
+}
+
+export interface EstimateOperationalUpperBlock {
+  effectiveFinanceVisibility: EstimateOperationalFinanceVisibility | null;
+  timing: EstimateOperationalUpperBlockTiming;
+  clientTotalCents: number | null;
+  vatBps: number | null;
+  discountBps: number | null;
+  resourceCostBreakdownClientSafeOnly: Record<string, number> | null;
 }
 
 export interface EstimateOperationalSummaryPayload {
   works: EstimateOperationalSummaryWorkRow[];
   resourceLines: EstimateOperationalSummaryResourceLineRow[];
+  upperBlock: EstimateOperationalUpperBlock | null;
 }
 
 function parseEstimateOperationalRpcRecord(value: unknown): Record<string, unknown> | null {
@@ -475,6 +498,47 @@ function parseEstimateOperationalWork(value: unknown): EstimateOperationalSummar
   };
 }
 
+function parseOptionalCents(value: unknown): number | null {
+  if (value == null) return null;
+  if (typeof value === "number" && Number.isFinite(value)) return Math.round(value);
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.round(n) : null;
+}
+
+function parseEstimateOperationalUpperBlock(raw: unknown): EstimateOperationalUpperBlock | null {
+  const row = parseEstimateOperationalRpcRecord(raw);
+  if (!row) return null;
+  const timingRow = parseEstimateOperationalRpcRecord(row.timing);
+  const vis = row.effective_finance_visibility;
+  const effectiveFinanceVisibility: EstimateOperationalFinanceVisibility | null =
+    vis === "none" || vis === "summary" || vis === "detail" ? vis : null;
+  const timing: EstimateOperationalUpperBlockTiming = {
+    estimate_version_id: typeof timingRow?.estimate_version_id === "string" ? timingRow.estimate_version_id : null,
+    estimate_version_number: parseOptionalCents(timingRow?.estimate_version_number),
+    estimate_version_created_at: typeof timingRow?.estimate_version_created_at === "string"
+      ? timingRow.estimate_version_created_at
+      : null,
+  };
+  const breakdownRaw = row.resource_cost_breakdown_client_safe_only;
+  let resourceCostBreakdownClientSafeOnly: Record<string, number> | null = null;
+  if (breakdownRaw && typeof breakdownRaw === "object" && !Array.isArray(breakdownRaw)) {
+    const entries: Record<string, number> = {};
+    for (const [key, val] of Object.entries(breakdownRaw)) {
+      const cents = parseOptionalCents(val);
+      if (cents != null) entries[key] = cents;
+    }
+    resourceCostBreakdownClientSafeOnly = Object.keys(entries).length > 0 ? entries : {};
+  }
+  return {
+    effectiveFinanceVisibility,
+    timing,
+    clientTotalCents: parseOptionalCents(row.client_total_cents),
+    vatBps: parseOptionalCents(row.vat_bps),
+    discountBps: parseOptionalCents(row.discount_bps),
+    resourceCostBreakdownClientSafeOnly,
+  };
+}
+
 function parseEstimateOperationalResourceLine(
   value: unknown,
 ): EstimateOperationalSummaryResourceLineRow | null {
@@ -504,17 +568,21 @@ function parseEstimateOperationalResourceLine(
   const clientTotalCents = typeof clientTotal === "number" && Number.isFinite(clientTotal)
     ? Math.round(clientTotal)
     : (clientTotal != null ? Math.round(Number(clientTotal)) : NaN);
+  const assigneeRaw = row.assignee_profile_id;
   return {
     estimate_resource_line_id: lineId,
     estimate_work_id: workId,
     estimate_work_title: typeof row.estimate_work_title === "string" ? row.estimate_work_title : "",
     estimate_version_id: versionId,
+    project_stage_title: typeof row.project_stage_title === "string" ? row.project_stage_title : null,
     resource_type: resourceType,
     title: typeof row.title === "string" ? row.title : "",
     quantity,
     unit: typeof row.unit === "string" ? row.unit : null,
     client_unit_price_cents: Number.isFinite(clientUnitCents) ? clientUnitCents : null,
     client_total_price_cents: Number.isFinite(clientTotalCents) ? clientTotalCents : null,
+    discounted_client_total_price_cents: parseOptionalCents(row.discounted_client_total_price_cents),
+    assignee_profile_id: typeof assigneeRaw === "string" ? assigneeRaw : null,
     created_at: typeof row.created_at === "string" ? row.created_at : new Date().toISOString(),
   };
 }
@@ -531,7 +599,8 @@ export function parseEstimateOperationalSummaryPayload(data: unknown): EstimateO
     ? linesRaw.map(parseEstimateOperationalResourceLine)
       .filter((row): row is EstimateOperationalSummaryResourceLineRow => Boolean(row))
     : [];
-  return { works, resourceLines };
+  const upperBlock = parseEstimateOperationalUpperBlock(root.upper_block);
+  return { works, resourceLines, upperBlock };
 }
 
 export async function loadEstimateOperationalSummary(

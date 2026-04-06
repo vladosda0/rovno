@@ -64,6 +64,8 @@ export interface EstimateV2ResourceLine {
   /** Populated from operational RPC when finance visibility is summary-only (no cost in payload). */
   summaryClientUnitCents?: number | null;
   summaryClientTotalCents?: number | null;
+  /** Persisted discounted client total from `get_estimate_operational_summary` when finance visibility is summary/detail. */
+  summaryDiscountedClientTotalCents?: number | null;
   markupBps: number;
   discountBpsOverride: number | null;
   assigneeId: string | null;

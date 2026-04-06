@@ -7,6 +7,7 @@ import { persistEstimateV2HeroTransition, EstimateV2HeroTransitionError } from "
 import {
   loadCurrentEstimateDraft,
   loadEstimateOperationalSummary,
+  type EstimateOperationalUpperBlock,
   saveCurrentEstimateDraft,
 } from "@/data/estimate-source";
 import { getPlanningSource, syncProjectTasksFromEstimate } from "@/data/planning-source";
@@ -75,6 +76,8 @@ interface EstimateV2ProjectState {
   dependencies: EstimateV2Dependency[];
   versions: EstimateV2Version[];
   scheduleBaseline: ScheduleBaseline | null;
+  /** Present when hydrated from `get_estimate_operational_summary` (summary/none finance visibility). */
+  operationalUpperBlock: EstimateOperationalUpperBlock | null;
   sync: EstimateV2ProjectSyncState;
 }
 
@@ -102,6 +105,7 @@ export interface EstimateV2ProjectView {
   dependencies: EstimateV2Dependency[];
   versions: EstimateV2Version[];
   scheduleBaseline: ScheduleBaseline | null;
+  operationalUpperBlock: EstimateOperationalUpperBlock | null;
   sync: EstimateV2ProjectSyncState;
 }
 
@@ -479,6 +483,19 @@ function getRetainedSupabaseSyncProfileId(projectId: string): string | null {
   return retainedSupabaseSyncProfileIdByProjectId.get(projectId) ?? null;
 }
 
+function cloneOperationalUpperBlock(
+  block: EstimateOperationalUpperBlock | null | undefined,
+): EstimateOperationalUpperBlock | null {
+  if (!block) return null;
+  return {
+    ...block,
+    timing: { ...block.timing },
+    resourceCostBreakdownClientSafeOnly: block.resourceCostBreakdownClientSafeOnly
+      ? { ...block.resourceCostBreakdownClientSafeOnly }
+      : null,
+  };
+}
+
 function cloneState(state: EstimateV2ProjectState): EstimateV2ProjectView {
   return {
     project: { ...state.project },
@@ -497,6 +514,7 @@ function cloneState(state: EstimateV2ProjectState): EstimateV2ProjectView {
         works: state.scheduleBaseline.works.map((work) => ({ ...work })),
       }
       : null,
+    operationalUpperBlock: cloneOperationalUpperBlock(state.operationalUpperBlock),
     sync: cloneProjectSyncState(state.sync),
   };
 }
@@ -615,6 +633,7 @@ function normalizeStateForWorkspace(projectId: string, state: EstimateV2ProjectS
         })),
       }
       : null,
+    operationalUpperBlock: cloneOperationalUpperBlock(state.operationalUpperBlock),
     sync: cloneProjectSyncState(state.sync),
   };
 
@@ -1400,6 +1419,15 @@ function summaryClientFieldsFromOptionalCents(
   return {};
 }
 
+function summaryDiscountedClientField(
+  cents: number | null | undefined,
+): Pick<EstimateV2ResourceLine, "summaryDiscountedClientTotalCents"> {
+  if (typeof cents === "number" && Number.isFinite(cents)) {
+    return { summaryDiscountedClientTotalCents: Math.round(cents) };
+  }
+  return {};
+}
+
 function buildTaskInfoByWorkId(tasks: Task[]): Map<string, {
   taskId: string;
   status: EstimateV2WorkStatus;
@@ -1513,6 +1541,7 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
             works: cached.scheduleBaseline.works.map((work) => ({ ...work })),
           }
           : null,
+        operationalUpperBlock: cloneOperationalUpperBlock(cached.operationalUpperBlock),
         sync: cloneProjectSyncState(cached.sync),
       };
       ensureProjectSyncState(cachedState);
@@ -1551,11 +1580,8 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
       }
     }
     const useOperationalEstimateShape = Boolean(
-      operationalEstimatePayload
-      && (
-        operationalEstimatePayload.works.length > 0
-        || operationalEstimatePayload.resourceLines.length > 0
-      ),
+      operationalEstimatePayload != null
+      && shouldHydrateEstimateViaOperationalRpc(accessSnapshot),
     );
 
     const stages = draft.stages
@@ -1664,9 +1690,10 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
           qtyMilli: Math.max(1, Math.round(line.quantity * 1_000)),
           costUnitCents: 0,
           ...summaryClientFieldsFromOptionalCents(line.client_unit_price_cents, line.client_total_price_cents),
-          markupBps: cachedLine?.markupBps ?? currentState.project.markupBps,
-          discountBpsOverride: cachedLine?.discountBpsOverride ?? null,
-          assigneeId: cachedLine?.assigneeId ?? null,
+          ...summaryDiscountedClientField(line.discounted_client_total_price_cents),
+          markupBps: 0,
+          discountBpsOverride: null,
+          assigneeId: line.assignee_profile_id ?? cachedLine?.assigneeId ?? null,
           assigneeName: cachedLine?.assigneeName ?? null,
           assigneeEmail: cachedLine?.assigneeEmail ?? null,
           receivedCents: cachedLine?.receivedCents ?? 0,
@@ -1791,6 +1818,9 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
           works: cached.scheduleBaseline.works.map((work) => ({ ...work })),
         }
         : null,
+      operationalUpperBlock: useOperationalEstimateShape && operationalEstimatePayload
+        ? operationalEstimatePayload.upperBlock
+        : null,
       sync: cloneProjectSyncState(cached?.sync),
     };
 
@@ -1871,6 +1901,7 @@ function ensureProjectState(projectId: string): EstimateV2ProjectState {
     dependencies: [],
     versions: [],
     scheduleBaseline: null,
+    operationalUpperBlock: null,
     sync: createEmptyProjectSyncState(),
   };
 
@@ -1966,6 +1997,7 @@ function buildPlanningToInWorkDraft(
     dependencies: state.dependencies.map((dependency) => ({ ...dependency })),
     versions: state.versions,
     scheduleBaseline: state.scheduleBaseline,
+    operationalUpperBlock: cloneOperationalUpperBlock(state.operationalUpperBlock),
     sync: cloneProjectSyncState(state.sync),
   };
 
