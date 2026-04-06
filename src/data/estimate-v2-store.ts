@@ -65,6 +65,7 @@ import type {
   ResourceLineType,
   ScheduleBaseline,
 } from "@/types/estimate-v2";
+import { resourceLineTypeFromPersisted, parsePersistedEstimateResourceType } from "@/lib/estimate-v2/resource-type-contract";
 
 interface EstimateV2ProjectState {
   project: EstimateV2Project;
@@ -668,13 +669,13 @@ function canAccessSensitiveEstimateRows(
   return context.financeVisibility === "detail";
 }
 
-/** Summary finance visibility: use operational estimate RPC instead of table-backed works/lines. */
+/** Non-detail finance visibility: use operational estimate RPC instead of table-backed works/lines. */
 function shouldHydrateEstimateViaOperationalRpc(
   context: EstimateV2ProjectAccessContext | null | undefined,
 ): boolean {
   if (!context) return false;
   if (canAccessSensitiveEstimateRows(context)) return false;
-  return context.financeVisibility === "summary";
+  return context.financeVisibility === "summary" || context.financeVisibility === "none";
 }
 
 function getManagedEstimateRemoteSyncContext(projectId: string): { profileId: string } | null {
@@ -1340,13 +1341,11 @@ function syncFromMainTaskStore() {
         ? Math.max(1, Math.round(checklistItem.estimateV2QtyMilli as number))
         : line.qtyMilli;
       const nextUnit = checklistItem.estimateV2Unit?.trim() || line.unit;
-      const nextType = checklistItem.estimateV2ResourceType ?? line.type;
 
       if (
         nextTitle === line.title
         && nextQtyMilli === line.qtyMilli
         && nextUnit === line.unit
-        && nextType === line.type
       ) {
         return line;
       }
@@ -1357,7 +1356,6 @@ function syncFromMainTaskStore() {
         title: nextTitle,
         qtyMilli: nextQtyMilli,
         unit: nextUnit,
-        type: nextType,
         updatedAt: now,
       };
     });
@@ -1385,15 +1383,8 @@ function ensureMainStoreSubscription() {
 
 function inferLineTypeFromRemote(
   resourceType: "material" | "labor" | "subcontractor" | "equipment" | "other",
-  cachedType?: ResourceLineType,
 ): ResourceLineType {
-  if (resourceType === "material") return "material";
-  if (resourceType === "equipment") return "tool";
-  if (resourceType === "subcontractor") return "subcontractor";
-  if (resourceType === "labor") {
-    return cachedType === "subcontractor" ? "subcontractor" : "labor";
-  }
-  return cachedType ?? "other";
+  return resourceLineTypeFromPersisted(resourceType);
 }
 
 function summaryClientFieldsFromOptionalCents(
@@ -1668,7 +1659,7 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
           stageId: stageIdByWorkId.get(line.estimate_work_id) ?? cachedLine?.stageId ?? "",
           workId: line.estimate_work_id,
           title: line.title,
-            type: inferLineTypeFromRemote(line.resource_type, cachedLine?.type ?? currentLine?.type),
+            type: inferLineTypeFromRemote(line.resource_type),
           unit: line.unit ?? cachedLine?.unit ?? "unit",
           qtyMilli: Math.max(1, Math.round(line.quantity * 1_000)),
           costUnitCents: 0,
@@ -1729,7 +1720,7 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
             stageId: stageIdByWorkId.get(line.estimate_work_id) ?? cachedLine?.stageId ?? "",
             workId: line.estimate_work_id,
             title: line.title,
-            type: inferLineTypeFromRemote(line.resource_type, cachedLine?.type ?? currentLine?.type),
+            type: inferLineTypeFromRemote(line.resource_type),
             unit: line.unit ?? cachedLine?.unit ?? "unit",
             qtyMilli: Math.max(1, Math.round(line.quantity * 1_000)),
             costUnitCents: Math.max(0, Math.round(line.unit_price_cents ?? 0)),

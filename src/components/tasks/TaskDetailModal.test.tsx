@@ -152,7 +152,7 @@ describe("TaskDetailModal", () => {
     });
   });
 
-  it("shows an estimate-item badge when linked checklist metadata is redacted", () => {
+  it("shows a real type badge for linked checklist items without explicit resource type", () => {
     renderTaskDetail({
       task: task({
         checklist: [
@@ -167,6 +167,7 @@ describe("TaskDetailModal", () => {
       }),
     });
 
-    expect(screen.getByText("Estimate item")).toBeInTheDocument();
+    expect(screen.getByText("Other")).toBeInTheDocument();
+    expect(screen.queryByText("Estimate item")).not.toBeInTheDocument();
   });
 });

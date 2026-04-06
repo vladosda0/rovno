@@ -12,6 +12,8 @@ import type {
   EstimateV2Work,
   ResourceLineType,
 } from "@/types/estimate-v2";
+import { checklistEstimateV2ResourceType, resourceLineTypeFromPersisted } from "@/lib/estimate-v2/resource-type-contract";
+import { loadEstimateOperationalSummary } from "@/data/estimate-source";
 import type { Database as PlanningDatabase } from "../../backend-truth/generated/supabase-types";
 
 type ProjectStageRow = PlanningDatabase["public"]["Tables"]["project_stages"]["Row"];
@@ -404,8 +406,10 @@ export function mapTaskRowToTask(row: TaskRow): Task {
 function mapEstimateResourceTypeToChecklistType(
   resourceType: EstimateResourceLineRow["resource_type"] | null | undefined,
 ): ChecklistItemType {
-  if (resourceType === "material") return "material";
-  if (resourceType === "equipment") return "tool";
+  if (resourceType == null) return "subtask";
+  const appType = resourceLineTypeFromPersisted(resourceType);
+  if (appType === "material") return "material";
+  if (appType === "tool") return "tool";
   return "subtask";
 }
 
@@ -426,15 +430,7 @@ function mapTaskChecklistItemRowToChecklistItem(
     procurementItemId: row.procurement_item_id ?? null,
     estimateV2LineId: row.estimate_resource_line_id ?? undefined,
     estimateV2WorkId: row.estimate_work_id ?? undefined,
-    estimateV2ResourceType: resourceType === "equipment"
-      ? "tool"
-      : resourceType === "material"
-        ? "material"
-        : resourceType === "labor"
-          ? "labor"
-          : resourceType === "other"
-            ? "other"
-            : undefined,
+    estimateV2ResourceType: checklistEstimateV2ResourceType(resourceType),
     estimateV2QtyMilli: linkedLine?.quantity != null
       ? Math.max(1, Math.round(linkedLine.quantity * 1_000))
       : undefined,
@@ -912,6 +908,7 @@ function createSupabasePlanningSource(
           .map((row) => row.estimate_resource_line_id)
           .filter((value): value is string => Boolean(value)),
       ));
+      const estimateLineIdSet = new Set(estimateLineIds);
 
       let estimateLineRows: Array<Pick<EstimateResourceLineRow, "id" | "resource_type" | "quantity" | "unit">> = [];
       if (estimateLineIds.length > 0) {
@@ -928,6 +925,25 @@ function createSupabasePlanningSource(
       }
 
       const lineById = new Map(estimateLineRows.map((row) => [row.id, row]));
+
+      if (estimateLineIds.length > lineById.size) {
+        try {
+          const op = await loadEstimateOperationalSummary(projectId, null);
+          for (const rl of op?.resourceLines ?? []) {
+            if (!estimateLineIdSet.has(rl.estimate_resource_line_id)) continue;
+            if (lineById.has(rl.estimate_resource_line_id)) continue;
+            lineById.set(rl.estimate_resource_line_id, {
+              id: rl.estimate_resource_line_id,
+              resource_type: rl.resource_type,
+              quantity: rl.quantity,
+              unit: rl.unit,
+            });
+          }
+        } catch {
+          /* tasks still load; checklist types may stay incomplete */
+        }
+      }
+
       const checklistByTaskId = new Map<string, ChecklistItem[]>();
       const commentsByTaskId = new Map<string, Comment[]>();
 

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "../../backend-truth/generated/supabase-types";
 import {
   createSupabaseOrdersSource,
+  mergeOperationalRpcLinesOntoExistingOrderLines,
   shapeOrdersWithDetails,
 } from "@/data/orders-source";
 
@@ -688,5 +689,73 @@ describe("supabase order writes", () => {
     expect(database.tables.inventory_movements).toHaveLength(3);
     expect(fullyReceived.status).toBe("received");
     expect(fullyReceived.lines.find((line) => line.id === "line-2")?.receivedQty).toBe(5);
+  });
+});
+
+describe("mergeOperationalRpcLinesOntoExistingOrderLines", () => {
+  it("preserves receivedQty from DB-shaped lines when applying operational RPC rows", () => {
+    const procItemTypeById = new Map<string, string | null>([["pi-1", "material"]]);
+    const existing = [{
+      id: "ol-1",
+      orderId: "ord-1",
+      procurementItemId: "pi-1",
+      qty: 10,
+      receivedQty: 7,
+      unit: "m",
+      plannedUnitPrice: 1,
+      actualUnitPrice: 1,
+    }];
+    const rpc = [{
+      order_line_id: "ol-1",
+      order_id: "ord-1",
+      order_status: "placed",
+      ordered_at: null,
+      delivery_due_at: null,
+      procurement_item_id: "pi-1",
+      procurement_item_title: "Cable",
+      estimate_resource_line_id: null,
+      estimate_resource_line_resource_type: null,
+      title: "Cable",
+      quantity: 10,
+      unit: "m",
+      created_at: "2026-01-01T00:00:00.000Z",
+    }];
+    const merged = mergeOperationalRpcLinesOntoExistingOrderLines(existing, rpc, procItemTypeById);
+    expect(merged).toHaveLength(1);
+    expect(merged[0]?.receivedQty).toBe(7);
+    expect(merged[0]?.plannedUnitPrice).toBeNull();
+    expect(merged[0]?.itemType).toBe("material");
+  });
+
+  it("uses estimate_resource_line_resource_type on RPC ordered line when procurement_items map misses", () => {
+    const procItemTypeById = new Map<string, string | null>();
+    const existing = [{
+      id: "ol-1",
+      orderId: "ord-1",
+      procurementItemId: "pi-tool",
+      qty: 2,
+      receivedQty: 2,
+      unit: "pcs",
+      plannedUnitPrice: null,
+      actualUnitPrice: null,
+    }];
+    const rpc = [{
+      order_line_id: "ol-1",
+      order_id: "ord-1",
+      order_status: "placed",
+      ordered_at: null,
+      delivery_due_at: null,
+      procurement_item_id: "pi-tool",
+      procurement_item_title: "Hammer",
+      estimate_resource_line_id: "erl-1",
+      estimate_resource_line_resource_type: "equipment",
+      title: "Hammer",
+      quantity: 2,
+      unit: "pcs",
+      created_at: "2026-01-01T00:00:00.000Z",
+    }];
+    const merged = mergeOperationalRpcLinesOntoExistingOrderLines(existing, rpc, procItemTypeById);
+    expect(merged[0]?.itemType).toBe("tool");
+    expect(merged[0]?.receivedQty).toBe(2);
   });
 });

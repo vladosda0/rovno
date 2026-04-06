@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../../backend-truth/generated/supabase-types";
 import { computeLineTotals } from "@/lib/estimate-v2/pricing";
 import type { EstimateV2Snapshot, ResourceLineType } from "@/types/estimate-v2";
+import { parsePersistedEstimateResourceType, resourceLineTypeToPersisted } from "@/lib/estimate-v2/resource-type-contract";
 
 type TypedSupabaseClient = SupabaseClient<Database>;
 type ProjectEstimateRow = Database["public"]["Tables"]["project_estimates"]["Row"];
@@ -138,11 +139,7 @@ function totalPriceCents(costUnitCents: number, qtyMilli: number): number {
 function mapLineTypeToRemote(
   type: ResourceLineType,
 ): Database["public"]["Tables"]["estimate_resource_lines"]["Insert"]["resource_type"] {
-  if (type === "material") return "material";
-  if (type === "tool") return "equipment";
-  if (type === "labor") return "labor";
-  if (type === "subcontractor") return "subcontractor";
-  return "other";
+  return resourceLineTypeToPersisted(type);
 }
 
 function assertUniqueExistingMatch<T>(
@@ -494,10 +491,11 @@ function parseEstimateOperationalResourceLine(
   if (!Number.isFinite(quantity)) {
     return null;
   }
-  const rt = row.resource_type;
-  const resourceType = rt === "material" || rt === "labor" || rt === "subcontractor" || rt === "equipment" || rt === "other"
-    ? rt
-    : "other";
+  const parsed = parsePersistedEstimateResourceType(row.resource_type);
+  if (!parsed.ok) {
+    return null;
+  }
+  const resourceType = parsed.db;
   const clientUnit = row.client_unit_price_cents;
   const clientTotal = row.client_total_price_cents;
   const clientUnitCents = typeof clientUnit === "number" && Number.isFinite(clientUnit)
@@ -604,11 +602,7 @@ export function resolveEstimateDraftRemoteIds(input: {
       existingDraft.lines.filter((row) => (
         row.estimate_work_id === resolvedWorkId
         && row.title === line.title
-        && (
-          row.resource_type === mapLineTypeToRemote(line.type)
-          || (line.type === "subcontractor" && row.resource_type === "labor")
-          || (line.type === "labor" && row.resource_type === "subcontractor")
-        )
+        && row.resource_type === mapLineTypeToRemote(line.type)
         && row.quantity === quantityFromQtyMilli(line.qtyMilli)
         && (row.unit ?? null) === (line.unit || null)
         && (row.unit_price_cents ?? 0) === line.costUnitCents

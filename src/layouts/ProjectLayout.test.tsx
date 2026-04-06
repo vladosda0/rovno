@@ -110,14 +110,14 @@ describe("ProjectLayout", () => {
     expect(screen.queryByText("Participants content")).not.toBeInTheDocument();
   });
 
-  it("denies hidden HR routes for viewers", () => {
+  it("allows HR routes for viewers in view mode", () => {
     useWorkspaceModeMock.mockReturnValue({ kind: "demo" });
     setPermission("viewer");
 
     renderProjectLayout("/project/project-1/hr");
 
-    expect(screen.getByText("No access")).toBeInTheDocument();
-    expect(screen.queryByText("HR content")).not.toBeInTheDocument();
+    expect(screen.queryByText("No access")).not.toBeInTheDocument();
+    expect(screen.getByText("HR content")).toBeInTheDocument();
   });
 
   it("keeps estimate route accessible for contractors", () => {

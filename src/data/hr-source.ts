@@ -10,8 +10,10 @@ import {
 } from "@/data/hr-store";
 import type { WorkspaceMode } from "@/data/workspace-source";
 import { resolveWorkspaceMode } from "@/data/workspace-source";
+import type { FinanceRowLoadAccess } from "@/lib/permissions";
 import type { EstimateExecutionStatus, EstimateV2ResourceLine, EstimateV2Work } from "@/types/estimate-v2";
-import type { HRItemStatus, HRPayment, HRPlannedItem } from "@/types/hr";
+import type { HRItemStatus, HRItemType, HRPayment, HRPlannedItem } from "@/types/hr";
+import { projectToHrItemType, type DbEstimateResourceType } from "@/lib/estimate-v2/resource-type-contract";
 import type { Database as HRDatabase } from "../../backend-truth/generated/supabase-types";
 
 type HRItemRow = HRDatabase["public"]["Tables"]["hr_items"]["Row"];
@@ -29,7 +31,7 @@ type HeroTransitionIds = {
 
 export interface HRSource {
   mode: WorkspaceMode["kind"];
-  getProjectHRItems: (projectId: string) => Promise<HRPlannedItem[]>;
+  getProjectHRItems: (projectId: string, financeLoadAccess?: FinanceRowLoadAccess) => Promise<HRPlannedItem[]>;
   getProjectHRPayments: (projectId: string) => Promise<HRPayment[]>;
 }
 
@@ -116,6 +118,110 @@ function createBrowserHRSource(mode: "demo" | "local"): HRSource {
       return getHRPayments(projectId);
     },
   };
+}
+
+interface HROperationalRpcItem {
+  hr_item_id: string;
+  project_id: string;
+  project_stage_id: string | null;
+  estimate_resource_line_id: string | null;
+  estimate_work_id: string | null;
+  task_id: string | null;
+  title: string;
+  description: string | null;
+  compensation_type: string;
+  status: string;
+  start_at: string | null;
+  end_at: string | null;
+  planned_cost_cents: number | null;
+  actual_cost_cents: number | null;
+  estimate_resource_line_resource_type: string | null;
+  assignees: Array<{ profile_id: string; role_label: string | null }>;
+  created_at: string;
+  updated_at: string;
+}
+
+function parseHROperationalSummaryPayload(data: unknown): HROperationalRpcItem[] {
+  if (!data || typeof data !== "object") return [];
+  const root = data as Record<string, unknown>;
+  const items = root.hr_items;
+  if (!Array.isArray(items)) return [];
+
+  return items
+    .map((raw): HROperationalRpcItem | null => {
+      if (!raw || typeof raw !== "object") return null;
+      const row = raw as Record<string, unknown>;
+      const id = row.hr_item_id;
+      if (typeof id !== "string") return null;
+
+      return {
+        hr_item_id: id,
+        project_id: typeof row.project_id === "string" ? row.project_id : "",
+        project_stage_id: typeof row.project_stage_id === "string" ? row.project_stage_id : null,
+        estimate_resource_line_id: typeof row.estimate_resource_line_id === "string" ? row.estimate_resource_line_id : null,
+        estimate_work_id: typeof row.estimate_work_id === "string" ? row.estimate_work_id : null,
+        task_id: typeof row.task_id === "string" ? row.task_id : null,
+        title: typeof row.title === "string" ? row.title : "",
+        description: typeof row.description === "string" ? row.description : null,
+        compensation_type: typeof row.compensation_type === "string" ? row.compensation_type : "fixed",
+        status: typeof row.status === "string" ? row.status : "planned",
+        start_at: typeof row.start_at === "string" ? row.start_at : null,
+        end_at: typeof row.end_at === "string" ? row.end_at : null,
+        planned_cost_cents: typeof row.planned_cost_cents === "number" ? row.planned_cost_cents : null,
+        actual_cost_cents: typeof row.actual_cost_cents === "number" ? row.actual_cost_cents : null,
+        estimate_resource_line_resource_type: typeof row.estimate_resource_line_resource_type === "string"
+          ? row.estimate_resource_line_resource_type
+          : null,
+        assignees: Array.isArray(row.assignees)
+          ? (row.assignees as Array<Record<string, unknown>>)
+            .filter((a) => typeof a?.profile_id === "string")
+            .map((a) => ({
+              profile_id: a.profile_id as string,
+              role_label: typeof a.role_label === "string" ? a.role_label : null,
+            }))
+          : [],
+        created_at: typeof row.created_at === "string" ? row.created_at : new Date().toISOString(),
+        updated_at: typeof row.updated_at === "string" ? row.updated_at : new Date().toISOString(),
+      };
+    })
+    .filter((item): item is HROperationalRpcItem => item !== null);
+}
+
+function shapeHROperationalRpcItems(items: HROperationalRpcItem[]): HRPlannedItem[] {
+  return items.map((row) => {
+    const assigneeIds = row.assignees.map((a) => a.profile_id);
+    const plannedCost = Math.max(0, row.planned_cost_cents ?? 0) / 100;
+
+    let hrType: HRItemType = "labor";
+    if (row.estimate_resource_line_resource_type) {
+      const projection = projectToHrItemType(row.estimate_resource_line_resource_type as DbEstimateResourceType);
+      if (projection.kind === "ok") {
+        hrType = projection.type;
+      }
+    }
+
+    return {
+      id: row.hr_item_id,
+      projectId: row.project_id,
+      stageId: row.project_stage_id ?? "",
+      workId: row.estimate_work_id ?? "",
+      taskId: row.task_id ?? null,
+      title: row.title,
+      type: hrType,
+      plannedQty: row.planned_cost_cents == null ? 0 : 1,
+      plannedRate: plannedCost,
+      assignee: assigneeIds[0] ?? null,
+      assigneeIds,
+      status: mapHRItemStatus(row.status as HRItemRow["status"]),
+      lockedFromEstimate: Boolean(row.estimate_resource_line_id) || Boolean(row.estimate_work_id),
+      sourceEstimateV2LineId: row.estimate_resource_line_id ?? null,
+      orphaned: false,
+      orphanedAt: null,
+      orphanedReason: null,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  });
 }
 
 function mapHRItemStatus(
@@ -407,6 +513,7 @@ export function shapeHRItemsWithAssignees(input: {
   itemRows: HRItemRow[];
   assigneeRows: HRItemAssigneeRow[];
   estimateLineIdByItemId?: Map<string, string>;
+  estimateLineResourceTypeById?: Map<string, string>;
 }): HRPlannedItem[] {
   const assigneeIdsByItemId = new Map<string, string[]>();
 
@@ -424,6 +531,15 @@ export function shapeHRItemsWithAssignees(input: {
     const fallbackEstimateLineId = input.estimateLineIdByItemId?.get(row.id) ?? null;
     const linkedEstimateLineId = row.estimate_resource_line_id ?? fallbackEstimateLineId;
 
+    let hrType: HRItemType = "labor";
+    if (linkedEstimateLineId && input.estimateLineResourceTypeById) {
+      const dbType = input.estimateLineResourceTypeById.get(linkedEstimateLineId);
+      const projection = projectToHrItemType(dbType as DbEstimateResourceType | undefined);
+      if (projection.kind === "ok") {
+        hrType = projection.type;
+      }
+    }
+
     return {
       id: row.id,
       projectId: row.project_id,
@@ -431,8 +547,7 @@ export function shapeHRItemsWithAssignees(input: {
       workId: row.estimate_work_id ?? "",
       taskId: row.task_id ?? null,
       title: row.title,
-      // Temporary compatibility bucket until backend HR rows expose a reliable labor/subcontractor discriminator.
-      type: "labor",
+      type: hrType,
       plannedQty: row.planned_cost_cents == null ? 0 : 1,
       plannedRate: plannedCost,
       assignee: assigneeIds[0] ?? null,
@@ -820,7 +935,21 @@ function createSupabaseHRSource(
 ): HRSource {
   return {
     mode: "supabase",
-    async getProjectHRItems(projectId: string) {
+    async getProjectHRItems(projectId: string, financeLoadAccess: FinanceRowLoadAccess = "full") {
+      if (financeLoadAccess !== "full") {
+        const { data, error } = await supabase.rpc("get_hr_operational_summary", {
+          p_project_id: projectId,
+          p_limit: 500,
+          p_offset: 0,
+        });
+
+        if (error) {
+          throw error;
+        }
+
+        return shapeHROperationalRpcItems(parseHROperationalSummaryPayload(data));
+      }
+
       const { data: itemRows, error: itemsError } = await supabase
         .from("hr_items")
         .select("*")
@@ -849,10 +978,26 @@ function createSupabaseHRSource(
 
       const heroIds = await resolveHeroTransitionIds(supabase, projectId);
 
+      const estimateLineIds = rows
+        .map((row) => row.estimate_resource_line_id)
+        .filter((id): id is string => id != null);
+
+      const estimateLineResourceTypeById = new Map<string, string>();
+      if (estimateLineIds.length > 0) {
+        const { data: lineRows } = await supabase
+          .from("estimate_resource_lines")
+          .select("id, resource_type")
+          .in("id", estimateLineIds);
+        for (const lr of lineRows ?? []) {
+          estimateLineResourceTypeById.set(lr.id, lr.resource_type);
+        }
+      }
+
       return shapeHRItemsWithAssignees({
         itemRows: rows,
         assigneeRows: assigneeRows ?? [],
         estimateLineIdByItemId: buildEstimateLineIdByHRItemId(heroIds),
+        estimateLineResourceTypeById,
       });
     },
 

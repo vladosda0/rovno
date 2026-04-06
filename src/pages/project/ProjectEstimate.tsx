@@ -124,6 +124,7 @@ import {
   getUnitOptionsForType,
   resolveUnitSelectValue,
 } from "@/lib/estimate-v2/resource-units";
+import { resourceLineSemanticLabel } from "@/lib/estimate-v2/resource-type-contract";
 import {
   assessResourceDelete,
   assessStageDelete,
@@ -193,11 +194,7 @@ function fromBpsToPercent(bps: number): string {
 }
 
 function labelForType(type: ResourceLineType): string {
-  if (type === "material") return "Material";
-  if (type === "tool") return "Tool";
-  if (type === "labor") return "Labor";
-  if (type === "subcontractor") return "Subcontractor";
-  return "Other";
+  return resourceLineSemanticLabel(type);
 }
 
 function isAssignableResourceType(type: ResourceLineType): boolean {
@@ -218,8 +215,6 @@ function resolveChecklistFallbackRowLabel(task: Task, checklistIndex: number): s
   const checklistItem = task.checklist[checklistIndex];
   if (!checklistItem) return null;
   if (checklistItem.estimateV2ResourceType) return null;
-  if (checklistItem.type === "material" || checklistItem.type === "tool") return null;
-  if (checklistItem.estimateV2LineId || checklistItem.estimateV2WorkId) return "Estimate item";
   return null;
 }
 

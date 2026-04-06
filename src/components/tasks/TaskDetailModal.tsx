@@ -192,20 +192,11 @@ export function TaskDetailModal({
     }, 800);
   }, [onDescriptionChange, task, toast]);
 
-  const getChecklistResourceType = useCallback((item: Task["checklist"][number]): ResourceLineType => {
-    if (item.estimateV2ResourceType === "material") return "material";
-    if (item.estimateV2ResourceType === "tool") return "tool";
-    if (item.estimateV2ResourceType === "labor") return "labor";
-    if (item.estimateV2ResourceType === "subcontractor") return "subcontractor";
+  const getChecklistResourceType = useCallback((item: Task["checklist"][number]): ResourceLineType | null => {
+    if (item.estimateV2ResourceType) return item.estimateV2ResourceType;
     if (item.type === "material") return "material";
     if (item.type === "tool") return "tool";
-    return "other";
-  }, []);
-
-  const getChecklistResourceLabel = useCallback((item: Task["checklist"][number]): string | null => {
-    if (item.estimateV2ResourceType) return null;
-    if (item.type === "material" || item.type === "tool") return null;
-    if (item.estimateV2LineId || item.estimateV2WorkId) return "Estimate item";
+    if (item.estimateV2LineId || item.estimateV2WorkId) return "other";
     return null;
   }, []);
 
@@ -489,7 +480,6 @@ export function TaskDetailModal({
                <div className="space-y-1">
                 {task.checklist.map((item) => {
                   const resourceType = getChecklistResourceType(item);
-                  const resourceLabel = getChecklistResourceLabel(item);
                   const isLinked = Boolean(item.procurementItemId || item.estimateV2LineId || item.estimateV2WorkId);
                   const isPending = Boolean(pendingChecklistItemIds[item.id]);
                   return (
@@ -505,11 +495,10 @@ export function TaskDetailModal({
                       <span className={`text-caption flex-1 ${item.done ? "line-through text-muted-foreground" : "text-foreground"}`}>
                         {item.text}
                       </span>
-                      {(resourceType !== "other" || resourceLabel) && (
+                      {resourceType && (
                         <ResourceTypeBadge
                           type={resourceType}
                           className="h-5 px-1.5 text-[10px]"
-                          labelOverride={resourceLabel ?? undefined}
                         />
                       )}
                       {isPending && (

@@ -209,7 +209,7 @@ describe("useProjectHRItems/useProjectHRPayments", () => {
     expect(screen.getByTestId("payment-count")).toHaveTextContent("1");
     expect(screen.getByTestId("item-titles")).toHaveTextContent("Supabase HR Item");
     expect(screen.getByTestId("payment-ids")).toHaveTextContent("supabase-payment-1");
-    expect(source.getProjectHRItems).toHaveBeenCalledWith("project-1");
+    expect(source.getProjectHRItems).toHaveBeenCalledWith("project-1", expect.any(String));
     expect(source.getProjectHRPayments).toHaveBeenCalledWith("project-1");
   });
 
@@ -284,7 +284,7 @@ describe("useProjectHRItems/useProjectHRPayments", () => {
       },
     );
     expect(invalidateQueriesSpy).toHaveBeenCalledWith({
-      queryKey: hrQueryKeys.projectItems("profile-77", "project-1"),
+      queryKey: hrQueryKeys.projectItemsRoot("profile-77", "project-1"),
     });
     expect(invalidateQueriesSpy).toHaveBeenCalledWith({
       queryKey: hrQueryKeys.projectPayments("profile-77", "project-1"),

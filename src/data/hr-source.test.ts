@@ -548,4 +548,30 @@ describe("hr-source helpers", () => {
     expect(state.insertAssigneesMock).not.toHaveBeenCalled();
     expect(state.deleteAssigneesMock).not.toHaveBeenCalled();
   });
+
+  it("derives subcontractor type from estimateLineResourceTypeById", () => {
+    const items = shapeHRItemsWithAssignees({
+      itemRows: [hrItemRow({ estimate_resource_line_id: "erl-sub" })],
+      assigneeRows: [],
+      estimateLineResourceTypeById: new Map([["erl-sub", "subcontractor"]]),
+    });
+    expect(items[0]?.type).toBe("subcontractor");
+  });
+
+  it("falls back to labor when estimateLineResourceTypeById is not provided", () => {
+    const items = shapeHRItemsWithAssignees({
+      itemRows: [hrItemRow({ estimate_resource_line_id: "erl-1" })],
+      assigneeRows: [],
+    });
+    expect(items[0]?.type).toBe("labor");
+  });
+
+  it("falls back to labor when estimate line resource type is a non-HR type", () => {
+    const items = shapeHRItemsWithAssignees({
+      itemRows: [hrItemRow({ estimate_resource_line_id: "erl-mat" })],
+      assigneeRows: [],
+      estimateLineResourceTypeById: new Map([["erl-mat", "material"]]),
+    });
+    expect(items[0]?.type).toBe("labor");
+  });
 });

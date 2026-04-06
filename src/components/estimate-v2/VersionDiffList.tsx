@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { resourceLineSemanticLabel } from "@/lib/estimate-v2/resource-type-contract";
 import type { EstimateV2StructuredChange, Regime, ResourceLineType } from "@/types/estimate-v2";
 
 interface VersionDiffListProps {
@@ -24,13 +25,7 @@ interface StageGroup {
   works: Map<string, WorkGroup>;
 }
 
-const TYPE_LABEL: Record<ResourceLineType, string> = {
-  material: "material",
-  tool: "tool",
-  labor: "labor",
-  subcontractor: "subcontractor",
-  other: "other",
-};
+const TYPE_LABEL = resourceLineSemanticLabel;
 
 function changeTypeLabel(type: EstimateV2StructuredChange["changeType"]): string {
   if (type === "added") return "added";
@@ -75,7 +70,7 @@ function formatFieldValue(field: string, value: unknown, currency: string): stri
     return typeof value === "number" ? `${value / 100}%` : String(value);
   }
   if (field === "type") {
-    return typeof value === "string" ? (TYPE_LABEL[value as ResourceLineType] ?? value) : String(value);
+    return typeof value === "string" ? (TYPE_LABEL(value as ResourceLineType) ?? value) : String(value);
   }
   return String(value);
 }

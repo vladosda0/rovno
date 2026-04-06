@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { trackEvent } from "@/lib/analytics";
 import {
   getHRItems,
@@ -14,6 +14,8 @@ import {
 } from "@/data/hr-source";
 import { useEstimateV2ProjectSync } from "@/hooks/use-estimate-v2-data";
 import { useWorkspaceMode } from "@/hooks/use-workspace-source";
+import { resolveFinanceRowLoadAccess, usePermission } from "@/lib/permissions";
+import type { FinanceRowLoadAccess } from "@/lib/permissions";
 import type { HRItemStatus, HRPayment, HRPlannedItem } from "@/types/hr";
 
 const HR_QUERY_STALE_TIME_MS = 60_000;
@@ -24,9 +26,13 @@ interface HRQueryOptions {
   enabled?: boolean;
 }
 
+const hrProjectItemsQueryRoot = (profileId: string, projectId: string) =>
+  ["hr", "project-items", profileId, projectId] as const;
+
 export const hrQueryKeys = {
-  projectItems: (profileId: string, projectId: string) =>
-    ["hr", "project-items", profileId, projectId] as const,
+  projectItems: (profileId: string, projectId: string, financeAccess: FinanceRowLoadAccess = "full") =>
+    [...hrProjectItemsQueryRoot(profileId, projectId), financeAccess] as const,
+  projectItemsRoot: hrProjectItemsQueryRoot,
   projectPayments: (profileId: string, projectId: string) =>
     ["hr", "project-payments", profileId, projectId] as const,
 };
@@ -52,6 +58,8 @@ export function useProjectHRItems(projectId: string, options?: HRQueryOptions): 
   const mode = useWorkspaceMode();
   const estimateSync = useEstimateV2ProjectSync(projectId);
   const supabaseMode = mode.kind === "supabase" ? mode : null;
+  const { seam } = usePermission(projectId);
+  const financeAccess = useMemo(() => resolveFinanceRowLoadAccess(seam), [seam]);
   const queriesEnabled = options?.enabled ?? true;
   const getItems = useCallback(() => getHRItems(projectId), [projectId]);
   const browserItems = useStoreValue(
@@ -61,11 +69,11 @@ export function useProjectHRItems(projectId: string, options?: HRQueryOptions): 
   );
   const itemsQuery = useQuery({
     queryKey: supabaseMode
-      ? [...hrQueryKeys.projectItems(supabaseMode.profileId, projectId), estimateSync.domains.hr.projectedRevision ?? "initial"]
+      ? [...hrQueryKeys.projectItems(supabaseMode.profileId, projectId, financeAccess), estimateSync.domains.hr.projectedRevision ?? "initial"]
       : hrQueryKeys.projectItems("browser", projectId),
     queryFn: async () => {
       const source = await getHRSource(supabaseMode ?? undefined);
-      return source.getProjectHRItems(projectId);
+      return source.getProjectHRItems(projectId, financeAccess);
     },
     enabled: queriesEnabled && Boolean(supabaseMode && projectId),
     staleTime: HR_QUERY_STALE_TIME_MS,
@@ -128,7 +136,7 @@ export function useProjectHRMutations(projectId: string) {
 
   const invalidateProjectItems = useCallback(async (resolvedMode: Extract<typeof mode, { kind: "supabase" }>) => {
     await queryClient.invalidateQueries({
-      queryKey: hrQueryKeys.projectItems(resolvedMode.profileId, projectId),
+      queryKey: hrQueryKeys.projectItemsRoot(resolvedMode.profileId, projectId),
     });
   }, [projectId, queryClient]);
 

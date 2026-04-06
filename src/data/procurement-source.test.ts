@@ -118,6 +118,7 @@ vi.mock("@/data/activity-source", () => ({
 }));
 
 import {
+  mapProcurementOperationalSummaryToItems,
   shapeProcurementItemsWithOrderContext,
   syncProjectProcurementFromEstimate,
 } from "@/data/procurement-source";
@@ -270,7 +271,7 @@ describe("procurement-source helpers", () => {
         projectId: "project-1",
         stageId: null,
         categoryId: "electrical",
-        type: "material",
+        type: "other",
         name: "Copper cable",
         spec: "NYM 3x2.5",
         unit: "m",
@@ -303,7 +304,7 @@ describe("procurement-source helpers", () => {
         projectId: "project-1",
         stageId: null,
         categoryId: null,
-        type: "material",
+        type: "other",
         name: "Drywall screws",
         spec: null,
         unit: "",
@@ -332,6 +333,58 @@ describe("procurement-source helpers", () => {
         updatedAt: "2026-03-04T00:00:00.000Z",
       },
     ]);
+  });
+
+  it("mapProcurementOperationalSummaryToItems synthesizes items for ordered lines when RPC omits procurement rows", () => {
+    const items = mapProcurementOperationalSummaryToItems("project-1", {
+      ordered_lines: [
+        {
+          order_line_id: "ol-1",
+          order_id: "ord-1",
+          order_status: "placed",
+          ordered_at: "2026-03-01T00:00:00.000Z",
+          delivery_due_at: null,
+          procurement_item_id: "pi-req-1",
+          procurement_item_title: "Bolts",
+          title: "Bolts",
+          quantity: 5,
+          unit: "pcs",
+          created_at: "2026-03-01T00:00:00.000Z",
+        },
+      ],
+      procurement_items: [],
+    });
+    expect(items).toHaveLength(1);
+    expect(items[0]?.id).toBe("pi-req-1");
+    expect(items[0]?.name).toBe("Bolts");
+    expect(items[0]?.type).toBe("other");
+  });
+
+  it("synthetic operational items use ordered_line estimate_resource_line_resource_type when present", () => {
+    const items = mapProcurementOperationalSummaryToItems("project-1", {
+      ordered_lines: [
+        {
+          order_line_id: "ol-1",
+          order_id: "ord-1",
+          order_status: "placed",
+          ordered_at: "2026-03-01T00:00:00.000Z",
+          delivery_due_at: null,
+          procurement_item_id: "pi-orphan",
+          procurement_item_title: "Hammer",
+          estimate_resource_line_id: "erl-1",
+          estimate_resource_line_resource_type: "equipment",
+          title: "Hammer",
+          quantity: 1,
+          unit: "pcs",
+          created_at: "2026-03-01T00:00:00.000Z",
+        },
+      ],
+      procurement_items: [],
+    });
+    expect(items).toHaveLength(1);
+    expect(items[0]?.type).toBe("tool");
+    expect(items[0]?.sourceEstimateV2LineId).toBe("erl-1");
+    expect(items[0]?.createdFrom).toBe("estimate");
   });
 
   it("shapeProcurementItemsWithOrderContext maps linked estimate line resource_type to procurement type", () => {

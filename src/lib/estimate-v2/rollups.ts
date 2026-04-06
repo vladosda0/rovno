@@ -27,6 +27,7 @@ export interface PlannedRollups {
 export interface FactRollups {
   spentCents: number;
   spentByTypeCents: Record<ResourceLineType, number>;
+  unattributedSpendCents: number;
   toBePaidPlannedCents: number;
   spentAbovePlannedCents: number;
 }
@@ -53,10 +54,10 @@ function emptyByType(): Record<ResourceLineType, number> {
   };
 }
 
-function procurementTypeToResourceType(type: ProcurementItemV2["type"]): ResourceLineType {
+function procurementTypeToResourceType(type: ProcurementItemV2["type"]): ResourceLineType | null {
   if (type === "material") return "material";
   if (type === "tool") return "tool";
-  return "other";
+  return null;
 }
 
 function toCents(value: number): number {
@@ -79,6 +80,7 @@ export function computeFactFromDataSources(input: {
 }): FactRollups {
   const spentByType = emptyByType();
   let spentCents = 0;
+  let unattributedSpendCents = 0;
   let toBePaidPlannedCents = 0;
   let spentAbovePlannedCents = 0;
 
@@ -88,7 +90,7 @@ export function computeFactFromDataSources(input: {
   supplierOrders.forEach((order) => {
     order.lines.forEach((line) => {
       const item = procurementItemsById.get(line.procurementItemId);
-      const resourceType = item ? procurementTypeToResourceType(item.type) : "other";
+      const resourceType = item ? procurementTypeToResourceType(item.type) : null;
       const unitPriceMajor =
         line.actualUnitPrice
           ?? line.plannedUnitPrice
@@ -98,7 +100,11 @@ export function computeFactFromDataSources(input: {
       const actualSpent = toCents(unitPriceMajor * line.qty);
 
       spentCents += actualSpent;
-      spentByType[resourceType] += actualSpent;
+      if (resourceType) {
+        spentByType[resourceType] += actualSpent;
+      } else {
+        unattributedSpendCents += actualSpent;
+      }
 
       const isEstimateScoped = Boolean(item && (item.sourceEstimateV2LineId || item.orphaned));
       if (!isEstimateScoped || !item) return;
@@ -149,6 +155,7 @@ export function computeFactFromDataSources(input: {
   return {
     spentCents,
     spentByTypeCents: spentByType,
+    unattributedSpendCents,
     toBePaidPlannedCents,
     spentAbovePlannedCents,
   };

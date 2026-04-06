@@ -60,7 +60,7 @@ export function getProjectDomainAccessForRole(
     case "procurement":
       return role === "owner" || role === "co_owner" ? "manage" : "summary";
     case "hr":
-      return role === "owner" || role === "co_owner" ? "manage" : "hidden";
+      return role === "owner" || role === "co_owner" ? "manage" : "view";
     default:
       return "hidden";
   }
@@ -136,12 +136,24 @@ export function seamCanViewOperationalFinanceSummary(seam: ProjectAuthoritySeam)
   return financeVisibility === "summary" || financeVisibility === "detail";
 }
 
+/**
+ * Gate for loading operational domain semantics (resource types, titles, status)
+ * without requiring any finance visibility. True for any authenticated project member.
+ * After DB migration widens RPCs for visibility = none, this enables hydration
+ * of non-money fields for all roles.
+ */
+export function seamCanLoadOperationalSemantics(seam: ProjectAuthoritySeam): boolean {
+  if (getProjectRole(seam) === "owner") return true;
+  return Boolean(seam.membership);
+}
+
 /** How Supabase row loads should hydrate money-bearing tables vs operational RPCs. */
 export type FinanceRowLoadAccess = "full" | "operational_summary" | "none";
 
 export function resolveFinanceRowLoadAccess(seam: ProjectAuthoritySeam): FinanceRowLoadAccess {
   if (seamCanViewSensitiveDetail(seam)) return "full";
   if (seamCanViewOperationalFinanceSummary(seam)) return "operational_summary";
+  if (seamCanLoadOperationalSemantics(seam)) return "operational_summary";
   return "none";
 }
 

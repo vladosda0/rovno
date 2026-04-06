@@ -67,6 +67,7 @@ import {
   computeRemainingRequestedQty,
   computeTabChipTotals,
   isEstimateLinkedProcurementItem,
+  toInventoryKey,
 } from "@/lib/procurement-fulfillment";
 import { fmtCost } from "@/lib/procurement-utils";
 import { useToast } from "@/hooks/use-toast";
@@ -76,6 +77,7 @@ import { OrderDetailModal } from "@/components/procurement/OrderDetailModal";
 import { ItemTypePicker } from "@/components/procurement/ItemTypePicker";
 import { LocationPicker } from "@/components/procurement/LocationPicker";
 import { ResourceTypeBadge } from "@/components/estimate-v2/ResourceTypeBadge";
+import { isProcurementResourceLineType, resourceLineTypeToPersisted, projectToProcurementItemType } from "@/lib/estimate-v2/resource-type-contract";
 import { useEstimateV2Project } from "@/hooks/use-estimate-v2-data";
 import { inventoryQueryKeys } from "@/hooks/use-inventory-data";
 import {
@@ -245,6 +247,10 @@ export default function ProjectProcurement() {
 
   const baseItems = useProcurementV2(pid);
   const orders = useOrders(pid);
+  const hasPlacedSupplierOrderLines = useMemo(
+    () => orders.some((o) => o.kind === "supplier" && o.status === "placed" && o.lines.length > 0),
+    [orders],
+  );
   const locations = useLocations(pid);
   const stockRows = useInventoryStock(pid);
   const { project, members, stages } = useProject(pid);
@@ -309,7 +315,8 @@ export default function ProjectProcurement() {
       if (!resolvedStageId) return item;
 
       const requiredByDate = work?.plannedStart ?? stageStartByStageId.get(resolvedStageId) ?? null;
-      const derivedType: ProcurementItemType = line.type === "tool" ? "tool" : "material";
+      const proj = projectToProcurementItemType(resourceLineTypeToPersisted(line.type));
+      const derivedType: ProcurementItemType = proj.kind === "ok" ? proj.type : "other";
       const requiredQty = Math.max(0, line.qtyMilli / 1_000);
       const plannedUnitPrice = Math.max(0, line.costUnitCents / 100);
 
@@ -331,13 +338,14 @@ export default function ProjectProcurement() {
     );
 
     const missingDerivedItems = estimateState.lines
-      .filter((line) => (line.type === "material" || line.type === "tool"))
+      .filter((line) => isProcurementResourceLineType(line.type))
       .filter((line) => !linkedLineIds.has(line.id))
       .map((line) => {
         const work = workById.get(line.workId) ?? null;
         const resolvedStageId = line.stageId || work?.stageId || fallbackStageId;
         const requiredByDate = work?.plannedStart ?? (resolvedStageId ? stageStartByStageId.get(resolvedStageId) ?? null : null);
-        const derivedType: ProcurementItemType = line.type === "tool" ? "tool" : "material";
+        const proj = projectToProcurementItemType(resourceLineTypeToPersisted(line.type));
+        const derivedType: ProcurementItemType = proj.kind === "ok" ? proj.type : "other";
         const requiredQty = Math.max(0, line.qtyMilli / 1_000);
         const plannedUnitPrice = Math.max(0, line.costUnitCents / 100);
 
@@ -629,8 +637,8 @@ export default function ProjectProcurement() {
         const lineMatch = order.lines.some((line) => {
           const item = itemById.get(line.procurementItemId);
           return (
-            item?.name.toLowerCase().includes(q)
-            || (item?.spec?.toLowerCase().includes(q) ?? false)
+            (item?.name?.toLowerCase()?.includes(q) ?? false)
+            || (item?.spec?.toLowerCase()?.includes(q) ?? false)
           );
         });
         return supplierMatch || lineMatch;
@@ -752,6 +760,10 @@ export default function ProjectProcurement() {
 
     const q = search.trim().toLowerCase();
     const locationById = new Map(locations.map((location) => [location.id, location]));
+    const itemByInventoryKey = new Map(
+      items.map((item) => [toInventoryKey(item), item] as const),
+    );
+
     const rows = stockRows
       .filter((row) => row.qty > 0)
       .map((row) => {
@@ -761,6 +773,21 @@ export default function ProjectProcurement() {
         const spec = row.spec ?? decoded.spec;
         const unit = row.unit ?? decoded.unit;
         const syntheticId = row.inventoryItemId ?? row.inventoryKey;
+
+        const matchedItem = itemByInventoryKey.get(row.inventoryKey);
+        if (matchedItem) {
+          return {
+            key: `${row.locationId}-${matchedItem.id}`,
+            procurementItemId: matchedItem.id,
+            item: matchedItem,
+            locationId: row.locationId,
+            locationName: location?.name ?? "Unknown location",
+            qty: row.qty,
+            orderIds: [],
+            lastReceivedAt: null,
+            receiverName: null,
+          } satisfies InStockTableRow;
+        }
 
         return {
           key: `${row.locationId}-${syntheticId}`,
@@ -818,7 +845,7 @@ export default function ProjectProcurement() {
       || (row.item.spec?.toLowerCase().includes(q) ?? false)
       || row.locationName.toLowerCase().includes(q)
     ));
-  }, [canManageProcurement, estimateState.project.updatedAt, locations, pid, search, stockRows]);
+  }, [canManageProcurement, estimateState.project.updatedAt, items, locations, pid, search, stockRows]);
 
   const visibleInStockRows = inStockRows.length > 0 ? inStockRows : summaryFallbackInStockRows;
 
@@ -1520,7 +1547,7 @@ export default function ProjectProcurement() {
     );
   }
 
-  if (items.length === 0 && visibleInStockRows.length === 0) {
+  if (items.length === 0 && visibleInStockRows.length === 0 && !hasPlacedSupplierOrderLines) {
     return (
       <EmptyState
         icon={ShoppingCart}
@@ -1999,13 +2026,13 @@ export default function ProjectProcurement() {
                         <table className="w-full text-sm">
                           {renderOrderedTableHeader()}
                           <tbody>
-                            {order.lines.length === 0 && !canViewSensitiveDetail && !canViewOperationalFinanceSummary ? (
+                            {order.lines.length === 0 ? (
                               <tr>
                                 <td
                                   colSpan={orderedTableColumnCount}
                                   className="px-3 py-6 text-sm text-muted-foreground"
                                 >
-                                  No ordered line items are visible with your current access.
+                                  No line items in this order.
                                 </td>
                               </tr>
                             ) : (
@@ -2032,7 +2059,7 @@ export default function ProjectProcurement() {
                                   )}
                                   <td className="px-2 py-2 min-w-[220px]">
                                     <div className="flex min-w-0 items-start gap-2">
-                                      <ResourceTypeBadge type={line.itemType ?? "material"} className="shrink-0 border-transparent" />
+                                      <ResourceTypeBadge type={line.itemType || "other"} className="shrink-0 border-transparent" />
                                       <div className="min-w-0">
                                         <p className="font-medium text-foreground truncate">{line.title || "Ordered item"}</p>
                                       </div>
@@ -2698,7 +2725,7 @@ export default function ProjectProcurement() {
                     <label className="text-xs text-muted-foreground">Type</label>
                     <div className="mt-1">
                       <ItemTypePicker
-                        value={(editForm.type ?? "material") as ProcurementItemType}
+                        value={(editForm.type ?? "other") as ProcurementItemType}
                         disabled={!canEdit || activeTab === "ordered" || !!detailItem.lockedFromEstimate}
                         onChange={(nextType) => patchEditForm((prev) => ({ ...prev, type: nextType }), "immediate")}
                       />

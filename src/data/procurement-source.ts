@@ -8,6 +8,7 @@ import { resolveWorkspaceMode } from "@/data/workspace-source";
 import type { FinanceRowLoadAccess } from "@/lib/permissions";
 import type { ProcurementItemType, ProcurementItemV2 } from "@/types/entities";
 import type { EstimateExecutionStatus, EstimateV2ResourceLine, EstimateV2Work } from "@/types/estimate-v2";
+import { isProcurementResourceLineType, projectToProcurementItemType, type DbEstimateResourceType } from "@/lib/estimate-v2/resource-type-contract";
 import type { Database as ProcurementDatabase } from "../../backend-truth/generated/supabase-types";
 import {
   parseProcurementOperationalSummaryPayload,
@@ -107,17 +108,19 @@ export interface SyncProjectProcurementFromEstimateInput {
   profileId: string;
 }
 
-const PROCUREMENT_RESOURCE_TYPES = new Set<EstimateV2ResourceLine["type"]>(["material", "tool"]);
+/** @deprecated Use isProcurementResourceLineType from the contract module instead. */
+const PROCUREMENT_RESOURCE_TYPES = {
+  has(type: EstimateV2ResourceLine["type"]): boolean {
+    return isProcurementResourceLineType(type);
+  },
+};
 
 /** Map DB `estimate_resource_lines.resource_type` to procurement UI `ProcurementItemType`. */
 function procurementItemTypeFromEstimateResourceType(
   resourceType: string | null | undefined,
 ): ProcurementItemType {
-  if (resourceType == null || resourceType === "") {
-    return "material";
-  }
-  if (resourceType === "material") return "material";
-  if (resourceType === "equipment") return "tool";
+  const projection = projectToProcurementItemType(resourceType as DbEstimateResourceType | null | undefined);
+  if (projection.kind === "ok") return projection.type;
   return "other";
 }
 
@@ -149,9 +152,7 @@ function baseOperationalProcurementItemV2(
     createdFrom: ProcurementItemV2["createdFrom"];
   },
 ): ProcurementItemV2 {
-  const typeFromEstimate = input.estimateResourceLineId
-    ? procurementItemTypeFromEstimateResourceType(input.estimateResourceLineResourceType)
-    : "material";
+  const typeFromEstimate = procurementItemTypeFromEstimateResourceType(input.estimateResourceLineResourceType);
   return {
     id: input.id,
     projectId,
@@ -262,6 +263,37 @@ export function mapProcurementOperationalSummaryToItems(
         createdAt: line.created_at,
         updatedAt: line.created_at,
         createdFrom: "manual",
+      }),
+    );
+  });
+
+  // Fallback when an ordered line references a procurement row not present in `procurement_items`
+  // (e.g. older RPCs, offset/limit mismatch, or cancelled item filtered out).
+  orderedLines.forEach((line) => {
+    const pid = line.procurement_item_id;
+    if (!pid || itemsById.has(pid)) return;
+    const title = line.title?.trim() || line.procurement_item_title?.trim() || "Procurement item";
+    const related = linesByProcurementItemId.get(pid) ?? [];
+    const orderedQty = related.reduce((sum, l) => sum + l.quantity, 0);
+    const erlId = line.estimate_resource_line_id;
+    const erlType = line.estimate_resource_line_resource_type;
+    itemsById.set(
+      pid,
+      baseOperationalProcurementItemV2(projectId, {
+        id: pid,
+        name: title,
+        spec: null,
+        unit: line.unit ?? "",
+        requiredQty: line.quantity,
+        orderedQty: orderedQty || line.quantity,
+        categoryId: null,
+        estimateResourceLineId: erlId,
+        estimateResourceLineResourceType: erlType,
+        taskId: null,
+        status: "requested",
+        createdAt: line.created_at,
+        updatedAt: line.created_at,
+        createdFrom: erlId ? "estimate" : "manual",
       }),
     );
   });
@@ -685,11 +717,7 @@ function createSupabaseProcurementSource(
       projectId: string,
       financeLoadAccess: FinanceRowLoadAccess = "full",
     ) {
-      if (financeLoadAccess === "none") {
-        return [];
-      }
-
-      if (financeLoadAccess === "operational_summary") {
+      if (financeLoadAccess === "none" || financeLoadAccess === "operational_summary") {
         const { data, error } = await supabase.rpc("get_procurement_operational_summary", {
           p_project_id: projectId,
           p_limit: 500,

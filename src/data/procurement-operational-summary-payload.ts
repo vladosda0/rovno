@@ -9,6 +9,9 @@ export type ProcurementOperationalRpcOrderedLine = {
   delivery_due_at: string | null;
   procurement_item_id: string | null;
   procurement_item_title: string | null;
+  /** From join procurement_items → estimate_resource_lines (when RPC provides them). */
+  estimate_resource_line_id: string | null;
+  estimate_resource_line_resource_type: string | null;
   title: string;
   quantity: number;
   unit: string | null;
@@ -61,6 +64,12 @@ function parseRpcOrderedLine(value: unknown): ProcurementOperationalRpcOrderedLi
     procurement_item_id: typeof row.procurement_item_id === "string" ? row.procurement_item_id : null,
     procurement_item_title: typeof row.procurement_item_title === "string"
       ? row.procurement_item_title
+      : null,
+    estimate_resource_line_id: typeof row.estimate_resource_line_id === "string"
+      ? row.estimate_resource_line_id
+      : null,
+    estimate_resource_line_resource_type: typeof row.estimate_resource_line_resource_type === "string"
+      ? row.estimate_resource_line_resource_type
       : null,
     title: typeof row.title === "string" ? row.title : "",
     quantity,

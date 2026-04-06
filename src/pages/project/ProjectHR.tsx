@@ -33,6 +33,7 @@ import { useEstimateV2Project } from "@/hooks/use-estimate-v2-data";
 import { useProjectHRMutations } from "@/hooks/use-hr-source";
 import { useHRItems, useHRPayments, usePermission, useProject, useTasks } from "@/hooks/use-mock-data";
 import { useWorkspaceMode } from "@/hooks/use-workspace-source";
+import { seamCanViewSensitiveDetail } from "@/lib/permissions";
 import { useToast } from "@/hooks/use-toast";
 import { getUserById } from "@/data/store";
 import { isDemoSessionActive } from "@/lib/auth-state";
@@ -132,9 +133,11 @@ export default function ProjectHR() {
   const hrItems = useHRItems(pid);
   const hrPayments = useHRPayments(pid);
   const hrMutations = useProjectHRMutations(pid);
-  const { can } = usePermission(pid);
+  const perm = usePermission(pid);
+  const { can } = perm;
   const workspaceMode = useWorkspaceMode();
   const canEdit = can("hr.edit");
+  const canViewFinancialDetail = seamCanViewSensitiveDetail(perm.seam);
   const isDemoMode = isDemoSessionActive();
   const isSupabaseMode = workspaceMode.kind === "supabase";
   const hrSyncState = estimateSync.domains.hr;
@@ -213,7 +216,7 @@ export default function ProjectHR() {
         const hasVisibleAssignee = knownAssigneeIds.length > 0 || (!isDemoMode && Boolean(estimateAssigneeLabel));
         const workStatus = task ? taskStatusToWorkStatus(task.status) : item.status;
         const title = linkedLine?.title ?? item.title;
-        const type = linkedLine?.type === "subcontractor" ? "subcontractor" : item.type;
+        const type = item.type;
 
         return {
           item,
@@ -331,6 +334,7 @@ export default function ProjectHR() {
                 </SelectContent>
               </Select>
 
+              {canViewFinancialDetail && (
               <Select
                 value={paymentStatusFilter}
                 onValueChange={(value) => setPaymentStatusFilter(value as "all" | HRPaymentStatus)}
@@ -346,6 +350,7 @@ export default function ProjectHR() {
                   ))}
                 </SelectContent>
               </Select>
+              )}
 
               <Select value={assigneeFilter} onValueChange={setAssigneeFilter}>
                 <SelectTrigger className="h-8">
@@ -368,17 +373,17 @@ export default function ProjectHR() {
                     <TableHead>Title</TableHead>
                     <TableHead>Assignees</TableHead>
                     <TableHead>Work Status</TableHead>
-                    <TableHead>Payment status</TableHead>
-                    <TableHead className="text-right">Planned</TableHead>
-                    <TableHead className="text-right">Paid</TableHead>
-                    <TableHead className="text-right">Remaining</TableHead>
-                    <TableHead>Add payment</TableHead>
+                    {canViewFinancialDetail && <TableHead>Payment status</TableHead>}
+                    {canViewFinancialDetail && <TableHead className="text-right">Planned</TableHead>}
+                    {canViewFinancialDetail && <TableHead className="text-right">Paid</TableHead>}
+                    {canViewFinancialDetail && <TableHead className="text-right">Remaining</TableHead>}
+                    {canViewFinancialDetail && <TableHead>Add payment</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {rows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center text-muted-foreground">
+                      <TableCell colSpan={canViewFinancialDetail ? 8 : 3} className="text-center text-muted-foreground">
                         No HR items match current filters.
                       </TableCell>
                     </TableRow>
@@ -482,14 +487,17 @@ export default function ProjectHR() {
                           {statusLabel(workStatus)}
                         </Badge>
                       </TableCell>
+                      {canViewFinancialDetail && (
                       <TableCell>
                         <Badge variant={paymentStatusBadgeVariant(paymentStatus)}>
                           {paymentStatusLabel(paymentStatus)}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right">{fmt(planned)}</TableCell>
-                      <TableCell className="text-right">{fmt(paid)}</TableCell>
-                      <TableCell className="text-right">{fmt(remaining)}</TableCell>
+                      )}
+                      {canViewFinancialDetail && <TableCell className="text-right">{fmt(planned)}</TableCell>}
+                      {canViewFinancialDetail && <TableCell className="text-right">{fmt(paid)}</TableCell>}
+                      {canViewFinancialDetail && <TableCell className="text-right">{fmt(remaining)}</TableCell>}
+                      {canViewFinancialDetail && (
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <Input
@@ -534,6 +542,7 @@ export default function ProjectHR() {
                           </Button>
                         </div>
                       </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>

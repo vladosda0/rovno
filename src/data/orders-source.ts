@@ -8,7 +8,12 @@ import {
   placeOrder,
   receiveOrder,
 } from "@/data/order-store";
-import { parseProcurementOperationalSummaryPayload } from "@/data/procurement-operational-summary-payload";
+import {
+  parseProcurementOperationalSummaryPayload,
+  type ProcurementOperationalRpcOrderedLine,
+} from "@/data/procurement-operational-summary-payload";
+import type { DbEstimateResourceType } from "@/lib/estimate-v2/resource-type-contract";
+import { projectToProcurementItemType } from "@/lib/estimate-v2/resource-type-contract";
 import type { FinanceRowLoadAccess } from "@/lib/permissions";
 import { normalizeName } from "@/lib/procurement-utils";
 import type { WorkspaceMode } from "@/data/workspace-source";
@@ -18,6 +23,7 @@ import type {
   OrderReceiveEvent,
   OrderWithLines,
   ProcurementAttachment,
+  ProcurementItemType,
 } from "@/types/entities";
 import type { Database as ProcurementDatabase } from "../../backend-truth/generated/supabase-types";
 
@@ -365,6 +371,46 @@ export function shapeOrdersWithDetails(input: ShapeOrdersInput): OrderWithLines[
     });
 }
 
+function procurementOrderLineItemType(dbType: string | null | undefined): ProcurementItemType {
+  const projection = projectToProcurementItemType(dbType as DbEstimateResourceType | null | undefined);
+  if (projection.kind === "ok") {
+    return projection.type;
+  }
+  return "material";
+}
+
+/**
+ * Replace order lines with RPC `ordered_lines` for operational (non-money) views while preserving
+ * receive quantities from the already-shaped DB lines so in-stock math still works.
+ */
+export function mergeOperationalRpcLinesOntoExistingOrderLines(
+  existingLines: OrderLine[],
+  rpcLines: ProcurementOperationalRpcOrderedLine[],
+  procItemTypeById: Map<string, string | null>,
+): OrderLine[] {
+  const sorted = [...rpcLines].sort((a, b) => a.order_line_id.localeCompare(b.order_line_id));
+  const existingLineById = new Map(existingLines.map((line) => [line.id, line]));
+  return sorted.map((ol) => {
+    const existing = existingLineById.get(ol.order_line_id);
+    const fromProcItem = ol.procurement_item_id
+      ? procItemTypeById.get(ol.procurement_item_id) ?? null
+      : null;
+    const resolvedDbType = fromProcItem ?? ol.estimate_resource_line_resource_type ?? null;
+    return {
+      id: ol.order_line_id,
+      orderId: ol.order_id,
+      procurementItemId: ol.procurement_item_id ?? "",
+      title: (ol.title || ol.procurement_item_title) ?? existing?.title ?? null,
+      itemType: procurementOrderLineItemType(resolvedDbType),
+      qty: ol.quantity,
+      receivedQty: existing?.receivedQty ?? 0,
+      unit: ol.unit ?? existing?.unit ?? "",
+      plannedUnitPrice: null,
+      actualUnitPrice: null,
+    };
+  });
+}
+
 async function loadSupabaseClient(): Promise<TypedSupabaseClient> {
   const { supabase } = await import("@/integrations/supabase/client");
   return supabase as unknown as TypedSupabaseClient;
@@ -390,6 +436,11 @@ async function mergeOperationalSummaryLinesIntoOrders(
     return orders;
   }
 
+  const procItemTypeById = new Map<string, string | null>();
+  for (const pi of parsed.procurementItems) {
+    procItemTypeById.set(pi.procurement_item_id, pi.estimate_resource_line_resource_type);
+  }
+
   const byOrderId = new Map<string, typeof parsed.orderedLines>();
   for (const ol of parsed.orderedLines) {
     const list = byOrderId.get(ol.order_id) ?? [];
@@ -410,18 +461,7 @@ async function mergeOperationalSummaryLinesIntoOrders(
     return {
       ...order,
       deliveryDeadline: order.deliveryDeadline ?? deliveryFromRpc,
-      lines: sorted.map((ol) => ({
-        id: ol.order_line_id,
-        orderId: ol.order_id,
-        procurementItemId: ol.procurement_item_id ?? "",
-        title: ol.title || ol.procurement_item_title || null,
-        itemType: "material",
-        qty: ol.quantity,
-        receivedQty: 0,
-        unit: ol.unit ?? "",
-        plannedUnitPrice: null,
-        actualUnitPrice: null,
-      })),
+      lines: mergeOperationalRpcLinesOntoExistingOrderLines(order.lines, sorted, procItemTypeById),
     };
   });
 }

@@ -262,7 +262,10 @@ describe("ProjectHR", () => {
     ]);
     mocks.useHRItems.mockReturnValue([hrItem()]);
     mocks.useHRPayments.mockReturnValue([hrPayment()]);
-    mocks.usePermission.mockReturnValue({ can: () => true });
+    mocks.usePermission.mockReturnValue({
+      can: () => true,
+      seam: { profileId: "user-1", membership: { role: "owner", finance_visibility: "detail" }, project: null },
+    });
     mocks.useProjectHRMutations.mockReturnValue({
       setAssignees: vi.fn(),
       setItemStatus: vi.fn(),

@@ -44,6 +44,7 @@ import {
 } from "@/data/hr-source";
 import { resolveRuntimeWorkspaceMode } from "@/data/workspace-source";
 import type { EstimateV2Snapshot, ResourceLineType } from "@/types/estimate-v2";
+import { resourceLineTypeToPersisted } from "@/lib/estimate-v2/resource-type-contract";
 
 const RESOURCE_TYPE_ORDER: Record<ResourceLineType, number> = {
   material: 0,
@@ -186,11 +187,8 @@ function totalPriceCentsFromLine(line: EstimateV2HeroTransitionLineInput): numbe
   return Math.max(0, Math.round(line.costUnitCents * quantityFromQtyMilli(line.qtyMilli)));
 }
 
-function resourceTypeForEstimateLine(type: ResourceLineType): "material" | "labor" | "equipment" | "other" {
-  if (type === "material") return "material";
-  if (type === "tool") return "equipment";
-  if (type === "labor" || type === "subcontractor") return "labor";
-  return "other";
+function resourceTypeForEstimateLine(type: ResourceLineType) {
+  return resourceLineTypeToPersisted(type);
 }
 
 function normalizePlan(input: EstimateV2HeroTransitionInput): NormalizedTransitionPlan {
