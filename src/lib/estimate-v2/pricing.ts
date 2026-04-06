@@ -48,6 +48,14 @@ export interface StageSubtotal {
   subtotalCents: number;
 }
 
+/** When true, `computeLineTotals` uses persisted `summaryClient*` on the line (RPC summary snapshot). */
+export type ComputeLineTotalsOptions = {
+  preferPersistedClientSnapshot?: boolean;
+};
+
+/** How client money is shown for an estimate line (align with `seamEstimateFinanceVisibilityMode`). */
+export type EstimateLineClientDisplayMode = "detail" | "summary" | "none";
+
 const BPS_BASE = 10_000;
 const QTY_MILLI_BASE = 1_000;
 
@@ -106,26 +114,28 @@ export function computeClientUnitCents(
 }
 
 /**
- * Client-facing unit/total for tables and CSV: prefer RPC snapshot fields when present (summary finance path).
- * When `requireSummaryRpc` is true (summary finance seam, no cost payload), omit fallback from computed totals
- * so zero-cost operational lines do not show misleading client money.
+ * Client-facing unit/total for tables and CSV.
+ * - `summary`: prefer persisted `summaryClient*` (RPC snapshot); missing → null.
+ * - `detail` / `none`: always use `computed` so owner edits to cost/qty/markup/discount are not overridden
+ *   by stale snapshot cents hydrated from the DB.
  */
 export function displayLineClientAmounts(
   line: EstimateV2ResourceLine,
   computed: ComputedLineTotals,
-  options?: { requireSummaryRpc?: boolean },
+  options?: { financeMode?: EstimateLineClientDisplayMode },
 ): Pick<ComputedLineTotals, "clientUnitCents" | "clientTotalCents"> | null {
-  const su = line.summaryClientUnitCents;
-  const st = line.summaryClientTotalCents;
-  if (
-    typeof su === "number"
-    && Number.isFinite(su)
-    && typeof st === "number"
-    && Number.isFinite(st)
-  ) {
-    return { clientUnitCents: su, clientTotalCents: st };
-  }
-  if (options?.requireSummaryRpc) {
+  const mode = options?.financeMode ?? "detail";
+  if (mode === "summary") {
+    const su = line.summaryClientUnitCents;
+    const st = line.summaryClientTotalCents;
+    if (
+      typeof su === "number"
+      && Number.isFinite(su)
+      && typeof st === "number"
+      && Number.isFinite(st)
+    ) {
+      return { clientUnitCents: su, clientTotalCents: st };
+    }
     return null;
   }
   return { clientUnitCents: computed.clientUnitCents, clientTotalCents: computed.clientTotalCents };
@@ -136,8 +146,32 @@ export function computeLineTotals(
   stage: EstimateV2Stage,
   project: EstimateV2Project,
   regime: Regime,
+  options?: ComputeLineTotalsOptions,
 ): ComputedLineTotals {
   const qtyMilli = Math.max(0, Math.round(line.qtyMilli));
+  const summaryUnit = line.summaryClientUnitCents;
+  const summaryTotal = line.summaryClientTotalCents;
+  if (
+    options?.preferPersistedClientSnapshot
+    && typeof summaryUnit === "number"
+    && Number.isFinite(summaryUnit)
+    && typeof summaryTotal === "number"
+    && Number.isFinite(summaryTotal)
+  ) {
+    const costTotalCents = multiplyQtyMilli(line.costUnitCents, qtyMilli);
+    return {
+      lineId: line.id,
+      type: line.type,
+      costTotalCents,
+      preDiscountTotalCents: summaryTotal,
+      clientUnitCents: summaryUnit,
+      clientTotalCents: summaryTotal,
+      marginCents: summaryTotal - costTotalCents,
+      markupCents: 0,
+      discountCents: 0,
+    };
+  }
+
   const effectiveDiscountBps = computeEffectiveDiscountBps(line, stage, project);
   const effectiveMarkupBps = regime === "build_myself" ? 0 : clampBps(line.markupBps);
 
@@ -166,6 +200,7 @@ export function computeProjectTotals(
   _works: unknown[],
   lines: EstimateV2ResourceLine[],
   regime: Regime,
+  options?: ComputeLineTotalsOptions,
 ): ProjectTotals {
   const stageById = new Map(stages.map((stage) => [stage.id, stage]));
 
@@ -180,7 +215,7 @@ export function computeProjectTotals(
     const stage = stageById.get(line.stageId);
     if (!stage) return;
 
-    const totals = computeLineTotals(line, stage, project, regime);
+    const totals = computeLineTotals(line, stage, project, regime, options);
     subtotalCents += totals.clientTotalCents;
     costTotalCents += totals.costTotalCents;
     markupTotalCents += totals.markupCents;
@@ -209,6 +244,7 @@ export function computeStageTotals(
   stages: EstimateV2Stage[],
   lines: EstimateV2ResourceLine[],
   regime: Regime,
+  options?: ComputeLineTotalsOptions,
 ): StageTotals[] {
   const stageById = new Map(stages.map((stage) => [stage.id, stage]));
   const totalsByStageId = new Map<string, Omit<StageTotals, "stageId" | "taxAmountCents" | "totalCents" | "subtotalBeforeDiscountCents" | "subtotalCents">>();
@@ -225,7 +261,7 @@ export function computeStageTotals(
       breakdownByType: emptyBreakdownByType(),
     };
 
-    const lineTotals = computeLineTotals(line, stage, project, regime);
+    const lineTotals = computeLineTotals(line, stage, project, regime, options);
     current.taxableBaseCents += lineTotals.clientTotalCents;
     current.costTotalCents += lineTotals.costTotalCents;
     current.markupTotalCents += lineTotals.markupCents;
@@ -267,6 +303,7 @@ export function computeStageSubtotals(
   stages: EstimateV2Stage[],
   lines: EstimateV2ResourceLine[],
   regime: Regime,
+  options?: ComputeLineTotalsOptions,
 ): StageSubtotal[] {
   const stageById = new Map(stages.map((stage) => [stage.id, stage]));
   const subtotalByStageId = new Map<string, number>();
@@ -274,7 +311,7 @@ export function computeStageSubtotals(
   lines.forEach((line) => {
     const stage = stageById.get(line.stageId);
     if (!stage) return;
-    const totals = computeLineTotals(line, stage, project, regime);
+    const totals = computeLineTotals(line, stage, project, regime, options);
     subtotalByStageId.set(line.stageId, (subtotalByStageId.get(line.stageId) ?? 0) + totals.clientTotalCents);
   });
 

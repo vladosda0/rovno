@@ -652,7 +652,7 @@ describe("ProjectEstimate", () => {
 
   it("keeps contractor estimate view redacted by default", async () => {
     const projectId = "project-estimate-contractor-redacted";
-    setupLocalProject(projectId);
+    setupLocalProject(projectId, { finance_visibility: "summary" });
     const seeded = seedEstimateLine(projectId);
     expect(seeded).not.toBeNull();
     if (!seeded?.line) return;

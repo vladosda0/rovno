@@ -90,6 +90,8 @@ import {
   computeProjectTotals,
   computeStageTotals,
   displayLineClientAmounts,
+  roundHalfUpDiv,
+  type ComputeLineTotalsOptions,
 } from "@/lib/estimate-v2/pricing";
 import { resolveProjectEstimateCtaState } from "@/lib/estimate-v2/project-estimate-cta";
 import { resolveSubmitToClientState } from "@/lib/estimate-v2/project-estimate-submit-state";
@@ -109,8 +111,10 @@ import {
   getProjectDomainAccess,
   projectDomainAllowsView,
   projectDomainAllowsManage,
+  seamAllowsEstimateExportCsv,
   seamCanViewOperationalFinanceSummary,
   seamCanViewSensitiveDetail,
+  seamEstimateFinanceVisibilityMode,
   usePermission,
 } from "@/lib/permissions";
 import { ApprovalStampCard } from "@/components/estimate-v2/ApprovalStampCard";
@@ -124,7 +128,11 @@ import {
   getUnitOptionsForType,
   resolveUnitSelectValue,
 } from "@/lib/estimate-v2/resource-units";
-import { resourceLineSemanticLabel } from "@/lib/estimate-v2/resource-type-contract";
+import {
+  parsePersistedEstimateResourceType,
+  resourceLineSemanticLabel,
+  resourceLineTypeFromPersisted,
+} from "@/lib/estimate-v2/resource-type-contract";
 import {
   assessResourceDelete,
   assessStageDelete,
@@ -195,6 +203,11 @@ function fromBpsToPercent(bps: number): string {
 
 function labelForType(type: ResourceLineType): string {
   return resourceLineSemanticLabel(type);
+}
+
+function labelForRpcResourceTypeKey(key: string): string {
+  const parsed = parsePersistedEstimateResourceType(key);
+  return parsed.ok ? labelForType(resourceLineTypeFromPersisted(parsed.db)) : key;
 }
 
 function isAssignableResourceType(type: ResourceLineType): boolean {
@@ -560,6 +573,7 @@ export default function ProjectEstimate() {
     dependencies,
     versions,
     scheduleBaseline,
+    operationalUpperBlock,
     isLoading: isEstimateLoading,
   } = useEstimateV2Project(pid);
 
@@ -569,11 +583,13 @@ export default function ProjectEstimate() {
   const estimateAccess = getProjectDomainAccess(perm.seam, "estimate");
   const canViewSensitiveDetail = seamCanViewSensitiveDetail(perm.seam);
   const canViewOperationalFinanceSummary = seamCanViewOperationalFinanceSummary(perm.seam);
+  const estimateFinanceMode = seamEstimateFinanceVisibilityMode(perm.seam);
+  const canExportEstimateCsv = seamAllowsEstimateExportCsv(perm.seam);
   const canManageEstimate = projectDomainAllowsManage(estimateAccess) && regime !== "client";
   const canEditEstimate = canManageEstimate;
   const canSubmitToClient = canManageEstimate && canSubmitByMembership;
-  const showEstimateInternalPricing = canViewSensitiveDetail && regime !== "client";
-  const showEstimateMarkup = canViewSensitiveDetail && regime === "contractor";
+  const showEstimateInternalPricing = estimateFinanceMode === "detail" && regime !== "client";
+  const showEstimateMarkup = estimateFinanceMode === "detail" && regime === "contractor";
 
   const [activeTab, setActiveTab] = useState("estimate");
   const [approvalModalOpen, setApprovalModalOpen] = useState(false);
@@ -975,15 +991,19 @@ export default function ProjectEstimate() {
   const stageById = useMemo(() => new Map(stages.map((stage) => [stage.id, stage])), [stages]);
   const lineById = useMemo(() => new Map(lines.map((line) => [line.id, line])), [lines]);
 
+  const lineTotalsComputeOptions = useMemo((): ComputeLineTotalsOptions | undefined => (
+    estimateFinanceMode === "summary" ? { preferPersistedClientSnapshot: true } : undefined
+  ), [estimateFinanceMode]);
+
   const lineTotalsById = useMemo(() => {
     const map = new Map<string, ReturnType<typeof computeLineTotals>>();
     lines.forEach((line) => {
       const stage = stageById.get(line.stageId);
       if (!stage) return;
-      map.set(line.id, computeLineTotals(line, stage, estimateProject, regime));
+      map.set(line.id, computeLineTotals(line, stage, estimateProject, regime, lineTotalsComputeOptions));
     });
     return map;
-  }, [estimateProject, lines, regime, stageById]);
+  }, [estimateProject, lines, regime, stageById, lineTotalsComputeOptions]);
 
   const hasSummaryClientPricingOnAnyLine = useMemo(() => (
     lines.some((line) => (
@@ -993,15 +1013,34 @@ export default function ProjectEstimate() {
   ), [lines]);
 
   const totals = useMemo(
-    () => computeProjectTotals(estimateProject, stages, works, lines, regime),
-    [estimateProject, stages, works, lines, regime],
+    () => computeProjectTotals(estimateProject, stages, works, lines, regime, lineTotalsComputeOptions),
+    [estimateProject, stages, works, lines, regime, lineTotalsComputeOptions],
   );
+
+  const rpcSummarySubtotalCents =
+    estimateFinanceMode === "summary" && operationalUpperBlock?.clientTotalCents != null
+      ? operationalUpperBlock.clientTotalCents
+      : null;
+  const rpcSummaryVatBps =
+    operationalUpperBlock?.vatBps != null && Number.isFinite(operationalUpperBlock.vatBps)
+      ? operationalUpperBlock.vatBps
+      : estimateProject.taxBps;
+  const rpcSummaryTaxCents = rpcSummarySubtotalCents != null
+    ? roundHalfUpDiv(rpcSummarySubtotalCents * rpcSummaryVatBps, 10_000)
+    : null;
+  const rpcSummaryTotalIncVatCents = rpcSummarySubtotalCents != null && rpcSummaryTaxCents != null
+    ? rpcSummarySubtotalCents + rpcSummaryTaxCents
+    : null;
+
+  const uiTaxAmountCents = rpcSummaryTaxCents ?? totals.taxAmountCents;
+  const uiTotalIncVatCents = rpcSummaryTotalIncVatCents ?? totals.totalCents;
+  const uiTaxableBaseCents = rpcSummarySubtotalCents ?? totals.taxableBaseCents;
 
   const stageTotalsById = useMemo(
     () => new Map(
-      computeStageTotals(estimateProject, stages, lines, regime).map((item) => [item.stageId, item]),
+      computeStageTotals(estimateProject, stages, lines, regime, lineTotalsComputeOptions).map((item) => [item.stageId, item]),
     ),
-    [estimateProject, stages, lines, regime],
+    [estimateProject, stages, lines, regime, lineTotalsComputeOptions],
   );
 
   const plannedRollups = useMemo(
@@ -1478,6 +1517,8 @@ export default function ProjectEstimate() {
   };
 
   const handleExportCsv = () => {
+    if (!canExportEstimateCsv) return;
+
     const rows: string[][] = [];
     rows.push(["Estimate v2 export"]);
     rows.push(["Project", estimateProject.title]);
@@ -1488,11 +1529,18 @@ export default function ProjectEstimate() {
       && canViewOperationalFinanceSummary
       && hasSummaryClientPricingOnAnyLine;
     const requireSummaryRpcForExport = canViewOperationalFinanceSummary && !canViewSensitiveDetail;
+    const exportDiscountedColumn = summaryFinancialExport && lines.some(
+      (line) => typeof line.summaryDiscountedClientTotalCents === "number",
+    );
 
     if (!canViewSensitiveDetail && !summaryFinancialExport) {
       rows.push(["Stage", "Work", "Line", "Qty", "Unit"]);
     } else if (!canViewSensitiveDetail && summaryFinancialExport) {
-      rows.push(["Stage", "Work", "Line", "Qty", "Unit", "Client unit", "Client total"]);
+      rows.push(
+        exportDiscountedColumn
+          ? ["Stage", "Work", "Line", "Qty", "Unit", "Client unit", "Client total", "Discounted client total"]
+          : ["Stage", "Work", "Line", "Qty", "Unit", "Client unit", "Client total"],
+      );
     } else if (regime === "client") {
       rows.push(["Stage", "Work", "Line", "Qty", "Unit", "Client unit", "Client total"]);
     } else if (regime === "contractor") {
@@ -1511,16 +1559,34 @@ export default function ProjectEstimate() {
 
           if (!canViewSensitiveDetail) {
             if (summaryFinancialExport) {
-              const clientMoney = displayLineClientAmounts(line, lineTotals, { requireSummaryRpc: requireSummaryRpcForExport });
-              rows.push([
-                stage.title,
-                work.title,
-                line.title,
-                qtyFromMilli(line.qtyMilli),
-                line.unit,
-                clientMoney ? money(clientMoney.clientUnitCents, estimateProject.currency) : "—",
-                clientMoney ? money(clientMoney.clientTotalCents, estimateProject.currency) : "—",
-              ]);
+              const clientMoney = displayLineClientAmounts(line, lineTotals, {
+                financeMode: requireSummaryRpcForExport ? "summary" : "detail",
+              });
+              const discounted = typeof line.summaryDiscountedClientTotalCents === "number"
+                ? money(line.summaryDiscountedClientTotalCents, estimateProject.currency)
+                : "—";
+              rows.push(
+                exportDiscountedColumn
+                  ? [
+                    stage.title,
+                    work.title,
+                    line.title,
+                    qtyFromMilli(line.qtyMilli),
+                    line.unit,
+                    clientMoney ? money(clientMoney.clientUnitCents, estimateProject.currency) : "—",
+                    clientMoney ? money(clientMoney.clientTotalCents, estimateProject.currency) : "—",
+                    discounted,
+                  ]
+                  : [
+                    stage.title,
+                    work.title,
+                    line.title,
+                    qtyFromMilli(line.qtyMilli),
+                    line.unit,
+                    clientMoney ? money(clientMoney.clientUnitCents, estimateProject.currency) : "—",
+                    clientMoney ? money(clientMoney.clientTotalCents, estimateProject.currency) : "—",
+                  ],
+              );
               return;
             }
             rows.push([
@@ -1533,7 +1599,7 @@ export default function ProjectEstimate() {
             return;
           }
 
-          const clientForCsv = displayLineClientAmounts(line, lineTotals)
+          const clientForCsv = displayLineClientAmounts(line, lineTotals, { financeMode: "detail" })
             ?? { clientUnitCents: lineTotals.clientUnitCents, clientTotalCents: lineTotals.clientTotalCents };
           const clientUnitStr = money(clientForCsv.clientUnitCents, estimateProject.currency);
           const clientTotalStr = money(clientForCsv.clientTotalCents, estimateProject.currency);
@@ -1592,9 +1658,12 @@ export default function ProjectEstimate() {
       rows.push(["Discount", money(totals.discountTotalCents, estimateProject.currency)]);
       rows.push(["Taxable base (ex VAT)", money(totals.taxableBaseCents, estimateProject.currency)]);
     }
-    rows.push(["Tax", `${(estimateProject.taxBps / 100).toFixed(2)}%`]);
-    rows.push(["Tax amount", money(totals.taxAmountCents, estimateProject.currency)]);
-    rows.push(["Total (inc VAT)", money(totals.totalCents, estimateProject.currency)]);
+    rows.push([
+      "Tax",
+      `${((operationalUpperBlock?.vatBps ?? estimateProject.taxBps) / 100).toFixed(2)}%`,
+    ]);
+    rows.push(["Tax amount", money(uiTaxAmountCents, estimateProject.currency)]);
+    rows.push(["Total (inc VAT)", money(uiTotalIncVatCents, estimateProject.currency)]);
 
     const csv = buildCsv(rows);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -1825,9 +1894,11 @@ export default function ProjectEstimate() {
           {showEstimateWorkspace && (
             <div className="flex w-full min-w-0 flex-col items-start gap-1 lg:w-auto lg:items-end">
               <div className="flex w-full flex-wrap items-center gap-2 lg:justify-end">
-                <Button variant="outline" size="sm" onClick={handleExportCsv}>
-                  <Download className="mr-1 h-4 w-4" /> Export CSV
-                </Button>
+                {canExportEstimateCsv && (
+                  <Button variant="outline" size="sm" onClick={handleExportCsv}>
+                    <Download className="mr-1 h-4 w-4" /> Export CSV
+                  </Button>
+                )}
 
                 {ctaState.showSubmit && (
                   <Button
@@ -1875,7 +1946,7 @@ export default function ProjectEstimate() {
                   <p className="col-span-2 text-sm font-semibold text-foreground md:col-span-3 lg:col-span-4">Financial</p>
                   <div className="rounded-md bg-muted/30 px-2.5 py-2">
                     <p className="text-[11px] text-muted-foreground">Total (inc VAT)</p>
-                    <p className="text-sm font-semibold tabular-nums text-foreground">{money(totals.totalCents, estimateProject.currency)}</p>
+                    <p className="text-sm font-semibold tabular-nums text-foreground">{money(uiTotalIncVatCents, estimateProject.currency)}</p>
                   </div>
                   <p className="col-span-2 text-sm font-semibold text-foreground md:col-span-3 lg:col-span-4">Timing</p>
                   <div className="rounded-md bg-muted/30 px-2.5 py-2">
@@ -1945,33 +2016,86 @@ export default function ProjectEstimate() {
             ) : (
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4">
-                  <p className="col-span-2 text-sm font-semibold text-foreground md:col-span-3 lg:col-span-4">Financial</p>
-                  <div className="rounded-md bg-muted/30 px-2.5 py-2">
-                    <p className="text-[11px] text-muted-foreground">Planned total</p>
-                    <p className="text-sm font-semibold tabular-nums text-foreground">
-                      {money(combinedPlanFact.planned.plannedBudgetCents, estimateProject.currency)}
-                    </p>
-                  </div>
-                  <div className="rounded-md bg-muted/30 px-2.5 py-2">
-                    <p className="text-[11px] text-muted-foreground">Actual spent</p>
-                    <p className="text-sm font-semibold tabular-nums text-foreground">
-                      {hasActualFinancialData ? money(combinedPlanFact.fact.spentCents, estimateProject.currency) : "—"}
-                    </p>
-                  </div>
-                  <div className="rounded-md bg-muted/30 px-2.5 py-2">
-                    <p className="text-[11px] text-muted-foreground">Over/Under</p>
-                    <p className="text-sm font-semibold tabular-nums text-foreground">
-                      {hasActualFinancialData
-                        ? money(combinedPlanFact.fact.spentCents - combinedPlanFact.planned.plannedBudgetCents, estimateProject.currency)
-                        : "—"}
-                    </p>
-                  </div>
-                  <div className="rounded-md bg-muted/30 px-2.5 py-2">
-                    <p className="text-[11px] text-muted-foreground">To be paid</p>
-                    <p className="text-sm font-semibold tabular-nums text-foreground">
-                      {money(combinedPlanFact.fact.toBePaidPlannedCents, estimateProject.currency)}
-                    </p>
-                  </div>
+                  {estimateFinanceMode === "detail" && (
+                    <>
+                      <p className="col-span-2 text-sm font-semibold text-foreground md:col-span-3 lg:col-span-4">Financial</p>
+                      <div className="rounded-md bg-muted/30 px-2.5 py-2">
+                        <p className="text-[11px] text-muted-foreground">Planned total</p>
+                        <p className="text-sm font-semibold tabular-nums text-foreground">
+                          {money(combinedPlanFact.planned.plannedBudgetCents, estimateProject.currency)}
+                        </p>
+                      </div>
+                      <div className="rounded-md bg-muted/30 px-2.5 py-2">
+                        <p className="text-[11px] text-muted-foreground">Actual spent</p>
+                        <p className="text-sm font-semibold tabular-nums text-foreground">
+                          {hasActualFinancialData ? money(combinedPlanFact.fact.spentCents, estimateProject.currency) : "—"}
+                        </p>
+                      </div>
+                      <div className="rounded-md bg-muted/30 px-2.5 py-2">
+                        <p className="text-[11px] text-muted-foreground">Over/Under</p>
+                        <p className="text-sm font-semibold tabular-nums text-foreground">
+                          {hasActualFinancialData
+                            ? money(combinedPlanFact.fact.spentCents - combinedPlanFact.planned.plannedBudgetCents, estimateProject.currency)
+                            : "—"}
+                        </p>
+                      </div>
+                      <div className="rounded-md bg-muted/30 px-2.5 py-2">
+                        <p className="text-[11px] text-muted-foreground">To be paid</p>
+                        <p className="text-sm font-semibold tabular-nums text-foreground">
+                          {money(combinedPlanFact.fact.toBePaidPlannedCents, estimateProject.currency)}
+                        </p>
+                      </div>
+                    </>
+                  )}
+                  {estimateFinanceMode === "summary" && operationalUpperBlock && (
+                    <>
+                      <p className="col-span-2 text-sm font-semibold text-foreground md:col-span-3 lg:col-span-4">Financial</p>
+                      {operationalUpperBlock.clientTotalCents != null && (
+                        <div className="rounded-md bg-muted/30 px-2.5 py-2">
+                          <p className="text-[11px] text-muted-foreground">Client total (ex VAT)</p>
+                          <p className="text-sm font-semibold tabular-nums text-foreground">
+                            {money(operationalUpperBlock.clientTotalCents, estimateProject.currency)}
+                          </p>
+                        </div>
+                      )}
+                      <div className="rounded-md bg-muted/30 px-2.5 py-2">
+                        <p className="text-[11px] text-muted-foreground">VAT rate</p>
+                        <p className="text-sm font-semibold tabular-nums text-foreground">
+                          {fromBpsToPercent(operationalUpperBlock.vatBps ?? estimateProject.taxBps)}%
+                        </p>
+                      </div>
+                      {operationalUpperBlock.discountBps != null && operationalUpperBlock.discountBps > 0 && (
+                        <div className="rounded-md bg-muted/30 px-2.5 py-2">
+                          <p className="text-[11px] text-muted-foreground">Discount (max)</p>
+                          <p className="text-sm font-semibold tabular-nums text-foreground">
+                            {fromBpsToPercent(operationalUpperBlock.discountBps)}%
+                          </p>
+                        </div>
+                      )}
+                      {rpcSummaryTotalIncVatCents != null && (
+                        <div className="rounded-md bg-muted/30 px-2.5 py-2">
+                          <p className="text-[11px] text-muted-foreground">Total (inc VAT)</p>
+                          <p className="text-sm font-semibold tabular-nums text-foreground">
+                            {money(rpcSummaryTotalIncVatCents, estimateProject.currency)}
+                          </p>
+                        </div>
+                      )}
+                      {operationalUpperBlock.resourceCostBreakdownClientSafeOnly
+                        && Object.keys(operationalUpperBlock.resourceCostBreakdownClientSafeOnly).length > 0 && (
+                        <div className="col-span-2 rounded-md bg-muted/30 px-2.5 py-2 md:col-span-3 lg:col-span-4">
+                          <p className="text-[11px] text-muted-foreground">By resource type (client)</p>
+                          <div className="mt-1 space-y-1">
+                            {Object.entries(operationalUpperBlock.resourceCostBreakdownClientSafeOnly).map(([key, cents]) => (
+                              <div key={key} className="flex justify-between text-sm">
+                                <span className="text-muted-foreground">{labelForRpcResourceTypeKey(key)}</span>
+                                <span className="font-medium tabular-nums text-foreground">{money(cents, estimateProject.currency)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
                   <p className="col-span-2 text-sm font-semibold text-foreground md:col-span-3 lg:col-span-4">Timing</p>
                   <div className="rounded-md bg-muted/30 px-2.5 py-2">
                     <p className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
@@ -2165,10 +2289,57 @@ export default function ProjectEstimate() {
 
             <div className="rounded-lg border border-border p-3">
               <p className="text-sm font-semibold text-foreground">Financial</p>
-              {regime === "client" || !canViewSensitiveDetail ? (
+              {estimateFinanceMode === "none" && regime !== "client" ? (
+                <p className="mt-2 text-caption text-muted-foreground">
+                  Financial details are not shown for your access level.
+                </p>
+              ) : estimateFinanceMode === "summary" && regime !== "client" && operationalUpperBlock ? (
+                <div className="mt-2 space-y-2 text-caption">
+                  {operationalUpperBlock.clientTotalCents != null && (
+                    <div className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
+                      <span className="text-muted-foreground">Client total (ex VAT)</span>
+                      <span className="font-medium tabular-nums text-foreground">
+                        {money(operationalUpperBlock.clientTotalCents, estimateProject.currency)}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
+                    <span className="text-muted-foreground">VAT rate</span>
+                    <span className="font-medium tabular-nums text-foreground">
+                      {fromBpsToPercent(operationalUpperBlock.vatBps ?? estimateProject.taxBps)}%
+                    </span>
+                  </div>
+                  {operationalUpperBlock.discountBps != null && operationalUpperBlock.discountBps > 0 && (
+                    <div className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
+                      <span className="text-muted-foreground">Discount (max)</span>
+                      <span className="font-medium tabular-nums text-foreground">
+                        {fromBpsToPercent(operationalUpperBlock.discountBps)}%
+                      </span>
+                    </div>
+                  )}
+                  {operationalUpperBlock.resourceCostBreakdownClientSafeOnly
+                    && Object.keys(operationalUpperBlock.resourceCostBreakdownClientSafeOnly).length > 0 && (
+                    <div className="space-y-1 rounded-md border border-border/70 px-2 py-2">
+                      <span className="text-muted-foreground">By resource type (client)</span>
+                      {Object.entries(operationalUpperBlock.resourceCostBreakdownClientSafeOnly).map(([key, cents]) => (
+                        <div key={key} className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">{labelForRpcResourceTypeKey(key)}</span>
+                          <span className="tabular-nums text-foreground">{money(cents, estimateProject.currency)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between rounded-md border border-border/70 bg-muted/30 px-2 py-1">
+                    <span className="font-medium text-foreground">Total (inc VAT)</span>
+                    <span className="font-semibold tabular-nums text-foreground">
+                      {money(uiTotalIncVatCents, estimateProject.currency)}
+                    </span>
+                  </div>
+                </div>
+              ) : regime === "client" || !canViewSensitiveDetail ? (
                 <div className="mt-2 rounded-md border border-border/70 p-2">
                   <p className="text-xs text-muted-foreground">Total (inc VAT)</p>
-                  <p className="text-2xl font-semibold text-foreground">{money(totals.totalCents, estimateProject.currency)}</p>
+                  <p className="text-2xl font-semibold text-foreground">{money(uiTotalIncVatCents, estimateProject.currency)}</p>
                 </div>
               ) : (
                 <div className="mt-2 space-y-1 text-caption">
@@ -2360,12 +2531,14 @@ export default function ProjectEstimate() {
                               )}
                             </div>
                           )}
-                          <div className="flex items-center gap-1">
-                            <span className="text-caption text-muted-foreground">Stage total:</span>
-                            <span className="text-sm font-semibold tabular-nums text-foreground">
-                              {money(stageTotals?.totalCents ?? 0, estimateProject.currency)}
-                            </span>
-                          </div>
+                          {estimateFinanceMode !== "none" && (
+                            <div className="flex items-center gap-1">
+                              <span className="text-caption text-muted-foreground">Stage total:</span>
+                              <span className="text-sm font-semibold tabular-nums text-foreground">
+                                {money(stageTotals?.totalCents ?? 0, estimateProject.currency)}
+                              </span>
+                            </div>
+                          )}
                           {canEditEstimate && (
                             <Button
                               size="icon"
@@ -2395,16 +2568,16 @@ export default function ProjectEstimate() {
                                 isAssignableResourceType(row.type)
                                 && Boolean(row.assigneeId || row.assigneeName || row.assigneeEmail)
                               ));
-                            // Show client money columns whenever we render real estimate lines (not checklist-only fallback).
-                            // Do not gate on `canViewSensitiveDetail`: summary-finance members still need these columns
-                            // (values come from RPC snapshot when present, else computed — often zero for operational hydrate).
-                            const showClientPricingColumns = !hasChecklistFallbackRows;
+                            const showClientPricingColumns = estimateFinanceMode !== "none" && !hasChecklistFallbackRows;
+                            const showDiscountedClientColumn = estimateFinanceMode === "summary"
+                              && workLines.some((line) => typeof line.summaryDiscountedClientTotalCents === "number");
                             const tableColumnCount = 3
                               + (showAssignmentColumn ? 1 : 0)
                               + (showEstimateInternalPricing ? 2 : 0)
                               + (showEstimateMarkup ? 1 : 0)
                               + (showEstimateInternalPricing ? 1 : 0)
                               + (showClientPricingColumns ? 2 : 0)
+                              + (showDiscountedClientColumn ? 1 : 0)
                               + (canEditEstimate ? 1 : 0);
 
                             return (
@@ -2469,6 +2642,9 @@ export default function ProjectEstimate() {
                                         {showClientPricingColumns && (
                                           <TableHead className="h-9 w-[126px] py-1 pr-2 text-right tabular-nums">Client total</TableHead>
                                         )}
+                                        {showDiscountedClientColumn && (
+                                          <TableHead className="h-9 w-[140px] py-1 pr-2 text-right tabular-nums">Discounted client</TableHead>
+                                        )}
                                         {canEditEstimate && <TableHead className="h-9 w-10 py-1 pr-0" />}
                                       </TableRow>
                                     </TableHeader>
@@ -2476,7 +2652,11 @@ export default function ProjectEstimate() {
                                       {workLines.map((line) => {
                                         const computed = lineTotalsById.get(line.id);
                                         if (!computed) return null;
-                                        const clientMoney = displayLineClientAmounts(line, computed);
+                                        const clientMoney = displayLineClientAmounts(
+                                          line,
+                                          computed,
+                                          { financeMode: estimateFinanceMode },
+                                        );
                                         const typeLabel = line.type === "other" && line.title.toLowerCase().includes("overhead")
                                           ? "Overheads"
                                           : labelForType(line.type);
@@ -2694,12 +2874,19 @@ export default function ProjectEstimate() {
 
                                             {showClientPricingColumns && (
                                               <TableCell className="w-[120px] py-1.5 pr-2 text-right text-sm tabular-nums align-top">
-                                                {money(clientMoney.clientUnitCents, estimateProject.currency)}
+                                                {clientMoney ? money(clientMoney.clientUnitCents, estimateProject.currency) : "—"}
                                               </TableCell>
                                             )}
                                             {showClientPricingColumns && (
                                               <TableCell className="w-[126px] py-1.5 pr-2 text-right text-sm tabular-nums align-top">
-                                                {money(clientMoney.clientTotalCents, estimateProject.currency)}
+                                                {clientMoney ? money(clientMoney.clientTotalCents, estimateProject.currency) : "—"}
+                                              </TableCell>
+                                            )}
+                                            {showDiscountedClientColumn && (
+                                              <TableCell className="w-[140px] py-1.5 pr-2 text-right text-sm tabular-nums align-top">
+                                                {typeof line.summaryDiscountedClientTotalCents === "number"
+                                                  ? money(line.summaryDiscountedClientTotalCents, estimateProject.currency)
+                                                  : "—"}
                                               </TableCell>
                                             )}
 
@@ -2874,14 +3061,17 @@ export default function ProjectEstimate() {
                   </div>
                 )}
 
-                <div className="flex items-center justify-between gap-2 whitespace-nowrap text-sm md:min-w-[190px] md:justify-end">
-                  <span className="text-muted-foreground">Total for client</span>
-                  <span className="font-semibold tabular-nums text-foreground">
-                    {money(totals.totalCents, estimateProject.currency)}
-                  </span>
-                </div>
+                {estimateFinanceMode !== "none" && (
+                  <div className="flex items-center justify-between gap-2 whitespace-nowrap text-sm md:min-w-[190px] md:justify-end">
+                    <span className="text-muted-foreground">Total for client</span>
+                    <span className="font-semibold tabular-nums text-foreground">
+                      {money(uiTotalIncVatCents, estimateProject.currency)}
+                    </span>
+                  </div>
+                )}
               </div>
 
+              {estimateFinanceMode !== "none" && (
               <div className={`mt-2 grid items-center gap-x-4 gap-y-2 ${regime === "client" ? "md:grid-cols-[minmax(0,1fr)_max-content]" : "md:grid-cols-[minmax(0,1fr)_max-content_max-content]"}`}>
                 <div className="flex flex-wrap items-center gap-2 text-sm">
                   <span className="text-muted-foreground">VAT</span>
@@ -2898,17 +3088,18 @@ export default function ProjectEstimate() {
                     />
                   ) : (
                     <span className="font-semibold tabular-nums text-foreground">
-                      {fromBpsToPercent(estimateProject.taxBps)}%
+                      {fromBpsToPercent(operationalUpperBlock?.vatBps ?? estimateProject.taxBps)}%
                     </span>
                   )}
                   <span className="tabular-nums text-muted-foreground">
-                    {money(totals.taxAmountCents, estimateProject.currency)}
+                    {money(uiTaxAmountCents, estimateProject.currency)}
                   </span>
                 </div>
 
                 {showEstimateInternalPricing && <div aria-hidden="true" className="hidden md:block" />}
                 <div aria-hidden="true" className="hidden md:block" />
               </div>
+              )}
             </div>
               </>
             )}

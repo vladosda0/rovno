@@ -223,7 +223,7 @@ describe("estimate-v2 pricing", () => {
     expect(procurementSubtotalCents).toBe(18_333);
   });
 
-  it("displayLineClientAmounts prefers summary RPC cents when both are finite", () => {
+  it("displayLineClientAmounts prefers summary RPC cents when both are finite (summary mode)", () => {
     const project = createProject();
     const stage = createStage();
     const line = createLine({
@@ -232,16 +232,54 @@ describe("estimate-v2 pricing", () => {
       summaryClientTotalCents: 456,
     });
     const computed = computeLineTotals(line, stage, project, "contractor");
-    const display = displayLineClientAmounts(line, computed);
+    const display = displayLineClientAmounts(line, computed, { financeMode: "summary" });
     expect(display?.clientUnitCents).toBe(123);
     expect(display?.clientTotalCents).toBe(456);
   });
 
-  it("displayLineClientAmounts returns null for requireSummaryRpc when summary is absent", () => {
+  it("displayLineClientAmounts returns null in summary mode when snapshot cents are absent", () => {
     const project = createProject();
     const stage = createStage();
     const line = createLine({ costUnitCents: 0 });
     const computed = computeLineTotals(line, stage, project, "contractor");
-    expect(displayLineClientAmounts(line, computed, { requireSummaryRpc: true })).toBeNull();
+    expect(displayLineClientAmounts(line, computed, { financeMode: "summary" })).toBeNull();
+  });
+
+  it("detail mode uses computed client cents even when persisted summary cents exist (owner edit path)", () => {
+    const project = createProject({ discountBps: 0 });
+    const stage = createStage();
+    const line = createLine({
+      costUnitCents: 10_000,
+      qtyMilli: 2_000,
+      markupBps: 1_000,
+      summaryClientUnitCents: 9_999,
+      summaryClientTotalCents: 19_998,
+    });
+    const computed = computeLineTotals(line, stage, project, "contractor");
+    const display = displayLineClientAmounts(line, computed, { financeMode: "detail" });
+    expect(display?.clientUnitCents).toBe(computed.clientUnitCents);
+    expect(display?.clientTotalCents).toBe(computed.clientTotalCents);
+    expect(display?.clientUnitCents).not.toBe(9_999);
+  });
+
+  it("computeLineTotals uses persisted snapshot only when preferPersistedClientSnapshot is true", () => {
+    const project = createProject();
+    const stage = createStage();
+    const line = createLine({
+      costUnitCents: 50_000,
+      qtyMilli: 1_000,
+      markupBps: 5_000,
+      summaryClientUnitCents: 1,
+      summaryClientTotalCents: 2,
+    });
+    const fromSnapshot = computeLineTotals(line, stage, project, "contractor", {
+      preferPersistedClientSnapshot: true,
+    });
+    expect(fromSnapshot.clientUnitCents).toBe(1);
+    expect(fromSnapshot.clientTotalCents).toBe(2);
+
+    const fromFormula = computeLineTotals(line, stage, project, "contractor");
+    expect(fromFormula.clientUnitCents).not.toBe(1);
+    expect(fromFormula.markupCents).toBeGreaterThan(0);
   });
 });
