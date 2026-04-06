@@ -14,7 +14,12 @@ import {
 } from "@/data/hr-source";
 import { useEstimateV2ProjectSync } from "@/hooks/use-estimate-v2-data";
 import { useWorkspaceMode } from "@/hooks/use-workspace-source";
-import { resolveFinanceRowLoadAccess, usePermission } from "@/lib/permissions";
+import {
+  getProjectDomainAccess,
+  projectDomainAllowsView,
+  resolveFinanceRowLoadAccess,
+  usePermission,
+} from "@/lib/permissions";
 import type { FinanceRowLoadAccess } from "@/lib/permissions";
 import type { HRItemStatus, HRPayment, HRPlannedItem } from "@/types/hr";
 
@@ -60,11 +65,16 @@ export function useProjectHRItems(projectId: string, options?: HRQueryOptions): 
   const supabaseMode = mode.kind === "supabase" ? mode : null;
   const { seam } = usePermission(projectId);
   const financeAccess = useMemo(() => resolveFinanceRowLoadAccess(seam), [seam]);
+  const hrReadsEnabled = useMemo(
+    () => projectDomainAllowsView(getProjectDomainAccess(seam, "hr")),
+    [seam],
+  );
   const queriesEnabled = options?.enabled ?? true;
+  const loadsEnabled = queriesEnabled && hrReadsEnabled;
   const getItems = useCallback(() => getHRItems(projectId), [projectId]);
   const browserItems = useStoreValue(
     getItems,
-    queriesEnabled && (mode.kind === "demo" || mode.kind === "local"),
+    loadsEnabled && (mode.kind === "demo" || mode.kind === "local"),
     EMPTY_HR_ITEMS,
   );
   const itemsQuery = useQuery({
@@ -75,7 +85,7 @@ export function useProjectHRItems(projectId: string, options?: HRQueryOptions): 
       const source = await getHRSource(supabaseMode ?? undefined);
       return source.getProjectHRItems(projectId, financeAccess);
     },
-    enabled: queriesEnabled && Boolean(supabaseMode && projectId),
+    enabled: loadsEnabled && Boolean(supabaseMode && projectId),
     staleTime: HR_QUERY_STALE_TIME_MS,
   });
 
@@ -90,11 +100,17 @@ export function useProjectHRPayments(projectId: string, options?: HRQueryOptions
   const mode = useWorkspaceMode();
   const estimateSync = useEstimateV2ProjectSync(projectId);
   const supabaseMode = mode.kind === "supabase" ? mode : null;
+  const { seam } = usePermission(projectId);
+  const hrReadsEnabled = useMemo(
+    () => projectDomainAllowsView(getProjectDomainAccess(seam, "hr")),
+    [seam],
+  );
   const queriesEnabled = options?.enabled ?? true;
+  const loadsEnabled = queriesEnabled && hrReadsEnabled;
   const getPayments = useCallback(() => getHRPayments(projectId), [projectId]);
   const browserPayments = useStoreValue(
     getPayments,
-    queriesEnabled && (mode.kind === "demo" || mode.kind === "local"),
+    loadsEnabled && (mode.kind === "demo" || mode.kind === "local"),
     EMPTY_HR_PAYMENTS,
   );
   const paymentsQuery = useQuery({
@@ -105,7 +121,7 @@ export function useProjectHRPayments(projectId: string, options?: HRQueryOptions
       const source = await getHRSource(supabaseMode ?? undefined);
       return source.getProjectHRPayments(projectId);
     },
-    enabled: queriesEnabled && Boolean(supabaseMode && projectId),
+    enabled: loadsEnabled && Boolean(supabaseMode && projectId),
     staleTime: HR_QUERY_STALE_TIME_MS,
   });
 

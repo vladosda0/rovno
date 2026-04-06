@@ -2,7 +2,11 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as store from "@/data/store";
-import { seamCanViewSensitiveDetail, usePermission } from "@/lib/permissions";
+import {
+  getProjectDomainAccessForRole,
+  seamCanViewSensitiveDetail,
+  usePermission,
+} from "@/lib/permissions";
 import { workspaceQueryKeys } from "@/hooks/use-workspace-source";
 import { authenticateRuntimeAuth } from "@/test/runtime-auth";
 import type { Member, User } from "@/types/entities";
@@ -165,6 +169,18 @@ describe("usePermission", () => {
       expect(screen.getByTestId("role")).toHaveTextContent("contractor");
     });
     expect(screen.getByTestId("can-sensitive")).toHaveTextContent("false");
+  });
+});
+
+describe("getProjectDomainAccessForRole (HR domain)", () => {
+  it("hides HR for viewer and contractor roles", () => {
+    expect(getProjectDomainAccessForRole("viewer", "hr")).toBe("hidden");
+    expect(getProjectDomainAccessForRole("contractor", "hr")).toBe("hidden");
+  });
+
+  it("grants manage for owner and co_owner", () => {
+    expect(getProjectDomainAccessForRole("owner", "hr")).toBe("manage");
+    expect(getProjectDomainAccessForRole("co_owner", "hr")).toBe("manage");
   });
 });
 

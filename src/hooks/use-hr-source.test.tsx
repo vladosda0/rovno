@@ -1,6 +1,6 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as estimateV2Store from "@/data/estimate-v2-store";
 import * as hrStore from "@/data/hr-store";
 import * as hrSource from "@/data/hr-source";
@@ -11,7 +11,43 @@ import {
   useProjectHRPayments,
 } from "@/hooks/use-hr-source";
 import { authenticateRuntimeAuth } from "@/test/runtime-auth";
+import type { MemberRole } from "@/types/entities";
 import type { HRPayment, HRPlannedItem } from "@/types/hr";
+
+const { usePermissionMock } = vi.hoisted(() => ({
+  usePermissionMock: vi.fn(),
+}));
+
+vi.mock("@/lib/permissions", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/permissions")>("@/lib/permissions");
+  return {
+    ...actual,
+    usePermission: usePermissionMock,
+  };
+});
+
+function permissionReturnForRole(role: MemberRole) {
+  return {
+    seam: {
+      projectId: "project-1",
+      profileId: "profile-1",
+      membership: {
+        project_id: "project-1",
+        user_id: "profile-1",
+        role,
+        viewer_regime: null,
+        ai_access: "consult_only",
+        finance_visibility: role === "owner" || role === "co_owner" ? "detail" : "summary",
+        credit_limit: 0,
+        used_credits: 0,
+      },
+      project: undefined,
+    },
+    can: vi.fn(),
+    role,
+    isLoading: false,
+  };
+}
 
 function createQueryClient() {
   return new QueryClient({
@@ -115,6 +151,7 @@ function HRMutationProbe({ projectId }: { projectId: string }) {
 
 describe("useProjectHRItems/useProjectHRPayments", () => {
   beforeEach(() => {
+    usePermissionMock.mockReturnValue(permissionReturnForRole("owner"));
     vi.spyOn(estimateV2Store, "hydrateEstimateV2ProjectFromWorkspace").mockResolvedValue(undefined);
   });
 
@@ -229,6 +266,34 @@ describe("useProjectHRItems/useProjectHRPayments", () => {
     render(
       <QueryClientProvider client={queryClient}>
         <HRProbe projectId="project-1" enabled={false} />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("item-count")).toHaveTextContent("0");
+    });
+    expect(screen.getByTestId("payment-count")).toHaveTextContent("0");
+    expect(source.getProjectHRItems).not.toHaveBeenCalled();
+    expect(source.getProjectHRPayments).not.toHaveBeenCalled();
+  });
+
+  it("does not call Supabase HR reads when HR domain is hidden for the viewer role", async () => {
+    vi.stubEnv("VITE_WORKSPACE_SOURCE", "supabase");
+    usePermissionMock.mockReturnValue(permissionReturnForRole("viewer"));
+
+    const queryClient = createQueryClient();
+    const source = {
+      mode: "supabase" as const,
+      getProjectHRItems: vi.fn(),
+      getProjectHRPayments: vi.fn(),
+    };
+
+    authenticateRuntimeAuth();
+    vi.spyOn(hrSource, "getHRSource").mockResolvedValue(source);
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <HRProbe projectId="project-1" />
       </QueryClientProvider>,
     );
 

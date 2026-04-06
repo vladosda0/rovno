@@ -36,7 +36,7 @@ function setPermission(role: MemberRole) {
 }
 
 describe("ProjectTabs", () => {
-  it("hides Participants for contractors but shows HR and other Phase 5 modules", async () => {
+  it("hides Participants and HR for contractors but shows other Phase 5 modules", async () => {
     setPermission("contractor");
     const { ProjectTabs } = await import("@/components/ProjectTabs");
 
@@ -52,8 +52,21 @@ describe("ProjectTabs", () => {
     expect(screen.getByRole("link", { name: "Procurement" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Gallery" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Documents" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "HR" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "HR" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Participants" })).not.toBeInTheDocument();
+  });
+
+  it("hides HR for viewers", async () => {
+    setPermission("viewer");
+    const { ProjectTabs } = await import("@/components/ProjectTabs");
+
+    render(
+      <MemoryRouter>
+        <ProjectTabs projectId="project-1" />
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByRole("link", { name: "HR" })).not.toBeInTheDocument();
   });
 
   it("shows Participants and HR for co-owners", async () => {

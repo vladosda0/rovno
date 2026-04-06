@@ -1,0 +1,290 @@
+{
+  "version": 1,
+  "name": "Track 1 Execution Contract",
+  "scope": "permissions_core_contract_alignment",
+  "goal": "Fix the highest-risk contract contradictions first: HR hidden mismatch, Estimate summary backend blocker, and Estimate export CSV mismatch.",
+  "source_of_truth": {
+    "primary": [
+      "Permissions.md",
+      "permissions.contract.json"
+    ],
+    "secondary": [
+      "permissions-implementation-audit.json"
+    ],
+    "priority_order": [
+      "backend_truth",
+      "permissions.contract.json",
+      "Permissions.md",
+      "current_frontend_behavior"
+    ]
+  },
+  "tracks": [
+    {
+      "id": "track_1",
+      "name": "Core contract contradiction fixes",
+      "status": "planned",
+      "items": [
+        {
+          "id": "track_1_hr_hidden_mismatch",
+          "title": "HR hidden-domain contract fix",
+          "goal": "Ensure viewer and contractor do not have HR domain visibility or HR-shaped operational data when the contract says HR is hidden.",
+          "current_behavior": {
+            "summary": "Audit identified a semantic mismatch: contract says viewer/contractor HR is hidden, but current implementation exposes broader HR-related behavior than intended.",
+            "known_risks": [
+              "viewer and contractor may still access or receive HR-shaped operational data",
+              "hidden means hidden is currently violated",
+              "AI inheritance would also be unsafe if base HR visibility is not fixed"
+            ]
+          },
+          "desired_behavior": {
+            "viewer": {
+              "domain_access": "hidden",
+              "route_access": "blocked",
+              "tab_visibility": "hidden",
+              "hr_operational_payload": "not available",
+              "hr_financial_payload": "not available"
+            },
+            "contractor": {
+              "domain_access": "hidden",
+              "route_access": "blocked",
+              "tab_visibility": "hidden",
+              "hr_operational_payload": "not available",
+              "hr_financial_payload": "not available"
+            },
+            "co_owner": {
+              "domain_access": "manage"
+            },
+            "owner": {
+              "domain_access": "manage"
+            }
+          },
+          "constraints": [
+            "do not redesign HR",
+            "do not broaden permissions model",
+            "do not introduce fake frontend-only hiding if backend still leaks HR-shaped rows",
+            "assignee names in non-HR domains may remain visible only where explicitly allowed by contract"
+          ],
+          "repo_owner": "both",
+          "likely_scope": {
+            "rovno": [
+              "permissions / authority seam",
+              "HR page routing/tab visibility",
+              "any HR-related read hooks or summary surfaces"
+            ],
+            "rovno-db": [
+              "HR-related helper/policy/RPC surfaces currently reachable by non-hidden roles"
+            ]
+          },
+          "acceptance_criteria": [
+            "viewer cannot see HR tab",
+            "contractor cannot see HR tab",
+            "viewer direct HR route is denied cleanly",
+            "contractor direct HR route is denied cleanly",
+            "viewer receives no HR operational summary payload",
+            "contractor receives no HR operational summary payload",
+            "co_owner and owner HR behavior remains valid",
+            "no AI-usable hidden HR action or hidden HR data path remains implied by implementation"
+          ],
+          "verification": [
+            "manual role matrix check for viewer / contractor / co_owner / owner",
+            "route denial verification",
+            "payload / query path verification",
+            "regression tests for hidden-domain enforcement"
+          ],
+          "rollback_notes": [
+            "revert isolated HR visibility and data-path changes only",
+            "do not rollback unrelated Estimate or Procurement work"
+          ]
+        },
+        {
+          "id": "track_1_estimate_summary_backend_blocker",
+          "title": "Estimate summary contract alignment",
+          "goal": "Align backend truth and frontend behavior so estimate summary shows exactly the contract-defined client-safe fields and does not rely on fake or unavailable backend semantics.",
+          "current_behavior": {
+            "summary": "Audit identified a backend blocker: contract requires summary-level estimate client-facing values, but current backend truth does not cleanly provide the full summary behavior defined in contract.",
+            "known_risks": [
+              "summary may show too little or inconsistent data",
+              "frontend may fake or partially infer summary fields",
+              "summary semantics drift between backend, frontend, and contract"
+            ]
+          },
+          "desired_behavior": {
+            "financial_visibility_summary": {
+              "upper_block_visible_fields": [
+                "timing",
+                "client_total",
+                "vat",
+                "discount",
+                "resource_cost_breakdown_client_safe_only"
+              ],
+              "upper_block_hidden_fields": [
+                "cost_totals",
+                "markup",
+                "profitability",
+                "internal_only_financial_widgets"
+              ],
+              "table_visible_fields": [
+                "stage",
+                "work",
+                "resource_title",
+                "resource_type",
+                "qty",
+                "unit",
+                "assignee",
+                "client_unit",
+                "client_total",
+                "discounted_client_total"
+              ],
+              "table_hidden_fields": [
+                "cost_unit",
+                "cost_total",
+                "markup",
+                "profitability"
+              ]
+            },
+            "financial_visibility_none": {
+              "upper_block_visible_fields": [
+                "timing"
+              ],
+              "upper_block_hidden_fields": [
+                "all_financial_widgets",
+                "client_total",
+                "vat",
+                "discount"
+              ],
+              "table_visible_fields": [
+                "stage",
+                "work",
+                "resource_title",
+                "resource_type",
+                "qty",
+                "unit",
+                "assignee"
+              ],
+              "table_hidden_fields": [
+                "client_unit",
+                "client_total",
+                "discounted_client_total",
+                "cost_unit",
+                "cost_total",
+                "markup",
+                "profitability"
+              ]
+            }
+          },
+          "constraints": [
+            "do not invent summary semantics beyond contract",
+            "do not infer client-facing values from hidden internal values",
+            "do not ship frontend-only fake summary if backend truth cannot support it",
+            "if backend and frontend changes must be split, do backend truth first"
+          ],
+          "repo_owner": "both",
+          "likely_scope": {
+            "rovno-db": [
+              "estimate summary read contract / RPC / view / helper surfaces",
+              "backend truth support for summary-safe estimate values"
+            ],
+            "rovno": [
+              "Estimate upper block rendering",
+              "Estimate table rendering",
+              "summary/none/detail read path usage"
+            ]
+          },
+          "acceptance_criteria": [
+            "summary users see exactly the contract-defined estimate fields and no more",
+            "none users see only Stage, Work, Resource title, Resource type, Qty, Unit, Assignee plus timing in upper block",
+            "detail users retain full estimate financial visibility",
+            "no hidden estimate financial field leaks through summary/none paths",
+            "frontend no longer depends on unavailable or ambiguous backend summary semantics"
+          ],
+          "verification": [
+            "manual role x financial_visibility matrix for estimate",
+            "upper block verification",
+            "table column verification",
+            "backend truth verification",
+            "regression tests for summary/none/detail behavior"
+          ],
+          "rollback_notes": [
+            "revert estimate summary alignment changes without touching HR or CSV changes",
+            "avoid rolling back shared permission seams unless strictly necessary"
+          ]
+        },
+        {
+          "id": "track_1_estimate_export_csv_fix",
+          "title": "Estimate export CSV contract fix",
+          "goal": "Ensure CSV/export behavior matches the canonical contract and does not leak estimate financial detail for roles that should not have export access.",
+          "current_behavior": {
+            "summary": "Audit identified a contract mismatch: export remains available where the contract says it must be hidden for viewer and contractor.",
+            "known_risks": [
+              "financial data may leak through export",
+              "UI and backend truth may disagree about allowed export behavior"
+            ]
+          },
+          "desired_behavior": {
+            "viewer": {
+              "export_csv": "hidden"
+            },
+            "contractor": {
+              "export_csv": "hidden"
+            },
+            "co_owner": {
+              "export_csv": "enabled"
+            },
+            "owner": {
+              "export_csv": "enabled"
+            }
+          },
+          "constraints": [
+            "do not redesign export system broadly",
+            "do not keep export visible while merely trimming columns if contract says hidden",
+            "do not break co_owner/owner valid export behavior"
+          ],
+          "repo_owner": "rovno",
+          "likely_scope": {
+            "rovno": [
+              "Estimate export button visibility",
+              "Estimate export trigger paths",
+              "related tests"
+            ],
+            "rovno-db": []
+          },
+          "acceptance_criteria": [
+            "viewer does not see or trigger estimate export",
+            "contractor does not see or trigger estimate export",
+            "co_owner can export where contract allows",
+            "owner can export where contract allows",
+            "no estimate financial leakage via CSV from hidden roles"
+          ],
+          "verification": [
+            "manual role check for export button visibility",
+            "export trigger path verification",
+            "tests for hidden/enabled export behavior"
+          ],
+          "rollback_notes": [
+            "revert export visibility changes only"
+          ]
+        }
+      ]
+    }
+  ],
+  "execution_order": [
+    "track_1_hr_hidden_mismatch",
+    "track_1_estimate_summary_backend_blocker",
+    "track_1_estimate_export_csv_fix"
+  ],
+  "cross_track_guardrails": {
+    "do_not_mix_with": [
+      "procurement_tab_semantics_cleanup",
+      "documents_media_classification_ui_work",
+      "activity_redaction",
+      "ai_hardening_beyond_foundational_rules",
+      "phase_7_project_mode"
+    ],
+    "rules": [
+      "do not change contract semantics during implementation",
+      "if contract must change, stop and revise the contract first",
+      "prefer backend-first when frontend behavior depends on missing backend truth",
+      "keep change sets narrow and intention-pure"
+    ]
+  }
+}

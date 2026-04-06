@@ -60,7 +60,7 @@ export function getProjectDomainAccessForRole(
     case "procurement":
       return role === "owner" || role === "co_owner" ? "manage" : "summary";
     case "hr":
-      return role === "owner" || role === "co_owner" ? "manage" : "view";
+      return role === "owner" || role === "co_owner" ? "manage" : "hidden";
     default:
       return "hidden";
   }
