@@ -1302,7 +1302,27 @@
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260405120000_resource_type_operational_visibility_and_hr_rpc.sql",
+      "sourceMigration": "supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "can_access_hr_domain",
+      "signature": "public.can_access_hr_domain(uuid)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "boolean",
+      "language": "sql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql",
       "triggerUsages": []
     }
   ]

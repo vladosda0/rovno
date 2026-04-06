@@ -1425,6 +1425,12 @@ export type Database = {
           }
           Returns: string
         }
+        "can_access_hr_domain": {
+          Args: {
+          "p_project_id": string
+          }
+          Returns: boolean
+        }
         "can_access_project": {
           Args: {
           "p_project_id": string

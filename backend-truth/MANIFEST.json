@@ -167,6 +167,10 @@
     {
       "path": "supabase/migrations/20260406183000_procurement_operational_summary_requested_and_ordered_line_types.sql",
       "sha256": "5e6ffd21201532e67d9afff639bd49b73c679ca3487df9178a41541e53065390"
+    },
+    {
+      "path": "supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql",
+      "sha256": "f0162f60ffdc29bc52f93846d22ecd3be1b36169fd0daff73a670ce3b78a3f80"
     }
   ],
   "generated_artifacts": [
@@ -232,6 +236,7 @@
     "sql/20260403191500_phase6_operational_summary_subcontractor_and_client_amounts.sql",
     "sql/20260405120000_resource_type_operational_visibility_and_hr_rpc.sql",
     "sql/20260406183000_procurement_operational_summary_requested_and_ordered_line_types.sql",
+    "sql/20260406184500_track1_hr_operational_summary_role_gate.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],

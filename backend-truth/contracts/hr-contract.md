@@ -10,7 +10,7 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 
 - `supabase/migrations/20260306164000_hr_domain.sql`
 - `supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql`
-- `supabase/migrations/20260405120000_resource_type_operational_visibility_and_hr_rpc.sql`
+- `supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql`
 - `supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql`
 - `supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql`
 
@@ -117,7 +117,7 @@ Indexes:
 
 | Function | Returns | Auth Execute | Kind | Source |
 | --- | --- | --- | --- | --- |
-| `public.get_hr_operational_summary(uuid, integer, integer)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260405120000_resource_type_operational_visibility_and_hr_rpc.sql` |
+| `public.get_hr_operational_summary(uuid, integer, integer)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql` |
 
 ## RLS and Grants
 
