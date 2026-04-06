@@ -534,6 +534,16 @@
     },
     {
       "schema": "public",
+      "table": "estimate_versions",
+      "column": "client_vat_bps",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "client_vat_bps is null or (client_vat_bps >= 0 and client_vat_bps <= 10000)",
+      "sourceMigration": "supabase/migrations/20260406200000_track1_estimate_operational_summary_finance_visibility.sql"
+    },
+    {
+      "schema": "public",
       "table": "estimate_works",
       "column": "sort_order",
       "constraintName": null,
@@ -617,6 +627,16 @@
       ],
       "expression": "resource_type in ('material', 'labor', 'subcontractor', 'equipment', 'other')",
       "sourceMigration": "supabase/migrations/20260403191500_phase6_operational_summary_subcontractor_and_client_amounts.sql"
+    },
+    {
+      "schema": "public",
+      "table": "estimate_resource_lines",
+      "column": "discounted_client_total_price_cents",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "discounted_client_total_price_cents is null\n    or discounted_client_total_price_cents >= 0",
+      "sourceMigration": "supabase/migrations/20260406200000_track1_estimate_operational_summary_finance_visibility.sql"
     },
     {
       "schema": "public",

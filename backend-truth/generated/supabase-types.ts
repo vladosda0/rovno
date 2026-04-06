@@ -569,6 +569,7 @@ export type Database = {
           "is_current": boolean
           "created_by": string
           "created_at": string
+          "client_vat_bps": number | null
           }
           Insert: {
           "id"?: string
@@ -577,6 +578,7 @@ export type Database = {
           "is_current"?: boolean
           "created_by": string
           "created_at"?: string
+          "client_vat_bps"?: number | null
           }
           Update: {
           "id"?: string
@@ -585,6 +587,7 @@ export type Database = {
           "is_current"?: boolean
           "created_by"?: string
           "created_at"?: string
+          "client_vat_bps"?: number | null
           }
           Relationships: []
         }
@@ -634,6 +637,7 @@ export type Database = {
           "created_at": string
           "client_unit_price_cents": number | null
           "client_total_price_cents": number | null
+          "discounted_client_total_price_cents": number | null
           }
           Insert: {
           "id"?: string
@@ -647,6 +651,7 @@ export type Database = {
           "created_at"?: string
           "client_unit_price_cents"?: number | null
           "client_total_price_cents"?: number | null
+          "discounted_client_total_price_cents"?: number | null
           }
           Update: {
           "id"?: string
@@ -660,6 +665,7 @@ export type Database = {
           "created_at"?: string
           "client_unit_price_cents"?: number | null
           "client_total_price_cents"?: number | null
+          "discounted_client_total_price_cents"?: number | null
           }
           Relationships: []
         }

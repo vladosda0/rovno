@@ -67,6 +67,7 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20260405120000_resource_type_operational_visibility_and_hr_rpc.sql`
 - `supabase/migrations/20260406183000_procurement_operational_summary_requested_and_ordered_line_types.sql`
 - `supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql`
+- `supabase/migrations/20260406200000_track1_estimate_operational_summary_finance_visibility.sql`
 
 ## Exclusions
 
