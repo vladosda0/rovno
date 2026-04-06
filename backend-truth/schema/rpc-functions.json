@@ -1237,7 +1237,7 @@
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260405120000_resource_type_operational_visibility_and_hr_rpc.sql",
+      "sourceMigration": "supabase/migrations/20260406183000_procurement_operational_summary_requested_and_ordered_line_types.sql",
       "triggerUsages": []
     },
     {

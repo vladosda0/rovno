@@ -167,6 +167,10 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260405120000_resource_type_operational_visibility_and_hr_rpc.sql",
       "sha256": "37377092895696d7114cab9e9aa1347790483af5278eb5d132855af55d6d7646"
+    },
+    {
+      "path": "supabase/migrations/20260406183000_procurement_operational_summary_requested_and_ordered_line_types.sql",
+      "sha256": "5e6ffd21201532e67d9afff639bd49b73c679ca3487df9178a41541e53065390"
     }
   ],
   "generated_artifacts": [
@@ -231,6 +235,7 @@ export const manifest = {
     "sql/20260403103000_phase6_operational_summary_read_rpcs.sql",
     "sql/20260403191500_phase6_operational_summary_subcontractor_and_client_amounts.sql",
     "sql/20260405120000_resource_type_operational_visibility_and_hr_rpc.sql",
+    "sql/20260406183000_procurement_operational_summary_requested_and_ordered_line_types.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -10366,7 +10371,7 @@ export const functions = {
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260405120000_resource_type_operational_visibility_and_hr_rpc.sql",
+      "sourceMigration": "supabase/migrations/20260406183000_procurement_operational_summary_requested_and_ordered_line_types.sql",
       "triggerUsages": []
     },
     {
@@ -12814,7 +12819,7 @@ export const sourceTrace = {
       "schema": "public",
       "name": "get_procurement_operational_summary",
       "signature": "public.get_procurement_operational_summary(uuid, integer, integer)",
-      "sourceMigration": "supabase/migrations/20260405120000_resource_type_operational_visibility_and_hr_rpc.sql"
+      "sourceMigration": "supabase/migrations/20260406183000_procurement_operational_summary_requested_and_ordered_line_types.sql"
     },
     {
       "key": "public.get_estimate_operational_summary",
@@ -14280,7 +14285,7 @@ export const sourceTrace = {
       "sourceMigrations": [
         "supabase/migrations/20260306163000_inventory_foundation.sql",
         "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
-        "supabase/migrations/20260405120000_resource_type_operational_visibility_and_hr_rpc.sql",
+        "supabase/migrations/20260406183000_procurement_operational_summary_requested_and_ordered_line_types.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
@@ -14681,7 +14686,7 @@ export const slices = {
       "sourceMigrations": [
         "supabase/migrations/20260306163000_inventory_foundation.sql",
         "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
-        "supabase/migrations/20260405120000_resource_type_operational_visibility_and_hr_rpc.sql",
+        "supabase/migrations/20260406183000_procurement_operational_summary_requested_and_ordered_line_types.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
