@@ -1,0 +1,941 @@
+{
+  "version": 1,
+  "meta": {
+    "name": "Rovno Permissions Execution Contract",
+    "status": "draft",
+    "intended_use": [
+      "agent_execution",
+      "implementation_planning",
+      "deviation_audit"
+    ],
+    "source_of_truth_priority": [
+      "backend_truth",
+      "permissions.contract.json",
+      "Permissions.md"
+    ]
+  },
+  "principles": {
+    "backend_truth_wins": true,
+    "hidden_means_hidden": true,
+    "summary_is_domain_specific": true,
+    "no_financial_data_means_no_money_fields": true,
+    "roles_are_default_presets_not_immutable": true,
+    "no_grant_above_held_authority": true,
+    "ai_authority_is_strict_subset_of_user_authority": true,
+    "client_facing_values_must_not_be_inferred_from_internal_values": true
+  },
+  "vocab": {
+    "domain_access": [
+      "hidden",
+      "summary",
+      "view",
+      "contribute",
+      "manage"
+    ],
+    "financial_visibility": [
+      "none",
+      "summary",
+      "detail"
+    ],
+    "action_state": [
+      "hidden",
+      "disabled_visible",
+      "enabled"
+    ],
+    "doc_visibility_class": [
+      "shared_project",
+      "internal"
+    ]
+  },
+  "ai_enforcement": {
+    "inherit_visibility": true,
+    "inherit_actions": true,
+    "can_reveal_hidden_fields": false,
+    "can_summarize_hidden_fields": false,
+    "can_execute_hidden_actions": false,
+    "can_execute_disabled_visible_actions": false,
+    "can_bypass_missing_buttons_or_hidden_tabs": false,
+    "confirmation_does_not_grant_permission": true
+  },
+  "shared_rules": {
+    "mixed_project_portfolio": {
+      "mode": "evaluate_per_project"
+    },
+    "documents_media_classification": {
+      "model": [
+        "shared_project",
+        "internal"
+      ],
+      "upload_selection_allowed_values": [
+        "shared_project",
+        "internal"
+      ],
+      "visual_label_required": true,
+      "fallback_when_unclassified": "explicit_fallback_required"
+    }
+  },
+  "roles": {
+    "owner": {
+      "kind": "preset",
+      "description": "highest authority preset",
+      "can_create_roles": [
+        "co_owner",
+        "contractor",
+        "viewer"
+      ],
+      "can_promote_roles": [
+        "co_owner",
+        "contractor",
+        "viewer"
+      ],
+      "forbidden_forever": []
+    },
+    "co_owner": {
+      "kind": "preset",
+      "description": "operational second admin preset",
+      "can_create_roles": [
+        "contractor",
+        "viewer"
+      ],
+      "can_promote_roles": [
+        "contractor",
+        "viewer"
+      ],
+      "forbidden_forever": [
+        "create_co_owner",
+        "promote_to_co_owner",
+        "transfer_ownership",
+        "grant_above_held_authority"
+      ]
+    },
+    "contractor": {
+      "kind": "preset",
+      "description": "operational contributor preset",
+      "can_create_roles": [],
+      "can_promote_roles": [],
+      "forbidden_forever": [
+        "invite_management",
+        "participant_management",
+        "permissions_management",
+        "grant_above_held_authority"
+      ]
+    },
+    "viewer": {
+      "kind": "preset",
+      "description": "client-safe read preset",
+      "can_create_roles": [],
+      "can_promote_roles": [],
+      "forbidden_forever": [
+        "invite_management",
+        "participant_management",
+        "permissions_management",
+        "grant_above_held_authority"
+      ]
+    }
+  },
+  "domains": {
+    "home_dashboard": {
+      "description": "cross-project navigation and overview",
+      "per_role": {
+        "viewer": {
+          "domain_access": "view",
+          "financial_visibility_behavior": {
+            "detail": {
+              "visible_blocks": [
+                "navigation",
+                "project_links",
+                "counts",
+                "dates",
+                "non_sensitive_widgets",
+                "allowed_monetary_widgets"
+              ],
+              "hidden_blocks": []
+            },
+            "summary": {
+              "visible_blocks": [
+                "navigation",
+                "project_links",
+                "counts",
+                "dates",
+                "non_sensitive_widgets"
+              ],
+              "hidden_blocks": [
+                "internal_aggregate_currency",
+                "internal_budget_widgets",
+                "internal_spend_widgets",
+                "internal_variance_widgets"
+              ]
+            },
+            "none": {
+              "visible_blocks": [
+                "navigation",
+                "project_links",
+                "counts",
+                "dates",
+                "non_sensitive_widgets"
+              ],
+              "hidden_blocks": [
+                "all_money_fields"
+              ]
+            }
+          },
+          "actions": {}
+        },
+        "contractor": {
+          "domain_access": "view",
+          "financial_visibility_behavior": {
+            "detail": {
+              "visible_blocks": [
+                "navigation",
+                "project_links",
+                "counts",
+                "dates",
+                "non_sensitive_widgets",
+                "allowed_monetary_widgets"
+              ],
+              "hidden_blocks": []
+            },
+            "summary": {
+              "visible_blocks": [
+                "navigation",
+                "project_links",
+                "counts",
+                "dates",
+                "non_sensitive_widgets"
+              ],
+              "hidden_blocks": [
+                "internal_aggregate_currency",
+                "internal_budget_widgets",
+                "internal_spend_widgets",
+                "internal_variance_widgets"
+              ]
+            },
+            "none": {
+              "visible_blocks": [
+                "navigation",
+                "project_links",
+                "counts",
+                "dates",
+                "non_sensitive_widgets"
+              ],
+              "hidden_blocks": [
+                "all_money_fields"
+              ]
+            }
+          },
+          "actions": {}
+        },
+        "co_owner": {
+          "domain_access": "manage"
+        },
+        "owner": {
+          "domain_access": "manage"
+        }
+      }
+    },
+    "estimate": {
+      "description": "estimate upper block plus estimate table/rows",
+      "per_role": {
+        "viewer": {
+          "domain_access": "view",
+          "surfaces": {
+            "upper_block": {
+              "financial_visibility_behavior": {
+                "detail": {
+                  "visible_fields": [
+                    "timing",
+                    "client_total",
+                    "vat",
+                    "discount",
+                    "allowed_internal_financial_widgets",
+                    "allowed_profitability_widgets"
+                  ],
+                  "hidden_fields": []
+                },
+                "summary": {
+                  "visible_fields": [
+                    "timing",
+                    "client_total",
+                    "vat",
+                    "discount",
+                    "resource_cost_breakdown_client_safe_only"
+                  ],
+                  "hidden_fields": [
+                    "cost_totals",
+                    "markup",
+                    "profitability",
+                    "internal_only_financial_widgets"
+                  ]
+                },
+                "none": {
+                  "visible_fields": [
+                    "timing"
+                  ],
+                  "hidden_fields": [
+                    "all_financial_widgets",
+                    "client_total",
+                    "vat",
+                    "discount"
+                  ]
+                }
+              }
+            },
+            "table_rows": {
+              "financial_visibility_behavior": {
+                "detail": {
+                  "visible_fields": [
+                    "stage",
+                    "work",
+                    "resource_title",
+                    "resource_type",
+                    "qty",
+                    "unit",
+                    "assignee",
+                    "client_unit",
+                    "client_total",
+                    "discounted_client_total",
+                    "cost_unit",
+                    "cost_total",
+                    "markup",
+                    "profitability"
+                  ],
+                  "hidden_fields": []
+                },
+                "summary": {
+                  "visible_fields": [
+                    "stage",
+                    "work",
+                    "resource_title",
+                    "resource_type",
+                    "qty",
+                    "unit",
+                    "assignee",
+                    "client_unit",
+                    "client_total",
+                    "discounted_client_total"
+                  ],
+                  "hidden_fields": [
+                    "cost_unit",
+                    "cost_total",
+                    "markup",
+                    "profitability"
+                  ]
+                },
+                "none": {
+                  "visible_fields": [
+                    "stage",
+                    "work",
+                    "resource_title",
+                    "resource_type",
+                    "qty",
+                    "unit",
+                    "assignee"
+                  ],
+                  "hidden_fields": [
+                    "client_unit",
+                    "client_total",
+                    "discounted_client_total",
+                    "cost_unit",
+                    "cost_total",
+                    "markup",
+                    "profitability"
+                  ]
+                }
+              }
+            }
+          },
+          "actions": {
+            "edit_estimate_rows": "hidden",
+            "edit_estimate_structure": "hidden",
+            "export_csv": "hidden"
+          }
+        },
+        "contractor": {
+          "domain_access": "view",
+          "surfaces": {
+            "upper_block": {
+              "financial_visibility_behavior": {
+                "detail": {
+                  "visible_fields": [
+                    "timing",
+                    "client_total",
+                    "vat",
+                    "discount",
+                    "allowed_internal_financial_widgets",
+                    "allowed_profitability_widgets"
+                  ]
+                },
+                "summary": {
+                  "visible_fields": [
+                    "timing",
+                    "client_total",
+                    "vat",
+                    "discount",
+                    "resource_cost_breakdown_client_safe_only"
+                  ],
+                  "hidden_fields": [
+                    "cost_totals",
+                    "markup",
+                    "profitability",
+                    "internal_only_financial_widgets"
+                  ]
+                },
+                "none": {
+                  "visible_fields": [
+                    "timing"
+                  ],
+                  "hidden_fields": [
+                    "all_financial_widgets",
+                    "client_total",
+                    "vat",
+                    "discount"
+                  ]
+                }
+              }
+            },
+            "table_rows": {
+              "financial_visibility_behavior": {
+                "detail": {
+                  "visible_fields": [
+                    "stage",
+                    "work",
+                    "resource_title",
+                    "resource_type",
+                    "qty",
+                    "unit",
+                    "assignee",
+                    "client_unit",
+                    "client_total",
+                    "discounted_client_total",
+                    "cost_unit",
+                    "cost_total",
+                    "markup",
+                    "profitability"
+                  ]
+                },
+                "summary": {
+                  "visible_fields": [
+                    "stage",
+                    "work",
+                    "resource_title",
+                    "resource_type",
+                    "qty",
+                    "unit",
+                    "assignee",
+                    "client_unit",
+                    "client_total",
+                    "discounted_client_total"
+                  ],
+                  "hidden_fields": [
+                    "cost_unit",
+                    "cost_total",
+                    "markup",
+                    "profitability"
+                  ]
+                },
+                "none": {
+                  "visible_fields": [
+                    "stage",
+                    "work",
+                    "resource_title",
+                    "resource_type",
+                    "qty",
+                    "unit",
+                    "assignee"
+                  ],
+                  "hidden_fields": [
+                    "client_unit",
+                    "client_total",
+                    "discounted_client_total",
+                    "cost_unit",
+                    "cost_total",
+                    "markup",
+                    "profitability"
+                  ]
+                }
+              }
+            }
+          },
+          "actions": {
+            "edit_estimate_rows": "hidden",
+            "edit_estimate_structure": "hidden",
+            "export_csv": "hidden"
+          }
+        },
+        "co_owner": {
+          "domain_access": "manage",
+          "actions": {
+            "edit_estimate_rows": "enabled",
+            "edit_estimate_structure": "enabled",
+            "export_csv": "enabled"
+          }
+        },
+        "owner": {
+          "domain_access": "manage",
+          "actions": {
+            "edit_estimate_rows": "enabled",
+            "edit_estimate_structure": "enabled",
+            "export_csv": "enabled"
+          }
+        }
+      },
+      "ai": {
+        "can_reveal_hidden_fields": false,
+        "can_execute_hidden_actions": false
+      }
+    },
+    "tasks": {
+      "description": "task board, task detail modal, checklist, comments, attachments/media",
+      "per_role": {
+        "viewer": {
+          "domain_access": "view",
+          "visible_field_groups": [
+            "task_title",
+            "status",
+            "checklist_shape",
+            "assignees",
+            "resource_names",
+            "resource_types",
+            "allowed_attachments"
+          ],
+          "hidden_field_groups_without_detail": [
+            "embedded_internal_finance_detail"
+          ],
+          "actions": {
+            "change_status": "hidden",
+            "edit_checklist": "hidden",
+            "comment": "hidden",
+            "upload_document": "hidden",
+            "upload_media": "hidden"
+          }
+        },
+        "contractor": {
+          "domain_access": "contribute",
+          "visible_field_groups": [
+            "task_title",
+            "status",
+            "checklist_shape",
+            "assignees",
+            "resource_names",
+            "resource_types",
+            "allowed_attachments"
+          ],
+          "hidden_field_groups_without_detail": [
+            "embedded_internal_finance_detail"
+          ],
+          "actions": {
+            "change_status": "enabled",
+            "edit_checklist": "enabled",
+            "comment": "enabled",
+            "upload_document": "enabled",
+            "upload_media": "enabled"
+          }
+        },
+        "co_owner": {
+          "domain_access": "manage",
+          "actions": {
+            "manage_tasks": "enabled"
+          }
+        },
+        "owner": {
+          "domain_access": "manage",
+          "actions": {
+            "manage_tasks": "enabled"
+          }
+        }
+      },
+      "ai": {
+        "can_execute_hidden_actions": false
+      }
+    },
+    "procurement": {
+      "description": "requested, ordered, in_stock, procurement header block, order detail views",
+      "rules": {
+        "summary_never_implies_money": true,
+        "until_backend_backed_client_facing_procurement_money_model_exists": true
+      },
+      "per_role": {
+        "viewer": {
+          "domain_access": "summary",
+          "tab_visibility": [
+            "requested",
+            "ordered",
+            "in_stock"
+          ],
+          "surfaces": {
+            "financial_header_block": {
+              "visible": false
+            },
+            "requested_tab": {
+              "financial_visibility_behavior": {
+                "summary": {
+                  "visible_fields": [
+                    "resource_title",
+                    "resource_type",
+                    "qty",
+                    "unit",
+                    "request_status"
+                  ],
+                  "hidden_fields": [
+                    "all_money_fields"
+                  ]
+                },
+                "none": {
+                  "visible_fields": [
+                    "resource_title",
+                    "resource_type",
+                    "qty",
+                    "unit",
+                    "request_status"
+                  ],
+                  "hidden_fields": [
+                    "all_money_fields"
+                  ]
+                }
+              }
+            },
+            "ordered_tab": {
+              "financial_visibility_behavior": {
+                "summary": {
+                  "visible_fields": [
+                    "order_number",
+                    "resource_title",
+                    "qty",
+                    "unit",
+                    "eta"
+                  ],
+                  "hidden_fields": [
+                    "supplier_name",
+                    "all_money_fields",
+                    "line_totals",
+                    "order_totals",
+                    "supplier_internal_pricing"
+                  ]
+                },
+                "none": {
+                  "visible_fields": [
+                    "order_number",
+                    "resource_title",
+                    "qty",
+                    "unit",
+                    "eta"
+                  ],
+                  "hidden_fields": [
+                    "supplier_name",
+                    "all_money_fields",
+                    "line_totals",
+                    "order_totals",
+                    "supplier_internal_pricing"
+                  ]
+                }
+              }
+            },
+            "in_stock_tab": {
+              "financial_visibility_behavior": {
+                "summary": {
+                  "visible_fields": [
+                    "resource_title",
+                    "qty",
+                    "unit",
+                    "receiver_name"
+                  ],
+                  "hidden_fields": [
+                    "supplier_name",
+                    "all_money_fields"
+                  ]
+                },
+                "none": {
+                  "visible_fields": [
+                    "resource_title",
+                    "qty",
+                    "unit",
+                    "receiver_name"
+                  ],
+                  "hidden_fields": [
+                    "supplier_name",
+                    "all_money_fields"
+                  ]
+                }
+              }
+            }
+          },
+          "actions": {
+            "order": "hidden",
+            "receive": "hidden",
+            "use_from_stock": "hidden"
+          }
+        },
+        "contractor": {
+          "domain_access": "summary",
+          "tab_visibility": [
+            "requested",
+            "ordered",
+            "in_stock"
+          ],
+          "surfaces": {
+            "financial_header_block": {
+              "visible": false
+            },
+            "requested_tab": {
+              "financial_visibility_behavior": {
+                "summary": {
+                  "visible_fields": [
+                    "resource_title",
+                    "resource_type",
+                    "qty",
+                    "unit",
+                    "request_status"
+                  ],
+                  "hidden_fields": [
+                    "all_money_fields"
+                  ]
+                },
+                "none": {
+                  "visible_fields": [
+                    "resource_title",
+                    "resource_type",
+                    "qty",
+                    "unit",
+                    "request_status"
+                  ],
+                  "hidden_fields": [
+                    "all_money_fields"
+                  ]
+                }
+              }
+            },
+            "ordered_tab": {
+              "financial_visibility_behavior": {
+                "summary": {
+                  "visible_fields": [
+                    "order_number",
+                    "supplier_name",
+                    "resource_title",
+                    "qty",
+                    "unit",
+                    "eta"
+                  ],
+                  "hidden_fields": [
+                    "all_money_fields",
+                    "line_totals",
+                    "order_totals",
+                    "supplier_internal_pricing"
+                  ]
+                },
+                "none": {
+                  "visible_fields": [
+                    "order_number",
+                    "supplier_name",
+                    "resource_title",
+                    "qty",
+                    "unit",
+                    "eta"
+                  ],
+                  "hidden_fields": [
+                    "all_money_fields",
+                    "line_totals",
+                    "order_totals",
+                    "supplier_internal_pricing"
+                  ]
+                }
+              }
+            },
+            "in_stock_tab": {
+              "financial_visibility_behavior": {
+                "summary": {
+                  "visible_fields": [
+                    "resource_title",
+                    "supplier_name",
+                    "qty",
+                    "unit",
+                    "receiver_name"
+                  ],
+                  "hidden_fields": [
+                    "all_money_fields"
+                  ]
+                },
+                "none": {
+                  "visible_fields": [
+                    "resource_title",
+                    "supplier_name",
+                    "qty",
+                    "unit",
+                    "receiver_name"
+                  ],
+                  "hidden_fields": [
+                    "all_money_fields"
+                  ]
+                }
+              }
+            }
+          },
+          "actions": {
+            "order": "disabled_visible",
+            "receive": "disabled_visible",
+            "use_from_stock": "disabled_visible"
+          }
+        },
+        "co_owner": {
+          "domain_access": "manage",
+          "tab_visibility": [
+            "requested",
+            "ordered",
+            "in_stock"
+          ],
+          "surfaces": {
+            "financial_header_block": {
+              "visible": true
+            }
+          },
+          "actions": {
+            "order": "enabled",
+            "receive": "enabled",
+            "use_from_stock": "enabled"
+          }
+        },
+        "owner": {
+          "domain_access": "manage",
+          "tab_visibility": [
+            "requested",
+            "ordered",
+            "in_stock"
+          ],
+          "surfaces": {
+            "financial_header_block": {
+              "visible": true
+            }
+          },
+          "actions": {
+            "order": "enabled",
+            "receive": "enabled",
+            "use_from_stock": "enabled"
+          }
+        }
+      },
+      "ai": {
+        "can_reveal_hidden_fields": false,
+        "can_execute_hidden_actions": false
+      }
+    },
+    "hr": {
+      "description": "hr list, hr detail, hr payments",
+      "per_role": {
+        "viewer": {
+          "domain_access": "hidden"
+        },
+        "contractor": {
+          "domain_access": "hidden"
+        },
+        "co_owner": {
+          "domain_access": "manage"
+        },
+        "owner": {
+          "domain_access": "manage"
+        }
+      },
+      "hidden_hr_rule": {
+        "assignee_names_may_still_appear_in_estimate_tasks": true,
+        "compensation_must_remain_hidden": true,
+        "payment_amounts_must_remain_hidden": true
+      },
+      "ai": {
+        "can_reveal_hidden_fields": false,
+        "can_execute_hidden_actions": false
+      }
+    },
+    "documents_media": {
+      "description": "documents, gallery, media preview, upload flows",
+      "classification_model": [
+        "shared_project",
+        "internal"
+      ],
+      "per_role": {
+        "viewer": {
+          "domain_access": "view"
+        },
+        "contractor": {
+          "domain_access": "contribute"
+        },
+        "co_owner": {
+          "domain_access": "manage"
+        },
+        "owner": {
+          "domain_access": "manage"
+        }
+      },
+      "upload_visibility_selection": [
+        "shared_project",
+        "internal"
+      ],
+      "ui_requirements": {
+        "visual_label_required": true
+      },
+      "fallback_rules": {
+        "unclassified_content": "explicit_fallback_required",
+        "must_not_imply_richer_taxonomy": true
+      },
+      "ai": {
+        "can_reveal_internal_content_without_user_access": false
+      }
+    },
+    "participants": {
+      "description": "participants, invites, permissions management surfaces",
+      "per_role": {
+        "viewer": {
+          "participants_tab": "hidden",
+          "invites_tab": "hidden",
+          "permissions_tab": "hidden"
+        },
+        "contractor": {
+          "participants_tab": "hidden",
+          "invites_tab": "hidden",
+          "permissions_tab": "hidden"
+        },
+        "co_owner": {
+          "participants_tab": "manage",
+          "invites_tab": "manage",
+          "permissions_tab": "manage"
+        },
+        "owner": {
+          "participants_tab": "manage",
+          "invites_tab": "manage",
+          "permissions_tab": "manage"
+        }
+      },
+      "assignee_visibility_exception": {
+        "visible_inside_estimate_and_tasks_even_when_participants_hidden": true
+      }
+    },
+    "activity": {
+      "description": "activity feed and event surfaces",
+      "rules": {
+        "must_not_leak_sensitive_payload": true,
+        "generic_rows_allowed_when_detail_hidden": true
+      },
+      "ai": {
+        "can_reveal_hidden_fields": false
+      }
+    },
+    "ai_project_surface": {
+      "description": "chat-driven access to project data and actions",
+      "per_role": {
+        "viewer": {
+          "can_access_visible_project_information_only": true,
+          "can_execute_only_enabled_actions": true
+        },
+        "contractor": {
+          "can_access_visible_project_information_only": true,
+          "can_execute_only_enabled_actions": true
+        },
+        "co_owner": {
+          "can_access_visible_project_information_only": true,
+          "can_execute_only_enabled_actions": true
+        },
+        "owner": {
+          "can_access_visible_project_information_only": true,
+          "can_execute_only_enabled_actions": true
+        }
+      }
+    }
+  }
+}
