@@ -30,7 +30,7 @@ Inference from the current implementation:
   - React 18
   - TypeScript 5
   - Vite 5 with `@vitejs/plugin-react-swc`
-  - `lovable-tagger` enabled in development via [`vite.config.ts`](../vite.config.ts)
+  - `lovable-tagger` enabled in development via `[vite.config.ts](../vite.config.ts)`
 - Routing:
   - `react-router-dom` v6 with `BrowserRouter`, nested layouts, redirects, dynamic segments, and route-level `React.lazy`
 - State and data access:
@@ -86,41 +86,45 @@ Inference from the current implementation:
 
 ### Top-level routes
 
-| Path | Layout | Implementation | Notes |
-| --- | --- | --- | --- |
-| `/` | none | `src/pages/Landing.tsx` | Public landing and demo narrative page |
-| `/onboarding` | none | `src/pages/Onboarding.tsx` | Uses `completeOnboarding()` from `lib/auth-state.ts` |
-| `/pricing` | none | `src/pages/Pricing.tsx` | Public pricing page |
-| `/theme` | none | `src/pages/ThemeDemo.tsx` | Standalone design-system showcase |
-| `/share/estimate/:shareId` | none | `src/pages/share/ShareEstimate.tsx` | Public/shared estimate approval flow backed by estimate-v2 store |
-| `/auth/login` | `AuthLayout` | `src/pages/auth/Login.tsx` | Simulated login |
-| `/auth/signup` | `AuthLayout` | `src/pages/auth/Signup.tsx` | Simulated signup |
-| `/auth/forgot` | `AuthLayout` | `src/pages/auth/ForgotPassword.tsx` | Simulated reset flow |
-| `/home` | `AppLayout` | `src/pages/Home.tsx` | Cross-project workspace with tab query param |
-| `/demo` | `AppLayout` | `src/pages/Demo.tsx` | Demo project list |
-| `/profile` | `AppLayout` | `src/pages/Profile.tsx` | Redirects to `/home` |
-| `/profile/upgrade` | `AppLayout` | inline redirect in `App.tsx` | Redirects to `/settings?tab=billing` |
-| `/settings` | `AppLayout` | `src/pages/Settings.tsx` | Settings with tab query param |
-| `*` | none | `src/pages/NotFound.tsx` | Catch-all 404 |
+
+| Path                       | Layout       | Implementation                      | Notes                                                            |
+| -------------------------- | ------------ | ----------------------------------- | ---------------------------------------------------------------- |
+| `/`                        | none         | `src/pages/Landing.tsx`             | Public landing and demo narrative page                           |
+| `/onboarding`              | none         | `src/pages/Onboarding.tsx`          | Uses `completeOnboarding()` from `lib/auth-state.ts`             |
+| `/pricing`                 | none         | `src/pages/Pricing.tsx`             | Public pricing page                                              |
+| `/theme`                   | none         | `src/pages/ThemeDemo.tsx`           | Standalone design-system showcase                                |
+| `/share/estimate/:shareId` | none         | `src/pages/share/ShareEstimate.tsx` | Public/shared estimate approval flow backed by estimate-v2 store |
+| `/auth/login`              | `AuthLayout` | `src/pages/auth/Login.tsx`          | Simulated login                                                  |
+| `/auth/signup`             | `AuthLayout` | `src/pages/auth/Signup.tsx`         | Simulated signup                                                 |
+| `/auth/forgot`             | `AuthLayout` | `src/pages/auth/ForgotPassword.tsx` | Simulated reset flow                                             |
+| `/home`                    | `AppLayout`  | `src/pages/Home.tsx`                | Cross-project workspace with tab query param                     |
+| `/demo`                    | `AppLayout`  | `src/pages/Demo.tsx`                | Demo project list                                                |
+| `/profile`                 | `AppLayout`  | `src/pages/Profile.tsx`             | Redirects to `/home`                                             |
+| `/profile/upgrade`         | `AppLayout`  | inline redirect in `App.tsx`        | Redirects to `/settings?tab=billing`                             |
+| `/settings`                | `AppLayout`  | `src/pages/Settings.tsx`            | Settings with tab query param                                    |
+| `*`                        | none         | `src/pages/NotFound.tsx`            | Catch-all 404                                                    |
+
 
 ### Project routes
 
 All project routes are nested under `AppLayout` and `ProjectLayout`.
 
-| Path | Page | Notes |
-| --- | --- | --- |
-| `/project/:id` | redirect | Redirects to `/project/:id/dashboard` |
-| `/project/:id/dashboard` | `src/pages/project/ProjectDashboard.tsx` | Project summary widgets and quick actions |
-| `/project/:id/tasks` | `src/pages/project/ProjectTasks.tsx` | Task board and detail modal |
-| `/project/:id/estimate` | `src/pages/project/ProjectEstimate.tsx` | Estimate v2 editor and review flow |
-| `/project/:id/procurement` | `src/pages/project/ProjectProcurement.tsx` | Procurement list view |
-| `/project/:id/procurement/order/:orderId` | `src/pages/project/ProjectProcurement.tsx` | Order detail routed inside the same page component |
-| `/project/:id/procurement/:itemId` | `src/pages/project/ProjectProcurement.tsx` | Item detail routed inside the same page component |
-| `/project/:id/hr` | `src/pages/project/ProjectHR.tsx` | HR work and payment tracking |
-| `/project/:id/gallery` | `src/pages/project/ProjectGallery.tsx` | Project media gallery |
-| `/project/:id/documents` | `src/pages/project/ProjectDocuments.tsx` | Project document management |
-| `/project/:id/activity` | `src/pages/project/ProjectActivity.tsx` | Event feed |
-| `/project/:id/participants` | `src/pages/project/ProjectParticipants.tsx` | Membership and invite UI |
+
+| Path                                      | Page                                        | Notes                                              |
+| ----------------------------------------- | ------------------------------------------- | -------------------------------------------------- |
+| `/project/:id`                            | redirect                                    | Redirects to `/project/:id/dashboard`              |
+| `/project/:id/dashboard`                  | `src/pages/project/ProjectDashboard.tsx`    | Project summary widgets and quick actions          |
+| `/project/:id/tasks`                      | `src/pages/project/ProjectTasks.tsx`        | Task board and detail modal                        |
+| `/project/:id/estimate`                   | `src/pages/project/ProjectEstimate.tsx`     | Estimate v2 editor and review flow                 |
+| `/project/:id/procurement`                | `src/pages/project/ProjectProcurement.tsx`  | Procurement list view                              |
+| `/project/:id/procurement/order/:orderId` | `src/pages/project/ProjectProcurement.tsx`  | Order detail routed inside the same page component |
+| `/project/:id/procurement/:itemId`        | `src/pages/project/ProjectProcurement.tsx`  | Item detail routed inside the same page component  |
+| `/project/:id/hr`                         | `src/pages/project/ProjectHR.tsx`           | HR work and payment tracking                       |
+| `/project/:id/gallery`                    | `src/pages/project/ProjectGallery.tsx`      | Project media gallery                              |
+| `/project/:id/documents`                  | `src/pages/project/ProjectDocuments.tsx`    | Project document management                        |
+| `/project/:id/activity`                   | `src/pages/project/ProjectActivity.tsx`     | Event feed                                         |
+| `/project/:id/participants`               | `src/pages/project/ProjectParticipants.tsx` | Membership and invite UI                           |
+
 
 ### Query-string sub-areas
 
@@ -407,16 +411,18 @@ All project routes are nested under `AppLayout` and `ProjectLayout`.
 
 ### Store inventory
 
-| Store / module | Owns | Read access | Write access | Persistence |
-| --- | --- | --- | --- | --- |
-| `src/data/store.ts` | current user, projects, members, legacy stages/tasks, legacy estimates, legacy procurement, documents, media, events, notifications, contractor proposals | `use-mock-data`, direct getters | direct function calls from many pages/components | in memory only |
-| `src/data/estimate-store.ts` | legacy `StageEstimateItem[]` bridge linked to tasks/checklists | `use-estimate-data`, direct getters | task flows and estimate sync helpers | in memory only |
-| `src/data/estimate-v2-store.ts` | estimate-v2 project state, works, lines, dependencies, versions, schedule baseline | `useEstimateV2Project`, `useEstimateV2Share` | direct function calls from `ProjectEstimate` and share flow | in memory only, plus read-only currency lookup from `localStorage` |
-| `src/data/procurement-store.ts` | procurement-v2 items | `useProcurementV2`, direct getters | procurement page, estimate sync, tests | in memory only |
-| `src/data/order-store.ts` | orders, order lines, receive/use events | `useOrders`, `useOrder`, direct getters | procurement/order UI | in memory only |
-| `src/data/inventory-store.ts` | locations and inventory balances | `useLocations`, `useInventoryStock`, direct getters | order receiving/use flows | in memory only |
-| `src/data/hr-store.ts` | HR planned items and payments | `useHRItems`, `useHRPayments`, direct getters | HR page, estimate sync | in memory only |
-| `src/lib/photo-consult-store.ts` | currently selected photo-consult context | `AISidebar` subscription | `PhotoViewer` | in memory only |
+
+| Store / module                   | Owns                                                                                                                                                      | Read access                                         | Write access                                                | Persistence                                                        |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------ |
+| `src/data/store.ts`              | current user, projects, members, legacy stages/tasks, legacy estimates, legacy procurement, documents, media, events, notifications, contractor proposals | `use-mock-data`, direct getters                     | direct function calls from many pages/components            | in memory only                                                     |
+| `src/data/estimate-store.ts`     | legacy `StageEstimateItem[]` bridge linked to tasks/checklists                                                                                            | `use-estimate-data`, direct getters                 | task flows and estimate sync helpers                        | in memory only                                                     |
+| `src/data/estimate-v2-store.ts`  | estimate-v2 project state, works, lines, dependencies, versions, schedule baseline                                                                        | `useEstimateV2Project`, `useEstimateV2Share`        | direct function calls from `ProjectEstimate` and share flow | in memory only, plus read-only currency lookup from `localStorage` |
+| `src/data/procurement-store.ts`  | procurement-v2 items                                                                                                                                      | `useProcurementV2`, direct getters                  | procurement page, estimate sync, tests                      | in memory only                                                     |
+| `src/data/order-store.ts`        | orders, order lines, receive/use events                                                                                                                   | `useOrders`, `useOrder`, direct getters             | procurement/order UI                                        | in memory only                                                     |
+| `src/data/inventory-store.ts`    | locations and inventory balances                                                                                                                          | `useLocations`, `useInventoryStock`, direct getters | order receiving/use flows                                   | in memory only                                                     |
+| `src/data/hr-store.ts`           | HR planned items and payments                                                                                                                             | `useHRItems`, `useHRPayments`, direct getters       | HR page, estimate sync                                      | in memory only                                                     |
+| `src/lib/photo-consult-store.ts` | currently selected photo-consult context                                                                                                                  | `AISidebar` subscription                            | `PhotoViewer`                                               | in memory only                                                     |
+
 
 ### Hook pattern
 
