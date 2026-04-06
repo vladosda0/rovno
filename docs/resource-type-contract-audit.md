@@ -33,10 +33,10 @@ Persisted truth for line kind lives only on `**public.estimate_resource_lines.re
 
 ### Top 5 highest-risk drift points
 
-1. `**resourceTypeForEstimateLine`** in `src/data/estimate-v2-hero-transition.ts` — persists subcontractor as `labor`, diverging from `**mapLineTypeToRemote**` in `src/data/estimate-source.ts`.
-2. `**inferLineTypeFromRemote**` in `src/data/estimate-v2-store.ts` — cache-based labor/subcontractor recovery; violates “no guessing.”
-3. `**mapTaskChecklistItemRowToChecklistItem` / `mapEstimateResourceTypeToChecklistType**` in `src/data/planning-source.ts` — drops `subcontractor` from `estimateV2ResourceType`; collapses several DB types to `subtask`.
-4. `**procurementItemTypeFromEstimateResourceType` + `baseOperationalProcurementItemV2**` in `src/data/procurement-source.ts` — null/empty → `material`; non-material/tool estimate types → `other`.
+1. `**resourceTypeForEstimateLine`** in `src/data/estimate-v2-hero-transition.ts` — persists subcontractor as `labor`, diverging from `**mapLineTypeToRemote`** in `src/data/estimate-source.ts`.
+2. `**inferLineTypeFromRemote`** in `src/data/estimate-v2-store.ts` — cache-based labor/subcontractor recovery; violates “no guessing.”
+3. `**mapTaskChecklistItemRowToChecklistItem` / `mapEstimateResourceTypeToChecklistType`** in `src/data/planning-source.ts` — drops `subcontractor` from `estimateV2ResourceType`; collapses several DB types to `subtask`.
+4. `**procurementItemTypeFromEstimateResourceType` + `baseOperationalProcurementItemV2`** in `src/data/procurement-source.ts` — null/empty → `material`; non-material/tool estimate types → `other`.
 5. `**ProjectProcurement.tsx` estimate-derived rows** — `line.type === "tool" ? "tool" : "material"` forces non–material/tool lines to display as material when merging from estimate state.
 
 ---
@@ -50,7 +50,7 @@ Persisted truth for line kind lives only on `**public.estimate_resource_lines.re
 | -------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
 | `src/types/estimate-v2.ts` | Defines `ResourceLineType`                                                         | UI/working canonical for estimate v2 lines; `tool` is alias for DB `equipment`. |
 | `src/types/entities.ts`    | `ProcurementItemType`, `ChecklistItemType`, `ChecklistItem.estimateV2ResourceType` | Narrower domain enums; checklist optional mirror of line type.                  |
-| `src/types/hr.ts`          | `HRItemType`                                                                       | Only `labor` | `subcontractor` — product-facing HR slice.                       |
+| `src/types/hr.ts`          | `HRItemType`                                                                       | Only `labor`                                                                    |
 
 
 ### B.2 Backend contract mirror (read-only)

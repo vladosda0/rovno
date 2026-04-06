@@ -1,210 +1,125 @@
-# AGENTS.md
+# AGENTS.md — `rovno` (application)
+
+How the AI should work in this repository, **in addition to** Cursor project rules.
+
+## Instruction layering (read this first)
+
+Apply guidance in this order when they conflict:
+
+1. **`.cursor/rules/*.mdc`** — especially `alwaysApply: true` rules (source of truth, sensitive zones, preflight, subagent orchestration). These win.
+2. **`.cursor/skills/**`** — invoke the matching `SKILL.md` when the task fits the skill description (audit, contract check, verification, mock vs real, etc.).
+3. **`.cursor/agents/**`** — delegate via the **Task** tool when `subagent-orchestration` says to (repo auditor, contract inspector, planner, implementer, verifier, sensitive-zone reviewer, security / AI reviewers). Do not skip verification on non-trivial work.
+4. **This `AGENTS.md`** — repo context, file pointers, and habits that rules do not repeat.
+
+**Semantic search** is for exploration; **exact search** prefers `rg` with narrow scope first (see `.cursor/rules/07-search-prefer-ripgrep.mdc`).
+
+---
 
 ## 1. Repo purpose
 
-This repository contains the Rovno application code.
+Frontend / app workspace for Rovno:
 
-It is the frontend/app workspace and currently includes:
-- UI and route structure
-- app state and mock/demo stores
-- project pages and domain screens
-- local integration scaffolding for future Supabase-backed data access
-- a synced read-only backend contract snapshot under `backend-truth/`
+- UI, routes, app state (including mock/demo paths where they still exist)
+- Hooks, stores, domain screens
+- Supabase client integration and **read-only** contract snapshot under `backend-truth/`
 
-This repo is not the authoritative source for database schema, SQL migrations, RLS, or backend policies.
-Those belong to the sibling repository: `rovno-db`.
+**Not authoritative:** database schema, SQL migrations, RLS, RPC definitions. Those live in **`rovno-db`**.
 
 ---
 
 ## 2. Source-of-truth hierarchy
 
-When data-model questions arise, trust this order:
+1. SQL migrations in **`rovno-db`**
+2. Generated mirror: **`backend-truth/`** in this repo (read-only; do not hand-edit)
+3. Adapters / mappers
+4. Frontend types and UI models
+5. Mock / demo store shapes
 
-1. merged SQL migrations in `rovno-db`
-2. generated backend contract mirror in `backend-truth/`
-3. frontend adapters / mapping code
-4. frontend domain types and UI models
-5. local mock/demo store shapes
-
-Important:
-- UI types are not authoritative backend truth
-- mock store structures are not authoritative backend truth
-- do not infer DB fields from UI code
+Never treat UI or mock types as DB truth. If the contract is missing a field or RPC, stop and fix **`rovno-db`** first, then consume the updated mirror via the **automated GitHub sync PR** after `rovno-db` is on `dev`.
 
 ---
 
 ## 3. Required reading before edits
 
-Before making changes, inspect the minimum relevant context.
+**Backend-shaped or data work**
 
-For backend-related or data-related work, read:
-- `backend-truth/schema/tables.json`
-- `backend-truth/schema/relations.json`
-- `backend-truth/schema/rpc-functions.json`
-- `backend-truth/schema/rls-summary.json`
+- `backend-truth/schema/tables.json`, `relations.json`, `rpc-functions.json`, `rls-summary.json`
 - `backend-truth/generated/supabase-types.ts`
-- relevant `backend-truth/slices/*.json`
-- relevant `backend-truth/contracts/*.md`
+- Relevant `backend-truth/slices/*.json` and `backend-truth/contracts/*.md`
 
-For app architecture work, inspect:
-- `src/hooks/use-mock-data.ts`
-- `src/data/store.ts`
-- relevant `src/data/*` modules
-- relevant route/page/component files
-- `src/lib/permissions.ts` when permissions or memberships are involved
+**App architecture**
 
-If the requested change touches a real backend integration seam, inspect current hook/data boundaries before editing UI pages.
+- `src/hooks/use-mock-data.ts`, `src/data/store.ts`, `src/lib/permissions.ts`
+- Relevant `src/data/*`, hooks, pages, components
+- `src/integrations/supabase/client.ts` and `types.ts` when touching real seams
 
 ---
 
-## 4. Planning and execution rules
+## 4. Planning and execution
 
-Always work plan-first.
-
-Before editing:
-- identify exact files to change
-- explain why each file is needed
-- keep the change surface minimal
-- prefer adapting existing architecture over introducing parallel patterns
-
-For non-trivial tasks:
-- separate discovery from implementation
-- do not jump from product intent directly into edits
-- inspect repo reality first
-- then implement only after scope is clear
-
-If the request is ambiguous, do not invent hidden behavior.
-State the assumption explicitly in the plan.
+- Plan first: files to touch, why, minimal surface (see `.cursor/rules/20-minimal-scope-change-and-reuse.mdc`).
+- Non-trivial work: **inspect repo reality before edits**; separate product intent from implementation (`.cursor/rules/00-core-operating-boundary.mdc`).
+- Use **slash commands** in `.cursor/commands/` when they match the moment (`/preflight`, `/ship-check`, `/rovno-contract-check`, etc.).
+- Ambiguous requests: state assumptions explicitly; do not invent hidden behavior.
 
 ---
 
-## 5. Edit scope and forbidden actions
+## 5. Forbidden unless explicitly requested
 
-Default rule: minimal, local, reversible edits.
+- Dependency upgrades, broad refactors, mass renames
+- Wiring Supabase through many pages at once
+- **Manual edits to `backend-truth/`** or ad hoc local regeneration of the mirror
+- Inventing columns, tables, RPCs, or policies in app code
 
-Prefer:
-- existing components
-- existing hooks
-- existing stores
-- existing design tokens
-- existing route structure
-
-Do not do any of the following unless explicitly requested:
-- update dependencies
-- reorganize folders
-- rename broad sets of files
-- rewrite architecture wholesale
-- replace mock/store systems globally
-- wire Supabase directly into many pages at once
-- edit `backend-truth/` manually
-- invent backend columns, tables, RPCs, or policies
-
-`backend-truth/` is read-only.
-If it appears incorrect, the fix belongs in `rovno-db` generator or migrations, not here.
+Mirror updates: **GitHub Actions sync PR** to `rovno` after `rovno-db` changes land on `dev`, not ad hoc agent regeneration.
 
 ---
 
-## 6. Data / contract rules
+## 6. Mock vs real
 
-`backend-truth/` is the canonical backend contract snapshot for this repo.
-
-Rules:
-1. Never invent database fields from frontend types.
-2. Never assume frontend `User`, `Project`, or `Member` maps 1:1 to DB rows.
-3. Use adapters/mappers where frontend and backend shapes differ.
-4. Keep demo/mock data behavior separate from real backend-backed behavior unless explicitly designed otherwise.
-5. Preserve demo mode unless the task explicitly changes it.
-6. When working on the first integration seam, prefer hook/repository boundaries over page-by-page rewrites.
-7. Do not manually regenerate `backend-truth/` from local agent sessions.
-8. `backend-truth/` updates must arrive through the automated GitHub sync PR flow after `rovno-db` changes are complete and pushed to `dev`.
-
-Important current architecture fact:
-- this repo still contains seeded/mock runtime state
-- real backend integration must be introduced incrementally without breaking demo UX
+This repo may mix **real** integration and **mock/demo** paths. Classify before changing behavior (`.cursor/rules/40-mock-vs-real-boundary.mdc`, skill `mock-vs-real-boundary-check`). Do not silently turn mocks into production paths or remove fallbacks without an explicit request.
 
 ---
 
-## 7. Verification gates
+## 7. Verification before “done”
 
-Before declaring work complete, run the smallest relevant verification set.
+- Smallest relevant checks: `git diff` / `git diff --name-only`, `npm run build`, targeted `npm test` when appropriate.
+- Use Cursor skill **`verification-and-regression-pass`** and/or **`rollback-aware-diff-review`** for non-trivial closeout.
+- Optional Codex closeout: if available, `~/.codex/skills/finish-gate/SKILL.md` for structured handoff (does not replace project rules).
 
-For any non-trivial closeout request such as `done`, `finished`, `ready to commit`, `push`, `PR-ready`, or `what did you verify`, explicitly use the global `$finish-gate` skill at `/Users/vladislavgorlov/.codex/skills/finish-gate/SKILL.md` before responding or taking git actions.
-
-Minimum for most app changes:
-- `git diff --name-only`
-- `git diff`
-- `npm run build`
-
-When relevant, also run:
-- `npm test`
-- targeted tests related to the changed domain
-
-Validation goals:
-- only intended files changed
-- build passes
-- no obvious regression introduced
-- data-related changes remain aligned with `backend-truth/`
-
-Warnings may be reported, but errors/blockers must be called out clearly.
+State what was verified and what was not.
 
 ---
 
-## 8. Git / commit / PR rules
+## 8. Git
 
-Human controls Git decisions.
+Human controls commits, merges, resets, reverts, branch deletes unless explicitly asked (see `.cursor/rules/00-core-operating-boundary.mdc`).
 
-Do not:
-- commit
-- merge
-- reset
-- revert
-- delete branches
-
-unless explicitly asked.
-
-Before any commit or push on a non-trivial task, run `$finish-gate` and summarize its checklist output, including any warning-only lint results and any mismatch between working tree, staged files, and `HEAD`.
-
-When asked to prepare commit guidance:
-- keep commits small
-- group by single intent
-- separate generated artifacts from hand-written logic when practical
-
-If changes touch both app code and backend contract generation, prefer separate commits and separate repos.
-For contract mirror updates, prefer the automated sync PR in `rovno` over local manual regeneration.
+Prefer small, single-intent commits; separate app logic from incidental noise per `.cursor/rules/06-generated-artifacts-and-local-noise.mdc`.
 
 ---
 
-## 9. When to stop and ask for review
+## 9. When to stop and escalate
 
-Stop and surface risk before editing if:
-- the task conflicts with `backend-truth/`
-- the requested behavior requires backend fields not present in contract files
-- the change would require broad architectural refactoring
-- multiple competing stores/models are involved and canonical ownership is unclear
-- the task appears to mix demo-only and real-data behavior without an explicit strategy
+Stop and summarize blockers if:
 
-In those cases:
-- summarize findings
-- list exact blockers or mismatches
-- propose the smallest safe next step
+- Required contract pieces are missing from `backend-truth/`
+- Demo vs real boundaries are unclear
+- Multiple stores/models compete for ownership
+- Change needs **`rovno-db`** work but that work is not done
+
+Use **subagents** rather than guessing (contract inspector, planner, sensitive-zone reviewer as appropriate).
 
 ---
 
-## 10. Repo-specific references
+## 10. Quick reference
 
-Key app architecture files:
-- `src/hooks/use-mock-data.ts`
-- `src/data/store.ts`
-- `src/lib/permissions.ts`
-- `src/integrations/supabase/client.ts`
-- `src/integrations/supabase/types.ts`
+| Area        | Location |
+|------------|----------|
+| Contract   | `backend-truth/README.md`, `schema/`, `slices/`, `contracts/`, `generated/` |
+| Permissions| `src/lib/permissions.ts` |
+| Data entry | `src/data/store.ts`, `src/hooks/use-mock-data.ts` |
+| Supabase   | `src/integrations/supabase/` |
+| Cursor     | `.cursor/rules/`, `.cursor/skills/`, `.cursor/agents/`, `.cursor/commands/` |
 
-Backend contract snapshot:
-- `backend-truth/README.md`
-- `backend-truth/schema/*`
-- `backend-truth/slices/*`
-- `backend-truth/contracts/*`
-- `backend-truth/generated/*`
-
-This repo consumes backend truth.
-The backend contract is generated from `rovno-db/scripts/generate-backend-truth.mjs`.
+This repo **consumes** backend truth produced from `rovno-db/scripts/generate-backend-truth.mjs`.

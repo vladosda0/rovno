@@ -1,0 +1,14 @@
+---
+description: Prefer ripgrep (rg) for exact code search; scope before widening; semantic search only when needed.
+alwaysApply: true
+---
+
+# Code search discipline
+
+- For **exact** codebase search (symbols, strings, paths), prefer **ripgrep** (`rg`) over traditional `grep`.
+- Use **semantic / codebase search** only when exact string search is **insufficient** (e.g. “where is X conceptually implemented?” without a known name).
+- When using `rg`, prefer **narrow scope first**:
+  - specific directories
+  - file globs (`--glob`, path prefixes)
+  - exact identifiers or literal strings
+- Widen to **repo-wide** or heavy **regex** only after scoped passes are insufficient or the target is genuinely unknown.
