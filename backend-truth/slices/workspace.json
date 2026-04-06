@@ -15,6 +15,7 @@
     "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql",
     "supabase/migrations/20260324140000_project_launch_authority.sql",
     "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
+    "supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql",
     "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
     "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql",
     "supabase/migrations/20260320130000_codex_review_findings_fixes.sql",
@@ -1903,6 +1904,27 @@
       "securityDefiner": true,
       "searchPath": "public",
       "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
+      "authenticatedExecute": true,
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "can_access_hr_domain",
+      "key": "public.can_access_hr_domain",
+      "signature": "public.can_access_hr_domain(uuid)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "boolean",
+      "language": "sql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "sourceMigration": "supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql",
       "authenticatedExecute": true,
       "triggerUsages": []
     }
