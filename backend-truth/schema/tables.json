@@ -2688,6 +2688,16 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "client_vat_bps",
+          "sqlType": "integer",
+          "tsType": "number",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -2702,6 +2712,16 @@
           "usingIndex": null,
           "nullsNotDistinct": false,
           "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "client_vat_bps"
+          ],
+          "expression": "client_vat_bps is null or (client_vat_bps >= 0 and client_vat_bps <= 10000)",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260406200000_track1_estimate_operational_summary_finance_visibility.sql"
         }
       ],
       "indexes": [
@@ -3004,6 +3024,16 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "discounted_client_total_price_cents",
+          "sqlType": "bigint",
+          "tsType": "number",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -3066,6 +3096,16 @@
           "expression": "resource_type in ('material', 'labor', 'subcontractor', 'equipment', 'other')",
           "usingIndex": null,
           "sourceMigration": "supabase/migrations/20260403191500_phase6_operational_summary_subcontractor_and_client_amounts.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "discounted_client_total_price_cents"
+          ],
+          "expression": "discounted_client_total_price_cents is null\n    or discounted_client_total_price_cents >= 0",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260406200000_track1_estimate_operational_summary_finance_visibility.sql"
         }
       ],
       "indexes": [

@@ -175,6 +175,10 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql",
       "sha256": "f0162f60ffdc29bc52f93846d22ecd3be1b36169fd0daff73a670ce3b78a3f80"
+    },
+    {
+      "path": "supabase/migrations/20260406200000_track1_estimate_operational_summary_finance_visibility.sql",
+      "sha256": "0d12b09815ef9fe7aa04113aa37a4ceb3f6859c0a9c6be81166db13708f11638"
     }
   ],
   "generated_artifacts": [
@@ -241,6 +245,7 @@ export const manifest = {
     "sql/20260405120000_resource_type_operational_visibility_and_hr_rpc.sql",
     "sql/20260406183000_procurement_operational_summary_requested_and_ordered_line_types.sql",
     "sql/20260406184500_track1_hr_operational_summary_role_gate.sql",
+    "sql/20260406200000_track1_estimate_operational_summary_finance_visibility.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -2959,6 +2964,16 @@ export const tables = {
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "client_vat_bps",
+          "sqlType": "integer",
+          "tsType": "number",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -2973,6 +2988,16 @@ export const tables = {
           "usingIndex": null,
           "nullsNotDistinct": false,
           "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "client_vat_bps"
+          ],
+          "expression": "client_vat_bps is null or (client_vat_bps >= 0 and client_vat_bps <= 10000)",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260406200000_track1_estimate_operational_summary_finance_visibility.sql"
         }
       ],
       "indexes": [
@@ -3275,6 +3300,16 @@ export const tables = {
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "discounted_client_total_price_cents",
+          "sqlType": "bigint",
+          "tsType": "number",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -3337,6 +3372,16 @@ export const tables = {
           "expression": "resource_type in ('material', 'labor', 'subcontractor', 'equipment', 'other')",
           "usingIndex": null,
           "sourceMigration": "supabase/migrations/20260403191500_phase6_operational_summary_subcontractor_and_client_amounts.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "discounted_client_total_price_cents"
+          ],
+          "expression": "discounted_client_total_price_cents is null\n    or discounted_client_total_price_cents >= 0",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260406200000_track1_estimate_operational_summary_finance_visibility.sql"
         }
       ],
       "indexes": [
@@ -8695,6 +8740,16 @@ export const checks = {
     },
     {
       "schema": "public",
+      "table": "estimate_versions",
+      "column": "client_vat_bps",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "client_vat_bps is null or (client_vat_bps >= 0 and client_vat_bps <= 10000)",
+      "sourceMigration": "supabase/migrations/20260406200000_track1_estimate_operational_summary_finance_visibility.sql"
+    },
+    {
+      "schema": "public",
       "table": "estimate_works",
       "column": "sort_order",
       "constraintName": null,
@@ -8778,6 +8833,16 @@ export const checks = {
       ],
       "expression": "resource_type in ('material', 'labor', 'subcontractor', 'equipment', 'other')",
       "sourceMigration": "supabase/migrations/20260403191500_phase6_operational_summary_subcontractor_and_client_amounts.sql"
+    },
+    {
+      "schema": "public",
+      "table": "estimate_resource_lines",
+      "column": "discounted_client_total_price_cents",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "discounted_client_total_price_cents is null\n    or discounted_client_total_price_cents >= 0",
+      "sourceMigration": "supabase/migrations/20260406200000_track1_estimate_operational_summary_finance_visibility.sql"
     },
     {
       "schema": "public",
@@ -10411,7 +10476,7 @@ export const functions = {
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260405120000_resource_type_operational_visibility_and_hr_rpc.sql",
+      "sourceMigration": "supabase/migrations/20260406200000_track1_estimate_operational_summary_finance_visibility.sql",
       "triggerUsages": []
     },
     {
@@ -12851,7 +12916,7 @@ export const sourceTrace = {
       "schema": "public",
       "name": "get_estimate_operational_summary",
       "signature": "public.get_estimate_operational_summary(uuid, uuid, integer, integer)",
-      "sourceMigration": "supabase/migrations/20260405120000_resource_type_operational_visibility_and_hr_rpc.sql"
+      "sourceMigration": "supabase/migrations/20260406200000_track1_estimate_operational_summary_finance_visibility.sql"
     },
     {
       "key": "public.get_hr_operational_summary",
@@ -14191,7 +14256,7 @@ export const sourceTrace = {
         "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
         "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql",
         "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
-        "supabase/migrations/20260405120000_resource_type_operational_visibility_and_hr_rpc.sql",
+        "supabase/migrations/20260406200000_track1_estimate_operational_summary_finance_visibility.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
@@ -14706,7 +14771,7 @@ export const slices = {
         "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
         "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql",
         "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
-        "supabase/migrations/20260405120000_resource_type_operational_visibility_and_hr_rpc.sql",
+        "supabase/migrations/20260406200000_track1_estimate_operational_summary_finance_visibility.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
