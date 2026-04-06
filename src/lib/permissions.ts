@@ -13,7 +13,7 @@ import {
 } from "@/lib/project-authority-seam";
 import { getAuthRole } from "@/lib/auth-state";
 import { getDefaultFinanceVisibility } from "@/lib/participant-role-policy";
-import type { MemberRole } from "@/types/entities";
+import type { FinanceVisibility, MemberRole } from "@/types/entities";
 
 export type { Action } from "@/lib/permission-matrix";
 export { can, isOwnerOrCoOwner } from "@/lib/permission-matrix";
@@ -147,6 +147,21 @@ export function seamCanLoadOperationalSemantics(seam: ProjectAuthoritySeam): boo
   return Boolean(seam.membership);
 }
 
+/** Mirrors `effective_finance_visibility` semantics for estimate UI (detail vs summary vs none). */
+export type EstimateFinanceVisibilityMode = "detail" | "summary" | "none";
+
+export function seamEstimateFinanceVisibilityMode(seam: ProjectAuthoritySeam): EstimateFinanceVisibilityMode {
+  if (seamCanViewSensitiveDetail(seam)) return "detail";
+  if (seamCanViewOperationalFinanceSummary(seam)) return "summary";
+  return "none";
+}
+
+/** Per `domains.estimate.actions.export_csv` in permissions.contract.json (owner/co_owner only). */
+export function seamAllowsEstimateExportCsv(seam: ProjectAuthoritySeam): boolean {
+  const role = getProjectRole(seam);
+  return role === "owner" || role === "co_owner";
+}
+
 /** How Supabase row loads should hydrate money-bearing tables vs operational RPCs. */
 export type FinanceRowLoadAccess = "full" | "operational_summary" | "none";
 
@@ -158,8 +173,14 @@ export function resolveFinanceRowLoadAccess(seam: ProjectAuthoritySeam): Finance
 }
 
 /**
- * Demo/local auth simulator: overlay simulated role + default finance visibility on the seam
- * so `seamCanViewSensitiveDetail` matches project pages.
+ * Demo/local auth simulator: overlay simulated role on the seam.
+ *
+ * Finance visibility:
+ * - Same simulated role as the membership row: use stored value or that role’s default.
+ * - Different role: if stored visibility differs from the **actual** role’s default, treat it as an
+ *   explicit grant and keep it (e.g. owner row with `summary` while previewing as contractor).
+ *   Otherwise use the simulated role’s default so owner `detail` is not carried into viewer/contractor
+ *   preview (fail-safe for `seamCanViewSensitiveDetail`).
  */
 export function applyWorkspaceDemoOverlayToSeam(
   seam: ProjectAuthoritySeam,
@@ -169,9 +190,26 @@ export function applyWorkspaceDemoOverlayToSeam(
     return seam;
   }
 
-  const simulatedRole = getAuthRole();
-  if (simulatedRole === "guest" || !seam.membership) {
+  const simulatedRoleRaw = getAuthRole();
+  if (simulatedRoleRaw === "guest" || !seam.membership) {
     return seam;
+  }
+
+  const simulatedRole = simulatedRoleRaw as MemberRole;
+  const actualRole = seam.membership.role;
+  const storedFv = seam.membership.finance_visibility;
+  const actualDefaultFv = getDefaultFinanceVisibility(actualRole);
+  const simDefaultFv = getDefaultFinanceVisibility(simulatedRole);
+
+  let finance_visibility: FinanceVisibility;
+  if (simulatedRole === actualRole) {
+    finance_visibility = storedFv ?? simDefaultFv;
+  } else if (storedFv == null) {
+    finance_visibility = simDefaultFv;
+  } else if (storedFv !== actualDefaultFv) {
+    finance_visibility = storedFv;
+  } else {
+    finance_visibility = simDefaultFv;
   }
 
   return {
@@ -179,7 +217,7 @@ export function applyWorkspaceDemoOverlayToSeam(
     membership: {
       ...seam.membership,
       role: simulatedRole,
-      finance_visibility: getDefaultFinanceVisibility(simulatedRole),
+      finance_visibility,
     },
   };
 }
