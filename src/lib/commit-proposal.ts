@@ -1,5 +1,5 @@
 import type { AIProposal } from "@/types/ai";
-import { buildProjectAuthoritySeam, seamAllowsAction } from "@/lib/permissions";
+import { buildProjectAuthoritySeam, seamAllowsAction, seamResolveActionState } from "@/lib/permissions";
 import {
   getCurrentUser, getMembers, getProject, getStages,
   addTask, addEvent, addProcurementItem, addDocument,
@@ -7,6 +7,7 @@ import {
   addProject, addMember, addStage,
 } from "@/data/store";
 import type { ProjectAuthoritySeam } from "@/lib/project-authority-seam";
+import { PROPOSAL_TYPE_TO_CONTRACT_ACTION } from "@/lib/ai-engine";
 
 export interface CommitResultItem {
   type: string;
@@ -60,6 +61,22 @@ export function commitProposal(proposal: AIProposal, options: CommitProposalOpti
 
   if (!seamAllowsAction(authoritySeam, "ai.generate")) {
     return { success: false, error: "You don't have permission to use AI generation.", eventIds: [], created: [], updated: [] };
+  }
+
+  // Contract action enforcement: proposal type must map to an enabled action.
+  // Hidden and disabled_visible actions are blocked — confirmation does not grant permission.
+  const actionMapping = PROPOSAL_TYPE_TO_CONTRACT_ACTION[proposal.type];
+  if (actionMapping) {
+    const actionState = seamResolveActionState(authoritySeam, actionMapping.domain, actionMapping.action);
+    if (actionState !== "enabled") {
+      return {
+        success: false,
+        error: `Action "${actionMapping.action}" is not available for your role.`,
+        eventIds: [],
+        created: [],
+        updated: [],
+      };
+    }
   }
 
   const totalCredits = user.credits_free + user.credits_paid;

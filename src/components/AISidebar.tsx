@@ -860,7 +860,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
 
     window.setTimeout(() => {
       const proposals = targetProjectId
-        ? generateProposalQueue(content, targetProjectId, automationMode)
+        ? generateProposalQueue(content, targetProjectId, automationMode, seamForProjectCommit)
         : [];
       const assistantContent = proposals.length > 0
         ? `I've prepared ${proposals.length} proposal${proposals.length === 1 ? "" : "s"}. Review them below.`
@@ -903,7 +903,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
         });
       }
     }, WORK_STEPS_GENERATE.length * 600 + 200);
-  }, [automationMode, defaultDirectEditForNewProposal]);
+  }, [automationMode, defaultDirectEditForNewProposal, seamForProjectCommit]);
 
   function shouldAskProjectBeforeProposal(content: string) {
     return ACTIONABLE_PROPOSAL_PATTERN.test(content);

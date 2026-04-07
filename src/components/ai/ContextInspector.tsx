@@ -5,6 +5,7 @@ import { useWorkspaceProjectMembers } from "@/hooks/use-workspace-source";
 import { getProjectDomainAccess, projectDomainAllowsView, usePermission } from "@/lib/permissions";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useProcurementReadProjectSummary } from "@/hooks/use-procurement-read-model";
+import { buildAIProjectContext } from "@/lib/ai-project-context";
 
 interface ContextInspectorProps {
   projectId: string;
@@ -26,27 +27,16 @@ export function ContextInspector({ projectId }: ContextInspectorProps) {
 
   if (!project) return null;
 
-  const pack = {
-    project: { title: project.title, type: project.type, progress: `${project.progress_pct}%` },
-    stages: stages.map((s) => ({ title: s.title, status: s.status })),
-    tasks: { total: tasks.length, done: tasks.filter((t) => t.status === "done").length, blocked: tasks.filter((t) => t.status === "blocked").length },
-    estimate: {
-      hasEstimate: financeSummary?.hasEstimate ?? false,
-      current: financeSummary?.status ?? null,
-      stages: financeSummary?.stageCount ?? 0,
-      lines: financeSummary?.lineCount ?? 0,
-    },
-    procurement: {
-      total: procurementSummary?.totalCount ?? 0,
-      requested: procurementSummary?.requestedCount ?? 0,
-      ordered: procurementSummary?.orderedCount ?? 0,
-      inStock: procurementSummary?.inStockCount ?? 0,
-      inStockActual: procurementSummary?.inStockActualTotal ?? 0,
-    },
-    user: { role: perm.role, credits: user.credits_free + user.credits_paid },
-    members: members.length,
-    recentEvents: events.map((e) => ({ type: e.type, time: new Date(e.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) })),
-  };
+  const pack = buildAIProjectContext(perm.seam, {
+    project,
+    stages,
+    tasks,
+    financeSummary,
+    procurementSummary,
+    events,
+    memberCount: members.length,
+    userCredits: user.credits_free + user.credits_paid,
+  });
 
   return (
     <div className="glass rounded-card p-2.5 text-[10px] font-mono">

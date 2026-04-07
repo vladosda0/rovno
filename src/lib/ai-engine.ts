@@ -1,7 +1,72 @@
 import type { AIProposal, ProposalChange } from "@/types/ai";
 import { getProject, getStages } from "@/data/store";
+import type { ProjectAuthoritySeam } from "@/lib/project-authority-seam";
+import {
+  seamResolveActionState,
+  seamEstimateFinanceVisibilityMode,
+  type EstimateFinanceVisibilityMode,
+} from "@/lib/permissions";
+import type { ActionState, ContractDomain, ContractAction } from "@/lib/permission-contract-actions";
 
 type AutomationMode = "full" | "assisted" | "manual" | "observer";
+
+// ---------------------------------------------------------------------------
+// Proposal type → contract action mapping
+// ---------------------------------------------------------------------------
+
+interface ProposalActionMapping {
+  domain: ContractDomain;
+  action: ContractAction;
+}
+
+const PROPOSAL_TYPE_TO_CONTRACT_ACTION: Record<string, ProposalActionMapping> = {
+  add_task:           { domain: "tasks",           action: "manage_tasks" },
+  update_estimate:    { domain: "estimate",        action: "edit_estimate_rows" },
+  add_procurement:    { domain: "procurement",     action: "order" },
+  generate_document:  { domain: "documents_media", action: "upload" },
+};
+
+function proposalAllowedForSeam(proposalType: string, seam: ProjectAuthoritySeam | undefined): boolean {
+  if (!seam) return true; // no seam = legacy path, allow (commit-proposal will re-check)
+  const mapping = PROPOSAL_TYPE_TO_CONTRACT_ACTION[proposalType];
+  if (!mapping) return true; // unmapped types pass through (e.g. create_project)
+  const state: ActionState = seamResolveActionState(seam, mapping.domain, mapping.action);
+  return state === "enabled";
+}
+
+// ---------------------------------------------------------------------------
+// Monetary copy sanitization
+// ---------------------------------------------------------------------------
+
+const MONEY_PATTERN = /[\d,.\s]+[₽$€£¥]/g;
+
+function stripMoney(text: string | undefined): string | undefined {
+  if (!text) return text;
+  return text.replace(MONEY_PATTERN, "—").trim();
+}
+
+function sanitizeProposalCopy(proposal: AIProposal, financeMode: EstimateFinanceVisibilityMode): AIProposal {
+  if (financeMode === "detail") return proposal;
+
+  const typeNeedsSanitization =
+    proposal.type === "update_estimate" || proposal.type === "add_procurement";
+  if (!typeNeedsSanitization) return proposal;
+
+  return {
+    ...proposal,
+    summary: stripMoney(proposal.summary) ?? proposal.summary,
+    changes: proposal.changes.map((change) => ({
+      ...change,
+      label: stripMoney(change.label) ?? change.label,
+      before: stripMoney(change.before),
+      after: stripMoney(change.after),
+    })),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Core proposal generation
+// ---------------------------------------------------------------------------
 
 function getStageTitle(projectId: string): string | null {
   const project = getProject(projectId);
@@ -80,17 +145,36 @@ function createProjectProposals(input: string, projectId: string): AIProposal[] 
   return proposals;
 }
 
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
 export function generateProposal(input: string, projectId: string): AIProposal | null {
   const proposals = createProjectProposals(input, projectId);
   return proposals[0] ?? null;
 }
 
-export function generateProposalQueue(input: string, projectId: string, automationMode: string): AIProposal[] {
+export function generateProposalQueue(
+  input: string,
+  projectId: string,
+  automationMode: string,
+  seam?: ProjectAuthoritySeam,
+): AIProposal[] {
   const normalizedMode: AutomationMode =
     automationMode === "full" || automationMode === "manual" || automationMode === "observer"
       ? automationMode
       : "assisted";
-  const proposals = createProjectProposals(input, projectId);
+
+  let proposals = createProjectProposals(input, projectId);
+
+  // Gate: only include proposals for actions the user's role can execute
+  proposals = proposals.filter((p) => proposalAllowedForSeam(p.type, seam));
+
+  // Sanitize monetary copy for non-detail finance visibility
+  if (seam) {
+    const financeMode = seamEstimateFinanceVisibilityMode(seam);
+    proposals = proposals.map((p) => sanitizeProposalCopy(p, financeMode));
+  }
 
   if (proposals.length <= 1) return proposals;
 
@@ -182,3 +266,5 @@ const TEXT_RESPONSES = [
 export function getTextResponse(): string {
   return TEXT_RESPONSES[Math.floor(Math.random() * TEXT_RESPONSES.length)];
 }
+
+export { PROPOSAL_TYPE_TO_CONTRACT_ACTION, type ProposalActionMapping };

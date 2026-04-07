@@ -1,0 +1,171 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { generateProposalQueue } from "@/lib/ai-engine";
+import type { ProjectAuthoritySeam } from "@/lib/project-authority-seam";
+import type { FinanceVisibility, MemberRole } from "@/types/entities";
+import * as store from "@/data/store";
+
+// ---------------------------------------------------------------------------
+// Store mocks — generateProposalQueue reads project + stages from the store
+// ---------------------------------------------------------------------------
+
+vi.mock("@/data/store", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/data/store")>();
+  return {
+    ...actual,
+    getProject: vi.fn(() => ({
+      id: "project-1",
+      owner_id: "profile-1",
+      title: "Test Project",
+      type: "residential",
+      automation_level: "full",
+      current_stage_id: "stage-1",
+      progress_pct: 50,
+    })),
+    getStages: vi.fn(() => [
+      { id: "stage-1", project_id: "project-1", title: "Demolition", description: "", order: 1, status: "open" },
+    ]),
+  };
+});
+
+// ---------------------------------------------------------------------------
+// Fixtures
+// ---------------------------------------------------------------------------
+
+function seamForRole(
+  role: MemberRole,
+  finance_visibility: FinanceVisibility = "none",
+): ProjectAuthoritySeam {
+  return {
+    projectId: "project-1",
+    profileId: "profile-1",
+    membership: {
+      project_id: "project-1",
+      user_id: "profile-1",
+      role,
+      ai_access: "project_pool",
+      finance_visibility,
+      credit_limit: 100,
+      used_credits: 0,
+    },
+    project: undefined,
+  };
+}
+
+function proposalTypes(input: string, seam: ProjectAuthoritySeam): string[] {
+  return generateProposalQueue(input, "project-1", "assisted", seam).map((p) => p.type);
+}
+
+// ---------------------------------------------------------------------------
+// Contract path: ai_enforcement.can_execute_hidden_actions = false
+// Contract path: ai_enforcement.can_execute_disabled_visible_actions = false
+// ---------------------------------------------------------------------------
+
+describe("generateProposalQueue — action filtering by role", () => {
+  it("viewer: no proposals at all (all mapped actions hidden)", () => {
+    const types = proposalTypes(
+      "add task, update estimate, buy materials, generate contract",
+      seamForRole("viewer"),
+    );
+    expect(types).toEqual([]);
+  });
+
+  it("contractor: only document proposals (upload=enabled; tasks/estimate/procurement blocked)", () => {
+    const types = proposalTypes(
+      "add task, update estimate, buy materials, generate contract",
+      seamForRole("contractor"),
+    );
+    expect(types).toEqual(["generate_document"]);
+  });
+
+  it("co_owner: all proposal types allowed", () => {
+    const types = proposalTypes(
+      "add task, update estimate, buy materials, generate contract",
+      seamForRole("co_owner", "detail"),
+    );
+    expect(types).toContain("add_task");
+    expect(types).toContain("update_estimate");
+    expect(types).toContain("add_procurement");
+    expect(types).toContain("generate_document");
+  });
+
+  it("owner: all proposal types allowed", () => {
+    const types = proposalTypes(
+      "add task, update estimate, buy materials, generate contract",
+      seamForRole("owner", "detail"),
+    );
+    expect(types).toHaveLength(4);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Contract path: ai_enforcement.can_reveal_hidden_fields = false
+// ---------------------------------------------------------------------------
+
+describe("generateProposalQueue — monetary copy sanitization", () => {
+  it("strips ₽ amounts from estimate proposals when finance is not detail", () => {
+    const proposals = generateProposalQueue(
+      "update estimate",
+      "project-1",
+      "assisted",
+      seamForRole("co_owner", "summary"),
+    );
+    const estimateProposal = proposals.find((p) => p.type === "update_estimate");
+    expect(estimateProposal).toBeDefined();
+    for (const change of estimateProposal!.changes) {
+      expect(change.before ?? "").not.toMatch(/₽/);
+      expect(change.after ?? "").not.toMatch(/₽/);
+    }
+  });
+
+  it("strips ₽ amounts from procurement proposals when finance is not detail", () => {
+    const proposals = generateProposalQueue(
+      "buy materials",
+      "project-1",
+      "assisted",
+      seamForRole("co_owner", "summary"),
+    );
+    const procProposal = proposals.find((p) => p.type === "add_procurement");
+    expect(procProposal).toBeDefined();
+    for (const change of procProposal!.changes) {
+      expect(change.after ?? "").not.toMatch(/₽/);
+    }
+  });
+
+  it("preserves ₽ amounts for detail finance visibility", () => {
+    const proposals = generateProposalQueue(
+      "buy materials",
+      "project-1",
+      "assisted",
+      seamForRole("owner", "detail"),
+    );
+    const procProposal = proposals.find((p) => p.type === "add_procurement");
+    expect(procProposal).toBeDefined();
+    expect(procProposal!.changes.some((c) => (c.after ?? "").includes("₽"))).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Contract: contractor procurement actions = disabled_visible → excluded
+// ---------------------------------------------------------------------------
+
+describe("generateProposalQueue — disabled_visible is not enabled", () => {
+  it("contractor cannot get procurement proposals (order=disabled_visible)", () => {
+    const types = proposalTypes("buy materials", seamForRole("contractor"));
+    expect(types).not.toContain("add_procurement");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Contract: legacy path without seam still returns all proposals
+// ---------------------------------------------------------------------------
+
+describe("generateProposalQueue — legacy path (no seam)", () => {
+  it("returns all matching proposals when seam is omitted", () => {
+    const types = generateProposalQueue(
+      "add task, update estimate, buy materials, generate contract",
+      "project-1",
+      "assisted",
+    ).map((p) => p.type);
+    expect(types).toHaveLength(4);
+  });
+});
