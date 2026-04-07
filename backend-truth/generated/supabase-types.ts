@@ -1304,6 +1304,7 @@ export type Database = {
           "finalized_at": string | null
           "task_id": string | null
           "is_final": boolean
+          "visibility_class": "shared_project" | "internal"
           }
           Insert: {
           "id"?: string
@@ -1321,6 +1322,7 @@ export type Database = {
           "finalized_at"?: string | null
           "task_id"?: string | null
           "is_final"?: boolean
+          "visibility_class"?: "shared_project" | "internal"
           }
           Update: {
           "id"?: string
@@ -1338,6 +1340,7 @@ export type Database = {
           "finalized_at"?: string | null
           "task_id"?: string | null
           "is_final"?: boolean
+          "visibility_class"?: "shared_project" | "internal"
           }
           Relationships: []
         }
@@ -1357,6 +1360,7 @@ export type Database = {
           "document_id": string | null
           "created_at": string
           "finalized_at": string | null
+          "visibility_class": "shared_project" | "internal"
           }
           Insert: {
           "id"?: string
@@ -1373,6 +1377,7 @@ export type Database = {
           "document_id"?: string | null
           "created_at"?: string
           "finalized_at"?: string | null
+          "visibility_class"?: "shared_project" | "internal"
           }
           Update: {
           "id"?: string
@@ -1389,6 +1394,7 @@ export type Database = {
           "document_id"?: string | null
           "created_at"?: string
           "finalized_at"?: string | null
+          "visibility_class"?: "shared_project" | "internal"
           }
           Relationships: []
         }
@@ -1593,6 +1599,7 @@ export type Database = {
           "p_mime_type": string
           "p_size_bytes": number
           "p_description": unknown
+          "p_visibility_class": unknown
           }
           Returns: unknown
         }
@@ -1606,6 +1613,7 @@ export type Database = {
           "p_caption": unknown
           "p_task_id": unknown
           "p_is_final": unknown
+          "p_visibility_class": unknown
           }
           Returns: unknown
         }

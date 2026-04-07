@@ -6222,6 +6222,16 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "visibility_class",
+          "sqlType": "text",
+          "tsType": "\"shared_project\" | \"internal\"",
+          "nullable": false,
+          "defaultSql": "'shared_project'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -6254,6 +6264,16 @@
           "expression": "not is_final or task_id is not null",
           "usingIndex": null,
           "sourceMigration": "supabase/migrations/20260320110000_task_final_media_contract.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "visibility_class"
+          ],
+          "expression": "visibility_class in ('shared_project', 'internal')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260407190000_track4_upload_visibility_class.sql"
         }
       ],
       "indexes": [
@@ -6446,6 +6466,16 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "visibility_class",
+          "sqlType": "text",
+          "tsType": "\"shared_project\" | \"internal\"",
+          "nullable": false,
+          "defaultSql": "'shared_project'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -6468,6 +6498,16 @@
           "expression": "size_bytes is null or size_bytes >= 0",
           "usingIndex": null,
           "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "visibility_class"
+          ],
+          "expression": "visibility_class in ('shared_project', 'internal')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260407190000_track4_upload_visibility_class.sql"
         }
       ],
       "indexes": [],

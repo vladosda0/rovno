@@ -15,7 +15,7 @@
     "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
     "supabase/migrations/20260317133000_storage_bucket_config_table.sql",
     "supabase/migrations/20260317121000_storage_upload_rpcs.sql",
-    "supabase/migrations/20260323113000_finalize_media_bucket_ambiguity_fix.sql",
+    "supabase/migrations/20260407190000_track4_upload_visibility_class.sql",
     "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
     "supabase/migrations/20260326213000_internal_visibility_write_boundary.sql"
   ],
@@ -871,6 +871,16 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "visibility_class",
+          "sqlType": "text",
+          "tsType": "\"shared_project\" | \"internal\"",
+          "nullable": false,
+          "defaultSql": "'shared_project'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -903,6 +913,16 @@
           "expression": "not is_final or task_id is not null",
           "usingIndex": null,
           "sourceMigration": "supabase/migrations/20260320110000_task_final_media_contract.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "visibility_class"
+          ],
+          "expression": "visibility_class in ('shared_project', 'internal')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260407190000_track4_upload_visibility_class.sql"
         }
       ],
       "indexes": [
@@ -1095,6 +1115,16 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "visibility_class",
+          "sqlType": "text",
+          "tsType": "\"shared_project\" | \"internal\"",
+          "nullable": false,
+          "defaultSql": "'shared_project'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -1117,6 +1147,16 @@
           "expression": "size_bytes is null or size_bytes >= 0",
           "usingIndex": null,
           "sourceMigration": "supabase/migrations/20260317120000_storage_upload_intents.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "visibility_class"
+          ],
+          "expression": "visibility_class in ('shared_project', 'internal')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260407190000_track4_upload_visibility_class.sql"
         }
       ],
       "indexes": [],
@@ -1488,9 +1528,61 @@
     },
     {
       "schema": "public",
+      "name": "finalize_document_upload",
+      "key": "public.finalize_document_upload",
+      "signature": "public.finalize_document_upload(uuid)",
+      "args": [
+        {
+          "name": "p_upload_intent_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "table ( document_id uuid, document_version_id uuid, storage_object_id uuid, project_id uuid, bucket text, object_path text, filename text )",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "sourceMigration": "supabase/migrations/20260407190000_track4_upload_visibility_class.sql",
+      "authenticatedExecute": true,
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "finalize_project_media_upload",
+      "key": "public.finalize_project_media_upload",
+      "signature": "public.finalize_project_media_upload(uuid, uuid, boolean)",
+      "args": [
+        {
+          "name": "p_upload_intent_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_task_id",
+          "type": "uuid default null",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_is_final",
+          "type": "boolean default null",
+          "identityType": "boolean"
+        }
+      ],
+      "returnType": "table ( project_media_id uuid, storage_object_id uuid, project_id uuid, bucket text, object_path text, filename text )",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "sourceMigration": "supabase/migrations/20260407190000_track4_upload_visibility_class.sql",
+      "authenticatedExecute": true,
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
       "name": "prepare_document_upload",
       "key": "public.prepare_document_upload",
-      "signature": "public.prepare_document_upload(uuid, text, text, text, text, bigint, text)",
+      "signature": "public.prepare_document_upload(uuid, text, text, text, text, bigint, text, text)",
       "args": [
         {
           "name": "p_project_id",
@@ -1526,6 +1618,11 @@
           "name": "p_description",
           "type": "text default null",
           "identityType": "text"
+        },
+        {
+          "name": "p_visibility_class",
+          "type": "text default 'shared_project'",
+          "identityType": "text"
         }
       ],
       "returnType": "table ( upload_intent_id uuid, bucket text, object_path text, filename text, mime_type text, size_bytes bigint )",
@@ -1533,28 +1630,7 @@
       "volatility": "volatile",
       "securityDefiner": true,
       "searchPath": "public",
-      "sourceMigration": "supabase/migrations/20260317133000_storage_bucket_config_table.sql",
-      "authenticatedExecute": true,
-      "triggerUsages": []
-    },
-    {
-      "schema": "public",
-      "name": "finalize_document_upload",
-      "key": "public.finalize_document_upload",
-      "signature": "public.finalize_document_upload(uuid)",
-      "args": [
-        {
-          "name": "p_upload_intent_id",
-          "type": "uuid",
-          "identityType": "uuid"
-        }
-      ],
-      "returnType": "table ( document_id uuid, document_version_id uuid, storage_object_id uuid, project_id uuid, bucket text, object_path text, filename text )",
-      "language": "plpgsql",
-      "volatility": "volatile",
-      "securityDefiner": true,
-      "searchPath": "public",
-      "sourceMigration": "supabase/migrations/20260317121000_storage_upload_rpcs.sql",
+      "sourceMigration": "supabase/migrations/20260407190000_track4_upload_visibility_class.sql",
       "authenticatedExecute": true,
       "triggerUsages": []
     },
@@ -1562,7 +1638,7 @@
       "schema": "public",
       "name": "prepare_project_media_upload",
       "key": "public.prepare_project_media_upload",
-      "signature": "public.prepare_project_media_upload(uuid, text, text, text, bigint, text, uuid, boolean)",
+      "signature": "public.prepare_project_media_upload(uuid, text, text, text, bigint, text, uuid, boolean, text)",
       "args": [
         {
           "name": "p_project_id",
@@ -1603,6 +1679,11 @@
           "name": "p_is_final",
           "type": "boolean default false",
           "identityType": "boolean"
+        },
+        {
+          "name": "p_visibility_class",
+          "type": "text default 'shared_project'",
+          "identityType": "text"
         }
       ],
       "returnType": "table ( upload_intent_id uuid, bucket text, object_path text, filename text, mime_type text, size_bytes bigint )",
@@ -1610,38 +1691,7 @@
       "volatility": "volatile",
       "securityDefiner": true,
       "searchPath": "public",
-      "sourceMigration": "supabase/migrations/20260320110000_task_final_media_contract.sql",
-      "authenticatedExecute": true,
-      "triggerUsages": []
-    },
-    {
-      "schema": "public",
-      "name": "finalize_project_media_upload",
-      "key": "public.finalize_project_media_upload",
-      "signature": "public.finalize_project_media_upload(uuid, uuid, boolean)",
-      "args": [
-        {
-          "name": "p_upload_intent_id",
-          "type": "uuid",
-          "identityType": "uuid"
-        },
-        {
-          "name": "p_task_id",
-          "type": "uuid default null",
-          "identityType": "uuid"
-        },
-        {
-          "name": "p_is_final",
-          "type": "boolean default null",
-          "identityType": "boolean"
-        }
-      ],
-      "returnType": "table ( project_media_id uuid, storage_object_id uuid, project_id uuid, bucket text, object_path text, filename text )",
-      "language": "plpgsql",
-      "volatility": "volatile",
-      "securityDefiner": true,
-      "searchPath": "public",
-      "sourceMigration": "supabase/migrations/20260323113000_finalize_media_bucket_ambiguity_fix.sql",
+      "sourceMigration": "supabase/migrations/20260407190000_track4_upload_visibility_class.sql",
       "authenticatedExecute": true,
       "triggerUsages": []
     }
