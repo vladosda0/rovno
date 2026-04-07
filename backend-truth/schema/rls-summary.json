@@ -623,18 +623,6 @@
       ],
       "policies": [
         {
-          "name": "document_versions_insert",
-          "schema": "public",
-          "table": "document_versions",
-          "command": "insert",
-          "roles": [
-            "authenticated"
-          ],
-          "using": null,
-          "withCheck": "created_by = auth.uid()\n  and exists (\n    select 1\n    from public.documents d\n    where d.id = document_id\n      and public.can_write_project_content(d.project_id)\n  )",
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-        },
-        {
           "name": "document_versions_select",
           "schema": "public",
           "table": "document_versions",
@@ -669,6 +657,18 @@
           "using": "exists (\n    select 1\n    from public.documents d\n    where d.id = document_id\n      and public.can_write_project_content(d.project_id)\n      and (\n        d.visibility_class = 'shared_project'\n        or public.can_view_internal_documents(d.project_id)\n      )\n  )",
           "withCheck": null,
           "sourceMigration": "supabase/migrations/20260326213000_internal_visibility_write_boundary.sql"
+        },
+        {
+          "name": "document_versions_insert",
+          "schema": "public",
+          "table": "document_versions",
+          "command": "insert",
+          "roles": [
+            "authenticated"
+          ],
+          "using": null,
+          "withCheck": "created_by = auth.uid()\n  and exists (\n    select 1\n    from public.documents d\n    where d.id = document_id\n      and public.can_write_project_content(d.project_id)\n      and (\n        d.visibility_class = 'shared_project'\n        or public.can_view_internal_documents(d.project_id)\n      )\n  )",
+          "sourceMigration": "supabase/migrations/20260408100000_document_versions_insert_internal_visibility_parity.sql"
         }
       ]
     },
