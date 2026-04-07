@@ -685,7 +685,9 @@ export async function syncProjectProcurementFromEstimate(
       plannedUnitPriceCents,
       plannedTotalPriceCents: Math.round(plannedUnitPriceCents * quantity),
       status: existing?.status ?? "requested",
-      createdBy: existing?.createdBy ?? input.profileId,
+      // Projection upsert must satisfy INSERT RLS (`created_by = auth.uid()`) even on conflict.
+      // Preserve role-based write checks via `can_write_project_content(project_id)`.
+      createdBy: input.profileId,
     };
   });
 

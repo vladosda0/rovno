@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { trackEvent } from "@/lib/analytics";
 import {
@@ -59,6 +59,10 @@ import {
   archiveProcurementItem,
   updateProcurementItem,
 } from "@/data/procurement-store";
+import {
+  clearEstimateV2ProjectAccessContext,
+  registerEstimateV2ProjectAccessContext,
+} from "@/data/estimate-v2-store";
 import { getOrdersSource } from "@/data/orders-source";
 import { consumeStockFromInventory, updateOrder } from "@/data/order-store";
 import { addEvent, addTask, getCurrentUser, getTask, getUserById } from "@/data/store";
@@ -89,7 +93,7 @@ import {
   orderQueryKeys,
 } from "@/hooks/use-order-data";
 import { procurementProjectItemsQueryRoot, procurementQueryKeys } from "@/hooks/use-procurement-source";
-import { useWorkspaceMode } from "@/hooks/use-workspace-source";
+import { useWorkspaceCurrentUserState, useWorkspaceMode } from "@/hooks/use-workspace-source";
 import { computeProjectTotals } from "@/lib/estimate-v2/pricing";
 import type {
   Event,
@@ -243,6 +247,7 @@ export default function ProjectProcurement() {
   const { toast } = useToast();
   const pid = projectId!;
   const workspaceMode = useWorkspaceMode();
+  const { user: currentUser } = useWorkspaceCurrentUserState();
   const supabaseMode = workspaceMode.kind === "supabase" ? workspaceMode : null;
   const isSupabaseMode = workspaceMode.kind === "supabase";
 
@@ -257,6 +262,7 @@ export default function ProjectProcurement() {
   const locations = useLocations(pid);
   const stockRows = useInventoryStock(pid);
   const { project, members, stages } = useProject(pid);
+  const currentMembership = members.find((member) => member.user_id === currentUser.id) ?? null;
   const estimateState = useEstimateV2Project(pid);
   const estimateSync = estimateState.sync ?? EMPTY_SYNC_STATE;
   const perm = usePermission(pid);
@@ -291,11 +297,53 @@ export default function ProjectProcurement() {
   const isProcurementSyncing = isSupabaseMode && procurementSyncState.status === "syncing";
   const hasProcurementSyncError = isSupabaseMode && procurementSyncState.status === "error";
   const isProcurementProjectionBehind = isSupabaseMode
+    && canManageProcurement
     && estimateState.project.estimateStatus !== "planning"
     && procurementSyncState.projectedRevision !== estimateSync.estimateRevision
     && !isProcurementSyncing
     && !hasProcurementSyncError;
   const shouldBlockProcurementLaunchActions = isProcurementProjectionBehind || hasProcurementSyncError;
+
+  useLayoutEffect(() => {
+    if (!pid) return undefined;
+
+    if (workspaceMode.kind === "supabase" && project?.owner_id && currentUser.id) {
+      registerEstimateV2ProjectAccessContext(pid, {
+        mode: "supabase",
+        profileId: workspaceMode.profileId,
+        projectOwnerProfileId: project.owner_id,
+        membershipRole: currentMembership?.role ?? null,
+        financeVisibility: currentMembership?.finance_visibility ?? null,
+      });
+      return () => {
+        clearEstimateV2ProjectAccessContext(pid);
+      };
+    }
+
+    if (workspaceMode.kind === "demo" || workspaceMode.kind === "local") {
+      registerEstimateV2ProjectAccessContext(pid, {
+        mode: workspaceMode.kind,
+        profileId: currentUser.id || undefined,
+        projectOwnerProfileId: project?.owner_id,
+        membershipRole: currentMembership?.role ?? null,
+        financeVisibility: currentMembership?.finance_visibility ?? null,
+      });
+      return () => {
+        clearEstimateV2ProjectAccessContext(pid);
+      };
+    }
+
+    clearEstimateV2ProjectAccessContext(pid);
+    return undefined;
+  }, [
+    currentMembership?.finance_visibility,
+    currentMembership?.role,
+    currentUser.id,
+    pid,
+    project?.owner_id,
+    workspaceMode.kind,
+    workspaceMode.kind === "supabase" ? workspaceMode.profileId : null,
+  ]);
 
   if (import.meta.env.DEV) {
     // eslint-disable-next-line no-console

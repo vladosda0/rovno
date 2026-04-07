@@ -482,7 +482,7 @@ describe("procurement-source helpers", () => {
           task_id: "task-1",
           title: "Laser level v2",
           status: "ordered",
-          created_by: "creator-1",
+          created_by: "profile-9",
         }),
       ],
       { onConflict: "id" },
