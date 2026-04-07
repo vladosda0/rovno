@@ -178,19 +178,19 @@ describe("ProjectProcurement header redesign", () => {
     }
   });
 
-  it("hides Requested tab for contractors and keeps summary tabs visible", () => {
+  it("shows all three tabs for contractors including Requested", () => {
     const projectId = "project-1";
     seedRequestedItem(projectId);
     setAuthRole("contractor");
 
     renderProjectProcurement(projectId);
 
-    expect(screen.queryByRole("button", { name: /^Requested \(/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Requested \(/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^Ordered \(/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^In stock \(/i })).toBeInTheDocument();
   });
 
-  it("redacts procurement money surfaces for contractors in summary mode", () => {
+  it("hides procurement money header and shows disabled Order for contractors", () => {
     const projectId = "project-1";
     seedRequestedItem(projectId);
     setAuthRole("contractor");
@@ -200,8 +200,11 @@ describe("ProjectProcurement header redesign", () => {
     expect(screen.queryByText("Budget")).not.toBeInTheDocument();
     expect(screen.queryByText("Committed")).not.toBeInTheDocument();
     expect(screen.queryByText("Variance")).not.toBeInTheDocument();
-    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Order" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /^Requested \(/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Requested \(/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Requested \(/i }));
+    const orderBtn = screen.getByRole("button", { name: "Order" });
+    expect(orderBtn).toBeInTheDocument();
+    expect(orderBtn).toBeDisabled();
   });
 });

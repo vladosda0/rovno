@@ -263,7 +263,7 @@ describe("ProjectProcurement Ordered tab", () => {
     }
   });
 
-  it("suppresses receive controls for contractors in summary mode", () => {
+  it("shows disabled receive controls for contractors in summary mode", () => {
     const projectId = "project-1";
     seedPartialOrderedLine(projectId);
     setAuthRole("contractor");
@@ -272,7 +272,9 @@ describe("ProjectProcurement Ordered tab", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /^Ordered \(/i }));
 
-    expect(screen.queryByRole("button", { name: "Receive" })).not.toBeInTheDocument();
+    const receiveBtn = screen.getByRole("button", { name: "Receive" });
+    expect(receiveBtn).toBeInTheDocument();
+    expect(receiveBtn).toBeDisabled();
   });
 
   it("omits monetary columns while keeping operational ordered rows for contractor summary mode", () => {
@@ -327,7 +329,11 @@ describe("ProjectProcurement Ordered tab — non-detail operational visibility",
     renderProjectProcurement(projectId);
     fireEvent.click(screen.getByRole("button", { name: /^Ordered \(/i }));
 
-    expect(screen.getByText("Supplier")).toBeInTheDocument();
+    if (role === "viewer") {
+      expect(screen.queryByText("Supplier")).not.toBeInTheDocument();
+    } else {
+      expect(screen.getByText("Supplier")).toBeInTheDocument();
+    }
     const table = screen.getByRole("table");
     const tableScope = within(table);
     expect(tableScope.getByText("pcs")).toBeInTheDocument();

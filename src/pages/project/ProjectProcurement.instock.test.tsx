@@ -278,7 +278,7 @@ describe("ProjectProcurement In stock tab", () => {
     expect(within(dialog).getByRole("link", { name: "Consignment note.pdf" })).toBeInTheDocument();
   });
 
-  it("shows receiver without monetary column in contractor summary mode", () => {
+  it("shows receiver and disabled actions without monetary column in contractor summary mode", () => {
     const projectId = "project-1";
     seedSupplierInStock(projectId, `Summary mode ${Date.now()}`, { linkEstimate: true });
     setAuthRole("contractor");
@@ -290,8 +290,13 @@ describe("ProjectProcurement In stock tab", () => {
     const tableScope = within(table);
     expect(tableScope.getByText("Receiver")).toBeInTheDocument();
     expect(tableScope.queryByText("Client price")).not.toBeInTheDocument();
-    expect(tableScope.queryByText("Actions")).not.toBeInTheDocument();
+    expect(tableScope.getByText("Actions")).toBeInTheDocument();
     expect(tableScope.queryByText(/₽/)).not.toBeInTheDocument();
+
+    const useBtn = tableScope.getByRole("button", { name: "Use" });
+    expect(useBtn).toBeDisabled();
+    const requestMoreBtn = tableScope.getByRole("button", { name: "Request more" });
+    expect(requestMoreBtn).toBeDisabled();
   });
 
   it("falls back to stock snapshot rows for contractor summary mode when procurement items are hidden", async () => {
@@ -303,6 +308,8 @@ describe("ProjectProcurement In stock tab", () => {
     renderProjectProcurement(projectId);
 
     expect(screen.queryByText("No procurement items")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /^In stock \(/i }));
 
     const table = await screen.findByRole("table");
     const tableScope = within(table);

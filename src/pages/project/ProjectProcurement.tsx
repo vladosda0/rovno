@@ -47,6 +47,7 @@ import { useOrders } from "@/hooks/use-order-data";
 import { useInventoryStock, useLocations } from "@/hooks/use-inventory-data";
 import {
   getProjectDomainAccess,
+  getProjectRole,
   projectDomainAllowsManage,
   seamCanViewOperationalFinanceSummary,
   seamCanViewSensitiveDetail,
@@ -257,17 +258,17 @@ export default function ProjectProcurement() {
   const estimateState = useEstimateV2Project(pid);
   const estimateSync = estimateState.sync ?? EMPTY_SYNC_STATE;
   const perm = usePermission(pid);
+  const projectRole = getProjectRole(perm.seam);
   const procurementAccess = getProjectDomainAccess(perm.seam, "procurement");
   const canViewSensitiveDetail = seamCanViewSensitiveDetail(perm.seam);
   const canViewOperationalFinanceSummary = seamCanViewOperationalFinanceSummary(perm.seam);
   const canManageProcurement = projectDomainAllowsManage(procurementAccess);
+  const showSupplier = projectRole !== "viewer";
+  const showProcurementActions = canManageProcurement || projectRole === "contractor";
   const canEdit = canManageProcurement;
   const canLaunchOrderFlows = canManageProcurement && canViewSensitiveDetail;
   const canUseFromStock = canManageProcurement && !isSupabaseMode;
-  const visibleTabs = useMemo<ProcurementTab[]>(
-    () => (canManageProcurement ? TABS : ["ordered", "in_stock"]),
-    [canManageProcurement],
-  );
+  const visibleTabs = TABS;
   const procurementSyncState = estimateSync.domains.procurement;
   const isProcurementSyncing = isSupabaseMode && procurementSyncState.status === "syncing";
   const hasProcurementSyncError = isSupabaseMode && procurementSyncState.status === "error";
@@ -391,7 +392,7 @@ export default function ProjectProcurement() {
   const [activeTab, setActiveTab] = useState<ProcurementTab>(() => {
     const savedTab = savedListState?.activeTab;
     if (savedTab && visibleTabs.includes(savedTab)) return savedTab;
-    return canManageProcurement ? "requested" : "ordered";
+    return "requested";
   });
   const [collapsedStages, setCollapsedStages] = useState<Set<string>>(new Set(savedListState?.collapsedStageIds ?? []));
   const [collapsedOrderIds, setCollapsedOrderIds] = useState<Set<string>>(new Set());
@@ -462,8 +463,8 @@ export default function ProjectProcurement() {
 
   useEffect(() => {
     if (visibleTabs.includes(activeTab)) return;
-    setActiveTab(canManageProcurement ? "requested" : "ordered");
-  }, [activeTab, canManageProcurement, visibleTabs]);
+    setActiveTab("requested");
+  }, [activeTab, visibleTabs]);
 
   useEffect(() => {
     if (canManageProcurement) return;
@@ -531,11 +532,11 @@ export default function ProjectProcurement() {
 
   const orderedTableColumnCount = useMemo(() => {
     let n = 5;
-    if (canManageProcurement) n += 1;
+    if (showProcurementActions) n += 1;
     if (canViewSensitiveDetail) n += 2;
-    if (canManageProcurement) n += 1;
+    if (showProcurementActions) n += 1;
     return n;
-  }, [canManageProcurement, canViewSensitiveDetail]);
+  }, [showProcurementActions, canViewSensitiveDetail]);
 
   const defaultLocationId = useMemo(
     () => locations.find((location) => location.isDefault)?.id ?? locations[0]?.id ?? null,
@@ -1481,11 +1482,7 @@ export default function ProjectProcurement() {
     : effectiveActiveTab === "ordered"
       ? selectedOrderedLineKeys.size
       : selectedInStockRowKeys.size;
-  const showStickySelectionBar = (
-    effectiveActiveTab === "requested"
-      ? canLaunchOrderFlows
-      : canManageProcurement
-  ) && selectionCount > 0;
+  const showStickySelectionBar = showProcurementActions && selectionCount > 0;
 
   const selectionPrimaryLabel = effectiveActiveTab === "requested"
     ? `Create order (${selectionCount})`
@@ -1560,13 +1557,13 @@ export default function ProjectProcurement() {
   const renderRequestedTableHeader = () => (
     <thead className="bg-muted/30 border-b border-border">
       <tr>
-        {canLaunchOrderFlows && <th className="w-10 text-left px-2 py-2 text-xs font-medium text-muted-foreground" />}
+        {showProcurementActions && <th className="w-10 text-left px-2 py-2 text-xs font-medium text-muted-foreground" />}
         <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Name / Spec</th>
         <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">When needed</th>
         <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Amount</th>
         <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Unit</th>
         {canViewSensitiveDetail && <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Planned</th>}
-        {canLaunchOrderFlows && <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Action</th>}
+        {showProcurementActions && <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Action</th>}
       </tr>
     </thead>
   );
@@ -1574,7 +1571,7 @@ export default function ProjectProcurement() {
   const renderOrderedTableHeader = () => (
     <thead className="bg-muted/30 border-b border-border">
       <tr>
-        {canManageProcurement && <th className="w-10 text-left px-2 py-2 text-xs font-medium text-muted-foreground" />}
+        {showProcurementActions && <th className="w-10 text-left px-2 py-2 text-xs font-medium text-muted-foreground" />}
         <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Name / Spec</th>
         <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">When needed</th>
         <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Delivery scheduled</th>
@@ -1582,7 +1579,7 @@ export default function ProjectProcurement() {
         <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Unit</th>
         {canViewSensitiveDetail && <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Unit price</th>}
         {canViewSensitiveDetail && <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Total</th>}
-        {canManageProcurement && <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Action</th>}
+        {showProcurementActions && <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Action</th>}
       </tr>
     </thead>
   );
@@ -1590,13 +1587,13 @@ export default function ProjectProcurement() {
   const renderInStockTableHeader = () => (
     <thead className="bg-muted/30 border-b border-border">
       <tr>
-        {canManageProcurement && <th className="w-10 text-left px-2 py-2 text-xs font-medium text-muted-foreground" />}
+        {showProcurementActions && <th className="w-10 text-left px-2 py-2 text-xs font-medium text-muted-foreground" />}
         <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Name / Spec</th>
         <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Location</th>
         <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Qty available</th>
         {!canManageProcurement && <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Receiver</th>}
         <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Date last received</th>
-        {canManageProcurement && <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Actions</th>}
+        {showProcurementActions && <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Actions</th>}
       </tr>
     </thead>
   );
@@ -1635,7 +1632,7 @@ export default function ProjectProcurement() {
       <div className="glass-elevated rounded-card p-sp-3 space-y-sp-3">
         <h2 className="text-h3 text-foreground">Procurement</h2>
 
-        {canViewSensitiveDetail && (
+        {canManageProcurement && (
           <>
             <div className="grid grid-cols-2 xl:grid-cols-4 gap-2">
               {[
@@ -1746,7 +1743,7 @@ export default function ProjectProcurement() {
                 size="sm"
                 className="h-8"
                 onClick={runSelectionPrimaryAction}
-                disabled={!canEdit || shouldBlockProcurementLaunchActions || (isSupabaseMode && effectiveActiveTab === "in_stock")}
+                disabled={!canManageProcurement || shouldBlockProcurementLaunchActions || (isSupabaseMode && effectiveActiveTab === "in_stock")}
               >
                 {selectionPrimaryLabel}
               </Button>
@@ -1764,7 +1761,7 @@ export default function ProjectProcurement() {
         </div>
       )}
 
-      {canManageProcurement && effectiveActiveTab === "requested" && (
+      {effectiveActiveTab === "requested" && (
         <div className="glass rounded-card p-2 space-y-2">
           {requestedItems.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">No requested items.</p>
@@ -1806,12 +1803,12 @@ export default function ProjectProcurement() {
 
                                 return (
                                   <tr key={item.id} className="border-b border-border/70 last:border-0 hover:bg-muted/20">
-                                    {canLaunchOrderFlows && (
+                                    {showProcurementActions && (
                                       <td className="px-2 py-2">
                                         <Checkbox
                                           checked={selected}
                                           onCheckedChange={(checked) => toggleSelected(item.id, !!checked)}
-                                          disabled={!canEdit}
+                                          disabled={!canManageProcurement}
                                         />
                                       </td>
                                     )}
@@ -1852,7 +1849,7 @@ export default function ProjectProcurement() {
                                     {canViewSensitiveDetail && (
                                       <td className="px-2 py-2 text-right tabular-nums text-foreground">{fmtCost(item.plannedUnitPrice ?? 0)}</td>
                                     )}
-                                    {canLaunchOrderFlows && (
+                                    {showProcurementActions && (
                                       <td className="px-2 py-2">
                                         <div className="flex justify-end">
                                           <Button
@@ -1860,7 +1857,7 @@ export default function ProjectProcurement() {
                                             size="sm"
                                             className="h-7"
                                             onClick={() => openCreateOrder([item.id])}
-                                            disabled={!canEdit || shouldBlockProcurementLaunchActions}
+                                            disabled={!canManageProcurement || shouldBlockProcurementLaunchActions}
                                           >
                                             Order
                                           </Button>
@@ -1901,12 +1898,12 @@ export default function ProjectProcurement() {
 
                             return (
                               <tr key={item.id} className="border-b border-border/70 last:border-0 hover:bg-muted/20">
-                                {canLaunchOrderFlows && (
+                                {showProcurementActions && (
                                   <td className="px-2 py-2">
                                     <Checkbox
                                       checked={selected}
                                       onCheckedChange={(checked) => toggleSelected(item.id, !!checked)}
-                                      disabled={!canEdit}
+                                      disabled={!canManageProcurement}
                                     />
                                   </td>
                                 )}
@@ -1945,7 +1942,7 @@ export default function ProjectProcurement() {
                                 {canViewSensitiveDetail && (
                                   <td className="px-2 py-2 text-right tabular-nums text-foreground">{fmtCost(item.plannedUnitPrice ?? 0)}</td>
                                 )}
-                                {canLaunchOrderFlows && (
+                                {showProcurementActions && (
                                   <td className="px-2 py-2">
                                     <div className="flex justify-end">
                                       <Button
@@ -1953,7 +1950,7 @@ export default function ProjectProcurement() {
                                         size="sm"
                                         className="h-7"
                                         onClick={() => openCreateOrder([item.id])}
-                                        disabled={!canEdit || shouldBlockProcurementLaunchActions}
+                                        disabled={!canManageProcurement || shouldBlockProcurementLaunchActions}
                                       >
                                         Order
                                       </Button>
@@ -2013,7 +2010,7 @@ export default function ProjectProcurement() {
                         {`Supplier order #${orderNumber}`}
                       </span>
                     )}
-                    {order.supplierName && (
+                    {showSupplier && order.supplierName && (
                       <span className="text-xs text-muted-foreground truncate">{order.supplierName}</span>
                     )}
                     {canViewSensitiveDetail && (
@@ -2052,7 +2049,7 @@ export default function ProjectProcurement() {
                             if (!item) {
                               return (
                                 <tr key={line.id} className="border-b border-border/70 last:border-0 hover:bg-muted/20">
-                                  {canManageProcurement && (
+                                  {showProcurementActions && (
                                     <td className="px-2 py-2">
                                       <Checkbox checked={false} disabled />
                                     </td>
@@ -2099,7 +2096,7 @@ export default function ProjectProcurement() {
                                     </div>
                                   </td>
                                   <td className="px-2 py-2">{line.unit}</td>
-                                  {canManageProcurement && (
+                                  {showProcurementActions && (
                                     <td className="px-2 py-2">
                                       <div className="flex justify-end">
                                         <Button type="button" size="sm" className="h-7" disabled>
@@ -2114,7 +2111,7 @@ export default function ProjectProcurement() {
 
                             return (
                               <tr key={line.id} className="border-b border-border/70 last:border-0 hover:bg-muted/20">
-                                {canManageProcurement && (
+                                {showProcurementActions && (
                                   <td className="px-2 py-2">
                                     <Checkbox
                                       checked={selected}
@@ -2122,7 +2119,7 @@ export default function ProjectProcurement() {
                                         if (!receivableTarget) return;
                                         toggleSelectedOrderedLine(receivableTarget.selectionKey, !!checked);
                                       }}
-                                      disabled={!canEdit || !receivableTarget}
+                                      disabled={!canManageProcurement || !receivableTarget}
                                     />
                                   </td>
                                 )}
@@ -2222,7 +2219,7 @@ export default function ProjectProcurement() {
                                 {canViewSensitiveDetail && (
                                   <td className="px-2 py-2 text-right">{fmtCost(unitPrice * openQty)}</td>
                                 )}
-                                {canManageProcurement && (
+                                {showProcurementActions && (
                                   <td className="px-2 py-2">
                                     <div className="flex justify-end">
                                       <Button
@@ -2230,7 +2227,7 @@ export default function ProjectProcurement() {
                                         size="sm"
                                         className="h-7"
                                         onClick={() => receivableTarget && openReceiveItemsModal([receivableTarget])}
-                                        disabled={!canEdit || shouldBlockProcurementLaunchActions || !receivableTarget}
+                                        disabled={!canManageProcurement || shouldBlockProcurementLaunchActions || !receivableTarget}
                                       >
                                         Receive
                                       </Button>
@@ -2263,7 +2260,7 @@ export default function ProjectProcurement() {
                 <tbody>
                   {visibleInStockRows.map((row) => (
                     <tr key={row.key} className="border-b border-border/70 last:border-0 hover:bg-muted/20">
-                      {canManageProcurement && (
+                      {showProcurementActions && (
                         <td className="px-2 py-2">
                           <Checkbox
                             checked={selectedInStockRowKeys.has(row.key)}
@@ -2293,7 +2290,7 @@ export default function ProjectProcurement() {
                         <td className="px-2 py-2 text-xs text-muted-foreground">{row.receiverName ?? "—"}</td>
                       )}
                       <td className="px-2 py-2 text-xs text-muted-foreground">{formatDate(row.lastReceivedAt)}</td>
-                      {canManageProcurement && (
+                      {showProcurementActions && (
                         <td className="px-2 py-2">
                           <div className="flex items-center justify-end gap-1">
                             <Button
@@ -2311,7 +2308,7 @@ export default function ProjectProcurement() {
                               variant="ghost"
                               className="h-7"
                               onClick={() => handleRequestMore(row)}
-                              disabled={!canEdit}
+                              disabled={!canManageProcurement}
                             >
                               Request more
                             </Button>
