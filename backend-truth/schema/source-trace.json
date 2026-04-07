@@ -379,32 +379,18 @@
       "sourceMigration": "supabase/migrations/20260317121000_storage_upload_rpcs.sql"
     },
     {
-      "key": "public.prepare_document_upload",
-      "schema": "public",
-      "name": "prepare_document_upload",
-      "signature": "public.prepare_document_upload(uuid, text, text, text, text, bigint, text)",
-      "sourceMigration": "supabase/migrations/20260317133000_storage_bucket_config_table.sql"
-    },
-    {
       "key": "public.finalize_document_upload",
       "schema": "public",
       "name": "finalize_document_upload",
       "signature": "public.finalize_document_upload(uuid)",
-      "sourceMigration": "supabase/migrations/20260317121000_storage_upload_rpcs.sql"
-    },
-    {
-      "key": "public.prepare_project_media_upload",
-      "schema": "public",
-      "name": "prepare_project_media_upload",
-      "signature": "public.prepare_project_media_upload(uuid, text, text, text, bigint, text, uuid, boolean)",
-      "sourceMigration": "supabase/migrations/20260320110000_task_final_media_contract.sql"
+      "sourceMigration": "supabase/migrations/20260407190000_track4_upload_visibility_class.sql"
     },
     {
       "key": "public.finalize_project_media_upload",
       "schema": "public",
       "name": "finalize_project_media_upload",
       "signature": "public.finalize_project_media_upload(uuid, uuid, boolean)",
-      "sourceMigration": "supabase/migrations/20260323113000_finalize_media_bucket_ambiguity_fix.sql"
+      "sourceMigration": "supabase/migrations/20260407190000_track4_upload_visibility_class.sql"
     },
     {
       "key": "public.enforce_tasks_estimate_lineage_scope",
@@ -587,6 +573,20 @@
       "name": "can_access_hr_domain",
       "signature": "public.can_access_hr_domain(uuid)",
       "sourceMigration": "supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql"
+    },
+    {
+      "key": "public.prepare_document_upload",
+      "schema": "public",
+      "name": "prepare_document_upload",
+      "signature": "public.prepare_document_upload(uuid, text, text, text, text, bigint, text, text)",
+      "sourceMigration": "supabase/migrations/20260407190000_track4_upload_visibility_class.sql"
+    },
+    {
+      "key": "public.prepare_project_media_upload",
+      "schema": "public",
+      "name": "prepare_project_media_upload",
+      "signature": "public.prepare_project_media_upload(uuid, text, text, text, bigint, text, uuid, boolean, text)",
+      "sourceMigration": "supabase/migrations/20260407190000_track4_upload_visibility_class.sql"
     }
   ],
   "policies": [
@@ -1776,7 +1776,7 @@
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
         "supabase/migrations/20260317133000_storage_bucket_config_table.sql",
         "supabase/migrations/20260317121000_storage_upload_rpcs.sql",
-        "supabase/migrations/20260323113000_finalize_media_bucket_ambiguity_fix.sql",
+        "supabase/migrations/20260407190000_track4_upload_visibility_class.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260326213000_internal_visibility_write_boundary.sql"
       ],
@@ -1792,10 +1792,10 @@
         "public.can_access_storage_object",
         "public.prepare_project_media_upload",
         "public.finalize_project_media_upload",
-        "public.prepare_document_upload",
         "public.finalize_document_upload",
-        "public.prepare_project_media_upload",
-        "public.finalize_project_media_upload"
+        "public.finalize_project_media_upload",
+        "public.prepare_document_upload",
+        "public.prepare_project_media_upload"
       ],
       "policies": [
         "public.storage_objects.storage_objects_select",
