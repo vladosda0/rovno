@@ -8,9 +8,14 @@ import {
   getCurrentUser,
   getUserById,
 } from "@/data/store";
-import { useProjectDocumentMutations } from "@/hooks/use-documents-media-source";
+import { useProjectDocumentMutations, useMediaUploadMutations } from "@/hooks/use-documents-media-source";
 import { useWorkspaceMode } from "@/hooks/use-mock-data";
 import { useToast } from "@/hooks/use-toast";
+import { usePermission } from "@/lib/permissions";
+import {
+  canViewInternalDocuments,
+  effectiveInternalDocsVisibilityForSeam,
+} from "@/lib/internal-docs-visibility";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -23,6 +28,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -55,7 +62,7 @@ import {
   X,
 } from "lucide-react";
 import { ReceiveOrderPickerModal } from "@/components/procurement/ReceiveOrderPickerModal";
-import type { AIAccess, Member, MemberRole, Stage, Task, TaskStatus } from "@/types/entities";
+import type { AIAccess, DocMediaVisibilityClass, Member, MemberRole, Stage, Task, TaskStatus } from "@/types/entities";
 
 type ModalKey = "task" | "document" | "photo" | "credits";
 
@@ -109,7 +116,19 @@ export function QuickActions({
   const currentUser = getCurrentUser();
   const workspaceMode = useWorkspaceMode();
   const { createDocument } = useProjectDocumentMutations(projectId);
+  const {
+    prepareUpload: prepareMediaUpload,
+    uploadBytes: uploadMediaBytes,
+    finalizeUpload: finalizeMediaUpload,
+  } = useMediaUploadMutations(projectId);
   const isSupabaseMode = workspaceMode.kind === "supabase";
+  const perm = usePermission(projectId);
+
+  const effectiveInternalDocs = useMemo(
+    () => effectiveInternalDocsVisibilityForSeam(perm.seam.membership),
+    [perm.seam.membership],
+  );
+  const canSelectInternalUpload = canViewInternalDocuments(effectiveInternalDocs);
 
   const [openModal, setOpenModal] = useState<ModalKey | null>(null);
   const [discardModal, setDiscardModal] = useState<ModalKey | null>(null);
@@ -130,14 +149,25 @@ export function QuickActions({
   const [manualDocDescription, setManualDocDescription] = useState("");
   const [manualDocAi, setManualDocAi] = useState(false);
 
+  const [docVisibilityClass, setDocVisibilityClass] = useState<DocMediaVisibilityClass>("shared_project");
+
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoDescription, setPhotoDescription] = useState("");
   const [photoTaskId, setPhotoTaskId] = useState("");
   const [taskPickerOpen, setTaskPickerOpen] = useState(false);
   const [photoCreateTask, setPhotoCreateTask] = useState(false);
   const [photoTaskStageId, setPhotoTaskStageId] = useState(stages[0]?.id ?? "");
+  const [photoVisibilityClass, setPhotoVisibilityClass] = useState<DocMediaVisibilityClass>("shared_project");
+  const [photoUploading, setPhotoUploading] = useState(false);
 
   const [creditPack, setCreditPack] = useState<string>("100");
+
+  useEffect(() => {
+    if (!canSelectInternalUpload) {
+      if (docVisibilityClass === "internal") setDocVisibilityClass("shared_project");
+      if (photoVisibilityClass === "internal") setPhotoVisibilityClass("shared_project");
+    }
+  }, [canSelectInternalUpload, docVisibilityClass, photoVisibilityClass]);
 
   const memberOptions = useMemo(
     () => members.map((member) => ({ member, user: getUserById(member.user_id) })).filter((item) => !!item.user),
@@ -162,7 +192,8 @@ export function QuickActions({
         || manualDocTitle.trim()
         || manualDocDescription.trim()
         || manualDocAi
-        || documentMode !== "upload",
+        || documentMode !== "upload"
+        || docVisibilityClass !== "shared_project",
       );
     }
     if (modal === "photo") {
@@ -171,7 +202,8 @@ export function QuickActions({
         || photoDescription.trim()
         || photoTaskId
         || photoCreateTask
-        || photoTaskStageId !== (stages[0]?.id ?? ""),
+        || photoTaskStageId !== (stages[0]?.id ?? "")
+        || photoVisibilityClass !== "shared_project",
       );
     }
     return creditPack !== "100";
@@ -194,6 +226,7 @@ export function QuickActions({
     setManualDocTitle("");
     setManualDocDescription("");
     setManualDocAi(false);
+    setDocVisibilityClass("shared_project");
   };
 
   const resetPhotoForm = () => {
@@ -203,6 +236,8 @@ export function QuickActions({
     setPhotoCreateTask(false);
     setPhotoTaskStageId(stages[0]?.id ?? "");
     setTaskPickerOpen(false);
+    setPhotoVisibilityClass("shared_project");
+    setPhotoUploading(false);
   };
 
   const resetCreditsForm = () => {
@@ -296,6 +331,7 @@ export function QuickActions({
           origin: "uploaded",
           initialVersionContent: `Uploaded document placeholder for ${uploadedTitle}.`,
           initialVersionStatus: "draft",
+          visibilityClass: docVisibilityClass,
         });
 
         toast({
@@ -322,6 +358,7 @@ export function QuickActions({
       origin: documentMode === "manual" ? (manualDocAi ? "ai_generated" : "manual") : "uploaded",
       description: manualDocDescription.trim() || undefined,
       created_at: now,
+      visibility_class: docVisibilityClass,
       file_meta: {
         filename: documentFile?.name || `${manualTitle || "document"}.txt`,
         mime: documentFile?.type || "text/plain",
@@ -357,16 +394,14 @@ export function QuickActions({
     forceClose("document");
   };
 
-  const handleCreatePhoto = () => {
+  const handleCreatePhoto = async () => {
     if (!photoFile && !photoDescription.trim()) return;
 
-    // RBAC guard: prevent task creation via photo flow for read-only roles.
     if (photoCreateTask && !canCreateTask) {
       toast({ title: "Not allowed", description: "You don't have permission to create tasks." });
       setPhotoCreateTask(false);
       return;
     }
-
 
     let linkedTaskId = photoTaskId || undefined;
     if (photoCreateTask) {
@@ -391,6 +426,36 @@ export function QuickActions({
       linkedTaskId = taskId;
     }
 
+    if (isSupabaseMode) {
+      if (!photoFile) {
+        toast({ title: "Please select a file", variant: "destructive" });
+        return;
+      }
+      setPhotoUploading(true);
+      try {
+        const intent = await prepareMediaUpload({
+          mediaType: "photo",
+          clientFilename: photoFile.name,
+          mimeType: photoFile.type || "image/jpeg",
+          sizeBytes: photoFile.size,
+          caption: photoDescription.trim() || undefined,
+          visibilityClass: photoVisibilityClass,
+        });
+        await uploadMediaBytes(intent.bucket, intent.objectPath, photoFile);
+        await finalizeMediaUpload(intent.uploadIntentId);
+        toast({ title: "Photo uploaded" });
+        forceClose("photo");
+      } catch (error) {
+        setPhotoUploading(false);
+        toast({
+          title: "Photo upload failed",
+          description: error instanceof Error ? error.message : "Unable to upload the photo.",
+          variant: "destructive",
+        });
+      }
+      return;
+    }
+
     const mediaId = `media-${Date.now()}`;
     const caption = photoDescription.trim() || photoFile?.name || "Photo";
     addMedia({
@@ -402,6 +467,7 @@ export function QuickActions({
       description: photoDescription.trim() || undefined,
       is_final: false,
       created_at: new Date().toISOString(),
+      visibility_class: photoVisibilityClass,
       file_meta: {
         filename: photoFile?.name || "photo.jpg",
         mime: photoFile?.type || "image/jpeg",
@@ -731,6 +797,33 @@ export function QuickActions({
                 </label>
               </div>
             )}
+            <div className="space-y-2">
+              <Label className="text-body-sm font-medium text-foreground">Visibility</Label>
+              <RadioGroup
+                value={docVisibilityClass}
+                onValueChange={(v) => setDocVisibilityClass(v as DocMediaVisibilityClass)}
+                className="flex flex-col gap-2"
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="shared_project" id="qa-doc-vis-shared" />
+                  <Label htmlFor="qa-doc-vis-shared" className="font-normal cursor-pointer">Shared</Label>
+                </div>
+                <div className="flex items-start space-x-2">
+                  <RadioGroupItem value="internal" id="qa-doc-vis-internal" disabled={!canSelectInternalUpload} />
+                  <div>
+                    <Label
+                      htmlFor="qa-doc-vis-internal"
+                      className={`font-normal ${canSelectInternalUpload ? "cursor-pointer" : "text-muted-foreground"}`}
+                    >
+                      Internal
+                    </Label>
+                    {!canSelectInternalUpload && (
+                      <p className="text-caption text-muted-foreground">Not available for your internal-docs access.</p>
+                    )}
+                  </div>
+                </div>
+              </RadioGroup>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => requestClose("document")}>Close</Button>
@@ -841,15 +934,43 @@ export function QuickActions({
                 </Select>
               </div>
             )}
+            <div className="space-y-2">
+              <Label className="text-body-sm font-medium text-foreground">Visibility</Label>
+              <RadioGroup
+                value={photoVisibilityClass}
+                onValueChange={(v) => setPhotoVisibilityClass(v as DocMediaVisibilityClass)}
+                className="flex flex-col gap-2"
+                disabled={photoUploading}
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="shared_project" id="qa-photo-vis-shared" />
+                  <Label htmlFor="qa-photo-vis-shared" className="font-normal cursor-pointer">Shared</Label>
+                </div>
+                <div className="flex items-start space-x-2">
+                  <RadioGroupItem value="internal" id="qa-photo-vis-internal" disabled={!canSelectInternalUpload} />
+                  <div>
+                    <Label
+                      htmlFor="qa-photo-vis-internal"
+                      className={`font-normal ${canSelectInternalUpload ? "cursor-pointer" : "text-muted-foreground"}`}
+                    >
+                      Internal
+                    </Label>
+                    {!canSelectInternalUpload && (
+                      <p className="text-caption text-muted-foreground">Not available for your internal-docs access.</p>
+                    )}
+                  </div>
+                </div>
+              </RadioGroup>
+            </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => requestClose("photo")}>Close</Button>
+            <Button variant="outline" onClick={() => requestClose("photo")} disabled={photoUploading}>Close</Button>
             <Button
               className="bg-accent text-accent-foreground hover:bg-accent/90"
               onClick={handleCreatePhoto}
-              disabled={!photoFile && !photoDescription.trim()}
+              disabled={photoUploading || (isSupabaseMode ? !photoFile : (!photoFile && !photoDescription.trim()))}
             >
-              Upload
+              {photoUploading ? "Uploading…" : "Upload"}
             </Button>
           </DialogFooter>
         </DialogContent>

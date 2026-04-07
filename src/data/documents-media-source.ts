@@ -667,7 +667,7 @@ export async function prepareSupabaseDocumentUpload(
     p_size_bytes: input.sizeBytes,
     p_description: input.description ?? null,
     p_visibility_class: input.visibilityClass ?? "shared_project",
-  } as never);
+  });
 
   if (error) {
     throw error;
@@ -732,7 +732,7 @@ export async function prepareSupabaseMediaUpload(
     p_task_id: input.taskId ?? null,
     p_is_final: input.isFinal ?? false,
     p_visibility_class: input.visibilityClass ?? "shared_project",
-  } as never);
+  });
 
   const shouldRetryWithLegacyPrepareSignature = Boolean(
     error

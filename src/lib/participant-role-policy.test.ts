@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import type { AIAccess, MemberRole } from "@/types/entities";
 import {
+  describePermissionSummary,
   getDefaultFinanceVisibility,
   getInviteAiAccessOptions,
   getInviteRoleOptions,
   getNonStandardAccessSummary,
+  getPermissionWarnings,
   getReassignRoleOptions,
   hasNonStandardSupportedAccess,
+  internalDocsVisibilityLabels,
 } from "@/lib/participant-role-policy";
 
 function assertRolesEqual(actual: MemberRole[], expected: MemberRole[]) {
@@ -79,6 +82,35 @@ describe("participant-role-policy", () => {
     it("keeps co_owner and owner on detail defaults", () => {
       expect(getDefaultFinanceVisibility("co_owner")).toBe("detail");
       expect(getDefaultFinanceVisibility("owner")).toBe("detail");
+    });
+  });
+
+  describe("internal docs & media copy", () => {
+    it("labels mention docs & media, not docs alone", () => {
+      expect(internalDocsVisibilityLabels.none).toContain("docs & media");
+      expect(internalDocsVisibilityLabels.view).toContain("docs & media");
+      expect(internalDocsVisibilityLabels.edit).toContain("docs & media");
+    });
+
+    it("permission summary line mentions docs & media", () => {
+      const summary = describePermissionSummary({
+        role: "contractor",
+        aiAccess: "none",
+        internalDocsVisibility: "view",
+        creditLimit: 0,
+      });
+      const docsLine = summary.find((l) => l.startsWith("Internal docs"));
+      expect(docsLine).toContain("docs & media");
+    });
+
+    it("edit warning mentions documents and media", () => {
+      const warnings = getPermissionWarnings({
+        role: "contractor",
+        aiAccess: "none",
+        internalDocsVisibility: "edit",
+        creditLimit: 0,
+      });
+      expect(warnings.some((w) => w.includes("documents and media"))).toBe(true);
     });
   });
 

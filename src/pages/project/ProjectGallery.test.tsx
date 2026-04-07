@@ -155,6 +155,19 @@ describe("ProjectGallery", () => {
     expect(uploadButton).toBeDisabled();
   });
 
+  it("opens the upload dialog from the empty state action button", () => {
+    mockUseWorkspaceMode.mockReturnValue({ kind: "local" });
+    mockUseMedia.mockReturnValue([]);
+
+    renderProjectGallery();
+
+    expect(screen.getByText("No photos yet")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Upload a photo/i }));
+
+    expect(screen.getByText("Upload photos")).toBeInTheDocument();
+  });
+
   it("hides upload affordances for viewers", () => {
     mockUseWorkspaceMode.mockReturnValue({ kind: "local" });
     mockUsePermission.mockReturnValue(buildPermission("viewer"));

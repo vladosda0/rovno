@@ -412,7 +412,7 @@ function PermissionFormSections(props: {
           </div>
 
           <div className={`rounded-card border p-3 ${docsDanger ? "border-warning/40 bg-warning/10" : "border-border/70 bg-background/70"}`}>
-            <label className="text-caption font-medium text-foreground">Internal docs visibility</label>
+            <label className="text-caption font-medium text-foreground">Internal docs & media visibility</label>
             <Select
               value={form.internalDocsVisibility}
               onValueChange={(value) => {

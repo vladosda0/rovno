@@ -15,11 +15,8 @@ import { toast } from "@/hooks/use-toast";
 import { useMedia, useTasks, useWorkspaceMode } from "@/hooks/use-mock-data";
 import { useMediaUploadMutations } from "@/hooks/use-documents-media-source";
 import { trackEvent } from "@/lib/analytics";
-import {
-  getProjectDomainAccess,
-  projectDomainAllowsContribute,
-  usePermission,
-} from "@/lib/permissions";
+import { usePermission } from "@/lib/permissions";
+import { resolveActionState } from "@/lib/permission-contract-actions";
 import { addMedia, addEvent, getCurrentUser } from "@/data/store";
 import type { DocMediaVisibilityClass, Media as MediaType } from "@/types/entities";
 import { VisibilityClassBadge } from "@/components/documents/VisibilityClassBadge";
@@ -39,8 +36,7 @@ export default function ProjectGallery() {
   const user = getCurrentUser();
   const workspaceMode = useWorkspaceMode();
   const isSupabaseMode = workspaceMode.kind === "supabase";
-  const galleryAccess = getProjectDomainAccess(perm.seam, "gallery");
-  const canUploadPhotos = projectDomainAllowsContribute(galleryAccess);
+  const canUploadPhotos = resolveActionState(perm.role, "documents_media", "upload") === "enabled";
   const {
     prepareUpload,
     uploadBytes,
@@ -174,95 +170,95 @@ export default function ProjectGallery() {
     "bg-success/10", "bg-destructive/10",
   ];
 
-  if (photos.length === 0) {
-    return (
-      <ProjectWorkflowEmptyState
-        variant="gallery"
-        title="No photos yet"
-        description="Upload project photos to document progress."
-        actionLabel={canUploadPhotos ? "Upload a photo" : undefined}
-        onAction={canUploadPhotos ? () => setUploadOpen(true) : undefined}
-      />
-    );
-  }
+  const isEmpty = photos.length === 0;
 
   return (
-    <div className="space-y-sp-2">
-      {/* Header */}
-      <div className="glass-elevated rounded-card p-sp-2 flex items-center justify-between flex-wrap gap-2">
-        <div>
-          <h2 className="text-h3 text-foreground">Gallery</h2>
-          <p className="text-caption text-muted-foreground">
-            {photos.length} photos · {photos.filter((p) => p.is_final).length} final
-          </p>
-        </div>
-        {canUploadPhotos && (
-          <Button size="sm" onClick={() => setUploadOpen(true)} className="bg-accent text-accent-foreground hover:bg-accent/90">
-            <Upload className="h-4 w-4 mr-1.5" /> Upload
-          </Button>
-        )}
-      </div>
+    <>
+      {isEmpty ? (
+        <ProjectWorkflowEmptyState
+          variant="gallery"
+          title="No photos yet"
+          description="Upload project photos to document progress."
+          actionLabel={canUploadPhotos ? "Upload a photo" : undefined}
+          onAction={canUploadPhotos ? () => setUploadOpen(true) : undefined}
+        />
+      ) : (
+        <div className="space-y-sp-2">
+          {/* Header */}
+          <div className="glass-elevated rounded-card p-sp-2 flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <h2 className="text-h3 text-foreground">Gallery</h2>
+              <p className="text-caption text-muted-foreground">
+                {photos.length} photos · {photos.filter((p) => p.is_final).length} final
+              </p>
+            </div>
+            {canUploadPhotos && (
+              <Button size="sm" onClick={() => setUploadOpen(true)} className="bg-accent text-accent-foreground hover:bg-accent/90">
+                <Upload className="h-4 w-4 mr-1.5" /> Upload
+              </Button>
+            )}
+          </div>
 
-      {/* Filters */}
-      <div className="flex gap-1.5">
-        {(["all", "progress", "final"] as const).map((f) => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={`rounded-pill px-3 py-1 text-caption font-medium transition-colors border ${
-              filter === f
-                ? "bg-accent/10 text-accent border-accent/20"
-                : "bg-transparent text-muted-foreground border-border hover:bg-muted/50"
-            }`}
-          >
-            {f === "all" ? "All" : f === "final" ? "Final photos" : "In progress"}
-          </button>
-        ))}
-      </div>
-
-      {/* Grid */}
-      <div className="glass rounded-card p-sp-2">
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
-          {filtered.map((photo, idx) => {
-            const task = tasks.find((t) => t.id === photo.task_id);
-            return (
+          {/* Filters */}
+          <div className="flex gap-1.5">
+            {(["all", "progress", "final"] as const).map((f) => (
               <button
-                key={photo.id}
-                onClick={() => setViewPhoto(photo)}
-                className="group relative aspect-square rounded-lg overflow-hidden hover:ring-2 hover:ring-accent/40 transition-all"
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`rounded-pill px-3 py-1 text-caption font-medium transition-colors border ${
+                  filter === f
+                    ? "bg-accent/10 text-accent border-accent/20"
+                    : "bg-transparent text-muted-foreground border-border hover:bg-muted/50"
+                }`}
               >
-                <div className={`absolute inset-0 ${placeholderColors[idx % placeholderColors.length]} flex items-center justify-center`}>
-                  <Camera className="h-8 w-8 text-muted-foreground/30" />
-                </div>
-                {/* Overlay */}
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-background/80 to-transparent p-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <p className="text-caption text-foreground truncate">{photo.caption}</p>
-                  {task && <p className="text-[10px] text-muted-foreground truncate">{task.title}</p>}
-                </div>
-                <div className="absolute top-1.5 left-1.5 max-w-[calc(100%-2.5rem)]">
-                  <VisibilityClassBadge visibilityClass={photo.visibility_class} className="text-[10px] px-1.5 py-0" />
-                </div>
-                {photo.is_final && (
-                  <div className="absolute top-1.5 right-1.5 bg-accent rounded-full p-0.5">
-                    <Star className="h-3 w-3 text-accent-foreground" fill="currentColor" />
-                  </div>
-                )}
+                {f === "all" ? "All" : f === "final" ? "Final photos" : "In progress"}
               </button>
-            );
-          })}
+            ))}
+          </div>
+
+          {/* Grid */}
+          <div className="glass rounded-card p-sp-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+              {filtered.map((photo, idx) => {
+                const task = tasks.find((t) => t.id === photo.task_id);
+                return (
+                  <button
+                    key={photo.id}
+                    onClick={() => setViewPhoto(photo)}
+                    className="group relative aspect-square rounded-lg overflow-hidden hover:ring-2 hover:ring-accent/40 transition-all"
+                  >
+                    <div className={`absolute inset-0 ${placeholderColors[idx % placeholderColors.length]} flex items-center justify-center`}>
+                      <Camera className="h-8 w-8 text-muted-foreground/30" />
+                    </div>
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-background/80 to-transparent p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <p className="text-caption text-foreground truncate">{photo.caption}</p>
+                      {task && <p className="text-[10px] text-muted-foreground truncate">{task.title}</p>}
+                    </div>
+                    <div className="absolute top-1.5 left-1.5 max-w-[calc(100%-2.5rem)]">
+                      <VisibilityClassBadge visibilityClass={photo.visibility_class} className="text-[10px] px-1.5 py-0" />
+                    </div>
+                    {photo.is_final && (
+                      <div className="absolute top-1.5 right-1.5 bg-accent rounded-full p-0.5">
+                        <Star className="h-3 w-3 text-accent-foreground" fill="currentColor" />
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <PhotoViewer
+            photo={viewPhoto}
+            open={!!viewPhoto}
+            onOpenChange={(o) => !o && setViewPhoto(null)}
+            source="gallery"
+            allPhotos={photos}
+          />
         </div>
-      </div>
+      )}
 
-      {/* Unified Photo Viewer */}
-      <PhotoViewer
-        photo={viewPhoto}
-        open={!!viewPhoto}
-        onOpenChange={(o) => !o && setViewPhoto(null)}
-        source="gallery"
-        allPhotos={photos}
-      />
-
-      {/* Upload modal */}
+      {/* Upload modal — always mounted so empty-state action works */}
       <AlertDialog open={uploadOpen} onOpenChange={(open) => { if (!open) closeUploadDialog(); else setUploadOpen(true); }}>
         <AlertDialogContent className="bg-card border border-border shadow-xl rounded-modal">
           <AlertDialogHeader>
@@ -363,6 +359,6 @@ export default function ProjectGallery() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </>
   );
 }

@@ -33,9 +33,9 @@ export const financeVisibilityLabels: Record<FinanceVisibility, string> = {
 };
 
 export const internalDocsVisibilityLabels: Record<InternalDocsVisibility, string> = {
-  none: "No internal docs",
-  view: "View internal docs",
-  edit: "Edit internal docs",
+  none: "No internal docs & media",
+  view: "View internal docs & media",
+  edit: "Edit internal docs & media",
 };
 
 export const viewerRegimeLabels: Record<ViewerRegime, string> = {
@@ -123,7 +123,7 @@ export function describePermissionSummary(input: PermissionSummaryInput): string
     roleDescriptions[input.role],
     `AI: ${aiAccessLabels[input.aiAccess]}.`,
     `Finance: ${financeVisibilityLabels[input.financeVisibility ?? "none"]}.`,
-    `Internal docs: ${internalDocsVisibilityLabels[input.internalDocsVisibility ?? "none"]}.`,
+    `Internal docs & media: ${internalDocsVisibilityLabels[input.internalDocsVisibility ?? "none"]}.`,
     `Credit limit: ${input.creditLimit}.`,
   ];
 
@@ -165,7 +165,7 @@ export function getPermissionWarnings(input: PermissionSummaryInput): string[] {
   }
 
   if ((input.internalDocsVisibility ?? "none") === "edit") {
-    warnings.push("Edit access allows changing internal documents.");
+    warnings.push("Edit access allows changing internal documents and media.");
   }
 
   return warnings;
