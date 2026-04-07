@@ -9,9 +9,17 @@ import {
   seamCanViewSensitiveDetail,
   usePermission,
 } from "@/lib/permissions";
+import {
+  resolveActionState,
+  isActionEnabled,
+  actionStateToControlProps,
+  type ActionState,
+  type PermissionOverrides,
+} from "@/lib/permission-contract-actions";
+import { can } from "@/lib/permission-matrix";
 import { workspaceQueryKeys } from "@/hooks/use-workspace-source";
 import { authenticateRuntimeAuth } from "@/test/runtime-auth";
-import type { Member, User } from "@/types/entities";
+import type { Member, MemberRole, User } from "@/types/entities";
 import type { ProjectAuthoritySeam } from "@/lib/project-authority-seam";
 import {
   clearDemoSession,
@@ -272,5 +280,146 @@ describe("seamCanViewSensitiveDetail", () => {
     expect(seamCanViewSensitiveDetail(seam({
       membership: member({ role: "co_owner", finance_visibility: "detail" }),
     }))).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Track 3: Contract action state resolver — golden preset tables
+// ---------------------------------------------------------------------------
+
+describe("resolveActionState — procurement presets match contract", () => {
+  const roles: MemberRole[] = ["owner", "co_owner", "contractor", "viewer"];
+  const actions = ["order", "receive", "use_from_stock"] as const;
+
+  const expected: Record<string, Record<string, ActionState>> = {
+    owner:      { order: "enabled",          receive: "enabled",          use_from_stock: "enabled" },
+    co_owner:   { order: "enabled",          receive: "enabled",          use_from_stock: "enabled" },
+    contractor: { order: "disabled_visible", receive: "disabled_visible", use_from_stock: "disabled_visible" },
+    viewer:     { order: "hidden",           receive: "hidden",           use_from_stock: "hidden" },
+  };
+
+  for (const role of roles) {
+    for (const action of actions) {
+      it(`${role} / ${action} → ${expected[role][action]}`, () => {
+        expect(resolveActionState(role, "procurement", action)).toBe(expected[role][action]);
+      });
+    }
+  }
+});
+
+describe("resolveActionState — estimate presets match contract", () => {
+  const actions = ["edit_estimate_rows", "edit_estimate_structure", "export_csv"] as const;
+
+  const expected: Record<string, Record<string, ActionState>> = {
+    owner:      { edit_estimate_rows: "enabled", edit_estimate_structure: "enabled", export_csv: "enabled" },
+    co_owner:   { edit_estimate_rows: "enabled", edit_estimate_structure: "enabled", export_csv: "enabled" },
+    contractor: { edit_estimate_rows: "hidden",  edit_estimate_structure: "hidden",  export_csv: "hidden" },
+    viewer:     { edit_estimate_rows: "hidden",  edit_estimate_structure: "hidden",  export_csv: "hidden" },
+  };
+
+  for (const role of ["owner", "co_owner", "contractor", "viewer"] as MemberRole[]) {
+    for (const action of actions) {
+      it(`${role} / ${action} → ${expected[role][action]}`, () => {
+        expect(resolveActionState(role, "estimate", action)).toBe(expected[role][action]);
+      });
+    }
+  }
+});
+
+describe("resolveActionState — tasks presets match contract", () => {
+  const actions = ["change_status", "edit_checklist", "comment", "upload_document", "upload_media", "manage_tasks"] as const;
+
+  const expected: Record<string, Record<string, ActionState>> = {
+    owner:      { change_status: "enabled", edit_checklist: "enabled", comment: "enabled", upload_document: "enabled", upload_media: "enabled", manage_tasks: "enabled" },
+    co_owner:   { change_status: "enabled", edit_checklist: "enabled", comment: "enabled", upload_document: "enabled", upload_media: "enabled", manage_tasks: "enabled" },
+    contractor: { change_status: "enabled", edit_checklist: "enabled", comment: "enabled", upload_document: "enabled", upload_media: "enabled", manage_tasks: "hidden" },
+    viewer:     { change_status: "hidden",  edit_checklist: "hidden",  comment: "hidden",  upload_document: "hidden",  upload_media: "hidden",  manage_tasks: "hidden" },
+  };
+
+  for (const role of ["owner", "co_owner", "contractor", "viewer"] as MemberRole[]) {
+    for (const action of actions) {
+      it(`${role} / ${action} → ${expected[role][action]}`, () => {
+        expect(resolveActionState(role, "tasks", action)).toBe(expected[role][action]);
+      });
+    }
+  }
+});
+
+describe("resolveActionState — overrides take precedence over preset", () => {
+  it("returns override value when provided", () => {
+    const overrides: PermissionOverrides = {
+      procurement: { order: "enabled" },
+    };
+    expect(resolveActionState("contractor", "procurement", "order", overrides)).toBe("enabled");
+  });
+
+  it("falls back to preset when override is undefined", () => {
+    expect(resolveActionState("contractor", "procurement", "order", undefined)).toBe("disabled_visible");
+    expect(resolveActionState("contractor", "procurement", "order", {})).toBe("disabled_visible");
+  });
+});
+
+describe("isActionEnabled", () => {
+  it("returns true only for enabled state", () => {
+    expect(isActionEnabled("owner", "procurement", "order")).toBe(true);
+    expect(isActionEnabled("contractor", "procurement", "order")).toBe(false);
+    expect(isActionEnabled("viewer", "procurement", "order")).toBe(false);
+  });
+});
+
+describe("actionStateToControlProps", () => {
+  it("hidden → not visible", () => {
+    const props = actionStateToControlProps("hidden");
+    expect(props.visible).toBe(false);
+    expect(props.disabled).toBe(true);
+    expect(props.disabledReason).toBeUndefined();
+  });
+
+  it("disabled_visible → visible + disabled + reason", () => {
+    const props = actionStateToControlProps("disabled_visible", { disabledReason: "Not allowed" });
+    expect(props.visible).toBe(true);
+    expect(props.disabled).toBe(true);
+    expect(props.disabledReason).toBe("Not allowed");
+  });
+
+  it("disabled_visible → uses default reason when none provided", () => {
+    const props = actionStateToControlProps("disabled_visible");
+    expect(props.disabledReason).toBeDefined();
+  });
+
+  it("enabled → visible + interactive", () => {
+    const props = actionStateToControlProps("enabled");
+    expect(props.visible).toBe(true);
+    expect(props.disabled).toBe(false);
+    expect(props.disabledReason).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Track 3: Narrowed permission-matrix regression
+// ---------------------------------------------------------------------------
+
+describe("permission-matrix — narrowed contractor actions (Track 3)", () => {
+  it("contractor can still do task and document actions", () => {
+    expect(can("contractor", "task.create")).toBe(true);
+    expect(can("contractor", "task.edit")).toBe(true);
+    expect(can("contractor", "document.create")).toBe(true);
+  });
+
+  it("contractor AI access respects ai_access parameter", () => {
+    expect(can("contractor", "ai.generate", "consult_only")).toBe(true);
+    expect(can("contractor", "ai.generate", "none")).toBe(false);
+  });
+
+  it("viewer cannot do any legacy actions", () => {
+    expect(can("viewer", "ai.generate")).toBe(false);
+    expect(can("viewer", "task.create")).toBe(false);
+    expect(can("viewer", "member.invite")).toBe(false);
+  });
+
+  it("owner and co_owner can do all legacy actions", () => {
+    expect(can("owner", "ai.generate")).toBe(true);
+    expect(can("owner", "member.invite")).toBe(true);
+    expect(can("co_owner", "estimate.approve")).toBe(true);
   });
 });

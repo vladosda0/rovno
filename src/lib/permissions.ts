@@ -11,6 +11,13 @@ import {
   buildProjectAuthoritySeam,
   type ProjectAuthoritySeam,
 } from "@/lib/project-authority-seam";
+import {
+  resolveActionState,
+  type ActionState,
+  type ContractAction,
+  type ContractDomain,
+  type PermissionOverrides,
+} from "@/lib/permission-contract-actions";
 import { getAuthRole } from "@/lib/auth-state";
 import { getDefaultFinanceVisibility } from "@/lib/participant-role-policy";
 import type { FinanceVisibility, MemberRole } from "@/types/entities";
@@ -19,6 +26,8 @@ export type { Action } from "@/lib/permission-matrix";
 export { can, isOwnerOrCoOwner } from "@/lib/permission-matrix";
 export type { ProjectAuthoritySeam } from "@/lib/project-authority-seam";
 export { buildProjectAuthoritySeam } from "@/lib/project-authority-seam";
+export type { ActionState, ActionControlProps, ContractAction, ContractDomain, PermissionOverrides } from "@/lib/permission-contract-actions";
+export { resolveActionState, actionStateToControlProps } from "@/lib/permission-contract-actions";
 
 export type ProjectDomain =
   | "participants"
@@ -93,11 +102,31 @@ export function projectDomainAllowsRoute(
   return projectDomainAllowsView(getProjectDomainAccess(seam, domain));
 }
 
-/** UI and non-React callers (e.g. AI commit) should use this instead of re-lookup in the demo store alone. */
+/**
+ * UI and non-React callers (e.g. AI commit) should use this instead of re-lookup
+ * in the demo store alone.
+ *
+ * For legacy `Action` keys this delegates to the coarse `can()` matrix.
+ * Callers needing the full three-state result should use `seamResolveActionState` instead.
+ */
 export function seamAllowsAction(seam: ProjectAuthoritySeam, action: Action): boolean {
   const role = getProjectRole(seam);
   const aiAccess = seam.membership?.ai_access ?? "none";
   return can(role, action, aiAccess);
+}
+
+/**
+ * Resolve contract-defined action state (hidden / disabled_visible / enabled)
+ * from the authority seam. Accepts optional overrides for future Advanced permissions.
+ */
+export function seamResolveActionState(
+  seam: ProjectAuthoritySeam,
+  domain: ContractDomain,
+  action: ContractAction,
+  overrides?: PermissionOverrides,
+): ActionState {
+  const role = getProjectRole(seam);
+  return resolveActionState(role, domain, action as never, overrides);
 }
 
 /**
@@ -247,6 +276,9 @@ export function usePermission(projectId: string) {
   return {
     seam: effectiveSeam,
     can: (action: Action) => seamAllowsAction(effectiveSeam, action),
+    /** Resolve contract action state (hidden / disabled_visible / enabled). */
+    actionState: (domain: ContractDomain, action: ContractAction, overrides?: PermissionOverrides) =>
+      seamResolveActionState(effectiveSeam, domain, action, overrides),
     role: getProjectRole(effectiveSeam),
     isLoading: isMembersLoading || isProjectLoading,
   };

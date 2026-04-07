@@ -46,11 +46,13 @@ import { useProject, useProcurementV2 } from "@/hooks/use-mock-data";
 import { useOrders } from "@/hooks/use-order-data";
 import { useInventoryStock, useLocations } from "@/hooks/use-inventory-data";
 import {
+  actionStateToControlProps,
   getProjectDomainAccess,
   getProjectRole,
   projectDomainAllowsManage,
   seamCanViewOperationalFinanceSummary,
   seamCanViewSensitiveDetail,
+  seamResolveActionState,
   usePermission,
 } from "@/lib/permissions";
 import {
@@ -264,10 +266,26 @@ export default function ProjectProcurement() {
   const canViewOperationalFinanceSummary = seamCanViewOperationalFinanceSummary(perm.seam);
   const canManageProcurement = projectDomainAllowsManage(procurementAccess);
   const showSupplier = projectRole !== "viewer";
-  const showProcurementActions = canManageProcurement || projectRole === "contractor";
+
+  const orderActionState = seamResolveActionState(perm.seam, "procurement", "order");
+  const receiveActionState = seamResolveActionState(perm.seam, "procurement", "receive");
+  const useFromStockActionState = seamResolveActionState(perm.seam, "procurement", "use_from_stock");
+
+  const orderControl = actionStateToControlProps(orderActionState, { disabledReason: "You cannot place orders with your current role." });
+  const receiveControl = actionStateToControlProps(receiveActionState, { disabledReason: "You cannot receive orders with your current role." });
+  const useFromStockControl = actionStateToControlProps(useFromStockActionState, { disabledReason: "You cannot use stock with your current role." });
+
+  const showProcurementActions = orderControl.visible || receiveControl.visible || useFromStockControl.visible;
   const canEdit = canManageProcurement;
   const canLaunchOrderFlows = canManageProcurement && canViewSensitiveDetail;
   const canUseFromStock = canManageProcurement && !isSupabaseMode;
+  const useFromStockDisabledBySupabase = canManageProcurement && isSupabaseMode;
+  const useFromStockEffectiveDisabled = useFromStockControl.disabled || useFromStockDisabledBySupabase;
+  const useFromStockEffectiveReason = useFromStockControl.disabled
+    ? useFromStockControl.disabledReason
+    : useFromStockDisabledBySupabase
+      ? "Use from stock is not available yet in this version."
+      : undefined;
   const visibleTabs = TABS;
   const procurementSyncState = estimateSync.domains.procurement;
   const isProcurementSyncing = isSupabaseMode && procurementSyncState.status === "syncing";
@@ -278,6 +296,30 @@ export default function ProjectProcurement() {
     && !isProcurementSyncing
     && !hasProcurementSyncError;
   const shouldBlockProcurementLaunchActions = isProcurementProjectionBehind || hasProcurementSyncError;
+
+  if (import.meta.env.DEV) {
+    // eslint-disable-next-line no-console
+    console.debug("[ProcurementDebug]", {
+      projectRole,
+      isSupabaseMode,
+      estimateStatus: estimateState.project.estimateStatus,
+      syncDomainStatus: procurementSyncState.status,
+      syncLastError: procurementSyncState.lastError,
+      projectedRevision: procurementSyncState.projectedRevision,
+      estimateRevision: estimateSync.estimateRevision,
+      isProcurementSyncing,
+      hasProcurementSyncError,
+      isProcurementProjectionBehind,
+      shouldBlockProcurementLaunchActions,
+      canManageProcurement,
+      canLaunchOrderFlows,
+      canViewSensitiveDetail,
+      canUseFromStock,
+      orderDisabled: orderControl.disabled,
+      receiveDisabled: receiveControl.disabled,
+      useFromStockDisabled: useFromStockControl.disabled,
+    });
+  }
 
   const items = useMemo(() => {
     const workById = new Map(estimateState.works.map((work) => [work.id, work]));
@@ -1743,7 +1785,15 @@ export default function ProjectProcurement() {
                 size="sm"
                 className="h-8"
                 onClick={runSelectionPrimaryAction}
-                disabled={!canManageProcurement || shouldBlockProcurementLaunchActions || (isSupabaseMode && effectiveActiveTab === "in_stock")}
+                disabled={
+                  (effectiveActiveTab === "requested" ? orderControl.disabled
+                    : effectiveActiveTab === "ordered" ? receiveControl.disabled
+                      : useFromStockEffectiveDisabled)
+                  || shouldBlockProcurementLaunchActions
+                }
+                title={
+                  effectiveActiveTab === "in_stock" ? useFromStockEffectiveReason : undefined
+                }
               >
                 {selectionPrimaryLabel}
               </Button>
@@ -1808,7 +1858,7 @@ export default function ProjectProcurement() {
                                         <Checkbox
                                           checked={selected}
                                           onCheckedChange={(checked) => toggleSelected(item.id, !!checked)}
-                                          disabled={!canManageProcurement}
+                                          disabled={orderControl.disabled}
                                         />
                                       </td>
                                     )}
@@ -1857,7 +1907,8 @@ export default function ProjectProcurement() {
                                             size="sm"
                                             className="h-7"
                                             onClick={() => openCreateOrder([item.id])}
-                                            disabled={!canManageProcurement || shouldBlockProcurementLaunchActions}
+                                            disabled={orderControl.disabled || shouldBlockProcurementLaunchActions}
+                                            title={orderControl.disabledReason}
                                           >
                                             Order
                                           </Button>
@@ -1903,7 +1954,7 @@ export default function ProjectProcurement() {
                                     <Checkbox
                                       checked={selected}
                                       onCheckedChange={(checked) => toggleSelected(item.id, !!checked)}
-                                      disabled={!canManageProcurement}
+                                      disabled={orderControl.disabled}
                                     />
                                   </td>
                                 )}
@@ -1950,7 +2001,8 @@ export default function ProjectProcurement() {
                                         size="sm"
                                         className="h-7"
                                         onClick={() => openCreateOrder([item.id])}
-                                        disabled={!canManageProcurement || shouldBlockProcurementLaunchActions}
+                                        disabled={orderControl.disabled || shouldBlockProcurementLaunchActions}
+                                        title={orderControl.disabledReason}
                                       >
                                         Order
                                       </Button>
@@ -2119,7 +2171,7 @@ export default function ProjectProcurement() {
                                         if (!receivableTarget) return;
                                         toggleSelectedOrderedLine(receivableTarget.selectionKey, !!checked);
                                       }}
-                                      disabled={!canManageProcurement || !receivableTarget}
+                                      disabled={receiveControl.disabled || !receivableTarget}
                                     />
                                   </td>
                                 )}
@@ -2227,7 +2279,8 @@ export default function ProjectProcurement() {
                                         size="sm"
                                         className="h-7"
                                         onClick={() => receivableTarget && openReceiveItemsModal([receivableTarget])}
-                                        disabled={!canManageProcurement || shouldBlockProcurementLaunchActions || !receivableTarget}
+                                        disabled={receiveControl.disabled || shouldBlockProcurementLaunchActions || !receivableTarget}
+                                        title={receiveControl.disabledReason}
                                       >
                                         Receive
                                       </Button>
@@ -2265,7 +2318,8 @@ export default function ProjectProcurement() {
                           <Checkbox
                             checked={selectedInStockRowKeys.has(row.key)}
                             onCheckedChange={(checked) => toggleSelectedInStockRow(row.key, !!checked)}
-                            disabled={!canUseFromStock}
+                            disabled={useFromStockEffectiveDisabled}
+                            title={useFromStockEffectiveReason}
                           />
                         </td>
                       )}
@@ -2298,7 +2352,8 @@ export default function ProjectProcurement() {
                               size="sm"
                               className="h-7"
                               onClick={() => openUseFromStockModal([row])}
-                              disabled={!canUseFromStock}
+                              disabled={useFromStockEffectiveDisabled}
+                              title={useFromStockEffectiveReason}
                             >
                               Use
                             </Button>

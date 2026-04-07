@@ -3,6 +3,9 @@ import type { Member, Project } from "@/types/entities";
 /**
  * Canonical read model for project-scoped authority in the app shell.
  *
+ * Contract surface: docs/permissions.contract.json
+ * Discovery index: src/lib/permissions-contract-surfaces.ts
+ *
  * Sourced from workspace membership + project rows (Supabase queries or demo/local store).
  * Add fields only when they appear on generated `backend-truth` shapes consumed by mappers.
  *

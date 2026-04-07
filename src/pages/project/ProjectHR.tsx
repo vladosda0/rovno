@@ -33,7 +33,11 @@ import { useEstimateV2Project } from "@/hooks/use-estimate-v2-data";
 import { useProjectHRMutations } from "@/hooks/use-hr-source";
 import { useHRItems, useHRPayments, usePermission, useProject, useTasks } from "@/hooks/use-mock-data";
 import { useWorkspaceMode } from "@/hooks/use-workspace-source";
-import { seamCanViewSensitiveDetail } from "@/lib/permissions";
+import {
+  getProjectDomainAccess,
+  projectDomainAllowsManage,
+  seamCanViewSensitiveDetail,
+} from "@/lib/permissions";
 import { useToast } from "@/hooks/use-toast";
 import { getUserById } from "@/data/store";
 import { isDemoSessionActive } from "@/lib/auth-state";
@@ -134,9 +138,8 @@ export default function ProjectHR() {
   const hrPayments = useHRPayments(pid);
   const hrMutations = useProjectHRMutations(pid);
   const perm = usePermission(pid);
-  const { can } = perm;
   const workspaceMode = useWorkspaceMode();
-  const canEdit = can("hr.edit");
+  const canEdit = projectDomainAllowsManage(getProjectDomainAccess(perm.seam, "hr"));
   const canViewFinancialDetail = seamCanViewSensitiveDetail(perm.seam);
   const isDemoMode = isDemoSessionActive();
   const isSupabaseMode = workspaceMode.kind === "supabase";
