@@ -283,7 +283,8 @@ export default function ProjectProcurement() {
 
   const showProcurementActions = orderControl.visible || receiveControl.visible || useFromStockControl.visible;
   const canEdit = canManageProcurement;
-  const canLaunchOrderFlows = canManageProcurement && canViewSensitiveDetail;
+  const canLaunchOrderFlows = canManageProcurement
+    && (canViewSensitiveDetail || canViewOperationalFinanceSummary);
   const canUseFromStock = canManageProcurement && !isSupabaseMode;
   const useFromStockDisabledBySupabase = canManageProcurement && isSupabaseMode;
   const useFromStockEffectiveDisabled = useFromStockControl.disabled || useFromStockDisabledBySupabase;

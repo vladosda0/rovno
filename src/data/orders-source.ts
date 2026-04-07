@@ -416,6 +416,59 @@ async function loadSupabaseClient(): Promise<TypedSupabaseClient> {
   return supabase as unknown as TypedSupabaseClient;
 }
 
+function orderRowStatusAllowsOperationalLineHydration(status: OrderRow["status"]): boolean {
+  return status === "placed" || status === "partially_received" || status === "received";
+}
+
+/** When `order_lines` SELECT returns nothing (RLS for finance summary), use operational RPC line ids. */
+function syntheticOrderLineRowFromRpc(ol: ProcurementOperationalRpcOrderedLine): OrderLineRow {
+  return {
+    id: ol.order_line_id,
+    order_id: ol.order_id,
+    procurement_item_id: ol.procurement_item_id,
+    title: ol.title || ol.procurement_item_title || "Item",
+    quantity: ol.quantity,
+    unit: ol.unit,
+    unit_price_cents: null,
+    total_price_cents: null,
+    created_at: ol.created_at,
+  };
+}
+
+async function hydrateOrderLinesWhenSelectReturnsEmpty(
+  supabase: TypedSupabaseClient,
+  orderId: string,
+  projectId: string,
+  orderStatus: OrderRow["status"],
+  directLines: OrderLineRow[],
+): Promise<OrderLineRow[]> {
+  if (directLines.length > 0 || !orderRowStatusAllowsOperationalLineHydration(orderStatus)) {
+    return directLines;
+  }
+
+  const { data, error } = await supabase.rpc("get_procurement_operational_summary", {
+    p_project_id: projectId,
+    p_limit: 500,
+    p_offset: 0,
+  });
+
+  if (error || data == null) {
+    return directLines;
+  }
+
+  const parsed = parseProcurementOperationalSummaryPayload(data);
+  if (!parsed) {
+    return directLines;
+  }
+
+  const forOrder = parsed.orderedLines.filter((ol) => ol.order_id === orderId);
+  if (forOrder.length === 0) {
+    return directLines;
+  }
+
+  return forOrder.map(syntheticOrderLineRowFromRpc);
+}
+
 async function mergeOperationalSummaryLinesIntoOrders(
   supabase: TypedSupabaseClient,
   projectId: string,
@@ -556,6 +609,17 @@ async function loadShapedOrders(
   });
 
   const projectIdForRpc = options.projectId ?? shaped[0]?.projectId;
+  if (projectIdForRpc) {
+    const needsOperationalBackfill = shaped.some(
+      (order) => order.kind === "supplier"
+        && order.lines.length === 0
+        && (order.status === "placed" || order.status === "partially_received" || order.status === "received"),
+    );
+    if (needsOperationalBackfill) {
+      shaped = await mergeOperationalSummaryLinesIntoOrders(supabase, projectIdForRpc, shaped);
+    }
+  }
+
   if (financeLoadAccess === "operational_summary" && projectIdForRpc) {
     shaped = await mergeOperationalSummaryLinesIntoOrders(supabase, projectIdForRpc, shaped);
   }
@@ -610,7 +674,15 @@ async function loadOrderWithDetailsForMutation(
     throw linesError;
   }
 
-  const lines = lineRows ?? [];
+  let lines = lineRows ?? [];
+  lines = await hydrateOrderLinesWhenSelectReturnsEmpty(
+    supabase,
+    orderId,
+    orderRow.project_id,
+    orderRow.status,
+    lines,
+  );
+
   const procurementItemIds = Array.from(new Set(
     lines.flatMap((row) => row.procurement_item_id ? [row.procurement_item_id] : []),
   ));
