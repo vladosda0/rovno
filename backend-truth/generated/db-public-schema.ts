@@ -1164,6 +1164,16 @@ export const tables = {
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "internal_docs_visibility",
+          "sqlType": "text",
+          "tsType": "\"none\" | \"view\" | \"edit\"",
+          "nullable": false,
+          "defaultSql": "'none'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -1252,7 +1262,7 @@ export const tables = {
           "type": "check",
           "name": null,
           "columns": [
-            "finance_visibility"
+            "internal_docs_visibility"
           ],
           "expression": "internal_docs_visibility in ('none', 'view', 'edit')",
           "usingIndex": null,
@@ -1465,6 +1475,16 @@ export const tables = {
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "internal_docs_visibility",
+          "sqlType": "text",
+          "tsType": "\"none\" | \"view\" | \"edit\"",
+          "nullable": false,
+          "defaultSql": "'none'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -1552,7 +1572,7 @@ export const tables = {
           "type": "check",
           "name": null,
           "columns": [
-            "finance_visibility"
+            "internal_docs_visibility"
           ],
           "expression": "internal_docs_visibility in ('none', 'view', 'edit')",
           "usingIndex": null,

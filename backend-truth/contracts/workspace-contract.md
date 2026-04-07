@@ -148,6 +148,7 @@ Triggers:
 | `used_credits` | `integer` | no | `0` | no |
 | `joined_at` | `timestamptz` | no | `now()` | no |
 | `finance_visibility` | `text` | no | `'none'` | no |
+| `internal_docs_visibility` | `text` | no | `'none'` | no |
 
 Constraints:
 - unnamed check (expression `role in ('owner', 'co_owner', 'contractor', 'viewer')`)
@@ -186,6 +187,7 @@ Triggers:
 | `created_at` | `timestamptz` | no | `now()` | no |
 | `accepted_at` | `timestamptz` | yes |   | no |
 | `finance_visibility` | `text` | no | `'none'` | no |
+| `internal_docs_visibility` | `text` | no | `'none'` | no |
 
 Constraints:
 - unnamed check (expression `role in ('owner', 'co_owner', 'contractor', 'viewer')`)
