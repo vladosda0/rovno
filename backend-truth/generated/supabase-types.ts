@@ -198,6 +198,7 @@ export type Database = {
           "used_credits": number
           "joined_at": string
           "finance_visibility": "none" | "summary" | "detail"
+          "internal_docs_visibility": "none" | "view" | "edit"
           }
           Insert: {
           "id"?: string
@@ -210,6 +211,7 @@ export type Database = {
           "used_credits"?: number
           "joined_at"?: string
           "finance_visibility"?: "none" | "summary" | "detail"
+          "internal_docs_visibility"?: "none" | "view" | "edit"
           }
           Update: {
           "id"?: string
@@ -222,6 +224,7 @@ export type Database = {
           "used_credits"?: number
           "joined_at"?: string
           "finance_visibility"?: "none" | "summary" | "detail"
+          "internal_docs_visibility"?: "none" | "view" | "edit"
           }
           Relationships: []
         }
@@ -241,6 +244,7 @@ export type Database = {
           "created_at": string
           "accepted_at": string | null
           "finance_visibility": "none" | "summary" | "detail"
+          "internal_docs_visibility": "none" | "view" | "edit"
           }
           Insert: {
           "id"?: string
@@ -257,6 +261,7 @@ export type Database = {
           "created_at"?: string
           "accepted_at"?: string | null
           "finance_visibility"?: "none" | "summary" | "detail"
+          "internal_docs_visibility"?: "none" | "view" | "edit"
           }
           Update: {
           "id"?: string
@@ -273,6 +278,7 @@ export type Database = {
           "created_at"?: string
           "accepted_at"?: string | null
           "finance_visibility"?: "none" | "summary" | "detail"
+          "internal_docs_visibility"?: "none" | "view" | "edit"
           }
           Relationships: []
         }
