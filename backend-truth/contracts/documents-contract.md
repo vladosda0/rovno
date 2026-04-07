@@ -17,6 +17,7 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 - `supabase/migrations/20260407190000_track4_upload_visibility_class.sql`
 - `supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql`
 - `supabase/migrations/20260326213000_internal_visibility_write_boundary.sql`
+- `supabase/migrations/20260408100000_document_versions_insert_internal_visibility_parity.sql`
 
 ## Tables
 
@@ -235,8 +236,6 @@ Constraints:
 - RLS enabled: yes
 - Authenticated grants: `delete`, `insert`, `select`, `update`
 - Policies:
-  - `document_versions_insert` for `insert` to `authenticated`
-    with check: `created_by = auth.uid() and exists ( select 1 from public.documents d where d.id = document_id and public.can_write_project_content(d.project_id) )`
   - `document_versions_select` for `select` to `authenticated`
     using: `exists ( select 1 from public.documents d where d.id = document_id and public.can_access_project(d.project_id) and ( d.visibility_class = 'shared_project' or public.can_view_internal_documents(d.project_id) ) )`
   - `document_versions_update` for `update` to `authenticated`
@@ -244,6 +243,8 @@ Constraints:
     with check: `exists ( select 1 from public.documents d where d.id = document_id and public.can_write_project_content(d.project_id) and ( d.visibility_class = 'shared_project' or public.can_view_internal_documents(d.project_id) ) )`
   - `document_versions_delete` for `delete` to `authenticated`
     using: `exists ( select 1 from public.documents d where d.id = document_id and public.can_write_project_content(d.project_id) and ( d.visibility_class = 'shared_project' or public.can_view_internal_documents(d.project_id) ) )`
+  - `document_versions_insert` for `insert` to `authenticated`
+    with check: `created_by = auth.uid() and exists ( select 1 from public.documents d where d.id = document_id and public.can_write_project_content(d.project_id) and ( d.visibility_class = 'shared_project' or public.can_view_internal_documents(d.project_id) ) )`
 
 ### public.project_media
 

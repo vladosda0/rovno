@@ -183,6 +183,10 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260407190000_track4_upload_visibility_class.sql",
       "sha256": "a49bc51e10c4c389d8b08f63d79475cdf0beff2e12a903771a02dfc3c62afc00"
+    },
+    {
+      "path": "supabase/migrations/20260408100000_document_versions_insert_internal_visibility_parity.sql",
+      "sha256": "02f394428cd29d41569ab6834be2f2170c4fa0369684ead40ebe08ca5b7ef88d"
     }
   ],
   "generated_artifacts": [
@@ -251,6 +255,7 @@ export const manifest = {
     "sql/20260406184500_track1_hr_operational_summary_role_gate.sql",
     "sql/20260406200000_track1_estimate_operational_summary_finance_visibility.sql",
     "sql/20260407190000_track4_upload_visibility_class.sql",
+    "sql/20260408100000_document_versions_insert_internal_visibility_parity.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -11258,18 +11263,6 @@ export const rls = {
       ],
       "policies": [
         {
-          "name": "document_versions_insert",
-          "schema": "public",
-          "table": "document_versions",
-          "command": "insert",
-          "roles": [
-            "authenticated"
-          ],
-          "using": null,
-          "withCheck": "created_by = auth.uid()\n  and exists (\n    select 1\n    from public.documents d\n    where d.id = document_id\n      and public.can_write_project_content(d.project_id)\n  )",
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-        },
-        {
           "name": "document_versions_select",
           "schema": "public",
           "table": "document_versions",
@@ -11304,6 +11297,18 @@ export const rls = {
           "using": "exists (\n    select 1\n    from public.documents d\n    where d.id = document_id\n      and public.can_write_project_content(d.project_id)\n      and (\n        d.visibility_class = 'shared_project'\n        or public.can_view_internal_documents(d.project_id)\n      )\n  )",
           "withCheck": null,
           "sourceMigration": "supabase/migrations/20260326213000_internal_visibility_write_boundary.sql"
+        },
+        {
+          "name": "document_versions_insert",
+          "schema": "public",
+          "table": "document_versions",
+          "command": "insert",
+          "roles": [
+            "authenticated"
+          ],
+          "using": null,
+          "withCheck": "created_by = auth.uid()\n  and exists (\n    select 1\n    from public.documents d\n    where d.id = document_id\n      and public.can_write_project_content(d.project_id)\n      and (\n        d.visibility_class = 'shared_project'\n        or public.can_view_internal_documents(d.project_id)\n      )\n  )",
+          "sourceMigration": "supabase/migrations/20260408100000_document_versions_insert_internal_visibility_parity.sql"
         }
       ]
     },
@@ -13348,12 +13353,12 @@ export const sourceTrace = {
       "sourceMigration": "supabase/migrations/20260326213000_internal_visibility_write_boundary.sql"
     },
     {
-      "key": "public.document_versions.document_versions_insert",
+      "key": "public.document_versions.document_versions_select",
       "schema": "public",
       "table": "document_versions",
-      "name": "document_versions_insert",
-      "command": "insert",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+      "name": "document_versions_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
     },
     {
       "key": "public.document_versions.document_versions_select",
@@ -13378,6 +13383,14 @@ export const sourceTrace = {
       "name": "document_versions_delete",
       "command": "delete",
       "sourceMigration": "supabase/migrations/20260326213000_internal_visibility_write_boundary.sql"
+    },
+    {
+      "key": "public.document_versions.document_versions_insert",
+      "schema": "public",
+      "table": "document_versions",
+      "name": "document_versions_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260408100000_document_versions_insert_internal_visibility_parity.sql"
     },
     {
       "key": "public.project_media.project_media_insert",
@@ -14223,7 +14236,8 @@ export const sourceTrace = {
         "supabase/migrations/20260317121000_storage_upload_rpcs.sql",
         "supabase/migrations/20260407190000_track4_upload_visibility_class.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
-        "supabase/migrations/20260326213000_internal_visibility_write_boundary.sql"
+        "supabase/migrations/20260326213000_internal_visibility_write_boundary.sql",
+        "supabase/migrations/20260408100000_document_versions_insert_internal_visibility_parity.sql"
       ],
       "tables": [
         "public.storage_objects",
@@ -14248,10 +14262,10 @@ export const sourceTrace = {
         "public.documents.documents_select",
         "public.documents.documents_update",
         "public.documents.documents_delete",
-        "public.document_versions.document_versions_insert",
         "public.document_versions.document_versions_select",
         "public.document_versions.document_versions_update",
         "public.document_versions.document_versions_delete",
+        "public.document_versions.document_versions_insert",
         "public.project_media.project_media_insert",
         "public.project_media.project_media_select",
         "public.project_media.project_media_update",
@@ -14855,7 +14869,8 @@ export const slices = {
         "supabase/migrations/20260317121000_storage_upload_rpcs.sql",
         "supabase/migrations/20260407190000_track4_upload_visibility_class.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
-        "supabase/migrations/20260326213000_internal_visibility_write_boundary.sql"
+        "supabase/migrations/20260326213000_internal_visibility_write_boundary.sql",
+        "supabase/migrations/20260408100000_document_versions_insert_internal_visibility_parity.sql"
       ],
       "tableCount": 6,
       "functionCount": 7,

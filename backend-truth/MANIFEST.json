@@ -179,6 +179,10 @@
     {
       "path": "supabase/migrations/20260407190000_track4_upload_visibility_class.sql",
       "sha256": "a49bc51e10c4c389d8b08f63d79475cdf0beff2e12a903771a02dfc3c62afc00"
+    },
+    {
+      "path": "supabase/migrations/20260408100000_document_versions_insert_internal_visibility_parity.sql",
+      "sha256": "02f394428cd29d41569ab6834be2f2170c4fa0369684ead40ebe08ca5b7ef88d"
     }
   ],
   "generated_artifacts": [
@@ -247,6 +251,7 @@
     "sql/20260406184500_track1_hr_operational_summary_role_gate.sql",
     "sql/20260406200000_track1_estimate_operational_summary_finance_visibility.sql",
     "sql/20260407190000_track4_upload_visibility_class.sql",
+    "sql/20260408100000_document_versions_insert_internal_visibility_parity.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],

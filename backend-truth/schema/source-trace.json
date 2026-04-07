@@ -903,12 +903,12 @@
       "sourceMigration": "supabase/migrations/20260326213000_internal_visibility_write_boundary.sql"
     },
     {
-      "key": "public.document_versions.document_versions_insert",
+      "key": "public.document_versions.document_versions_select",
       "schema": "public",
       "table": "document_versions",
-      "name": "document_versions_insert",
-      "command": "insert",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+      "name": "document_versions_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
     },
     {
       "key": "public.document_versions.document_versions_select",
@@ -933,6 +933,14 @@
       "name": "document_versions_delete",
       "command": "delete",
       "sourceMigration": "supabase/migrations/20260326213000_internal_visibility_write_boundary.sql"
+    },
+    {
+      "key": "public.document_versions.document_versions_insert",
+      "schema": "public",
+      "table": "document_versions",
+      "name": "document_versions_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260408100000_document_versions_insert_internal_visibility_parity.sql"
     },
     {
       "key": "public.project_media.project_media_insert",
@@ -1778,7 +1786,8 @@
         "supabase/migrations/20260317121000_storage_upload_rpcs.sql",
         "supabase/migrations/20260407190000_track4_upload_visibility_class.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
-        "supabase/migrations/20260326213000_internal_visibility_write_boundary.sql"
+        "supabase/migrations/20260326213000_internal_visibility_write_boundary.sql",
+        "supabase/migrations/20260408100000_document_versions_insert_internal_visibility_parity.sql"
       ],
       "tables": [
         "public.storage_objects",
@@ -1803,10 +1812,10 @@
         "public.documents.documents_select",
         "public.documents.documents_update",
         "public.documents.documents_delete",
-        "public.document_versions.document_versions_insert",
         "public.document_versions.document_versions_select",
         "public.document_versions.document_versions_update",
         "public.document_versions.document_versions_delete",
+        "public.document_versions.document_versions_insert",
         "public.project_media.project_media_insert",
         "public.project_media.project_media_select",
         "public.project_media.project_media_update",
