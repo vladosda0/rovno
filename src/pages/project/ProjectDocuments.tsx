@@ -56,9 +56,9 @@ import {
 import {
   getProjectDomainAccess,
   projectDomainAllowsContribute,
-  projectDomainAllowsManage,
   usePermission,
 } from "@/lib/permissions";
+import { resolveActionState } from "@/lib/permission-contract-actions";
 import {
   addDocument,
   addDocumentVersion,
@@ -116,10 +116,10 @@ export default function ProjectDocuments() {
     finalizeUpload,
   } = useDocumentUploadMutations(pid);
   const isSupabaseMode = workspaceMode.kind === "supabase";
-  const documentsAccess = getProjectDomainAccess(perm.seam, "documents");
   const commentsAccess = getProjectDomainAccess(perm.seam, "comments");
-  const canManageDocuments = projectDomainAllowsManage(documentsAccess);
-  const canContributeDocuments = projectDomainAllowsContribute(documentsAccess);
+  const canUploadDocuments = resolveActionState(perm.role, "documents_media", "upload") === "enabled";
+  const canDeleteDocuments = resolveActionState(perm.role, "documents_media", "delete") === "enabled";
+  const canManageDocuments = resolveActionState(perm.role, "documents_media", "rename_or_archive") === "enabled";
   const canCommentOnDocuments = !isSupabaseMode && projectDomainAllowsContribute(commentsAccess);
 
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -568,7 +568,7 @@ export default function ProjectDocuments() {
             {documents.length > 0 && (
               <DocumentsViewModeToggle value={viewMode} onValueChange={setViewMode} />
             )}
-            {canContributeDocuments && (
+            {canUploadDocuments && (
               <div className="flex gap-1.5">
                 <Button size="sm" variant="outline" onClick={() => setUploadOpen(true)}>
                   <Upload className="h-4 w-4 mr-1.5" /> Upload
@@ -593,8 +593,8 @@ export default function ProjectDocuments() {
           description={isSupabaseMode
             ? "Upload a document to this project."
             : "Upload a document or generate one with AI."}
-          actionLabel={canContributeDocuments ? "Upload a document" : undefined}
-          onAction={canContributeDocuments ? () => setUploadOpen(true) : undefined}
+          actionLabel={canUploadDocuments ? "Upload a document" : undefined}
+          onAction={canUploadDocuments ? () => setUploadOpen(true) : undefined}
         />
       ) : (
         <>

@@ -345,6 +345,25 @@ describe("resolveActionState — tasks presets match contract", () => {
   }
 });
 
+describe("resolveActionState — documents_media presets match contract", () => {
+  const actions = ["upload", "delete", "rename_or_archive", "classify"] as const;
+
+  const expected: Record<string, Record<string, ActionState>> = {
+    owner:      { upload: "enabled", delete: "enabled", rename_or_archive: "enabled", classify: "enabled" },
+    co_owner:   { upload: "enabled", delete: "enabled", rename_or_archive: "enabled", classify: "enabled" },
+    contractor: { upload: "enabled", delete: "hidden",  rename_or_archive: "hidden",  classify: "hidden" },
+    viewer:     { upload: "hidden",  delete: "hidden",  rename_or_archive: "hidden",  classify: "hidden" },
+  };
+
+  for (const role of ["owner", "co_owner", "contractor", "viewer"] as MemberRole[]) {
+    for (const action of actions) {
+      it(`${role} / ${action} → ${expected[role][action]}`, () => {
+        expect(resolveActionState(role, "documents_media", action)).toBe(expected[role][action]);
+      });
+    }
+  }
+});
+
 describe("resolveActionState — overrides take precedence over preset", () => {
   it("returns override value when provided", () => {
     const overrides: PermissionOverrides = {

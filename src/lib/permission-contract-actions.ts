@@ -29,9 +29,18 @@ export type EstimateAction = "edit_estimate_rows" | "edit_estimate_structure" | 
 export type TaskAction = "change_status" | "edit_checklist" | "comment" | "upload_document" | "upload_media" | "manage_tasks";
 export type ProcurementAction = "order" | "receive" | "use_from_stock";
 
-export type ContractAction = EstimateAction | TaskAction | ProcurementAction;
+/**
+ * Documents/media actions derived from permissions.contract.json → domains.documents_media.
+ *
+ * `upload` = contribute-level (shared_project by default; internal gated separately
+ *   by `canViewInternalDocuments` at call sites — Option 1 keeps view/edit equivalent).
+ * `delete`, `rename_or_archive`, `classify` = manage-level.
+ */
+export type DocumentsMediaAction = "upload" | "delete" | "rename_or_archive" | "classify";
 
-export type ContractDomain = "estimate" | "tasks" | "procurement";
+export type ContractAction = EstimateAction | TaskAction | ProcurementAction | DocumentsMediaAction;
+
+export type ContractDomain = "estimate" | "tasks" | "procurement" | "documents_media";
 
 // ---------------------------------------------------------------------------
 // Preset tables — one-to-one with permissions.contract.json per_role.actions
@@ -58,16 +67,25 @@ const PROCUREMENT_PRESETS: Record<MemberRole, Record<ProcurementAction, ActionSt
   viewer:     { order: "hidden",           receive: "hidden",           use_from_stock: "hidden" },
 };
 
+const DOCUMENTS_MEDIA_PRESETS: Record<MemberRole, Record<DocumentsMediaAction, ActionState>> = {
+  owner:      { upload: "enabled", delete: "enabled", rename_or_archive: "enabled", classify: "enabled" },
+  co_owner:   { upload: "enabled", delete: "enabled", rename_or_archive: "enabled", classify: "enabled" },
+  contractor: { upload: "enabled", delete: "hidden",  rename_or_archive: "hidden",  classify: "hidden" },
+  viewer:     { upload: "hidden",  delete: "hidden",  rename_or_archive: "hidden",  classify: "hidden" },
+};
+
 type DomainPresetMap = {
   estimate: Record<MemberRole, Record<EstimateAction, ActionState>>;
   tasks: Record<MemberRole, Record<TaskAction, ActionState>>;
   procurement: Record<MemberRole, Record<ProcurementAction, ActionState>>;
+  documents_media: Record<MemberRole, Record<DocumentsMediaAction, ActionState>>;
 };
 
 const DOMAIN_PRESETS: DomainPresetMap = {
   estimate: ESTIMATE_PRESETS,
   tasks: TASK_PRESETS,
   procurement: PROCUREMENT_PRESETS,
+  documents_media: DOCUMENTS_MEDIA_PRESETS,
 };
 
 // ---------------------------------------------------------------------------
@@ -87,6 +105,7 @@ export type PermissionOverrides = {
   estimate?: Partial<Record<EstimateAction, ActionState>>;
   tasks?: Partial<Record<TaskAction, ActionState>>;
   procurement?: Partial<Record<ProcurementAction, ActionState>>;
+  documents_media?: Partial<Record<DocumentsMediaAction, ActionState>>;
 };
 
 // ---------------------------------------------------------------------------
@@ -109,6 +128,12 @@ export function resolveActionState(
   role: MemberRole,
   domain: "procurement",
   action: ProcurementAction,
+  overrides?: PermissionOverrides,
+): ActionState;
+export function resolveActionState(
+  role: MemberRole,
+  domain: "documents_media",
+  action: DocumentsMediaAction,
   overrides?: PermissionOverrides,
 ): ActionState;
 export function resolveActionState(

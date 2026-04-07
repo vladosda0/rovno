@@ -21,11 +21,11 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useToast } from "@/hooks/use-toast";
 import {
   getProjectDomainAccess,
-  projectDomainAllowsContribute,
   projectDomainAllowsManage,
   projectDomainAllowsView,
   seamCanViewSensitiveDetail,
 } from "@/lib/permissions";
+import { resolveActionState } from "@/lib/permission-contract-actions";
 import { Copy, Info, LayoutDashboard, MapPin } from "lucide-react";
 
 export default function ProjectDashboard() {
@@ -50,8 +50,6 @@ export default function ProjectDashboard() {
   const actorAiAccess = perm.seam.membership?.ai_access ?? "none";
   const participantsAccess = getProjectDomainAccess(perm.seam, "participants");
   const tasksAccess = getProjectDomainAccess(perm.seam, "tasks");
-  const documentsAccess = getProjectDomainAccess(perm.seam, "documents");
-  const galleryAccess = getProjectDomainAccess(perm.seam, "gallery");
   const procurementAccess = getProjectDomainAccess(perm.seam, "procurement");
   const canViewSensitiveDetail = seamCanViewSensitiveDetail(perm.seam);
 
@@ -69,8 +67,8 @@ export default function ProjectDashboard() {
   const progressPct = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
   const canManageParticipants = projectDomainAllowsManage(participantsAccess);
   const canManageTasks = projectDomainAllowsManage(tasksAccess);
-  const canContributeDocuments = projectDomainAllowsContribute(documentsAccess);
-  const canContributeGallery = projectDomainAllowsContribute(galleryAccess);
+  const canContributeDocuments = resolveActionState(perm.role, "documents_media", "upload") === "enabled";
+  const canContributeGallery = resolveActionState(perm.role, "documents_media", "upload") === "enabled";
   const canManageProcurement = projectDomainAllowsManage(procurementAccess);
 
   const handleCopyAddress = async () => {
