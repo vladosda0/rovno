@@ -1106,12 +1106,17 @@ function isOwnerActionAllowed(
   return role === "owner";
 }
 
-function isSubmissionActionAllowed(projectId: string): boolean {
+/** Owner or co-owner may edit/submit the shared estimate draft (matches submission gate). */
+function isOwnerOrCoOwnerProjectMember(projectId: string): boolean {
   const accessContext = accessContextByProjectId.get(projectId);
   if (accessContext?.mode === "supabase") {
+    if (!accessContext.profileId) return false;
+    if (accessContext.membershipRole === "owner" || accessContext.membershipRole === "co_owner") {
+      return true;
+    }
     return Boolean(
-      accessContext.profileId
-      && (accessContext.membershipRole === "owner" || accessContext.membershipRole === "co_owner"),
+      accessContext.projectOwnerProfileId
+      && accessContext.profileId === accessContext.projectOwnerProfileId,
     );
   }
 
@@ -1119,8 +1124,14 @@ function isSubmissionActionAllowed(projectId: string): boolean {
   if (authRole !== "owner" && authRole !== "co_owner") return false;
   const user = getCurrentUser();
   const membership = getMembers(projectId).find((member) => member.user_id === user.id);
-  if (!membership) return false;
+  if (!membership) {
+    return authRole === "owner" && isOwnerActionAllowed(projectId);
+  }
   return membership.role === "owner" || membership.role === "co_owner";
+}
+
+function isSubmissionActionAllowed(projectId: string): boolean {
+  return isOwnerOrCoOwnerProjectMember(projectId);
 }
 
 function normalizeProjectMode(value: string | null | undefined): ProjectMode {
@@ -1128,7 +1139,7 @@ function normalizeProjectMode(value: string | null | undefined): ProjectMode {
 }
 
 function canEditEstimateState(projectId: string, state: EstimateV2ProjectState): boolean {
-  if (!isOwnerActionAllowed(projectId)) return false;
+  if (!isOwnerOrCoOwnerProjectMember(projectId)) return false;
   if (state.project.regime === "client") return false;
   return true;
 }
