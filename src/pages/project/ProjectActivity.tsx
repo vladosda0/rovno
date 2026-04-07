@@ -1,6 +1,8 @@
 import { useParams } from "react-router-dom";
 import { useEvents } from "@/hooks/use-mock-data";
 import { getUserById } from "@/data/store";
+import { usePermission, seamCanViewSensitiveDetail } from "@/lib/permissions";
+import { getActivityDisplayDetail } from "@/lib/activity-display";
 import { EmptyState } from "@/components/EmptyState";
 import {
   Activity,
@@ -34,7 +36,10 @@ const typeIcons: Record<string, typeof Activity> = {
 
 export default function ProjectActivity() {
   const { id } = useParams<{ id: string }>();
-  const events = useEvents(id!);
+  const projectId = id!;
+  const events = useEvents(projectId);
+  const perm = usePermission(projectId);
+  const redactionCtx = { canViewFinanceDetail: seamCanViewSensitiveDetail(perm.seam) };
 
   if (events.length === 0) {
     return (
@@ -52,8 +57,7 @@ export default function ProjectActivity() {
       <div className="space-y-3">
         {events.map((evt) => {
           const actor = getUserById(evt.actor_id);
-          const payload = evt.payload as Record<string, unknown>;
-          const detail = (payload.title ?? payload.caption ?? payload.name ?? payload.text ?? "") as string;
+          const detail = getActivityDisplayDetail(evt, redactionCtx);
           const Icon = typeIcons[evt.type] ?? Activity;
           return (
             <div key={evt.id} className="flex items-start gap-3 glass rounded-card p-sp-2">
@@ -65,7 +69,7 @@ export default function ProjectActivity() {
                   <span className="font-medium text-foreground">{actor?.name ?? "Unknown"}</span>
                   <span className="text-muted-foreground"> {evt.type.replace(/[._]/g, " ")}</span>
                 </p>
-                {detail && <p className="text-caption text-muted-foreground truncate">{detail}</p>}
+                {detail ? <p className="text-caption text-muted-foreground truncate">{detail}</p> : null}
               </div>
               <span className="text-caption text-muted-foreground whitespace-nowrap">
                 {new Date(evt.timestamp).toLocaleDateString()}

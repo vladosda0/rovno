@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Dialog, DialogContent, DialogDescription, DialogTitle,
@@ -18,7 +18,14 @@ import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
   AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel,
 } from "@/components/ui/alert-dialog";
-import type { Task, TaskStatus, Media as MediaType } from "@/types/entities";
+import type { DocMediaVisibilityClass, Task, TaskStatus, Media as MediaType } from "@/types/entities";
+import { usePermission } from "@/lib/permissions";
+import {
+  canViewInternalDocuments,
+  effectiveInternalDocsVisibilityForSeam,
+} from "@/lib/internal-docs-visibility";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useMediaUploadMutations } from "@/hooks/use-documents-media-source";
 import { ResourceTypeBadge } from "@/components/estimate-v2/ResourceTypeBadge";
 import { format } from "date-fns";
@@ -87,7 +94,14 @@ export function TaskDetailModal({
 }: Props) {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { prepareUpload, uploadBytes, finalizeUpload } = useMediaUploadMutations(task?.project_id ?? "");
+  const projectId = task?.project_id ?? "";
+  const { prepareUpload, uploadBytes, finalizeUpload } = useMediaUploadMutations(projectId);
+  const perm = usePermission(projectId);
+  const effectiveInternalDocs = useMemo(
+    () => effectiveInternalDocsVisibilityForSeam(perm.seam.membership),
+    [perm.seam.membership],
+  );
+  const canSelectInternalUpload = canViewInternalDocuments(effectiveInternalDocs);
   const [commentText, setCommentText] = useState("");
   const [descDraft, setDescDraft] = useState("");
   const [newCheckItem, setNewCheckItem] = useState("");
@@ -95,6 +109,7 @@ export function TaskDetailModal({
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadCaption, setUploadCaption] = useState("");
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
+  const [uploadVisibilityClass, setUploadVisibilityClass] = useState<DocMediaVisibilityClass>("shared_project");
   const [uploading, setUploading] = useState(false);
   const [pendingChecklist, setPendingChecklist] = useState<{ itemId: string; nextDone: boolean } | null>(null);
   const [pendingChecklistItemIds, setPendingChecklistItemIds] = useState<Record<string, boolean>>({});
@@ -117,6 +132,12 @@ export function TaskDetailModal({
       setTitleDraft(taskTitle);
     }
   }, [taskId, taskDescription, taskTitle]);
+
+  useEffect(() => {
+    if (!canSelectInternalUpload && uploadVisibilityClass === "internal") {
+      setUploadVisibilityClass("shared_project");
+    }
+  }, [canSelectInternalUpload, uploadVisibilityClass]);
 
   // Close title editing when modal closes
   useEffect(() => {
@@ -646,6 +667,29 @@ export function TaskDetailModal({
               <label className="text-body-sm font-medium text-foreground">Caption (optional)</label>
               <Input value={uploadCaption} onChange={(e) => setUploadCaption(e.target.value)} placeholder="e.g. Kitchen wiring complete" />
             </div>
+            <div className="space-y-2">
+              <Label className="text-body-sm font-medium text-foreground">Visibility</Label>
+              <RadioGroup
+                value={uploadVisibilityClass}
+                onValueChange={(v) => setUploadVisibilityClass(v as DocMediaVisibilityClass)}
+                className="flex flex-col gap-2"
+                disabled={uploading}
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="shared_project" id="task-media-vis-shared" />
+                  <Label htmlFor="task-media-vis-shared" className="font-normal cursor-pointer">Shared</Label>
+                </div>
+                <div className="flex items-start space-x-2">
+                  <RadioGroupItem value="internal" id="task-media-vis-internal" disabled={!canSelectInternalUpload} />
+                  <Label
+                    htmlFor="task-media-vis-internal"
+                    className={`font-normal ${canSelectInternalUpload ? "cursor-pointer" : "text-muted-foreground"}`}
+                  >
+                    Internal
+                  </Label>
+                </div>
+              </RadioGroup>
+            </div>
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -668,6 +712,7 @@ export function TaskDetailModal({
                       caption: uploadCaption.trim() || undefined,
                       taskId: task.id,
                       isFinal: false,
+                      visibilityClass: uploadVisibilityClass,
                     });
                     await uploadBytes(intent.bucket, intent.objectPath, file);
                     await finalizeUpload(intent.uploadIntentId, { taskId: task.id, isFinal: false });
@@ -675,6 +720,7 @@ export function TaskDetailModal({
                   setUploadOpen(false);
                   setUploadCaption("");
                   setUploadFiles([]);
+                  setUploadVisibilityClass("shared_project");
                   toast({ title: "Photo uploaded" });
                 } catch (error) {
                   toast({

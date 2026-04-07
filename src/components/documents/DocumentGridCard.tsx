@@ -48,10 +48,10 @@ export function DocumentGridCard({
             <FileText className="h-4 w-4" />
           </div>
           <div className="min-w-0">
-            <p className={cn("text-body-sm font-medium leading-6", muted ? "text-muted-foreground" : "text-foreground")}>
+            <div className={cn("text-body-sm font-medium leading-6", muted ? "text-muted-foreground" : "text-foreground")}>
               {titleAdornment}
               <span className="break-words">{title}</span>
-            </p>
+            </div>
           </div>
         </div>
         {actions ? (

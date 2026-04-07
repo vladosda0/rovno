@@ -1,4 +1,6 @@
 import { useNavigate } from "react-router-dom";
+import { usePermission, seamCanViewSensitiveDetail } from "@/lib/permissions";
+import { getActivityDisplayDetail } from "@/lib/activity-display";
 import { getUserById } from "@/data/store";
 import type { Event } from "@/types/entities";
 import { isAIEvent } from "@/components/ai/event-utils";
@@ -67,9 +69,11 @@ interface EventFeedItemProps {
 
 export function EventFeedItem({ event, compact, highlighted }: EventFeedItemProps) {
   const navigate = useNavigate();
+  const perm = usePermission(event.project_id);
   const actor = getUserById(event.actor_id);
-  const payload = event.payload as Record<string, unknown>;
-  const detail = (payload.title ?? payload.caption ?? payload.text ?? payload.name ?? "") as string;
+  const detail = getActivityDisplayDetail(event, {
+    canViewFinanceDetail: seamCanViewSensitiveDetail(perm.seam),
+  });
   const route = getEventRoute(event);
   const isAiOrigin = isAIEvent(event);
   const Icon = isAiOrigin ? Bot : (typeIcons[event.type] ?? Activity);

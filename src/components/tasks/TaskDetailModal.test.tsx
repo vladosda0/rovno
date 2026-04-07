@@ -19,6 +19,33 @@ vi.mock("@/hooks/use-documents-media-source", () => ({
   }),
 }));
 
+vi.mock("@/lib/permissions", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/permissions")>("@/lib/permissions");
+  return {
+    ...actual,
+    usePermission: () => ({
+      seam: {
+        projectId: "project-1",
+        profileId: "user-1",
+        membership: {
+          project_id: "project-1",
+          user_id: "user-1",
+          role: "owner" as const,
+          ai_access: "consult_only",
+          finance_visibility: "detail",
+          credit_limit: 0,
+          used_credits: 0,
+        },
+        project: undefined,
+      },
+      role: "owner" as const,
+      can: () => true,
+      actionState: () => "enabled" as const,
+      isLoading: false,
+    }),
+  };
+});
+
 vi.mock("@/data/store", () => ({
   getUserById: (id: string) => {
     if (id === "user-1") return { id, name: "Crew Lead" };

@@ -22,7 +22,7 @@ export function DocumentListItem({
   muted = false,
 }: DocumentListItemProps) {
   const titleClassName = cn(
-    "min-w-0 text-body-sm font-medium truncate",
+    "min-w-0 text-body-sm font-medium truncate flex items-center gap-x-2",
     muted ? "text-muted-foreground" : "text-foreground",
     onOpen ? "hover:text-accent transition-colors" : "",
   );
@@ -32,15 +32,15 @@ export function DocumentListItem({
       <FileText className={cn("h-5 w-5 shrink-0", muted ? "text-muted-foreground/70" : "text-muted-foreground")} />
       <div className="min-w-0 flex-1">
         {onOpen ? (
-          <button type="button" onClick={onOpen} className={cn(titleClassName, "text-left")}>
+          <button type="button" onClick={onOpen} className={cn(titleClassName, "text-left w-full")}>
             {titleAdornment}
-            {title}
+            <span className="truncate">{title}</span>
           </button>
         ) : (
-          <p className={titleClassName}>
+          <div className={titleClassName}>
             {titleAdornment}
-            {title}
-          </p>
+            <span className="truncate">{title}</span>
+          </div>
         )}
         {details ? (
           <div className="mt-0.5 flex flex-wrap items-center gap-2">

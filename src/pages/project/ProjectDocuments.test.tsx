@@ -48,6 +48,7 @@ function createDocument(partial: Partial<Document> = {}): Document {
     project_id: "project-1",
     type: "specification",
     title: "Document One",
+    visibility_class: "shared_project",
     created_at: "2026-03-16T10:00:00.000Z",
     versions: [{
       id: "version-1",
@@ -221,7 +222,7 @@ describe("ProjectDocuments", () => {
 
     renderProjectDocuments();
 
-    fireEvent.click(screen.getByRole("button", { name: "Supabase Document" }));
+    fireEvent.click(screen.getByRole("button", { name: /Supabase Document/ }));
 
     expect(screen.getByRole("button", { name: "Print" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Download" })).toBeDisabled();

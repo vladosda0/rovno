@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { useParams } from "react-router-dom";
 import { trackEvent } from "@/lib/analytics";
@@ -36,9 +36,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { DocumentGridCard } from "@/components/documents/DocumentGridCard";
 import { DocumentListItem } from "@/components/documents/DocumentListItem";
+import { VisibilityClassBadge } from "@/components/documents/VisibilityClassBadge";
 import { DocumentsViewModeToggle, type DocumentViewMode } from "@/components/documents/DocumentsViewModeToggle";
 import { PreviewCard } from "@/components/ai/PreviewCard";
 import { ActionBar } from "@/components/ai/ActionBar";
@@ -62,7 +65,11 @@ import {
   addEvent,
   deleteDocument as deleteDocumentLocal,
 } from "@/data/store";
-import type { Document as DocType } from "@/types/entities";
+import type { DocMediaVisibilityClass, Document as DocType } from "@/types/entities";
+import {
+  canViewInternalDocuments,
+  effectiveInternalDocsVisibilityForSeam,
+} from "@/lib/internal-docs-visibility";
 import type { ProposalChange } from "@/types/ai";
 
 const DOCUMENT_DEFAULT_TYPE = "specification";
@@ -117,6 +124,7 @@ export default function ProjectDocuments() {
 
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadTitle, setUploadTitle] = useState("");
+  const [uploadVisibilityClass, setUploadVisibilityClass] = useState<DocMediaVisibilityClass>("shared_project");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [pendingFinalizeIntentId, setPendingFinalizeIntentId] = useState<string | null>(null);
@@ -131,6 +139,18 @@ export default function ProjectDocuments() {
   const [commentText, setCommentText] = useState("");
   const [viewMode, setViewMode] = useState<DocumentViewMode>("list");
 
+  const effectiveInternalDocs = useMemo(
+    () => effectiveInternalDocsVisibilityForSeam(perm.seam.membership),
+    [perm.seam.membership],
+  );
+  const canSelectInternalUpload = canViewInternalDocuments(effectiveInternalDocs);
+
+  useEffect(() => {
+    if (!canSelectInternalUpload && uploadVisibilityClass === "internal") {
+      setUploadVisibilityClass("shared_project");
+    }
+  }, [canSelectInternalUpload, uploadVisibilityClass]);
+
   const activeDocuments = documents.filter((document) => {
     const latestVersion = document.versions[document.versions.length - 1];
     return latestVersion?.status !== "archived";
@@ -143,6 +163,7 @@ export default function ProjectDocuments() {
   function closeUploadDialog() {
     setUploadOpen(false);
     setUploadTitle("");
+    setUploadVisibilityClass("shared_project");
     setUploadFile(null);
     setUploading(false);
     setPendingFinalizeIntentId(null);
@@ -160,6 +181,7 @@ export default function ProjectDocuments() {
         type: DOCUMENT_DEFAULT_TYPE,
         title,
         origin: "uploaded",
+        visibility_class: uploadVisibilityClass,
         versions: [{
           id: versionId,
           document_id: docId,
@@ -197,6 +219,7 @@ export default function ProjectDocuments() {
         clientFilename: uploadFile.name,
         mimeType: uploadFile.type || "application/octet-stream",
         sizeBytes: uploadFile.size,
+        visibilityClass: uploadVisibilityClass,
       });
 
       await uploadBytes(intent.bucket, intent.objectPath, uploadFile);
@@ -260,6 +283,7 @@ export default function ProjectDocuments() {
       type: DOCUMENT_DEFAULT_TYPE,
       title: generateTitle || "Generated document",
       origin: "ai_generated",
+      visibility_class: "shared_project",
       versions: [{
         id: versionId,
         document_id: docId,
@@ -479,6 +503,11 @@ export default function ProjectDocuments() {
             <DocumentGridCard
               key={document.id}
               title={document.title}
+              titleAdornment={(
+                <span className="inline-block mr-2 align-middle">
+                  <VisibilityClassBadge visibilityClass={document.visibility_class} />
+                </span>
+              )}
               onOpen={() => setViewDoc(document)}
               muted={archived}
               actions={archived ? (
@@ -500,6 +529,11 @@ export default function ProjectDocuments() {
             <DocumentListItem
               key={document.id}
               title={document.title}
+              titleAdornment={(
+                <span className="inline-block mr-2 align-middle">
+                  <VisibilityClassBadge visibilityClass={document.visibility_class} />
+                </span>
+              )}
               muted={archived}
               details={renderDocumentMeta(document, archived)}
               onOpen={() => setViewDoc(document)}
@@ -526,7 +560,7 @@ export default function ProjectDocuments() {
             </p>
             {isSupabaseMode && (
               <p className="text-caption text-muted-foreground mt-1">
-                Documents are stored securely. Sharing is coming soon.
+                Each file is labeled Shared (visible to the project) or Internal (restricted by workspace internal-docs rules enforced on the server).
               </p>
             )}
           </div>
@@ -630,6 +664,42 @@ export default function ProjectDocuments() {
                   : "Attach a file now, or create a placeholder document with a title only."}
               </p>
             </div>
+            <div className="space-y-2">
+              <Label className="text-body-sm font-medium text-foreground">Visibility</Label>
+              <RadioGroup
+                value={uploadVisibilityClass}
+                onValueChange={(v) => setUploadVisibilityClass(v as DocMediaVisibilityClass)}
+                className="flex flex-col gap-2"
+                disabled={uploading}
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="shared_project" id="doc-vis-shared" />
+                  <Label htmlFor="doc-vis-shared" className="font-normal cursor-pointer">
+                    Shared — visible to everyone on the project who can open documents
+                  </Label>
+                </div>
+                <div className="flex items-start space-x-2">
+                  <RadioGroupItem
+                    value="internal"
+                    id="doc-vis-internal"
+                    disabled={!canSelectInternalUpload}
+                  />
+                  <div className="grid gap-0.5">
+                    <Label
+                      htmlFor="doc-vis-internal"
+                      className={`font-normal ${canSelectInternalUpload ? "cursor-pointer" : "text-muted-foreground"}`}
+                    >
+                      Internal — only participants with internal document access (server-enforced)
+                    </Label>
+                    {!canSelectInternalUpload && (
+                      <p className="text-caption text-muted-foreground pl-0">
+                        Your role does not include internal document visibility for this project.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </RadioGroup>
+            </div>
           </div>
           <DialogFooter className="border-t border-border px-5 py-4">
             <Button variant="outline" onClick={closeUploadDialog} disabled={uploading}>Cancel</Button>
@@ -696,7 +766,10 @@ export default function ProjectDocuments() {
           {viewDoc && latestViewedVersion && (
             <>
               <DialogHeader className="border-b border-border px-5 py-4">
-                <DialogTitle>{viewDoc.title}</DialogTitle>
+                <div className="flex flex-wrap items-center gap-2">
+                  <DialogTitle className="flex-1 min-w-0">{viewDoc.title}</DialogTitle>
+                  <VisibilityClassBadge visibilityClass={viewDoc.visibility_class} />
+                </div>
                 <DialogDescription>
                   {viewedDocumentIsArchived ? "Archived document" : "Document preview"}
                 </DialogDescription>

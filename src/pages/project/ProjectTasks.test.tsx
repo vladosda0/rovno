@@ -31,6 +31,14 @@ vi.mock("@/hooks/use-documents-media-source", () => ({
   useMediaUploadMutations: mocks.useMediaUploadMutations,
 }));
 
+vi.mock("@/lib/permissions", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/permissions")>();
+  return {
+    ...actual,
+    usePermission: mocks.usePermission,
+  };
+});
+
 vi.mock("@/data/store", () => ({
   getUserById: (id: string) => (id === "user-1" ? { id, name: "Owner" } : null),
   getCurrentUser: () => ({ id: "user-1", name: "Owner" }),

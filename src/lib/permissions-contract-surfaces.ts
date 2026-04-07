@@ -7,6 +7,10 @@
  * when the permissions contract changes. It introduces no runtime behavior.
  *
  * When docs/permissions.contract.json is updated, audit the paths listed below.
+ *
+ * Track 4 (documents/media + activity): UI uses `internal-docs-visibility` and
+ * `activity-display` for presentation alignment with the contract. This is not
+ * full AI/tool hardening — server payloads and AI runtime policy are separate.
  */
 
 // ---------------------------------------------------------------------------

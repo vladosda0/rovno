@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,8 @@ import { useProjects, useCurrentUser } from "@/hooks/use-mock-data";
 import { useProjectsRecentEventsMap } from "@/hooks/use-activity-source";
 import * as store from "@/data/store";
 import { PendingInvitationsBlock } from "@/components/home/PendingInvitationsBlock";
+import { useWorkspaceProjectsSensitiveDetailMap } from "@/hooks/use-home-sensitive-detail-map";
+import { getActivityDisplayDetailForHome } from "@/lib/activity-display";
 
 function getStatusColor(progress: number): string {
   if (progress >= 100) return "bg-success/15 text-success";
@@ -46,6 +49,14 @@ export function OverviewTab() {
     projects.slice(0, 3).map((project) => project.id),
     2,
   );
+  const { canViewSensitiveDetailByProjectId } = useWorkspaceProjectsSensitiveDetailMap();
+  const activityRedactionByProject = useMemo(() => {
+    const record: Record<string, { canViewFinanceDetail: boolean }> = {};
+    for (const [pid, canView] of canViewSensitiveDetailByProjectId) {
+      record[pid] = { canViewFinanceDetail: canView };
+    }
+    return record;
+  }, [canViewSensitiveDetailByProjectId]);
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -221,12 +232,18 @@ export function OverviewTab() {
               <div className="space-y-1.5">
                 {projects.slice(0, 3).map((p) => {
                   const events = recentActivityByProject[p.id] ?? [];
-                  return events.map((evt) => (
-                    <div key={evt.id} className="flex items-center gap-2 p-1.5 text-caption text-muted-foreground">
-                      <span className="h-1.5 w-1.5 rounded-full bg-accent shrink-0" />
-                      <span className="truncate">{String(evt.payload?.title || evt.type)} — {p.title}</span>
-                    </div>
-                  ));
+                  return events.map((evt) => {
+                    const line = getActivityDisplayDetailForHome(evt, activityRedactionByProject, {
+                      canViewFinanceDetail: true,
+                    });
+                    const summary = line ?? evt.type.replace(/[._]/g, " ");
+                    return (
+                      <div key={evt.id} className="flex items-center gap-2 p-1.5 text-caption text-muted-foreground">
+                        <span className="h-1.5 w-1.5 rounded-full bg-accent shrink-0" />
+                        <span className="truncate">{summary} — {p.title}</span>
+                      </div>
+                    );
+                  });
                 })}
               </div>
             </CardContent>

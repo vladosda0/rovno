@@ -18,6 +18,8 @@ export type ProcurementItemType = "material" | "tool" | "other";
 export type OrderStatus = "draft" | "placed" | "received" | "voided";
 export type OrderKind = "supplier" | "stock";
 export type ChecklistItemType = "subtask" | "material" | "tool";
+/** Binary document/media visibility; matches DB `visibility_class` check constraint. */
+export type DocMediaVisibilityClass = "shared_project" | "internal";
 export type DocumentVersionStatus = "draft" | "active" | "archived" | "awaiting_approval";
 
 export type EventType =
@@ -94,6 +96,8 @@ export interface Member {
   viewer_regime?: ViewerRegime;
   ai_access: AIAccess;
   finance_visibility?: FinanceVisibility;
+  /** Mirrors `project_members.internal_docs_visibility` when hydrated from workspace. */
+  internal_docs_visibility?: InternalDocsVisibility;
   credit_limit: number;
   used_credits: number;
 }
@@ -344,6 +348,8 @@ export interface Document {
   origin?: "project_creation" | "uploaded" | "manual" | "ai_generated";
   description?: string;
   created_at?: string;
+  /** When absent (e.g. legacy mock rows), UI shows explicit fallback — not a finer ACL model. */
+  visibility_class?: DocMediaVisibilityClass;
   file_meta?: {
     filename: string;
     mime: string;
@@ -364,6 +370,8 @@ export interface Media {
   description?: string;
   is_final: boolean;
   created_at: string;
+  /** When absent (e.g. legacy mock rows), UI shows explicit fallback — not a finer ACL model. */
+  visibility_class?: DocMediaVisibilityClass;
   file_meta?: {
     filename: string;
     mime: string;

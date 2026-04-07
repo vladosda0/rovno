@@ -7,11 +7,9 @@ import type { Member, Project } from "@/types/entities";
  * Discovery index: src/lib/permissions-contract-surfaces.ts
  *
  * Sourced from workspace membership + project rows (Supabase queries or demo/local store).
- * Add fields only when they appear on generated `backend-truth` shapes consumed by mappers.
- *
- * Contract drift note: `internal_docs_visibility` exists in backend SQL and RPCs but is not yet
- * present on `project_members.Row` in `backend-truth/generated/supabase-types.ts`. Do not add it
- * to this seam until the generated mirror is regenerated from `rovno-db`.
+ * `Member.internal_docs_visibility` is hydrated by workspace mappers when present on rows;
+ * use `effectiveInternalDocsVisibilityForSeam` from `@/lib/internal-docs-visibility` for UI parity
+ * with `public.effective_internal_docs_visibility` (backend remains authoritative).
  */
 export interface ProjectAuthoritySeam {
   projectId: string;

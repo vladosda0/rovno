@@ -201,7 +201,7 @@ export function mapProjectMemberRowToMember(row: ProjectMemberRow): Member {
     ...(internalDocsVisibility !== undefined
       ? { internal_docs_visibility: internalDocsVisibility ?? undefined }
       : {}),
-  } as Member;
+  };
 }
 
 export function filterActiveProjectRows(rows: ProjectRow[]): ProjectRow[] {

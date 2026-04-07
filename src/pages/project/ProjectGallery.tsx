@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import {
   Upload, Camera, Star, X,
@@ -21,7 +21,14 @@ import {
   usePermission,
 } from "@/lib/permissions";
 import { addMedia, addEvent, getCurrentUser } from "@/data/store";
-import type { Media as MediaType } from "@/types/entities";
+import type { DocMediaVisibilityClass, Media as MediaType } from "@/types/entities";
+import { VisibilityClassBadge } from "@/components/documents/VisibilityClassBadge";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import {
+  canViewInternalDocuments,
+  effectiveInternalDocsVisibilityForSeam,
+} from "@/lib/internal-docs-visibility";
 
 export default function ProjectGallery() {
   const { id: projectId } = useParams<{ id: string }>();
@@ -45,9 +52,22 @@ export default function ProjectGallery() {
   const [uploadCaption, setUploadCaption] = useState("");
   const [uploadTaskId, setUploadTaskId] = useState("");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadVisibilityClass, setUploadVisibilityClass] = useState<DocMediaVisibilityClass>("shared_project");
   const [uploading, setUploading] = useState(false);
   const [pendingFinalizeIntentId, setPendingFinalizeIntentId] = useState<string | null>(null);
   const [viewPhoto, setViewPhoto] = useState<MediaType | null>(null);
+
+  const effectiveInternalDocs = useMemo(
+    () => effectiveInternalDocsVisibilityForSeam(perm.seam.membership),
+    [perm.seam.membership],
+  );
+  const canSelectInternalUpload = canViewInternalDocuments(effectiveInternalDocs);
+
+  useEffect(() => {
+    if (!canSelectInternalUpload && uploadVisibilityClass === "internal") {
+      setUploadVisibilityClass("shared_project");
+    }
+  }, [canSelectInternalUpload, uploadVisibilityClass]);
 
   const filtered = photos.filter((p) => {
     if (filter === "final") return p.is_final;
@@ -60,6 +80,7 @@ export default function ProjectGallery() {
     setUploadCaption("");
     setUploadTaskId("");
     setUploadFile(null);
+    setUploadVisibilityClass("shared_project");
     setUploading(false);
     setPendingFinalizeIntentId(null);
   }
@@ -75,6 +96,7 @@ export default function ProjectGallery() {
         caption: uploadCaption || "Photo",
         is_final: false,
         created_at: new Date().toISOString(),
+        visibility_class: uploadVisibilityClass,
       });
       addEvent({
         id: `evt-${Date.now()}`,
@@ -105,6 +127,7 @@ export default function ProjectGallery() {
         mimeType: uploadFile.type || "image/jpeg",
         sizeBytes: uploadFile.size,
         caption: uploadCaption || undefined,
+        visibilityClass: uploadVisibilityClass,
       });
 
       await uploadBytes(intent.bucket, intent.objectPath, uploadFile);
@@ -216,6 +239,9 @@ export default function ProjectGallery() {
                   <p className="text-caption text-foreground truncate">{photo.caption}</p>
                   {task && <p className="text-[10px] text-muted-foreground truncate">{task.title}</p>}
                 </div>
+                <div className="absolute top-1.5 left-1.5 max-w-[calc(100%-2.5rem)]">
+                  <VisibilityClassBadge visibilityClass={photo.visibility_class} className="text-[10px] px-1.5 py-0" />
+                </div>
                 {photo.is_final && (
                   <div className="absolute top-1.5 right-1.5 bg-accent rounded-full p-0.5">
                     <Star className="h-3 w-3 text-accent-foreground" fill="currentColor" />
@@ -269,6 +295,34 @@ export default function ProjectGallery() {
             <div className="space-y-1">
               <label className="text-body-sm font-medium text-foreground">Caption (optional)</label>
               <Input value={uploadCaption} onChange={(e) => setUploadCaption(e.target.value)} placeholder="e.g. Kitchen wiring complete" disabled={uploading} />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-body-sm font-medium text-foreground">Visibility</Label>
+              <RadioGroup
+                value={uploadVisibilityClass}
+                onValueChange={(v) => setUploadVisibilityClass(v as DocMediaVisibilityClass)}
+                className="flex flex-col gap-2"
+                disabled={uploading}
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="shared_project" id="gal-vis-shared" />
+                  <Label htmlFor="gal-vis-shared" className="font-normal cursor-pointer">Shared</Label>
+                </div>
+                <div className="flex items-start space-x-2">
+                  <RadioGroupItem value="internal" id="gal-vis-internal" disabled={!canSelectInternalUpload} />
+                  <div>
+                    <Label
+                      htmlFor="gal-vis-internal"
+                      className={`font-normal ${canSelectInternalUpload ? "cursor-pointer" : "text-muted-foreground"}`}
+                    >
+                      Internal
+                    </Label>
+                    {!canSelectInternalUpload && (
+                      <p className="text-caption text-muted-foreground">Not available for your internal-docs access.</p>
+                    )}
+                  </div>
+                </div>
+              </RadioGroup>
             </div>
             {!isSupabaseMode && (
               <div className="space-y-1">

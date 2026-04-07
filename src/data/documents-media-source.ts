@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import * as store from "@/data/store";
 import type { WorkspaceMode } from "@/data/workspace-source";
 import { resolveWorkspaceMode } from "@/data/workspace-source";
-import type { Document, DocumentVersion, Media, StorageObjectMeta } from "@/types/entities";
+import type { DocMediaVisibilityClass, Document, DocumentVersion, Media, StorageObjectMeta } from "@/types/entities";
 import type { Database as DocumentsMediaDatabase } from "../../backend-truth/generated/supabase-types";
 
 type DocumentRow = DocumentsMediaDatabase["public"]["Tables"]["documents"]["Row"];
@@ -22,6 +22,7 @@ export interface CreateProjectDocumentInput {
   description?: string;
   initialVersionContent?: string;
   initialVersionStatus?: DocumentVersion["status"];
+  visibilityClass?: DocMediaVisibilityClass;
 }
 
 export interface CreateProjectDocumentVersionInput {
@@ -56,6 +57,8 @@ export interface PrepareDocumentUploadInput {
   mimeType: string;
   sizeBytes: number;
   description?: string;
+  /** Defaults to shared_project when omitted (RPC default). */
+  visibilityClass?: DocMediaVisibilityClass;
 }
 
 export interface PrepareUploadResult {
@@ -86,6 +89,8 @@ export interface PrepareMediaUploadInput {
   caption?: string;
   taskId?: string;
   isFinal?: boolean;
+  /** Defaults to shared_project when omitted (RPC default). */
+  visibilityClass?: DocMediaVisibilityClass;
 }
 
 export interface FinalizeMediaUploadResult {
@@ -158,6 +163,7 @@ function createBrowserDocumentsMediaSource(mode: WorkspaceMode["kind"]): Documen
         origin: input.origin,
         description: input.description,
         created_at: now,
+        visibility_class: input.visibilityClass ?? "shared_project",
         versions: [{
           id: versionId,
           document_id: documentId,
@@ -312,6 +318,7 @@ export function mapDocumentRowToDocument(
     origin: row.origin ?? undefined,
     description: row.description ?? undefined,
     created_at: row.created_at,
+    visibility_class: row.visibility_class,
     file_meta: fileMeta,
     ai_flags: undefined,
   };
@@ -397,6 +404,7 @@ export function mapProjectMediaRowToMedia(
     description: undefined,
     is_final: row.is_final,
     created_at: row.created_at,
+    visibility_class: row.visibility_class,
     file_meta: fileMeta,
     storage,
   };
@@ -522,6 +530,7 @@ export async function createSupabaseProjectDocument(
     origin: input.origin ?? "manual",
     description: input.description ?? null,
     created_by: profileId,
+    visibility_class: input.visibilityClass ?? "shared_project",
   };
 
   const { error: documentError } = await supabase
@@ -657,7 +666,8 @@ export async function prepareSupabaseDocumentUpload(
     p_mime_type: input.mimeType,
     p_size_bytes: input.sizeBytes,
     p_description: input.description ?? null,
-  });
+    p_visibility_class: input.visibilityClass ?? "shared_project",
+  } as never);
 
   if (error) {
     throw error;
@@ -721,7 +731,8 @@ export async function prepareSupabaseMediaUpload(
     p_caption: input.caption ?? null,
     p_task_id: input.taskId ?? null,
     p_is_final: input.isFinal ?? false,
-  });
+    p_visibility_class: input.visibilityClass ?? "shared_project",
+  } as never);
 
   const shouldRetryWithLegacyPrepareSignature = Boolean(
     error

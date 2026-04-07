@@ -17,6 +17,7 @@ import { openPhotoConsult } from "@/lib/photo-consult-store";
 import { format } from "date-fns";
 import { useState } from "react";
 import type { Media as MediaType } from "@/types/entities";
+import { VisibilityClassBadge } from "@/components/documents/VisibilityClassBadge";
 
 const placeholderColors = [
   "bg-accent/10", "bg-info/10", "bg-warning/10", "bg-muted",
@@ -111,9 +112,12 @@ export function PhotoViewer({ photo, open, onOpenChange, source, allPhotos = [] 
               <span className="text-caption font-medium">Back</span>
             </button>
 
-            <h3 className="text-body-sm font-semibold text-foreground truncate max-w-[50%] text-center">
-              {photo.caption}
-            </h3>
+            <div className="flex flex-col items-center max-w-[50%] min-w-0 gap-1">
+              <h3 className="text-body-sm font-semibold text-foreground truncate w-full text-center">
+                {photo.caption}
+              </h3>
+              <VisibilityClassBadge visibilityClass={photo.visibility_class} className="text-[10px] px-1.5 py-0" />
+            </div>
 
             <div className="flex items-center gap-1">
               <button
