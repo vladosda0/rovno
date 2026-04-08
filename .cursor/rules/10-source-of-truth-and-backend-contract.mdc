@@ -22,5 +22,7 @@ Non-negotiable rules:
 - Backend changes belong in `rovno-db` first.
 - Frontend must adapt to backend truth through adapters/mappers, not by mutating the contract mirror.
 
+If any hand-edits to `backend-truth/` occurred, follow **`11-backend-truth-emergency-closeout`** before closing the task.
+
 If a requested feature needs backend fields, RPCs, storage rules, auth rules, or RLS behavior that do not exist in migrations or `backend-truth/`, stop and report that the backend contract is missing.
 Do not guess.

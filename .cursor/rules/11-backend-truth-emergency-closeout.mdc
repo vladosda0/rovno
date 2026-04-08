@@ -1,0 +1,32 @@
+---
+alwaysApply: true
+---
+
+# Backend-truth emergency hand-edit and mandatory closeout
+
+## Default
+
+- `backend-truth/` in this repo is **read-only** (see `10-source-of-truth-and-backend-contract.mdc`).
+- Prefer **stop and escalate** when the contract is wrong or stale rather than editing generated files.
+
+## Rare exception
+
+Hand-editing files under **`backend-truth/**`** is allowed **only** when there is **no** reasonable way to proceed in-session (for example generator or allowlist in `rovno-db` is blocked, or a migration cannot land yet) **and** the agent states in the same session:
+
+- what blocked progress
+- what was tried first (migrations, allowlist sync, asking to switch repo)
+- **exact paths** under `backend-truth/` that were touched
+
+This is an **unblock**, not a new source of truth.
+
+## Mandatory closeout before “done”
+
+If any hand-edit under **`backend-truth/**`** happened in this work session, you **must** complete all of the following before calling the task finished:
+
+1. **`rovno-db` (authoritative)** — Contract changes must live in committed migrations; **allowlist** aligned (`node scripts/sync-curated-migration-allowlist.mjs --write` or equivalent manual update / `curated-migration-exclusions.mjs` when intentional); **`SLICE_CONFIG` `functions`** in `generate-backend-truth.mjs` updated when new **`public`** slice RPCs require it; **`node scripts/verify-curated-migrations.mjs`** and **`node --test scripts/test-backend-truth-generator.mjs`** pass.
+2. **This repo (`rovno`)** — **Revert or discard** every session hand-edit under `backend-truth/**` (for example `git restore` paths or restore to `HEAD`). The working tree must **not** keep manual contract drift. Do **not** run local `generate-backend-truth.mjs --target …/backend-truth` to “fix” the mirror here; the official consumer refresh is the **GitHub sync PR** after `rovno-db` merges to `dev`.
+3. **Handoff (required)** — Summarize for the human: what was hand-edited and why; what was fixed in `rovno-db`; which verification commands were run; that `backend-truth/` hand-edits were reverted and **sync PR** is the next step for types/JSON parity with the new migrations.
+
+## Stop condition
+
+Do **not** mark work complete if `backend-truth/` still contains those session hand-edits, or if `rovno-db` verify / generator tests are failing.
