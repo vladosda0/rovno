@@ -644,6 +644,8 @@ export type Database = {
           "client_unit_price_cents": number | null
           "client_total_price_cents": number | null
           "discounted_client_total_price_cents": number | null
+          "markup_bps": number | null
+          "discount_bps_override": number | null
           }
           Insert: {
           "id"?: string
@@ -658,6 +660,8 @@ export type Database = {
           "client_unit_price_cents"?: number | null
           "client_total_price_cents"?: number | null
           "discounted_client_total_price_cents"?: number | null
+          "markup_bps"?: number | null
+          "discount_bps_override"?: number | null
           }
           Update: {
           "id"?: string
@@ -672,6 +676,8 @@ export type Database = {
           "client_unit_price_cents"?: number | null
           "client_total_price_cents"?: number | null
           "discounted_client_total_price_cents"?: number | null
+          "markup_bps"?: number | null
+          "discount_bps_override"?: number | null
           }
           Relationships: []
         }

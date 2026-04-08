@@ -640,6 +640,26 @@
     },
     {
       "schema": "public",
+      "table": "estimate_resource_lines",
+      "column": "markup_bps",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "markup_bps is null or (markup_bps >= 0 and markup_bps <= 10000)",
+      "sourceMigration": "supabase/migrations/20260408120000_estimate_line_pricing_params.sql"
+    },
+    {
+      "schema": "public",
+      "table": "estimate_resource_lines",
+      "column": "discount_bps_override",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "discount_bps_override is null or (discount_bps_override >= 0 and discount_bps_override <= 10000)",
+      "sourceMigration": "supabase/migrations/20260408120000_estimate_line_pricing_params.sql"
+    },
+    {
+      "schema": "public",
       "table": "estimate_dependencies",
       "column": "dependency_type",
       "constraintName": null,

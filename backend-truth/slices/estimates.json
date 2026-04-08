@@ -579,6 +579,26 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "markup_bps",
+          "sqlType": "integer",
+          "tsType": "number",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "discount_bps_override",
+          "sqlType": "integer",
+          "tsType": "number",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -651,6 +671,26 @@
           "expression": "discounted_client_total_price_cents is null\n    or discounted_client_total_price_cents >= 0",
           "usingIndex": null,
           "sourceMigration": "supabase/migrations/20260406200000_track1_estimate_operational_summary_finance_visibility.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "markup_bps"
+          ],
+          "expression": "markup_bps is null or (markup_bps >= 0 and markup_bps <= 10000)",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260408120000_estimate_line_pricing_params.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "discount_bps_override"
+          ],
+          "expression": "discount_bps_override is null or (discount_bps_override >= 0 and discount_bps_override <= 10000)",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260408120000_estimate_line_pricing_params.sql"
         }
       ],
       "indexes": [

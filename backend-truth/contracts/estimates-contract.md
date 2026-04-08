@@ -102,6 +102,8 @@ Triggers:
 | `client_unit_price_cents` | `bigint` | yes |   | no |
 | `client_total_price_cents` | `bigint` | yes |   | no |
 | `discounted_client_total_price_cents` | `bigint` | yes |   | no |
+| `markup_bps` | `integer` | yes |   | no |
+| `discount_bps_override` | `integer` | yes |   | no |
 
 Constraints:
 - unnamed check (expression `quantity >= 0`)
@@ -111,6 +113,8 @@ Constraints:
 - unnamed check (expression `client_total_price_cents is null or client_total_price_cents >= 0`)
 - `estimate_resource_lines_resource_type_check` check (expression `resource_type in ('material', 'labor', 'subcontractor', 'equipment', 'other')`)
 - unnamed check (expression `discounted_client_total_price_cents is null or discounted_client_total_price_cents >= 0`)
+- unnamed check (expression `markup_bps is null or (markup_bps >= 0 and markup_bps <= 10000)`)
+- unnamed check (expression `discount_bps_override is null or (discount_bps_override >= 0 and discount_bps_override <= 10000)`)
 
 Indexes:
 - `idx_estimate_resource_lines_estimate_work_id` on (`estimate_work_id`)

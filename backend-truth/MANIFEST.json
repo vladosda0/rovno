@@ -183,6 +183,10 @@
     {
       "path": "supabase/migrations/20260408100000_document_versions_insert_internal_visibility_parity.sql",
       "sha256": "02f394428cd29d41569ab6834be2f2170c4fa0369684ead40ebe08ca5b7ef88d"
+    },
+    {
+      "path": "supabase/migrations/20260408120000_estimate_line_pricing_params.sql",
+      "sha256": "51b4bfc61c3438eb68687fbd039835e43001dbbc2c3c823f84f3e8ab579741ba"
     }
   ],
   "generated_artifacts": [
@@ -252,6 +256,7 @@
     "sql/20260406200000_track1_estimate_operational_summary_finance_visibility.sql",
     "sql/20260407190000_track4_upload_visibility_class.sql",
     "sql/20260408100000_document_versions_insert_internal_visibility_parity.sql",
+    "sql/20260408120000_estimate_line_pricing_params.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],

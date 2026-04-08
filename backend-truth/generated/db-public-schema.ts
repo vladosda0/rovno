@@ -187,6 +187,10 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260408100000_document_versions_insert_internal_visibility_parity.sql",
       "sha256": "02f394428cd29d41569ab6834be2f2170c4fa0369684ead40ebe08ca5b7ef88d"
+    },
+    {
+      "path": "supabase/migrations/20260408120000_estimate_line_pricing_params.sql",
+      "sha256": "51b4bfc61c3438eb68687fbd039835e43001dbbc2c3c823f84f3e8ab579741ba"
     }
   ],
   "generated_artifacts": [
@@ -256,6 +260,7 @@ export const manifest = {
     "sql/20260406200000_track1_estimate_operational_summary_finance_visibility.sql",
     "sql/20260407190000_track4_upload_visibility_class.sql",
     "sql/20260408100000_document_versions_insert_internal_visibility_parity.sql",
+    "sql/20260408120000_estimate_line_pricing_params.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -3340,6 +3345,26 @@ export const tables = {
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "markup_bps",
+          "sqlType": "integer",
+          "tsType": "number",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "discount_bps_override",
+          "sqlType": "integer",
+          "tsType": "number",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -3412,6 +3437,26 @@ export const tables = {
           "expression": "discounted_client_total_price_cents is null\n    or discounted_client_total_price_cents >= 0",
           "usingIndex": null,
           "sourceMigration": "supabase/migrations/20260406200000_track1_estimate_operational_summary_finance_visibility.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "markup_bps"
+          ],
+          "expression": "markup_bps is null or (markup_bps >= 0 and markup_bps <= 10000)",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260408120000_estimate_line_pricing_params.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "discount_bps_override"
+          ],
+          "expression": "discount_bps_override is null or (discount_bps_override >= 0 and discount_bps_override <= 10000)",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260408120000_estimate_line_pricing_params.sql"
         }
       ],
       "indexes": [
@@ -8916,6 +8961,26 @@ export const checks = {
     },
     {
       "schema": "public",
+      "table": "estimate_resource_lines",
+      "column": "markup_bps",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "markup_bps is null or (markup_bps >= 0 and markup_bps <= 10000)",
+      "sourceMigration": "supabase/migrations/20260408120000_estimate_line_pricing_params.sql"
+    },
+    {
+      "schema": "public",
+      "table": "estimate_resource_lines",
+      "column": "discount_bps_override",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "discount_bps_override is null or (discount_bps_override >= 0 and discount_bps_override <= 10000)",
+      "sourceMigration": "supabase/migrations/20260408120000_estimate_line_pricing_params.sql"
+    },
+    {
+      "schema": "public",
       "table": "estimate_dependencies",
       "column": "dependency_type",
       "constraintName": null,
@@ -13351,14 +13416,6 @@ export const sourceTrace = {
       "name": "documents_delete",
       "command": "delete",
       "sourceMigration": "supabase/migrations/20260326213000_internal_visibility_write_boundary.sql"
-    },
-    {
-      "key": "public.document_versions.document_versions_select",
-      "schema": "public",
-      "table": "document_versions",
-      "name": "document_versions_select",
-      "command": "select",
-      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
     },
     {
       "key": "public.document_versions.document_versions_select",
