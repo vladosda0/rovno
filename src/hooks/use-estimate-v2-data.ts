@@ -30,6 +30,9 @@ import type { EstimateV2Version } from "@/types/estimate-v2";
 
 export const EMPTY_ESTIMATE_V2_PROJECT_SYNC_STATE: EstimateV2ProjectSyncState = {
   estimateRevision: null,
+  draftSaveStatus: "idle",
+  draftSaveLastSucceededAt: null,
+  draftSaveLastError: null,
   domains: {
     tasks: {
       status: "idle",

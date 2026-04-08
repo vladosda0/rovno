@@ -23,7 +23,7 @@ const PROJECT_ESTIMATE_SELECT = "id, project_id, title, description, status, cre
 const ESTIMATE_VERSION_SELECT = "id, estimate_id, version_number, is_current, created_by, created_at";
 const PROJECT_STAGE_SELECT = "id, project_id, title, description, sort_order, status, discount_bps, created_at, updated_at";
 const ESTIMATE_WORK_SELECT = "id, estimate_version_id, project_stage_id, title, description, sort_order, planned_cost_cents, created_at";
-const ESTIMATE_RESOURCE_LINE_SELECT = "id, estimate_work_id, resource_type, title, quantity, unit, unit_price_cents, total_price_cents, client_unit_price_cents, client_total_price_cents, created_at";
+const ESTIMATE_RESOURCE_LINE_SELECT = "id, estimate_work_id, resource_type, title, quantity, unit, unit_price_cents, total_price_cents, client_unit_price_cents, client_total_price_cents, markup_bps, discount_bps_override, created_at";
 const ESTIMATE_DEPENDENCY_SELECT = "id, estimate_version_id, from_work_id, to_work_id, dependency_type, created_at";
 
 export interface EnsureProjectEstimateRootInput {
@@ -55,6 +55,13 @@ export type EnsureEstimateCurrentVersionResult =
 export interface SaveCurrentEstimateDraftActor {
   profileId: string;
   shouldAbort?: () => boolean;
+  /**
+   * When false, the save will upsert rows but skip deletion of stale
+   * stages/works/lines/dependencies.  Use this when the snapshot may be
+   * incomplete (e.g. non-detail hydrate, partial load, or cold cache).
+   * Defaults to true for backward compatibility.
+   */
+  allowPrune?: boolean;
 }
 
 export interface CurrentEstimateDraft {
@@ -856,6 +863,8 @@ export async function saveCurrentEstimateDraft(
       total_price_cents: totalPriceCents(line.costUnitCents, line.qtyMilli),
       client_unit_price_cents: pricingTotals.clientUnitCents,
       client_total_price_cents: pricingTotals.clientTotalCents,
+      markup_bps: line.markupBps,
+      discount_bps_override: line.discountBpsOverride ?? null,
     };
   });
 
@@ -891,6 +900,24 @@ export async function saveCurrentEstimateDraft(
     }
   }
 
+  if (actor.allowPrune === false) {
+    return;
+  }
+
+  const snapshotHasStructure =
+    stageRows.length > 0 || workRows.length > 0 || lineRows.length > 0;
+  const existingDraftHasStructure =
+    existingDraft.stages.length > 0
+    || existingDraft.works.length > 0
+    || existingDraft.lines.length > 0;
+  if (!snapshotHasStructure && existingDraftHasStructure) {
+    return;
+  }
+
+  const canPruneLines = lineRows.length > 0 || existingDraft.lines.length === 0;
+  const canPruneWorks = workRows.length > 0 || existingDraft.works.length === 0;
+  const canPruneStages = stageRows.length > 0 || existingDraft.stages.length === 0;
+
   const stageIdsToKeep = new Set(stageRows.map((row) => row.id));
   const workIdsToKeep = new Set(workRows.map((row) => row.id));
   const lineIdsToKeep = new Set(lineRows.map((row) => row.id));
@@ -913,53 +940,59 @@ export async function saveCurrentEstimateDraft(
     }
   }
 
-  const staleLineIds = existingDraft.lines
-    .map((row) => row.id)
-    .filter((id) => !lineIdsToKeep.has(id));
-  if (staleLineIds.length > 0) {
-    if (shouldAbortCurrentEstimateDraftSave(actor)) {
-      return;
-    }
-    const { error } = await supabase
-      .from("estimate_resource_lines")
-      .delete()
-      .in("id", staleLineIds);
-    if (error) {
-      throw error;
-    }
-  }
-
-  const staleWorkIds = existingDraft.works
-    .map((row) => row.id)
-    .filter((id) => !workIdsToKeep.has(id));
-  if (staleWorkIds.length > 0) {
-    if (shouldAbortCurrentEstimateDraftSave(actor)) {
-      return;
-    }
-    const { error } = await supabase
-      .from("estimate_works")
-      .delete()
-      .eq("estimate_version_id", versionResult.row.id)
-      .in("id", staleWorkIds);
-    if (error) {
-      throw error;
+  if (canPruneLines) {
+    const staleLineIds = existingDraft.lines
+      .map((row) => row.id)
+      .filter((id) => !lineIdsToKeep.has(id));
+    if (staleLineIds.length > 0) {
+      if (shouldAbortCurrentEstimateDraftSave(actor)) {
+        return;
+      }
+      const { error } = await supabase
+        .from("estimate_resource_lines")
+        .delete()
+        .in("id", staleLineIds);
+      if (error) {
+        throw error;
+      }
     }
   }
 
-  const staleStageIds = existingDraft.stages
-    .map((row) => row.id)
-    .filter((id) => !stageIdsToKeep.has(id));
-  if (staleStageIds.length > 0) {
-    if (shouldAbortCurrentEstimateDraftSave(actor)) {
-      return;
+  if (canPruneWorks) {
+    const staleWorkIds = existingDraft.works
+      .map((row) => row.id)
+      .filter((id) => !workIdsToKeep.has(id));
+    if (staleWorkIds.length > 0) {
+      if (shouldAbortCurrentEstimateDraftSave(actor)) {
+        return;
+      }
+      const { error } = await supabase
+        .from("estimate_works")
+        .delete()
+        .eq("estimate_version_id", versionResult.row.id)
+        .in("id", staleWorkIds);
+      if (error) {
+        throw error;
+      }
     }
-    const { error } = await supabase
-      .from("project_stages")
-      .delete()
-      .eq("project_id", projectId)
-      .in("id", staleStageIds);
-    if (error) {
-      throw error;
+  }
+
+  if (canPruneStages) {
+    const staleStageIds = existingDraft.stages
+      .map((row) => row.id)
+      .filter((id) => !stageIdsToKeep.has(id));
+    if (staleStageIds.length > 0) {
+      if (shouldAbortCurrentEstimateDraftSave(actor)) {
+        return;
+      }
+      const { error } = await supabase
+        .from("project_stages")
+        .delete()
+        .eq("project_id", projectId)
+        .in("id", staleStageIds);
+      if (error) {
+        throw error;
+      }
     }
   }
 }

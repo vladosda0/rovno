@@ -82,6 +82,7 @@ import {
   updateWork,
 } from "@/data/estimate-v2-store";
 import { useEstimateV2Project } from "@/hooks/use-estimate-v2-data";
+import type { EstimateV2ProjectSyncState } from "@/data/estimate-v2-store";
 import { getPlanningSource } from "@/data/planning-source";
 import { addEvent, getUserById } from "@/data/store";
 import { createWorkspaceProjectInvite, sendWorkspaceProjectInviteEmail } from "@/data/workspace-source";
@@ -544,6 +545,38 @@ function WorkTableFrame({ className, children }: { className?: string; children:
   );
 }
 
+function formatRelativeTime(iso: string | null): string | null {
+  if (!iso) return null;
+  const diff = Date.now() - new Date(iso).getTime();
+  if (diff < 5_000) return "just now";
+  if (diff < 60_000) return `${Math.round(diff / 1_000)}s ago`;
+  if (diff < 3_600_000) return `${Math.round(diff / 60_000)}m ago`;
+  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function EstimateSyncStatusIndicator({ sync }: { sync: EstimateV2ProjectSyncState }) {
+  const status = sync.draftSaveStatus ?? "idle";
+  const label = status === "saving" ? "Saving…"
+    : status === "pending" ? "Pending…"
+    : status === "saved" ? `Saved ${formatRelativeTime(sync.draftSaveLastSucceededAt) ?? ""}`
+    : status === "error" ? "Save error"
+    : null;
+
+  if (!label) return null;
+
+  const colorClass = status === "error"
+    ? "text-destructive"
+    : status === "saved"
+      ? "text-muted-foreground"
+      : "text-muted-foreground/70";
+
+  return (
+    <span className={`text-[11px] font-medium ${colorClass}`}>
+      {label}
+    </span>
+  );
+}
+
 export default function ProjectEstimate() {
   const { id: projectId } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -574,6 +607,7 @@ export default function ProjectEstimate() {
     versions,
     scheduleBaseline,
     operationalUpperBlock,
+    sync: estimateSync,
     isLoading: isEstimateLoading,
   } = useEstimateV2Project(pid);
 
@@ -1887,6 +1921,7 @@ export default function ProjectEstimate() {
                     Share link with client for approval of the latest estimate version.
                   </TooltipContent>
                 </Tooltip>
+                <EstimateSyncStatusIndicator sync={estimateSync} />
               </div>
             )}
           </div>

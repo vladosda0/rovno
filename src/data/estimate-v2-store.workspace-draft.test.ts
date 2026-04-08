@@ -290,6 +290,175 @@ describe("estimate-v2 workspace drafts", () => {
     });
   });
 
+  it("hydrates multi-stage multi-work multi-line graph with pricing fields intact", async () => {
+    const projectId = "project-remote-1";
+    loadCurrentEstimateDraftMock.mockResolvedValue({
+      estimate: {
+        id: "estimate-1",
+        project_id: projectId,
+        title: "Multi-stage Estimate",
+        description: null,
+        status: "draft",
+        created_by: "profile-1",
+        created_at: "2026-03-01T00:00:00.000Z",
+        updated_at: "2026-03-02T00:00:00.000Z",
+      },
+      currentVersion: {
+        id: "version-1",
+        estimate_id: "estimate-1",
+        version_number: 1,
+        is_current: true,
+        created_by: "profile-1",
+        created_at: "2026-03-01T00:00:00.000Z",
+      },
+      stages: [
+        {
+          id: "stage-1",
+          project_id: projectId,
+          title: "Stage 1",
+          description: "",
+          sort_order: 1,
+          status: "open",
+          discount_bps: 150,
+          created_at: "2026-03-01T00:00:00.000Z",
+          updated_at: "2026-03-02T00:00:00.000Z",
+        },
+        {
+          id: "stage-2",
+          project_id: projectId,
+          title: "Stage 2",
+          description: "",
+          sort_order: 2,
+          status: "open",
+          discount_bps: 300,
+          created_at: "2026-03-01T00:00:00.000Z",
+          updated_at: "2026-03-02T00:00:00.000Z",
+        },
+      ],
+      works: [
+        {
+          id: "work-1",
+          estimate_version_id: "version-1",
+          project_stage_id: "stage-1",
+          title: "Work 1.1",
+          description: null,
+          sort_order: 1,
+          planned_cost_cents: 30000,
+          created_at: "2026-03-01T00:00:00.000Z",
+        },
+        {
+          id: "work-2",
+          estimate_version_id: "version-1",
+          project_stage_id: "stage-1",
+          title: "Work 1.2",
+          description: null,
+          sort_order: 2,
+          planned_cost_cents: 15000,
+          created_at: "2026-03-01T00:00:00.000Z",
+        },
+        {
+          id: "work-3",
+          estimate_version_id: "version-1",
+          project_stage_id: "stage-2",
+          title: "Work 2.1",
+          description: null,
+          sort_order: 1,
+          planned_cost_cents: 20000,
+          created_at: "2026-03-01T00:00:00.000Z",
+        },
+      ],
+      lines: [
+        {
+          id: "line-1",
+          estimate_work_id: "work-1",
+          resource_type: "labor",
+          title: "Crew A",
+          quantity: 2,
+          unit: "day",
+          unit_price_cents: 15000,
+          total_price_cents: 30000,
+          client_unit_price_cents: 15750,
+          client_total_price_cents: 31500,
+          markup_bps: 500,
+          discount_bps_override: 200,
+          created_at: "2026-03-01T00:00:00.000Z",
+        },
+        {
+          id: "line-2",
+          estimate_work_id: "work-2",
+          resource_type: "material",
+          title: "Lumber",
+          quantity: 100,
+          unit: "m3",
+          unit_price_cents: 150,
+          total_price_cents: 15000,
+          client_unit_price_cents: 165,
+          client_total_price_cents: 16500,
+          markup_bps: 1000,
+          discount_bps_override: null,
+          created_at: "2026-03-01T00:00:00.000Z",
+        },
+        {
+          id: "line-3",
+          estimate_work_id: "work-3",
+          resource_type: "subcontractor",
+          title: "Electrical",
+          quantity: 1,
+          unit: "job",
+          unit_price_cents: 20000,
+          total_price_cents: 20000,
+          client_unit_price_cents: 21400,
+          client_total_price_cents: 21400,
+          markup_bps: 700,
+          discount_bps_override: 350,
+          created_at: "2026-03-01T00:00:00.000Z",
+        },
+      ],
+      dependencies: [],
+    });
+
+    registerEstimateV2ProjectAccessContext(projectId, {
+      mode: "supabase",
+      profileId: "profile-1",
+      projectOwnerProfileId: "profile-1",
+      membershipRole: "owner",
+      financeVisibility: "detail",
+    });
+
+    await hydrateEstimateV2ProjectFromWorkspace(projectId, { profileId: "profile-1" });
+    const state = getEstimateV2ProjectState(projectId);
+
+    expect(state.stages).toHaveLength(2);
+    expect(state.stages[0]?.title).toBe("Stage 1");
+    expect(state.stages[0]?.discountBps).toBe(150);
+    expect(state.stages[1]?.title).toBe("Stage 2");
+    expect(state.stages[1]?.discountBps).toBe(300);
+
+    expect(state.works).toHaveLength(3);
+    expect(state.works.map((w) => w.title)).toEqual(["Work 1.1", "Work 2.1", "Work 1.2"]);
+
+    expect(state.lines).toHaveLength(3);
+
+    const line1 = state.lines.find((l) => l.title === "Crew A");
+    expect(line1).toBeDefined();
+    expect(line1?.markupBps).toBe(500);
+    expect(line1?.discountBpsOverride).toBe(200);
+    expect(line1?.workId).toBe("work-1");
+
+    const line2 = state.lines.find((l) => l.title === "Lumber");
+    expect(line2).toBeDefined();
+    expect(line2?.markupBps).toBe(1000);
+    expect(line2?.discountBpsOverride).toBeNull();
+    expect(line2?.workId).toBe("work-2");
+
+    const line3 = state.lines.find((l) => l.title === "Electrical");
+    expect(line3).toBeDefined();
+    expect(line3?.markupBps).toBe(700);
+    expect(line3?.discountBpsOverride).toBe(350);
+    expect(line3?.workId).toBe("work-3");
+    expect(line3?.stageId).toBe("stage-2");
+  });
+
   it("treats an approved remote estimate root as in_work without requiring downstream bootstrap rows", async () => {
     const projectId = "project-remote-approved-root";
 

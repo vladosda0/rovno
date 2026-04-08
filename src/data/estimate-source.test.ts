@@ -338,6 +338,106 @@ describe("saveCurrentEstimateDraft", () => {
     expect(database?.tables.estimate_works.map((work) => work.title)).toEqual(["Framing", "Roof"]);
   });
 
+  it("does not delete existing rows when snapshot is empty but draft has structure", async () => {
+    const snapshot: EstimateV2Snapshot = {
+      project: {
+        id: "project-remote-1",
+        projectId: "project-remote-1",
+        title: "Remote Project",
+        projectMode: "contractor",
+        currency: "RUB",
+        regime: "contractor",
+        taxBps: 2000,
+        discountBps: 0,
+        markupBps: 0,
+        estimateStatus: "planning",
+        receivedCents: 0,
+        pnlPlaceholderCents: 0,
+        createdAt: "2026-03-01T00:00:00.000Z",
+        updatedAt: "2026-03-02T00:00:00.000Z",
+      },
+      stages: [],
+      works: [],
+      lines: [],
+      dependencies: [],
+    };
+
+    await expect(
+      saveCurrentEstimateDraft("project-remote-1", snapshot, { profileId: "profile-1" }),
+    ).resolves.toBeUndefined();
+
+    const database = mockDatabaseRef.current;
+    expect(database?.tables.project_stages).toHaveLength(1);
+    expect(database?.tables.estimate_works).toHaveLength(1);
+  });
+
+  it("does not delete existing rows when allowPrune is false", async () => {
+    const snapshot: EstimateV2Snapshot = {
+      project: {
+        id: "project-remote-1",
+        projectId: "project-remote-1",
+        title: "Remote Project",
+        projectMode: "contractor",
+        currency: "RUB",
+        regime: "contractor",
+        taxBps: 2000,
+        discountBps: 0,
+        markupBps: 0,
+        estimateStatus: "planning",
+        receivedCents: 0,
+        pnlPlaceholderCents: 0,
+        createdAt: "2026-03-01T00:00:00.000Z",
+        updatedAt: "2026-03-02T00:00:00.000Z",
+      },
+      stages: [
+        {
+          id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          projectId: "project-remote-1",
+          title: "New Stage",
+          order: 1,
+          discountBps: 0,
+          createdAt: "2026-03-01T00:00:00.000Z",
+          updatedAt: "2026-03-02T00:00:00.000Z",
+        },
+      ],
+      works: [
+        {
+          id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          projectId: "project-remote-1",
+          stageId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          title: "New Work",
+          order: 1,
+          discountBps: 0,
+          plannedStart: null,
+          plannedEnd: null,
+          taskId: null,
+          status: "not_started",
+          createdAt: "2026-03-01T00:00:00.000Z",
+          updatedAt: "2026-03-02T00:00:00.000Z",
+        },
+      ],
+      lines: [],
+      dependencies: [],
+    };
+
+    await expect(
+      saveCurrentEstimateDraft("project-remote-1", snapshot, {
+        profileId: "profile-1",
+        allowPrune: false,
+      }),
+    ).resolves.toBeUndefined();
+
+    const database = mockDatabaseRef.current;
+    expect(database?.tables.project_stages).toHaveLength(2);
+    expect(database?.tables.estimate_works).toHaveLength(2);
+    expect(database?.tables.project_stages.map((s) => s.title)).toEqual(
+      expect.arrayContaining(["Shell", "New Stage"]),
+    );
+    expect(database?.tables.estimate_works.map((w) => w.title)).toEqual(
+      expect.arrayContaining(["Framing", "New Work"]),
+    );
+  });
+
   it("aborts before stale line writes when a newer revision lands mid-save", async () => {
     const snapshot: EstimateV2Snapshot = {
       project: {
@@ -426,5 +526,183 @@ describe("saveCurrentEstimateDraft", () => {
     expect(database?.tables.project_estimates[0]?.title).toBe("Remote Project");
     expect(database?.tables.estimate_works).toHaveLength(1);
     expect(database?.tables.estimate_resource_lines).toHaveLength(0);
+  });
+
+  it("does not prune lines when snapshot has works but zero lines and DB has lines", async () => {
+    mockDatabaseRef.current!.tables.estimate_resource_lines = [
+      {
+        id: "77777777-7777-4777-8777-777777777777",
+        estimate_work_id: "44444444-4444-4444-8444-444444444444",
+        resource_type: "labor",
+        title: "Crew",
+        quantity: 2,
+        unit: "day",
+        unit_price_cents: 15000,
+        total_price_cents: 30000,
+        client_unit_price_cents: 15000,
+        client_total_price_cents: 30000,
+        markup_bps: 500,
+        discount_bps_override: 200,
+        created_at: "2026-03-01T00:00:00.000Z",
+      } as Database["public"]["Tables"]["estimate_resource_lines"]["Row"],
+    ];
+
+    const snapshot: EstimateV2Snapshot = {
+      project: {
+        id: "project-remote-1",
+        projectId: "project-remote-1",
+        title: "Remote Project",
+        projectMode: "contractor",
+        currency: "RUB",
+        regime: "contractor",
+        taxBps: 2000,
+        discountBps: 0,
+        markupBps: 0,
+        estimateStatus: "planning",
+        receivedCents: 0,
+        pnlPlaceholderCents: 0,
+        createdAt: "2026-03-01T00:00:00.000Z",
+        updatedAt: "2026-03-02T00:00:00.000Z",
+      },
+      stages: [
+        {
+          id: "33333333-3333-4333-8333-333333333333",
+          projectId: "project-remote-1",
+          title: "Shell",
+          order: 1,
+          discountBps: 0,
+          createdAt: "2026-03-01T00:00:00.000Z",
+          updatedAt: "2026-03-02T00:00:00.000Z",
+        },
+      ],
+      works: [
+        {
+          id: "44444444-4444-4444-8444-444444444444",
+          projectId: "project-remote-1",
+          stageId: "33333333-3333-4333-8333-333333333333",
+          title: "Framing",
+          order: 1,
+          discountBps: 0,
+          plannedStart: null,
+          plannedEnd: null,
+          taskId: null,
+          status: "not_started",
+          createdAt: "2026-03-01T00:00:00.000Z",
+          updatedAt: "2026-03-02T00:00:00.000Z",
+        },
+      ],
+      lines: [],
+      dependencies: [],
+    };
+
+    await saveCurrentEstimateDraft("project-remote-1", snapshot, {
+      profileId: "profile-1",
+      allowPrune: true,
+    });
+
+    const database = mockDatabaseRef.current;
+    expect(database?.tables.estimate_resource_lines).toHaveLength(1);
+    expect(database?.tables.estimate_resource_lines[0]?.markup_bps).toBe(500);
+    expect(database?.tables.estimate_resource_lines[0]?.discount_bps_override).toBe(200);
+  });
+
+  it("prunes lines normally when snapshot includes both works and lines", async () => {
+    mockDatabaseRef.current!.tables.estimate_resource_lines = [
+      {
+        id: "77777777-7777-4777-8777-777777777777",
+        estimate_work_id: "44444444-4444-4444-8444-444444444444",
+        resource_type: "labor",
+        title: "Old Crew",
+        quantity: 2,
+        unit: "day",
+        unit_price_cents: 15000,
+        total_price_cents: 30000,
+        client_unit_price_cents: 15000,
+        client_total_price_cents: 30000,
+        markup_bps: 0,
+        discount_bps_override: null,
+        created_at: "2026-03-01T00:00:00.000Z",
+      } as Database["public"]["Tables"]["estimate_resource_lines"]["Row"],
+    ];
+
+    const snapshot: EstimateV2Snapshot = {
+      project: {
+        id: "project-remote-1",
+        projectId: "project-remote-1",
+        title: "Remote Project",
+        projectMode: "contractor",
+        currency: "RUB",
+        regime: "contractor",
+        taxBps: 2000,
+        discountBps: 0,
+        markupBps: 500,
+        estimateStatus: "planning",
+        receivedCents: 0,
+        pnlPlaceholderCents: 0,
+        createdAt: "2026-03-01T00:00:00.000Z",
+        updatedAt: "2026-03-02T00:00:00.000Z",
+      },
+      stages: [
+        {
+          id: "33333333-3333-4333-8333-333333333333",
+          projectId: "project-remote-1",
+          title: "Shell",
+          order: 1,
+          discountBps: 0,
+          createdAt: "2026-03-01T00:00:00.000Z",
+          updatedAt: "2026-03-02T00:00:00.000Z",
+        },
+      ],
+      works: [
+        {
+          id: "44444444-4444-4444-8444-444444444444",
+          projectId: "project-remote-1",
+          stageId: "33333333-3333-4333-8333-333333333333",
+          title: "Framing",
+          order: 1,
+          discountBps: 0,
+          plannedStart: null,
+          plannedEnd: null,
+          taskId: null,
+          status: "not_started",
+          createdAt: "2026-03-01T00:00:00.000Z",
+          updatedAt: "2026-03-02T00:00:00.000Z",
+        },
+      ],
+      lines: [
+        {
+          id: "88888888-8888-4888-8888-888888888888",
+          projectId: "project-remote-1",
+          stageId: "33333333-3333-4333-8333-333333333333",
+          workId: "44444444-4444-4444-8444-444444444444",
+          title: "New Crew",
+          type: "labor",
+          unit: "day",
+          qtyMilli: 3000,
+          costUnitCents: 20000,
+          markupBps: 500,
+          discountBpsOverride: 100,
+          assigneeId: null,
+          assigneeName: null,
+          assigneeEmail: null,
+          receivedCents: 0,
+          pnlPlaceholderCents: 0,
+          createdAt: "2026-03-03T00:00:00.000Z",
+          updatedAt: "2026-03-03T00:00:00.000Z",
+        },
+      ],
+      dependencies: [],
+    };
+
+    await saveCurrentEstimateDraft("project-remote-1", snapshot, {
+      profileId: "profile-1",
+      allowPrune: true,
+    });
+
+    const database = mockDatabaseRef.current;
+    expect(database?.tables.estimate_resource_lines).toHaveLength(1);
+    expect(database?.tables.estimate_resource_lines[0]?.title).toBe("New Crew");
+    expect(database?.tables.estimate_resource_lines[0]?.markup_bps).toBe(500);
+    expect(database?.tables.estimate_resource_lines[0]?.discount_bps_override).toBe(100);
   });
 });

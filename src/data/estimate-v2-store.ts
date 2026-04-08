@@ -92,8 +92,13 @@ export interface EstimateV2ProjectSyncDomainState {
   lastError: string | null;
 }
 
+type EstimateV2DraftSaveStatus = "idle" | "pending" | "saving" | "saved" | "error";
+
 export interface EstimateV2ProjectSyncState {
   estimateRevision: string | null;
+  draftSaveStatus: EstimateV2DraftSaveStatus;
+  draftSaveLastSucceededAt: string | null;
+  draftSaveLastError: string | null;
   domains: Record<EstimateV2SyncDomain, EstimateV2ProjectSyncDomainState>;
 }
 
@@ -207,6 +212,12 @@ const retainedSupabaseSyncProfileIdByProjectId = new Map<string, string>();
 
 function notify() {
   listeners.forEach((listener) => listener());
+}
+
+function traceEstimateDraftSync(label: string, projectId: string, data: Record<string, unknown>) {
+  if (typeof import.meta !== "undefined" && import.meta.env?.DEV) {
+    console.debug(`[estimate-draft-sync] ${label}`, { projectId, ...data });
+  }
 }
 
 function nowIso(): string {
@@ -366,6 +377,9 @@ function createEmptySyncDomainState(): EstimateV2ProjectSyncDomainState {
 function createEmptyProjectSyncState(): EstimateV2ProjectSyncState {
   return {
     estimateRevision: null,
+    draftSaveStatus: "idle",
+    draftSaveLastSucceededAt: null,
+    draftSaveLastError: null,
     domains: {
       tasks: createEmptySyncDomainState(),
       procurement: createEmptySyncDomainState(),
@@ -378,6 +392,9 @@ function cloneProjectSyncState(sync?: EstimateV2ProjectSyncState | null): Estima
   const source = sync ?? createEmptyProjectSyncState();
   return {
     estimateRevision: source.estimateRevision ?? null,
+    draftSaveStatus: source.draftSaveStatus ?? "idle",
+    draftSaveLastSucceededAt: source.draftSaveLastSucceededAt ?? null,
+    draftSaveLastError: source.draftSaveLastError ?? null,
     domains: {
       tasks: { ...(source.domains.tasks ?? createEmptySyncDomainState()) },
       procurement: { ...(source.domains.procurement ?? createEmptySyncDomainState()) },
@@ -399,6 +416,7 @@ function buildEstimateProjectionRevision(state: Pick<EstimateV2ProjectState, "pr
         id: stage.id,
         order: stage.order,
         title: stage.title,
+        discountBps: stage.discountBps,
       })),
     works: [...state.works]
       .sort((left, right) => (
@@ -411,6 +429,7 @@ function buildEstimateProjectionRevision(state: Pick<EstimateV2ProjectState, "pr
         stageId: work.stageId,
         order: work.order,
         title: work.title,
+        discountBps: work.discountBps,
         plannedStart: work.plannedStart ?? null,
         plannedEnd: work.plannedEnd ?? null,
       })),
@@ -429,6 +448,8 @@ function buildEstimateProjectionRevision(state: Pick<EstimateV2ProjectState, "pr
         unit: line.unit,
         qtyMilli: line.qtyMilli,
         costUnitCents: line.costUnitCents,
+        markupBps: line.markupBps,
+        discountBpsOverride: line.discountBpsOverride ?? null,
         assigneeId: line.assigneeId ?? null,
       })),
   };
@@ -734,6 +755,11 @@ function queueProjectDraftSync(projectId: string) {
     return;
   }
 
+  const syncState = ensureProjectSyncState(state);
+  if (syncState.draftSaveStatus !== "saving") {
+    syncState.draftSaveStatus = "pending";
+  }
+
   const existingTimer = remoteDraftSyncTimers.get(projectId);
   if (existingTimer) {
     clearTimeout(existingTimer);
@@ -860,11 +886,47 @@ async function runProjectDraftSync(projectId: string) {
     }
 
     const canRunSensitiveEstimateProjection = canAccessSensitiveEstimateRows(accessContext);
+    const hasStructure = normalized.stages.length > 0 || normalized.works.length > 0 || normalized.lines.length > 0;
+    const snapshotIsAuthoritative = canRunSensitiveEstimateProjection && hasStructure;
+    const worksWithoutLines = normalized.works.length > 0 && normalized.lines.length === 0;
+    const allowPrune = snapshotIsAuthoritative && !worksWithoutLines;
     if (canRunSensitiveEstimateProjection) {
-      await saveCurrentEstimateDraft(projectId, getSnapshotFromState(normalized), {
-        profileId,
-        shouldAbort: () => hasProjectDraftProjectionDrift(projectId, projectionRevision),
-      });
+      const syncState = ensureProjectSyncState(state);
+      syncState.draftSaveStatus = "saving";
+      syncState.draftSaveLastError = null;
+      notify();
+      try {
+        await saveCurrentEstimateDraft(projectId, getSnapshotFromState(normalized), {
+          profileId,
+          shouldAbort: () => hasProjectDraftProjectionDrift(projectId, projectionRevision),
+          allowPrune,
+        });
+        const postSaveState = statesByProjectId.get(projectId);
+        if (postSaveState) {
+          const postSync = ensureProjectSyncState(postSaveState);
+          postSync.draftSaveStatus = "saved";
+          postSync.draftSaveLastSucceededAt = nowIso();
+          postSync.draftSaveLastError = null;
+        }
+      } catch (saveError) {
+        const postSaveState = statesByProjectId.get(projectId);
+        if (postSaveState) {
+          const postSync = ensureProjectSyncState(postSaveState);
+          postSync.draftSaveStatus = "error";
+          postSync.draftSaveLastError = saveError instanceof Error ? saveError.message : "Draft save failed";
+        }
+        throw saveError;
+      }
+      if (import.meta.env.DEV) {
+        traceEstimateDraftSync("post-save", projectId, {
+          allowPrune,
+          worksWithoutLines,
+          snapshotIsAuthoritative,
+          stages: normalized.stages.length,
+          works: normalized.works.length,
+          lines: normalized.lines.length,
+        });
+      }
     }
 
     if (!isCurrentSupabaseProjectProfile(projectId, profileId)) {
@@ -889,10 +951,10 @@ async function runProjectDraftSync(projectId: string) {
       return;
     }
 
-    if (!canRunSensitiveEstimateProjection) {
-      // Projection upserts (tasks / procurement / HR) reference estimate line rows that are not
-      // visible under RLS for finance summary; server rejects writes (e.g. procurement_items 42501).
-      // Advance client revision bookkeeping only; owner/detail sessions remain authoritative for DB rows.
+    if (!canRunSensitiveEstimateProjection || !snapshotIsAuthoritative) {
+      // Skip downstream projections when estimate rows are not visible under RLS,
+      // or when the snapshot is non-authoritative (empty/partial) to prevent
+      // mass-unlinking procurement/HR items from an incomplete estimate state.
       const skipState = statesByProjectId.get(projectId);
       if (skipState) {
         (["tasks", "procurement", "hr"] as const).forEach((domain) => {
@@ -1548,6 +1610,16 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
         || currentState.stages.length > 0
       )
     ) {
+      if (import.meta.env.DEV) {
+        traceEstimateDraftSync("hydrate-early-return-pending", projectId, {
+          stages: currentState.stages.length,
+          works: currentState.works.length,
+          lines: currentState.lines.length,
+          remoteStages: draft.stages.length,
+          remoteWorks: draft.works.length,
+          remoteLines: draft.lines.length,
+        });
+      }
       saveWorkspaceEstimateCache(projectId, input.profileId, currentState);
       notify();
       return;
@@ -1775,6 +1847,8 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
         : draft.lines.map((line) => {
           const cachedLine = cachedLinesById.get(line.id);
           const currentLine = currentLinesById.get(line.id);
+          const persistedMarkupBps = typeof line.markup_bps === "number" ? line.markup_bps : null;
+          const persistedDiscountOverride = typeof line.discount_bps_override === "number" ? line.discount_bps_override : null;
           return {
             id: line.id,
             projectId,
@@ -1786,8 +1860,8 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
             qtyMilli: Math.max(1, Math.round(line.quantity * 1_000)),
             costUnitCents: Math.max(0, Math.round(line.unit_price_cents ?? 0)),
             ...summaryClientFieldsFromOptionalCents(line.client_unit_price_cents, line.client_total_price_cents),
-            markupBps: cachedLine?.markupBps ?? currentState.project.markupBps,
-            discountBpsOverride: cachedLine?.discountBpsOverride ?? null,
+            markupBps: persistedMarkupBps ?? cachedLine?.markupBps ?? currentState.project.markupBps,
+            discountBpsOverride: persistedDiscountOverride ?? cachedLine?.discountBpsOverride ?? null,
             assigneeId: cachedLine?.assigneeId ?? null,
             assigneeName: cachedLine?.assigneeName ?? null,
             assigneeEmail: cachedLine?.assigneeEmail ?? null,
@@ -1859,6 +1933,20 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
     };
 
     ensureProjectSyncState(nextState);
+    if (import.meta.env.DEV) {
+      traceEstimateDraftSync("hydrate-complete", projectId, {
+        branch: useOperationalEstimateShape ? "operational" : (canRebuildLinesFromTasks ? "task-rebuild" : "table-backed"),
+        stages: nextState.stages.length,
+        works: nextState.works.length,
+        lines: nextState.lines.length,
+        dependencies: nextState.dependencies.length,
+        remoteStages: draft.stages.length,
+        remoteWorks: draft.works.length,
+        remoteLines: draft.lines.length,
+        linesWithMarkup: nextState.lines.filter((l) => l.markupBps !== 0).length,
+        linesWithDiscount: nextState.lines.filter((l) => l.discountBpsOverride != null).length,
+      });
+    }
     statesByProjectId.set(projectId, nextState);
     ensureMainStoreSubscription();
     saveWorkspaceEstimateCache(projectId, input.profileId, nextState);
