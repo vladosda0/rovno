@@ -911,14 +911,6 @@
       "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
     },
     {
-      "key": "public.document_versions.document_versions_select",
-      "schema": "public",
-      "table": "document_versions",
-      "name": "document_versions_select",
-      "command": "select",
-      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
-    },
-    {
       "key": "public.document_versions.document_versions_update",
       "schema": "public",
       "table": "document_versions",
