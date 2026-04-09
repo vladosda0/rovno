@@ -623,6 +623,12 @@ export default function ProjectEstimate() {
   const canEditEstimate = canManageEstimate;
   const canSubmitToClient = canManageEstimate && canSubmitByMembership;
   const isContractorMode = projectMode === "contractor";
+  const useReadOnlySummaryPricing = estimateFinanceMode === "summary"
+    && !canEditEstimate
+    && !isCurrentUserLoading
+    && !isProjectLoading
+    && !isMembersLoading
+    && !isEstimateLoading;
   const showEstimateInternalPricing = estimateFinanceMode === "detail";
   const showEstimateMarkup = estimateFinanceMode === "detail" && isContractorMode;
   const showEstimateCommercialSummary = estimateFinanceMode === "detail" && isContractorMode;
@@ -1027,8 +1033,13 @@ export default function ProjectEstimate() {
   const lineById = useMemo(() => new Map(lines.map((line) => [line.id, line])), [lines]);
 
   const lineTotalsComputeOptions = useMemo((): ComputeLineTotalsOptions | undefined => (
-    estimateFinanceMode === "summary" ? { preferPersistedClientSnapshot: true } : undefined
-  ), [estimateFinanceMode]);
+    useReadOnlySummaryPricing ? { preferPersistedClientSnapshot: true } : undefined
+  ), [useReadOnlySummaryPricing]);
+
+  const lineClientDisplayMode = useMemo(() => {
+    if (estimateFinanceMode === "none") return "none";
+    return useReadOnlySummaryPricing ? "summary" : "detail";
+  }, [estimateFinanceMode, useReadOnlySummaryPricing]);
 
   const lineTotalsById = useMemo(() => {
     const map = new Map<string, ReturnType<typeof computeLineTotals>>();
@@ -1053,7 +1064,7 @@ export default function ProjectEstimate() {
   );
 
   const rpcSummarySubtotalCents =
-    estimateFinanceMode === "summary" && operationalUpperBlock?.clientTotalCents != null
+    useReadOnlySummaryPricing && operationalUpperBlock?.clientTotalCents != null
       ? operationalUpperBlock.clientTotalCents
       : null;
   const rpcSummaryVatBps =
@@ -1994,7 +2005,7 @@ export default function ProjectEstimate() {
                       </div>
                     </>
                   )}
-                  {estimateFinanceMode === "summary" && operationalUpperBlock && (
+                  {useReadOnlySummaryPricing && operationalUpperBlock && (
                     <>
                       <p className="col-span-2 text-sm font-semibold text-foreground md:col-span-3 lg:col-span-4">Financial</p>
                       {operationalUpperBlock.clientTotalCents != null && (
@@ -2239,7 +2250,7 @@ export default function ProjectEstimate() {
                 <p className="mt-2 text-caption text-muted-foreground">
                   Financial details are not shown for your access level.
                 </p>
-              ) : estimateFinanceMode === "summary" && operationalUpperBlock ? (
+              ) : useReadOnlySummaryPricing && operationalUpperBlock ? (
                 <div className="mt-2 space-y-2 text-caption">
                   {operationalUpperBlock.clientTotalCents != null && (
                     <div className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
@@ -2601,7 +2612,7 @@ export default function ProjectEstimate() {
                                         const clientMoney = displayLineClientAmounts(
                                           line,
                                           computed,
-                                          { financeMode: estimateFinanceMode },
+                                          { financeMode: lineClientDisplayMode },
                                         );
                                         const typeLabel = line.type === "other" && line.title.toLowerCase().includes("overhead")
                                           ? "Overheads"

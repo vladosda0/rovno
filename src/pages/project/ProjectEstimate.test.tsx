@@ -6,12 +6,14 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import ProjectEstimate from "@/pages/project/ProjectEstimate";
 import { __unsafeResetStoreForTests, addMember, addProject, addTask, updateTask } from "@/data/store";
 import {
+  __unsafeSetEstimateOperationalUpperBlockForTests,
   __unsafeResetEstimateV2ForTests,
   createLine,
   createStage,
   createWork,
   getEstimateV2ProjectState,
   setProjectEstimateStatus,
+  updateEstimateV2Project,
   updateLine,
 } from "@/data/estimate-v2-store";
 import { __unsafeResetHrForTests } from "@/data/hr-store";
@@ -195,6 +197,10 @@ function formatMoney(cents: number, currency: string) {
 
 function normalizeText(value: string | null | undefined) {
   return (value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function byNormalizedText(expected: string) {
+  return (_content: string, element: Element | null) => normalizeText(element?.textContent) === normalizeText(expected);
 }
 
 async function expectSelection(input: HTMLInputElement, value: string) {
@@ -673,6 +679,227 @@ describe("ProjectEstimate", () => {
     expect(screen.queryByText("Markup %")).not.toBeInTheDocument();
     expect(screen.getByText("Client unit")).toBeInTheDocument();
     expect(screen.getByText("Client total")).toBeInTheDocument();
+  });
+
+  it("uses fresh computed client pricing for editable build_myself summary managers even when stale summary cents are zero", async () => {
+    const projectId = "project-estimate-build-myself-summary-editable-line";
+    const profile = setStoredAuthProfile({
+      email: `${projectId}@example.com`,
+      name: "Co Owner User",
+    });
+
+    addProject({
+      id: projectId,
+      owner_id: "other-owner-id",
+      title: "Workspace Project",
+      type: "residential",
+      project_mode: "build_myself",
+      automation_level: "assisted",
+      current_stage_id: "",
+      progress_pct: 0,
+    });
+
+    addMember({
+      project_id: projectId,
+      user_id: profile.id,
+      role: "co_owner",
+      ai_access: "project_pool",
+      credit_limit: 500,
+      used_credits: 0,
+      finance_visibility: "summary",
+    });
+    setAuthRole("co_owner");
+
+    const seeded = seedEstimateLine(projectId);
+    expect(seeded).not.toBeNull();
+    if (!seeded?.line) return;
+
+    updateEstimateV2Project(projectId, { projectMode: "build_myself" });
+    updateLine(projectId, seeded.line.id, {
+      qtyMilli: 2_000,
+      discountBpsOverride: 0,
+    });
+    updateLine(projectId, seeded.line.id, {
+      summaryClientUnitCents: 0,
+      summaryClientTotalCents: 0,
+    });
+
+    const state = getEstimateV2ProjectState(projectId);
+    const line = state.lines.find((item) => item.id === seeded.line.id);
+    expect(line).toBeTruthy();
+    if (!line) return;
+
+    const computedTotals = computeProjectTotals(
+      state.project,
+      state.stages,
+      state.works,
+      state.lines,
+      state.project.projectMode,
+    );
+    const expectedLineClientUnit = formatMoney(line.costUnitCents, state.project.currency);
+    const expectedLineClientTotal = formatMoney(line.costUnitCents * 2, state.project.currency);
+
+    await act(async () => {
+      renderProjectEstimate(projectId);
+      await flushUi();
+    });
+
+    const lineRow = screen.getByText(line.title).closest("tr");
+    expect(lineRow).not.toBeNull();
+    if (!lineRow) return;
+
+    expect(within(lineRow).getByText(byNormalizedText(expectedLineClientUnit))).toBeInTheDocument();
+    expect(within(lineRow).getByText(byNormalizedText(expectedLineClientTotal))).toBeInTheDocument();
+
+    const footer = screen.getByText("Total across all stages").closest("div.rounded-lg");
+    expect(footer).not.toBeNull();
+    if (!footer) return;
+
+    expect(within(footer).getByText(byNormalizedText(formatMoney(computedTotals.totalCents, state.project.currency)))).toBeInTheDocument();
+  });
+
+  it("uses fresh computed total for editable build_myself summary managers even when cached summary total is zero", async () => {
+    const projectId = "project-estimate-build-myself-summary-editable-total";
+    const profile = setStoredAuthProfile({
+      email: `${projectId}@example.com`,
+      name: "Co Owner User",
+    });
+
+    addProject({
+      id: projectId,
+      owner_id: "other-owner-id",
+      title: "Workspace Project",
+      type: "residential",
+      project_mode: "build_myself",
+      automation_level: "assisted",
+      current_stage_id: "",
+      progress_pct: 0,
+    });
+
+    addMember({
+      project_id: projectId,
+      user_id: profile.id,
+      role: "co_owner",
+      ai_access: "project_pool",
+      credit_limit: 500,
+      used_credits: 0,
+      finance_visibility: "summary",
+    });
+    setAuthRole("co_owner");
+
+    const seeded = seedEstimateLine(projectId);
+    expect(seeded).not.toBeNull();
+    if (!seeded?.line) return;
+
+    updateEstimateV2Project(projectId, { projectMode: "build_myself" });
+    updateLine(projectId, seeded.line.id, {
+      qtyMilli: 2_000,
+      discountBpsOverride: 0,
+    });
+    __unsafeSetEstimateOperationalUpperBlockForTests(projectId, {
+      effectiveFinanceVisibility: "summary",
+      timing: {
+        estimate_version_id: null,
+        estimate_version_number: null,
+        estimate_version_created_at: null,
+      },
+      clientTotalCents: 0,
+      vatBps: 2200,
+      discountBps: 0,
+      resourceCostBreakdownClientSafeOnly: null,
+    });
+
+    const state = getEstimateV2ProjectState(projectId);
+    const computedTotals = computeProjectTotals(
+      state.project,
+      state.stages,
+      state.works,
+      state.lines,
+      state.project.projectMode,
+    );
+
+    await act(async () => {
+      renderProjectEstimate(projectId);
+      await flushUi();
+    });
+
+    const footer = screen.getByText("Total across all stages").closest("div.rounded-lg");
+    expect(footer).not.toBeNull();
+    if (!footer) return;
+
+    expect(within(footer).getByText(byNormalizedText(formatMoney(computedTotals.totalCents, state.project.currency)))).toBeInTheDocument();
+    expect(within(footer).queryByText(byNormalizedText(formatMoney(0, state.project.currency)))).not.toBeInTheDocument();
+  });
+
+  it("keeps persisted summary pricing for read-only summary viewers while internal detail stays redacted", async () => {
+    const projectId = "project-estimate-summary-viewer-snapshot-pricing";
+    setupLocalProject(projectId, { finance_visibility: "summary" });
+    const seeded = seedEstimateLine(projectId);
+    expect(seeded).not.toBeNull();
+    if (!seeded?.line) return;
+
+    updateLine(projectId, seeded.line.id, {
+      type: "labor",
+      qtyMilli: 2_000,
+      markupBps: 2_000,
+    });
+    updateLine(projectId, seeded.line.id, {
+      summaryClientUnitCents: 19_999,
+      summaryClientTotalCents: 39_998,
+    });
+    setAuthRole("viewer");
+
+    await act(async () => {
+      renderProjectEstimate(projectId);
+      await flushUi();
+    });
+
+    const lineRow = screen.getByText("Concrete").closest("tr");
+    expect(lineRow).not.toBeNull();
+    if (!lineRow) return;
+
+    expect(screen.queryByText("Cost unit")).not.toBeInTheDocument();
+    expect(screen.queryByText("Cost total")).not.toBeInTheDocument();
+    expect(within(lineRow).getByText(byNormalizedText(formatMoney(19_999, "RUB")))).toBeInTheDocument();
+    expect(within(lineRow).getByText(byNormalizedText(formatMoney(39_998, "RUB")))).toBeInTheDocument();
+  });
+
+  it("clears cached summary pricing when a pricing-driving line field changes", () => {
+    const projectId = "project-estimate-clear-stale-summary-cache";
+    setupLocalProject(projectId);
+    const seeded = seedEstimateLine(projectId);
+    expect(seeded).not.toBeNull();
+    if (!seeded?.line) return;
+
+    updateLine(projectId, seeded.line.id, {
+      summaryClientUnitCents: 0,
+      summaryClientTotalCents: 0,
+      summaryDiscountedClientTotalCents: 0,
+    });
+    __unsafeSetEstimateOperationalUpperBlockForTests(projectId, {
+      effectiveFinanceVisibility: "summary",
+      timing: {
+        estimate_version_id: null,
+        estimate_version_number: null,
+        estimate_version_created_at: null,
+      },
+      clientTotalCents: 0,
+      vatBps: 2200,
+      discountBps: 0,
+      resourceCostBreakdownClientSafeOnly: null,
+    });
+
+    updateLine(projectId, seeded.line.id, { costUnitCents: 15_000 });
+
+    const nextState = getEstimateV2ProjectState(projectId);
+    const updatedLine = nextState.lines.find((line) => line.id === seeded.line.id);
+    expect(updatedLine).toBeTruthy();
+    if (!updatedLine) return;
+
+    expect(updatedLine.summaryClientUnitCents).toBeUndefined();
+    expect(updatedLine.summaryClientTotalCents).toBeUndefined();
+    expect(updatedLine.summaryDiscountedClientTotalCents).toBeUndefined();
+    expect(nextState.operationalUpperBlock).toBeNull();
   });
 
   it("renders checklist-linked resources for reduced-access viewers when estimate lines are unavailable", async () => {

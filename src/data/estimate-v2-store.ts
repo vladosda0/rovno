@@ -1522,6 +1522,28 @@ function summaryDiscountedClientField(
   return {};
 }
 
+const PRICING_DRIVER_LINE_FIELDS = [
+  "qtyMilli",
+  "costUnitCents",
+  "markupBps",
+  "discountBpsOverride",
+  "type",
+] as const;
+
+function linePartialTouchesPricing(partial: Partial<EstimateV2ResourceLine>): boolean {
+  return PRICING_DRIVER_LINE_FIELDS.some((field) => Object.prototype.hasOwnProperty.call(partial, field));
+}
+
+function clearLineSummaryPricing(line: EstimateV2ResourceLine): EstimateV2ResourceLine {
+  const {
+    summaryClientUnitCents: _summaryClientUnitCents,
+    summaryClientTotalCents: _summaryClientTotalCents,
+    summaryDiscountedClientTotalCents: _summaryDiscountedClientTotalCents,
+    ...lineWithoutSummaryPricing
+  } = line;
+  return lineWithoutSummaryPricing;
+}
+
 function buildTaskInfoByWorkId(tasks: Task[]): Map<string, {
   taskId: string;
   status: EstimateV2WorkStatus;
@@ -2607,6 +2629,7 @@ export function createLine(
   };
 
   state.lines.push(line);
+  state.operationalUpperBlock = null;
   const parentWork = state.works.find((work) => work.id === line.workId);
   if (parentWork) syncChecklistForWork(state, parentWork);
   syncExternalDomainsFromEstimate(projectId, state);
@@ -2620,16 +2643,21 @@ export function updateLine(projectId: string, lineId: string, partial: Partial<E
   if (!canEditEstimateState(projectId, state)) return;
   const now = nowIso();
   const previous = state.lines.find((line) => line.id === lineId) ?? null;
+  const shouldClearSummaryPricing = linePartialTouchesPricing(partial);
   state.lines = state.lines.map((line) => (
     line.id === lineId
-      ? {
-        ...line,
-        ...partial,
-        updatedAt: now,
-      }
+      ? (() => {
+        const nextLine = {
+          ...line,
+          ...partial,
+          updatedAt: now,
+        };
+        return shouldClearSummaryPricing ? clearLineSummaryPricing(nextLine) : nextLine;
+      })()
       : line
   ));
   const updated = state.lines.find((line) => line.id === lineId) ?? null;
+  state.operationalUpperBlock = null;
   if (previous) {
     const oldWork = state.works.find((work) => work.id === previous.workId);
     if (oldWork) syncChecklistForWork(state, oldWork);
@@ -2648,6 +2676,7 @@ export function deleteLine(projectId: string, lineId: string) {
   if (!canEditEstimateState(projectId, state)) return;
   const existing = state.lines.find((line) => line.id === lineId) ?? null;
   state.lines = state.lines.filter((line) => line.id !== lineId);
+  state.operationalUpperBlock = null;
   if (existing) {
     const parentWork = state.works.find((work) => work.id === existing.workId);
     if (parentWork) syncChecklistForWork(state, parentWork);
@@ -3534,4 +3563,13 @@ export function __unsafeResetEstimateV2ForTests() {
   remoteProjectionSyncInFlightByProjectId.clear();
   listeners.clear();
   crossSyncInProgress = false;
+}
+
+export function __unsafeSetEstimateOperationalUpperBlockForTests(
+  projectId: string,
+  upperBlock: EstimateOperationalUpperBlock | null,
+) {
+  const state = ensureProjectState(projectId);
+  state.operationalUpperBlock = upperBlock ? cloneOperationalUpperBlock(upperBlock) : null;
+  notify();
 }
