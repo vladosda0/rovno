@@ -1,13 +1,22 @@
-import type { AIProposal } from "@/types/ai";
-import { buildProjectAuthoritySeam, seamAllowsAction, seamResolveActionState } from "@/lib/permissions";
+import type { AIProposal, ProposalChange } from "@/types/ai";
+import { getAuthRole } from "@/lib/auth-state";
+import { can } from "@/lib/permission-matrix";
 import {
-  getCurrentUser, getMembers, getProject, getStages,
-  addTask, addEvent, addProcurementItem, addDocument,
-  updateEstimateItems, deductCredit,
+  buildProjectAuthoritySeam,
+  getProjectDomainAccess,
+  projectDomainAllowsView,
+  seamAllowsAction,
+  seamResolveActionState,
+} from "@/lib/permissions";
+import type { AIAccess, MemberRole } from "@/types/entities";
+import {
+  getCurrentUser, getMembers, getProject, getStages, getTask,
+  addTask, addEvent, addProcurementItem, addDocument, addComment,
+  deductCredit, updateTask,
   addProject, addMember, addStage,
 } from "@/data/store";
 import type { ProjectAuthoritySeam } from "@/lib/project-authority-seam";
-import { PROPOSAL_TYPE_TO_CONTRACT_ACTION } from "@/lib/ai-engine";
+import { PROPOSAL_TYPE_TO_CONTRACT_ACTION, PROPOSAL_TYPE_TO_PROJECT_DOMAIN } from "@/lib/ai-engine";
 
 export interface CommitResultItem {
   type: string;
@@ -38,6 +47,197 @@ export interface CommitProposalOptions {
   authoritySeam?: ProjectAuthoritySeam;
 }
 
+export type PhotoConsultApplyKind = "create_task" | "task_comment" | "task_status_done";
+
+export interface PhotoConsultApplyAction {
+  kind: PhotoConsultApplyKind;
+  projectId: string;
+  title?: string;
+  description?: string;
+  stageId?: string;
+  photoIds?: string[];
+  taskId?: string;
+  commentText?: string;
+}
+
+export interface CommitPhotoConsultOptions extends CommitProposalOptions {
+  /** Required — photo consult apply must not bypass workspace membership authority. */
+  authoritySeam: ProjectAuthoritySeam;
+}
+
+function projectDomainAllowsProposalType(seam: ProjectAuthoritySeam, proposalType: string): boolean {
+  const routeDomain = PROPOSAL_TYPE_TO_PROJECT_DOMAIN[proposalType];
+  if (!routeDomain) return true;
+  return projectDomainAllowsView(getProjectDomainAccess(seam, routeDomain));
+}
+
+/**
+ * Maps a photo-consult UI suggestion row to the apply kind used by `commitPhotoConsultActions`.
+ * `hasLinkedTask` must match whether the consult context includes a task (comment / mark-done need it).
+ */
+export function photoConsultApplyKindForChange(
+  change: ProposalChange,
+  hasLinkedTask: boolean,
+): PhotoConsultApplyKind | null {
+  if (change.entity_type === "task" && change.action === "create") {
+    return "create_task";
+  }
+  if (change.entity_type === "comment" && change.action === "create" && hasLinkedTask) {
+    return "task_comment";
+  }
+  if (
+    change.entity_type === "task" &&
+    change.action === "update" &&
+    hasLinkedTask &&
+    change.after === "done"
+  ) {
+    return "task_status_done";
+  }
+  return null;
+}
+
+/** Same domain + contract checks as `commitPhotoConsultActions` per kind (after ai.generate + project scope). */
+export function photoConsultSeamAllowsApplyKind(seam: ProjectAuthoritySeam, kind: PhotoConsultApplyKind): boolean {
+  switch (kind) {
+    case "create_task":
+      return (
+        projectDomainAllowsProposalType(seam, "add_task") &&
+        seamResolveActionState(seam, "tasks", "manage_tasks") === "enabled"
+      );
+    case "task_comment":
+      return (
+        projectDomainAllowsProposalType(seam, "add_task") &&
+        seamResolveActionState(seam, "tasks", "comment") === "enabled"
+      );
+    case "task_status_done":
+      return (
+        projectDomainAllowsProposalType(seam, "add_task") &&
+        seamResolveActionState(seam, "tasks", "change_status") === "enabled"
+      );
+    default:
+      return false;
+  }
+}
+
+/**
+ * Filter consult suggestions before render so hidden/disabled actions never appear as available.
+ * Aligns with `commitPhotoConsultActions` enforcement.
+ */
+export function filterPhotoConsultProposalChangesBySeam(
+  seam: ProjectAuthoritySeam | undefined,
+  projectId: string,
+  changes: ProposalChange[],
+  hasLinkedTask: boolean,
+): ProposalChange[] {
+  if (!seam || seam.projectId !== projectId) return [];
+  if (!seamAllowsAction(seam, "ai.generate")) return [];
+  return changes.filter((change) => {
+    const kind = photoConsultApplyKindForChange(change, hasLinkedTask);
+    if (!kind) return false;
+    return photoConsultSeamAllowsApplyKind(seam, kind);
+  });
+}
+
+/**
+ * Apply photo-consult suggested actions through the same coarse + contract checks as `commitProposal`,
+ * without inventing a parallel mutation path.
+ */
+export function commitPhotoConsultActions(
+  actions: PhotoConsultApplyAction[],
+  options: CommitPhotoConsultOptions,
+): CommitResult {
+  if (actions.length === 0) {
+    return { success: true, count: 0, eventIds: [], created: [], updated: [] };
+  }
+
+  const { authoritySeam, eventSource, eventActorId } = options;
+  const user = getCurrentUser();
+
+  if (!seamAllowsAction(authoritySeam, "ai.generate")) {
+    return { success: false, error: "You don't have permission to use AI generation.", eventIds: [], created: [], updated: [] };
+  }
+
+  for (const action of actions) {
+    if (action.projectId !== authoritySeam.projectId) {
+      return { success: false, error: "Project scope mismatch for photo consult actions.", eventIds: [], created: [], updated: [] };
+    }
+    if (!photoConsultSeamAllowsApplyKind(authoritySeam, action.kind)) {
+      return {
+        success: false,
+        error: "This photo consult action is not available for your role.",
+        eventIds: [],
+        created: [],
+        updated: [],
+      };
+    }
+  }
+
+  const totalCredits = user.credits_free + user.credits_paid;
+  if (totalCredits <= 0) {
+    return { success: false, error: "No credits remaining. Upgrade your plan.", eventIds: [], created: [], updated: [] };
+  }
+
+  const actorId = eventActorId ?? (eventSource === "ai" ? "ai" : user.id);
+  const created: CommitResultItem[] = [];
+  const updated: CommitResultItem[] = [];
+  const eventIds: string[] = [];
+  let count = 0;
+
+  for (let i = 0; i < actions.length; i++) {
+    const action = actions[i];
+    if (action.kind === "create_task") {
+      const title = action.title?.trim();
+      if (!title) continue;
+      const taskId = `task-ai-photo-${Date.now()}-${i}`;
+      addTask({
+        id: taskId,
+        project_id: action.projectId,
+        stage_id: action.stageId ?? "",
+        title,
+        description: action.description ?? "",
+        status: "not_started",
+        assignee_id: user.id,
+        checklist: [],
+        comments: [],
+        attachments: [],
+        photos: action.photoIds ?? [],
+        linked_estimate_item_ids: [],
+        created_at: new Date().toISOString(),
+      }, { actorId, source: eventSource });
+      created.push({ type: "task", id: taskId, label: title, route: `/project/${action.projectId}/tasks` });
+      count++;
+    } else if (action.kind === "task_comment") {
+      const taskId = action.taskId;
+      const text = action.commentText?.trim();
+      if (!taskId || !text) continue;
+      const task = getTask(taskId);
+      if (!task || task.project_id !== action.projectId) {
+        return { success: false, error: "Task not found in this project.", eventIds: [], created: [], updated: [] };
+      }
+      addComment(taskId, text);
+      count++;
+    } else if (action.kind === "task_status_done") {
+      const taskId = action.taskId;
+      if (!taskId) continue;
+      const task = getTask(taskId);
+      if (!task || task.project_id !== action.projectId) {
+        return { success: false, error: "Task not found in this project.", eventIds: [], created: [], updated: [] };
+      }
+      updateTask(taskId, { status: "done" });
+      updated.push({ type: "task", id: taskId, label: task.title, route: `/project/${action.projectId}/tasks` });
+      count++;
+    }
+  }
+
+  if (count === 0) {
+    return { success: false, error: "No valid actions to apply.", eventIds: [], created: [], updated: [] };
+  }
+
+  deductCredit();
+
+  return { success: true, count, eventIds, created, updated };
+}
+
 function buildPayloadWithSource(payload: Record<string, unknown>, source?: "ai" | "user") {
   return source ? { ...payload, source } : payload;
 }
@@ -63,20 +263,38 @@ export function commitProposal(proposal: AIProposal, options: CommitProposalOpti
     return { success: false, error: "You don't have permission to use AI generation.", eventIds: [], created: [], updated: [] };
   }
 
-  // Contract action enforcement: proposal type must map to an enabled action.
-  // Hidden and disabled_visible actions are blocked — confirmation does not grant permission.
+  // Deny-by-default: only explicitly mapped proposal types may execute.
   const actionMapping = PROPOSAL_TYPE_TO_CONTRACT_ACTION[proposal.type];
-  if (actionMapping) {
-    const actionState = seamResolveActionState(authoritySeam, actionMapping.domain, actionMapping.action);
-    if (actionState !== "enabled") {
-      return {
-        success: false,
-        error: `Action "${actionMapping.action}" is not available for your role.`,
-        eventIds: [],
-        created: [],
-        updated: [],
-      };
-    }
+  if (!actionMapping) {
+    return {
+      success: false,
+      error: `AI proposal type "${proposal.type}" cannot be applied.`,
+      eventIds: [],
+      created: [],
+      updated: [],
+    };
+  }
+
+  if (!projectDomainAllowsProposalType(authoritySeam, proposal.type)) {
+    return {
+      success: false,
+      error: "This module is not available for your role.",
+      eventIds: [],
+      created: [],
+      updated: [],
+    };
+  }
+
+  // Contract action enforcement: hidden and disabled_visible actions are blocked — confirmation does not grant permission.
+  const actionState = seamResolveActionState(authoritySeam, actionMapping.domain, actionMapping.action);
+  if (actionState !== "enabled") {
+    return {
+      success: false,
+      error: `Action "${actionMapping.action}" is not available for your role.`,
+      eventIds: [],
+      created: [],
+      updated: [],
+    };
   }
 
   const totalCredits = user.credits_free + user.credits_paid;
@@ -253,6 +471,17 @@ export function commitProposal(proposal: AIProposal, options: CommitProposalOpti
 
 function commitProjectProposal(proposal: AIProposal, options: CommitProposalOptions): CommitResult {
   const user = getCurrentUser();
+  const authRole = getAuthRole();
+  if (authRole === "guest") {
+    return { success: false, error: "Sign in to create a project.", eventIds: [], created: [], updated: [] };
+  }
+  const memberRole = authRole as MemberRole;
+  const aiAccess: AIAccess =
+    memberRole === "contractor" ? "consult_only" : memberRole === "viewer" ? "none" : "project_pool";
+  if (!can(memberRole, "ai.generate", aiAccess)) {
+    return { success: false, error: "You don't have permission to use AI generation.", eventIds: [], created: [], updated: [] };
+  }
+
   const totalCredits = user.credits_free + user.credits_paid;
   if (totalCredits <= 0) {
     return { success: false, error: "No credits remaining.", eventIds: [], created: [], updated: [] };

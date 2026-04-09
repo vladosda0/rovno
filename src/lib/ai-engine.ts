@@ -2,9 +2,12 @@ import type { AIProposal, ProposalChange } from "@/types/ai";
 import { getProject, getStages } from "@/data/store";
 import type { ProjectAuthoritySeam } from "@/lib/project-authority-seam";
 import {
+  getProjectDomainAccess,
+  projectDomainAllowsView,
   seamResolveActionState,
   seamEstimateFinanceVisibilityMode,
   type EstimateFinanceVisibilityMode,
+  type ProjectDomain,
 } from "@/lib/permissions";
 import type { ActionState, ContractDomain, ContractAction } from "@/lib/permission-contract-actions";
 
@@ -26,10 +29,24 @@ const PROPOSAL_TYPE_TO_CONTRACT_ACTION: Record<string, ProposalActionMapping> = 
   generate_document:  { domain: "documents_media", action: "upload" },
 };
 
+/** Route-level domain for module visibility (mirrors project tabs / hidden modules). */
+export const PROPOSAL_TYPE_TO_PROJECT_DOMAIN: Record<string, ProjectDomain> = {
+  add_task: "tasks",
+  update_estimate: "estimate",
+  add_procurement: "procurement",
+  generate_document: "documents",
+};
+
 function proposalAllowedForSeam(proposalType: string, seam: ProjectAuthoritySeam | undefined): boolean {
-  if (!seam) return true; // no seam = legacy path, allow (commit-proposal will re-check)
+  // Fail closed: without a seam we cannot bound the visible/actionable AI surface.
+  if (!seam) return false;
   const mapping = PROPOSAL_TYPE_TO_CONTRACT_ACTION[proposalType];
-  if (!mapping) return true; // unmapped types pass through (e.g. create_project)
+  if (!mapping) return false;
+  const routeDomain = PROPOSAL_TYPE_TO_PROJECT_DOMAIN[proposalType];
+  if (routeDomain) {
+    const access = getProjectDomainAccess(seam, routeDomain);
+    if (!projectDomainAllowsView(access)) return false;
+  }
   const state: ActionState = seamResolveActionState(seam, mapping.domain, mapping.action);
   return state === "enabled";
 }

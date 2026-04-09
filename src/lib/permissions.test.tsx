@@ -108,7 +108,7 @@ describe("usePermission", () => {
     await waitFor(() => {
       expect(screen.getByTestId("role")).toHaveTextContent("contractor");
     });
-    expect(screen.getByTestId("can-ai")).toHaveTextContent("true");
+    expect(screen.getByTestId("can-ai")).toHaveTextContent("false");
     expect(screen.getByTestId("can-invite")).toHaveTextContent("false");
     expect(getCurrentUserSpy).not.toHaveBeenCalled();
     expect(getMembersSpy).not.toHaveBeenCalled();
@@ -426,7 +426,8 @@ describe("permission-matrix — narrowed contractor actions (Track 3)", () => {
   });
 
   it("contractor AI access respects ai_access parameter", () => {
-    expect(can("contractor", "ai.generate", "consult_only")).toBe(true);
+    expect(can("contractor", "ai.generate", "project_pool")).toBe(true);
+    expect(can("contractor", "ai.generate", "consult_only")).toBe(false);
     expect(can("contractor", "ai.generate", "none")).toBe(false);
   });
 

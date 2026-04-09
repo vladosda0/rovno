@@ -33,6 +33,7 @@ export function can(role: MemberRole, action: Action, aiAccess?: AIAccess): bool
   if (isOwnerOrCoOwner(role)) return true;
   if (role === "viewer") return false;
   // contractor
-  if (action === "ai.generate") return aiAccess !== "none";
+  // consult_only = read-oriented AI; mutating AI surfaces require project_pool (see backend ai_access ranks).
+  if (action === "ai.generate") return aiAccess === "project_pool";
   return CONTRACTOR_ACTIONS.includes(action);
 }

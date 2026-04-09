@@ -22,8 +22,11 @@ import { ActionBar } from "@/components/ai/ActionBar";
 import { SuggestionChips } from "@/components/ai/SuggestionChips";
 import { getPlanningSource } from "@/data/planning-source";
 import { getWorkspaceSource, resolveWorkspaceMode } from "@/data/workspace-source";
+import { getAuthRole } from "@/lib/auth-state";
 import { generateProjectProposal } from "@/lib/ai-engine";
 import { commitProposal } from "@/lib/commit-proposal";
+import { can } from "@/lib/permission-matrix";
+import type { AIAccess, MemberRole } from "@/types/entities";
 import { planningQueryKeys } from "@/hooks/use-planning-source";
 import { toast } from "@/hooks/use-toast";
 import { workspaceQueryKeys } from "@/hooks/use-workspace-source";
@@ -49,6 +52,17 @@ const SUGGESTIONS = [
 
 type SortKey = "activity" | "progress" | "name";
 
+/** AI project sparkles: local/demo store only; Supabase must use real project APIs. */
+function homeAiProjectSparklesAllowed(workspaceMode: ReturnType<typeof useWorkspaceMode>): boolean {
+  if (workspaceMode.kind !== "demo" && workspaceMode.kind !== "local") return false;
+  const role = getAuthRole();
+  if (role === "guest") return false;
+  const memberRole = role as MemberRole;
+  const aiAccess: AIAccess =
+    memberRole === "contractor" ? "consult_only" : memberRole === "viewer" ? "none" : "project_pool";
+  return can(memberRole, "ai.generate", aiAccess);
+}
+
 interface FolderItem {
   id: string;
   name: string;
@@ -59,6 +73,7 @@ export function ProjectsTab() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const workspaceMode = useWorkspaceMode();
+  const aiProjectSparklesEnabled = homeAiProjectSparklesAllowed(workspaceMode);
 
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortKey>("activity");
@@ -91,6 +106,17 @@ export function ProjectsTab() {
     });
 
   function handleAiSubmit(text?: string) {
+    if (!aiProjectSparklesEnabled) {
+      toast({
+        title: "AI project setup unavailable",
+        description:
+          workspaceMode.kind === "supabase" || workspaceMode.kind === "pending-supabase"
+            ? "Create a project with “Create manually” while connected to your workspace."
+            : "AI-assisted project creation is not available in this mode.",
+        variant: "destructive",
+      });
+      return;
+    }
     const input = (text ?? description).trim();
     if (!input) return;
     setDescription(input);
@@ -99,7 +125,15 @@ export function ProjectsTab() {
 
   function handleConfirm() {
     if (!proposal) return;
-    const result = commitProposal(proposal);
+    if (!aiProjectSparklesEnabled) {
+      toast({
+        title: "AI project setup unavailable",
+        description: "Confirm is disabled for this workspace mode.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const result = commitProposal(proposal, { eventSource: "user", emitProposalEvent: true });
     if (result.success) {
       toast({ title: "Project created", description: `${result.count} items set up.` });
       setProposal(null);
@@ -181,20 +215,32 @@ export function ProjectsTab() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* AI Project Input */}
+      {/* AI Project Input — local/demo only; no authority bypass vs Supabase */}
       <div className="glass space-y-3 rounded-card p-4 sm:space-y-4 sm:p-6">
+        {!aiProjectSparklesEnabled && (
+          <p className="text-caption text-muted-foreground">
+            {workspaceMode.kind === "supabase" || workspaceMode.kind === "pending-supabase"
+              ? "AI-assisted project creation is not available while connected to a workspace. Use Create manually."
+              : "AI-assisted project creation is not available. Use Create manually."}
+          </p>
+        )}
         <div className="flex gap-2 items-start">
           <Textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Describe your project… e.g. 'Renovate a 60m² apartment with 2 bedrooms'"
             className="flex-1 min-h-[72px] resize-none bg-background/50"
+            disabled={!aiProjectSparklesEnabled}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAiSubmit(); }
             }}
           />
           <div className="flex flex-col gap-1.5 shrink-0">
-            <Button onClick={() => handleAiSubmit()} disabled={!description.trim()} className="bg-accent text-accent-foreground hover:bg-accent/90">
+            <Button
+              onClick={() => handleAiSubmit()}
+              disabled={!aiProjectSparklesEnabled || !description.trim()}
+              className="bg-accent text-accent-foreground hover:bg-accent/90"
+            >
               <Sparkles className="h-4 w-4 mr-1.5" /> Generate
             </Button>
             <Button variant="outline" size="icon" className="h-9 w-9" title="Attach files">
@@ -202,11 +248,17 @@ export function ProjectsTab() {
             </Button>
           </div>
         </div>
-        {!proposal && <SuggestionChips suggestions={SUGGESTIONS} onSelect={(s) => handleAiSubmit(s)} />}
+        {!proposal && aiProjectSparklesEnabled && (
+          <SuggestionChips suggestions={SUGGESTIONS} onSelect={(s) => handleAiSubmit(s)} />
+        )}
         {proposal && (
           <div className="space-y-2 pt-1">
             <PreviewCard summary={proposal.summary} changes={proposal.changes} />
-            <ActionBar onConfirm={handleConfirm} onCancel={() => setProposal(null)} />
+            <ActionBar
+              onConfirm={handleConfirm}
+              onCancel={() => setProposal(null)}
+              disabled={!aiProjectSparklesEnabled}
+            />
           </div>
         )}
       </div>

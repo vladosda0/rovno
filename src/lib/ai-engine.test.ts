@@ -156,16 +156,16 @@ describe("generateProposalQueue — disabled_visible is not enabled", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Contract: legacy path without seam still returns all proposals
+// Fail closed when seam is omitted (no unbounded AI proposal surface)
 // ---------------------------------------------------------------------------
 
-describe("generateProposalQueue — legacy path (no seam)", () => {
-  it("returns all matching proposals when seam is omitted", () => {
+describe("generateProposalQueue — missing seam", () => {
+  it("returns no proposals when seam is omitted", () => {
     const types = generateProposalQueue(
       "add task, update estimate, buy materials, generate contract",
       "project-1",
       "assisted",
     ).map((p) => p.type);
-    expect(types).toHaveLength(4);
+    expect(types).toEqual([]);
   });
 });

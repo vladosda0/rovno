@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { commitProposal, type CommitResult } from "@/lib/commit-proposal";
+import {
+  commitPhotoConsultActions,
+  commitProposal,
+  filterPhotoConsultProposalChangesBySeam,
+  type CommitResult,
+} from "@/lib/commit-proposal";
+import type { ProposalChange } from "@/types/ai";
 import type { AIProposal, ProposalChange } from "@/types/ai";
 import type { ProjectAuthoritySeam } from "@/lib/project-authority-seam";
 import type { FinanceVisibility, MemberRole } from "@/types/entities";
@@ -169,5 +175,112 @@ describe("commitProposal — enabled actions succeed", () => {
       authoritySeam: seamForRole("contractor"),
     });
     expect(result.success).toBe(true);
+  });
+});
+
+describe("commitProposal — unknown / unsupported proposal types", () => {
+  it("fails closed for an unknown proposal type string", () => {
+    const result = commitProposal(
+      {
+        id: "bad",
+        project_id: "project-1",
+        type: "unknown_type" as never,
+        summary: "nope",
+        changes: [],
+        status: "pending",
+      },
+      { authoritySeam: seamForRole("owner", "detail") },
+    );
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("cannot be applied");
+  });
+});
+
+describe("filterPhotoConsultProposalChangesBySeam", () => {
+  const fullSet: ProposalChange[] = [
+    { entity_type: "task", action: "create", label: "Fix", after: "not_started" },
+    { entity_type: "comment", action: "create", label: "Note" },
+    {
+      entity_type: "task",
+      action: "update",
+      label: "Done",
+      before: "in_progress",
+      after: "done",
+    },
+  ];
+
+  it("drops all suggestions for viewer (tasks domain actions hidden)", () => {
+    const filtered = filterPhotoConsultProposalChangesBySeam(
+      seamForRole("viewer"),
+      "project-1",
+      fullSet,
+      true,
+    );
+    expect(filtered).toEqual([]);
+  });
+
+  it("keeps contractor comment + status but drops manage_tasks create", () => {
+    const filtered = filterPhotoConsultProposalChangesBySeam(
+      seamForRole("contractor"),
+      "project-1",
+      fullSet,
+      true,
+    );
+    expect(filtered.map((c) => c.entity_type)).toEqual(["comment", "task"]);
+    expect(filtered[0].action).toBe("create");
+    expect(filtered[1].action).toBe("update");
+  });
+
+  it("drops comment and mark-done when there is no linked task", () => {
+    const filtered = filterPhotoConsultProposalChangesBySeam(
+      seamForRole("owner", "detail"),
+      "project-1",
+      fullSet,
+      false,
+    );
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0].entity_type).toBe("task");
+    expect(filtered[0].action).toBe("create");
+  });
+
+  it("returns nothing when seam projectId mismatches", () => {
+    const filtered = filterPhotoConsultProposalChangesBySeam(
+      { ...seamForRole("owner", "detail"), projectId: "other" },
+      "project-1",
+      fullSet,
+      true,
+    );
+    expect(filtered).toEqual([]);
+  });
+
+  it("returns nothing when ai.generate is denied (contractor consult_only)", () => {
+    const base = seamForRole("contractor");
+    const seam = {
+      ...base,
+      membership: base.membership
+        ? { ...base.membership, ai_access: "consult_only" as const }
+        : null,
+    };
+    const filtered = filterPhotoConsultProposalChangesBySeam(seam, "project-1", fullSet, true);
+    expect(filtered).toEqual([]);
+  });
+});
+
+describe("commitPhotoConsultActions", () => {
+  it("viewer cannot apply photo consult task create", () => {
+    const result = commitPhotoConsultActions(
+      [{ kind: "create_task", projectId: "project-1", title: "Fix", stageId: "s1", photoIds: [] }],
+      { authoritySeam: seamForRole("viewer") },
+    );
+    expect(result.success).toBe(false);
+  });
+
+  it("owner can apply a single photo consult task create", () => {
+    const result = commitPhotoConsultActions(
+      [{ kind: "create_task", projectId: "project-1", title: "Fix leak", stageId: "stage-1-1", photoIds: ["m1"] }],
+      { authoritySeam: seamForRole("owner", "detail"), eventSource: "ai" },
+    );
+    expect(result.success).toBe(true);
+    expect(result.count).toBe(1);
   });
 });

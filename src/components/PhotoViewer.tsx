@@ -1,5 +1,7 @@
 import { useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { isAuthenticated } from "@/lib/auth-state";
+import { usePermission } from "@/lib/permissions";
 import {
   Dialog, DialogContent,
 } from "@/components/ui/dialog";
@@ -36,10 +38,19 @@ interface PhotoViewerProps {
 
 export function PhotoViewer({ photo, open, onOpenChange, source, allPhotos = [] }: PhotoViewerProps) {
   const navigate = useNavigate();
-  const { id: projectId } = useParams<{ id: string }>();
+  const { id: routeProjectId } = useParams<{ id: string }>();
   const [deleteOpen, setDeleteOpen] = useState(false);
 
+  const permissionProjectId = photo?.project_id ?? routeProjectId ?? "";
+  const perm = usePermission(permissionProjectId);
+
   const close = useCallback(() => onOpenChange(false), [onOpenChange]);
+
+  const canUseAiConsult =
+    Boolean(photo) &&
+    isAuthenticated() &&
+    !perm.isLoading &&
+    perm.can("ai.generate");
 
   if (!photo) return null;
 
@@ -74,9 +85,9 @@ export function PhotoViewer({ photo, open, onOpenChange, source, allPhotos = [] 
   }
 
   function handleTaskClick() {
-    if (!task || !projectId) return;
+    if (!task || !routeProjectId) return;
     // Navigate to tasks tab with state to open this specific task
-    navigate(`/project/${projectId}/tasks`, {
+    navigate(`/project/${routeProjectId}/tasks`, {
       state: { openTaskId: task.id },
     });
     close();
@@ -192,14 +203,16 @@ export function PhotoViewer({ photo, open, onOpenChange, source, allPhotos = [] 
 
           {/* Bottom action row */}
           <div className="px-4 pb-4 flex items-center gap-2">
-            <Button
-              onClick={handleAiConsult}
-              className="bg-accent text-accent-foreground hover:bg-accent/90"
-              size="sm"
-            >
-              <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-              AI Consult
-            </Button>
+            {canUseAiConsult && (
+              <Button
+                onClick={handleAiConsult}
+                className="bg-accent text-accent-foreground hover:bg-accent/90"
+                size="sm"
+              >
+                <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                AI Consult
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"

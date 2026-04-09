@@ -45,7 +45,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useCurrentUser, useEvents, useProject, useProjects, useTasks, useWorkspaceMode } from "@/hooks/use-mock-data";
 import { usePermission } from "@/lib/permissions";
 import { generateProposalQueue, getTextResponse, reviseProposalWithEdits } from "@/lib/ai-engine";
-import { commitProposal } from "@/lib/commit-proposal";
+import {
+  commitPhotoConsultActions,
+  commitProposal,
+  filterPhotoConsultProposalChangesBySeam,
+  type PhotoConsultApplyAction,
+} from "@/lib/commit-proposal";
 import { toast } from "@/hooks/use-toast";
 import type { AIMessage, AIProposal, ProposalChange } from "@/types/ai";
 import type { Event } from "@/types/entities";
@@ -56,8 +61,8 @@ import {
   type PhotoConsultContext,
 } from "@/lib/photo-consult-store";
 import {
-  addTask, addComment as addTaskComment, addEvent, addDocument, addDocumentVersion,
-  getCurrentUser, getStages, getUserById, updateProject, getDocuments, updateTask,
+  addEvent, addDocument, addDocumentVersion,
+  getStages, getUserById, updateProject, getDocuments,
 } from "@/data/store";
 import { format, isToday, isYesterday } from "date-fns";
 
@@ -172,12 +177,12 @@ const AUTOMATION_OPTIONS: { mode: AutomationMode; label: string; description: st
   {
     mode: "observer",
     label: "Proactive",
-    description: "AI executes predefined low-risk actions automatically.",
+    description: "More editing shortcuts in the review queue. Risky changes still require your confirmation.",
   },
   {
     mode: "full",
     label: "Autopilot",
-    description: "AI runs operational layer autonomously.",
+    description: "Faster review UX; each change is still confirmed before it is applied.",
   },
 ];
 
@@ -478,15 +483,52 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     setInputValue(buildConsultPrompt(ctx));
 
     photoAnalysisTimerRef.current = window.setTimeout(() => {
+      if (!seamForProjectCommit || seamForProjectCommit.projectId !== ctx.photo.project_id) {
+        setPhotoConsult(null);
+        setPhotoAnalysis(null);
+        setPhotoAnalysisLoading(false);
+        setSuggestedActions([]);
+        setSelectedActions(new Set());
+        closePhotoConsult(ctx.photo.project_id);
+        toast({
+          title: "Access denied",
+          description: "Project permissions are still loading or unavailable.",
+          variant: "destructive",
+        });
+        photoAnalysisTimerRef.current = null;
+        return;
+      }
+      if (perm && !perm.can("ai.generate")) {
+        setPhotoConsult(null);
+        setPhotoAnalysis(null);
+        setPhotoAnalysisLoading(false);
+        setSuggestedActions([]);
+        setSelectedActions(new Set());
+        closePhotoConsult(ctx.photo.project_id);
+        toast({
+          title: "Access denied",
+          description: "You don't have permission to use AI photo consult.",
+          variant: "destructive",
+        });
+        photoAnalysisTimerRef.current = null;
+        return;
+      }
+
       const analysis = mockPhotoAnalysis(ctx);
-      const actions = buildSuggestedActions(ctx, analysis);
+      const rawActions = buildSuggestedActions(ctx, analysis);
+      const actions = filterPhotoConsultProposalChangesBySeam(
+        seamForProjectCommit,
+        ctx.photo.project_id,
+        rawActions,
+        Boolean(ctx.task),
+      );
       setPhotoAnalysis(analysis);
       setPhotoAnalysisLoading(false);
       setSuggestedActions(actions);
       setSelectedActions(new Set(actions.map((_, index) => index)));
       photoAnalysisTimerRef.current = null;
     }, 2000);
-  }, [clearPhotoAnalysisTimer]);
+  }, [clearPhotoAnalysisTimer, perm, seamForProjectCommit]);
 
   useEffect(() => {
     latestScopedStateRef.current = {
@@ -1218,54 +1260,82 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     });
   }
 
-  // Photo consult: confirm suggested actions
+  // Photo consult: confirm suggested actions (seam-aware; same enforcement stack as proposal commit)
   function handleConsultConfirm() {
     if (!photoConsult) return;
-    const currentUser = getCurrentUser();
+    if (!seamForProjectCommit) {
+      toast({
+        title: "Access denied",
+        description: "Project permissions are still loading or unavailable.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (perm && !perm.can("ai.generate")) {
+      toast({
+        title: "Access denied",
+        description: "You don't have permission to use AI generation.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const stages = getStages(photoConsult.photo.project_id);
     const stage = stages[0];
-    let appliedCount = 0;
+    const actions: PhotoConsultApplyAction[] = [];
 
     selectedActions.forEach((idx) => {
       const action = suggestedActions[idx];
       if (!action) return;
 
       if (action.entity_type === "task" && action.action === "create") {
-        const taskId = `task-ai-${Date.now()}-${idx}`;
-        addTask({
-          id: taskId,
-          project_id: photoConsult.photo.project_id,
-          stage_id: photoConsult.task?.stage_id ?? stage?.id ?? "",
+        actions.push({
+          kind: "create_task",
+          projectId: photoConsult.photo.project_id,
           title: action.label,
           description: `AI-identified issue from photo: ${photoConsult.photo.caption}`,
-          status: "not_started",
-          assignee_id: currentUser.id,
-          checklist: [],
-          comments: [],
-          attachments: [],
-          photos: [photoConsult.photo.id],
-          linked_estimate_item_ids: [],
-          created_at: new Date().toISOString(),
+          stageId: photoConsult.task?.stage_id ?? stage?.id ?? "",
+          photoIds: [photoConsult.photo.id],
         });
-        appliedCount++;
       }
 
       if (action.entity_type === "comment" && action.action === "create" && photoConsult.task) {
-        addTaskComment(
-          photoConsult.task.id,
-          `AI Photo Analysis: ${photoAnalysis?.observations ?? "Analysis complete"}`
-        );
-        appliedCount++;
+        actions.push({
+          kind: "task_comment",
+          projectId: photoConsult.photo.project_id,
+          taskId: photoConsult.task.id,
+          commentText: `AI Photo Analysis: ${photoAnalysis?.observations ?? "Analysis complete"}`,
+        });
       }
 
       if (action.entity_type === "task" && action.action === "update" && photoConsult.task) {
-        updateTask(photoConsult.task.id, { status: "done" as const });
-        appliedCount++;
+        actions.push({
+          kind: "task_status_done",
+          projectId: photoConsult.photo.project_id,
+          taskId: photoConsult.task.id,
+        });
       }
     });
 
-    toast({ title: "Changes applied", description: `${appliedCount} action${appliedCount !== 1 ? "s" : ""} committed.` });
-    closePhotoConsult(photoConsult.photo.project_id);
+    const result = commitPhotoConsultActions(actions, {
+      authoritySeam: seamForProjectCommit,
+      eventSource: "ai",
+      eventActorId: "ai",
+    });
+
+    if (result.success) {
+      toast({
+        title: "Changes applied",
+        description: `${result.count} action${result.count !== 1 ? "s" : ""} committed.`,
+      });
+      closePhotoConsult(photoConsult.photo.project_id);
+    } else {
+      toast({
+        title: "Could not apply",
+        description: result.error ?? "Permission or validation failed.",
+        variant: "destructive",
+      });
+    }
   }
 
   function handleConsultCancel() {
