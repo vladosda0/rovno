@@ -129,6 +129,7 @@ import {
   getUnitOptionsForType,
   resolveUnitSelectValue,
 } from "@/lib/estimate-v2/resource-units";
+import { buildDefaultResourceLineName } from "@/lib/estimate-v2/default-resource-line-name";
 import {
   parsePersistedEstimateResourceType,
   resourceLineSemanticLabel,
@@ -1746,11 +1747,12 @@ export default function ProjectEstimate() {
     workId: string,
     option: { value: ResourceLineType },
   ) => {
+    const defaultTitle = buildDefaultResourceLineName(linesByWork.get(workId) ?? [], option.value);
     suppressResourceCreateAutoFocusRef.current = true;
     const created = createLine(pid, {
       stageId,
       workId,
-      title: "Add resource",
+      title: defaultTitle,
       type: option.value,
       qtyMilli: 1_000,
       costUnitCents: 0,

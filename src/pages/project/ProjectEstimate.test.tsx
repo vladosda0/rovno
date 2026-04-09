@@ -454,12 +454,64 @@ describe("ProjectEstimate", () => {
       await flushUi();
     });
 
-    const resourceInput = screen.getByDisplayValue("Add resource") as HTMLInputElement;
-    await expectSelection(resourceInput, "Add resource");
+    const resourceInput = screen.getByDisplayValue("Material 1") as HTMLInputElement;
+    await expectSelection(resourceInput, "Material 1");
     expect(screen.getByRole("button", { name: "Add resource" })).not.toHaveFocus();
+
+    const createdState = getEstimateV2ProjectState(projectId);
+    expect(createdState.lines.some((line) => line.title === "Material 1" && line.type === "material")).toBe(true);
 
     expect(screen.queryByText("Stage 1")).not.toBeInTheDocument();
     expect(screen.queryByText("General work")).not.toBeInTheDocument();
+  });
+
+  it("numbers default resource names per work instead of across the whole estimate", async () => {
+    const projectId = "project-estimate-resource-naming-scope";
+    setupLocalProject(projectId);
+
+    const stage = createStage(projectId, { title: "Shell" });
+    expect(stage).not.toBeNull();
+    if (!stage) return;
+
+    const firstWork = createWork(projectId, { stageId: stage.id, title: "Framing" });
+    const secondWork = createWork(projectId, { stageId: stage.id, title: "Roof" });
+    expect(firstWork).not.toBeNull();
+    expect(secondWork).not.toBeNull();
+    if (!firstWork || !secondWork) return;
+
+    createLine(projectId, {
+      stageId: stage.id,
+      workId: firstWork.id,
+      title: "Material 1",
+      type: "material",
+      qtyMilli: 1_000,
+      costUnitCents: 0,
+    });
+
+    await act(async () => {
+      renderProjectEstimate(projectId);
+      await flushUi();
+    });
+
+    const addResourceButtons = screen.getAllByRole("button", { name: "Add resource" });
+    expect(addResourceButtons).toHaveLength(2);
+
+    await act(async () => {
+      fireEvent.pointerDown(addResourceButtons[1]);
+      await flushUi();
+    });
+
+    await act(async () => {
+      fireEvent.click(await screen.findByRole("menuitem", { name: "Material" }));
+      await flushUi();
+    });
+
+    const resourceInput = screen.getByDisplayValue("Material 1") as HTMLInputElement;
+    await expectSelection(resourceInput, "Material 1");
+
+    const state = getEstimateV2ProjectState(projectId);
+    const roofLine = state.lines.find((line) => line.workId === secondWork.id && line.title === "Material 1");
+    expect(roofLine).toBeDefined();
   });
 
   it("opens the estimate immediately when seeded estimate resource lines already exist", async () => {
