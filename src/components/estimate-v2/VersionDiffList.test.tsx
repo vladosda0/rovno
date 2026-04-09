@@ -27,7 +27,7 @@ describe("VersionDiffList", () => {
     render(
       <VersionDiffList
         changes={[change]}
-        regime="contractor"
+        projectMode="contractor"
         currency="RUB"
         showSensitiveDetail={false}
       />,

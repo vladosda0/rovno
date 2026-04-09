@@ -851,7 +851,7 @@ export async function saveCurrentEstimateDraft(
     if (!work || !stage) {
       throw new Error(`Missing work or stage for estimate line "${line.title}"`);
     }
-    const pricingTotals = computeLineTotals(line, stage, snapshot.project, snapshot.project.regime);
+    const pricingTotals = computeLineTotals(line, stage, snapshot.project, snapshot.project.projectMode);
     return {
       id: lineIdByLocalId.get(line.id),
       estimate_work_id: workIdByLocalId.get(line.workId) ?? ensureRemoteUuid(projectId, "work", line.workId),

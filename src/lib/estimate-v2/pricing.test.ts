@@ -3,7 +3,7 @@ import type {
   EstimateV2Project,
   EstimateV2ResourceLine,
   EstimateV2Stage,
-  Regime,
+  ProjectMode,
   ResourceLineType,
 } from "@/types/estimate-v2";
 import {
@@ -23,7 +23,6 @@ function createProject(partial: Partial<EstimateV2Project> = {}): EstimateV2Proj
     title: "Project",
     projectMode: "contractor",
     currency: "RUB",
-    regime: "contractor",
     taxBps: 2000,
     discountBps: 500,
     markupBps: 2000,
@@ -138,7 +137,7 @@ describe("estimate-v2 pricing", () => {
     const project = createProject({ taxBps: 5000 });
     const stage = createStage();
     const line = createLine({ costUnitCents: 1, qtyMilli: 1_000, markupBps: 0, discountBpsOverride: 0 });
-    const totals = computeLineTotals(line, stage, project, "contractor" as Regime);
+    const totals = computeLineTotals(line, stage, project, "contractor" as ProjectMode);
 
     expect(totals.clientTotalCents).toBe(1);
   });

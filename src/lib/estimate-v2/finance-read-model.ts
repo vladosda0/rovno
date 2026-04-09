@@ -112,7 +112,7 @@ export function buildEstimateV2FinanceProjectSummary(
     state.stages,
     state.works,
     state.lines,
-    state.project.regime,
+    state.project.projectMode,
   );
   const revenueExVatCents = pricingTotals.taxableBaseCents;
   const costExVatCents = pricingTotals.costTotalCents;

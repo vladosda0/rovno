@@ -109,10 +109,9 @@ export default function ProjectTasks() {
   const { toast } = useToast();
   const authRole = getAuthRole();
   const currentUser = getCurrentUser();
-  const isClientRegime = estimateProject.regime === "client";
   const tasksAccess = getProjectDomainAccess(perm.seam, "tasks");
-  const canManageTasks = !isClientRegime && projectDomainAllowsManage(tasksAccess);
-  const canContributeTasks = !isClientRegime && projectDomainAllowsContribute(tasksAccess);
+  const canManageTasks = projectDomainAllowsManage(tasksAccess);
+  const canContributeTasks = projectDomainAllowsContribute(tasksAccess);
   const canCreateTask = canManageTasks;
   const canChangeTaskStatus = canContributeTasks;
   const canEditChecklist = canContributeTasks;
@@ -695,9 +694,6 @@ export default function ProjectTasks() {
           )}
         </div>
       </div>
-      {isClientRegime && (
-        <p className="mb-2 text-caption text-muted-foreground">Client regime: tasks are read-only.</p>
-      )}
       {(isTaskSyncing || isTaskProjectionBehind || hasTaskSyncError) && (
         <div className={cn(
           "mb-2 flex items-start gap-2 rounded-lg border px-3 py-2 text-sm",

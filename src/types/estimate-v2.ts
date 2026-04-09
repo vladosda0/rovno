@@ -1,6 +1,5 @@
 export type ResourceLineType = "material" | "tool" | "labor" | "subcontractor" | "other";
 
-export type Regime = "contractor" | "client" | "build_myself";
 export type ProjectMode = "build_myself" | "contractor";
 
 export type EstimateV2VersionStatus = "proposed" | "approved";
@@ -15,7 +14,6 @@ export interface EstimateV2Project {
   title: string;
   projectMode: ProjectMode;
   currency: string;
-  regime: Regime;
   taxBps: number;
   discountBps: number;
   markupBps: number;

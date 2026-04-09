@@ -171,7 +171,7 @@ export function computePlannedFromEstimateV2(input: {
     input.stages,
     [],
     input.lines,
-    input.project.regime,
+    input.project.projectMode,
   );
 
   return {

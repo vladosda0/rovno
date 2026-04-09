@@ -22,7 +22,6 @@ function project(partial: Partial<EstimateV2Project> = {}): EstimateV2Project {
     title: "Project",
     projectMode: "contractor",
     currency: "RUB",
-    regime: "contractor",
     taxBps: 1_000,
     discountBps: 0,
     markupBps: 0,

@@ -613,17 +613,19 @@ export default function ProjectEstimate() {
 
   const currentMembership = members.find((member) => member.user_id === currentUser.id) ?? null;
   const canSubmitByMembership = currentMembership?.role === "owner" || currentMembership?.role === "co_owner";
-  const regime = estimateProject.regime;
+  const projectMode = estimateProject.projectMode;
   const estimateAccess = getProjectDomainAccess(perm.seam, "estimate");
   const canViewSensitiveDetail = seamCanViewSensitiveDetail(perm.seam);
   const canViewOperationalFinanceSummary = seamCanViewOperationalFinanceSummary(perm.seam);
   const estimateFinanceMode = seamEstimateFinanceVisibilityMode(perm.seam);
   const canExportEstimateCsv = seamAllowsEstimateExportCsv(perm.seam);
-  const canManageEstimate = projectDomainAllowsManage(estimateAccess) && regime !== "client";
+  const canManageEstimate = projectDomainAllowsManage(estimateAccess);
   const canEditEstimate = canManageEstimate;
   const canSubmitToClient = canManageEstimate && canSubmitByMembership;
-  const showEstimateInternalPricing = estimateFinanceMode === "detail" && regime !== "client";
-  const showEstimateMarkup = estimateFinanceMode === "detail" && regime === "contractor";
+  const isContractorMode = projectMode === "contractor";
+  const showEstimateInternalPricing = estimateFinanceMode === "detail";
+  const showEstimateMarkup = estimateFinanceMode === "detail" && isContractorMode;
+  const showEstimateCommercialSummary = estimateFinanceMode === "detail" && isContractorMode;
 
   const [activeTab, setActiveTab] = useState("estimate");
   const [approvalModalOpen, setApprovalModalOpen] = useState(false);
@@ -845,7 +847,6 @@ export default function ProjectEstimate() {
         email: invite.email,
       }))
   ), [projectInvites]);
-  const projectMode = project?.project_mode === "build_myself" ? "build_myself" : "contractor";
 
   const handleAssigneeInvite = useCallback(async (identity: { name: string; email: string }) => {
     if (!canEditEstimate) return;
@@ -1034,10 +1035,10 @@ export default function ProjectEstimate() {
     lines.forEach((line) => {
       const stage = stageById.get(line.stageId);
       if (!stage) return;
-      map.set(line.id, computeLineTotals(line, stage, estimateProject, regime, lineTotalsComputeOptions));
+      map.set(line.id, computeLineTotals(line, stage, estimateProject, projectMode, lineTotalsComputeOptions));
     });
     return map;
-  }, [estimateProject, lines, regime, stageById, lineTotalsComputeOptions]);
+  }, [estimateProject, lines, projectMode, stageById, lineTotalsComputeOptions]);
 
   const hasSummaryClientPricingOnAnyLine = useMemo(() => (
     lines.some((line) => (
@@ -1047,8 +1048,8 @@ export default function ProjectEstimate() {
   ), [lines]);
 
   const totals = useMemo(
-    () => computeProjectTotals(estimateProject, stages, works, lines, regime, lineTotalsComputeOptions),
-    [estimateProject, stages, works, lines, regime, lineTotalsComputeOptions],
+    () => computeProjectTotals(estimateProject, stages, works, lines, projectMode, lineTotalsComputeOptions),
+    [estimateProject, stages, works, lines, projectMode, lineTotalsComputeOptions],
   );
 
   const rpcSummarySubtotalCents =
@@ -1072,9 +1073,9 @@ export default function ProjectEstimate() {
 
   const stageTotalsById = useMemo(
     () => new Map(
-      computeStageTotals(estimateProject, stages, lines, regime, lineTotalsComputeOptions).map((item) => [item.stageId, item]),
+      computeStageTotals(estimateProject, stages, lines, projectMode, lineTotalsComputeOptions).map((item) => [item.stageId, item]),
     ),
-    [estimateProject, stages, lines, regime, lineTotalsComputeOptions],
+    [estimateProject, stages, lines, projectMode, lineTotalsComputeOptions],
   );
 
   const plannedRollups = useMemo(
@@ -1198,12 +1199,12 @@ export default function ProjectEstimate() {
   }, [baselineRange, currentRange, estimateProject.estimateStatus, incompleteLinkedTaskCount, todayDay]);
 
   const ctaState = resolveProjectEstimateCtaState({
-    regime,
+    projectMode,
     isOwner: canSubmitToClient,
     hasProposedVersion: Boolean(latestProposed),
   });
   const showEstimateWorkspace = estimateEditorStarted || estimateHasSavedContent;
-  const reviewExpandedByDefault = regime === "client" && !canManageEstimate;
+  const reviewExpandedByDefault = false;
   const approvedVersionWithStamp = latestApproved?.approvalStamp ? latestApproved : null;
   const latestVersionNumber = useMemo(
     () => versions.reduce((max, version) => Math.max(max, version.number), 1),
@@ -1221,7 +1222,7 @@ export default function ProjectEstimate() {
     { label: "Other cost", amountCents: totals.breakdownByType.other },
   ];
   const financialBreakdownSummaryRows = [
-    { label: "Markup", amountCents: totals.markupTotalCents },
+    ...(isContractorMode ? [{ label: "Markup", amountCents: totals.markupTotalCents }] : []),
     { label: "Subtotal (ex VAT)", amountCents: totals.subtotalBeforeDiscountCents },
     { label: "Discount", amountCents: totals.discountTotalCents },
     { label: "VAT amount", amountCents: totals.taxAmountCents },
@@ -1556,7 +1557,7 @@ export default function ProjectEstimate() {
     const rows: string[][] = [];
     rows.push(["Estimate v2 export"]);
     rows.push(["Project", estimateProject.title]);
-    rows.push(["Regime", regime]);
+    rows.push(["Mode", projectMode]);
     rows.push([]);
 
     const summaryFinancialExport = !canViewSensitiveDetail
@@ -1575,11 +1576,9 @@ export default function ProjectEstimate() {
           ? ["Stage", "Work", "Line", "Qty", "Unit", "Client unit", "Client total", "Discounted client total"]
           : ["Stage", "Work", "Line", "Qty", "Unit", "Client unit", "Client total"],
       );
-    } else if (regime === "client") {
-      rows.push(["Stage", "Work", "Line", "Qty", "Unit", "Client unit", "Client total"]);
-    } else if (regime === "contractor") {
+    } else if (projectMode === "contractor") {
       rows.push(["Stage", "Work", "Line", "Type", "Qty", "Unit", "Cost unit", "Cost total", "Markup %", "Discount %", "Client unit", "Client total"]);
-    } else if (regime === "build_myself") {
+    } else if (projectMode === "build_myself") {
       rows.push(["Stage", "Work", "Line", "Type", "Qty", "Unit", "Cost unit", "Cost total", "Discount %", "Client unit", "Client total"]);
     }
 
@@ -1638,20 +1637,7 @@ export default function ProjectEstimate() {
           const clientUnitStr = money(clientForCsv.clientUnitCents, estimateProject.currency);
           const clientTotalStr = money(clientForCsv.clientTotalCents, estimateProject.currency);
 
-          if (regime === "client") {
-            rows.push([
-              stage.title,
-              work.title,
-              line.title,
-              qtyFromMilli(line.qtyMilli),
-              line.unit,
-              clientUnitStr,
-              clientTotalStr,
-            ]);
-            return;
-          }
-
-          if (regime === "contractor") {
+          if (projectMode === "contractor") {
             rows.push([
               stage.title,
               work.title,
@@ -1704,7 +1690,7 @@ export default function ProjectEstimate() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `estimate-v2-${pid}-${canViewSensitiveDetail ? regime : "operational"}.csv`;
+    link.download = `estimate-v2-${pid}-${canViewSensitiveDetail ? projectMode : "operational"}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -1975,81 +1961,7 @@ export default function ProjectEstimate() {
 
         {showEstimateWorkspace && (isInWork ? (
           <div className="rounded-lg border border-border p-3">
-            {regime === "client" ? (
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4">
-                  <p className="col-span-2 text-sm font-semibold text-foreground md:col-span-3 lg:col-span-4">Financial</p>
-                  <div className="rounded-md bg-muted/30 px-2.5 py-2">
-                    <p className="text-[11px] text-muted-foreground">Total (inc VAT)</p>
-                    <p className="text-sm font-semibold tabular-nums text-foreground">{money(uiTotalIncVatCents, estimateProject.currency)}</p>
-                  </div>
-                  <p className="col-span-2 text-sm font-semibold text-foreground md:col-span-3 lg:col-span-4">Timing</p>
-                  <div className="rounded-md bg-muted/30 px-2.5 py-2">
-                    <p className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                      Days to end
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button type="button" className="text-muted-foreground hover:text-foreground">
-                            <Info className="h-3 w-3" />
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent>{TIMING_TOOLTIP_TEXT.daysToEnd}</TooltipContent>
-                      </Tooltip>
-                    </p>
-                    <p className="text-sm font-semibold tabular-nums text-foreground">
-                      {timingMetrics.daysToEnd == null ? "—" : `${timingMetrics.daysToEnd} d`}
-                    </p>
-                  </div>
-                  <div className="rounded-md bg-muted/30 px-2.5 py-2">
-                    <p className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                      Behind schedule
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button type="button" className="text-muted-foreground hover:text-foreground">
-                            <Info className="h-3 w-3" />
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent>{TIMING_TOOLTIP_TEXT.behindSchedule}</TooltipContent>
-                      </Tooltip>
-                    </p>
-                    <p className="text-sm font-semibold tabular-nums text-foreground">{timingMetrics.behindScheduleDays} d</p>
-                  </div>
-                  <div className="rounded-md bg-muted/30 px-2.5 py-2">
-                    <p className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                      Duration planned
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button type="button" className="text-muted-foreground hover:text-foreground">
-                            <Info className="h-3 w-3" />
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent>{TIMING_TOOLTIP_TEXT.durationPlanned}</TooltipContent>
-                      </Tooltip>
-                    </p>
-                    <p className="text-sm font-semibold tabular-nums text-foreground">
-                      {timingMetrics.durationPlannedDays == null ? "—" : `${timingMetrics.durationPlannedDays} d`}
-                    </p>
-                  </div>
-                  <div className="rounded-md bg-muted/30 px-2.5 py-2">
-                    <p className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                      Duration estimated
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button type="button" className="text-muted-foreground hover:text-foreground">
-                            <Info className="h-3 w-3" />
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent>{TIMING_TOOLTIP_TEXT.durationEstimated}</TooltipContent>
-                      </Tooltip>
-                    </p>
-                    <p className="text-sm font-semibold tabular-nums text-foreground">
-                      {timingMetrics.durationEstimatedDays == null ? "—" : `${timingMetrics.durationEstimatedDays} d`}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-3">
+            <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4">
                   {estimateFinanceMode === "detail" && (
                     <>
@@ -2294,7 +2206,6 @@ export default function ProjectEstimate() {
                   </div>
                 )}
               </div>
-            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
@@ -2324,11 +2235,11 @@ export default function ProjectEstimate() {
 
             <div className="rounded-lg border border-border p-3">
               <p className="text-sm font-semibold text-foreground">Financial</p>
-              {estimateFinanceMode === "none" && regime !== "client" ? (
+              {estimateFinanceMode === "none" ? (
                 <p className="mt-2 text-caption text-muted-foreground">
                   Financial details are not shown for your access level.
                 </p>
-              ) : estimateFinanceMode === "summary" && regime !== "client" && operationalUpperBlock ? (
+              ) : estimateFinanceMode === "summary" && operationalUpperBlock ? (
                 <div className="mt-2 space-y-2 text-caption">
                   {operationalUpperBlock.clientTotalCents != null && (
                     <div className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
@@ -2371,7 +2282,7 @@ export default function ProjectEstimate() {
                     </span>
                   </div>
                 </div>
-              ) : regime === "client" || !canViewSensitiveDetail ? (
+              ) : !canViewSensitiveDetail ? (
                 <div className="mt-2 rounded-md border border-border/70 p-2">
                   <p className="text-xs text-muted-foreground">Total (inc VAT)</p>
                   <p className="text-2xl font-semibold text-foreground">{money(uiTotalIncVatCents, estimateProject.currency)}</p>
@@ -2413,10 +2324,12 @@ export default function ProjectEstimate() {
                       </div>
                     </div>
                   )}
-                  <div className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
-                    <span className="text-muted-foreground">Markup</span>
-                    <span className="tabular-nums text-foreground">{money(totals.markupTotalCents, estimateProject.currency)}</span>
-                  </div>
+                  {showEstimateCommercialSummary && (
+                    <div className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
+                      <span className="text-muted-foreground">Markup</span>
+                      <span className="tabular-nums text-foreground">{money(totals.markupTotalCents, estimateProject.currency)}</span>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
                     <span className="text-muted-foreground">Subtotal (ex VAT)</span>
                     <span className="tabular-nums text-foreground">{money(totals.subtotalBeforeDiscountCents, estimateProject.currency)}</span>
@@ -2433,16 +2346,18 @@ export default function ProjectEstimate() {
                     <span className="font-medium text-foreground">Total (inc VAT)</span>
                     <span className="font-semibold tabular-nums text-foreground">{money(totals.totalCents, estimateProject.currency)}</span>
                   </div>
-                  <div className="mt-2 grid grid-cols-2 gap-2">
-                    <div className="rounded-md border border-border/70 p-2">
-                      <p className="text-muted-foreground">Profit (ex VAT)</p>
-                      <p className="text-sm font-medium text-foreground">{money(profitExVatCents, estimateProject.currency)}</p>
+                  {showEstimateCommercialSummary && (
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <div className="rounded-md border border-border/70 p-2">
+                        <p className="text-muted-foreground">Profit (ex VAT)</p>
+                        <p className="text-sm font-medium text-foreground">{money(profitExVatCents, estimateProject.currency)}</p>
+                      </div>
+                      <div className="rounded-md border border-border/70 p-2">
+                        <p className="text-muted-foreground">Profitability (%)</p>
+                        <p className="text-sm font-medium text-foreground">{profitabilityPct == null ? "—" : formatPercent(profitabilityPct)}</p>
+                      </div>
                     </div>
-                    <div className="rounded-md border border-border/70 p-2">
-                      <p className="text-muted-foreground">Profitability (%)</p>
-                      <p className="text-sm font-medium text-foreground">{profitabilityPct == null ? "—" : formatPercent(profitabilityPct)}</p>
-                    </div>
-                  </div>
+                  )}
                 </div>
               )}
             </div>
@@ -2453,16 +2368,12 @@ export default function ProjectEstimate() {
           hasPending={pendingProposed && Boolean(latestProposed)}
           isOpenByDefault={reviewExpandedByDefault}
           title="New version submitted"
-          secondaryActions={(
-            !canManageEstimate && regime === "client" ? (
-              <Button variant="outline" size="sm" onClick={handleAskQuestions}>Ask questions</Button>
-            ) : undefined
-          )}
+          secondaryActions={undefined}
         >
           <p className="mb-2 text-caption font-medium text-foreground">Changed items</p>
           <VersionDiffList
             changes={diff.changes}
-            regime={regime}
+            projectMode={projectMode}
             currency={estimateProject.currency}
             showSensitiveDetail={canViewSensitiveDetail}
           />
@@ -2754,7 +2665,7 @@ export default function ProjectEstimate() {
                                                     participants={participantOptions}
                                                     pendingInvites={pendingInviteOptions}
                                                     editable={canEditEstimate}
-                                                    clientView={regime === "client"}
+                                                    clientView={false}
                                                     onInvite={handleAssigneeInvite}
                                                     onCommit={(nextValue) => updateLine(pid, line.id, nextValue)}
                                                   />
@@ -3074,7 +2985,7 @@ export default function ProjectEstimate() {
               </div>
             )}
             <div className="rounded-lg border border-border p-3">
-              <div className={`grid items-center gap-x-4 gap-y-2 ${regime === "client" ? "md:grid-cols-[minmax(0,1fr)_max-content]" : "md:grid-cols-[minmax(0,1fr)_max-content_max-content]"}`}>
+              <div className="grid items-center gap-x-4 gap-y-2 md:grid-cols-[minmax(0,1fr)_max-content_max-content]">
                 <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-foreground">
                   <span className="truncate">Total across all stages</span>
                   <Tooltip>
@@ -3107,7 +3018,7 @@ export default function ProjectEstimate() {
               </div>
 
               {estimateFinanceMode !== "none" && (
-              <div className={`mt-2 grid items-center gap-x-4 gap-y-2 ${regime === "client" ? "md:grid-cols-[minmax(0,1fr)_max-content]" : "md:grid-cols-[minmax(0,1fr)_max-content_max-content]"}`}>
+              <div className="mt-2 grid items-center gap-x-4 gap-y-2 md:grid-cols-[minmax(0,1fr)_max-content_max-content]">
                 <div className="flex flex-wrap items-center gap-2 text-sm">
                   <span className="text-muted-foreground">VAT</span>
                   {canEditEstimate ? (

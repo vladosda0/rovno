@@ -62,7 +62,7 @@ describe("estimate-v2 finance read model", () => {
       stateAfter.stages,
       stateAfter.works,
       stateAfter.lines,
-      stateAfter.project.regime,
+      stateAfter.project.projectMode,
     );
     const expectedProfitPct = totals.taxableBaseCents > 0
       ? ((totals.taxableBaseCents - totals.costTotalCents) / totals.taxableBaseCents) * 100
@@ -204,7 +204,7 @@ describe("estimate-v2 finance read model", () => {
       stateAfter.stages,
       stateAfter.works,
       stateAfter.lines,
-      stateAfter.project.regime,
+      stateAfter.project.projectMode,
     );
     const expectedProfitPct = totals.taxableBaseCents > 0
       ? ((totals.taxableBaseCents - totals.costTotalCents) / totals.taxableBaseCents) * 100

@@ -88,7 +88,7 @@ export default function ShareEstimate() {
     lines.forEach((line) => {
       const stage = stageById.get(line.stageId);
       if (!stage) return;
-      map.set(line.id, computeLineTotals(line, stage, project, "client"));
+      map.set(line.id, computeLineTotals(line, stage, project, project.projectMode));
     });
     return map;
   }, [snapshot?.lines, snapshot?.project, stageById]);
@@ -114,7 +114,13 @@ export default function ShareEstimate() {
       };
     }
 
-    return computeProjectTotals(snapshot.project, snapshot.stages, snapshot.works, snapshot.lines, "client");
+    return computeProjectTotals(
+      snapshot.project,
+      snapshot.stages,
+      snapshot.works,
+      snapshot.lines,
+      snapshot.project.projectMode,
+    );
   }, [snapshot]);
 
   const latestProposed = projectId ? getLatestProposedVersion(projectId) : null;
@@ -175,9 +181,9 @@ export default function ShareEstimate() {
   return (
     <div className="mx-auto max-w-6xl p-sp-3 space-y-sp-2">
       <div className="rounded-card border border-border bg-card p-sp-2 space-y-2">
-        <h1 className="text-lg font-semibold text-foreground">Client estimate view</h1>
+        <h1 className="text-lg font-semibold text-foreground">Estimate preview</h1>
         <p className="text-caption text-muted-foreground">
-          Version #{version.number} · Client regime enforced
+          Version #{version.number}
         </p>
 
         {newerProposed && (

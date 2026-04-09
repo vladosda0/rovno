@@ -61,7 +61,6 @@ import type {
   EstimateV2VersionShareApprovalPolicy,
   EstimateV2Work,
   EstimateV2WorkStatus,
-  Regime,
   ProjectMode,
   ResourceLineType,
   ScheduleBaseline,
@@ -1225,7 +1224,6 @@ function normalizeProjectMode(value: string | null | undefined): ProjectMode {
 
 function canEditEstimateState(projectId: string, state: EstimateV2ProjectState): boolean {
   if (!isOwnerOrCoOwnerProjectMember(projectId)) return false;
-  if (state.project.regime === "client") return false;
   return true;
 }
 
@@ -1902,9 +1900,6 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
       projectId,
       title: workspaceProject?.title ?? draft.estimate?.title ?? cachedProject?.title ?? currentState.project.title,
       projectMode: derivedProjectMode,
-      regime: derivedProjectMode === "build_myself" && cachedProject?.regime === "client"
-        ? "build_myself"
-        : (cachedProject?.regime ?? (derivedProjectMode === "build_myself" ? "build_myself" : "contractor")),
       estimateStatus: nextEstimateStatus,
       updatedAt: cachedProject?.updatedAt ?? draft.estimate?.updated_at ?? currentState.project.updatedAt,
     };
@@ -2004,7 +1999,6 @@ function ensureProjectState(projectId: string): EstimateV2ProjectState {
     title: projectEntity?.title ?? "Estimate",
     projectMode: normalizeProjectMode(projectEntity?.project_mode),
     currency: resolveCurrency(),
-    regime: normalizeProjectMode(projectEntity?.project_mode) === "build_myself" ? "build_myself" : "contractor",
     taxBps: 2200,
     discountBps: 0,
     markupBps: 0,
@@ -2309,7 +2303,7 @@ function lineClientTotals(
 ): { clientUnitCents: number; clientTotalCents: number } | null {
   const stage = snapshot.stages.find((entry) => entry.id === line.stageId);
   if (!stage) return null;
-  const totals = computeLineTotals(line, stage, snapshot.project, snapshot.project.regime);
+  const totals = computeLineTotals(line, stage, snapshot.project, snapshot.project.projectMode);
   return {
     clientUnitCents: totals.clientUnitCents,
     clientTotalCents: totals.clientTotalCents,
@@ -2671,7 +2665,6 @@ export function setProjectEstimateStatus(
   const state = ensureProjectState(projectId);
   if (
     !isOwnerActionAllowed(projectId, options.ownerProfileId, options.projectOwnerProfileId)
-    || state.project.regime === "client"
   ) {
     return {
       ok: false,
@@ -2778,13 +2771,6 @@ export async function transitionEstimateV2ProjectToInWork(
       ok: true,
       autoScheduled: false,
       baselineCaptured: Boolean(state.scheduleBaseline),
-    };
-  }
-
-  if (state.project.regime === "client") {
-    return {
-      ok: false,
-      reason: "forbidden",
     };
   }
 
@@ -2946,15 +2932,10 @@ export function updateEstimateV2Project(projectId: string, partial: Partial<Esti
   const prevDiscount = state.project.discountBps;
   const prevProjectMode = state.project.projectMode;
   const nextProjectMode = partial.projectMode ?? state.project.projectMode;
-  const requestedRegime = partial.regime ?? state.project.regime;
-  const safeRegime = nextProjectMode === "build_myself" && requestedRegime === "client"
-    ? "build_myself"
-    : requestedRegime;
   state.project = {
     ...state.project,
     ...partial,
     projectMode: nextProjectMode,
-    regime: safeRegime,
     updatedAt: nowIso(),
   };
 
@@ -2980,34 +2961,6 @@ export function updateEstimateV2Project(projectId: string, partial: Partial<Esti
   }
 
   commitProjectStateChange(projectId);
-}
-
-export function setRegime(projectId: string, regime: Regime): boolean {
-  const state = ensureProjectState(projectId);
-  if (!isOwnerActionAllowed(projectId)) return false;
-  if (state.project.regime === "client") return false;
-  if (state.project.projectMode === "build_myself" && regime === "client") return false;
-  state.project = {
-    ...state.project,
-    regime,
-    updatedAt: nowIso(),
-  };
-  commitProjectStateChange(projectId);
-  return true;
-}
-
-export function setRegimeDev(projectId: string, regime: Regime): boolean {
-  if (!import.meta.env.DEV) return false;
-  if (!isDemoProject(projectId)) return false;
-  const state = ensureProjectState(projectId);
-  if (state.project.projectMode === "build_myself" && regime === "client") return false;
-  state.project = {
-    ...state.project,
-    regime,
-    updatedAt: nowIso(),
-  };
-  commitProjectStateChange(projectId);
-  return true;
 }
 
 export function addDependency(
@@ -3193,7 +3146,7 @@ function resolveShareApprovalPolicy(
 
 export function submitVersion(projectId: string, versionId: string, options: SubmitVersionOptions = {}): boolean {
   const state = ensureProjectState(projectId);
-  if (!isSubmissionActionAllowed(projectId) || state.project.regime === "client") return false;
+  if (!isSubmissionActionAllowed(projectId)) return false;
   const now = nowIso();
   const actor = getCurrentUser();
   const approvalPolicy = resolveShareApprovalPolicy(options);
@@ -3252,7 +3205,7 @@ export function refreshVersionSnapshot(
   options: SubmitVersionOptions = {},
 ): boolean {
   const state = ensureProjectState(projectId);
-  if (!isSubmissionActionAllowed(projectId) || state.project.regime === "client") return false;
+  if (!isSubmissionActionAllowed(projectId)) return false;
   const target = state.versions.find((version) => version.id === versionId);
   if (!target || !target.submitted || target.archived || target.status !== "proposed") return false;
   const now = nowIso();

@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
 import { resourceLineSemanticLabel } from "@/lib/estimate-v2/resource-type-contract";
-import type { EstimateV2StructuredChange, Regime, ResourceLineType } from "@/types/estimate-v2";
+import type { EstimateV2StructuredChange, ProjectMode, ResourceLineType } from "@/types/estimate-v2";
 
 interface VersionDiffListProps {
   changes: EstimateV2StructuredChange[];
-  regime: Regime;
+  projectMode: ProjectMode;
   currency: string;
   compactLimit?: number;
   showSensitiveDetail?: boolean;
@@ -37,12 +37,9 @@ function isSensitiveField(field: string): boolean {
   return field === "costUnitCents" || field === "markupBps" || field === "discountBpsOverride";
 }
 
-function shouldShowField(field: string, regime: Regime, showSensitiveDetail: boolean): boolean {
+function shouldShowField(field: string, projectMode: ProjectMode, showSensitiveDetail: boolean): boolean {
   if (!showSensitiveDetail && isSensitiveField(field)) return false;
-  if (regime === "client") {
-    if (isSensitiveField(field)) return false;
-  }
-  if (regime === "build_myself" && field === "markupBps") return false;
+  if (projectMode === "build_myself" && field === "markupBps") return false;
   return true;
 }
 
@@ -97,7 +94,7 @@ function workOrder(workNumber: string | null): number {
 
 export function VersionDiffList({
   changes,
-  regime,
+  projectMode,
   currency,
   compactLimit = 12,
   showSensitiveDetail = true,
@@ -155,10 +152,10 @@ export function VersionDiffList({
               <p className="text-caption text-foreground">
                 {change.title} ({changeTypeLabel(change.changeType)})
               </p>
-              {change.fieldChanges.filter((field) => shouldShowField(field.field, regime, showSensitiveDetail)).length > 0 && (
+              {change.fieldChanges.filter((field) => shouldShowField(field.field, projectMode, showSensitiveDetail)).length > 0 && (
                 <p className="text-caption text-muted-foreground">
                   {change.fieldChanges
-                    .filter((field) => shouldShowField(field.field, regime, showSensitiveDetail))
+                    .filter((field) => shouldShowField(field.field, projectMode, showSensitiveDetail))
                     .map((field) => `${field.label} changed ${formatFieldValue(field.field, field.before, currency)} → ${formatFieldValue(field.field, field.after, currency)}`)
                     .join(" · ")}
                 </p>
@@ -174,10 +171,10 @@ export function VersionDiffList({
                   <p className="text-caption text-foreground">
                     {change.entityKind === "line" ? `Resource: ${change.title}` : change.title} ({changeTypeLabel(change.changeType)})
                   </p>
-                  {change.fieldChanges.filter((field) => shouldShowField(field.field, regime, showSensitiveDetail)).length > 0 && (
+                  {change.fieldChanges.filter((field) => shouldShowField(field.field, projectMode, showSensitiveDetail)).length > 0 && (
                     <p className="text-caption text-muted-foreground">
                       {change.fieldChanges
-                        .filter((field) => shouldShowField(field.field, regime, showSensitiveDetail))
+                        .filter((field) => shouldShowField(field.field, projectMode, showSensitiveDetail))
                         .map((field) => `${field.label} changed ${formatFieldValue(field.field, field.before, currency)} → ${formatFieldValue(field.field, field.after, currency)}`)
                         .join(" · ")}
                     </p>

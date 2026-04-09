@@ -2,7 +2,7 @@ import type {
   EstimateV2Project,
   EstimateV2ResourceLine,
   EstimateV2Stage,
-  Regime,
+  ProjectMode,
   ResourceLineType,
 } from "@/types/estimate-v2";
 
@@ -145,7 +145,7 @@ export function computeLineTotals(
   line: EstimateV2ResourceLine,
   stage: EstimateV2Stage,
   project: EstimateV2Project,
-  regime: Regime,
+  projectMode: ProjectMode,
   options?: ComputeLineTotalsOptions,
 ): ComputedLineTotals {
   const qtyMilli = Math.max(0, Math.round(line.qtyMilli));
@@ -173,7 +173,7 @@ export function computeLineTotals(
   }
 
   const effectiveDiscountBps = computeEffectiveDiscountBps(line, stage, project);
-  const effectiveMarkupBps = regime === "build_myself" ? 0 : clampBps(line.markupBps);
+  const effectiveMarkupBps = projectMode === "build_myself" ? 0 : clampBps(line.markupBps);
 
   const costTotalCents = multiplyQtyMilli(line.costUnitCents, qtyMilli);
   const preDiscountUnitCents = line.costUnitCents + multiplyBps(line.costUnitCents, effectiveMarkupBps);
@@ -199,7 +199,7 @@ export function computeProjectTotals(
   stages: EstimateV2Stage[],
   _works: unknown[],
   lines: EstimateV2ResourceLine[],
-  regime: Regime,
+  projectMode: ProjectMode,
   options?: ComputeLineTotalsOptions,
 ): ProjectTotals {
   const stageById = new Map(stages.map((stage) => [stage.id, stage]));
@@ -215,7 +215,7 @@ export function computeProjectTotals(
     const stage = stageById.get(line.stageId);
     if (!stage) return;
 
-    const totals = computeLineTotals(line, stage, project, regime, options);
+    const totals = computeLineTotals(line, stage, project, projectMode, options);
     subtotalCents += totals.clientTotalCents;
     costTotalCents += totals.costTotalCents;
     markupTotalCents += totals.markupCents;
@@ -243,7 +243,7 @@ export function computeStageTotals(
   project: EstimateV2Project,
   stages: EstimateV2Stage[],
   lines: EstimateV2ResourceLine[],
-  regime: Regime,
+  projectMode: ProjectMode,
   options?: ComputeLineTotalsOptions,
 ): StageTotals[] {
   const stageById = new Map(stages.map((stage) => [stage.id, stage]));
@@ -261,7 +261,7 @@ export function computeStageTotals(
       breakdownByType: emptyBreakdownByType(),
     };
 
-    const lineTotals = computeLineTotals(line, stage, project, regime, options);
+    const lineTotals = computeLineTotals(line, stage, project, projectMode, options);
     current.taxableBaseCents += lineTotals.clientTotalCents;
     current.costTotalCents += lineTotals.costTotalCents;
     current.markupTotalCents += lineTotals.markupCents;
@@ -302,7 +302,7 @@ export function computeStageSubtotals(
   project: EstimateV2Project,
   stages: EstimateV2Stage[],
   lines: EstimateV2ResourceLine[],
-  regime: Regime,
+  projectMode: ProjectMode,
   options?: ComputeLineTotalsOptions,
 ): StageSubtotal[] {
   const stageById = new Map(stages.map((stage) => [stage.id, stage]));
@@ -311,7 +311,7 @@ export function computeStageSubtotals(
   lines.forEach((line) => {
     const stage = stageById.get(line.stageId);
     if (!stage) return;
-    const totals = computeLineTotals(line, stage, project, regime, options);
+    const totals = computeLineTotals(line, stage, project, projectMode, options);
     subtotalByStageId.set(line.stageId, (subtotalByStageId.get(line.stageId) ?? 0) + totals.clientTotalCents);
   });
 

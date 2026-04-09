@@ -526,7 +526,7 @@ export default function ProjectProcurement() {
       estimateState.stages,
       estimateState.works,
       estimateState.lines,
-      estimateState.project.regime,
+      estimateState.project.projectMode,
     );
     const procurementCostCents = totals.breakdownByType.material + totals.breakdownByType.tool;
     return procurementCostCents / 100;

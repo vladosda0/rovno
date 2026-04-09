@@ -1171,7 +1171,7 @@ describe("ProjectEstimate", () => {
       beforeState.stages,
       beforeState.works,
       beforeState.lines,
-      beforeState.project.regime,
+      beforeState.project.projectMode,
     );
 
     expect(within(footer).getByText("Total across all stages")).toBeInTheDocument();
@@ -1193,7 +1193,7 @@ describe("ProjectEstimate", () => {
       afterState.stages,
       afterState.works,
       afterState.lines,
-      afterState.project.regime,
+      afterState.project.projectMode,
     );
 
     expect(afterTotals.totalCents).not.toBe(beforeTotals.totalCents);

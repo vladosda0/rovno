@@ -1,4 +1,4 @@
-import type { Regime } from "@/types/estimate-v2";
+import type { ProjectMode } from "@/types/estimate-v2";
 
 export interface ProjectEstimateCtaState {
   showSubmit: boolean;
@@ -9,7 +9,7 @@ export interface ProjectEstimateCtaState {
 }
 
 interface ResolveProjectEstimateCtaInput {
-  regime: Regime;
+  projectMode: ProjectMode;
   isOwner: boolean;
   hasProposedVersion: boolean;
 }
@@ -17,20 +17,8 @@ interface ResolveProjectEstimateCtaInput {
 export function resolveProjectEstimateCtaState(
   input: ResolveProjectEstimateCtaInput,
 ): ProjectEstimateCtaState {
-  const { regime, isOwner, hasProposedVersion } = input;
-
-  if (regime === "client") {
-    return {
-      showSubmit: false,
-      showApprove: true,
-      approveDisabled: !hasProposedVersion,
-      approveDisabledReason: hasProposedVersion ? null : "No submitted version to approve",
-      showClientPreviewBadge: isOwner,
-    };
-  }
-
   return {
-    showSubmit: isOwner,
+    showSubmit: input.isOwner && input.projectMode === "contractor",
     showApprove: false,
     approveDisabled: true,
     approveDisabledReason: null,

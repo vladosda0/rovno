@@ -13,8 +13,6 @@ import {
   submitVersion,
   updateWorkDates,
   setProjectEstimateStatus,
-  setRegime,
-  setRegimeDev,
   updateEstimateV2Project,
   updateLine,
 } from "@/data/estimate-v2-store";
@@ -40,7 +38,6 @@ function project(partial: Partial<EstimateV2Project> = {}): EstimateV2Project {
     title: "Project",
     projectMode: "contractor",
     currency: "RUB",
-    regime: "contractor",
     taxBps: 2000,
     discountBps: 0,
     markupBps: 0,
@@ -233,101 +230,6 @@ describe("estimate-v2 bootstrap", () => {
     expect(state.lines.some((lineItem) => lineItem.type === "labor")).toBe(false);
 
     legacyReadSpy.mockRestore();
-  });
-});
-
-describe("estimate-v2 regime switching", () => {
-  afterEach(() => {
-    setAuthRole("owner");
-  });
-
-  it("setRegimeDev updates regime for seeded demo projects in DEV", () => {
-    const ok = setRegimeDev("project-1", "client");
-    expect(ok).toBe(true);
-    const state = getEstimateV2ProjectState("project-1");
-    expect(state.project.regime).toBe("client");
-  });
-
-  it("setRegimeDev rejects non-demo projects", () => {
-    const ok = setRegimeDev("project-manual-test", "client");
-    expect(ok).toBe(false);
-  });
-
-  it("setRegime keeps owner-only role gate unchanged", () => {
-    setRegimeDev("project-1", "contractor");
-    setAuthRole("viewer");
-    const blocked = setRegime("project-1", "build_myself");
-    expect(blocked).toBe(false);
-
-    setAuthRole("owner");
-    const allowed = setRegime("project-1", "build_myself");
-    expect(allowed).toBe(true);
-  });
-
-  it("blocks switching to client regime when project mode is build_myself", () => {
-    const projectId = "project-1";
-    setAuthRole("owner");
-
-    updateEstimateV2Project(projectId, { projectMode: "build_myself", regime: "build_myself" });
-    const blocked = setRegime(projectId, "client");
-    expect(blocked).toBe(false);
-
-    updateEstimateV2Project(projectId, { projectMode: "contractor", regime: "contractor" });
-  });
-
-  it("rejects estimate mutations in client regime", () => {
-    const projectId = "project-1";
-    setAuthRole("owner");
-    const initial = getEstimateV2ProjectState(projectId);
-    const initialFirstWork = initial.works[0];
-    const initialSecondWork = initial.works[1];
-    expect(initialFirstWork).toBeDefined();
-    expect(initialSecondWork).toBeDefined();
-    if (!initialFirstWork || !initialSecondWork) return;
-
-    const seededLine = createLine(projectId, {
-      stageId: initialFirstWork.stageId,
-      workId: initialFirstWork.id,
-      title: "Client-regime mutation guard line",
-      type: "material",
-      unit: "pcs",
-      qtyMilli: 1_000,
-      costUnitCents: 1_000,
-    });
-    expect(seededLine).toBeTruthy();
-
-    const switched = setRegimeDev(projectId, "client");
-    expect(switched).toBe(true);
-
-    const before = getEstimateV2ProjectState(projectId);
-    const firstLine = before.lines.find((lineItem) => lineItem.id === seededLine?.id);
-    const firstWork = before.works.find((workItem) => workItem.id === initialFirstWork.id);
-    const secondWork = before.works.find((workItem) => workItem.id === initialSecondWork.id);
-    expect(firstLine).toBeDefined();
-    expect(firstWork).toBeDefined();
-    expect(secondWork).toBeDefined();
-    if (!firstLine || !firstWork || !secondWork) return;
-
-    updateLine(projectId, firstLine.id, { title: "Blocked line update" });
-    updateEstimateV2Project(projectId, { taxBps: before.project.taxBps + 100 });
-    const depResult = addDependency(projectId, firstWork.id, secondWork.id, 1);
-    const dateResult = updateWorkDates(projectId, firstWork.id, "2026-01-01T00:00:00.000Z", "2026-01-02T00:00:00.000Z", { source: "gantt" });
-    const statusResult = setProjectEstimateStatus(projectId, "paused");
-
-    expect(depResult.ok).toBe(false);
-    if (!depResult.ok) expect(depResult.reason).toBe("forbidden");
-    expect(dateResult.ok).toBe(false);
-    if (!dateResult.ok) expect(dateResult.reason).toBe("forbidden");
-    expect(statusResult.ok).toBe(false);
-    expect(statusResult.reason).toBe("forbidden");
-
-    const after = getEstimateV2ProjectState(projectId);
-    const lineAfter = after.lines.find((line) => line.id === firstLine.id);
-    expect(lineAfter?.title).toBe(firstLine.title);
-    expect(after.project.taxBps).toBe(before.project.taxBps);
-    expect(after.dependencies.length).toBe(before.dependencies.length);
-
-    setRegimeDev(projectId, "contractor");
   });
 });
 
@@ -723,7 +625,6 @@ describe("estimate-v2 execution foundation", () => {
   it("appends dependency comment to successor task comments", () => {
     const projectId = "project-2";
     setAuthRole("owner");
-    setRegimeDev(projectId, "contractor");
     setProjectEstimateStatus(projectId, "in_work", { skipSetup: true });
 
     const before = getEstimateV2ProjectState(projectId);
@@ -746,7 +647,6 @@ describe("estimate-v2 execution foundation", () => {
   it("emits tax/discount events only on meaningful value change", () => {
     const projectId = "project-3";
     setAuthRole("owner");
-    setRegimeDev(projectId, "contractor");
     const initial = getEstimateV2ProjectState(projectId).project;
 
     updateEstimateV2Project(projectId, { taxBps: initial.taxBps + 100 });
@@ -767,7 +667,6 @@ describe("estimate-v2 execution foundation", () => {
   it("keeps archived proposed versions out of latest proposed selector", () => {
     const projectId = "project-1";
     setAuthRole("owner");
-    setRegimeDev(projectId, "contractor");
 
     const v1 = createVersionSnapshot(projectId, "user-1");
     expect(submitVersion(projectId, v1.versionId)).toBe(true);
@@ -789,7 +688,6 @@ describe("estimate-v2 execution foundation", () => {
   it("rejects replay approval for archived and already-approved versions", () => {
     const projectId = "project-2";
     setAuthRole("owner");
-    setRegimeDev(projectId, "contractor");
 
     const v1 = createVersionSnapshot(projectId, "user-1");
     expect(submitVersion(projectId, v1.versionId)).toBe(true);
@@ -830,7 +728,6 @@ describe("estimate-v2 execution foundation", () => {
 
   it("allows co-owner submissions but blocks non-privileged roles", () => {
     const projectId = "project-1";
-    setRegimeDev(projectId, "contractor");
 
     setAuthRole("co_owner");
     const coOwnerVersion = createVersionSnapshot(projectId, "user-1");
@@ -844,7 +741,6 @@ describe("estimate-v2 execution foundation", () => {
   it("refreshes pending version snapshot without changing number or share link", () => {
     const projectId = "project-2";
     setAuthRole("owner");
-    setRegimeDev(projectId, "contractor");
     const seededState = getEstimateV2ProjectState(projectId);
     const seededWork = seededState.works[0];
     const seededLine = createLine(projectId, {
@@ -887,7 +783,6 @@ describe("estimate-v2 execution foundation", () => {
   it("stores share approval policy for submitted versions", () => {
     const projectId = "project-3";
     setAuthRole("owner");
-    setRegimeDev(projectId, "contractor");
 
     const disabledVersion = createVersionSnapshot(projectId, "user-1");
     expect(

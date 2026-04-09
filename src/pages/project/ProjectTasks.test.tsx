@@ -166,7 +166,7 @@ describe("ProjectTasks", () => {
     mocks.useWorkspaceMode.mockReturnValue({ kind: "supabase", profileId: "user-1" });
     mocks.useEstimateV2Project.mockReturnValue({
       project: {
-        regime: "contractor",
+        projectMode: "contractor",
         estimateStatus: "in_work",
       },
       works: [],
