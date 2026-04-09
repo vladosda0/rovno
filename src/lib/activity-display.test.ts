@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getActivityDisplayDetail } from "@/lib/activity-display";
+import { getActivityDisplayDetail, getActivityDisplayDetailForHome } from "@/lib/activity-display";
 import type { Event } from "@/types/entities";
 
 function makeEvent(partial: Partial<Event> & Pick<Event, "type" | "payload">): Event {
@@ -53,5 +53,33 @@ describe("getActivityDisplayDetail", () => {
       payload: { text: "note", line_total_cents: 100 },
     });
     expect(getActivityDisplayDetail(evt, { canViewFinanceDetail: false })).toBeNull();
+  });
+});
+
+describe("getActivityDisplayDetailForHome", () => {
+  it("uses fail-closed fallback when project id is missing from the map", () => {
+    const evt = makeEvent({
+      type: "estimate.tax_changed",
+      payload: { title: "VAT 20%" },
+    });
+    const line = getActivityDisplayDetailForHome(
+      evt,
+      { p_other: { canViewFinanceDetail: true } },
+      { canViewFinanceDetail: false },
+    );
+    expect(line).toBeNull();
+  });
+
+  it("uses per-project context when project id is present", () => {
+    const evt = makeEvent({
+      type: "estimate.tax_changed",
+      payload: { title: "VAT 20%" },
+    });
+    const shown = getActivityDisplayDetailForHome(
+      evt,
+      { p1: { canViewFinanceDetail: true } },
+      { canViewFinanceDetail: false },
+    );
+    expect(shown).toBe("VAT 20%");
   });
 });

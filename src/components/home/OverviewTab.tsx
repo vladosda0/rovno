@@ -234,7 +234,7 @@ export function OverviewTab() {
                   const events = recentActivityByProject[p.id] ?? [];
                   return events.map((evt) => {
                     const line = getActivityDisplayDetailForHome(evt, activityRedactionByProject, {
-                      canViewFinanceDetail: true,
+                      canViewFinanceDetail: false,
                     });
                     const summary = line ?? evt.type.replace(/[._]/g, " ");
                     return (
