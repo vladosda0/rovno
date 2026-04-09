@@ -73,6 +73,8 @@ Never treat UI or mock types as DB truth. If the contract is missing a field or 
 
 Mirror updates: **GitHub Actions sync PR** to `rovno` after `rovno-db` changes land on `dev`, not ad hoc agent regeneration.
 
+If `backend-truth/` was hand-edited as a rare unblock, **before closing** follow `.cursor/rules/11-backend-truth-emergency-closeout.mdc`: fix `rovno-db` (migrations, allowlist, verify + generator tests), **revert** all `backend-truth/` hand-edits here, then hand off noting the **sync PR** step.
+
 ---
 
 ## 6. Mock vs real
