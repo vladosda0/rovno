@@ -3,6 +3,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, useNavigate } from "react-router-dom";
+/**
+ * Project-targeted AI send / seam readiness is asserted in `ai-project-context.test.ts`
+ * via `evaluateProjectTargetedSendReadiness` (shared with `AISidebar` `runAssistantForContent`).
+ */
 import { AISidebar } from "@/components/AISidebar";
 import { __unsafeResetStoreForTests, addMember, addProject } from "@/data/store";
 import { clearDemoSession, clearStoredAuthProfile, setAuthRole, setStoredAuthProfile } from "@/lib/auth-state";

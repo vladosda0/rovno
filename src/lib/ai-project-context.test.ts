@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { buildAIProjectContext, type AIContextInputs, type AIContextPack } from "@/lib/ai-project-context";
+import {
+  buildAIProjectContext,
+  evaluateProjectTargetedSendReadiness,
+  gateAIProjectTargetedSend,
+  type AIContextInputs,
+  type AIContextPack,
+} from "@/lib/ai-project-context";
 import type { ProjectAuthoritySeam } from "@/lib/project-authority-seam";
 import type { FinanceVisibility, MemberRole } from "@/types/entities";
 
@@ -183,5 +189,77 @@ describe("buildAIProjectContext — no forbidden financial keys in output", () =
     expect(json).not.toContain("plannedBudgetCents");
     expect(json).not.toContain("percentProfitability");
     expect(json).not.toContain("orderedTotal");
+  });
+});
+
+describe("gateAIProjectTargetedSend", () => {
+  it("returns no_target without a project id", () => {
+    expect(gateAIProjectTargetedSend(undefined, seamForRole("owner"), false)).toBe("no_target");
+    expect(gateAIProjectTargetedSend("", seamForRole("owner"), false)).toBe("no_target");
+  });
+
+  it("returns loading while seam is loading", () => {
+    expect(gateAIProjectTargetedSend("project-1", seamForRole("owner"), true)).toBe("loading");
+  });
+
+  it("returns no_seam when seam is missing", () => {
+    expect(gateAIProjectTargetedSend("project-1", undefined, false)).toBe("no_seam");
+  });
+
+  it("returns seam_mismatch when seam project id differs", () => {
+    const seam = seamForRole("owner");
+    expect(gateAIProjectTargetedSend("other-project", seam, false)).toBe("seam_mismatch");
+  });
+
+  it("returns ok when seam matches target", () => {
+    const seam = seamForRole("owner");
+    expect(gateAIProjectTargetedSend("project-1", seam, false)).toBe("ok");
+  });
+});
+
+describe("evaluateProjectTargetedSendReadiness — AISidebar project-targeted send (route-agnostic)", () => {
+  const minimalProject = {
+    id: "project-1",
+    owner_id: "profile-1",
+    title: "P",
+    type: "residential",
+    automation_level: "assisted" as const,
+    current_stage_id: "",
+    progress_pct: 0,
+  };
+
+  it("blocks while seam is loading (same for /project/:id and /home picker)", () => {
+    const seam = seamForRole("owner");
+    expect(
+      evaluateProjectTargetedSendReadiness("project-1", seam, true, minimalProject),
+    ).toEqual({ status: "blocked", gate: "loading" });
+  });
+
+  it("blocks when seam is missing or mismatched", () => {
+    const seam = seamForRole("owner");
+    expect(evaluateProjectTargetedSendReadiness("project-1", undefined, false, minimalProject)).toEqual({
+      status: "blocked",
+      gate: "no_seam",
+    });
+    expect(
+      evaluateProjectTargetedSendReadiness("project-1", { ...seam, projectId: "other" }, false, minimalProject),
+    ).toEqual({ status: "blocked", gate: "seam_mismatch" });
+  });
+
+  it("requires ctx project row after gate ok (strict context path)", () => {
+    const seam = seamForRole("owner");
+    expect(evaluateProjectTargetedSendReadiness("project-1", seam, false, undefined)).toEqual({
+      status: "no_project",
+    });
+    expect(evaluateProjectTargetedSendReadiness("project-1", seam, false, null)).toEqual({
+      status: "no_project",
+    });
+  });
+
+  it("is ready when seam matches and project context exists", () => {
+    const seam = seamForRole("owner");
+    expect(evaluateProjectTargetedSendReadiness("project-1", seam, false, minimalProject)).toEqual({
+      status: "ready",
+    });
   });
 });

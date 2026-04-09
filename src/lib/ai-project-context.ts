@@ -12,7 +12,7 @@
 import type { ProjectAuthoritySeam } from "@/lib/project-authority-seam";
 import type { EstimateV2FinanceProjectSummary } from "@/lib/estimate-v2/finance-read-model";
 import type { ProcurementReadProjectSummary } from "@/lib/procurement-read-model";
-import type { Event } from "@/types/entities";
+import type { Event, Project } from "@/types/entities";
 import {
   getProjectDomainAccess,
   getProjectRole,
@@ -24,6 +24,54 @@ import {
   effectiveInternalDocsVisibilityForSeam,
   canViewInternalDocuments,
 } from "@/lib/internal-docs-visibility";
+
+// ---------------------------------------------------------------------------
+// Targeted send gate (live assistant path must not bypass strict context seam)
+// ---------------------------------------------------------------------------
+
+export type AIProjectTargetedSendGate =
+  | "ok"
+  | "no_target"
+  | "loading"
+  | "no_seam"
+  | "seam_mismatch";
+
+/**
+ * Fail-closed guard for project-targeted AI sends: seam must finish loading,
+ * exist, and match the project id being addressed.
+ */
+export function gateAIProjectTargetedSend(
+  targetProjectId: string | undefined,
+  seam: ProjectAuthoritySeam | undefined,
+  seamLoading: boolean,
+): AIProjectTargetedSendGate {
+  if (!targetProjectId) return "no_target";
+  if (seamLoading) return "loading";
+  if (!seam) return "no_seam";
+  if (seam.projectId !== targetProjectId) return "seam_mismatch";
+  return "ok";
+}
+
+/**
+ * Full readiness for a project-targeted assistant turn (AISidebar `runAssistantForContent`).
+ * Route-agnostic: `/project/:id` and `/home` with a selected project use the same inputs.
+ */
+export type AIProjectTargetedSendReadiness =
+  | { status: "ready" }
+  | { status: "blocked"; gate: Exclude<AIProjectTargetedSendGate, "ok"> }
+  | { status: "no_project" };
+
+export function evaluateProjectTargetedSendReadiness(
+  targetProjectId: string | undefined,
+  seam: ProjectAuthoritySeam | undefined,
+  seamLoading: boolean,
+  ctxProject: Project | null | undefined,
+): AIProjectTargetedSendReadiness {
+  const gate = gateAIProjectTargetedSend(targetProjectId, seam, seamLoading);
+  if (gate !== "ok") return { status: "blocked", gate };
+  if (!ctxProject) return { status: "no_project" };
+  return { status: "ready" };
+}
 
 // ---------------------------------------------------------------------------
 // Output shape

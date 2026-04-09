@@ -43,7 +43,18 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCurrentUser, useEvents, useProject, useProjects, useTasks, useWorkspaceMode } from "@/hooks/use-mock-data";
-import { usePermission } from "@/lib/permissions";
+import { useEstimateV2FinanceProjectSummaryFromWorkspace } from "@/hooks/use-estimate-v2-data";
+import { useProcurementReadProjectSummary } from "@/hooks/use-procurement-read-model";
+import {
+  getProjectDomainAccess,
+  projectDomainAllowsView,
+  usePermission,
+} from "@/lib/permissions";
+import {
+  buildAIProjectContext,
+  evaluateProjectTargetedSendReadiness,
+  type AIContextInputs,
+} from "@/lib/ai-project-context";
 import { generateProposalQueue, getTextResponse, reviseProposalWithEdits } from "@/lib/ai-engine";
 import {
   commitPhotoConsultActions,
@@ -397,12 +408,34 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const user = useCurrentUser();
   const workspaceMode = useWorkspaceMode();
   const projects = useProjects();
-  const permResult = usePermission(projectId || "");
+  const [homeProjectMode, setHomeProjectMode] = useState<string>(GENERAL_MODE_VALUE);
+
+  const resolvedPermissionProjectId = useMemo(() => {
+    if (isProjectContext) return projectId;
+    if (isHomeContext && homeProjectMode !== GENERAL_MODE_VALUE) return homeProjectMode;
+    return "";
+  }, [isProjectContext, isHomeContext, projectId, homeProjectMode]);
+
+  const permResult = usePermission(resolvedPermissionProjectId);
   const perm = isProjectContext && !isGuest ? permResult : null;
-  /** Aligns AI commit checks with workspace membership (critical for Supabase mode: store `getMembers` is empty). */
-  const seamForProjectCommit = isProjectContext && !isGuest ? permResult.seam : undefined;
+  /** Workspace seam for the project AI is addressing (project route or home project picker). */
+  const seamForProjectCommit =
+    !isGuest && resolvedPermissionProjectId ? permResult.seam : undefined;
+
   const { project, members } = useProject(projectId || "");
   const tasks = useTasks(projectId || "");
+  const { project: ctxProject, members: ctxMembers, stages: ctxStages } = useProject(resolvedPermissionProjectId);
+  const ctxTasks = useTasks(resolvedPermissionProjectId);
+  const ctxEventsFull = useEvents(resolvedPermissionProjectId);
+  const ctxHrReadsEnabled = resolvedPermissionProjectId
+    ? projectDomainAllowsView(getProjectDomainAccess(permResult.seam, "hr"))
+    : false;
+  const ctxFinanceSummary = useEstimateV2FinanceProjectSummaryFromWorkspace(
+    resolvedPermissionProjectId,
+    ctxProject ?? null,
+    { hrReadsEnabled: ctxHrReadsEnabled },
+  );
+  const ctxProcurementSummary = useProcurementReadProjectSummary(resolvedPermissionProjectId);
 
   const [messages, setMessages] = useState<AIMessage[]>([]);
   const [workLogs, setWorkLogs] = useState<Map<string, WorkLogEntry>>(new Map());
@@ -412,7 +445,6 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const [activityFilter, setActivityFilter] = useState<FeedFilter>("all");
   const [learnMode, setLearnMode] = useState(false);
   const [automationMode, setAutomationMode] = useState<AutomationMode>("assisted");
-  const [homeProjectMode, setHomeProjectMode] = useState<string>(GENERAL_MODE_VALUE);
   const [pendingGeneralProposalInput, setPendingGeneralProposalInput] = useState<string | null>(null);
   const [voiceState, setVoiceState] = useState<VoiceState>("idle");
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
@@ -436,6 +468,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const photoAnalysisTimerRef = useRef<number | null>(null);
   const previousScopeKeyRef = useRef(scopeKey);
   const latestScopedStateRef = useRef<ScopedAISidebarState>(createEmptyScopedSidebarState());
+  const startPhotoConsultRef = useRef<((ctx: PhotoConsultContext) => void) | null>(null);
   const [highlightedEventIds, setHighlightedEventIds] = useState<Set<string>>(new Set());
   const [proposalExecutionLinks, setProposalExecutionLinks] = useState<Record<string, ProposalExecutionGroupMeta>>({});
   const [expandedProposalEventIds, setExpandedProposalEventIds] = useState<Set<string>>(new Set());
@@ -498,7 +531,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
         photoAnalysisTimerRef.current = null;
         return;
       }
-      if (perm && !perm.can("ai.generate")) {
+      if (!isGuest && !permResult.can("ai.generate")) {
         setPhotoConsult(null);
         setPhotoAnalysis(null);
         setPhotoAnalysisLoading(false);
@@ -528,7 +561,11 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
       setSelectedActions(new Set(actions.map((_, index) => index)));
       photoAnalysisTimerRef.current = null;
     }, 2000);
-  }, [clearPhotoAnalysisTimer, perm, seamForProjectCommit]);
+  }, [clearPhotoAnalysisTimer, isGuest, permResult, seamForProjectCommit]);
+
+  useEffect(() => {
+    startPhotoConsultRef.current = startPhotoConsult;
+  }, [startPhotoConsult]);
 
   useEffect(() => {
     latestScopedStateRef.current = {
@@ -587,7 +624,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
 
     const scopedPhotoConsult = projectId ? getPhotoConsultContext(projectId) : null;
     if (!nextState.photoConsult && scopedPhotoConsult) {
-      startPhotoConsult(scopedPhotoConsult);
+      startPhotoConsultRef.current?.(scopedPhotoConsult);
     }
   }, [
     clearPhotoAnalysisTimer,
@@ -595,7 +632,6 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     clearVoiceTimers,
     projectId,
     scopeKey,
-    startPhotoConsult,
   ]);
 
   useEffect(() => () => {
@@ -901,6 +937,70 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     });
 
     window.setTimeout(() => {
+      if (targetProjectId) {
+        const readiness = evaluateProjectTargetedSendReadiness(
+          targetProjectId,
+          seamForProjectCommit,
+          permResult.isLoading,
+          ctxProject,
+        );
+        if (readiness.status === "blocked") {
+          setWorkLogs((prev) => {
+            const next = new Map(prev);
+            next.delete(workLogId);
+            return next;
+          });
+          const denied =
+            readiness.gate === "loading"
+              ? "Still loading your permissions for this project. Try again in a moment."
+              : "AI can't use this project context right now (permissions unavailable).";
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `msg-${Date.now() + 1}`,
+              role: "assistant",
+              content: denied,
+              timestamp: new Date().toISOString(),
+              mode: responseMode,
+            },
+          ]);
+          return;
+        }
+        if (readiness.status === "no_project") {
+          setWorkLogs((prev) => {
+            const next = new Map(prev);
+            next.delete(workLogId);
+            return next;
+          });
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `msg-${Date.now() + 1}`,
+              role: "assistant",
+              content: "Project data is not available yet for AI context. Try again shortly.",
+              timestamp: new Date().toISOString(),
+              mode: responseMode,
+            },
+          ]);
+          return;
+        }
+        const contextInputs: AIContextInputs = {
+          project: {
+            title: ctxProject.title,
+            type: ctxProject.type,
+            progress_pct: ctxProject.progress_pct,
+          },
+          stages: ctxStages,
+          tasks: ctxTasks,
+          financeSummary: ctxFinanceSummary,
+          procurementSummary: ctxProcurementSummary,
+          events: ctxEventsFull.slice(0, 5),
+          memberCount: ctxMembers.length,
+          userCredits: user.credits_free + user.credits_paid,
+        };
+        void buildAIProjectContext(seamForProjectCommit!, contextInputs);
+      }
+
       const proposals = targetProjectId
         ? generateProposalQueue(content, targetProjectId, automationMode, seamForProjectCommit)
         : [];
@@ -945,7 +1045,21 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
         });
       }
     }, WORK_STEPS_GENERATE.length * 600 + 200);
-  }, [automationMode, defaultDirectEditForNewProposal, seamForProjectCommit]);
+  }, [
+    automationMode,
+    ctxFinanceSummary,
+    ctxMembers.length,
+    ctxProcurementSummary,
+    ctxProject,
+    ctxStages,
+    ctxTasks,
+    ctxEventsFull,
+    defaultDirectEditForNewProposal,
+    permResult.isLoading,
+    seamForProjectCommit,
+    user.credits_free,
+    user.credits_paid,
+  ]);
 
   function shouldAskProjectBeforeProposal(content: string) {
     return ACTIONABLE_PROPOSAL_PATTERN.test(content);
@@ -1009,7 +1123,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
       return;
     }
 
-    if (isProjectContext && perm && !perm.can("ai.generate")) {
+    if (!isGuest && resolvedPermissionProjectId && !permResult.can("ai.generate")) {
       toast({ title: "Access denied", description: "You don't have permission to use AI generation.", variant: "destructive" });
       return;
     }
@@ -1271,7 +1385,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
       });
       return;
     }
-    if (perm && !perm.can("ai.generate")) {
+    if (!isGuest && !permResult.can("ai.generate")) {
       toast({
         title: "Access denied",
         description: "You don't have permission to use AI generation.",
