@@ -71,6 +71,8 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20260407190000_track4_upload_visibility_class.sql`
 - `supabase/migrations/20260408100000_document_versions_insert_internal_visibility_parity.sql`
 - `supabase/migrations/20260408120000_estimate_line_pricing_params.sql`
+- `supabase/migrations/20260409120000_hr_select_policies_align_can_access_hr_domain.sql`
+- `supabase/migrations/20260409140000_hr_write_policies_align_can_access_hr_domain.sql`
 
 ## Exclusions
 

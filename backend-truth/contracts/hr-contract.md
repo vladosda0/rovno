@@ -11,8 +11,8 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 - `supabase/migrations/20260306164000_hr_domain.sql`
 - `supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql`
 - `supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql`
-- `supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql`
-- `supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql`
+- `supabase/migrations/20260409120000_hr_select_policies_align_can_access_hr_domain.sql`
+- `supabase/migrations/20260409140000_hr_write_policies_align_can_access_hr_domain.sql`
 
 ## Tables
 
@@ -126,15 +126,15 @@ Indexes:
 - RLS enabled: yes
 - Authenticated grants: `delete`, `insert`, `select`, `update`
 - Policies:
-  - `hr_items_insert` for `insert` to `authenticated`
-    with check: `public.can_write_project_content(project_id) and created_by = auth.uid()`
-  - `hr_items_update` for `update` to `authenticated`
-    using: `public.can_write_project_content(project_id)`
-    with check: `public.can_write_project_content(project_id)`
-  - `hr_items_delete` for `delete` to `authenticated`
-    using: `public.can_write_project_content(project_id)`
   - `hr_items_select` for `select` to `authenticated`
-    using: `public.can_access_project(project_id) and public.can_view_sensitive_detail(project_id)`
+    using: `public.can_access_project(project_id) and public.can_view_sensitive_detail(project_id) and public.can_access_hr_domain(project_id)`
+  - `hr_items_insert` for `insert` to `authenticated`
+    with check: `public.can_write_project_content(project_id) and public.can_access_hr_domain(project_id) and created_by = auth.uid()`
+  - `hr_items_update` for `update` to `authenticated`
+    using: `public.can_write_project_content(project_id) and public.can_access_hr_domain(project_id)`
+    with check: `public.can_write_project_content(project_id) and public.can_access_hr_domain(project_id)`
+  - `hr_items_delete` for `delete` to `authenticated`
+    using: `public.can_write_project_content(project_id) and public.can_access_hr_domain(project_id)`
 
 ### public.hr_item_assignees
 
@@ -142,27 +142,27 @@ Indexes:
 - Authenticated grants: `delete`, `insert`, `select`, `update`
 - Policies:
   - `hr_item_assignees_select` for `select` to `authenticated`
-    using: `exists ( select 1 from public.hr_items hi where hi.id = hr_item_id and public.can_access_project(hi.project_id) )`
+    using: `exists ( select 1 from public.hr_items hi where hi.id = hr_item_id and public.can_access_project(hi.project_id) and public.can_access_hr_domain(hi.project_id) )`
   - `hr_item_assignees_insert` for `insert` to `authenticated`
-    with check: `exists ( select 1 from public.hr_items hi where hi.id = hr_item_id and public.can_write_project_content(hi.project_id) )`
+    with check: `exists ( select 1 from public.hr_items hi where hi.id = hr_item_id and public.can_write_project_content(hi.project_id) and public.can_access_hr_domain(hi.project_id) )`
   - `hr_item_assignees_update` for `update` to `authenticated`
-    using: `exists ( select 1 from public.hr_items hi where hi.id = hr_item_id and public.can_write_project_content(hi.project_id) )`
-    with check: `exists ( select 1 from public.hr_items hi where hi.id = hr_item_id and public.can_write_project_content(hi.project_id) )`
+    using: `exists ( select 1 from public.hr_items hi where hi.id = hr_item_id and public.can_write_project_content(hi.project_id) and public.can_access_hr_domain(hi.project_id) )`
+    with check: `exists ( select 1 from public.hr_items hi where hi.id = hr_item_id and public.can_write_project_content(hi.project_id) and public.can_access_hr_domain(hi.project_id) )`
   - `hr_item_assignees_delete` for `delete` to `authenticated`
-    using: `exists ( select 1 from public.hr_items hi where hi.id = hr_item_id and public.can_write_project_content(hi.project_id) )`
+    using: `exists ( select 1 from public.hr_items hi where hi.id = hr_item_id and public.can_write_project_content(hi.project_id) and public.can_access_hr_domain(hi.project_id) )`
 
 ### public.hr_payments
 
 - RLS enabled: yes
 - Authenticated grants: `delete`, `insert`, `select`, `update`
 - Policies:
-  - `hr_payments_insert` for `insert` to `authenticated`
-    with check: `public.can_write_project_content(project_id) and (created_by is null or created_by = auth.uid())`
-  - `hr_payments_update` for `update` to `authenticated`
-    using: `public.can_write_project_content(project_id)`
-    with check: `public.can_write_project_content(project_id)`
-  - `hr_payments_delete` for `delete` to `authenticated`
-    using: `public.can_write_project_content(project_id)`
   - `hr_payments_select` for `select` to `authenticated`
-    using: `public.can_access_project(project_id) and public.can_view_sensitive_detail(project_id)`
+    using: `public.can_access_project(project_id) and public.can_view_sensitive_detail(project_id) and public.can_access_hr_domain(project_id)`
+  - `hr_payments_insert` for `insert` to `authenticated`
+    with check: `public.can_write_project_content(project_id) and public.can_access_hr_domain(project_id) and (created_by is null or created_by = auth.uid())`
+  - `hr_payments_update` for `update` to `authenticated`
+    using: `public.can_write_project_content(project_id) and public.can_access_hr_domain(project_id)`
+    with check: `public.can_write_project_content(project_id) and public.can_access_hr_domain(project_id)`
+  - `hr_payments_delete` for `delete` to `authenticated`
+    using: `public.can_write_project_content(project_id) and public.can_access_hr_domain(project_id)`
 

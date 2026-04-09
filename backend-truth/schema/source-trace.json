@@ -1359,12 +1359,20 @@
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
     },
     {
+      "key": "public.hr_items.hr_items_select",
+      "schema": "public",
+      "table": "hr_items",
+      "name": "hr_items_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260409120000_hr_select_policies_align_can_access_hr_domain.sql"
+    },
+    {
       "key": "public.hr_items.hr_items_insert",
       "schema": "public",
       "table": "hr_items",
       "name": "hr_items_insert",
       "command": "insert",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260409140000_hr_write_policies_align_can_access_hr_domain.sql"
     },
     {
       "key": "public.hr_items.hr_items_update",
@@ -1372,7 +1380,7 @@
       "table": "hr_items",
       "name": "hr_items_update",
       "command": "update",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260409140000_hr_write_policies_align_can_access_hr_domain.sql"
     },
     {
       "key": "public.hr_items.hr_items_delete",
@@ -1380,7 +1388,7 @@
       "table": "hr_items",
       "name": "hr_items_delete",
       "command": "delete",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260409140000_hr_write_policies_align_can_access_hr_domain.sql"
     },
     {
       "key": "public.hr_items.hr_items_select",
@@ -1396,7 +1404,7 @@
       "table": "hr_item_assignees",
       "name": "hr_item_assignees_select",
       "command": "select",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260409120000_hr_select_policies_align_can_access_hr_domain.sql"
     },
     {
       "key": "public.hr_item_assignees.hr_item_assignees_insert",
@@ -1404,7 +1412,7 @@
       "table": "hr_item_assignees",
       "name": "hr_item_assignees_insert",
       "command": "insert",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260409140000_hr_write_policies_align_can_access_hr_domain.sql"
     },
     {
       "key": "public.hr_item_assignees.hr_item_assignees_update",
@@ -1412,7 +1420,7 @@
       "table": "hr_item_assignees",
       "name": "hr_item_assignees_update",
       "command": "update",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260409140000_hr_write_policies_align_can_access_hr_domain.sql"
     },
     {
       "key": "public.hr_item_assignees.hr_item_assignees_delete",
@@ -1420,7 +1428,15 @@
       "table": "hr_item_assignees",
       "name": "hr_item_assignees_delete",
       "command": "delete",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260409140000_hr_write_policies_align_can_access_hr_domain.sql"
+    },
+    {
+      "key": "public.hr_payments.hr_payments_select",
+      "schema": "public",
+      "table": "hr_payments",
+      "name": "hr_payments_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260409120000_hr_select_policies_align_can_access_hr_domain.sql"
     },
     {
       "key": "public.hr_payments.hr_payments_insert",
@@ -1428,7 +1444,7 @@
       "table": "hr_payments",
       "name": "hr_payments_insert",
       "command": "insert",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260409140000_hr_write_policies_align_can_access_hr_domain.sql"
     },
     {
       "key": "public.hr_payments.hr_payments_update",
@@ -1436,7 +1452,7 @@
       "table": "hr_payments",
       "name": "hr_payments_update",
       "command": "update",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260409140000_hr_write_policies_align_can_access_hr_domain.sql"
     },
     {
       "key": "public.hr_payments.hr_payments_delete",
@@ -1444,7 +1460,7 @@
       "table": "hr_payments",
       "name": "hr_payments_delete",
       "command": "delete",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260409140000_hr_write_policies_align_can_access_hr_domain.sql"
     },
     {
       "key": "public.hr_payments.hr_payments_select",
@@ -2197,8 +2213,8 @@
         "supabase/migrations/20260306164000_hr_domain.sql",
         "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql",
         "supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql",
-        "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
-        "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
+        "supabase/migrations/20260409120000_hr_select_policies_align_can_access_hr_domain.sql",
+        "supabase/migrations/20260409140000_hr_write_policies_align_can_access_hr_domain.sql"
       ],
       "tables": [
         "public.hr_items",

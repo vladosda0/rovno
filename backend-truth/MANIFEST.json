@@ -187,6 +187,14 @@
     {
       "path": "supabase/migrations/20260408120000_estimate_line_pricing_params.sql",
       "sha256": "51b4bfc61c3438eb68687fbd039835e43001dbbc2c3c823f84f3e8ab579741ba"
+    },
+    {
+      "path": "supabase/migrations/20260409120000_hr_select_policies_align_can_access_hr_domain.sql",
+      "sha256": "5b9cea7b69b563d96567fb373f1ef1096afe70d122eadfe8dd399d257716f29c"
+    },
+    {
+      "path": "supabase/migrations/20260409140000_hr_write_policies_align_can_access_hr_domain.sql",
+      "sha256": "3c175a1c459ed5c8078fcff4b4af5e7c61dbaa3eb0a8bd7d7c684b50aa799885"
     }
   ],
   "generated_artifacts": [
@@ -257,6 +265,8 @@
     "sql/20260407190000_track4_upload_visibility_class.sql",
     "sql/20260408100000_document_versions_insert_internal_visibility_parity.sql",
     "sql/20260408120000_estimate_line_pricing_params.sql",
+    "sql/20260409120000_hr_select_policies_align_can_access_hr_domain.sql",
+    "sql/20260409140000_hr_write_policies_align_can_access_hr_domain.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],

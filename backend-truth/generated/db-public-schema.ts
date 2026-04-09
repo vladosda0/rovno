@@ -191,6 +191,14 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260408120000_estimate_line_pricing_params.sql",
       "sha256": "51b4bfc61c3438eb68687fbd039835e43001dbbc2c3c823f84f3e8ab579741ba"
+    },
+    {
+      "path": "supabase/migrations/20260409120000_hr_select_policies_align_can_access_hr_domain.sql",
+      "sha256": "5b9cea7b69b563d96567fb373f1ef1096afe70d122eadfe8dd399d257716f29c"
+    },
+    {
+      "path": "supabase/migrations/20260409140000_hr_write_policies_align_can_access_hr_domain.sql",
+      "sha256": "3c175a1c459ed5c8078fcff4b4af5e7c61dbaa3eb0a8bd7d7c684b50aa799885"
     }
   ],
   "generated_artifacts": [
@@ -261,6 +269,8 @@ export const manifest = {
     "sql/20260407190000_track4_upload_visibility_class.sql",
     "sql/20260408100000_document_versions_insert_internal_visibility_parity.sql",
     "sql/20260408120000_estimate_line_pricing_params.sql",
+    "sql/20260409120000_hr_select_policies_align_can_access_hr_domain.sql",
+    "sql/20260409140000_hr_write_policies_align_can_access_hr_domain.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -12204,6 +12214,18 @@ export const rls = {
       ],
       "policies": [
         {
+          "name": "hr_items_select",
+          "schema": "public",
+          "table": "hr_items",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "public.can_access_project(project_id)\n  and public.can_view_sensitive_detail(project_id)\n  and public.can_access_hr_domain(project_id)",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260409120000_hr_select_policies_align_can_access_hr_domain.sql"
+        },
+        {
           "name": "hr_items_insert",
           "schema": "public",
           "table": "hr_items",
@@ -12212,8 +12234,8 @@ export const rls = {
             "authenticated"
           ],
           "using": null,
-          "withCheck": "public.can_write_project_content(project_id)\n  and created_by = auth.uid()",
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+          "withCheck": "public.can_write_project_content(project_id)\n  and public.can_access_hr_domain(project_id)\n  and created_by = auth.uid()",
+          "sourceMigration": "supabase/migrations/20260409140000_hr_write_policies_align_can_access_hr_domain.sql"
         },
         {
           "name": "hr_items_update",
@@ -12223,9 +12245,9 @@ export const rls = {
           "roles": [
             "authenticated"
           ],
-          "using": "public.can_write_project_content(project_id)",
-          "withCheck": "public.can_write_project_content(project_id)",
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+          "using": "public.can_write_project_content(project_id)\n  and public.can_access_hr_domain(project_id)",
+          "withCheck": "public.can_write_project_content(project_id)\n  and public.can_access_hr_domain(project_id)",
+          "sourceMigration": "supabase/migrations/20260409140000_hr_write_policies_align_can_access_hr_domain.sql"
         },
         {
           "name": "hr_items_delete",
@@ -12235,21 +12257,9 @@ export const rls = {
           "roles": [
             "authenticated"
           ],
-          "using": "public.can_write_project_content(project_id)",
+          "using": "public.can_write_project_content(project_id)\n  and public.can_access_hr_domain(project_id)",
           "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-        },
-        {
-          "name": "hr_items_select",
-          "schema": "public",
-          "table": "hr_items",
-          "command": "select",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "public.can_access_project(project_id)\n  and public.can_view_sensitive_detail(project_id)",
-          "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
+          "sourceMigration": "supabase/migrations/20260409140000_hr_write_policies_align_can_access_hr_domain.sql"
         }
       ]
     },
@@ -12272,9 +12282,9 @@ export const rls = {
           "roles": [
             "authenticated"
           ],
-          "using": "exists (\n    select 1\n    from public.hr_items hi\n    where hi.id = hr_item_id\n      and public.can_access_project(hi.project_id)\n  )",
+          "using": "exists (\n    select 1\n    from public.hr_items hi\n    where hi.id = hr_item_id\n      and public.can_access_project(hi.project_id)\n      and public.can_access_hr_domain(hi.project_id)\n  )",
           "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+          "sourceMigration": "supabase/migrations/20260409120000_hr_select_policies_align_can_access_hr_domain.sql"
         },
         {
           "name": "hr_item_assignees_insert",
@@ -12285,8 +12295,8 @@ export const rls = {
             "authenticated"
           ],
           "using": null,
-          "withCheck": "exists (\n    select 1\n    from public.hr_items hi\n    where hi.id = hr_item_id\n      and public.can_write_project_content(hi.project_id)\n  )",
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+          "withCheck": "exists (\n    select 1\n    from public.hr_items hi\n    where hi.id = hr_item_id\n      and public.can_write_project_content(hi.project_id)\n      and public.can_access_hr_domain(hi.project_id)\n  )",
+          "sourceMigration": "supabase/migrations/20260409140000_hr_write_policies_align_can_access_hr_domain.sql"
         },
         {
           "name": "hr_item_assignees_update",
@@ -12296,9 +12306,9 @@ export const rls = {
           "roles": [
             "authenticated"
           ],
-          "using": "exists (\n    select 1\n    from public.hr_items hi\n    where hi.id = hr_item_id\n      and public.can_write_project_content(hi.project_id)\n  )",
-          "withCheck": "exists (\n    select 1\n    from public.hr_items hi\n    where hi.id = hr_item_id\n      and public.can_write_project_content(hi.project_id)\n  )",
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+          "using": "exists (\n    select 1\n    from public.hr_items hi\n    where hi.id = hr_item_id\n      and public.can_write_project_content(hi.project_id)\n      and public.can_access_hr_domain(hi.project_id)\n  )",
+          "withCheck": "exists (\n    select 1\n    from public.hr_items hi\n    where hi.id = hr_item_id\n      and public.can_write_project_content(hi.project_id)\n      and public.can_access_hr_domain(hi.project_id)\n  )",
+          "sourceMigration": "supabase/migrations/20260409140000_hr_write_policies_align_can_access_hr_domain.sql"
         },
         {
           "name": "hr_item_assignees_delete",
@@ -12308,9 +12318,9 @@ export const rls = {
           "roles": [
             "authenticated"
           ],
-          "using": "exists (\n    select 1\n    from public.hr_items hi\n    where hi.id = hr_item_id\n      and public.can_write_project_content(hi.project_id)\n  )",
+          "using": "exists (\n    select 1\n    from public.hr_items hi\n    where hi.id = hr_item_id\n      and public.can_write_project_content(hi.project_id)\n      and public.can_access_hr_domain(hi.project_id)\n  )",
           "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+          "sourceMigration": "supabase/migrations/20260409140000_hr_write_policies_align_can_access_hr_domain.sql"
         }
       ]
     },
@@ -12326,6 +12336,18 @@ export const rls = {
       ],
       "policies": [
         {
+          "name": "hr_payments_select",
+          "schema": "public",
+          "table": "hr_payments",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "public.can_access_project(project_id)\n  and public.can_view_sensitive_detail(project_id)\n  and public.can_access_hr_domain(project_id)",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260409120000_hr_select_policies_align_can_access_hr_domain.sql"
+        },
+        {
           "name": "hr_payments_insert",
           "schema": "public",
           "table": "hr_payments",
@@ -12334,8 +12356,8 @@ export const rls = {
             "authenticated"
           ],
           "using": null,
-          "withCheck": "public.can_write_project_content(project_id)\n  and (created_by is null or created_by = auth.uid())",
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+          "withCheck": "public.can_write_project_content(project_id)\n  and public.can_access_hr_domain(project_id)\n  and (created_by is null or created_by = auth.uid())",
+          "sourceMigration": "supabase/migrations/20260409140000_hr_write_policies_align_can_access_hr_domain.sql"
         },
         {
           "name": "hr_payments_update",
@@ -12345,9 +12367,9 @@ export const rls = {
           "roles": [
             "authenticated"
           ],
-          "using": "public.can_write_project_content(project_id)",
-          "withCheck": "public.can_write_project_content(project_id)",
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+          "using": "public.can_write_project_content(project_id)\n  and public.can_access_hr_domain(project_id)",
+          "withCheck": "public.can_write_project_content(project_id)\n  and public.can_access_hr_domain(project_id)",
+          "sourceMigration": "supabase/migrations/20260409140000_hr_write_policies_align_can_access_hr_domain.sql"
         },
         {
           "name": "hr_payments_delete",
@@ -12357,21 +12379,9 @@ export const rls = {
           "roles": [
             "authenticated"
           ],
-          "using": "public.can_write_project_content(project_id)",
+          "using": "public.can_write_project_content(project_id)\n  and public.can_access_hr_domain(project_id)",
           "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-        },
-        {
-          "name": "hr_payments_select",
-          "schema": "public",
-          "table": "hr_payments",
-          "command": "select",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "public.can_access_project(project_id)\n  and public.can_view_sensitive_detail(project_id)",
-          "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
+          "sourceMigration": "supabase/migrations/20260409140000_hr_write_policies_align_can_access_hr_domain.sql"
         }
       ]
     },
@@ -13874,12 +13884,20 @@ export const sourceTrace = {
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
     },
     {
+      "key": "public.hr_items.hr_items_select",
+      "schema": "public",
+      "table": "hr_items",
+      "name": "hr_items_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260409120000_hr_select_policies_align_can_access_hr_domain.sql"
+    },
+    {
       "key": "public.hr_items.hr_items_insert",
       "schema": "public",
       "table": "hr_items",
       "name": "hr_items_insert",
       "command": "insert",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260409140000_hr_write_policies_align_can_access_hr_domain.sql"
     },
     {
       "key": "public.hr_items.hr_items_update",
@@ -13887,7 +13905,7 @@ export const sourceTrace = {
       "table": "hr_items",
       "name": "hr_items_update",
       "command": "update",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260409140000_hr_write_policies_align_can_access_hr_domain.sql"
     },
     {
       "key": "public.hr_items.hr_items_delete",
@@ -13895,7 +13913,7 @@ export const sourceTrace = {
       "table": "hr_items",
       "name": "hr_items_delete",
       "command": "delete",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260409140000_hr_write_policies_align_can_access_hr_domain.sql"
     },
     {
       "key": "public.hr_items.hr_items_select",
@@ -13911,7 +13929,7 @@ export const sourceTrace = {
       "table": "hr_item_assignees",
       "name": "hr_item_assignees_select",
       "command": "select",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260409120000_hr_select_policies_align_can_access_hr_domain.sql"
     },
     {
       "key": "public.hr_item_assignees.hr_item_assignees_insert",
@@ -13919,7 +13937,7 @@ export const sourceTrace = {
       "table": "hr_item_assignees",
       "name": "hr_item_assignees_insert",
       "command": "insert",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260409140000_hr_write_policies_align_can_access_hr_domain.sql"
     },
     {
       "key": "public.hr_item_assignees.hr_item_assignees_update",
@@ -13927,7 +13945,7 @@ export const sourceTrace = {
       "table": "hr_item_assignees",
       "name": "hr_item_assignees_update",
       "command": "update",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260409140000_hr_write_policies_align_can_access_hr_domain.sql"
     },
     {
       "key": "public.hr_item_assignees.hr_item_assignees_delete",
@@ -13935,7 +13953,15 @@ export const sourceTrace = {
       "table": "hr_item_assignees",
       "name": "hr_item_assignees_delete",
       "command": "delete",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260409140000_hr_write_policies_align_can_access_hr_domain.sql"
+    },
+    {
+      "key": "public.hr_payments.hr_payments_select",
+      "schema": "public",
+      "table": "hr_payments",
+      "name": "hr_payments_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260409120000_hr_select_policies_align_can_access_hr_domain.sql"
     },
     {
       "key": "public.hr_payments.hr_payments_insert",
@@ -13943,7 +13969,7 @@ export const sourceTrace = {
       "table": "hr_payments",
       "name": "hr_payments_insert",
       "command": "insert",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260409140000_hr_write_policies_align_can_access_hr_domain.sql"
     },
     {
       "key": "public.hr_payments.hr_payments_update",
@@ -13951,7 +13977,7 @@ export const sourceTrace = {
       "table": "hr_payments",
       "name": "hr_payments_update",
       "command": "update",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260409140000_hr_write_policies_align_can_access_hr_domain.sql"
     },
     {
       "key": "public.hr_payments.hr_payments_delete",
@@ -13959,7 +13985,7 @@ export const sourceTrace = {
       "table": "hr_payments",
       "name": "hr_payments_delete",
       "command": "delete",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260409140000_hr_write_policies_align_can_access_hr_domain.sql"
     },
     {
       "key": "public.hr_payments.hr_payments_select",
@@ -14712,8 +14738,8 @@ export const sourceTrace = {
         "supabase/migrations/20260306164000_hr_domain.sql",
         "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql",
         "supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql",
-        "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
-        "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
+        "supabase/migrations/20260409120000_hr_select_policies_align_can_access_hr_domain.sql",
+        "supabase/migrations/20260409140000_hr_write_policies_align_can_access_hr_domain.sql"
       ],
       "tables": [
         "public.hr_items",
@@ -14975,8 +15001,8 @@ export const slices = {
         "supabase/migrations/20260306164000_hr_domain.sql",
         "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql",
         "supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql",
-        "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
-        "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
+        "supabase/migrations/20260409120000_hr_select_policies_align_can_access_hr_domain.sql",
+        "supabase/migrations/20260409140000_hr_write_policies_align_can_access_hr_domain.sql"
       ],
       "tableCount": 3,
       "functionCount": 1,
