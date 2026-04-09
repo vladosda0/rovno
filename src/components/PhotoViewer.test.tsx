@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { PhotoViewer } from "@/components/PhotoViewer";
+import type { ContractAction, ContractDomain } from "@/lib/permission-contract-actions";
+import { seamResolveActionState } from "@/lib/permissions";
 import type { Media } from "@/types/entities";
 import type { MemberRole } from "@/types/entities";
 
@@ -57,21 +59,22 @@ function buildMedia(over: Partial<Media> = {}): Media {
 }
 
 function permStub(role: MemberRole, aiAccess: "none" | "consult_only" | "project_pool" = "project_pool") {
-  return {
-    seam: {
-      projectId: "project-1",
-      profileId: "user-1",
-      membership: {
-        project_id: "project-1",
-        user_id: "user-1",
-        role,
-        ai_access: aiAccess,
-        finance_visibility: "detail" as const,
-        credit_limit: 100,
-        used_credits: 0,
-      },
-      project: undefined,
+  const seam = {
+    projectId: "project-1",
+    profileId: "user-1",
+    membership: {
+      project_id: "project-1",
+      user_id: "user-1",
+      role,
+      ai_access: aiAccess,
+      finance_visibility: "detail" as const,
+      credit_limit: 100,
+      used_credits: 0,
     },
+    project: undefined,
+  };
+  return {
+    seam,
     role,
     can: (action: string) => {
       if (action !== "ai.generate") return true;
@@ -80,7 +83,8 @@ function permStub(role: MemberRole, aiAccess: "none" | "consult_only" | "project
       return aiAccess === "project_pool";
     },
     isLoading: false,
-    actionState: vi.fn(),
+    actionState: (domain: ContractDomain, action: ContractAction) =>
+      seamResolveActionState(seam, domain, action),
   };
 }
 
@@ -131,5 +135,28 @@ describe("PhotoViewer — AI Consult entry", () => {
     expect(btn).toBeInTheDocument();
     fireEvent.click(btn);
     expect(mockOpenPhotoConsult).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("PhotoViewer — documents/media contract actions", () => {
+  beforeEach(() => {
+    mockUsePermission.mockReset();
+    mockIsAuthenticated.mockReturnValue(true);
+  });
+
+  it("hides delete and mark-final for contractor (documents_media preset)", () => {
+    mockUsePermission.mockReturnValue(permStub("contractor"));
+    renderViewer(buildMedia());
+    expect(screen.queryByRole("button", { name: /Delete photo/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Mark as final/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Unmark as final/i })).not.toBeInTheDocument();
+  });
+
+  it("shows mark final and delete for owner", () => {
+    mockUsePermission.mockReturnValue(permStub("owner"));
+    renderViewer(buildMedia());
+    expect(screen.getByRole("button", { name: /Delete photo/i })).toBeInTheDocument();
+    const markFinalButtons = screen.getAllByRole("button", { name: /Mark as final/i });
+    expect(markFinalButtons.length).toBeGreaterThanOrEqual(1);
   });
 });

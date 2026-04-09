@@ -3,6 +3,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ProjectTasks from "@/pages/project/ProjectTasks";
+import type { ContractAction, ContractDomain } from "@/lib/permission-contract-actions";
+import { seamResolveActionState } from "@/lib/permissions";
 import type { MemberRole } from "@/types/entities";
 
 const mocks = vi.hoisted(() => ({
@@ -86,25 +88,28 @@ function renderProjectTasks() {
 }
 
 function buildPermission(role: MemberRole) {
-  return {
-    seam: {
-      projectId: "project-1",
-      profileId: "user-1",
-      membership: {
-        project_id: "project-1",
-        user_id: "user-1",
-        role,
-        viewer_regime: null,
-        ai_access: "consult_only",
-        finance_visibility: "summary",
-        credit_limit: 0,
-        used_credits: 0,
-      },
-      project: undefined,
+  const seam = {
+    projectId: "project-1",
+    profileId: "user-1",
+    membership: {
+      project_id: "project-1",
+      user_id: "user-1",
+      role,
+      viewer_regime: null,
+      ai_access: "consult_only",
+      finance_visibility: "summary",
+      credit_limit: 0,
+      used_credits: 0,
     },
+    project: undefined,
+  };
+  return {
+    seam,
     role,
     can: () => true,
     isLoading: false,
+    actionState: (domain: ContractDomain, action: ContractAction) =>
+      seamResolveActionState(seam, domain, action),
   };
 }
 

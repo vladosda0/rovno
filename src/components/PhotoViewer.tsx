@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { isAuthenticated } from "@/lib/auth-state";
-import { usePermission } from "@/lib/permissions";
+import { actionStateToControlProps, usePermission } from "@/lib/permissions";
 import {
   Dialog, DialogContent,
 } from "@/components/ui/dialog";
@@ -52,6 +52,9 @@ export function PhotoViewer({ photo, open, onOpenChange, source, allPhotos = [] 
     !perm.isLoading &&
     perm.can("ai.generate");
 
+  const deleteMediaControl = actionStateToControlProps(perm.actionState("documents_media", "delete"));
+  const markFinalControl = actionStateToControlProps(perm.actionState("documents_media", "rename_or_archive"));
+
   if (!photo) return null;
 
   const user = getCurrentUser();
@@ -62,12 +65,14 @@ export function PhotoViewer({ photo, open, onOpenChange, source, allPhotos = [] 
 
   function handleToggleFinal() {
     if (!photo) return;
+    if (perm.actionState("documents_media", "rename_or_archive") !== "enabled") return;
     updateMedia(photo.id, { is_final: !photo.is_final });
     toast({ title: photo.is_final ? "Unmarked as final" : "Marked as final" });
   }
 
   function handleDelete() {
     if (!photo) return;
+    if (perm.actionState("documents_media", "delete") !== "enabled") return;
     deleteMedia(photo.id);
     addEvent({
       id: `evt-${Date.now()}`,
@@ -85,9 +90,10 @@ export function PhotoViewer({ photo, open, onOpenChange, source, allPhotos = [] 
   }
 
   function handleTaskClick() {
-    if (!task || !routeProjectId) return;
-    // Navigate to tasks tab with state to open this specific task
-    navigate(`/project/${routeProjectId}/tasks`, {
+    if (!task) return;
+    const navProjectId = photo.project_id || routeProjectId;
+    if (!navProjectId) return;
+    navigate(`/project/${navProjectId}/tasks`, {
       state: { openTaskId: task.id },
     });
     close();
@@ -131,24 +137,44 @@ export function PhotoViewer({ photo, open, onOpenChange, source, allPhotos = [] 
             </div>
 
             <div className="flex items-center gap-1">
-              <button
-                onClick={handleToggleFinal}
-                className={`p-1.5 rounded-md transition-colors ${
-                  photo.is_final
-                    ? "text-accent bg-accent/10 hover:bg-accent/20"
-                    : "text-muted-foreground hover:text-accent hover:bg-accent/10"
-                }`}
-                title={photo.is_final ? "Unmark as final" : "Mark as final"}
-              >
-                <Star className="h-4 w-4" fill={photo.is_final ? "currentColor" : "none"} />
-              </button>
-              <button
-                onClick={() => setDeleteOpen(true)}
-                className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                title="Delete photo"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
+              {markFinalControl.visible ? (
+                <button
+                  type="button"
+                  onClick={handleToggleFinal}
+                  disabled={markFinalControl.disabled}
+                  className={`p-1.5 rounded-md transition-colors ${
+                    markFinalControl.disabled ? "opacity-50 cursor-not-allowed" : ""
+                  } ${
+                    photo.is_final
+                      ? "text-accent bg-accent/10 hover:bg-accent/20"
+                      : "text-muted-foreground hover:text-accent hover:bg-accent/10"
+                  }`}
+                  title={
+                    markFinalControl.disabled
+                      ? (markFinalControl.disabledReason ?? "Not available")
+                      : photo.is_final
+                        ? "Unmark as final"
+                        : "Mark as final"
+                  }
+                >
+                  <Star className="h-4 w-4" fill={photo.is_final ? "currentColor" : "none"} />
+                </button>
+              ) : null}
+              {deleteMediaControl.visible ? (
+                <button
+                  type="button"
+                  onClick={() => !deleteMediaControl.disabled && setDeleteOpen(true)}
+                  disabled={deleteMediaControl.disabled}
+                  className={`p-1.5 rounded-md transition-colors ${
+                    deleteMediaControl.disabled
+                      ? "opacity-50 cursor-not-allowed text-muted-foreground"
+                      : "text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                  }`}
+                  title={deleteMediaControl.disabled ? (deleteMediaControl.disabledReason ?? "Not available") : "Delete photo"}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              ) : null}
               <button
                 onClick={close}
                 className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
@@ -213,14 +239,18 @@ export function PhotoViewer({ photo, open, onOpenChange, source, allPhotos = [] 
                 AI Consult
               </Button>
             )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleToggleFinal}
-            >
-              <Star className="h-3.5 w-3.5 mr-1.5" />
-              {photo.is_final ? "Unmark final" : "Mark as final"}
-            </Button>
+            {markFinalControl.visible ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleToggleFinal}
+                disabled={markFinalControl.disabled}
+                title={markFinalControl.disabled ? markFinalControl.disabledReason : undefined}
+              >
+                <Star className="h-3.5 w-3.5 mr-1.5" />
+                {photo.is_final ? "Unmark final" : "Mark as final"}
+              </Button>
+            ) : null}
           </div>
         </DialogContent>
       </Dialog>
