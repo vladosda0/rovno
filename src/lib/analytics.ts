@@ -43,7 +43,8 @@ export type AnalyticsEventName =
   | "ai_proposal_generated"
   | "ai_proposal_revised"
   | "ai_proposal_applied"
-  | "ai_proposal_rejected";
+  | "ai_proposal_rejected"
+  | "ai_live_text_completed";
 
 export type AnalyticsEventPayload = Record<string, unknown>;
 

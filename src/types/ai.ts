@@ -20,6 +20,21 @@ export interface AIProposal {
   status: AIProposalStatus;
 }
 
+import type {
+  AssistantGroundingStatus,
+  LiveTextAssistantSource,
+  PresentationalWorkProposal,
+} from "@/lib/ai-assistant-contract";
+
+/** Structured payload for Wave 1 live text turns (not committable; no `AIProposal` queue). */
+export interface AIMessageLiveTextAssistantV1 {
+  version: 1;
+  grounding: AssistantGroundingStatus;
+  groundingNote?: string;
+  sources?: LiveTextAssistantSource[];
+  workProposal?: PresentationalWorkProposal;
+}
+
 export interface AIMessage {
   id: string;
   role: AIMessageRole;
@@ -27,4 +42,7 @@ export interface AIMessage {
   timestamp: string;
   mode?: "default" | "learn";
   proposal?: AIProposal;
+  liveTextAssistantV1?: AIMessageLiveTextAssistantV1;
+  /** Project id the live text turn used (handoff to `/project/:id/estimate`). */
+  liveTextProjectId?: string;
 }

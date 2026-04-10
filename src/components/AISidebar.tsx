@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from "react";
+import { flushSync } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
 import { trackEvent } from "@/lib/analytics";
 import {
@@ -32,6 +33,8 @@ import { ConfirmModal } from "@/components/ConfirmModal";
 import { WorkLog } from "@/components/ai/WorkLog";
 import { SuggestionChips } from "@/components/ai/SuggestionChips";
 import { EventFeedItem } from "@/components/ai/EventFeedItem";
+import { GroundingCallout } from "@/components/ai/GroundingCallout";
+import { WorkProposalPreview } from "@/components/ai/WorkProposalPreview";
 import { isAIEvent } from "@/components/ai/event-utils";
 import { PreviewCard } from "@/components/ai/PreviewCard";
 import { ActionBar } from "@/components/ai/ActionBar";
@@ -55,6 +58,8 @@ import {
   evaluateProjectTargetedSendReadiness,
   type AIContextInputs,
 } from "@/lib/ai-project-context";
+import { invokeLiveTextAssistant } from "@/lib/ai-assistant-client";
+import { isLiveTextAssistantEnabled } from "@/lib/ai-live-text-assistant-feature";
 import { generateProposalQueue, getTextResponse, reviseProposalWithEdits } from "@/lib/ai-engine";
 import {
   commitPhotoConsultActions,
@@ -923,6 +928,16 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     void runQueueExecution(queueSnapshot);
   }, [runQueueExecution]);
 
+  /** Latest `runAssistantForContent` for `/home` pending-project flow after `flushSync` (avoids stale seam/context). */
+  const runAssistantForContentRef = useRef<
+    (
+      content: string,
+      userMessageId: string,
+      targetProjectId?: string,
+      responseMode?: AIMessage["mode"],
+    ) => void
+  >(() => {});
+
   const runAssistantForContent = useCallback((
     content: string,
     userMessageId: string,
@@ -936,8 +951,120 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
       return next;
     });
 
-    window.setTimeout(() => {
-      if (targetProjectId) {
+    const finishWithLegacyHeuristic = () => {
+      window.setTimeout(() => {
+        if (targetProjectId) {
+          const readiness = evaluateProjectTargetedSendReadiness(
+            targetProjectId,
+            seamForProjectCommit,
+            permResult.isLoading,
+            ctxProject,
+          );
+          if (readiness.status === "blocked") {
+            setWorkLogs((prev) => {
+              const next = new Map(prev);
+              next.delete(workLogId);
+              return next;
+            });
+            const denied =
+              readiness.gate === "loading"
+                ? "Still loading your permissions for this project. Try again in a moment."
+                : "AI can't use this project context right now (permissions unavailable).";
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: `msg-${Date.now() + 1}`,
+                role: "assistant",
+                content: denied,
+                timestamp: new Date().toISOString(),
+                mode: responseMode,
+              },
+            ]);
+            return;
+          }
+          if (readiness.status === "no_project") {
+            setWorkLogs((prev) => {
+              const next = new Map(prev);
+              next.delete(workLogId);
+              return next;
+            });
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: `msg-${Date.now() + 1}`,
+                role: "assistant",
+                content: "Project data is not available yet for AI context. Try again shortly.",
+                timestamp: new Date().toISOString(),
+                mode: responseMode,
+              },
+            ]);
+            return;
+          }
+          const contextInputs: AIContextInputs = {
+            project: {
+              title: ctxProject.title,
+              type: ctxProject.type,
+              progress_pct: ctxProject.progress_pct,
+            },
+            stages: ctxStages,
+            tasks: ctxTasks,
+            financeSummary: ctxFinanceSummary,
+            procurementSummary: ctxProcurementSummary,
+            events: ctxEventsFull.slice(0, 5),
+            memberCount: ctxMembers.length,
+            userCredits: user.credits_free + user.credits_paid,
+          };
+          void buildAIProjectContext(seamForProjectCommit!, contextInputs);
+        }
+
+        const proposals = targetProjectId
+          ? generateProposalQueue(content, targetProjectId, automationMode, seamForProjectCommit)
+          : [];
+        const assistantContent = proposals.length > 0
+          ? `I've prepared ${proposals.length} proposal${proposals.length === 1 ? "" : "s"}. Review them below.`
+          : getTextResponse();
+
+        const assistantMsg: AIMessage = {
+          id: `msg-${Date.now() + 1}`,
+          role: "assistant",
+          content: assistantContent,
+          timestamp: new Date().toISOString(),
+          mode: responseMode,
+        };
+
+        setWorkLogs((prev) => {
+          const next = new Map(prev);
+          next.delete(workLogId);
+          return next;
+        });
+        setMessages((prev) => [...prev, assistantMsg]);
+
+        if (proposals.length > 0) {
+          const queueItems: ProposalQueueItemState[] = proposals.map((proposal, idx) => ({
+            id: `queue-item-${userMessageId}-${idx}`,
+            proposal,
+            decision: "unresolved",
+            suggestEditMode: false,
+            suggestEditText: "",
+            directEditMode: defaultDirectEditForNewProposal,
+            draftSummary: proposal.summary,
+            draftChangeLabels: proposal.changes.map((change) => change.label),
+          }));
+          setProposalQueue({
+            messageId: userMessageId,
+            items: queueItems,
+            activeIndex: 0,
+            phase: "review",
+            executionCursor: 0,
+            retryByItemId: {},
+            executionErrorByItemId: {},
+          });
+        }
+      }, WORK_STEPS_GENERATE.length * 600 + 200);
+    };
+
+    if (isLiveTextAssistantEnabled() && targetProjectId) {
+      void (async () => {
         const readiness = evaluateProjectTargetedSendReadiness(
           targetProjectId,
           seamForProjectCommit,
@@ -984,6 +1111,27 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
           ]);
           return;
         }
+
+        const seam = seamForProjectCommit;
+        if (!seam || seam.projectId !== targetProjectId) {
+          setWorkLogs((prev) => {
+            const next = new Map(prev);
+            next.delete(workLogId);
+            return next;
+          });
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `msg-${Date.now() + 1}`,
+              role: "assistant",
+              content: "AI can't use this project context right now (permissions unavailable).",
+              timestamp: new Date().toISOString(),
+              mode: responseMode,
+            },
+          ]);
+          return;
+        }
+
         const contextInputs: AIContextInputs = {
           project: {
             title: ctxProject.title,
@@ -998,53 +1146,62 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
           memberCount: ctxMembers.length,
           userCredits: user.credits_free + user.credits_paid,
         };
-        void buildAIProjectContext(seamForProjectCommit!, contextInputs);
-      }
+        const contextPack = buildAIProjectContext(seam, contextInputs);
 
-      const proposals = targetProjectId
-        ? generateProposalQueue(content, targetProjectId, automationMode, seamForProjectCommit)
-        : [];
-      const assistantContent = proposals.length > 0
-        ? `I've prepared ${proposals.length} proposal${proposals.length === 1 ? "" : "s"}. Review them below.`
-        : getTextResponse();
+        try {
+          const result = await invokeLiveTextAssistant({
+            projectId: targetProjectId,
+            contextPack,
+            userMessage: content,
+          });
+          setWorkLogs((prev) => {
+            const next = new Map(prev);
+            next.delete(workLogId);
+            return next;
+          });
+          const assistantMsg: AIMessage = {
+            id: `msg-${Date.now() + 1}`,
+            role: "assistant",
+            content: result.explanation,
+            timestamp: new Date().toISOString(),
+            mode: responseMode,
+            liveTextProjectId: targetProjectId,
+            liveTextAssistantV1: {
+              version: 1,
+              grounding: result.grounding,
+              groundingNote: result.groundingNote,
+              sources: result.sources,
+              workProposal: result.workProposal,
+            },
+          };
+          setMessages((prev) => [...prev, assistantMsg]);
+          trackEvent("ai_live_text_completed", {
+            project_id: targetProjectId,
+            surface: "ai",
+            grounding: result.grounding,
+          });
+        } catch {
+          setWorkLogs((prev) => {
+            const next = new Map(prev);
+            next.delete(workLogId);
+            return next;
+          });
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `msg-${Date.now() + 1}`,
+              role: "assistant",
+              content: "The assistant could not complete this request. Please try again.",
+              timestamp: new Date().toISOString(),
+              mode: responseMode,
+            },
+          ]);
+        }
+      })();
+      return;
+    }
 
-      const assistantMsg: AIMessage = {
-        id: `msg-${Date.now() + 1}`,
-        role: "assistant",
-        content: assistantContent,
-        timestamp: new Date().toISOString(),
-        mode: responseMode,
-      };
-
-      setWorkLogs((prev) => {
-        const next = new Map(prev);
-        next.delete(workLogId);
-        return next;
-      });
-      setMessages((prev) => [...prev, assistantMsg]);
-
-      if (proposals.length > 0) {
-        const queueItems: ProposalQueueItemState[] = proposals.map((proposal, idx) => ({
-          id: `queue-item-${userMessageId}-${idx}`,
-          proposal,
-          decision: "unresolved",
-          suggestEditMode: false,
-          suggestEditText: "",
-          directEditMode: defaultDirectEditForNewProposal,
-          draftSummary: proposal.summary,
-          draftChangeLabels: proposal.changes.map((change) => change.label),
-        }));
-        setProposalQueue({
-          messageId: userMessageId,
-          items: queueItems,
-          activeIndex: 0,
-          phase: "review",
-          executionCursor: 0,
-          retryByItemId: {},
-          executionErrorByItemId: {},
-        });
-      }
-    }, WORK_STEPS_GENERATE.length * 600 + 200);
+    finishWithLegacyHeuristic();
   }, [
     automationMode,
     ctxFinanceSummary,
@@ -1061,29 +1218,49 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     user.credits_paid,
   ]);
 
+  useLayoutEffect(() => {
+    runAssistantForContentRef.current = runAssistantForContent;
+  }, [runAssistantForContent]);
+
   function shouldAskProjectBeforeProposal(content: string) {
     return ACTIONABLE_PROPOSAL_PATTERN.test(content);
   }
 
   function handleHomeProjectModeChange(nextProjectMode: string) {
-    setHomeProjectMode(nextProjectMode);
+    const pendingContent = pendingGeneralProposalInput;
 
-    if (!pendingGeneralProposalInput || nextProjectMode === GENERAL_MODE_VALUE) return;
-    if (activeWindow !== "none" || proposalQueue) return;
+    const canRunPendingAssistant =
+      Boolean(pendingContent) &&
+      nextProjectMode !== GENERAL_MODE_VALUE &&
+      activeWindow === "none" &&
+      !proposalQueue;
 
-    const selectedProject = projects.find((projectItem) => projectItem.id === nextProjectMode);
-    if (selectedProject) {
-      setMessages((prev) => [...prev, {
-        id: `msg-${Date.now()}-project-selected`,
-        role: "assistant",
-        content: `Using "${selectedProject.title}". Preparing proposals now.`,
-        timestamp: new Date().toISOString(),
-      }]);
+    if (canRunPendingAssistant) {
+      const selectedProject = projects.find((projectItem) => projectItem.id === nextProjectMode);
+      flushSync(() => {
+        setHomeProjectMode(nextProjectMode);
+      });
+      if (selectedProject) {
+        setMessages((prev) => [...prev, {
+          id: `msg-${Date.now()}-project-selected`,
+          role: "assistant",
+          content: `Using "${selectedProject.title}". Preparing proposals now.`,
+          timestamp: new Date().toISOString(),
+        }]);
+      }
+      setPendingGeneralProposalInput(null);
+      runAssistantForContentRef.current(
+        pendingContent,
+        `pending-${Date.now()}`,
+        nextProjectMode,
+        learnMode ? "learn" : "default",
+      );
+      return;
     }
 
-    const pendingContent = pendingGeneralProposalInput;
-    setPendingGeneralProposalInput(null);
-    runAssistantForContent(pendingContent, `pending-${Date.now()}`, nextProjectMode, learnMode ? "learn" : "default");
+    setHomeProjectMode(nextProjectMode);
+    if (!pendingContent || nextProjectMode === GENERAL_MODE_VALUE) return;
+    if (activeWindow !== "none" || proposalQueue) return;
   }
 
   function handleVoiceInput() {
@@ -2300,6 +2477,21 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                                               <p className="mt-1 text-caption text-foreground/95 whitespace-pre-wrap break-words">
                                                 {row.message.content}
                                               </p>
+                                              {!isUserMessage && row.message.liveTextAssistantV1 && row.message.liveTextProjectId ? (
+                                                <>
+                                                  <GroundingCallout
+                                                    grounding={row.message.liveTextAssistantV1.grounding}
+                                                    groundingNote={row.message.liveTextAssistantV1.groundingNote}
+                                                    sources={row.message.liveTextAssistantV1.sources}
+                                                  />
+                                                  {row.message.liveTextAssistantV1.workProposal ? (
+                                                    <WorkProposalPreview
+                                                      projectId={row.message.liveTextProjectId}
+                                                      proposal={row.message.liveTextAssistantV1.workProposal}
+                                                    />
+                                                  ) : null}
+                                                </>
+                                              ) : null}
                                               {!isUserMessage && isLearnContext && (
                                                 <div className="mt-1.5 flex items-center gap-0.5 opacity-70 hover:opacity-100 transition-opacity">
                                                   <button
