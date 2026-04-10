@@ -1,15 +1,21 @@
-import { Building2, Circle, HardHat, Package, Wrench } from "lucide-react";
+import { Building2, Circle, HardHat, Package, Truck, Wrench } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { resourceLineSemanticLabel } from "@/lib/estimate-v2/resource-type-contract";
 import type { ResourceLineType } from "@/types/estimate-v2";
+
+export type OtherResourcePresentation = "generic" | "overhead";
 
 interface ResourceTypeBadgeProps {
   type: ResourceLineType;
   className?: string;
   labelOverride?: string;
   iconOnly?: boolean;
+  /** When `type` is `other`, distinguishes delivery/overhead-style lines (truck) from generic “other” (circle). */
+  otherPresentation?: OtherResourcePresentation;
 }
+
+const OTHER_BADGE_CLASS = "bg-muted text-muted-foreground border-border";
 
 const typeMeta: Record<ResourceLineType, { className: string; Icon: typeof Package }> = {
   material: {
@@ -29,13 +35,24 @@ const typeMeta: Record<ResourceLineType, { className: string; Icon: typeof Packa
     Icon: Building2,
   },
   other: {
-    className: "bg-muted text-muted-foreground border-border",
+    className: OTHER_BADGE_CLASS,
     Icon: Circle,
   },
 };
 
-export function ResourceTypeBadge({ type, className, labelOverride, iconOnly = false }: ResourceTypeBadgeProps) {
-  const meta = typeMeta[type];
+const otherPresentationMeta: Record<OtherResourcePresentation, { className: string; Icon: typeof Circle }> = {
+  generic: { className: OTHER_BADGE_CLASS, Icon: Circle },
+  overhead: { className: OTHER_BADGE_CLASS, Icon: Truck },
+};
+
+export function ResourceTypeBadge({
+  type,
+  className,
+  labelOverride,
+  iconOnly = false,
+  otherPresentation = "generic",
+}: ResourceTypeBadgeProps) {
+  const meta = type === "other" ? otherPresentationMeta[otherPresentation] : typeMeta[type];
   const Icon = meta.Icon;
   const label = labelOverride ?? resourceLineSemanticLabel(type);
 

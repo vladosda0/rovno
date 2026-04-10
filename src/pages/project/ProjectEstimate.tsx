@@ -207,6 +207,11 @@ function labelForType(type: ResourceLineType): string {
   return resourceLineSemanticLabel(type);
 }
 
+/** `other` lines created as “Overheads” default to titles like “Overhead 1”; use truck badge for those vs generic “Other”. */
+function isDeliveryOverheadsOtherLine(type: ResourceLineType, title: string): boolean {
+  return type === "other" && title.toLowerCase().includes("overhead");
+}
+
 function labelForRpcResourceTypeKey(key: string): string {
   const parsed = parsePersistedEstimateResourceType(key);
   return parsed.ok ? labelForType(resourceLineTypeFromPersisted(parsed.db)) : key;
@@ -2571,7 +2576,7 @@ export default function ProjectEstimate() {
                                 <WorkTableFrame className="table-fixed min-w-[980px]">
                                     <TableHeader>
                                       <TableRow>
-                                        <TableHead className="sticky left-0 z-30 h-9 w-[360px] border-r border-border bg-card py-1 pr-2 shadow-[6px_0_10px_-10px_hsl(var(--foreground)/0.45)]">
+                                        <TableHead className="sticky left-0 z-30 h-9 w-[180px] border-r border-border bg-card py-1 pr-2 shadow-[6px_0_10px_-10px_hsl(var(--foreground)/0.45)]">
                                           Resource
                                         </TableHead>
                                         {showAssignmentColumn && (
@@ -2616,9 +2621,12 @@ export default function ProjectEstimate() {
                                           computed,
                                           { financeMode: lineClientDisplayMode },
                                         );
-                                        const typeLabel = line.type === "other" && line.title.toLowerCase().includes("overhead")
+                                        const typeLabel = isDeliveryOverheadsOtherLine(line.type, line.title)
                                           ? "Overheads"
                                           : labelForType(line.type);
+                                        const otherPresentation = isDeliveryOverheadsOtherLine(line.type, line.title)
+                                          ? "overhead"
+                                          : "generic";
                                         const resolvedUnitSelectValue = resolveUnitSelectValue(line.type, line.unit);
                                         const isCustomUnit = resolvedUnitSelectValue === CUSTOM_UNIT_SENTINEL;
                                         const unitSelectValue = customUnitInputLineIds.has(line.id)
@@ -2628,7 +2636,7 @@ export default function ProjectEstimate() {
                                         const shouldShowCustomInput = isCustomUnit || customUnitInputLineIds.has(line.id);
                                         return (
                                           <TableRow key={line.id} className={changedLineIds.has(line.id) ? "bg-warning/10" : ""}>
-                                            <TableCell className="sticky left-0 z-20 w-[360px] border-r border-border bg-card py-1.5 pr-2 align-top shadow-[6px_0_10px_-10px_hsl(var(--foreground)/0.35)]">
+                                            <TableCell className="sticky left-0 z-20 w-[180px] border-r border-border bg-card py-1.5 pr-2 align-top shadow-[6px_0_10px_-10px_hsl(var(--foreground)/0.35)]">
                                               <div className="flex min-w-0 items-start gap-2">
                                                 {canEditEstimate ? (
                                                   <DropdownMenu>
@@ -2638,7 +2646,7 @@ export default function ProjectEstimate() {
                                                         title={typeLabel}
                                                         className="rounded-full focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/40"
                                                       >
-                                                        <ResourceTypeBadge type={line.type} iconOnly />
+                                                        <ResourceTypeBadge type={line.type} iconOnly otherPresentation={otherPresentation} />
                                                       </button>
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent align="start">
@@ -2654,7 +2662,7 @@ export default function ProjectEstimate() {
                                                   </DropdownMenu>
                                                 ) : (
                                                   <span title={typeLabel}>
-                                                    <ResourceTypeBadge type={line.type} iconOnly />
+                                                    <ResourceTypeBadge type={line.type} iconOnly otherPresentation={otherPresentation} />
                                                   </span>
                                                 )}
                                                 <InlineEditableText
@@ -2869,12 +2877,20 @@ export default function ProjectEstimate() {
 
                                       {fallbackChecklistRows.map((row) => {
                                         const typeLabel = row.typeLabel ?? labelForType(row.type);
+                                        const fallbackOtherPresentation = isDeliveryOverheadsOtherLine(row.type, row.title)
+                                          ? "overhead"
+                                          : "generic";
                                         return (
                                           <TableRow key={row.id}>
-                                            <TableCell className="sticky left-0 z-20 w-[360px] border-r border-border bg-card py-1.5 pr-2 align-top shadow-[6px_0_10px_-10px_hsl(var(--foreground)/0.35)]">
+                                            <TableCell className="sticky left-0 z-20 w-[180px] border-r border-border bg-card py-1.5 pr-2 align-top shadow-[6px_0_10px_-10px_hsl(var(--foreground)/0.35)]">
                                               <div className="flex min-w-0 items-start gap-2">
                                                 <span title={typeLabel}>
-                                                  <ResourceTypeBadge type={row.type} iconOnly labelOverride={row.typeLabel ?? undefined} />
+                                                  <ResourceTypeBadge
+                                                    type={row.type}
+                                                    iconOnly
+                                                    labelOverride={row.typeLabel ?? undefined}
+                                                    otherPresentation={fallbackOtherPresentation}
+                                                  />
                                                 </span>
                                                 <div className="min-w-0 flex-1 whitespace-normal break-words leading-5 font-medium">
                                                   {row.title}
@@ -2911,7 +2927,7 @@ export default function ProjectEstimate() {
 
                                       {canEditEstimate && (
                                         <TableRow className="border-b-0 hover:bg-transparent">
-                                          <TableCell className="sticky left-0 z-20 w-[360px] border-r border-border bg-card py-1 pr-2 shadow-[6px_0_10px_-10px_hsl(var(--foreground)/0.35)]">
+                                          <TableCell className="sticky left-0 z-20 w-[180px] border-r border-border bg-card py-1 pr-2 shadow-[6px_0_10px_-10px_hsl(var(--foreground)/0.35)]">
                                             <div className="flex h-8 items-center rounded-md border border-dashed border-border/70 bg-background/40 px-2">
                                               <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
@@ -2942,6 +2958,11 @@ export default function ProjectEstimate() {
                                                         type={option.value}
                                                         labelOverride={option.label}
                                                         className="border-transparent"
+                                                        otherPresentation={
+                                                          option.value === "other" && option.label === "Overheads"
+                                                            ? "overhead"
+                                                            : "generic"
+                                                        }
                                                       />
                                                     </DropdownMenuItem>
                                                   ))}
