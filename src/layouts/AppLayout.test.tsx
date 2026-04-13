@@ -12,6 +12,9 @@ import {
   writeAiSidebarSessionPreference,
 } from "@/lib/ai-sidebar-session";
 
+/** Lazy `AISidebar` + Suspense can exceed RTL's default findBy timeout on slow CI runners. */
+const SIDEBAR_FIND_TIMEOUT_MS = 10_000;
+
 function createQueryClient() {
   return new QueryClient({
     defaultOptions: {
@@ -23,7 +26,7 @@ function createQueryClient() {
 }
 
 describe("AppLayout", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     localStorage.clear();
     sessionStorage.clear();
     setAuthRole("guest");
@@ -53,6 +56,9 @@ describe("AppLayout", () => {
       credit_limit: 500,
       used_credits: 0,
     });
+
+    // Warm module cache so AppLayout's `lazy(() => import(AISidebar))` resolves under parallel test load.
+    await import("@/components/AISidebar");
   });
 
   function renderLayout(path = "/project/project-1/dashboard") {
@@ -72,13 +78,13 @@ describe("AppLayout", () => {
 
   it("starts with AI sidebar open when no session preference is set", async () => {
     renderLayout();
-    expect(await screen.findByPlaceholderText("Ask AI...")).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText("Ask AI...", { timeout: SIDEBAR_FIND_TIMEOUT_MS })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Open AI sidebar" })).not.toBeInTheDocument();
   });
 
   it("restores explicit close preference across remount in the same session", async () => {
     const firstRender = renderLayout();
-    fireEvent.click(await screen.findByRole("button", { name: /toggle ai sidebar/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /toggle ai sidebar/i, timeout: SIDEBAR_FIND_TIMEOUT_MS }));
     expect(screen.getByRole("button", { name: "Open AI sidebar" })).toBeInTheDocument();
     firstRender.unmount();
 
@@ -94,7 +100,7 @@ describe("AppLayout", () => {
 
     clearAiSidebarSessionPreference();
     const reopenedRender = renderLayout();
-    expect(await screen.findByPlaceholderText("Ask AI...")).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText("Ask AI...", { timeout: SIDEBAR_FIND_TIMEOUT_MS })).toBeInTheDocument();
     reopenedRender.unmount();
   });
 

@@ -58,7 +58,7 @@ import {
   evaluateProjectTargetedSendReadiness,
   type AIContextInputs,
 } from "@/lib/ai-project-context";
-import { invokeLiveTextAssistant } from "@/lib/ai-assistant-client";
+import { invokeLiveTextAssistant, userVisibleLiveTextAssistantError } from "@/lib/ai-assistant-client";
 import { isLiveTextAssistantEnabled } from "@/lib/ai-live-text-assistant-feature";
 import { generateProposalQueue, getTextResponse, reviseProposalWithEdits } from "@/lib/ai-engine";
 import {
@@ -1153,6 +1153,8 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
             projectId: targetProjectId,
             contextPack,
             userMessage: content,
+            workspaceKind: workspaceMode.kind,
+            aiAccess: seam.membership?.ai_access ?? "none",
           });
           setWorkLogs((prev) => {
             const next = new Map(prev);
@@ -1180,7 +1182,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
             surface: "ai",
             grounding: result.grounding,
           });
-        } catch {
+        } catch (err) {
           setWorkLogs((prev) => {
             const next = new Map(prev);
             next.delete(workLogId);
@@ -1191,7 +1193,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
             {
               id: `msg-${Date.now() + 1}`,
               role: "assistant",
-              content: "The assistant could not complete this request. Please try again.",
+              content: userVisibleLiveTextAssistantError(err),
               timestamp: new Date().toISOString(),
               mode: responseMode,
             },

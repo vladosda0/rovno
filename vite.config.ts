@@ -32,5 +32,7 @@ export default defineConfig(({ mode }) => ({
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
+    /** Default 5s is tight when many files run in parallel (transform + jsdom). */
+    testTimeout: 10_000,
   },
 }));

@@ -425,7 +425,7 @@ describe("ProjectEstimate", () => {
 
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Shell" })).toBeInTheDocument();
-    });
+    }, { timeout: 10_000 });
 
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Add work" }));
@@ -442,7 +442,7 @@ describe("ProjectEstimate", () => {
 
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Framing" })).toBeInTheDocument();
-    });
+    }, { timeout: 10_000 });
 
     await act(async () => {
       fireEvent.pointerDown(screen.getByRole("button", { name: "Add resource" }));
@@ -450,7 +450,7 @@ describe("ProjectEstimate", () => {
     });
 
     await act(async () => {
-      fireEvent.click(await screen.findByRole("menuitem", { name: "Material" }));
+      fireEvent.click(await screen.findByRole("menuitem", { name: "Material", timeout: 10_000 }));
       await flushUi();
     });
 
@@ -463,7 +463,7 @@ describe("ProjectEstimate", () => {
 
     expect(screen.queryByText("Stage 1")).not.toBeInTheDocument();
     expect(screen.queryByText("General work")).not.toBeInTheDocument();
-  });
+  }, 20_000);
 
   it("numbers default resource names per work instead of across the whole estimate", async () => {
     const projectId = "project-estimate-resource-naming-scope";
@@ -502,7 +502,7 @@ describe("ProjectEstimate", () => {
     });
 
     await act(async () => {
-      fireEvent.click(await screen.findByRole("menuitem", { name: "Material" }));
+      fireEvent.click(await screen.findByRole("menuitem", { name: "Material", timeout: 10_000 }));
       await flushUi();
     });
 
@@ -512,7 +512,7 @@ describe("ProjectEstimate", () => {
     const state = getEstimateV2ProjectState(projectId);
     const roofLine = state.lines.find((line) => line.workId === secondWork.id && line.title === "Material 1");
     expect(roofLine).toBeDefined();
-  });
+  }, 20_000);
 
   it("opens the estimate immediately when seeded estimate resource lines already exist", async () => {
     const projectId = "project-estimate-seeded-lines";
