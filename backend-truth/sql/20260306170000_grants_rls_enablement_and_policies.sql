@@ -132,12 +132,12 @@ using (
     from public.projects p
     where p.owner_profile_id = auth.uid()
       and (
-        p.owner_profile_id = id
+        p.owner_profile_id = profiles.id
         or exists (
           select 1
           from public.project_members pm_target
           where pm_target.project_id = p.id
-            and pm_target.profile_id = id
+            and pm_target.profile_id = profiles.id
         )
       )
   )
@@ -147,7 +147,7 @@ using (
     join public.projects p
       on p.id = pm_self.project_id
     where pm_self.profile_id = auth.uid()
-      and p.owner_profile_id = id
+      and p.owner_profile_id = profiles.id
   )
 );
 
@@ -203,7 +203,7 @@ using (
   or exists (
     select 1
     from public.project_members pm
-    where pm.project_id = id
+    where pm.project_id = projects.id
       and pm.profile_id = auth.uid()
   )
 );
@@ -221,7 +221,7 @@ using (
   or exists (
     select 1
     from public.project_members pm
-    where pm.project_id = id
+    where pm.project_id = projects.id
       and pm.profile_id = auth.uid()
       and pm.role = 'co_owner'
   )
@@ -236,7 +236,7 @@ using (
   or exists (
     select 1
     from public.project_members pm
-    where pm.project_id = id
+    where pm.project_id = projects.id
       and pm.profile_id = auth.uid()
       and pm.role = 'co_owner'
   )

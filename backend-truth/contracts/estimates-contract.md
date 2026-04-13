@@ -147,7 +147,7 @@ Indexes:
 | `public.estimate_versions(estimate_id)` | `public.project_estimates(id)` | `cascade` | `supabase/migrations/20260306162500_estimates_core.sql` |
 | `public.estimate_versions(created_by)` | `public.profiles(id)` | `restrict` | `supabase/migrations/20260306162500_estimates_core.sql` |
 | `public.estimate_works(estimate_version_id)` | `public.estimate_versions(id)` | `cascade` | `supabase/migrations/20260306162500_estimates_core.sql` |
-| `public.estimate_works(project_stage_id)` | `public.project_stages(id)` | `set` | `supabase/migrations/20260306162500_estimates_core.sql` |
+| `public.estimate_works(project_stage_id)` | `public.project_stages(id)` | `set null` | `supabase/migrations/20260306162500_estimates_core.sql` |
 | `public.estimate_resource_lines(estimate_work_id)` | `public.estimate_works(id)` | `cascade` | `supabase/migrations/20260306162500_estimates_core.sql` |
 | `public.estimate_dependencies(estimate_version_id)` | `public.estimate_versions(id)` | `cascade` | `supabase/migrations/20260306162500_estimates_core.sql` |
 | `public.estimate_dependencies(from_work_id)` | `public.estimate_works(id)` | `cascade` | `supabase/migrations/20260306162500_estimates_core.sql` |

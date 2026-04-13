@@ -339,7 +339,7 @@
             "toColumns": [
               "id"
             ],
-            "onDelete": "set"
+            "onDelete": "set null"
           }
         },
         {
@@ -936,7 +936,7 @@
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -1016,7 +1016,7 @@
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -1032,7 +1032,7 @@
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,
@@ -1048,7 +1048,7 @@
       "toColumns": [
         "id"
       ],
-      "onDelete": "set"
+      "onDelete": "set null"
     },
     {
       "name": null,

@@ -663,14 +663,6 @@
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
     },
     {
-      "key": "public.projects.projects_select",
-      "schema": "public",
-      "table": "projects",
-      "name": "projects_select",
-      "command": "select",
-      "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-    },
-    {
       "key": "public.projects.projects_insert",
       "schema": "public",
       "table": "projects",
@@ -1391,14 +1383,6 @@
       "sourceMigration": "supabase/migrations/20260409140000_hr_write_policies_align_can_access_hr_domain.sql"
     },
     {
-      "key": "public.hr_items.hr_items_select",
-      "schema": "public",
-      "table": "hr_items",
-      "name": "hr_items_select",
-      "command": "select",
-      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
-    },
-    {
       "key": "public.hr_item_assignees.hr_item_assignees_select",
       "schema": "public",
       "table": "hr_item_assignees",
@@ -1461,14 +1445,6 @@
       "name": "hr_payments_delete",
       "command": "delete",
       "sourceMigration": "supabase/migrations/20260409140000_hr_write_policies_align_can_access_hr_domain.sql"
-    },
-    {
-      "key": "public.hr_payments.hr_payments_select",
-      "schema": "public",
-      "table": "hr_payments",
-      "name": "hr_payments_select",
-      "command": "select",
-      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
     },
     {
       "key": "public.activity_events.activity_events_select",
@@ -1827,8 +1803,7 @@
         "public.project_media.project_media_insert",
         "public.project_media.project_media_select",
         "public.project_media.project_media_update",
-        "public.project_media.project_media_delete",
-        "public.project_media.project_media_select"
+        "public.project_media.project_media_delete"
       ],
       "relations": [
         {
@@ -2225,18 +2200,18 @@
         "public.get_hr_operational_summary"
       ],
       "policies": [
+        "public.hr_items.hr_items_select",
         "public.hr_items.hr_items_insert",
         "public.hr_items.hr_items_update",
         "public.hr_items.hr_items_delete",
-        "public.hr_items.hr_items_select",
         "public.hr_item_assignees.hr_item_assignees_select",
         "public.hr_item_assignees.hr_item_assignees_insert",
         "public.hr_item_assignees.hr_item_assignees_update",
         "public.hr_item_assignees.hr_item_assignees_delete",
+        "public.hr_payments.hr_payments_select",
         "public.hr_payments.hr_payments_insert",
         "public.hr_payments.hr_payments_update",
-        "public.hr_payments.hr_payments_delete",
-        "public.hr_payments.hr_payments_select"
+        "public.hr_payments.hr_payments_delete"
       ],
       "relations": [
         {

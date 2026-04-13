@@ -156,7 +156,7 @@ Constraints:
 - unnamed check (expression `viewer_regime in ('contractor', 'client', 'build_myself')`)
 - unnamed check (expression `credit_limit >= 0`)
 - unnamed check (expression `used_credits >= 0`)
-- `project_members_viewer_regime_check` check (expression `(role = 'viewer' and viewer_regime is not null) or (role <> 'viewer' and viewer_regime is null)`)
+- `project_members_viewer_role_regime_check` check (expression `(role = 'viewer' and viewer_regime is not null) or (role <> 'viewer' and viewer_regime is null)`)
 - unnamed unique (columns `project_id`, `profile_id`)
 - unnamed check (expression `finance_visibility in ('none', 'summary', 'detail')`)
 - unnamed check (expression `internal_docs_visibility in ('none', 'view', 'edit')`)
@@ -195,7 +195,7 @@ Constraints:
 - unnamed check (expression `viewer_regime in ('contractor', 'client', 'build_myself')`)
 - unnamed check (expression `credit_limit >= 0`)
 - unnamed check (expression `status in ('pending', 'accepted', 'revoked', 'expired')`)
-- `project_invites_viewer_regime_check` check (expression `(role = 'viewer' and viewer_regime is not null) or (role <> 'viewer' and viewer_regime is null)`)
+- `project_invites_viewer_role_regime_check` check (expression `(role = 'viewer' and viewer_regime is not null) or (role <> 'viewer' and viewer_regime is null)`)
 - unnamed unique (columns `invite_token`)
 - unnamed check (expression `finance_visibility in ('none', 'summary', 'detail')`)
 - unnamed check (expression `internal_docs_visibility in ('none', 'view', 'edit')`)
@@ -220,7 +220,7 @@ Triggers:
 | `public.project_members(profile_id)` | `public.profiles(id)` | `cascade` | `supabase/migrations/20260306161000_projects_membership_and_invites.sql` |
 | `public.project_invites(project_id)` | `public.projects(id)` | `cascade` | `supabase/migrations/20260306161000_projects_membership_and_invites.sql` |
 | `public.project_invites(invited_by)` | `public.profiles(id)` | `restrict` | `supabase/migrations/20260306161000_projects_membership_and_invites.sql` |
-| `public.project_invites(accepted_profile_id)` | `public.profiles(id)` | `set` | `supabase/migrations/20260306161000_projects_membership_and_invites.sql` |
+| `public.project_invites(accepted_profile_id)` | `public.profiles(id)` | `set null` | `supabase/migrations/20260306161000_projects_membership_and_invites.sql` |
 | `public.projects(current_stage_id)` | `public.project_stages(id)` | `set null` | `supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql` |
 
 ## Functions
@@ -256,7 +256,7 @@ Triggers:
 - Authenticated grants: `insert`, `select`, `update`
 - Policies:
   - `profiles_select` for `select` to `authenticated`
-    using: `id = auth.uid() or exists ( select 1 from public.projects p where p.owner_profile_id = auth.uid() and ( p.owner_profile_id = id or exists ( select 1 from public.project_members pm_target where pm_target.project_id = p.id and pm_target.profile_id = id ) ) ) or exists ( select 1 from public.project_members pm_self join public.projects p on p.id = pm_self.project_id where pm_self.profile_id = auth.uid() and p.owner_profile_id = id )`
+    using: `id = auth.uid() or exists ( select 1 from public.projects p where p.owner_profile_id = auth.uid() and ( p.owner_profile_id = profiles.id or exists ( select 1 from public.project_members pm_target where pm_target.project_id = p.id and pm_target.profile_id = profiles.id ) ) ) or exists ( select 1 from public.project_members pm_self join public.projects p on p.id = pm_self.project_id where pm_self.profile_id = auth.uid() and p.owner_profile_id = profiles.id )`
   - `profiles_insert` for `insert` to `authenticated`
     with check: `id = auth.uid()`
   - `profiles_update` for `update` to `authenticated`

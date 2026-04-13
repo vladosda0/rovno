@@ -24,7 +24,7 @@
           "roles": [
             "authenticated"
           ],
-          "using": "id = auth.uid()\n  or exists (\n    select 1\n    from public.projects p\n    where p.owner_profile_id = auth.uid()\n      and (\n        p.owner_profile_id = id\n        or exists (\n          select 1\n          from public.project_members pm_target\n          where pm_target.project_id = p.id\n            and pm_target.profile_id = id\n        )\n      )\n  )\n  or exists (\n    select 1\n    from public.project_members pm_self\n    join public.projects p\n      on p.id = pm_self.project_id\n    where pm_self.profile_id = auth.uid()\n      and p.owner_profile_id = id\n  )",
+          "using": "id = auth.uid()\n  or exists (\n    select 1\n    from public.projects p\n    where p.owner_profile_id = auth.uid()\n      and (\n        p.owner_profile_id = profiles.id\n        or exists (\n          select 1\n          from public.project_members pm_target\n          where pm_target.project_id = p.id\n            and pm_target.profile_id = profiles.id\n        )\n      )\n  )\n  or exists (\n    select 1\n    from public.project_members pm_self\n    join public.projects p\n      on p.id = pm_self.project_id\n    where pm_self.profile_id = auth.uid()\n      and p.owner_profile_id = profiles.id\n  )",
           "withCheck": null,
           "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
         },
@@ -161,18 +161,6 @@
         "update"
       ],
       "policies": [
-        {
-          "name": "projects_select",
-          "schema": "public",
-          "table": "projects",
-          "command": "select",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "owner_profile_id = auth.uid()\n  or exists (\n    select 1\n    from public.project_members pm\n    where pm.project_id = id\n      and pm.profile_id = auth.uid()\n  )",
-          "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
-        },
         {
           "name": "projects_insert",
           "schema": "public",
