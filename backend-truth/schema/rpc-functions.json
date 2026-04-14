@@ -1334,6 +1334,26 @@
       "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260407190000_track4_upload_visibility_class.sql",
       "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "get_ai_project_snapshot",
+      "signature": "public.get_ai_project_snapshot(uuid)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260414120000_wave1_get_ai_project_snapshot.sql",
+      "triggerUsages": []
     }
   ]
 }

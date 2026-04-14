@@ -1542,6 +1542,12 @@ export type Database = {
           }
           Returns: number
         }
+        "get_ai_project_snapshot": {
+          Args: {
+          "p_project_id": string
+          }
+          Returns: Json
+        }
         "get_estimate_operational_summary": {
           Args: {
           "p_project_id": string
