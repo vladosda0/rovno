@@ -149,6 +149,10 @@ describe("mapGroundingStatus", () => {
     expect(mapGroundingStatus("none")).toBe("ungrounded");
   });
 
+  it("maps server_verified → project_context_grounded", () => {
+    expect(mapGroundingStatus("server_verified")).toBe("project_context_grounded");
+  });
+
   it("falls back to ungrounded for undefined", () => {
     expect(mapGroundingStatus(undefined)).toBe("ungrounded");
   });
@@ -271,6 +275,16 @@ describe("mapInferenceResponse", () => {
     expect(result.groundingNote).toBeUndefined();
     expect(result.sources).toBeUndefined();
     expect(result.workProposal).toBeUndefined();
+  });
+
+  it("maps server_verified backend status to grounded callout", () => {
+    const result = mapInferenceResponse({
+      explanation: "Answer.",
+      groundingStatus: "server_verified",
+      groundingNote: "Uses verified procurement data.",
+    });
+    expect(result.grounding).toBe("project_context_grounded");
+    expect(result.groundingNote).toBe("Uses verified procurement data.");
   });
 
   it("provides fallback explanation when missing", () => {

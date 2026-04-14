@@ -59,7 +59,11 @@ interface AIInferenceRequestBody {
   };
 }
 
-type BackendGroundingStatus = "client_attributed" | "partial_client_attributed" | "none";
+type BackendGroundingStatus =
+  | "client_attributed"
+  | "partial_client_attributed"
+  | "none"
+  | "server_verified";
 
 interface BackendGroundingSource {
   kind?: string;
@@ -93,6 +97,7 @@ const GROUNDING_MAP: Record<BackendGroundingStatus, AssistantGroundingStatus> = 
   client_attributed: "project_context_grounded",
   partial_client_attributed: "partial",
   none: "ungrounded",
+  server_verified: "project_context_grounded",
 };
 
 export function mapGroundingStatus(raw: string | undefined): AssistantGroundingStatus {
