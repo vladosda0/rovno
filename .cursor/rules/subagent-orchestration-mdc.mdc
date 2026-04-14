@@ -73,6 +73,7 @@ Invoke `security-quick-pass` when:
 Invoke `ai-product-reviewer` when:
 
 - the repo is `rovno` and AI sidebar, prompts, tool use, model-backed flows, or commit proposals change
+- the repo is `rovno-db` and SQL migrations, policies, grants, RPCs, triggers, or generator plumbing change anything that powers AISidebar, tool execution, prompts stored as data, model telemetry, or cross-tenant AI boundaries
 - reviewing failure modes, empty states, injection surfaces, or permission boundaries for AI features
 
 Invoke `independent-verifier` after every non-trivial implementation.
@@ -116,7 +117,7 @@ High-risk task:
 `repo-auditor` -> `backend-contract-truth-inspector` -> `implementation-planner` -> implementer -> `sensitive-zone-reviewer` -> `independent-verifier`
 
 Optional before merge or release:
-`security-quick-pass` and/or (in `rovno`) `ai-product-reviewer`
+`security-quick-pass` and/or `ai-product-reviewer` when AI surfaces or their backing contracts change
 
 ## Conflict-of-interest rule
 
