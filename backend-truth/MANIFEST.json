@@ -199,6 +199,10 @@
     {
       "path": "supabase/migrations/20260414120000_wave1_get_ai_project_snapshot.sql",
       "sha256": "445ba9a959befcb8ff306b30b6a9f343d4a2faa860eae9ff06955a524fc8605d"
+    },
+    {
+      "path": "supabase/migrations/20260414140000_wave3_procurement_ai_operational_evidence_rpc.sql",
+      "sha256": "f0b4576c81dfe0bb05501b950f456dbeda0cff60c1dd88d66448dba08fe2aadc"
     }
   ],
   "generated_artifacts": [
@@ -272,6 +276,7 @@
     "sql/20260409120000_hr_select_policies_align_can_access_hr_domain.sql",
     "sql/20260409140000_hr_write_policies_align_can_access_hr_domain.sql",
     "sql/20260414120000_wave1_get_ai_project_snapshot.sql",
+    "sql/20260414140000_wave3_procurement_ai_operational_evidence_rpc.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],

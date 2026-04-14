@@ -1565,6 +1565,14 @@ export type Database = {
           }
           Returns: Json
         }
+        "get_procurement_ai_operational_evidence": {
+          Args: {
+          "p_project_id": string
+          "p_limit": unknown
+          "p_offset": unknown
+          }
+          Returns: Json
+        }
         "get_procurement_operational_summary": {
           Args: {
           "p_project_id": string

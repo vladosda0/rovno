@@ -12,6 +12,7 @@
     "supabase/migrations/20260306163000_inventory_foundation.sql",
     "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
     "supabase/migrations/20260406183000_procurement_operational_summary_requested_and_ordered_line_types.sql",
+    "supabase/migrations/20260414140000_wave3_procurement_ai_operational_evidence_rpc.sql",
     "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
     "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
   ],
@@ -1608,6 +1609,37 @@
       "securityDefiner": true,
       "searchPath": "public",
       "sourceMigration": "supabase/migrations/20260406183000_procurement_operational_summary_requested_and_ordered_line_types.sql",
+      "authenticatedExecute": true,
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "get_procurement_ai_operational_evidence",
+      "key": "public.get_procurement_ai_operational_evidence",
+      "signature": "public.get_procurement_ai_operational_evidence(uuid, integer, integer)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_limit",
+          "type": "integer default 40",
+          "identityType": "integer"
+        },
+        {
+          "name": "p_offset",
+          "type": "integer default 0",
+          "identityType": "integer"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "sourceMigration": "supabase/migrations/20260414140000_wave3_procurement_ai_operational_evidence_rpc.sql",
       "authenticatedExecute": true,
       "triggerUsages": []
     }

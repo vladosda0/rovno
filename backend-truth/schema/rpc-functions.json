@@ -1354,6 +1354,36 @@
       "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260414120000_wave1_get_ai_project_snapshot.sql",
       "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "get_procurement_ai_operational_evidence",
+      "signature": "public.get_procurement_ai_operational_evidence(uuid, integer, integer)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_limit",
+          "type": "integer default 40",
+          "identityType": "integer"
+        },
+        {
+          "name": "p_offset",
+          "type": "integer default 0",
+          "identityType": "integer"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260414140000_wave3_procurement_ai_operational_evidence_rpc.sql",
+      "triggerUsages": []
     }
   ]
 }
