@@ -1587,6 +1587,14 @@ export type Database = {
           }
           Returns: Database['public']['Tables']["estimate_versions"]['Row']
         }
+        "get_tasks_ai_operational_evidence": {
+          Args: {
+          "p_project_id": string
+          "p_task_limit": unknown
+          "p_offset": unknown
+          }
+          Returns: Json
+        }
         "has_project_role": {
           Args: {
           "p_project_id": string

@@ -75,6 +75,7 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20260409140000_hr_write_policies_align_can_access_hr_domain.sql`
 - `supabase/migrations/20260414120000_wave1_get_ai_project_snapshot.sql`
 - `supabase/migrations/20260414140000_wave3_procurement_ai_operational_evidence_rpc.sql`
+- `supabase/migrations/20260414150000_wave4_tasks_ai_operational_evidence_rpc.sql`
 
 ## Exclusions
 

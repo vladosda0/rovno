@@ -601,6 +601,13 @@
       "name": "get_procurement_ai_operational_evidence",
       "signature": "public.get_procurement_ai_operational_evidence(uuid, integer, integer)",
       "sourceMigration": "supabase/migrations/20260414140000_wave3_procurement_ai_operational_evidence_rpc.sql"
+    },
+    {
+      "key": "public.get_tasks_ai_operational_evidence",
+      "schema": "public",
+      "name": "get_tasks_ai_operational_evidence",
+      "signature": "public.get_tasks_ai_operational_evidence(uuid, integer, integer)",
+      "sourceMigration": "supabase/migrations/20260414150000_wave4_tasks_ai_operational_evidence_rpc.sql"
     }
   ],
   "policies": [
@@ -1648,6 +1655,7 @@
         "supabase/migrations/20260306164000_hr_domain.sql",
         "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
         "supabase/migrations/20260320110000_task_final_media_contract.sql",
+        "supabase/migrations/20260414150000_wave4_tasks_ai_operational_evidence_rpc.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
       ],
       "tables": [
@@ -1656,7 +1664,9 @@
         "public.task_comments",
         "public.task_checklist_items"
       ],
-      "functions": [],
+      "functions": [
+        "public.get_tasks_ai_operational_evidence"
+      ],
       "policies": [
         "public.project_stages.project_stages_select",
         "public.project_stages.project_stages_insert",
