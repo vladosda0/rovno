@@ -203,6 +203,10 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260414120000_wave1_get_ai_project_snapshot.sql",
       "sha256": "445ba9a959befcb8ff306b30b6a9f343d4a2faa860eae9ff06955a524fc8605d"
+    },
+    {
+      "path": "supabase/migrations/20260414140000_wave3_procurement_ai_operational_evidence_rpc.sql",
+      "sha256": "f0b4576c81dfe0bb05501b950f456dbeda0cff60c1dd88d66448dba08fe2aadc"
     }
   ],
   "generated_artifacts": [
@@ -276,6 +280,7 @@ export const manifest = {
     "sql/20260409120000_hr_select_policies_align_can_access_hr_domain.sql",
     "sql/20260409140000_hr_write_policies_align_can_access_hr_domain.sql",
     "sql/20260414120000_wave1_get_ai_project_snapshot.sql",
+    "sql/20260414140000_wave3_procurement_ai_operational_evidence_rpc.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -10764,6 +10769,36 @@ export const functions = {
       "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260414120000_wave1_get_ai_project_snapshot.sql",
       "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "get_procurement_ai_operational_evidence",
+      "signature": "public.get_procurement_ai_operational_evidence(uuid, integer, integer)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_limit",
+          "type": "integer default 40",
+          "identityType": "integer"
+        },
+        {
+          "name": "p_offset",
+          "type": "integer default 0",
+          "identityType": "integer"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260414140000_wave3_procurement_ai_operational_evidence_rpc.sql",
+      "triggerUsages": []
     }
   ]
 } as const;
@@ -13162,6 +13197,13 @@ export const sourceTrace = {
       "name": "get_ai_project_snapshot",
       "signature": "public.get_ai_project_snapshot(uuid)",
       "sourceMigration": "supabase/migrations/20260414120000_wave1_get_ai_project_snapshot.sql"
+    },
+    {
+      "key": "public.get_procurement_ai_operational_evidence",
+      "schema": "public",
+      "name": "get_procurement_ai_operational_evidence",
+      "signature": "public.get_procurement_ai_operational_evidence(uuid, integer, integer)",
+      "sourceMigration": "supabase/migrations/20260414140000_wave3_procurement_ai_operational_evidence_rpc.sql"
     }
   ],
   "policies": [
@@ -14610,6 +14652,7 @@ export const sourceTrace = {
         "supabase/migrations/20260306163000_inventory_foundation.sql",
         "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
         "supabase/migrations/20260406183000_procurement_operational_summary_requested_and_ordered_line_types.sql",
+        "supabase/migrations/20260414140000_wave3_procurement_ai_operational_evidence_rpc.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
@@ -14625,7 +14668,8 @@ export const sourceTrace = {
       "functions": [
         "public.apply_inventory_balance_delta",
         "public.sync_inventory_balances",
-        "public.get_procurement_operational_summary"
+        "public.get_procurement_operational_summary",
+        "public.get_procurement_ai_operational_evidence"
       ],
       "policies": [
         "public.inventory_items.inventory_items_select",
@@ -15014,11 +15058,12 @@ export const slices = {
         "supabase/migrations/20260306163000_inventory_foundation.sql",
         "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
         "supabase/migrations/20260406183000_procurement_operational_summary_requested_and_ordered_line_types.sql",
+        "supabase/migrations/20260414140000_wave3_procurement_ai_operational_evidence_rpc.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
       "tableCount": 7,
-      "functionCount": 3,
+      "functionCount": 4,
       "rlsTableCount": 7
     },
     {
