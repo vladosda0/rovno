@@ -199,6 +199,10 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260409140000_hr_write_policies_align_can_access_hr_domain.sql",
       "sha256": "3c175a1c459ed5c8078fcff4b4af5e7c61dbaa3eb0a8bd7d7c684b50aa799885"
+    },
+    {
+      "path": "supabase/migrations/20260414120000_wave1_get_ai_project_snapshot.sql",
+      "sha256": "445ba9a959befcb8ff306b30b6a9f343d4a2faa860eae9ff06955a524fc8605d"
     }
   ],
   "generated_artifacts": [
@@ -271,6 +275,7 @@ export const manifest = {
     "sql/20260408120000_estimate_line_pricing_params.sql",
     "sql/20260409120000_hr_select_policies_align_can_access_hr_domain.sql",
     "sql/20260409140000_hr_write_policies_align_can_access_hr_domain.sql",
+    "sql/20260414120000_wave1_get_ai_project_snapshot.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -10739,6 +10744,26 @@ export const functions = {
       "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260407190000_track4_upload_visibility_class.sql",
       "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "get_ai_project_snapshot",
+      "signature": "public.get_ai_project_snapshot(uuid)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260414120000_wave1_get_ai_project_snapshot.sql",
+      "triggerUsages": []
     }
   ]
 } as const;
@@ -13130,6 +13155,13 @@ export const sourceTrace = {
       "name": "prepare_project_media_upload",
       "signature": "public.prepare_project_media_upload(uuid, text, text, text, bigint, text, uuid, boolean, text)",
       "sourceMigration": "supabase/migrations/20260407190000_track4_upload_visibility_class.sql"
+    },
+    {
+      "key": "public.get_ai_project_snapshot",
+      "schema": "public",
+      "name": "get_ai_project_snapshot",
+      "signature": "public.get_ai_project_snapshot(uuid)",
+      "sourceMigration": "supabase/migrations/20260414120000_wave1_get_ai_project_snapshot.sql"
     }
   ],
   "policies": [
@@ -14051,6 +14083,7 @@ export const sourceTrace = {
         "supabase/migrations/20260324140000_project_launch_authority.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
         "supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql",
+        "supabase/migrations/20260414120000_wave1_get_ai_project_snapshot.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql",
         "supabase/migrations/20260320130000_codex_review_findings_fixes.sql",
@@ -14086,7 +14119,8 @@ export const sourceTrace = {
         "public.effective_ai_access_for_profile",
         "public.can_view_internal_documents",
         "public.can_view_sensitive_detail",
-        "public.can_access_hr_domain"
+        "public.can_access_hr_domain",
+        "public.get_ai_project_snapshot"
       ],
       "policies": [
         "public.profiles.profiles_select",
@@ -14904,6 +14938,7 @@ export const slices = {
         "supabase/migrations/20260324140000_project_launch_authority.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
         "supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql",
+        "supabase/migrations/20260414120000_wave1_get_ai_project_snapshot.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql",
         "supabase/migrations/20260320130000_codex_review_findings_fixes.sql",
@@ -14912,7 +14947,7 @@ export const slices = {
         "supabase/migrations/20260326190000_restore_co_owner_project_members_rls_subset.sql"
       ],
       "tableCount": 6,
-      "functionCount": 20,
+      "functionCount": 21,
       "rlsTableCount": 6
     },
     {

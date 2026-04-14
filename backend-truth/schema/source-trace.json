@@ -587,6 +587,13 @@
       "name": "prepare_project_media_upload",
       "signature": "public.prepare_project_media_upload(uuid, text, text, text, bigint, text, uuid, boolean, text)",
       "sourceMigration": "supabase/migrations/20260407190000_track4_upload_visibility_class.sql"
+    },
+    {
+      "key": "public.get_ai_project_snapshot",
+      "schema": "public",
+      "name": "get_ai_project_snapshot",
+      "signature": "public.get_ai_project_snapshot(uuid)",
+      "sourceMigration": "supabase/migrations/20260414120000_wave1_get_ai_project_snapshot.sql"
     }
   ],
   "policies": [
@@ -1508,6 +1515,7 @@
         "supabase/migrations/20260324140000_project_launch_authority.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
         "supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql",
+        "supabase/migrations/20260414120000_wave1_get_ai_project_snapshot.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql",
         "supabase/migrations/20260320130000_codex_review_findings_fixes.sql",
@@ -1543,7 +1551,8 @@
         "public.effective_ai_access_for_profile",
         "public.can_view_internal_documents",
         "public.can_view_sensitive_detail",
-        "public.can_access_hr_domain"
+        "public.can_access_hr_domain",
+        "public.get_ai_project_snapshot"
       ],
       "policies": [
         "public.profiles.profiles_select",
