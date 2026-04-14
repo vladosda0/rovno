@@ -15,6 +15,7 @@
     "supabase/migrations/20260306164000_hr_domain.sql",
     "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
     "supabase/migrations/20260320110000_task_final_media_contract.sql",
+    "supabase/migrations/20260414150000_wave4_tasks_ai_operational_evidence_rpc.sql",
     "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
   ],
   "tables": [
@@ -1045,7 +1046,39 @@
       "onDelete": "set null"
     }
   ],
-  "functions": [],
+  "functions": [
+    {
+      "schema": "public",
+      "name": "get_tasks_ai_operational_evidence",
+      "key": "public.get_tasks_ai_operational_evidence",
+      "signature": "public.get_tasks_ai_operational_evidence(uuid, integer, integer)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_task_limit",
+          "type": "integer default 25",
+          "identityType": "integer"
+        },
+        {
+          "name": "p_offset",
+          "type": "integer default 0",
+          "identityType": "integer"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "sourceMigration": "supabase/migrations/20260414150000_wave4_tasks_ai_operational_evidence_rpc.sql",
+      "authenticatedExecute": true,
+      "triggerUsages": []
+    }
+  ],
   "rls": [
     {
       "schema": "public",

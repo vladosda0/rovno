@@ -207,6 +207,10 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260414140000_wave3_procurement_ai_operational_evidence_rpc.sql",
       "sha256": "f0b4576c81dfe0bb05501b950f456dbeda0cff60c1dd88d66448dba08fe2aadc"
+    },
+    {
+      "path": "supabase/migrations/20260414150000_wave4_tasks_ai_operational_evidence_rpc.sql",
+      "sha256": "1db9714e2e907a2f3f0a821f40479b85bd19132c247a77780d1b9d53a03b2cb9"
     }
   ],
   "generated_artifacts": [
@@ -281,6 +285,7 @@ export const manifest = {
     "sql/20260409140000_hr_write_policies_align_can_access_hr_domain.sql",
     "sql/20260414120000_wave1_get_ai_project_snapshot.sql",
     "sql/20260414140000_wave3_procurement_ai_operational_evidence_rpc.sql",
+    "sql/20260414150000_wave4_tasks_ai_operational_evidence_rpc.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -10799,6 +10804,36 @@ export const functions = {
       "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260414140000_wave3_procurement_ai_operational_evidence_rpc.sql",
       "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "get_tasks_ai_operational_evidence",
+      "signature": "public.get_tasks_ai_operational_evidence(uuid, integer, integer)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_task_limit",
+          "type": "integer default 25",
+          "identityType": "integer"
+        },
+        {
+          "name": "p_offset",
+          "type": "integer default 0",
+          "identityType": "integer"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260414150000_wave4_tasks_ai_operational_evidence_rpc.sql",
+      "triggerUsages": []
     }
   ]
 } as const;
@@ -13204,6 +13239,13 @@ export const sourceTrace = {
       "name": "get_procurement_ai_operational_evidence",
       "signature": "public.get_procurement_ai_operational_evidence(uuid, integer, integer)",
       "sourceMigration": "supabase/migrations/20260414140000_wave3_procurement_ai_operational_evidence_rpc.sql"
+    },
+    {
+      "key": "public.get_tasks_ai_operational_evidence",
+      "schema": "public",
+      "name": "get_tasks_ai_operational_evidence",
+      "signature": "public.get_tasks_ai_operational_evidence(uuid, integer, integer)",
+      "sourceMigration": "supabase/migrations/20260414150000_wave4_tasks_ai_operational_evidence_rpc.sql"
     }
   ],
   "policies": [
@@ -14251,6 +14293,7 @@ export const sourceTrace = {
         "supabase/migrations/20260306164000_hr_domain.sql",
         "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
         "supabase/migrations/20260320110000_task_final_media_contract.sql",
+        "supabase/migrations/20260414150000_wave4_tasks_ai_operational_evidence_rpc.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
       ],
       "tables": [
@@ -14259,7 +14302,9 @@ export const sourceTrace = {
         "public.task_comments",
         "public.task_checklist_items"
       ],
-      "functions": [],
+      "functions": [
+        "public.get_tasks_ai_operational_evidence"
+      ],
       "policies": [
         "public.project_stages.project_stages_select",
         "public.project_stages.project_stages_insert",
@@ -15005,10 +15050,11 @@ export const slices = {
         "supabase/migrations/20260306164000_hr_domain.sql",
         "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
         "supabase/migrations/20260320110000_task_final_media_contract.sql",
+        "supabase/migrations/20260414150000_wave4_tasks_ai_operational_evidence_rpc.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
       ],
       "tableCount": 4,
-      "functionCount": 0,
+      "functionCount": 1,
       "rlsTableCount": 4
     },
     {
