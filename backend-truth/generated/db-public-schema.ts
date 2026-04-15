@@ -219,6 +219,10 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql",
       "sha256": "e107593eb350541db8b2a1ca5fc3e5e520b3b88169c824da3c3fffb2d78b9130"
+    },
+    {
+      "path": "supabase/migrations/20260415130000_wave7_documents_media_ai_metadata_evidence.sql",
+      "sha256": "87e334a653120aaf96232dbe94b976e42c378824d7827e622ceba0db9311103f"
     }
   ],
   "generated_artifacts": [
@@ -296,6 +300,7 @@ export const manifest = {
     "sql/20260414150000_wave4_tasks_ai_operational_evidence_rpc.sql",
     "sql/20260415100000_wave5_ai_chat_session_continuity.sql",
     "sql/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql",
+    "sql/20260415130000_wave7_documents_media_ai_metadata_evidence.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -11137,6 +11142,66 @@ export const functions = {
       "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql",
       "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "get_documents_ai_metadata_evidence",
+      "signature": "public.get_documents_ai_metadata_evidence(uuid, integer, integer)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_limit",
+          "type": "integer default 25",
+          "identityType": "integer"
+        },
+        {
+          "name": "p_offset",
+          "type": "integer default 0",
+          "identityType": "integer"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260415130000_wave7_documents_media_ai_metadata_evidence.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "get_project_media_ai_metadata_evidence",
+      "signature": "public.get_project_media_ai_metadata_evidence(uuid, integer, integer)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_limit",
+          "type": "integer default 25",
+          "identityType": "integer"
+        },
+        {
+          "name": "p_offset",
+          "type": "integer default 0",
+          "identityType": "integer"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260415130000_wave7_documents_media_ai_metadata_evidence.sql",
+      "triggerUsages": []
     }
   ]
 } as const;
@@ -13597,6 +13662,20 @@ export const sourceTrace = {
       "name": "get_activity_ai_evidence",
       "signature": "public.get_activity_ai_evidence(uuid, integer, integer)",
       "sourceMigration": "supabase/migrations/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql"
+    },
+    {
+      "key": "public.get_documents_ai_metadata_evidence",
+      "schema": "public",
+      "name": "get_documents_ai_metadata_evidence",
+      "signature": "public.get_documents_ai_metadata_evidence(uuid, integer, integer)",
+      "sourceMigration": "supabase/migrations/20260415130000_wave7_documents_media_ai_metadata_evidence.sql"
+    },
+    {
+      "key": "public.get_project_media_ai_metadata_evidence",
+      "schema": "public",
+      "name": "get_project_media_ai_metadata_evidence",
+      "signature": "public.get_project_media_ai_metadata_evidence(uuid, integer, integer)",
+      "sourceMigration": "supabase/migrations/20260415130000_wave7_documents_media_ai_metadata_evidence.sql"
     }
   ],
   "policies": [
@@ -14800,6 +14879,7 @@ export const sourceTrace = {
         "supabase/migrations/20260317133000_storage_bucket_config_table.sql",
         "supabase/migrations/20260317121000_storage_upload_rpcs.sql",
         "supabase/migrations/20260407190000_track4_upload_visibility_class.sql",
+        "supabase/migrations/20260415130000_wave7_documents_media_ai_metadata_evidence.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260326213000_internal_visibility_write_boundary.sql",
         "supabase/migrations/20260408100000_document_versions_insert_internal_visibility_parity.sql"
@@ -14819,7 +14899,9 @@ export const sourceTrace = {
         "public.finalize_document_upload",
         "public.finalize_project_media_upload",
         "public.prepare_document_upload",
-        "public.prepare_project_media_upload"
+        "public.prepare_project_media_upload",
+        "public.get_documents_ai_metadata_evidence",
+        "public.get_project_media_ai_metadata_evidence"
       ],
       "policies": [
         "public.storage_objects.storage_objects_select",
@@ -15441,12 +15523,13 @@ export const slices = {
         "supabase/migrations/20260317133000_storage_bucket_config_table.sql",
         "supabase/migrations/20260317121000_storage_upload_rpcs.sql",
         "supabase/migrations/20260407190000_track4_upload_visibility_class.sql",
+        "supabase/migrations/20260415130000_wave7_documents_media_ai_metadata_evidence.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260326213000_internal_visibility_write_boundary.sql",
         "supabase/migrations/20260408100000_document_versions_insert_internal_visibility_parity.sql"
       ],
       "tableCount": 6,
-      "functionCount": 7,
+      "functionCount": 9,
       "rlsTableCount": 6
     },
     {

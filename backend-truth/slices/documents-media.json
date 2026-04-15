@@ -16,6 +16,7 @@
     "supabase/migrations/20260317133000_storage_bucket_config_table.sql",
     "supabase/migrations/20260317121000_storage_upload_rpcs.sql",
     "supabase/migrations/20260407190000_track4_upload_visibility_class.sql",
+    "supabase/migrations/20260415130000_wave7_documents_media_ai_metadata_evidence.sql",
     "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
     "supabase/migrations/20260326213000_internal_visibility_write_boundary.sql",
     "supabase/migrations/20260408100000_document_versions_insert_internal_visibility_parity.sql"
@@ -1693,6 +1694,68 @@
       "securityDefiner": true,
       "searchPath": "public",
       "sourceMigration": "supabase/migrations/20260407190000_track4_upload_visibility_class.sql",
+      "authenticatedExecute": true,
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "get_documents_ai_metadata_evidence",
+      "key": "public.get_documents_ai_metadata_evidence",
+      "signature": "public.get_documents_ai_metadata_evidence(uuid, integer, integer)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_limit",
+          "type": "integer default 25",
+          "identityType": "integer"
+        },
+        {
+          "name": "p_offset",
+          "type": "integer default 0",
+          "identityType": "integer"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "sourceMigration": "supabase/migrations/20260415130000_wave7_documents_media_ai_metadata_evidence.sql",
+      "authenticatedExecute": true,
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "get_project_media_ai_metadata_evidence",
+      "key": "public.get_project_media_ai_metadata_evidence",
+      "signature": "public.get_project_media_ai_metadata_evidence(uuid, integer, integer)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_limit",
+          "type": "integer default 25",
+          "identityType": "integer"
+        },
+        {
+          "name": "p_offset",
+          "type": "integer default 0",
+          "identityType": "integer"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "sourceMigration": "supabase/migrations/20260415130000_wave7_documents_media_ai_metadata_evidence.sql",
       "authenticatedExecute": true,
       "triggerUsages": []
     }

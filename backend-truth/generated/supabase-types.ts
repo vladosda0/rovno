@@ -1599,6 +1599,14 @@ export type Database = {
           }
           Returns: Json
         }
+        "get_documents_ai_metadata_evidence": {
+          Args: {
+          "p_project_id": string
+          "p_limit": unknown
+          "p_offset": unknown
+          }
+          Returns: Json
+        }
         "get_estimate_operational_summary": {
           Args: {
           "p_project_id": string
@@ -1625,6 +1633,14 @@ export type Database = {
           Returns: Json
         }
         "get_procurement_operational_summary": {
+          Args: {
+          "p_project_id": string
+          "p_limit": unknown
+          "p_offset": unknown
+          }
+          Returns: Json
+        }
+        "get_project_media_ai_metadata_evidence": {
           Args: {
           "p_project_id": string
           "p_limit": unknown

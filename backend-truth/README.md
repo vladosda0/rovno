@@ -78,6 +78,7 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20260414150000_wave4_tasks_ai_operational_evidence_rpc.sql`
 - `supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql`
 - `supabase/migrations/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql`
+- `supabase/migrations/20260415130000_wave7_documents_media_ai_metadata_evidence.sql`
 
 ## Exclusions
 
