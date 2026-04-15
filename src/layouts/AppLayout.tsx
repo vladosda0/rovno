@@ -15,7 +15,8 @@ const AISidebar = lazy(() =>
   import("@/components/AISidebar").then((module) => ({ default: module.AISidebar })),
 );
 
-const HIDE_AI_ROUTES = ["/settings"];
+/** MVP: hide reusable project AI sidebar on `/home` (see architecture contract); code preserved in `AISidebar`. */
+const HIDE_AI_ROUTES = ["/settings", "/home"];
 
 export default function AppLayout() {
   const [aiSidebarCollapsed, setAiSidebarCollapsed] = useState(() => readAiSidebarSessionPreference() ?? false);

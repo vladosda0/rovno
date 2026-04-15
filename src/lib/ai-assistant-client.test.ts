@@ -1,8 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   shouldUseHostedInference,
+  shouldUseHostedLiveTextAssistantPath,
+  isLiveTextHostedKillSwitchEnabled,
   pickInferenceMode,
   mapGroundingStatus,
+  mapGroundingKind,
   mapGroundingSources,
   mapWorkProposal,
   mapInferenceResponse,
@@ -163,6 +166,25 @@ describe("mapGroundingStatus", () => {
 });
 
 // ---------------------------------------------------------------------------
+// mapGroundingKind
+// ---------------------------------------------------------------------------
+
+describe("mapGroundingKind", () => {
+  it("maps contract groundingKind values", () => {
+    expect(mapGroundingKind("grounded_on_project_sources")).toBe("project_context_grounded");
+    expect(mapGroundingKind("partially_grounded")).toBe("partial");
+    expect(
+      mapGroundingKind("not_grounded_on_project_sources_but_general_guidance_available"),
+    ).toBe("ungrounded");
+  });
+
+  it("returns undefined for unknown", () => {
+    expect(mapGroundingKind(undefined)).toBeUndefined();
+    expect(mapGroundingKind("legacy")).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // mapGroundingSources
 // ---------------------------------------------------------------------------
 
@@ -233,6 +255,15 @@ describe("mapWorkProposal", () => {
     });
   });
 
+  it("maps hosted Gigachat-style steps (title + description)", () => {
+    const result = mapWorkProposal({
+      title: "План",
+      summary: "S",
+      steps: [{ title: "Step A", description: "Note A" }],
+    });
+    expect(result?.suggestedWorkItems).toEqual([{ label: "Step A", note: "Note A" }]);
+  });
+
   it("handles missing steps array", () => {
     const result = mapWorkProposal({ title: "T", summary: "S" });
     expect(result?.suggestedWorkItems).toEqual([]);
@@ -291,6 +322,54 @@ describe("mapInferenceResponse", () => {
     const result = mapInferenceResponse({});
     expect(result.explanation).toBe("The assistant returned an empty response.");
   });
+
+  it("prefers answerText and groundingKind when present (Wave 8 contract)", () => {
+    const result = mapInferenceResponse({
+      responseVersion: "0.7.0-wave7-docs-media-metadata",
+      answerText: "Primary answer.",
+      groundingKind: "partially_grounded",
+      groundingDetails: {
+        serverSnapshotUsed: true,
+        domainsRetrieved: ["estimate", "documents_metadata"],
+        evidenceTruncated: true,
+      },
+      followUps: [{ prompt: "Want procurement totals?", intent: "procurement" }],
+      freshnessHint: { note: "Dashboard may be newer" },
+      optionalWorkProposalPreview: null,
+      explanation: "Legacy alias.",
+      groundingStatus: "none",
+      groundingNote: "Note from server",
+    });
+    expect(result.explanation).toBe("Primary answer.");
+    expect(result.grounding).toBe("partial");
+    expect(result.groundingKind).toBe("partially_grounded");
+    expect(result.responseVersion).toBe("0.7.0-wave7-docs-media-metadata");
+    expect(result.groundingDetails?.domainsRetrieved).toEqual(["estimate", "documents_metadata"]);
+    expect(result.groundingDetails?.evidenceTruncated).toBe(true);
+    expect(result.followUps?.[0]?.prompt).toBe("Want procurement totals?");
+    expect(result.freshnessHint?.note).toBe("Dashboard may be newer");
+  });
+
+  it("prefers optionalWorkProposalPreview over workProposal", () => {
+    const result = mapInferenceResponse({
+      answerText: "A",
+      groundingKind: "grounded_on_project_sources",
+      groundingDetails: { serverSnapshotUsed: true, domainsRetrieved: [], evidenceTruncated: false },
+      followUps: [],
+      freshnessHint: null,
+      optionalWorkProposalPreview: {
+        title: "Preview only",
+        summary: "S",
+        steps: [{ title: "One", description: "D" }],
+      },
+      workProposal: {
+        title: "Ignored",
+        summary: "X",
+        steps: [],
+      },
+    });
+    expect(result.workProposal?.proposalTitle).toBe("Preview only");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -330,5 +409,45 @@ describe("buildInferenceRequestBody", () => {
     const ctx = body.contextPack.projectContext;
     expect(ctx).toHaveProperty("project");
     expect((ctx as { project: { title: string } }).project.title).toBe("Test Project");
+  });
+
+  it("includes chatId when a valid UUID is provided", () => {
+    const pack = minimalContextPack();
+    const cid = "a1b2c3d4-e5f6-4780-abcd-ef1234567890";
+    const body = buildInferenceRequestBody("pid-1", "consult", "hi", pack, cid);
+    expect(body.chatId).toBe(cid);
+  });
+
+  it("omits chatId when not a UUID", () => {
+    const pack = minimalContextPack();
+    const body = buildInferenceRequestBody("pid-1", "consult", "hi", pack, "not-uuid");
+    expect(body).not.toHaveProperty("chatId");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// shouldUseHostedLiveTextAssistantPath / kill switch
+// ---------------------------------------------------------------------------
+
+describe("shouldUseHostedLiveTextAssistantPath", () => {
+  const uuid = "a1b2c3d4-e5f6-4780-abcd-ef1234567890";
+
+  it("is true for supabase + UUID when env kill switch unset", () => {
+    vi.stubEnv("VITE_AI_LIVE_TEXT_ASSISTANT", "");
+    expect(shouldUseHostedLiveTextAssistantPath("supabase", uuid)).toBe(true);
+    vi.unstubAllEnvs();
+  });
+
+  it("is false when VITE_AI_LIVE_TEXT_ASSISTANT disables hosted path", () => {
+    vi.stubEnv("VITE_AI_LIVE_TEXT_ASSISTANT", "false");
+    expect(isLiveTextHostedKillSwitchEnabled()).toBe(true);
+    expect(shouldUseHostedLiveTextAssistantPath("supabase", uuid)).toBe(false);
+    vi.unstubAllEnvs();
+  });
+
+  it("is false for demo workspace", () => {
+    vi.stubEnv("VITE_AI_LIVE_TEXT_ASSISTANT", "");
+    expect(shouldUseHostedLiveTextAssistantPath("demo", uuid)).toBe(false);
+    vi.unstubAllEnvs();
   });
 });

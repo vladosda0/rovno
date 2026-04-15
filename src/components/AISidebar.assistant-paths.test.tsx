@@ -29,13 +29,14 @@ const { liveFlag, invokeLiveTextAssistantMock } = vi.hoisted(() => {
   return { liveFlag, invokeLiveTextAssistantMock };
 });
 
-vi.mock("@/lib/ai-live-text-assistant-feature", () => ({
-  isLiveTextAssistantEnabled: () => liveFlag.current,
-}));
-
-vi.mock("@/lib/ai-assistant-client", () => ({
-  invokeLiveTextAssistant: (...args: unknown[]) => invokeLiveTextAssistantMock(...args),
-}));
+vi.mock("@/lib/ai-assistant-client", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/ai-assistant-client")>();
+  return {
+    ...actual,
+    invokeLiveTextAssistant: (...args: unknown[]) => invokeLiveTextAssistantMock(...args),
+    shouldUseHostedLiveTextAssistantPath: () => liveFlag.current,
+  };
+});
 
 import { AISidebar } from "@/components/AISidebar";
 import * as AiProjectContext from "@/lib/ai-project-context";
@@ -136,38 +137,29 @@ describe("AISidebar assistant paths", () => {
       expect(screen.queryByText("PREVIEW_TITLE")).toBeInTheDocument();
     });
 
-    it("after /home project pick, live assistant receives context for the selected project (not stale pre-pick state)", async () => {
+    it("passes a UUID chatId on live assistant invoke (session continuity)", async () => {
       const queryClient = createQueryClient();
       render(
         <QueryClientProvider client={queryClient}>
-          <MemoryRouter initialEntries={["/home"]}>
+          <MemoryRouter initialEntries={["/project/project-a/dashboard"]}>
             <AISidebar collapsed={false} onCollapsedChange={vi.fn()} />
           </MemoryRouter>
         </QueryClientProvider>,
       );
 
       const composer = screen.getByPlaceholderText("Ask AI...");
-      fireEvent.change(composer, { target: { value: "add task for rough-in" } });
+      fireEvent.change(composer, { target: { value: "first question" } });
       fireEvent.keyDown(composer, { key: "Enter" });
 
-      expect(await screen.findByText(/Select a project below/i)).toBeInTheDocument();
-
-      const combobox = screen.getByRole("combobox");
-      fireEvent.click(combobox);
-
-      const projectOption = await screen.findByRole("option", { name: /^Project A$/i, hidden: true });
-      fireEvent.click(projectOption);
-
       await waitFor(() => {
-        expect(invokeLiveTextAssistantMock).toHaveBeenCalled();
+        expect(invokeLiveTextAssistantMock).toHaveBeenCalledTimes(1);
       });
-
-      const invokeArg = invokeLiveTextAssistantMock.mock.calls[0]?.[0] as {
-        projectId: string;
-        contextPack: { project: { title: string } };
-      };
-      expect(invokeArg.projectId).toBe("project-a");
-      expect(invokeArg.contextPack.project.title).toBe("Project A");
+      const first = invokeLiveTextAssistantMock.mock.calls[0]?.[0] as { chatId?: string };
+      expect(first.chatId).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+      );
+      const stored = sessionStorage.getItem("rovno:ai-chat:project-a");
+      expect(stored).toBe(first.chatId);
     });
   });
 

@@ -58,8 +58,12 @@ import {
   evaluateProjectTargetedSendReadiness,
   type AIContextInputs,
 } from "@/lib/ai-project-context";
-import { invokeLiveTextAssistant, userVisibleLiveTextAssistantError } from "@/lib/ai-assistant-client";
-import { isLiveTextAssistantEnabled } from "@/lib/ai-live-text-assistant-feature";
+import {
+  invokeLiveTextAssistant,
+  shouldUseHostedLiveTextAssistantPath,
+  userVisibleLiveTextAssistantError,
+} from "@/lib/ai-assistant-client";
+import { getOrCreateProjectChatSessionId } from "@/lib/ai-project-chat-session";
 import { generateProposalQueue, getTextResponse, reviseProposalWithEdits } from "@/lib/ai-engine";
 import {
   commitPhotoConsultActions,
@@ -1063,7 +1067,10 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
       }, WORK_STEPS_GENERATE.length * 600 + 200);
     };
 
-    if (isLiveTextAssistantEnabled() && targetProjectId) {
+    if (
+      targetProjectId
+      && shouldUseHostedLiveTextAssistantPath(workspaceMode.kind, targetProjectId)
+    ) {
       void (async () => {
         const readiness = evaluateProjectTargetedSendReadiness(
           targetProjectId,
@@ -1147,6 +1154,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
           userCredits: user.credits_free + user.credits_paid,
         };
         const contextPack = buildAIProjectContext(seam, contextInputs);
+        const chatId = getOrCreateProjectChatSessionId(targetProjectId);
 
         try {
           const result = await invokeLiveTextAssistant({
@@ -1155,6 +1163,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
             userMessage: content,
             workspaceKind: workspaceMode.kind,
             aiAccess: seam.membership?.ai_access ?? "none",
+            chatId,
           });
           setWorkLogs((prev) => {
             const next = new Map(prev);
@@ -1174,6 +1183,11 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
               groundingNote: result.groundingNote,
               sources: result.sources,
               workProposal: result.workProposal,
+              responseVersion: result.responseVersion,
+              groundingKind: result.groundingKind,
+              groundingDetails: result.groundingDetails,
+              followUps: result.followUps,
+              freshnessHint: result.freshnessHint,
             },
           };
           setMessages((prev) => [...prev, assistantMsg]);
@@ -1218,6 +1232,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     seamForProjectCommit,
     user.credits_free,
     user.credits_paid,
+    workspaceMode.kind,
   ]);
 
   useLayoutEffect(() => {
@@ -2485,7 +2500,23 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                                                     grounding={row.message.liveTextAssistantV1.grounding}
                                                     groundingNote={row.message.liveTextAssistantV1.groundingNote}
                                                     sources={row.message.liveTextAssistantV1.sources}
+                                                    inferenceGroundingKind={row.message.liveTextAssistantV1.groundingKind}
+                                                    groundingDetails={row.message.liveTextAssistantV1.groundingDetails}
+                                                    freshnessHint={row.message.liveTextAssistantV1.freshnessHint}
                                                   />
+                                                  {row.message.liveTextAssistantV1.followUps
+                                                    && row.message.liveTextAssistantV1.followUps.length > 0 ? (
+                                                    <div className="mt-1.5">
+                                                      <p className="text-[10px] font-medium text-muted-foreground mb-1">
+                                                        Suggested follow-ups
+                                                      </p>
+                                                      <SuggestionChips
+                                                        suggestions={row.message.liveTextAssistantV1.followUps.map((f) => f.prompt)}
+                                                        onSelect={(text) => setInputValue(text)}
+                                                        singleLineScrollable
+                                                      />
+                                                    </div>
+                                                  ) : null}
                                                   {row.message.liveTextAssistantV1.workProposal ? (
                                                     <WorkProposalPreview
                                                       projectId={row.message.liveTextProjectId}

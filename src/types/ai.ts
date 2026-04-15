@@ -22,7 +22,9 @@ export interface AIProposal {
 
 import type {
   AssistantGroundingStatus,
+  InferenceGroundingKind,
   LiveTextAssistantSource,
+  LiveTextFollowUpPrompt,
   PresentationalWorkProposal,
 } from "@/lib/ai-assistant-contract";
 
@@ -33,6 +35,16 @@ export interface AIMessageLiveTextAssistantV1 {
   groundingNote?: string;
   sources?: LiveTextAssistantSource[];
   workProposal?: PresentationalWorkProposal;
+  /** Wave 8 — mirrors `LiveTextAssistantResult` for persisted thread rendering. */
+  responseVersion?: string;
+  groundingKind?: InferenceGroundingKind;
+  groundingDetails?: {
+    serverSnapshotUsed: boolean;
+    domainsRetrieved: string[];
+    evidenceTruncated: boolean;
+  };
+  followUps?: LiveTextFollowUpPrompt[];
+  freshnessHint?: Record<string, unknown> | null;
 }
 
 export interface AIMessage {

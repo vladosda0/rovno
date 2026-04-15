@@ -92,6 +92,23 @@ describe("AppLayout", () => {
     expect(screen.getByRole("button", { name: "Open AI sidebar" })).toBeInTheDocument();
   });
 
+  it("does not mount project AI sidebar on /home (MVP policy)", async () => {
+    const queryClient = createQueryClient();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/home"]}>
+          <Routes>
+            <Route element={<AppLayout />}>
+              <Route path="/home" element={<div>Home surface</div>} />
+            </Route>
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    expect(screen.queryByPlaceholderText("Ask AI...")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /toggle ai sidebar/i })).not.toBeInTheDocument();
+  });
+
   it("opens again after clearing session preference", async () => {
     writeAiSidebarSessionPreference(true);
     const collapsedRender = renderLayout();

@@ -1,8 +1,10 @@
 import type { AIContextPack } from "@/lib/ai-project-context";
 import type {
   AssistantGroundingStatus,
+  InferenceGroundingKind,
   LiveTextAssistantResult,
   LiveTextAssistantSource,
+  LiveTextFollowUpPrompt,
   PresentationalWorkProposal,
 } from "@/lib/ai-assistant-contract";
 import type { AIAccess } from "@/types/entities";
@@ -21,6 +23,8 @@ export interface InvokeLiveTextAssistantInput {
   workspaceKind: string;
   /** Effective AI access for the current user on this project. */
   aiAccess: AIAccess;
+  /** Optional UUID — Layer B session continuity for hosted `ai-inference`. */
+  chatId?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -31,6 +35,20 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 export function shouldUseHostedInference(workspaceKind: string, projectId: string): boolean {
   return workspaceKind === "supabase" && UUID_RE.test(projectId);
+}
+
+/** Explicit opt-out for hosted inference (Supabase + UUID) via `VITE_AI_LIVE_TEXT_ASSISTANT`. */
+export function isLiveTextHostedKillSwitchEnabled(): boolean {
+  const v = import.meta.env.VITE_AI_LIVE_TEXT_ASSISTANT;
+  if (v === undefined || v === null) return false;
+  const s = String(v).trim().toLowerCase();
+  if (s === "") return false;
+  return s === "0" || s === "false" || s === "no" || s === "off";
+}
+
+/** Hosted edge path for project AI (default-on for Supabase + UUID; kill switch above). */
+export function shouldUseHostedLiveTextAssistantPath(workspaceKind: string, projectId: string): boolean {
+  return shouldUseHostedInference(workspaceKind, projectId) && !isLiveTextHostedKillSwitchEnabled();
 }
 
 // ---------------------------------------------------------------------------
@@ -51,6 +69,7 @@ export function pickInferenceMode(userMessage: string, aiAccess: AIAccess): Infe
 
 interface AIInferenceRequestBody {
   projectId: string;
+  chatId?: string;
   mode: InferenceMode;
   message: string;
   contextPack: {
@@ -73,6 +92,9 @@ interface BackendGroundingSource {
 interface BackendWorkProposalStep {
   label?: string;
   note?: string;
+  /** Hosted `ai-inference` / Gigachat schema uses title + description per step. */
+  title?: string;
+  description?: string;
 }
 
 interface BackendWorkProposal {
@@ -82,6 +104,17 @@ interface BackendWorkProposal {
 }
 
 interface AIInferenceResponseBody {
+  responseVersion?: string;
+  answerText?: string;
+  groundingKind?: string;
+  groundingDetails?: {
+    serverSnapshotUsed?: boolean;
+    domainsRetrieved?: unknown;
+    evidenceTruncated?: boolean;
+  };
+  followUps?: unknown;
+  freshnessHint?: unknown;
+  optionalWorkProposalPreview?: BackendWorkProposal | null;
   explanation?: string;
   groundingStatus?: BackendGroundingStatus;
   groundingNote?: string;
@@ -105,12 +138,45 @@ export function mapGroundingStatus(raw: string | undefined): AssistantGroundingS
   return "ungrounded";
 }
 
+function formatGroundingSourceFallbackLabel(kind: string | undefined): string {
+  if (!kind || typeof kind !== "string") return "Source";
+  const map: Record<string, string> = {
+    client_project_context: "Project context (client)",
+    client_document_metadata: "Document metadata (client)",
+    server_verified_estimate: "Estimate (server-verified)",
+    server_verified_procurement: "Procurement (server-verified)",
+    server_verified_tasks: "Tasks (server-verified)",
+    server_verified_hr: "HR (server-verified)",
+    server_verified_participants: "Participants (server-verified)",
+    server_verified_activity: "Activity (server-verified)",
+    server_verified_documents_metadata: "Documents — titles/metadata only (not full text)",
+    server_verified_media_metadata: "Media — filenames/metadata only (not file contents)",
+  };
+  return map[kind] ?? kind.replace(/_/g, " ");
+}
+
 export function mapGroundingSources(raw: BackendGroundingSource[] | undefined): LiveTextAssistantSource[] | undefined {
   if (!raw || raw.length === 0) return undefined;
-  return raw.map((s) => ({
-    kind: (s.kind === "project_summary" || s.kind === "recent_activity") ? s.kind : "other",
-    label: typeof s.label === "string" ? s.label : "Source",
-  }));
+  return raw.map((s) => {
+    const kind = (s.kind === "project_summary" || s.kind === "recent_activity") ? s.kind : "other";
+    const hasLabel = typeof s.label === "string" && s.label.trim();
+    const label = hasLabel
+      ? s.label!.trim()
+      : (s.kind === "project_summary" || s.kind === "recent_activity")
+        ? "Source"
+        : formatGroundingSourceFallbackLabel(s.kind);
+    return { kind, label };
+  });
+}
+
+function mapWorkProposalStep(step: BackendWorkProposalStep): { label: string; note?: string } {
+  const label = typeof step.label === "string" && step.label.trim()
+    ? step.label
+    : (typeof step.title === "string" ? step.title : "");
+  const note = typeof step.note === "string"
+    ? step.note
+    : (typeof step.description === "string" ? step.description : undefined);
+  return { label, note };
 }
 
 export function mapWorkProposal(raw: BackendWorkProposal | null | undefined): PresentationalWorkProposal | undefined {
@@ -118,20 +184,93 @@ export function mapWorkProposal(raw: BackendWorkProposal | null | undefined): Pr
   return {
     proposalTitle: raw.title,
     proposalSummary: raw.summary ?? "",
-    suggestedWorkItems: (raw.steps ?? []).map((step) => ({
-      label: step.label ?? "",
-      note: step.note,
-    })),
+    suggestedWorkItems: (raw.steps ?? []).map((step) => mapWorkProposalStep(step)),
   };
 }
 
-export function mapInferenceResponse(body: AIInferenceResponseBody): LiveTextAssistantResult {
+const INFERENCE_GROUNDING_KINDS: ReadonlySet<string> = new Set<InferenceGroundingKind>([
+  "grounded_on_project_sources",
+  "partially_grounded",
+  "not_grounded_on_project_sources_but_general_guidance_available",
+]);
+
+export function mapGroundingKind(raw: string | undefined): AssistantGroundingStatus | undefined {
+  if (!raw || !INFERENCE_GROUNDING_KINDS.has(raw)) return undefined;
+  switch (raw as InferenceGroundingKind) {
+    case "grounded_on_project_sources":
+      return "project_context_grounded";
+    case "partially_grounded":
+      return "partial";
+    case "not_grounded_on_project_sources_but_general_guidance_available":
+      return "ungrounded";
+    default:
+      return undefined;
+  }
+}
+
+function parseFollowUps(raw: unknown): LiveTextFollowUpPrompt[] | undefined {
+  if (!Array.isArray(raw) || raw.length === 0) return undefined;
+  const out: LiveTextFollowUpPrompt[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const rec = item as Record<string, unknown>;
+    if (typeof rec.prompt !== "string" || !rec.prompt.trim()) continue;
+    const intent = typeof rec.intent === "string" && rec.intent.trim() ? rec.intent : undefined;
+    out.push({ prompt: rec.prompt.trim(), intent });
+  }
+  return out.length > 0 ? out : undefined;
+}
+
+function normalizeFreshnessHint(value: unknown): Record<string, unknown> | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value === "object" && !Array.isArray(value)) {
+    return { ...(value as Record<string, unknown>) };
+  }
+  return null;
+}
+
+function parseGroundingDetails(raw: AIInferenceResponseBody["groundingDetails"]):
+  LiveTextAssistantResult["groundingDetails"] | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const domainsRaw = raw.domainsRetrieved;
+  const domainsRetrieved = Array.isArray(domainsRaw)
+    ? domainsRaw.filter((d): d is string => typeof d === "string" && d.length > 0)
+    : [];
   return {
-    explanation: typeof body.explanation === "string" ? body.explanation : "The assistant returned an empty response.",
-    grounding: mapGroundingStatus(body.groundingStatus),
+    serverSnapshotUsed: typeof raw.serverSnapshotUsed === "boolean" ? raw.serverSnapshotUsed : false,
+    domainsRetrieved,
+    evidenceTruncated: typeof raw.evidenceTruncated === "boolean" ? raw.evidenceTruncated : false,
+  };
+}
+
+function pickAnswerText(body: AIInferenceResponseBody): string {
+  if (typeof body.answerText === "string" && body.answerText.trim()) return body.answerText;
+  if (typeof body.explanation === "string" && body.explanation.trim()) return body.explanation;
+  return "The assistant returned an empty response.";
+}
+
+export function mapInferenceResponse(body: AIInferenceResponseBody): LiveTextAssistantResult {
+  const fromKind = mapGroundingKind(body.groundingKind);
+  const grounding = fromKind ?? mapGroundingStatus(body.groundingStatus);
+  const proposal = mapWorkProposal(body.optionalWorkProposalPreview ?? body.workProposal ?? undefined);
+  const freshnessHint = normalizeFreshnessHint(body.freshnessHint);
+
+  const groundingKind = body.groundingKind && INFERENCE_GROUNDING_KINDS.has(body.groundingKind)
+    ? (body.groundingKind as InferenceGroundingKind)
+    : undefined;
+
+  return {
+    explanation: pickAnswerText(body),
+    grounding,
     groundingNote: typeof body.groundingNote === "string" ? body.groundingNote : undefined,
     sources: mapGroundingSources(body.groundingSources),
-    workProposal: mapWorkProposal(body.workProposal),
+    workProposal: proposal,
+    responseVersion: typeof body.responseVersion === "string" ? body.responseVersion : undefined,
+    groundingKind,
+    groundingDetails: parseGroundingDetails(body.groundingDetails),
+    followUps: parseFollowUps(body.followUps),
+    freshnessHint: freshnessHint === undefined ? undefined : freshnessHint,
   };
 }
 
@@ -144,9 +283,10 @@ export function buildInferenceRequestBody(
   mode: InferenceMode,
   userMessage: string,
   contextPack: AIContextPack,
+  chatId?: string,
 ): AIInferenceRequestBody {
   const { _meta: _, ...safeContext } = contextPack;
-  return {
+  const body: AIInferenceRequestBody = {
     projectId,
     mode,
     message: userMessage,
@@ -155,6 +295,10 @@ export function buildInferenceRequestBody(
       documentExcerpts: [],
     },
   };
+  if (chatId && UUID_RE.test(chatId)) {
+    body.chatId = chatId;
+  }
+  return body;
 }
 
 // ---------------------------------------------------------------------------
@@ -248,9 +392,10 @@ async function invokeHosted(
   mode: InferenceMode,
   userMessage: string,
   contextPack: AIContextPack,
+  chatId?: string,
 ): Promise<LiveTextAssistantResult> {
   const { supabase } = await import("@/integrations/supabase/client");
-  const body = buildInferenceRequestBody(projectId, mode, userMessage, contextPack);
+  const body = buildInferenceRequestBody(projectId, mode, userMessage, contextPack, chatId);
 
   const { data, error } = await supabase.functions.invoke("ai-inference", { body });
 
@@ -364,9 +509,15 @@ async function invokeMock(input: InvokeLiveTextAssistantInput): Promise<LiveText
 export async function invokeLiveTextAssistant(
   input: InvokeLiveTextAssistantInput,
 ): Promise<LiveTextAssistantResult> {
-  if (shouldUseHostedInference(input.workspaceKind, input.projectId)) {
+  if (shouldUseHostedLiveTextAssistantPath(input.workspaceKind, input.projectId)) {
     const mode = pickInferenceMode(input.userMessage, input.aiAccess);
-    return invokeHosted(input.projectId, mode, input.userMessage, input.contextPack);
+    return invokeHosted(
+      input.projectId,
+      mode,
+      input.userMessage,
+      input.contextPack,
+      input.chatId,
+    );
   }
   return invokeMock(input);
 }
