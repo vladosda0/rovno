@@ -1578,6 +1578,14 @@ export type Database = {
           }
           Returns: number
         }
+        "get_activity_ai_evidence": {
+          Args: {
+          "p_project_id": string
+          "p_limit": unknown
+          "p_offset": unknown
+          }
+          Returns: Json
+        }
         "get_ai_chat_session_continuity": {
           Args: {
           "p_project_id": string
@@ -1617,6 +1625,14 @@ export type Database = {
           Returns: Json
         }
         "get_procurement_operational_summary": {
+          Args: {
+          "p_project_id": string
+          "p_limit": unknown
+          "p_offset": unknown
+          }
+          Returns: Json
+        }
+        "get_project_participants_ai_evidence": {
           Args: {
           "p_project_id": string
           "p_limit": unknown

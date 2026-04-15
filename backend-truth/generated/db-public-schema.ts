@@ -215,6 +215,10 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql",
       "sha256": "461931b9eb7113ed55edb04fe663de5852f440e5e8e6f2cbe3a60b7f94b4e176"
+    },
+    {
+      "path": "supabase/migrations/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql",
+      "sha256": "e107593eb350541db8b2a1ca5fc3e5e520b3b88169c824da3c3fffb2d78b9130"
     }
   ],
   "generated_artifacts": [
@@ -291,6 +295,7 @@ export const manifest = {
     "sql/20260414140000_wave3_procurement_ai_operational_evidence_rpc.sql",
     "sql/20260414150000_wave4_tasks_ai_operational_evidence_rpc.sql",
     "sql/20260415100000_wave5_ai_chat_session_continuity.sql",
+    "sql/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -11072,6 +11077,66 @@ export const functions = {
       "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql",
       "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "get_project_participants_ai_evidence",
+      "signature": "public.get_project_participants_ai_evidence(uuid, integer, integer)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_limit",
+          "type": "integer default 30",
+          "identityType": "integer"
+        },
+        {
+          "name": "p_offset",
+          "type": "integer default 0",
+          "identityType": "integer"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "get_activity_ai_evidence",
+      "signature": "public.get_activity_ai_evidence(uuid, integer, integer)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_limit",
+          "type": "integer default 20",
+          "identityType": "integer"
+        },
+        {
+          "name": "p_offset",
+          "type": "integer default 0",
+          "identityType": "integer"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql",
+      "triggerUsages": []
     }
   ]
 } as const;
@@ -13518,6 +13583,20 @@ export const sourceTrace = {
       "name": "append_ai_chat_session_turns",
       "signature": "public.append_ai_chat_session_turns(uuid, uuid, text, text)",
       "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql"
+    },
+    {
+      "key": "public.get_project_participants_ai_evidence",
+      "schema": "public",
+      "name": "get_project_participants_ai_evidence",
+      "signature": "public.get_project_participants_ai_evidence(uuid, integer, integer)",
+      "sourceMigration": "supabase/migrations/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql"
+    },
+    {
+      "key": "public.get_activity_ai_evidence",
+      "schema": "public",
+      "name": "get_activity_ai_evidence",
+      "signature": "public.get_activity_ai_evidence(uuid, integer, integer)",
+      "sourceMigration": "supabase/migrations/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql"
     }
   ],
   "policies": [
@@ -14441,6 +14520,7 @@ export const sourceTrace = {
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
         "supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql",
         "supabase/migrations/20260414120000_wave1_get_ai_project_snapshot.sql",
+        "supabase/migrations/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql",
         "supabase/migrations/20260320130000_codex_review_findings_fixes.sql",
@@ -14480,7 +14560,8 @@ export const sourceTrace = {
         "public.can_access_hr_domain",
         "public.get_ai_project_snapshot",
         "public.get_ai_chat_session_continuity",
-        "public.append_ai_chat_session_turns"
+        "public.append_ai_chat_session_turns",
+        "public.get_project_participants_ai_evidence"
       ],
       "policies": [
         "public.profiles.profiles_select",
@@ -15235,6 +15316,7 @@ export const sourceTrace = {
       "sourceMigrations": [
         "supabase/migrations/20260306164500_activity_and_notifications.sql",
         "supabase/migrations/20260306165000_billing_launch_tables.sql",
+        "supabase/migrations/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
       ],
       "tables": [
@@ -15243,7 +15325,9 @@ export const sourceTrace = {
         "public.billing_customers",
         "public.subscriptions"
       ],
-      "functions": [],
+      "functions": [
+        "public.get_activity_ai_evidence"
+      ],
       "policies": [
         "public.activity_events.activity_events_select",
         "public.activity_events.activity_events_insert",
@@ -15315,6 +15399,7 @@ export const slices = {
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
         "supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql",
         "supabase/migrations/20260414120000_wave1_get_ai_project_snapshot.sql",
+        "supabase/migrations/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql",
         "supabase/migrations/20260320130000_codex_review_findings_fixes.sql",
@@ -15323,7 +15408,7 @@ export const slices = {
         "supabase/migrations/20260326190000_restore_co_owner_project_members_rls_subset.sql"
       ],
       "tableCount": 7,
-      "functionCount": 23,
+      "functionCount": 24,
       "rlsTableCount": 7
     },
     {
@@ -15421,10 +15506,11 @@ export const slices = {
       "sourceMigrations": [
         "supabase/migrations/20260306164500_activity_and_notifications.sql",
         "supabase/migrations/20260306165000_billing_launch_tables.sql",
+        "supabase/migrations/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
       ],
       "tableCount": 4,
-      "functionCount": 0,
+      "functionCount": 1,
       "rlsTableCount": 4
     }
   ]

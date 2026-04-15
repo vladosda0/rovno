@@ -635,6 +635,20 @@
       "name": "append_ai_chat_session_turns",
       "signature": "public.append_ai_chat_session_turns(uuid, uuid, text, text)",
       "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql"
+    },
+    {
+      "key": "public.get_project_participants_ai_evidence",
+      "schema": "public",
+      "name": "get_project_participants_ai_evidence",
+      "signature": "public.get_project_participants_ai_evidence(uuid, integer, integer)",
+      "sourceMigration": "supabase/migrations/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql"
+    },
+    {
+      "key": "public.get_activity_ai_evidence",
+      "schema": "public",
+      "name": "get_activity_ai_evidence",
+      "signature": "public.get_activity_ai_evidence(uuid, integer, integer)",
+      "sourceMigration": "supabase/migrations/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql"
     }
   ],
   "policies": [
@@ -1558,6 +1572,7 @@
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
         "supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql",
         "supabase/migrations/20260414120000_wave1_get_ai_project_snapshot.sql",
+        "supabase/migrations/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql",
         "supabase/migrations/20260320130000_codex_review_findings_fixes.sql",
@@ -1597,7 +1612,8 @@
         "public.can_access_hr_domain",
         "public.get_ai_project_snapshot",
         "public.get_ai_chat_session_continuity",
-        "public.append_ai_chat_session_turns"
+        "public.append_ai_chat_session_turns",
+        "public.get_project_participants_ai_evidence"
       ],
       "policies": [
         "public.profiles.profiles_select",
@@ -2352,6 +2368,7 @@
       "sourceMigrations": [
         "supabase/migrations/20260306164500_activity_and_notifications.sql",
         "supabase/migrations/20260306165000_billing_launch_tables.sql",
+        "supabase/migrations/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
       ],
       "tables": [
@@ -2360,7 +2377,9 @@
         "public.billing_customers",
         "public.subscriptions"
       ],
-      "functions": [],
+      "functions": [
+        "public.get_activity_ai_evidence"
+      ],
       "policies": [
         "public.activity_events.activity_events_select",
         "public.activity_events.activity_events_insert",

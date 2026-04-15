@@ -211,6 +211,10 @@
     {
       "path": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql",
       "sha256": "461931b9eb7113ed55edb04fe663de5852f440e5e8e6f2cbe3a60b7f94b4e176"
+    },
+    {
+      "path": "supabase/migrations/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql",
+      "sha256": "e107593eb350541db8b2a1ca5fc3e5e520b3b88169c824da3c3fffb2d78b9130"
     }
   ],
   "generated_artifacts": [
@@ -287,6 +291,7 @@
     "sql/20260414140000_wave3_procurement_ai_operational_evidence_rpc.sql",
     "sql/20260414150000_wave4_tasks_ai_operational_evidence_rpc.sql",
     "sql/20260415100000_wave5_ai_chat_session_continuity.sql",
+    "sql/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],

@@ -10,6 +10,7 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 
 - `supabase/migrations/20260306164500_activity_and_notifications.sql`
 - `supabase/migrations/20260306165000_billing_launch_tables.sql`
+- `supabase/migrations/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql`
 - `supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql`
 
 ## Tables
@@ -128,7 +129,9 @@ Triggers:
 
 ## Functions
 
-- None
+| Function | Returns | Auth Execute | Kind | Source |
+| --- | --- | --- | --- | --- |
+| `public.get_activity_ai_evidence(uuid, integer, integer)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql` |
 
 ## RLS and Grants
 
