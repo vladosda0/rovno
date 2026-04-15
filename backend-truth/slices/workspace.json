@@ -18,6 +18,7 @@
     "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
     "supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql",
     "supabase/migrations/20260414120000_wave1_get_ai_project_snapshot.sql",
+    "supabase/migrations/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql",
     "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
     "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql",
     "supabase/migrations/20260320130000_codex_review_findings_fixes.sql",
@@ -2168,6 +2169,37 @@
       "securityDefiner": true,
       "searchPath": "public",
       "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql",
+      "authenticatedExecute": true,
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "get_project_participants_ai_evidence",
+      "key": "public.get_project_participants_ai_evidence",
+      "signature": "public.get_project_participants_ai_evidence(uuid, integer, integer)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_limit",
+          "type": "integer default 30",
+          "identityType": "integer"
+        },
+        {
+          "name": "p_offset",
+          "type": "integer default 0",
+          "identityType": "integer"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "sourceMigration": "supabase/migrations/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql",
       "authenticatedExecute": true,
       "triggerUsages": []
     }
