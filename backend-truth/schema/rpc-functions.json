@@ -1559,6 +1559,66 @@
       "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql",
       "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "get_documents_ai_metadata_evidence",
+      "signature": "public.get_documents_ai_metadata_evidence(uuid, integer, integer)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_limit",
+          "type": "integer default 25",
+          "identityType": "integer"
+        },
+        {
+          "name": "p_offset",
+          "type": "integer default 0",
+          "identityType": "integer"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260415130000_wave7_documents_media_ai_metadata_evidence.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "get_project_media_ai_metadata_evidence",
+      "signature": "public.get_project_media_ai_metadata_evidence(uuid, integer, integer)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_limit",
+          "type": "integer default 25",
+          "identityType": "integer"
+        },
+        {
+          "name": "p_offset",
+          "type": "integer default 0",
+          "identityType": "integer"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260415130000_wave7_documents_media_ai_metadata_evidence.sql",
+      "triggerUsages": []
     }
   ]
 }
