@@ -606,7 +606,7 @@
       "schema": "public",
       "name": "get_procurement_ai_operational_evidence",
       "signature": "public.get_procurement_ai_operational_evidence(uuid, integer, integer)",
-      "sourceMigration": "supabase/migrations/20260414140000_wave3_procurement_ai_operational_evidence_rpc.sql"
+      "sourceMigration": "supabase/migrations/20260416100000_wave9_closeout_hardening.sql"
     },
     {
       "key": "public.get_tasks_ai_operational_evidence",
@@ -634,7 +634,7 @@
       "schema": "public",
       "name": "append_ai_chat_session_turns",
       "signature": "public.append_ai_chat_session_turns(uuid, uuid, text, text)",
-      "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql"
+      "sourceMigration": "supabase/migrations/20260416100000_wave9_closeout_hardening.sql"
     },
     {
       "key": "public.get_project_participants_ai_evidence",
@@ -1586,6 +1586,7 @@
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
         "supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql",
         "supabase/migrations/20260414120000_wave1_get_ai_project_snapshot.sql",
+        "supabase/migrations/20260416100000_wave9_closeout_hardening.sql",
         "supabase/migrations/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql",
@@ -2133,7 +2134,7 @@
         "supabase/migrations/20260306163000_inventory_foundation.sql",
         "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
         "supabase/migrations/20260406183000_procurement_operational_summary_requested_and_ordered_line_types.sql",
-        "supabase/migrations/20260414140000_wave3_procurement_ai_operational_evidence_rpc.sql",
+        "supabase/migrations/20260416100000_wave9_closeout_hardening.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],

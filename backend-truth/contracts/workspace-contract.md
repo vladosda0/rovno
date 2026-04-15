@@ -17,6 +17,7 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 - `supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql`
 - `supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql`
 - `supabase/migrations/20260414120000_wave1_get_ai_project_snapshot.sql`
+- `supabase/migrations/20260416100000_wave9_closeout_hardening.sql`
 - `supabase/migrations/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql`
 - `supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql`
 - `supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql`
@@ -271,7 +272,7 @@ Indexes:
 | `public.can_access_hr_domain(uuid)` | `boolean` | yes | `rpc` | `supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql` |
 | `public.get_ai_project_snapshot(uuid)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260414120000_wave1_get_ai_project_snapshot.sql` |
 | `public.get_ai_chat_session_continuity(uuid, uuid)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql` |
-| `public.append_ai_chat_session_turns(uuid, uuid, text, text)` | `void` | yes | `rpc` | `supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql` |
+| `public.append_ai_chat_session_turns(uuid, uuid, text, text)` | `void` | yes | `rpc` | `supabase/migrations/20260416100000_wave9_closeout_hardening.sql` |
 | `public.get_project_participants_ai_evidence(uuid, integer, integer)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql` |
 
 ## RLS and Grants

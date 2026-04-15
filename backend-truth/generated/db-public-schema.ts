@@ -223,6 +223,10 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260415130000_wave7_documents_media_ai_metadata_evidence.sql",
       "sha256": "87e334a653120aaf96232dbe94b976e42c378824d7827e622ceba0db9311103f"
+    },
+    {
+      "path": "supabase/migrations/20260416100000_wave9_closeout_hardening.sql",
+      "sha256": "8953af6cb94106a51c8f5e6fab1821a48ad42109a1ce7fede7c1095e0afb94da"
     }
   ],
   "generated_artifacts": [
@@ -301,6 +305,7 @@ export const manifest = {
     "sql/20260415100000_wave5_ai_chat_session_continuity.sql",
     "sql/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql",
     "sql/20260415130000_wave7_documents_media_ai_metadata_evidence.sql",
+    "sql/20260416100000_wave9_closeout_hardening.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -2184,7 +2189,19 @@ export const tables = {
         }
       ],
       "constraints": [],
-      "indexes": [],
+      "indexes": [
+        {
+          "name": "idx_task_comments_task_id_created_at_desc",
+          "unique": false,
+          "expressions": [
+            "task_id",
+            "created_at desc"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260416100000_wave9_closeout_hardening.sql"
+        }
+      ],
       "triggers": []
     },
     {
@@ -10965,7 +10982,7 @@ export const functions = {
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260414140000_wave3_procurement_ai_operational_evidence_rpc.sql",
+      "sourceMigration": "supabase/migrations/20260416100000_wave9_closeout_hardening.sql",
       "triggerUsages": []
     },
     {
@@ -11080,7 +11097,7 @@ export const functions = {
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql",
+      "sourceMigration": "supabase/migrations/20260416100000_wave9_closeout_hardening.sql",
       "triggerUsages": []
     },
     {
@@ -13619,7 +13636,7 @@ export const sourceTrace = {
       "schema": "public",
       "name": "get_procurement_ai_operational_evidence",
       "signature": "public.get_procurement_ai_operational_evidence(uuid, integer, integer)",
-      "sourceMigration": "supabase/migrations/20260414140000_wave3_procurement_ai_operational_evidence_rpc.sql"
+      "sourceMigration": "supabase/migrations/20260416100000_wave9_closeout_hardening.sql"
     },
     {
       "key": "public.get_tasks_ai_operational_evidence",
@@ -13647,7 +13664,7 @@ export const sourceTrace = {
       "schema": "public",
       "name": "append_ai_chat_session_turns",
       "signature": "public.append_ai_chat_session_turns(uuid, uuid, text, text)",
-      "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql"
+      "sourceMigration": "supabase/migrations/20260416100000_wave9_closeout_hardening.sql"
     },
     {
       "key": "public.get_project_participants_ai_evidence",
@@ -14599,6 +14616,7 @@ export const sourceTrace = {
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
         "supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql",
         "supabase/migrations/20260414120000_wave1_get_ai_project_snapshot.sql",
+        "supabase/migrations/20260416100000_wave9_closeout_hardening.sql",
         "supabase/migrations/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql",
@@ -15146,7 +15164,7 @@ export const sourceTrace = {
         "supabase/migrations/20260306163000_inventory_foundation.sql",
         "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
         "supabase/migrations/20260406183000_procurement_operational_summary_requested_and_ordered_line_types.sql",
-        "supabase/migrations/20260414140000_wave3_procurement_ai_operational_evidence_rpc.sql",
+        "supabase/migrations/20260416100000_wave9_closeout_hardening.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
@@ -15481,6 +15499,7 @@ export const slices = {
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
         "supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql",
         "supabase/migrations/20260414120000_wave1_get_ai_project_snapshot.sql",
+        "supabase/migrations/20260416100000_wave9_closeout_hardening.sql",
         "supabase/migrations/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql",
@@ -15559,7 +15578,7 @@ export const slices = {
         "supabase/migrations/20260306163000_inventory_foundation.sql",
         "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
         "supabase/migrations/20260406183000_procurement_operational_summary_requested_and_ordered_line_types.sql",
-        "supabase/migrations/20260414140000_wave3_procurement_ai_operational_evidence_rpc.sql",
+        "supabase/migrations/20260416100000_wave9_closeout_hardening.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],

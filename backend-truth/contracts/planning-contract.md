@@ -89,6 +89,9 @@ Triggers:
 | `body` | `text` | no |   | no |
 | `created_at` | `timestamptz` | no | `now()` | no |
 
+Indexes:
+- `idx_task_comments_task_id_created_at_desc` on (`task_id`, `created_at desc`)
+
 ### public.task_checklist_items
 
 | Column | Type | Nullable | Default | Primary Key |

@@ -219,6 +219,10 @@
     {
       "path": "supabase/migrations/20260415130000_wave7_documents_media_ai_metadata_evidence.sql",
       "sha256": "87e334a653120aaf96232dbe94b976e42c378824d7827e622ceba0db9311103f"
+    },
+    {
+      "path": "supabase/migrations/20260416100000_wave9_closeout_hardening.sql",
+      "sha256": "8953af6cb94106a51c8f5e6fab1821a48ad42109a1ce7fede7c1095e0afb94da"
     }
   ],
   "generated_artifacts": [
@@ -297,6 +301,7 @@
     "sql/20260415100000_wave5_ai_chat_session_continuity.sql",
     "sql/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql",
     "sql/20260415130000_wave7_documents_media_ai_metadata_evidence.sql",
+    "sql/20260416100000_wave9_closeout_hardening.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
