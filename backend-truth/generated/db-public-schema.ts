@@ -211,6 +211,10 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260414150000_wave4_tasks_ai_operational_evidence_rpc.sql",
       "sha256": "1db9714e2e907a2f3f0a821f40479b85bd19132c247a77780d1b9d53a03b2cb9"
+    },
+    {
+      "path": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql",
+      "sha256": "461931b9eb7113ed55edb04fe663de5852f440e5e8e6f2cbe3a60b7f94b4e176"
     }
   ],
   "generated_artifacts": [
@@ -286,6 +290,7 @@ export const manifest = {
     "sql/20260414120000_wave1_get_ai_project_snapshot.sql",
     "sql/20260414140000_wave3_procurement_ai_operational_evidence_rpc.sql",
     "sql/20260414150000_wave4_tasks_ai_operational_evidence_rpc.sql",
+    "sql/20260415100000_wave5_ai_chat_session_continuity.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -6967,6 +6972,112 @@ export const tables = {
       ],
       "indexes": [],
       "triggers": []
+    },
+    {
+      "schema": "public",
+      "name": "project_ai_chat_sessions",
+      "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql",
+      "columns": [
+        {
+          "name": "chat_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "project_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "projects",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "cascade"
+          }
+        },
+        {
+          "name": "profile_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "profiles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "cascade"
+          }
+        },
+        {
+          "name": "recent_turns",
+          "sqlType": "jsonb",
+          "tsType": "Json",
+          "nullable": false,
+          "defaultSql": "'[]'::jsonb",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "rolling_summary",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "updated_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": "project_ai_chat_sessions_recent_turns_is_array",
+          "columns": [],
+          "expression": "jsonb_typeof(recent_turns) = 'array'",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_project_ai_chat_sessions_project_profile",
+          "unique": false,
+          "expressions": [
+            "project_id",
+            "profile_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql"
+        }
+      ],
+      "triggers": []
     }
   ]
 } as const;
@@ -8370,6 +8481,38 @@ export const relations = {
         "id"
       ],
       "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "project_ai_chat_sessions",
+      "fromColumns": [
+        "project_id"
+      ],
+      "toSchema": "public",
+      "toTable": "projects",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "project_ai_chat_sessions",
+      "fromColumns": [
+        "profile_id"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
     }
   ]
 } as const;
@@ -9414,6 +9557,16 @@ export const checks = {
       "allowedValues": null,
       "expression": "length(trim(bucket)) > 0",
       "sourceMigration": "supabase/migrations/20260317133000_storage_bucket_config_table.sql"
+    },
+    {
+      "schema": "public",
+      "table": "project_ai_chat_sessions",
+      "column": null,
+      "constraintName": "project_ai_chat_sessions_recent_turns_is_array",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "jsonb_typeof(recent_turns) = 'array'",
+      "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql"
     }
   ]
 } as const;
@@ -10833,6 +10986,91 @@ export const functions = {
       "searchPath": "public",
       "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260414150000_wave4_tasks_ai_operational_evidence_rpc.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "_trim_session_turns_jsonb",
+      "signature": "public._trim_session_turns_jsonb(jsonb, integer)",
+      "args": [
+        {
+          "name": "p_turns",
+          "type": "jsonb",
+          "identityType": "jsonb"
+        },
+        {
+          "name": "p_max",
+          "type": "integer",
+          "identityType": "integer"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "sql",
+      "volatility": "immutable",
+      "securityDefiner": false,
+      "searchPath": null,
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "get_ai_chat_session_continuity",
+      "signature": "public.get_ai_chat_session_continuity(uuid, uuid)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_chat_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "append_ai_chat_session_turns",
+      "signature": "public.append_ai_chat_session_turns(uuid, uuid, text, text)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_chat_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_user_text",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_assistant_text",
+          "type": "text",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "void",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql",
       "triggerUsages": []
     }
   ]
@@ -12632,6 +12870,13 @@ export const rls = {
       "rlsEnabled": false,
       "authenticatedGrants": [],
       "policies": []
+    },
+    {
+      "schema": "public",
+      "table": "project_ai_chat_sessions",
+      "rlsEnabled": true,
+      "authenticatedGrants": [],
+      "policies": []
     }
   ]
 } as const;
@@ -12859,6 +13104,12 @@ export const sourceTrace = {
       "schema": "public",
       "table": "storage_bucket_config",
       "sourceMigration": "supabase/migrations/20260317133000_storage_bucket_config_table.sql"
+    },
+    {
+      "key": "public.project_ai_chat_sessions",
+      "schema": "public",
+      "table": "project_ai_chat_sessions",
+      "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql"
     }
   ],
   "functions": [
@@ -13246,6 +13497,27 @@ export const sourceTrace = {
       "name": "get_tasks_ai_operational_evidence",
       "signature": "public.get_tasks_ai_operational_evidence(uuid, integer, integer)",
       "sourceMigration": "supabase/migrations/20260414150000_wave4_tasks_ai_operational_evidence_rpc.sql"
+    },
+    {
+      "key": "public._trim_session_turns_jsonb",
+      "schema": "public",
+      "name": "_trim_session_turns_jsonb",
+      "signature": "public._trim_session_turns_jsonb(jsonb, integer)",
+      "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql"
+    },
+    {
+      "key": "public.get_ai_chat_session_continuity",
+      "schema": "public",
+      "name": "get_ai_chat_session_continuity",
+      "signature": "public.get_ai_chat_session_continuity(uuid, uuid)",
+      "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql"
+    },
+    {
+      "key": "public.append_ai_chat_session_turns",
+      "schema": "public",
+      "name": "append_ai_chat_session_turns",
+      "signature": "public.append_ai_chat_session_turns(uuid, uuid, text, text)",
+      "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql"
     }
   ],
   "policies": [
@@ -14165,6 +14437,7 @@ export const sourceTrace = {
         "supabase/migrations/20260306161000_projects_membership_and_invites.sql",
         "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql",
         "supabase/migrations/20260324140000_project_launch_authority.sql",
+        "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
         "supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql",
         "supabase/migrations/20260414120000_wave1_get_ai_project_snapshot.sql",
@@ -14181,7 +14454,8 @@ export const sourceTrace = {
         "public.notification_preferences",
         "public.projects",
         "public.project_members",
-        "public.project_invites"
+        "public.project_invites",
+        "public.project_ai_chat_sessions"
       ],
       "functions": [
         "public.guard_project_owner_change",
@@ -14204,7 +14478,9 @@ export const sourceTrace = {
         "public.can_view_internal_documents",
         "public.can_view_sensitive_detail",
         "public.can_access_hr_domain",
-        "public.get_ai_project_snapshot"
+        "public.get_ai_project_snapshot",
+        "public.get_ai_chat_session_continuity",
+        "public.append_ai_chat_session_turns"
       ],
       "policies": [
         "public.profiles.profiles_select",
@@ -14279,6 +14555,16 @@ export const sourceTrace = {
           "from": "public.projects",
           "to": "public.project_stages",
           "sourceMigration": "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql"
+        },
+        {
+          "from": "public.project_ai_chat_sessions",
+          "to": "public.projects",
+          "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql"
+        },
+        {
+          "from": "public.project_ai_chat_sessions",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql"
         }
       ]
     },
@@ -15025,6 +15311,7 @@ export const slices = {
         "supabase/migrations/20260306161000_projects_membership_and_invites.sql",
         "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql",
         "supabase/migrations/20260324140000_project_launch_authority.sql",
+        "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
         "supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql",
         "supabase/migrations/20260414120000_wave1_get_ai_project_snapshot.sql",
@@ -15035,9 +15322,9 @@ export const slices = {
         "supabase/migrations/20260325133000_break_projects_project_members_rls_cycle.sql",
         "supabase/migrations/20260326190000_restore_co_owner_project_members_rls_subset.sql"
       ],
-      "tableCount": 6,
-      "functionCount": 21,
-      "rlsTableCount": 6
+      "tableCount": 7,
+      "functionCount": 23,
+      "rlsTableCount": 7
     },
     {
       "name": "planning",

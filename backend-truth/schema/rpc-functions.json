@@ -1414,6 +1414,91 @@
       "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260414150000_wave4_tasks_ai_operational_evidence_rpc.sql",
       "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "_trim_session_turns_jsonb",
+      "signature": "public._trim_session_turns_jsonb(jsonb, integer)",
+      "args": [
+        {
+          "name": "p_turns",
+          "type": "jsonb",
+          "identityType": "jsonb"
+        },
+        {
+          "name": "p_max",
+          "type": "integer",
+          "identityType": "integer"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "sql",
+      "volatility": "immutable",
+      "securityDefiner": false,
+      "searchPath": null,
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "get_ai_chat_session_continuity",
+      "signature": "public.get_ai_chat_session_continuity(uuid, uuid)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_chat_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "append_ai_chat_session_turns",
+      "signature": "public.append_ai_chat_session_turns(uuid, uuid, text, text)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_chat_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_user_text",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_assistant_text",
+          "type": "text",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "void",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql",
+      "triggerUsages": []
     }
   ]
 }

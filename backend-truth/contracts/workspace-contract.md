@@ -13,6 +13,7 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 - `supabase/migrations/20260306161000_projects_membership_and_invites.sql`
 - `supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql`
 - `supabase/migrations/20260324140000_project_launch_authority.sql`
+- `supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql`
 - `supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql`
 - `supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql`
 - `supabase/migrations/20260414120000_wave1_get_ai_project_snapshot.sql`
@@ -209,6 +210,23 @@ Indexes:
 Triggers:
 - `enforce_project_invite_delegation`: before insert or update, executes `public.enforce_project_invite_delegation()`
 
+### public.project_ai_chat_sessions
+
+| Column | Type | Nullable | Default | Primary Key |
+| --- | --- | --- | --- | --- |
+| `chat_id` | `uuid` | no |   | yes |
+| `project_id` | `uuid` | no |   | no |
+| `profile_id` | `uuid` | no |   | no |
+| `recent_turns` | `jsonb` | no | `'[]'::jsonb` | no |
+| `rolling_summary` | `text` | yes |   | no |
+| `updated_at` | `timestamptz` | no | `now()` | no |
+
+Constraints:
+- `project_ai_chat_sessions_recent_turns_is_array` check (expression `jsonb_typeof(recent_turns) = 'array'`)
+
+Indexes:
+- `idx_project_ai_chat_sessions_project_profile` on (`project_id`, `profile_id`)
+
 ## Relations
 
 | From | To | On Delete | Source |
@@ -223,6 +241,8 @@ Triggers:
 | `public.project_invites(invited_by)` | `public.profiles(id)` | `restrict` | `supabase/migrations/20260306161000_projects_membership_and_invites.sql` |
 | `public.project_invites(accepted_profile_id)` | `public.profiles(id)` | `set null` | `supabase/migrations/20260306161000_projects_membership_and_invites.sql` |
 | `public.projects(current_stage_id)` | `public.project_stages(id)` | `set null` | `supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql` |
+| `public.project_ai_chat_sessions(project_id)` | `public.projects(id)` | `cascade` | `supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql` |
+| `public.project_ai_chat_sessions(profile_id)` | `public.profiles(id)` | `cascade` | `supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql` |
 
 ## Functions
 
@@ -249,6 +269,8 @@ Triggers:
 | `public.can_view_sensitive_detail(uuid)` | `boolean` | yes | `rpc` | `supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql` |
 | `public.can_access_hr_domain(uuid)` | `boolean` | yes | `rpc` | `supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql` |
 | `public.get_ai_project_snapshot(uuid)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260414120000_wave1_get_ai_project_snapshot.sql` |
+| `public.get_ai_chat_session_continuity(uuid, uuid)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql` |
+| `public.append_ai_chat_session_turns(uuid, uuid, text, text)` | `void` | yes | `rpc` | `supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql` |
 
 ## RLS and Grants
 
@@ -335,4 +357,10 @@ Triggers:
     with check: `public.can_manage_project(project_id)`
   - `project_invites_delete` for `delete` to `authenticated`
     using: `public.can_manage_project(project_id)`
+
+### public.project_ai_chat_sessions
+
+- RLS enabled: yes
+- Authenticated grants: none
+- Policies: none
 

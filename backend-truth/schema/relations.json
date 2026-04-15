@@ -1397,6 +1397,38 @@
         "id"
       ],
       "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "project_ai_chat_sessions",
+      "fromColumns": [
+        "project_id"
+      ],
+      "toSchema": "public",
+      "toTable": "projects",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "project_ai_chat_sessions",
+      "fromColumns": [
+        "profile_id"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
     }
   ]
 }

@@ -1428,6 +1428,33 @@ export type Database = {
           }
           Relationships: []
         }
+        "project_ai_chat_sessions": {
+          Row: {
+          "chat_id": string
+          "project_id": string
+          "profile_id": string
+          "recent_turns": Json
+          "rolling_summary": string | null
+          "updated_at": string
+          }
+          Insert: {
+          "chat_id"?: string
+          "project_id": string
+          "profile_id": string
+          "recent_turns"?: Json
+          "rolling_summary"?: string | null
+          "updated_at"?: string
+          }
+          Update: {
+          "chat_id"?: string
+          "project_id"?: string
+          "profile_id"?: string
+          "recent_turns"?: Json
+          "rolling_summary"?: string | null
+          "updated_at"?: string
+          }
+          Relationships: []
+        }
     }
     Views: {
       [_ in never]: never
@@ -1444,6 +1471,15 @@ export type Database = {
           "p_access": string
           }
           Returns: number
+        }
+        "append_ai_chat_session_turns": {
+          Args: {
+          "p_project_id": string
+          "p_chat_id": string
+          "p_user_text": string
+          "p_assistant_text": string
+          }
+          Returns: unknown
         }
         "approve_estimate_version_by_share_token": {
           Args: {
@@ -1541,6 +1577,13 @@ export type Database = {
           "p_level": string
           }
           Returns: number
+        }
+        "get_ai_chat_session_continuity": {
+          Args: {
+          "p_project_id": string
+          "p_chat_id": string
+          }
+          Returns: Json
         }
         "get_ai_project_snapshot": {
           Args: {

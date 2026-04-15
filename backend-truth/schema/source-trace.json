@@ -221,6 +221,12 @@
       "schema": "public",
       "table": "storage_bucket_config",
       "sourceMigration": "supabase/migrations/20260317133000_storage_bucket_config_table.sql"
+    },
+    {
+      "key": "public.project_ai_chat_sessions",
+      "schema": "public",
+      "table": "project_ai_chat_sessions",
+      "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql"
     }
   ],
   "functions": [
@@ -608,6 +614,27 @@
       "name": "get_tasks_ai_operational_evidence",
       "signature": "public.get_tasks_ai_operational_evidence(uuid, integer, integer)",
       "sourceMigration": "supabase/migrations/20260414150000_wave4_tasks_ai_operational_evidence_rpc.sql"
+    },
+    {
+      "key": "public._trim_session_turns_jsonb",
+      "schema": "public",
+      "name": "_trim_session_turns_jsonb",
+      "signature": "public._trim_session_turns_jsonb(jsonb, integer)",
+      "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql"
+    },
+    {
+      "key": "public.get_ai_chat_session_continuity",
+      "schema": "public",
+      "name": "get_ai_chat_session_continuity",
+      "signature": "public.get_ai_chat_session_continuity(uuid, uuid)",
+      "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql"
+    },
+    {
+      "key": "public.append_ai_chat_session_turns",
+      "schema": "public",
+      "name": "append_ai_chat_session_turns",
+      "signature": "public.append_ai_chat_session_turns(uuid, uuid, text, text)",
+      "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql"
     }
   ],
   "policies": [
@@ -1527,6 +1554,7 @@
         "supabase/migrations/20260306161000_projects_membership_and_invites.sql",
         "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql",
         "supabase/migrations/20260324140000_project_launch_authority.sql",
+        "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
         "supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql",
         "supabase/migrations/20260414120000_wave1_get_ai_project_snapshot.sql",
@@ -1543,7 +1571,8 @@
         "public.notification_preferences",
         "public.projects",
         "public.project_members",
-        "public.project_invites"
+        "public.project_invites",
+        "public.project_ai_chat_sessions"
       ],
       "functions": [
         "public.guard_project_owner_change",
@@ -1566,7 +1595,9 @@
         "public.can_view_internal_documents",
         "public.can_view_sensitive_detail",
         "public.can_access_hr_domain",
-        "public.get_ai_project_snapshot"
+        "public.get_ai_project_snapshot",
+        "public.get_ai_chat_session_continuity",
+        "public.append_ai_chat_session_turns"
       ],
       "policies": [
         "public.profiles.profiles_select",
@@ -1641,6 +1672,16 @@
           "from": "public.projects",
           "to": "public.project_stages",
           "sourceMigration": "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql"
+        },
+        {
+          "from": "public.project_ai_chat_sessions",
+          "to": "public.projects",
+          "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql"
+        },
+        {
+          "from": "public.project_ai_chat_sessions",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql"
         }
       ]
     },

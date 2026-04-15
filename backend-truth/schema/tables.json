@@ -6651,6 +6651,112 @@
       ],
       "indexes": [],
       "triggers": []
+    },
+    {
+      "schema": "public",
+      "name": "project_ai_chat_sessions",
+      "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql",
+      "columns": [
+        {
+          "name": "chat_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "project_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "projects",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "cascade"
+          }
+        },
+        {
+          "name": "profile_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "profiles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "cascade"
+          }
+        },
+        {
+          "name": "recent_turns",
+          "sqlType": "jsonb",
+          "tsType": "Json",
+          "nullable": false,
+          "defaultSql": "'[]'::jsonb",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "rolling_summary",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "updated_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": "project_ai_chat_sessions_recent_turns_is_array",
+          "columns": [],
+          "expression": "jsonb_typeof(recent_turns) = 'array'",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_project_ai_chat_sessions_project_profile",
+          "unique": false,
+          "expressions": [
+            "project_id",
+            "profile_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql"
+        }
+      ],
+      "triggers": []
     }
   ]
 }
