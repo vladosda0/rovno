@@ -1382,7 +1382,7 @@
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260414140000_wave3_procurement_ai_operational_evidence_rpc.sql",
+      "sourceMigration": "supabase/migrations/20260416100000_wave9_closeout_hardening.sql",
       "triggerUsages": []
     },
     {
@@ -1497,7 +1497,7 @@
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql",
+      "sourceMigration": "supabase/migrations/20260416100000_wave9_closeout_hardening.sql",
       "triggerUsages": []
     },
     {

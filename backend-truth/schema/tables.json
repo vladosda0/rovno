@@ -1853,7 +1853,19 @@
         }
       ],
       "constraints": [],
-      "indexes": [],
+      "indexes": [
+        {
+          "name": "idx_task_comments_task_id_created_at_desc",
+          "unique": false,
+          "expressions": [
+            "task_id",
+            "created_at desc"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260416100000_wave9_closeout_hardening.sql"
+        }
+      ],
       "triggers": []
     },
     {
