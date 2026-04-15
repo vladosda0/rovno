@@ -1792,6 +1792,13 @@
       "rlsEnabled": false,
       "authenticatedGrants": [],
       "policies": []
+    },
+    {
+      "schema": "public",
+      "table": "project_ai_chat_sessions",
+      "rlsEnabled": true,
+      "authenticatedGrants": [],
+      "policies": []
     }
   ]
 }

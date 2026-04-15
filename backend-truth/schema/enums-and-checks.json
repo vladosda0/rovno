@@ -1038,6 +1038,16 @@
       "allowedValues": null,
       "expression": "length(trim(bucket)) > 0",
       "sourceMigration": "supabase/migrations/20260317133000_storage_bucket_config_table.sql"
+    },
+    {
+      "schema": "public",
+      "table": "project_ai_chat_sessions",
+      "column": null,
+      "constraintName": "project_ai_chat_sessions_recent_turns_is_array",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "jsonb_typeof(recent_turns) = 'array'",
+      "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql"
     }
   ]
 }
