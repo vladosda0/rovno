@@ -39,6 +39,7 @@ import {
   seamCanViewSensitiveDetail,
 } from "@/lib/permissions";
 import { useToast } from "@/hooks/use-toast";
+import { isHRAssigneeManagedInEstimate } from "@/data/hr-store";
 import { getUserById } from "@/data/store";
 import { isDemoSessionActive } from "@/lib/auth-state";
 import type { TaskStatus } from "@/types/entities";
@@ -423,7 +424,7 @@ export default function ProjectHR() {
                             ) : (
                               <span className="font-medium text-foreground">{title}</span>
                             )}
-                            {item.lockedFromEstimate && <Badge variant="outline">Locked</Badge>}
+                            {isHRAssigneeManagedInEstimate(item) && <Badge variant="outline">Locked</Badge>}
                             {item.orphaned && <Badge variant="destructive">Orphaned</Badge>}
                           </div>
                           {task && (
@@ -440,50 +441,65 @@ export default function ProjectHR() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              className="h-8 max-w-[180px]"
-                              disabled={!canEdit || shouldBlockHRLaunchActions}
-                            >
-                              <span className="truncate">{visibleAssigneeSummary}</span>
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="start" className="w-56">
-                            {participants.length === 0 ? (
-                              <DropdownMenuItem disabled>No participants available</DropdownMenuItem>
-                            ) : participants.map((participant) => {
-                              const checked = assigneeIds.includes(participant.id);
-                              return (
-                                <DropdownMenuCheckboxItem
-                                  key={participant.id}
-                                  checked={checked}
-                                  onSelect={(event) => event.preventDefault()}
-                                  disabled={!canEdit || shouldBlockHRLaunchActions}
-                                  onCheckedChange={(nextChecked) => {
-                                    if (!canEdit || shouldBlockHRLaunchActions) return;
-                                    const nextIds = nextChecked === true
-                                      ? Array.from(new Set([...assigneeIds, participant.id]))
-                                      : assigneeIds.filter((id) => id !== participant.id);
-                                    void hrMutations.setAssignees(item.id, [...nextIds, ...hiddenAssigneeIds]).catch((error) => {
-                                      toast({
-                                        title: error instanceof Error
-                                          ? error.message
-                                          : "Unable to update assignees",
-                                        variant: "destructive",
+                        {isHRAssigneeManagedInEstimate(item) ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span
+                                className="inline-flex h-8 max-w-[180px] cursor-default items-center rounded-md border border-border bg-muted/40 px-3 text-sm text-foreground"
+                              >
+                                <span className="truncate">{visibleAssigneeSummary}</span>
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              Assignees for this row are managed in the Estimate.
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-8 max-w-[180px]"
+                                disabled={!canEdit || shouldBlockHRLaunchActions}
+                              >
+                                <span className="truncate">{visibleAssigneeSummary}</span>
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start" className="w-56">
+                              {participants.length === 0 ? (
+                                <DropdownMenuItem disabled>No participants available</DropdownMenuItem>
+                              ) : participants.map((participant) => {
+                                const checked = assigneeIds.includes(participant.id);
+                                return (
+                                  <DropdownMenuCheckboxItem
+                                    key={participant.id}
+                                    checked={checked}
+                                    onSelect={(event) => event.preventDefault()}
+                                    disabled={!canEdit || shouldBlockHRLaunchActions}
+                                    onCheckedChange={(nextChecked) => {
+                                      if (!canEdit || shouldBlockHRLaunchActions) return;
+                                      const nextIds = nextChecked === true
+                                        ? Array.from(new Set([...assigneeIds, participant.id]))
+                                        : assigneeIds.filter((id) => id !== participant.id);
+                                      void hrMutations.setAssignees(item.id, [...nextIds, ...hiddenAssigneeIds]).catch((error) => {
+                                        toast({
+                                          title: error instanceof Error
+                                            ? error.message
+                                            : "Unable to update assignees",
+                                          variant: "destructive",
+                                        });
                                       });
-                                    });
-                                  }}
-                                >
-                                  {participant.name}
-                                </DropdownMenuCheckboxItem>
-                              );
-                            })}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                                    }}
+                                  >
+                                    {participant.name}
+                                  </DropdownMenuCheckboxItem>
+                                );
+                              })}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline">

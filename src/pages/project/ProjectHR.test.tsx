@@ -288,6 +288,8 @@ describe("ProjectHR", () => {
     expect(row).not.toBeNull();
     expect(within(row as HTMLTableRowElement).getByText("Blocked")).toBeInTheDocument();
     expect(within(row as HTMLTableRowElement).getByText("Alex Crew")).toBeInTheDocument();
+    expect(within(row as HTMLTableRowElement).getByText("Locked")).toBeInTheDocument();
+    expect(within(row as HTMLTableRowElement).queryByRole("button", { name: "Alex Crew" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Painter crew" }));
     expect(navigateMock).toHaveBeenCalledWith("/project/project-1/tasks", {

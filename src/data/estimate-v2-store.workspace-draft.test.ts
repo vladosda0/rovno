@@ -290,6 +290,245 @@ describe("estimate-v2 workspace drafts", () => {
     });
   });
 
+  it("hydrates line assignee from draft assignee_profile_id when task assignee is empty", async () => {
+    const projectId = "project-remote-1";
+    const assigneeUuid = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    loadCurrentEstimateDraftMock.mockResolvedValue({
+      estimate: {
+        id: "estimate-1",
+        project_id: projectId,
+        title: "Remote Estimate",
+        description: null,
+        status: "draft",
+        created_by: "profile-1",
+        created_at: "2026-03-01T00:00:00.000Z",
+        updated_at: "2026-03-02T00:00:00.000Z",
+      },
+      currentVersion: {
+        id: "version-1",
+        estimate_id: "estimate-1",
+        version_number: 1,
+        is_current: true,
+        created_by: "profile-1",
+        created_at: "2026-03-01T00:00:00.000Z",
+      },
+      stages: [
+        {
+          id: "stage-1",
+          project_id: projectId,
+          title: "Shell",
+          description: "",
+          sort_order: 1,
+          status: "open",
+          discount_bps: 250,
+          created_at: "2026-03-01T00:00:00.000Z",
+          updated_at: "2026-03-02T00:00:00.000Z",
+        },
+      ],
+      works: [
+        {
+          id: "work-1",
+          estimate_version_id: "version-1",
+          project_stage_id: "stage-1",
+          title: "Framing",
+          description: null,
+          sort_order: 1,
+          planned_cost_cents: 30000,
+          created_at: "2026-03-01T00:00:00.000Z",
+        },
+        {
+          id: "work-2",
+          estimate_version_id: "version-1",
+          project_stage_id: "stage-1",
+          title: "Roof",
+          description: null,
+          sort_order: 2,
+          planned_cost_cents: 15000,
+          created_at: "2026-03-01T00:00:00.000Z",
+        },
+      ],
+      lines: [
+        {
+          id: "line-1",
+          estimate_work_id: "work-1",
+          resource_type: "labor",
+          title: "Crew",
+          quantity: 2,
+          unit: "day",
+          unit_price_cents: 15000,
+          total_price_cents: 30000,
+          assignee_profile_id: assigneeUuid,
+          created_at: "2026-03-01T00:00:00.000Z",
+        },
+      ],
+      dependencies: [],
+    });
+    getPlanningSourceMock.mockResolvedValue({
+      getProjectTasks: vi.fn().mockResolvedValue([
+        {
+          id: "task-1",
+          project_id: projectId,
+          stage_id: "stage-1",
+          title: "Framing task",
+          description: "",
+          status: "in_progress",
+          assignee_id: "",
+          checklist: [
+            {
+              id: "checklist-1",
+              text: "Crew",
+              done: false,
+              estimateV2LineId: "line-1",
+              estimateV2WorkId: "work-1",
+              estimateV2ResourceType: "labor",
+              estimateV2QtyMilli: 2000,
+              estimateV2Unit: "day",
+            },
+          ],
+          comments: [],
+          attachments: [],
+          photos: [],
+          linked_estimate_item_ids: [],
+          created_at: "2026-03-01T00:00:00.000Z",
+          startDate: "2026-03-10T00:00:00.000Z",
+          deadline: "2026-03-12T00:00:00.000Z",
+        },
+      ]),
+    });
+
+    registerEstimateV2ProjectAccessContext(projectId, {
+      mode: "supabase",
+      profileId: "profile-1",
+      projectOwnerProfileId: "profile-1",
+      membershipRole: "owner",
+    });
+
+    await hydrateEstimateV2ProjectFromWorkspace(projectId, { profileId: "profile-1" });
+    const state = getEstimateV2ProjectState(projectId);
+    expect(state.lines[0]?.assigneeId).toBe(assigneeUuid);
+  });
+
+  it("hydrates free-text assignee from draft assignee_label and ignores task profile assignee", async () => {
+    const projectId = "project-remote-1";
+    const ownerUuid = "8dad1741-7d55-445f-9588-7c29726b4e90";
+    loadCurrentEstimateDraftMock.mockResolvedValue({
+      estimate: {
+        id: "estimate-1",
+        project_id: projectId,
+        title: "Remote Estimate",
+        description: null,
+        status: "draft",
+        created_by: "profile-1",
+        created_at: "2026-03-01T00:00:00.000Z",
+        updated_at: "2026-03-02T00:00:00.000Z",
+      },
+      currentVersion: {
+        id: "version-1",
+        estimate_id: "estimate-1",
+        version_number: 1,
+        is_current: true,
+        created_by: "profile-1",
+        created_at: "2026-03-01T00:00:00.000Z",
+      },
+      stages: [
+        {
+          id: "stage-1",
+          project_id: projectId,
+          title: "Shell",
+          description: "",
+          sort_order: 1,
+          status: "open",
+          discount_bps: 250,
+          created_at: "2026-03-01T00:00:00.000Z",
+          updated_at: "2026-03-02T00:00:00.000Z",
+        },
+      ],
+      works: [
+        {
+          id: "work-1",
+          estimate_version_id: "version-1",
+          project_stage_id: "stage-1",
+          title: "Framing",
+          description: null,
+          sort_order: 1,
+          planned_cost_cents: 30000,
+          created_at: "2026-03-01T00:00:00.000Z",
+        },
+        {
+          id: "work-2",
+          estimate_version_id: "version-1",
+          project_stage_id: "stage-1",
+          title: "Roof",
+          description: null,
+          sort_order: 2,
+          planned_cost_cents: 15000,
+          created_at: "2026-03-01T00:00:00.000Z",
+        },
+      ],
+      lines: [
+        {
+          id: "line-1",
+          estimate_work_id: "work-1",
+          resource_type: "labor",
+          title: "Crew",
+          quantity: 2,
+          unit: "day",
+          unit_price_cents: 15000,
+          total_price_cents: 30000,
+          assignee_profile_id: null,
+          assignee_label: "Володя",
+          created_at: "2026-03-01T00:00:00.000Z",
+        },
+      ],
+      dependencies: [],
+    });
+    getPlanningSourceMock.mockResolvedValue({
+      getProjectTasks: vi.fn().mockResolvedValue([
+        {
+          id: "task-1",
+          project_id: projectId,
+          stage_id: "stage-1",
+          title: "Framing task",
+          description: "",
+          status: "in_progress",
+          assignee_id: ownerUuid,
+          assignees: [{ id: ownerUuid, name: "Owner Name", email: null }],
+          checklist: [
+            {
+              id: "checklist-1",
+              text: "Crew",
+              done: false,
+              estimateV2LineId: "line-1",
+              estimateV2WorkId: "work-1",
+              estimateV2ResourceType: "labor",
+              estimateV2QtyMilli: 2000,
+              estimateV2Unit: "day",
+            },
+          ],
+          comments: [],
+          attachments: [],
+          photos: [],
+          linked_estimate_item_ids: [],
+          created_at: "2026-03-01T00:00:00.000Z",
+          startDate: "2026-03-10T00:00:00.000Z",
+          deadline: "2026-03-12T00:00:00.000Z",
+        },
+      ]),
+    });
+
+    registerEstimateV2ProjectAccessContext(projectId, {
+      mode: "supabase",
+      profileId: "profile-1",
+      projectOwnerProfileId: "profile-1",
+      membershipRole: "owner",
+    });
+
+    await hydrateEstimateV2ProjectFromWorkspace(projectId, { profileId: "profile-1" });
+    const state = getEstimateV2ProjectState(projectId);
+    expect(state.lines[0]?.assigneeId).toBeNull();
+    expect(state.lines[0]?.assigneeName).toBe("Володя");
+  });
+
   it("hydrates multi-stage multi-work multi-line graph with pricing fields intact", async () => {
     const projectId = "project-remote-1";
     loadCurrentEstimateDraftMock.mockResolvedValue({
@@ -1317,5 +1556,247 @@ describe("estimate-v2 workspace drafts", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("hydrate uses linked task assignee for both profiles, not profile-local workspace cache", async () => {
+    const projectId = "project-assignee-parity-1";
+    const draftPayload = {
+      estimate: {
+        id: "estimate-1",
+        project_id: projectId,
+        title: "Remote Estimate",
+        description: null,
+        status: "draft",
+        created_by: "profile-owner",
+        created_at: "2026-03-01T00:00:00.000Z",
+        updated_at: "2026-03-02T00:00:00.000Z",
+      },
+      currentVersion: {
+        id: "version-1",
+        estimate_id: "estimate-1",
+        version_number: 1,
+        is_current: true,
+        created_by: "profile-owner",
+        created_at: "2026-03-01T00:00:00.000Z",
+      },
+      stages: [
+        {
+          id: "stage-1",
+          project_id: projectId,
+          title: "Shell",
+          description: "",
+          sort_order: 1,
+          status: "open",
+          discount_bps: 0,
+          created_at: "2026-03-01T00:00:00.000Z",
+          updated_at: "2026-03-02T00:00:00.000Z",
+        },
+      ],
+      works: [
+        {
+          id: "work-1",
+          estimate_version_id: "version-1",
+          project_stage_id: "stage-1",
+          title: "Framing",
+          description: null,
+          sort_order: 1,
+          planned_cost_cents: null,
+          created_at: "2026-03-01T00:00:00.000Z",
+        },
+      ],
+      lines: [
+        {
+          id: "line-1",
+          estimate_work_id: "work-1",
+          resource_type: "labor",
+          title: "Crew",
+          quantity: 2,
+          unit: "day",
+          unit_price_cents: 15000,
+          total_price_cents: 30000,
+          created_at: "2026-03-01T00:00:00.000Z",
+        },
+      ],
+      dependencies: [],
+    };
+
+    const sharedTask = {
+      id: "task-1",
+      project_id: projectId,
+      stage_id: "stage-1",
+      title: "Framing task",
+      description: "",
+      status: "not_started" as const,
+      assignee_id: "profile-shared",
+      assignees: [{ id: "profile-shared", name: "Shared Person", email: "shared@example.com" }],
+      checklist: [
+        {
+          id: "checklist-1",
+          text: "Crew",
+          done: false,
+          type: "subtask" as const,
+          estimateV2LineId: "line-1",
+          estimateV2WorkId: "work-1",
+          estimateV2ResourceType: "labor" as const,
+          estimateV2QtyMilli: 2000,
+          estimateV2Unit: "day",
+        },
+      ],
+      comments: [],
+      attachments: [],
+      photos: [],
+      linked_estimate_item_ids: [],
+      created_at: "2026-03-01T00:00:00.000Z",
+      startDate: null,
+      deadline: null,
+    };
+
+    const staleLine = (wrongId: string, wrongName: string) => ({
+      id: "line-1",
+      projectId,
+      stageId: "stage-1",
+      workId: "work-1",
+      title: "Stale title",
+      type: "labor" as const,
+      unit: "day",
+      qtyMilli: 2000,
+      costUnitCents: 0,
+      markupBps: 0,
+      discountBpsOverride: null,
+      assigneeId: wrongId,
+      assigneeName: wrongName,
+      assigneeEmail: null,
+      receivedCents: 0,
+      pnlPlaceholderCents: 0,
+      createdAt: "2026-03-01T00:00:00.000Z",
+      updatedAt: "2026-03-01T00:00:00.000Z",
+    });
+
+    const minimalCachedState = (wrongId: string, wrongName: string) => ({
+      project: {
+        id: "estimate-v2-project-1",
+        projectId,
+        title: "Cached",
+        projectMode: "contractor" as const,
+        currency: "RUB",
+        taxBps: 0,
+        discountBps: 0,
+        markupBps: 0,
+        estimateStatus: "planning" as const,
+        receivedCents: 0,
+        pnlPlaceholderCents: 0,
+        createdAt: "2026-03-01T00:00:00.000Z",
+        updatedAt: "2026-03-01T00:00:00.000Z",
+      },
+      stages: [],
+      works: [],
+      lines: [staleLine(wrongId, wrongName)],
+      dependencies: [],
+      versions: [],
+      scheduleBaseline: null,
+      operationalUpperBlock: null,
+      sync: {
+        estimateRevision: null,
+        draftSaveStatus: "idle" as const,
+        draftSaveLastSucceededAt: null,
+        draftSaveLastError: null,
+        domains: {
+          tasks: { status: "idle" as const, projectedRevision: null, lastAttemptedAt: null, lastSucceededAt: null, lastError: null },
+          procurement: { status: "idle" as const, projectedRevision: null, lastAttemptedAt: null, lastSucceededAt: null, lastError: null },
+          hr: { status: "idle" as const, projectedRevision: null, lastAttemptedAt: null, lastSucceededAt: null, lastError: null },
+        },
+      },
+    });
+
+    localStorage.setItem(
+      `estimate-v2-workspace:${projectId}:profile-1`,
+      JSON.stringify({ savedAt: "2026-03-01T00:00:00.000Z", state: minimalCachedState("wrong-1", "User A cache") }),
+    );
+    localStorage.setItem(
+      `estimate-v2-workspace:${projectId}:profile-2`,
+      JSON.stringify({ savedAt: "2026-03-01T00:00:00.000Z", state: minimalCachedState("wrong-2", "User B cache") }),
+    );
+
+    loadCurrentEstimateDraftMock.mockResolvedValue(draftPayload);
+    getPlanningSourceMock.mockResolvedValue({
+      getProjectTasks: vi.fn().mockResolvedValue([sharedTask]),
+    });
+
+    const runHydrate = async (profileId: string) => {
+      __unsafeResetEstimateV2ForTests();
+      vi.clearAllMocks();
+      getWorkspaceSourceMock.mockResolvedValue({
+        getProjectById: vi.fn().mockResolvedValue({
+          id: projectId,
+          owner_id: "profile-owner",
+          title: "Remote Project",
+          type: "residential",
+          project_mode: "contractor",
+          automation_level: "assisted",
+          current_stage_id: "",
+          progress_pct: 0,
+        }),
+      });
+      getPlanningSourceMock.mockResolvedValue({
+        getProjectTasks: vi.fn().mockResolvedValue([sharedTask]),
+      });
+      loadCurrentEstimateDraftMock.mockResolvedValue(draftPayload);
+      saveCurrentEstimateDraftMock.mockResolvedValue(undefined);
+      syncProjectTasksFromEstimateMock.mockResolvedValue({});
+      syncProjectProcurementFromEstimateMock.mockResolvedValue(undefined);
+      syncProjectHRFromEstimateMock.mockResolvedValue(undefined);
+      persistEstimateV2HeroTransitionMock.mockResolvedValue({
+        fingerprint: "fingerprint-1",
+        profileId,
+        ids: {
+          estimateId: "estimate-1",
+          versionId: "version-1",
+          eventId: "event-1",
+          stageIdByLocalStageId: {},
+          workIdByLocalWorkId: {},
+          lineIdByLocalLineId: {},
+          taskIdByLocalWorkId: {},
+          checklistItemIdByLocalLineId: {},
+          procurementItemIdByLocalLineId: {},
+          hrItemIdByLocalLineId: {},
+        },
+      });
+
+      localStorage.setItem(
+        `estimate-v2-workspace:${projectId}:profile-1`,
+        JSON.stringify({ savedAt: "2026-03-01T00:00:00.000Z", state: minimalCachedState("wrong-1", "User A cache") }),
+      );
+      localStorage.setItem(
+        `estimate-v2-workspace:${projectId}:profile-2`,
+        JSON.stringify({ savedAt: "2026-03-01T00:00:00.000Z", state: minimalCachedState("wrong-2", "User B cache") }),
+      );
+
+      registerEstimateV2ProjectAccessContext(projectId, {
+        mode: "supabase",
+        profileId,
+        projectOwnerProfileId: "profile-owner",
+        membershipRole: "owner",
+        financeVisibility: "detail",
+      });
+
+      await hydrateEstimateV2ProjectFromWorkspace(projectId, { profileId });
+      return getEstimateV2ProjectState(projectId).lines.find((l) => l.id === "line-1") ?? null;
+    };
+
+    const lineAfterProfile1 = await runHydrate("profile-1");
+    expect(lineAfterProfile1).toMatchObject({
+      assigneeId: "profile-shared",
+      assigneeName: "Shared Person",
+      assigneeEmail: "shared@example.com",
+      title: "Crew",
+    });
+
+    const lineAfterProfile2 = await runHydrate("profile-2");
+    expect(lineAfterProfile2).toMatchObject({
+      assigneeId: "profile-shared",
+      assigneeName: "Shared Person",
+      assigneeEmail: "shared@example.com",
+      title: "Crew",
+    });
   });
 });

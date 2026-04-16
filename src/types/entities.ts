@@ -122,6 +122,10 @@ export interface ChecklistItem {
   estimateV2ResourceType?: "material" | "tool" | "labor" | "subcontractor" | "other";
   estimateV2QtyMilli?: number;
   estimateV2Unit?: string;
+  /** Linked `estimate_resource_lines.assignee_profile_id` when loaded from planning (refresh-safe). */
+  estimateV2AssigneeProfileId?: string | null;
+  /** Linked `estimate_resource_lines.assignee_label` (free-text assignee, no profile id). */
+  estimateV2AssigneeLabel?: string | null;
 }
 
 export interface Comment {

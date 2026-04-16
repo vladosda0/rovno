@@ -1,9 +1,11 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { trackEvent } from "@/lib/analytics";
 import {
   getHRItems,
   getHRPayments,
+  HR_ASSIGNEE_MANAGED_IN_ESTIMATE_MESSAGE,
+  isHRAssigneeManagedInEstimate,
   subscribeHR,
 } from "@/data/hr-store";
 import {
@@ -41,6 +43,18 @@ export const hrQueryKeys = {
   projectPayments: (profileId: string, projectId: string) =>
     ["hr", "project-payments", profileId, projectId] as const,
 };
+
+function readCachedSupabaseHRItem(
+  queryClient: QueryClient,
+  profileId: string,
+  projectId: string,
+  financeAccess: FinanceRowLoadAccess,
+  projectedRevision: string | null,
+  hrItemId: string,
+): HRPlannedItem | undefined {
+  const key = [...hrQueryKeys.projectItems(profileId, projectId, financeAccess), projectedRevision ?? "initial"];
+  return queryClient.getQueryData<HRPlannedItem[]>(key)?.find((item) => item.id === hrItemId);
+}
 
 function useStoreValue<T>(getter: () => T, enabled: boolean, fallback: T): T {
   const [value, setValue] = useState<T>(() => enabled ? getter() : fallback);
@@ -149,6 +163,9 @@ function assertHRMutationWorkspaceMode(
 export function useProjectHRMutations(projectId: string) {
   const mode = useWorkspaceMode();
   const queryClient = useQueryClient();
+  const estimateSync = useEstimateV2ProjectSync(projectId);
+  const { seam } = usePermission(projectId);
+  const financeAccess = useMemo(() => resolveFinanceRowLoadAccess(seam), [seam]);
 
   const invalidateProjectItems = useCallback(async (resolvedMode: Extract<typeof mode, { kind: "supabase" }>) => {
     await queryClient.invalidateQueries({
@@ -164,11 +181,23 @@ export function useProjectHRMutations(projectId: string) {
 
   const setAssignees = useCallback(async (hrItemId: string, assigneeIds: string[]) => {
     const resolvedMode = assertHRMutationWorkspaceMode(mode);
-    const currentItems = resolvedMode.kind === "supabase"
-      ? queryClient.getQueryData<HRPlannedItem[]>(hrQueryKeys.projectItems(resolvedMode.profileId, projectId)) || []
-      : [];
-    const currentItem = currentItems.find(item => item.id === hrItemId);
-    const previousAssigneeIds = currentItem?.assigneeIds || [];
+
+    const existing = resolvedMode.kind === "supabase"
+      ? readCachedSupabaseHRItem(
+        queryClient,
+        resolvedMode.profileId,
+        projectId,
+        financeAccess,
+        estimateSync.domains.hr.projectedRevision,
+        hrItemId,
+      )
+      : getHRItems(projectId).find((item) => item.id === hrItemId);
+
+    if (existing && isHRAssigneeManagedInEstimate(existing)) {
+      throw new Error(HR_ASSIGNEE_MANAGED_IN_ESTIMATE_MESSAGE);
+    }
+
+    const previousAssigneeIds = existing?.assigneeIds || [];
 
     await setProjectHRAssigneesSource(resolvedMode, {
       projectId,
@@ -188,14 +217,27 @@ export function useProjectHRMutations(projectId: string) {
     if (resolvedMode.kind === "supabase") {
       await invalidateProjectItems(resolvedMode);
     }
-  }, [invalidateProjectItems, mode, projectId, queryClient]);
+  }, [
+    estimateSync.domains.hr.projectedRevision,
+    financeAccess,
+    invalidateProjectItems,
+    mode,
+    projectId,
+    queryClient,
+  ]);
 
   const setItemStatus = useCallback(async (hrItemId: string, status: HRItemStatus) => {
     const resolvedMode = assertHRMutationWorkspaceMode(mode);
-    const currentItems = resolvedMode.kind === "supabase"
-      ? queryClient.getQueryData<HRPlannedItem[]>(hrQueryKeys.projectItems(resolvedMode.profileId, projectId)) || []
-      : [];
-    const currentItem = currentItems.find(item => item.id === hrItemId);
+    const currentItem = resolvedMode.kind === "supabase"
+      ? readCachedSupabaseHRItem(
+        queryClient,
+        resolvedMode.profileId,
+        projectId,
+        financeAccess,
+        estimateSync.domains.hr.projectedRevision,
+        hrItemId,
+      )
+      : getHRItems(projectId).find((item) => item.id === hrItemId);
     const previousStatus = currentItem?.status;
 
     await setProjectHRItemStatusSource(resolvedMode, {
@@ -216,7 +258,14 @@ export function useProjectHRMutations(projectId: string) {
     if (resolvedMode.kind === "supabase") {
       await invalidateProjectItems(resolvedMode);
     }
-  }, [invalidateProjectItems, mode, projectId, queryClient]);
+  }, [
+    estimateSync.domains.hr.projectedRevision,
+    financeAccess,
+    invalidateProjectItems,
+    mode,
+    projectId,
+    queryClient,
+  ]);
 
   const createPayment = useCallback(async (input: {
     hrItemId: string;

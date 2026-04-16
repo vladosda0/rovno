@@ -14,6 +14,11 @@ type EstimateWorkRow = Database["public"]["Tables"]["estimate_works"]["Row"];
 type EstimateWorkInsert = Database["public"]["Tables"]["estimate_works"]["Insert"];
 type EstimateResourceLineRow = Database["public"]["Tables"]["estimate_resource_lines"]["Row"];
 type EstimateResourceLineInsert = Database["public"]["Tables"]["estimate_resource_lines"]["Insert"];
+/** Present after migrations assignee_profile + assignee_label; consumer types refresh via sync PR. */
+export type EstimateResourceLineRowWithAssignee = EstimateResourceLineRow & {
+  assignee_profile_id?: string | null;
+  assignee_label?: string | null;
+};
 type EstimateDependencyRow = Database["public"]["Tables"]["estimate_dependencies"]["Row"];
 type EstimateDependencyInsert = Database["public"]["Tables"]["estimate_dependencies"]["Insert"];
 type ProjectStageRow = Database["public"]["Tables"]["project_stages"]["Row"];
@@ -23,7 +28,7 @@ const PROJECT_ESTIMATE_SELECT = "id, project_id, title, description, status, cre
 const ESTIMATE_VERSION_SELECT = "id, estimate_id, version_number, is_current, created_by, created_at";
 const PROJECT_STAGE_SELECT = "id, project_id, title, description, sort_order, status, discount_bps, created_at, updated_at";
 const ESTIMATE_WORK_SELECT = "id, estimate_version_id, project_stage_id, title, description, sort_order, planned_cost_cents, created_at";
-const ESTIMATE_RESOURCE_LINE_SELECT = "id, estimate_work_id, resource_type, title, quantity, unit, unit_price_cents, total_price_cents, client_unit_price_cents, client_total_price_cents, markup_bps, discount_bps_override, created_at";
+const ESTIMATE_RESOURCE_LINE_SELECT = "id, estimate_work_id, resource_type, title, quantity, unit, unit_price_cents, total_price_cents, client_unit_price_cents, client_total_price_cents, markup_bps, discount_bps_override, assignee_profile_id, assignee_label, created_at";
 const ESTIMATE_DEPENDENCY_SELECT = "id, estimate_version_id, from_work_id, to_work_id, dependency_type, created_at";
 
 export interface EnsureProjectEstimateRootInput {
@@ -69,7 +74,7 @@ export interface CurrentEstimateDraft {
   currentVersion: EstimateVersionRow | null;
   stages: ProjectStageRow[];
   works: EstimateWorkRow[];
-  lines: EstimateResourceLineRow[];
+  lines: EstimateResourceLineRowWithAssignee[];
   dependencies: EstimateDependencyRow[];
 }
 
@@ -388,7 +393,7 @@ export async function loadCurrentEstimateDraft(projectId: string): Promise<Curre
   const works = workRows ?? [];
   const workIds = works.map((row) => row.id);
 
-  let lines: EstimateResourceLineRow[] = [];
+  let lines: EstimateResourceLineRowWithAssignee[] = [];
   if (workIds.length > 0) {
     const { data: lineRows, error: lineError } = await supabase
       .from("estimate_resource_lines")
@@ -399,7 +404,7 @@ export async function loadCurrentEstimateDraft(projectId: string): Promise<Curre
       throw lineError;
     }
 
-    lines = lineRows ?? [];
+    lines = (lineRows ?? []) as EstimateResourceLineRowWithAssignee[];
   }
 
   const { data: dependencyRows, error: dependencyError } = await supabase
@@ -446,6 +451,8 @@ export interface EstimateOperationalSummaryResourceLineRow {
   client_total_price_cents: number | null;
   discounted_client_total_price_cents: number | null;
   assignee_profile_id: string | null;
+  /** From `get_estimate_operational_summary` join to profiles (definer); optional on older backends. */
+  assignee_display_name: string | null;
   created_at: string;
 }
 
@@ -576,6 +583,7 @@ function parseEstimateOperationalResourceLine(
     ? Math.round(clientTotal)
     : (clientTotal != null ? Math.round(Number(clientTotal)) : NaN);
   const assigneeRaw = row.assignee_profile_id;
+  const displayRaw = row.assignee_display_name;
   return {
     estimate_resource_line_id: lineId,
     estimate_work_id: workId,
@@ -590,6 +598,7 @@ function parseEstimateOperationalResourceLine(
     client_total_price_cents: Number.isFinite(clientTotalCents) ? clientTotalCents : null,
     discounted_client_total_price_cents: parseOptionalCents(row.discounted_client_total_price_cents),
     assignee_profile_id: typeof assigneeRaw === "string" ? assigneeRaw : null,
+    assignee_display_name: typeof displayRaw === "string" ? displayRaw : null,
     created_at: typeof row.created_at === "string" ? row.created_at : new Date().toISOString(),
   };
 }
@@ -852,6 +861,12 @@ export async function saveCurrentEstimateDraft(
       throw new Error(`Missing work or stage for estimate line "${line.title}"`);
     }
     const pricingTotals = computeLineTotals(line, stage, snapshot.project, snapshot.project.projectMode);
+    const trimmedAssignee = line.assigneeId?.trim();
+    const trimmedName = line.assigneeName?.trim();
+    const assigneeProfileId = trimmedAssignee || null;
+    const assigneeLabel = assigneeProfileId
+      ? null
+      : (trimmedName ? trimmedName.slice(0, 200) : null);
     return {
       id: lineIdByLocalId.get(line.id),
       estimate_work_id: workIdByLocalId.get(line.workId) ?? ensureRemoteUuid(projectId, "work", line.workId),
@@ -865,7 +880,9 @@ export async function saveCurrentEstimateDraft(
       client_total_price_cents: pricingTotals.clientTotalCents,
       markup_bps: line.markupBps,
       discount_bps_override: line.discountBpsOverride ?? null,
-    };
+      assignee_profile_id: assigneeProfileId,
+      assignee_label: assigneeLabel,
+    } as EstimateResourceLineInsert;
   });
 
   if (shouldAbortCurrentEstimateDraftSave(actor)) {

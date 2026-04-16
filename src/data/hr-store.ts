@@ -15,6 +15,17 @@ export interface HRStoreMutationResult {
   error?: string;
 }
 
+/** HR surface cannot change assignees while the row is driven by the Estimate. */
+export const HR_ASSIGNEE_MANAGED_IN_ESTIMATE_MESSAGE =
+  "Assignees for estimate-linked HR work are managed in the Estimate.";
+
+export function isHRAssigneeManagedInEstimate(
+  item: Pick<HRPlannedItem, "lockedFromEstimate" | "sourceEstimateV2LineId">,
+): boolean {
+  const lineId = item.sourceEstimateV2LineId?.trim();
+  return Boolean(item.lockedFromEstimate || lineId);
+}
+
 type Listener = () => void;
 
 const listeners = new Set<Listener>();
@@ -84,6 +95,7 @@ function orphanItem(item: HRPlannedItem, reason: "estimate_line_deleted" | "esti
       ? {
         ...entry,
         sourceEstimateV2LineId: null,
+        lockedFromEstimate: false,
         orphaned: true,
         orphanedAt: now,
         orphanedReason: reason,
@@ -94,12 +106,23 @@ function orphanItem(item: HRPlannedItem, reason: "estimate_line_deleted" | "esti
   return true;
 }
 
+function assigneesFromEstimateLine(line: EstimateV2ResourceLine): {
+  assignee: string | null;
+  assigneeIds: string[];
+} {
+  const id = line.assigneeId?.trim();
+  if (!id) return { assignee: null, assigneeIds: [] };
+  const ids = normalizeAssigneeIds([id]);
+  return { assignee: ids[0] ?? null, assigneeIds: ids };
+}
+
 function applyEstimateLine(itemId: string, line: EstimateV2ResourceLine): boolean {
   const existing = getHRItemById(itemId);
   if (!existing) return false;
   const nextType: HRItemType = line.type === "subcontractor" ? "subcontractor" : "labor";
   const nextQty = qtyFromLine(line);
   const nextRate = rateFromLine(line);
+  const { assignee: nextAssignee, assigneeIds: nextAssigneeIds } = assigneesFromEstimateLine(line);
   if (
     existing.stageId === line.stageId
     && existing.workId === line.workId
@@ -107,6 +130,8 @@ function applyEstimateLine(itemId: string, line: EstimateV2ResourceLine): boolea
     && existing.type === nextType
     && existing.plannedQty === nextQty
     && existing.plannedRate === nextRate
+    && existing.assignee === nextAssignee
+    && arraysEqual(currentAssigneeIds(existing), nextAssigneeIds)
     && existing.lockedFromEstimate
     && existing.sourceEstimateV2LineId === line.id
     && !existing.orphaned
@@ -125,6 +150,8 @@ function applyEstimateLine(itemId: string, line: EstimateV2ResourceLine): boolea
         type: line.type === "subcontractor" ? "subcontractor" : "labor",
         plannedQty: qtyFromLine(line),
         plannedRate: rateFromLine(line),
+        assignee: nextAssignee,
+        assigneeIds: nextAssigneeIds,
         lockedFromEstimate: true,
         sourceEstimateV2LineId: line.id,
         orphaned: false,
@@ -227,6 +254,10 @@ export function updateFromEstimateLine(
   if (!existing || existing.projectId !== projectId) return null;
 
   const now = nowIso();
+  const nextAssignee = patch.assignee === undefined ? existing.assignee : patch.assignee;
+  const nextAssigneeIds = patch.assignee !== undefined
+    ? normalizeAssigneeIds(nextAssignee ? [nextAssignee] : [])
+    : currentAssigneeIds(existing);
   const next: HRPlannedItem = {
     ...existing,
     stageId: patch.stageId ?? existing.stageId,
@@ -235,8 +266,8 @@ export function updateFromEstimateLine(
     type: patch.type ?? existing.type,
     plannedQty: patch.plannedQty == null ? existing.plannedQty : Math.max(0, patch.plannedQty),
     plannedRate: patch.plannedRate == null ? existing.plannedRate : Math.max(0, patch.plannedRate),
-    assignee: patch.assignee === undefined ? existing.assignee : patch.assignee,
-    assigneeIds: currentAssigneeIds(existing),
+    assignee: nextAssignee,
+    assigneeIds: nextAssigneeIds,
     lockedFromEstimate: true,
     sourceEstimateV2LineId: patch.lineId ?? existing.sourceEstimateV2LineId,
     orphaned: false,
@@ -258,6 +289,10 @@ export function setHRAssignees(
   const existing = getHRItemById(hrItemId);
   if (!existing || existing.projectId !== projectId) {
     return { ok: false, error: "HR item not found" };
+  }
+
+  if (isHRAssigneeManagedInEstimate(existing)) {
+    return { ok: false, error: HR_ASSIGNEE_MANAGED_IN_ESTIMATE_MESSAGE };
   }
 
   const normalized = normalizeAssigneeIds(assigneeIds);
@@ -390,6 +425,7 @@ export function syncHRFromEstimateV2(projectId: string, estimateState: EstimateV
 
     if (!nowInWork) return;
 
+    const { assignee: lineAssignee } = assigneesFromEstimateLine(line);
     createFromEstimateLine(projectId, line.id, {
       stageId: line.stageId,
       workId: line.workId,
@@ -397,6 +433,7 @@ export function syncHRFromEstimateV2(projectId: string, estimateState: EstimateV
       type: line.type === "subcontractor" ? "subcontractor" : "labor",
       plannedQty: qtyFromLine(line),
       plannedRate: rateFromLine(line),
+      assignee: lineAssignee ?? undefined,
     }, { notify: false });
     didMutate = true;
   });

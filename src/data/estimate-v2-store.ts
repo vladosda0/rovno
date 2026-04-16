@@ -1589,6 +1589,20 @@ function mapChecklistTypeToEstimateLineType(
   return null;
 }
 
+function displayForTaskProfileId(
+  task: Task | undefined,
+  profileId: string | null,
+): { name: string | null; email: string | null } {
+  if (!task || !profileId) {
+    return { name: null, email: null };
+  }
+  const match = task.assignees?.find((entry) => entry.id === profileId) ?? null;
+  return {
+    name: match?.name ?? null,
+    email: match?.email ?? null,
+  };
+}
+
 export async function hydrateEstimateV2ProjectFromWorkspace(
   projectId: string,
   input: { profileId: string },
@@ -1820,7 +1834,7 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
           markupBps: 0,
           discountBpsOverride: null,
           assigneeId: line.assignee_profile_id ?? cachedLine?.assigneeId ?? null,
-          assigneeName: cachedLine?.assigneeName ?? null,
+          assigneeName: line.assignee_label?.trim() || cachedLine?.assigneeName || null,
           assigneeEmail: cachedLine?.assigneeEmail ?? null,
           receivedCents: cachedLine?.receivedCents ?? 0,
           pnlPlaceholderCents: cachedLine?.pnlPlaceholderCents ?? 0,
@@ -1843,6 +1857,16 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
           if (!resolvedType) {
             return null;
           }
+          const checklistProfile = item.estimateV2AssigneeProfileId?.trim() || null;
+          const checklistLabel = item.estimateV2AssigneeLabel?.trim() || null;
+          const taskProfile = task.assignee_id?.trim() || null;
+          const hasFreeText = Boolean(checklistLabel);
+          const resolvedAssigneeId = (
+            checklistProfile
+            || (hasFreeText ? null : taskProfile)
+            || cachedLine?.assigneeId
+          ) ?? null;
+          const display = displayForTaskProfileId(task, resolvedAssigneeId);
           return {
             id: lineId,
             projectId,
@@ -1855,9 +1879,9 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
             costUnitCents: Math.max(0, Math.round(cachedLine?.costUnitCents ?? 0)),
             markupBps: cachedLine?.markupBps ?? currentState.project.markupBps,
             discountBpsOverride: cachedLine?.discountBpsOverride ?? null,
-            assigneeId: cachedLine?.assigneeId ?? null,
-            assigneeName: cachedLine?.assigneeName ?? null,
-            assigneeEmail: cachedLine?.assigneeEmail ?? null,
+            assigneeId: resolvedAssigneeId,
+            assigneeName: checklistLabel || display.name || cachedLine?.assigneeName || null,
+            assigneeEmail: display.email || cachedLine?.assigneeEmail || null,
             receivedCents: cachedLine?.receivedCents ?? 0,
             pnlPlaceholderCents: cachedLine?.pnlPlaceholderCents ?? 0,
             createdAt: cachedLine?.createdAt ?? task.created_at,
@@ -1869,6 +1893,26 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
           const currentLine = currentLinesById.get(line.id);
           const persistedMarkupBps = typeof line.markup_bps === "number" ? line.markup_bps : null;
           const persistedDiscountOverride = typeof line.discount_bps_override === "number" ? line.discount_bps_override : null;
+          const lineAssigneeProfile = typeof line.assignee_profile_id === "string" && line.assignee_profile_id.trim() !== ""
+            ? line.assignee_profile_id.trim()
+            : null;
+          const lineAssigneeLabel = typeof line.assignee_label === "string" && line.assignee_label.trim() !== ""
+            ? line.assignee_label.trim()
+            : null;
+          const linked = linkedChecklistEntries.find(({ item }) => item.estimateV2LineId === line.id) ?? null;
+          const task = linked?.task;
+          const checklistItem = linked?.item;
+          const overlayProfile = checklistItem?.estimateV2AssigneeProfileId?.trim() || null;
+          const overlayLabel = checklistItem?.estimateV2AssigneeLabel?.trim() || null;
+          const taskProfile = task?.assignee_id?.trim() || null;
+          const hasFreeText = Boolean(lineAssigneeLabel || overlayLabel);
+          const resolvedAssigneeId = (
+            lineAssigneeProfile
+            || overlayProfile
+            || (hasFreeText ? null : taskProfile)
+            || cachedLine?.assigneeId
+          ) ?? null;
+          const display = displayForTaskProfileId(task, resolvedAssigneeId);
           return {
             id: line.id,
             projectId,
@@ -1882,9 +1926,13 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
             ...summaryClientFieldsFromOptionalCents(line.client_unit_price_cents, line.client_total_price_cents),
             markupBps: persistedMarkupBps ?? cachedLine?.markupBps ?? currentState.project.markupBps,
             discountBpsOverride: persistedDiscountOverride ?? cachedLine?.discountBpsOverride ?? null,
-            assigneeId: cachedLine?.assigneeId ?? null,
-            assigneeName: cachedLine?.assigneeName ?? null,
-            assigneeEmail: cachedLine?.assigneeEmail ?? null,
+            assigneeId: resolvedAssigneeId,
+            assigneeName: lineAssigneeLabel
+              || overlayLabel
+              || display.name
+              || cachedLine?.assigneeName
+              || null,
+            assigneeEmail: display.email || cachedLine?.assigneeEmail || null,
             receivedCents: cachedLine?.receivedCents ?? 0,
             pnlPlaceholderCents: cachedLine?.pnlPlaceholderCents ?? 0,
             createdAt: cachedLine?.createdAt ?? line.created_at,

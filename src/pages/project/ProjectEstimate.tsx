@@ -243,12 +243,20 @@ function resolveTaskAssignee(task: Task): {
   assigneeName: string | null;
   assigneeEmail: string | null;
 } {
-  const taskAssignee = task.assignees?.find((entry) => entry.id === task.assignee_id) ?? null;
-  if (taskAssignee) {
+  const fromList = task.assignees?.length
+    ? (
+      task.assignee_id
+        ? task.assignees.find((entry) => entry.id === task.assignee_id)
+        : task.assignees.find((entry) => entry.name?.trim() || entry.email?.trim())
+    ) ?? task.assignees[0]
+    : null;
+
+  if (fromList) {
+    const user = fromList.id ? getUserById(fromList.id) : null;
     return {
-      assigneeId: taskAssignee.id ?? null,
-      assigneeName: taskAssignee.name ?? null,
-      assigneeEmail: taskAssignee.email ?? null,
+      assigneeId: fromList.id ?? null,
+      assigneeName: fromList.name?.trim() || user?.name || null,
+      assigneeEmail: fromList.email?.trim() || user?.email || null,
     };
   }
 

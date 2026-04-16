@@ -3,8 +3,10 @@ import {
   deriveEstimateTaskAssignees,
   mapProjectStageRowToStage,
   mapTaskRowToTask,
+  overlayEstimateLinkedAssigneeFromChecklist,
   syncProjectTasksFromEstimate,
 } from "@/data/planning-source";
+import type { Task } from "@/types/entities";
 
 type MockSupabaseClient = {
   from: (table: string) => unknown;
@@ -517,5 +519,59 @@ describe("planning-source helpers", () => {
         assignee_profile_id: "user-2",
       }),
     ]);
+  });
+});
+
+describe("overlayEstimateLinkedAssigneeFromChecklist", () => {
+  it("replaces stale task assignee row with free-text from estimate-linked checklist", () => {
+    const base = mapTaskRowToTask(taskRow({
+      assignee_profile_id: "user-2",
+      estimate_work_id: "work-1",
+    }));
+    const task: Task = {
+      ...base,
+      checklist: [
+        {
+          id: "c1",
+          text: "Labor line",
+          done: false,
+          type: "subtask",
+          procurementItemId: null,
+          estimateV2LineId: "line-1",
+          estimateV2WorkId: "work-1",
+          estimateV2ResourceType: "labor",
+          estimateV2AssigneeLabel: "Володя",
+        },
+      ],
+    };
+    const next = overlayEstimateLinkedAssigneeFromChecklist(task);
+    expect(next.assignee_id).toBe("");
+    expect(next.assignees?.[0]?.name).toBe("Володя");
+    expect(next.assignees?.[0]?.id ?? null).toBeNull();
+  });
+
+  it("uses checklist profile id when present on the first sorted estimate line", () => {
+    const base = mapTaskRowToTask(taskRow({
+      assignee_profile_id: "user-2",
+      estimate_work_id: "work-1",
+    }));
+    const task: Task = {
+      ...base,
+      checklist: [
+        {
+          id: "c1",
+          text: "Labor",
+          done: false,
+          type: "subtask",
+          procurementItemId: null,
+          estimateV2LineId: "line-1",
+          estimateV2WorkId: "work-1",
+          estimateV2ResourceType: "labor",
+          estimateV2AssigneeProfileId: "user-1",
+        },
+      ],
+    };
+    const next = overlayEstimateLinkedAssigneeFromChecklist(task);
+    expect(next.assignee_id).toBe("user-1");
   });
 });

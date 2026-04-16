@@ -94,6 +94,38 @@ vi.mock("@/integrations/supabase/client", () => ({
               };
             }
 
+            if (selection === "id, estimate_resource_line_id, estimate_work_id") {
+              const filter: { id?: string; projectId?: string } = {};
+              return {
+                eq(field: string, value: string) {
+                  if (field === "id") filter.id = value;
+                  if (field === "project_id") filter.projectId = value;
+                  return {
+                    eq(field2: string, value2: string) {
+                      if (field2 === "id") filter.id = value2;
+                      if (field2 === "project_id") filter.projectId = value2;
+                      return {
+                        maybeSingle() {
+                          const row = state.existingHRRows.find((r) => r.id === filter.id) ?? null;
+                          if (!row) {
+                            return Promise.resolve({ data: null, error: null });
+                          }
+                          return Promise.resolve({
+                            data: {
+                              id: row.id,
+                              estimate_resource_line_id: row.estimate_resource_line_id,
+                              estimate_work_id: row.estimate_work_id,
+                            },
+                            error: null,
+                          });
+                        },
+                      };
+                    },
+                  };
+                },
+              };
+            }
+
             if (selection === "id") {
               return {
                 eq() {
@@ -181,9 +213,11 @@ import {
   hrStatusRequiresAssignee,
   mapHRItemStatusToRemoteStatus,
   mapHRPaymentRowToHRPayment,
+  setProjectHRAssignees,
   shapeHRItemsWithAssignees,
   syncProjectHRFromEstimate,
 } from "@/data/hr-source";
+import { HR_ASSIGNEE_MANAGED_IN_ESTIMATE_MESSAGE } from "@/data/hr-store";
 
 function hrItemRow(
   overrides: Partial<Parameters<typeof shapeHRItemsWithAssignees>[0]["itemRows"][number]> = {},
@@ -313,7 +347,7 @@ describe("hr-source helpers", () => {
         assignee: "profile-3",
         assigneeIds: ["profile-3", "profile-2"],
         status: "done",
-        lockedFromEstimate: false,
+        lockedFromEstimate: true,
         sourceEstimateV2LineId: "estimate-line-1",
         orphaned: false,
         orphanedAt: null,
@@ -549,6 +583,79 @@ describe("hr-source helpers", () => {
     expect(state.deleteAssigneesMock).not.toHaveBeenCalled();
   });
 
+  it("clears HR item assignees when estimate line has no assigneeId (e.g. free-text only)", async () => {
+    state.loadEstimateV2HeroTransitionCacheMock.mockReturnValue({
+      version: 1,
+      projectId: "project-1",
+      fingerprint: "fingerprint-1",
+      status: "completed",
+      updatedAt: "2026-03-05T00:00:00.000Z",
+      ids: {
+        estimateId: "estimate-1",
+        versionId: "version-1",
+        eventId: "event-1",
+        stageIdByLocalStageId: {},
+        workIdByLocalWorkId: {},
+        lineIdByLocalLineId: { "line-local-1": "line-1" },
+        taskIdByLocalWorkId: {},
+        checklistItemIdByLocalLineId: {},
+        procurementItemIdByLocalLineId: {},
+        hrItemIdByLocalLineId: { "line-local-1": "hr-item-1" },
+      },
+    });
+    state.existingHRRows = [
+      {
+        id: "hr-item-1",
+        estimate_resource_line_id: "line-1",
+        estimate_work_id: "work-1",
+        task_id: "task-1",
+        title: "Crew hours",
+        description: null,
+        compensation_type: "fixed",
+        planned_cost_cents: 300000,
+        actual_cost_cents: null,
+        status: "planned",
+        start_at: "2026-03-10T00:00:00.000Z",
+        end_at: "2026-03-11T00:00:00.000Z",
+        created_by: "creator-1",
+      },
+    ];
+    state.assigneeRowsByItemId = {
+      "hr-item-1": [{ id: "asg-stale", profile_id: "profile-old" }],
+    };
+
+    await syncProjectHRFromEstimate(
+      { kind: "supabase", profileId: "profile-9" },
+      {
+        projectId: "project-1",
+        estimateStatus: "in_work",
+        works: [
+          {
+            id: "work-1",
+            taskId: "task-1",
+            plannedStart: "2026-03-10T00:00:00.000Z",
+            plannedEnd: "2026-03-11T00:00:00.000Z",
+          },
+        ],
+        lines: [
+          {
+            id: "line-1",
+            stageId: "stage-1",
+            workId: "work-1",
+            title: "Crew hours",
+            type: "labor",
+            qtyMilli: 2000,
+            costUnitCents: 150000,
+            assigneeId: null,
+          },
+        ],
+      },
+    );
+
+    expect(state.deleteAssigneesMock).toHaveBeenCalledWith("id", ["asg-stale"]);
+    expect(state.insertAssigneesMock).not.toHaveBeenCalled();
+  });
+
   it("derives subcontractor type from estimateLineResourceTypeById", () => {
     const items = shapeHRItemsWithAssignees({
       itemRows: [hrItemRow({ estimate_resource_line_id: "erl-sub" })],
@@ -573,5 +680,32 @@ describe("hr-source helpers", () => {
       estimateLineResourceTypeById: new Map([["erl-mat", "material"]]),
     });
     expect(items[0]?.type).toBe("labor");
+  });
+
+  it("rejects setProjectHRAssignees when the HR row is estimate-linked", async () => {
+    state.existingHRRows = [
+      {
+        id: "hr-item-linked",
+        estimate_resource_line_id: "erl-1",
+        estimate_work_id: "work-1",
+        task_id: null,
+        title: "Crew",
+        description: null,
+        compensation_type: "hourly",
+        planned_cost_cents: 10000,
+        actual_cost_cents: null,
+        status: "planned",
+        start_at: null,
+        end_at: null,
+        created_by: "profile-1",
+      },
+    ];
+
+    await expect(
+      setProjectHRAssignees(
+        { kind: "supabase", profileId: "profile-1" },
+        { projectId: "project-1", hrItemId: "hr-item-linked", assigneeIds: ["profile-2"] },
+      ),
+    ).rejects.toThrow(HR_ASSIGNEE_MANAGED_IN_ESTIMATE_MESSAGE);
   });
 });

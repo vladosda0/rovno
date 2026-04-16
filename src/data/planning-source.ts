@@ -207,6 +207,19 @@ function sortEstimateLinesForChecklist(
   });
 }
 
+/** Labor / subcontractor lines only — same slice HR uses for estimate-driven people. */
+export function pickEstimateLinesForTaskAssigneeProjection(
+  lines: Array<Pick<EstimateV2ResourceLine, "type" | "assigneeId" | "assigneeName" | "assigneeEmail">>,
+): Array<Pick<EstimateV2ResourceLine, "assigneeId" | "assigneeName" | "assigneeEmail">> {
+  return lines
+    .filter((line) => line.type === "labor" || line.type === "subcontractor")
+    .map((line) => ({
+      assigneeId: line.assigneeId,
+      assigneeName: line.assigneeName,
+      assigneeEmail: line.assigneeEmail,
+    }));
+}
+
 function normalizeTaskAssigneeIdentity(
   line: Pick<EstimateV2ResourceLine, "assigneeId" | "assigneeName" | "assigneeEmail">,
 ): string | null {
@@ -400,6 +413,64 @@ export function mapTaskRowToTask(row: TaskRow): Task {
     created_at: row.created_at,
     startDate: row.start_at ?? undefined,
     deadline: row.due_at ?? undefined,
+  };
+}
+
+function resourceLineTypeForChecklistAssigneeSort(item: ChecklistItem): ResourceLineType {
+  const mapped = checklistEstimateV2ResourceType(item.estimateV2ResourceType);
+  if (
+    mapped === "material"
+    || mapped === "tool"
+    || mapped === "labor"
+    || mapped === "subcontractor"
+    || mapped === "other"
+  ) {
+    return mapped;
+  }
+  return "other";
+}
+
+/**
+ * Hero `tasks.assignee_profile_id` can lag estimate lines after edits. Checklist rows are
+ * already projected from `estimate_resource_lines` — align task-level assignee for UI/filters.
+ */
+export function overlayEstimateLinkedAssigneeFromChecklist(task: Task): Task {
+  if (!task.estimateV2WorkId) return task;
+
+  const estimateItems = task.checklist
+    .filter((item) => Boolean(item.estimateV2LineId))
+    .sort((a, b) => {
+      const orderA = RESOURCE_TYPE_ORDER[resourceLineTypeForChecklistAssigneeSort(a)];
+      const orderB = RESOURCE_TYPE_ORDER[resourceLineTypeForChecklistAssigneeSort(b)];
+      if (orderA !== orderB) return orderA - orderB;
+      return (a.estimateV2LineId ?? "").localeCompare(b.estimateV2LineId ?? "");
+    });
+
+  if (estimateItems.length === 0) return task;
+
+  for (const item of estimateItems) {
+    const profileId = item.estimateV2AssigneeProfileId?.trim() || null;
+    if (profileId) {
+      return {
+        ...task,
+        assignee_id: profileId,
+        assignees: [{ id: profileId, name: null, email: null }],
+      };
+    }
+    const label = item.estimateV2AssigneeLabel?.trim() || null;
+    if (label) {
+      return {
+        ...task,
+        assignee_id: "",
+        assignees: [{ id: null, name: label, email: null }],
+      };
+    }
+  }
+
+  return {
+    ...task,
+    assignee_id: "",
+    assignees: [],
   };
 }
 
@@ -728,7 +799,9 @@ export async function syncProjectTasksFromEstimate(
     const existingRow = taskRowByEstimateWorkId.get(work.id)
       ?? (work.taskId ? taskRowById.get(work.taskId) ?? null : null);
     const taskId = existingRow?.id ?? work.taskId ?? defaultTaskIdForEstimateWork(work.id);
-    const derivedAssignees = deriveEstimateTaskAssignees(linesByWorkId.get(work.id) ?? []);
+    const derivedAssignees = deriveEstimateTaskAssignees(
+      pickEstimateLinesForTaskAssigneeProjection(linesByWorkId.get(work.id) ?? []),
+    );
     taskIdByWorkId[work.id] = taskId;
 
     return {
@@ -958,11 +1031,14 @@ function createSupabasePlanningSource(
         commentsByTaskId.set(row.task_id, list);
       });
 
-      return taskRows.map((row) => ({
-        ...mapTaskRowToTask(row),
-        checklist: checklistByTaskId.get(row.id) ?? [],
-        comments: commentsByTaskId.get(row.id) ?? [],
-      }));
+      return taskRows.map((row) => {
+        const merged: Task = {
+          ...mapTaskRowToTask(row),
+          checklist: checklistByTaskId.get(row.id) ?? [],
+          comments: commentsByTaskId.get(row.id) ?? [],
+        };
+        return overlayEstimateLinkedAssigneeFromChecklist(merged);
+      });
     },
 
     async createProjectStage(input: CreateProjectStageInput) {

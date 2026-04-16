@@ -1,7 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import * as store from "@/data/store";
-import { deriveEstimateTaskAssignees, getPlanningSource, getPrimaryEstimateTaskAssigneeId } from "@/data/planning-source";
+import {
+  deriveEstimateTaskAssignees,
+  getPlanningSource,
+  getPrimaryEstimateTaskAssigneeId,
+  pickEstimateLinesForTaskAssigneeProjection,
+} from "@/data/planning-source";
 import { useEstimateV2Project } from "@/hooks/use-estimate-v2-data";
 import { useWorkspaceMode } from "@/hooks/use-workspace-source";
 import type { Stage, Task } from "@/types/entities";
@@ -109,14 +114,17 @@ export function usePlanningProjectTasks(projectId: string): Task[] {
         return task;
       }
 
-      const assignees = deriveEstimateTaskAssignees(linesByWorkId.get(task.estimateV2WorkId) ?? []);
+      const linesForWork = linesByWorkId.get(task.estimateV2WorkId) ?? [];
+      const assignees = deriveEstimateTaskAssignees(
+        pickEstimateLinesForTaskAssigneeProjection(linesForWork),
+      );
       if (assignees.length === 0) {
         return task;
       }
 
       return {
         ...task,
-        assignee_id: getPrimaryEstimateTaskAssigneeId(assignees) ?? task.assignee_id,
+        assignee_id: getPrimaryEstimateTaskAssigneeId(assignees) ?? "",
         assignees,
       };
     });

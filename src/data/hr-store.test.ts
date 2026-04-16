@@ -4,6 +4,7 @@ import {
   addPayment,
   createFromEstimateLine,
   getHRItems,
+  HR_ASSIGNEE_MANAGED_IN_ESTIMATE_MESSAGE,
   relinkToEstimateLine,
   setHRAssignees,
   setStatus,
@@ -25,9 +26,9 @@ function line(partial: Partial<EstimateV2ResourceLine>): EstimateV2ResourceLine 
     costUnitCents: partial.costUnitCents ?? 2_000,
     markupBps: 0,
     discountBpsOverride: null,
-    assigneeId: null,
-    assigneeName: null,
-    assigneeEmail: null,
+    assigneeId: partial.assigneeId ?? null,
+    assigneeName: partial.assigneeName ?? null,
+    assigneeEmail: partial.assigneeEmail ?? null,
     receivedCents: 0,
     pnlPlaceholderCents: 0,
     createdAt: "2025-01-01T00:00:00.000Z",
@@ -85,7 +86,10 @@ describe("hr-store", () => {
     const blocked = setStatus(created.id, "in_progress");
     expect(blocked.ok).toBe(false);
 
-    setHRAssignees(projectId, created.id, ["user-2"]);
+    updateFromEstimateLine(projectId, created.id, {
+      assignee: "user-2",
+      lineId: "line-1",
+    });
     const changed = setStatus(created.id, "in_progress");
     expect(changed.ok).toBe(true);
 
@@ -114,8 +118,14 @@ describe("hr-store", () => {
     const blockedDone = setStatus(created.id, "done");
     expect(blockedDone.ok).toBe(false);
 
-    const assignResult = setHRAssignees(projectId, created.id, ["user-2", "user-3"]);
-    expect(assignResult.ok).toBe(true);
+    const blockedAssign = setHRAssignees(projectId, created.id, ["user-2", "user-3"]);
+    expect(blockedAssign.ok).toBe(false);
+    expect(blockedAssign.error).toBe(HR_ASSIGNEE_MANAGED_IN_ESTIMATE_MESSAGE);
+
+    updateFromEstimateLine(projectId, created.id, {
+      assignee: "user-2",
+      lineId: "line-1",
+    });
 
     const allowedStart = setStatus(created.id, "in_progress");
     expect(allowedStart.ok).toBe(true);
@@ -196,20 +206,25 @@ describe("hr-store", () => {
 
     syncHRFromEstimateV2(projectId, {
       project: { estimateStatus: "in_work" },
-      lines: [line({ id: lineId, projectId, title: "Crew" })],
+      lines: [line({ id: lineId, projectId, title: "Crew", assigneeId: "user-2" })],
     });
 
     const created = getHRItems(projectId)[0];
-    const setResult = setHRAssignees(projectId, created.id, ["user-2", "user-3"]);
-    expect(setResult.ok).toBe(true);
+    expect(created.assigneeIds).toEqual(["user-2"]);
 
     syncHRFromEstimateV2(projectId, {
       project: { estimateStatus: "in_work" },
-      lines: [line({ id: lineId, projectId, title: "Crew updated", qtyMilli: 15_000 })],
+      lines: [line({
+        id: lineId,
+        projectId,
+        title: "Crew updated",
+        qtyMilli: 15_000,
+        assigneeId: "user-2",
+      })],
     });
 
     const updated = getHRItems(projectId)[0];
     expect(updated.title).toBe("Crew updated");
-    expect(updated.assigneeIds).toEqual(["user-2", "user-3"]);
+    expect(updated.assigneeIds).toEqual(["user-2"]);
   });
 });

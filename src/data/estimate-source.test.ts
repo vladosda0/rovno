@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "../../backend-truth/generated/supabase-types";
-import { saveCurrentEstimateDraft } from "@/data/estimate-source";
+import { parseEstimateOperationalSummaryPayload, saveCurrentEstimateDraft } from "@/data/estimate-source";
 import type { EstimateV2Snapshot } from "@/types/estimate-v2";
 
 type TableName =
@@ -698,5 +698,193 @@ describe("saveCurrentEstimateDraft", () => {
     expect(database?.tables.estimate_resource_lines[0]?.title).toBe("New Crew");
     expect(database?.tables.estimate_resource_lines[0]?.markup_bps).toBe(500);
     expect(database?.tables.estimate_resource_lines[0]?.discount_bps_override).toBe(100);
+  });
+
+  it("persists assignee_profile_id on resource line upserts when snapshot line has assigneeId", async () => {
+    const assigneeUuid = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const snapshot: EstimateV2Snapshot = {
+      project: {
+        id: "project-remote-1",
+        projectId: "project-remote-1",
+        title: "Remote Project",
+        projectMode: "contractor",
+        currency: "RUB",
+        taxBps: 2000,
+        discountBps: 0,
+        markupBps: 0,
+        estimateStatus: "planning",
+        receivedCents: 0,
+        pnlPlaceholderCents: 0,
+        createdAt: "2026-03-01T00:00:00.000Z",
+        updatedAt: "2026-03-02T00:00:00.000Z",
+      },
+      stages: [
+        {
+          id: "33333333-3333-4333-8333-333333333333",
+          projectId: "project-remote-1",
+          title: "Shell",
+          order: 1,
+          discountBps: 0,
+          createdAt: "2026-03-01T00:00:00.000Z",
+          updatedAt: "2026-03-02T00:00:00.000Z",
+        },
+      ],
+      works: [
+        {
+          id: "44444444-4444-4444-8444-444444444444",
+          projectId: "project-remote-1",
+          stageId: "33333333-3333-4333-8333-333333333333",
+          title: "Framing",
+          order: 1,
+          discountBps: 0,
+          plannedStart: null,
+          plannedEnd: null,
+          taskId: null,
+          status: "not_started",
+          createdAt: "2026-03-01T00:00:00.000Z",
+          updatedAt: "2026-03-02T00:00:00.000Z",
+        },
+      ],
+      lines: [
+        {
+          id: "88888888-8888-4888-8888-888888888888",
+          projectId: "project-remote-1",
+          stageId: "33333333-3333-4333-8333-333333333333",
+          workId: "44444444-4444-4444-8444-444444444444",
+          title: "Crew",
+          type: "labor",
+          unit: "day",
+          qtyMilli: 2000,
+          costUnitCents: 15000,
+          markupBps: 0,
+          discountBpsOverride: null,
+          assigneeId: assigneeUuid,
+          assigneeName: null,
+          assigneeEmail: null,
+          receivedCents: 0,
+          pnlPlaceholderCents: 0,
+          createdAt: "2026-03-03T00:00:00.000Z",
+          updatedAt: "2026-03-03T00:00:00.000Z",
+        },
+      ],
+      dependencies: [],
+    };
+
+    await saveCurrentEstimateDraft("project-remote-1", snapshot, { profileId: "profile-1" });
+
+    const row = mockDatabaseRef.current?.tables.estimate_resource_lines[0] as Record<string, unknown> | undefined;
+    expect(row?.assignee_profile_id).toBe(assigneeUuid);
+  });
+
+  it("persists assignee_label when snapshot line has free-text assigneeName without assigneeId", async () => {
+    const snapshot: EstimateV2Snapshot = {
+      project: {
+        id: "project-remote-1",
+        projectId: "project-remote-1",
+        title: "Remote Project",
+        projectMode: "contractor",
+        currency: "RUB",
+        taxBps: 2000,
+        discountBps: 0,
+        markupBps: 0,
+        estimateStatus: "planning",
+        receivedCents: 0,
+        pnlPlaceholderCents: 0,
+        createdAt: "2026-03-01T00:00:00.000Z",
+        updatedAt: "2026-03-02T00:00:00.000Z",
+      },
+      stages: [
+        {
+          id: "33333333-3333-4333-8333-333333333333",
+          projectId: "project-remote-1",
+          title: "Shell",
+          order: 1,
+          discountBps: 0,
+          createdAt: "2026-03-01T00:00:00.000Z",
+          updatedAt: "2026-03-02T00:00:00.000Z",
+        },
+      ],
+      works: [
+        {
+          id: "44444444-4444-4444-8444-444444444444",
+          projectId: "project-remote-1",
+          stageId: "33333333-3333-4333-8333-333333333333",
+          title: "Framing",
+          order: 1,
+          discountBps: 0,
+          plannedStart: null,
+          plannedEnd: null,
+          taskId: null,
+          status: "not_started",
+          createdAt: "2026-03-01T00:00:00.000Z",
+          updatedAt: "2026-03-02T00:00:00.000Z",
+        },
+      ],
+      lines: [
+        {
+          id: "88888888-8888-4888-8888-888888888888",
+          projectId: "project-remote-1",
+          stageId: "33333333-3333-4333-8333-333333333333",
+          workId: "44444444-4444-4444-8444-444444444444",
+          title: "Crew",
+          type: "labor",
+          unit: "day",
+          qtyMilli: 2000,
+          costUnitCents: 15000,
+          markupBps: 0,
+          discountBpsOverride: null,
+          assigneeId: null,
+          assigneeName: "Володя",
+          assigneeEmail: null,
+          receivedCents: 0,
+          pnlPlaceholderCents: 0,
+          createdAt: "2026-03-03T00:00:00.000Z",
+          updatedAt: "2026-03-03T00:00:00.000Z",
+        },
+      ],
+      dependencies: [],
+    };
+
+    await saveCurrentEstimateDraft("project-remote-1", snapshot, { profileId: "profile-1" });
+
+    const row = mockDatabaseRef.current?.tables.estimate_resource_lines[0] as Record<string, unknown> | undefined;
+    expect(row?.assignee_profile_id).toBeNull();
+    expect(row?.assignee_label).toBe("Володя");
+  });
+});
+
+describe("parseEstimateOperationalSummaryPayload", () => {
+  it("parses assignee_display_name on resource lines", () => {
+    const parsed = parseEstimateOperationalSummaryPayload({
+      works: [],
+      resource_lines: [
+        {
+          estimate_resource_line_id: "88888888-8888-4888-8888-888888888888",
+          estimate_work_id: "44444444-4444-4444-8444-444444444444",
+          estimate_work_title: "Framing",
+          estimate_version_id: "77777777-7777-4777-8777-777777777777",
+          project_stage_title: "Shell",
+          resource_type: "labor",
+          title: "Crew",
+          quantity: 1,
+          unit: "day",
+          assignee_profile_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          assignee_display_name: "Shared assignee",
+          created_at: "2026-03-01T00:00:00.000Z",
+        },
+      ],
+      upper_block: {
+        effective_finance_visibility: "none",
+        timing: {
+          estimate_version_id: "77777777-7777-4777-8777-777777777777",
+          estimate_version_number: 1,
+          estimate_version_created_at: "2026-03-01T00:00:00.000Z",
+        },
+      },
+    });
+
+    expect(parsed?.resourceLines).toHaveLength(1);
+    expect(parsed?.resourceLines[0]?.assignee_profile_id).toBe("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+    expect(parsed?.resourceLines[0]?.assignee_display_name).toBe("Shared assignee");
   });
 });

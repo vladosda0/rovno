@@ -5,6 +5,7 @@ import {
   addPayment,
   getHRItems,
   getHRPayments,
+  HR_ASSIGNEE_MANAGED_IN_ESTIMATE_MESSAGE,
   setHRAssignees,
   setStatus,
 } from "@/data/hr-store";
@@ -553,7 +554,7 @@ export function shapeHRItemsWithAssignees(input: {
       assignee: assigneeIds[0] ?? null,
       assigneeIds,
       status: mapHRItemStatus(row.status),
-      lockedFromEstimate: Boolean(row.estimate_resource_line_id) || Boolean(row.estimate_work_id),
+      lockedFromEstimate: Boolean(linkedEstimateLineId) || Boolean(row.estimate_work_id),
       sourceEstimateV2LineId: linkedEstimateLineId,
       orphaned: false,
       orphanedAt: null,
@@ -678,7 +679,25 @@ export async function setProjectHRAssignees(
   }
 
   const supabase = await loadSupabaseClient();
-  await assertProjectHRItemExists(supabase, input);
+  const { data, error } = await supabase
+    .from("hr_items")
+    .select("id, estimate_resource_line_id, estimate_work_id")
+    .eq("id", input.hrItemId)
+    .eq("project_id", input.projectId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data) {
+    throw new Error("HR item not found");
+  }
+
+  if (data.estimate_resource_line_id || data.estimate_work_id) {
+    throw new Error(HR_ASSIGNEE_MANAGED_IN_ESTIMATE_MESSAGE);
+  }
+
   await syncHRItemAssignees(supabase, {
     hrItemId: input.hrItemId,
     assigneeIds: input.assigneeIds,
@@ -887,47 +906,26 @@ export async function syncProjectHRFromEstimate(
     syncableLines.map(({ line }, index) => [line.id, rowsToUpsert[index]?.id ?? line.id]),
   );
 
-  const linesWithParticipantAssignees = syncableLines
-    .filter(({ line }) => Boolean(line.assigneeId))
-    .map(({ line }) => ({
-      hrItemId: existingHrRowsByLocalLineId.get(line.id)?.id
-        ?? hrItemIdByEstimateLineId.get(line.id)
-        ?? hrItemIdByLineId.get(line.id)
-        ?? line.id,
-      assigneeId: line.assigneeId as string,
-    }))
-    .filter((entry) => Boolean(entry.hrItemId));
-
-  if (linesWithParticipantAssignees.length === 0) {
-    return;
-  }
-
-  const { data: assigneeRows, error: assigneeRowsError } = await supabase
-    .from("hr_item_assignees")
-    .select("hr_item_id, profile_id")
-    .in("hr_item_id", linesWithParticipantAssignees.map((entry) => entry.hrItemId));
-
-  if (assigneeRowsError) {
-    throw assigneeRowsError;
-  }
-
-  const assigneeIdsByItemId = new Map<string, string[]>();
-  (assigneeRows ?? []).forEach((row) => {
-    const ids = assigneeIdsByItemId.get(row.hr_item_id) ?? [];
-    ids.push(row.profile_id);
-    assigneeIdsByItemId.set(row.hr_item_id, ids);
+  /** Reconcile `hr_item_assignees` to match estimate lines (including clearing when line is free-text only). */
+  const assigneeTargets = syncableLines.map(({ line }) => {
+    const existingRow = existingHrRowsByLocalLineId.get(line.id) ?? null;
+    const hrItemId = existingRow?.id
+      ?? hrItemIdByEstimateLineId.get(line.id)
+      ?? hrItemIdByLineId.get(line.id)
+      ?? line.id;
+    const trimmed = line.assigneeId?.trim();
+    return {
+      hrItemId,
+      assigneeIds: trimmed ? [trimmed] : [],
+    };
   });
 
-  await Promise.all(linesWithParticipantAssignees.map(async ({ hrItemId, assigneeId }) => {
-    if ((assigneeIdsByItemId.get(hrItemId) ?? []).length > 0) {
-      return;
-    }
-
-    await syncHRItemAssignees(supabase, {
+  await Promise.all(
+    assigneeTargets.map(({ hrItemId, assigneeIds }) => syncHRItemAssignees(supabase, {
       hrItemId,
-      assigneeIds: [assigneeId],
-    });
-  }));
+      assigneeIds,
+    })),
+  );
 }
 
 function createSupabaseHRSource(

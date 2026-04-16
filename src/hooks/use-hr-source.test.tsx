@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as estimateV2Store from "@/data/estimate-v2-store";
 import * as hrStore from "@/data/hr-store";
 import * as hrSource from "@/data/hr-source";
+import * as estimateV2Data from "@/hooks/use-estimate-v2-data";
 import {
   hrQueryKeys,
   useProjectHRItems,
@@ -354,6 +355,61 @@ describe("useProjectHRItems/useProjectHRPayments", () => {
     expect(invalidateQueriesSpy).toHaveBeenCalledWith({
       queryKey: hrQueryKeys.projectPayments("profile-77", "project-1"),
     });
+  });
+
+  it("blocks Supabase setAssignees when cached HR row is tied to an estimate line", async () => {
+    vi.stubEnv("VITE_WORKSPACE_SOURCE", "supabase");
+    vi.spyOn(estimateV2Data, "useEstimateV2ProjectSync").mockReturnValue(
+      estimateV2Data.EMPTY_ESTIMATE_V2_PROJECT_SYNC_STATE,
+    );
+
+    const queryClient = createQueryClient();
+    const setAssigneesSpy = vi.spyOn(hrSource, "setProjectHRAssignees").mockResolvedValue(undefined);
+    const onError = vi.fn();
+
+    authenticateRuntimeAuth("profile-77");
+
+    queryClient.setQueryData(
+      [...hrQueryKeys.projectItems("profile-77", "project-1", "full"), "initial"],
+      [
+        hrItem({
+          id: "hr-item-1",
+          lockedFromEstimate: false,
+          sourceEstimateV2LineId: "estimate-line-z",
+        }),
+      ],
+    );
+
+    function AssigneeGuardProbe() {
+      const { setAssignees } = useProjectHRMutations("project-1");
+      return (
+        <button
+          type="button"
+          onClick={() => {
+            void setAssignees("hr-item-1", ["profile-2"]).catch((error) => {
+              onError(error instanceof Error ? error.message : String(error));
+            });
+          }}
+        >
+          Try assignees
+        </button>
+      );
+    }
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AssigneeGuardProbe />
+      </QueryClientProvider>,
+    );
+
+    act(() => {
+      screen.getByRole("button", { name: "Try assignees" }).click();
+    });
+
+    await waitFor(() => {
+      expect(onError).toHaveBeenCalledWith(hrStore.HR_ASSIGNEE_MANAGED_IN_ESTIMATE_MESSAGE);
+    });
+    expect(setAssigneesSpy).not.toHaveBeenCalled();
   });
 
   it("skips React Query invalidation for browser-mode HR mutations", async () => {
