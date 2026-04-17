@@ -1,9 +1,11 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSyncExternalStore } from "react";
 import {
   getWorkspaceSource,
   hasSupabaseWorkspaceConfig,
   isSupabaseWorkspaceRequested,
+  type ProfilePreferences,
+  type ProfilePreferencesPatch,
   type WorkspaceMode,
   type WorkspaceProjectInvite,
 } from "@/data/workspace-source";
@@ -32,6 +34,7 @@ export const EMPTY_WORKSPACE_USER: User = {
 export const workspaceQueryKeys = {
   mode: () => ["workspace", "mode"] as const,
   currentUser: (profileId: string) => ["workspace", "current-user", profileId] as const,
+  profilePreferences: (profileId: string) => ["workspace", "profile-preferences", profileId] as const,
   projects: (profileId: string) => ["workspace", "projects", profileId] as const,
   project: (profileId: string, projectId: string) => ["workspace", "project", profileId, projectId] as const,
   projectMembers: (profileId: string, projectId: string) => ["workspace", "project-members", profileId, projectId] as const,
@@ -108,6 +111,58 @@ export function useWorkspaceCurrentUserState(): {
 
 export function useWorkspaceCurrentUser(): User {
   return useWorkspaceCurrentUserState().user;
+}
+
+export function useWorkspaceProfilePreferencesState(): {
+  preferences: ProfilePreferences | undefined;
+  isLoading: boolean;
+} {
+  const mode = useWorkspaceModeState();
+  const supabaseMode = mode.kind === "supabase" ? mode : null;
+  const queryProfileId = supabaseMode?.profileId ?? mode.kind;
+  const preferencesQuery = useQuery({
+    queryKey: workspaceQueryKeys.profilePreferences(queryProfileId),
+    queryFn: async () => {
+      const source = await getWorkspaceSource(
+        mode.kind === "local" || mode.kind === "demo" || mode.kind === "supabase" ? mode : undefined,
+      );
+      return source.getProfilePreferences();
+    },
+    enabled: mode.kind === "local" || mode.kind === "demo" || mode.kind === "supabase",
+    staleTime: WORKSPACE_QUERY_STALE_TIME_MS,
+  });
+
+  if (mode.kind === "pending-supabase") {
+    return { preferences: undefined, isLoading: true };
+  }
+
+  return {
+    preferences: preferencesQuery.data,
+    isLoading: preferencesQuery.isPending,
+  };
+}
+
+export function useWorkspaceProfilePreferences(): ProfilePreferences | undefined {
+  return useWorkspaceProfilePreferencesState().preferences;
+}
+
+export function useUpdateWorkspaceProfilePreferences() {
+  const mode = useWorkspaceModeState();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (patch: ProfilePreferencesPatch) => {
+      if (mode.kind !== "local" && mode.kind !== "demo" && mode.kind !== "supabase") {
+        throw new Error("Profile preferences are not available yet.");
+      }
+      const source = await getWorkspaceSource(mode);
+      return source.updateProfilePreferences(patch);
+    },
+    onSuccess: (preferences) => {
+      const profileId = mode.kind === "supabase" ? mode.profileId : mode.kind;
+      queryClient.setQueryData(workspaceQueryKeys.profilePreferences(profileId), preferences);
+      void queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.profilePreferences(profileId) });
+    },
+  });
 }
 
 export function useWorkspaceProjects(): Project[] {

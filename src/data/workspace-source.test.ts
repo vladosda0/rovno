@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import * as store from "@/data/store";
 import {
   createWorkspaceProjectInvite,
+  DEFAULT_PROFILE_PREFERENCES,
   filterActiveProjectRows,
   getWorkspaceSource,
   mapProfileRowToUser,
@@ -167,6 +168,7 @@ describe("sendWorkspaceProjectInviteEmail", () => {
 
 describe("workspace-source helpers", () => {
   afterEach(() => {
+    localStorage.clear();
     vi.restoreAllMocks();
   });
 
@@ -226,6 +228,31 @@ describe("workspace-source helpers", () => {
       credit_limit: 50,
       used_credits: 10,
     });
+  });
+
+  it("persists local profile preferences with AI defaults", async () => {
+    const source = await getWorkspaceSource({ kind: "local" });
+
+    await expect(source.getProfilePreferences()).resolves.toEqual(DEFAULT_PROFILE_PREFERENCES);
+    await expect(source.updateProfilePreferences({
+      currency: "RUB",
+      units: "metric",
+      aiOutputLanguage: "ru",
+      automationLevel: "manual",
+    })).resolves.toMatchObject({
+      currency: "RUB",
+      units: "metric",
+      aiOutputLanguage: "ru",
+      automationLevel: "manual",
+    });
+    await expect(source.getProfilePreferences()).resolves.toMatchObject({
+      currency: "RUB",
+      units: "metric",
+      aiOutputLanguage: "ru",
+      automationLevel: "manual",
+    });
+    expect(localStorage.getItem("profile-currency")).toBe("RUB");
+    expect(localStorage.getItem("profile-automation-level")).toBe("manual");
   });
 
   it("excludes archived projects from the active workspace slice", () => {

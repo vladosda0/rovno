@@ -16,6 +16,8 @@ import type { Database as WorkspaceDatabase } from "../../backend-truth/generate
 
 export type WorkspaceProjectInvite = WorkspaceDatabase["public"]["Tables"]["project_invites"]["Row"];
 type ProfileRow = WorkspaceDatabase["public"]["Tables"]["profiles"]["Row"];
+type ProfileSettingsRow = WorkspaceDatabase["public"]["Tables"]["profile_settings"]["Row"];
+type ProfileSettingsInsert = WorkspaceDatabase["public"]["Tables"]["profile_settings"]["Insert"];
 type ProjectRow = WorkspaceDatabase["public"]["Tables"]["projects"]["Row"];
 type ProjectMemberRow = WorkspaceDatabase["public"]["Tables"]["project_members"]["Row"];
 type ProjectInsert = WorkspaceDatabase["public"]["Tables"]["projects"]["Insert"];
@@ -43,12 +45,41 @@ export type SendWorkspaceProjectInviteEmailResult =
 export interface WorkspaceSource {
   mode: WorkspaceMode["kind"];
   getCurrentUser: () => Promise<User>;
+  getProfilePreferences: () => Promise<ProfilePreferences>;
+  updateProfilePreferences: (patch: ProfilePreferencesPatch) => Promise<ProfilePreferences>;
   getProjects: () => Promise<Project[]>;
   getProjectById: (projectId: string) => Promise<Project | undefined>;
   getProjectMembers: (projectId: string) => Promise<Member[]>;
   getProjectInvites: (projectId: string) => Promise<WorkspaceProjectInvite[]>;
   createProject: (input: CreateWorkspaceProjectInput) => Promise<Project>;
 }
+
+export type ProfileCurrency = "RUB" | "USD" | "EUR" | "GBP";
+export type ProfileUnits = "metric" | "imperial";
+export type ProfileDateFormat = "dd.MM.yyyy" | "MM/dd/yyyy" | "yyyy-MM-dd";
+export type ProfileWeekStart = "monday" | "sunday";
+export type ProfileAiOutputLanguage = "ru" | "en" | "auto";
+export type ProfileAutomationLevel = "manual" | "assisted" | "full" | "observer";
+
+export interface ProfilePreferences {
+  currency: ProfileCurrency;
+  units: ProfileUnits;
+  dateFormat: ProfileDateFormat;
+  weekStart: ProfileWeekStart;
+  aiOutputLanguage: ProfileAiOutputLanguage;
+  automationLevel: ProfileAutomationLevel;
+}
+
+export type ProfilePreferencesPatch = Partial<ProfilePreferences>;
+
+export const DEFAULT_PROFILE_PREFERENCES: ProfilePreferences = {
+  currency: "RUB",
+  units: "metric",
+  dateFormat: "dd.MM.yyyy",
+  weekStart: "monday",
+  aiOutputLanguage: "auto",
+  automationLevel: "assisted",
+};
 
 export interface CreateWorkspaceProjectInput {
   title: string;
@@ -59,6 +90,66 @@ export interface CreateWorkspaceProjectInput {
 const SUPABASE_WORKSPACE_SOURCE = "supabase";
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+const LOCAL_PROFILE_PREFERENCES_KEY = "profile-preferences";
+
+function normalizeProfilePreferences(raw: Partial<ProfilePreferences> | Record<string, unknown> | null | undefined): ProfilePreferences {
+  const value = raw ?? {};
+  const record = value as Record<string, unknown>;
+  const currency = record.currency;
+  const units = record.units;
+  const dateFormat = record.dateFormat ?? record.date_format;
+  const weekStart = record.weekStart ?? record.week_start;
+  const aiOutputLanguage = record.aiOutputLanguage ?? record.ai_output_language;
+  const automationLevel = record.automationLevel ?? record.automation_level;
+
+  return {
+    currency: currency === "RUB" || currency === "USD" || currency === "EUR" || currency === "GBP" ? currency : DEFAULT_PROFILE_PREFERENCES.currency,
+    units: units === "metric" || units === "imperial" ? units : DEFAULT_PROFILE_PREFERENCES.units,
+    dateFormat: dateFormat === "dd.MM.yyyy" || dateFormat === "MM/dd/yyyy" || dateFormat === "yyyy-MM-dd" ? dateFormat : DEFAULT_PROFILE_PREFERENCES.dateFormat,
+    weekStart: weekStart === "monday" || weekStart === "sunday" ? weekStart : DEFAULT_PROFILE_PREFERENCES.weekStart,
+    aiOutputLanguage: aiOutputLanguage === "ru" || aiOutputLanguage === "en" || aiOutputLanguage === "auto" ? aiOutputLanguage : DEFAULT_PROFILE_PREFERENCES.aiOutputLanguage,
+    automationLevel: automationLevel === "manual" || automationLevel === "assisted" || automationLevel === "full" || automationLevel === "observer" ? automationLevel : DEFAULT_PROFILE_PREFERENCES.automationLevel,
+  };
+}
+
+function readLocalProfilePreferences(): ProfilePreferences {
+  if (typeof window === "undefined") return DEFAULT_PROFILE_PREFERENCES;
+  const raw = window.localStorage.getItem(LOCAL_PROFILE_PREFERENCES_KEY);
+  if (raw) {
+    try {
+      return normalizeProfilePreferences(JSON.parse(raw) as Record<string, unknown>);
+    } catch {
+      return DEFAULT_PROFILE_PREFERENCES;
+    }
+  }
+  return normalizeProfilePreferences({
+    currency: window.localStorage.getItem("profile-currency"),
+    automationLevel: window.localStorage.getItem("profile-automation-level"),
+  });
+}
+
+function writeLocalProfilePreferences(next: ProfilePreferences): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(LOCAL_PROFILE_PREFERENCES_KEY, JSON.stringify(next));
+  window.localStorage.setItem("profile-currency", next.currency);
+  window.localStorage.setItem("profile-automation-level", next.automationLevel);
+}
+
+function mapProfileSettingsRowToPreferences(row: ProfileSettingsRow | null | undefined): ProfilePreferences {
+  return normalizeProfilePreferences(row as Record<string, unknown> | null | undefined);
+}
+
+function profilePreferencesToDbPatch(profileId: string, preferences: ProfilePreferences): ProfileSettingsInsert {
+  return {
+    profile_id: profileId,
+    currency: preferences.currency,
+    units: preferences.units,
+    date_format: preferences.dateFormat,
+    week_start: preferences.weekStart,
+    ai_output_language: preferences.aiOutputLanguage,
+    automation_level: preferences.automationLevel,
+  };
+}
 
 function isBrowserWorkspaceMode(
   mode: WorkspaceMode | RuntimeWorkspaceMode,
@@ -113,6 +204,17 @@ function createBrowserWorkspaceSource(mode: store.BrowserWorkspaceKind): Workspa
     mode,
     async getCurrentUser() {
       return store.getCurrentUserForMode(mode);
+    },
+    async getProfilePreferences() {
+      return readLocalProfilePreferences();
+    },
+    async updateProfilePreferences(patch: ProfilePreferencesPatch) {
+      const next = normalizeProfilePreferences({
+        ...readLocalProfilePreferences(),
+        ...patch,
+      });
+      writeLocalProfilePreferences(next);
+      return next;
     },
     async getProjects() {
       return store.getProjectsForMode(mode);
@@ -452,6 +554,20 @@ function createSupabaseWorkspaceSource(
   supabase: TypedSupabaseClient,
   profileId: string,
 ): WorkspaceSource {
+  async function readRemoteProfilePreferences(): Promise<ProfilePreferences> {
+    const { data, error } = await supabase
+      .from("profile_settings")
+      .select("currency, units, date_format, week_start, ai_output_language, automation_level")
+      .eq("profile_id", profileId)
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    return mapProfileSettingsRowToPreferences(data);
+  }
+
   return {
     mode: "supabase",
     async getCurrentUser() {
@@ -468,6 +584,26 @@ function createSupabaseWorkspaceSource(
       const user = mapProfileRowToUser(data);
       cacheWorkspaceUsers([user]);
       return user;
+    },
+
+    async getProfilePreferences() {
+      return readRemoteProfilePreferences();
+    },
+
+    async updateProfilePreferences(patch: ProfilePreferencesPatch) {
+      const current = await readRemoteProfilePreferences();
+      const next = normalizeProfilePreferences({ ...current, ...patch });
+      const { data, error } = await supabase
+        .from("profile_settings")
+        .upsert(profilePreferencesToDbPatch(profileId, next), { onConflict: "profile_id" })
+        .select("currency, units, date_format, week_start, ai_output_language, automation_level")
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      return mapProfileSettingsRowToPreferences(data);
     },
 
     async getProjects() {

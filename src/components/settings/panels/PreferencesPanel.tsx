@@ -1,10 +1,21 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SettingsSection } from "@/components/settings/SettingsSection";
-import { getProfileAutomationLevelMode, setProfileAutomationLevelMode } from "@/lib/auth-state";
 import { toast } from "@/hooks/use-toast";
+import {
+  useUpdateWorkspaceProfilePreferences,
+  useWorkspaceProfilePreferencesState,
+} from "@/hooks/use-workspace-source";
+import type {
+  ProfileAiOutputLanguage,
+  ProfileAutomationLevel,
+  ProfileCurrency,
+  ProfileDateFormat,
+  ProfileUnits,
+  ProfileWeekStart,
+} from "@/data/workspace-source";
 
 const CURRENCIES = [
   { value: "RUB", label: "₽ Russian Ruble (RUB)" },
@@ -32,18 +43,43 @@ const AUTOMATION_LEVELS = [
 ];
 
 export function PreferencesPanel() {
+  const { preferences, isLoading } = useWorkspaceProfilePreferencesState();
+  const updatePreferences = useUpdateWorkspaceProfilePreferences();
   const [currency, setCurrency] = useState("RUB");
   const [units, setUnits] = useState("metric");
   const [dateFormat, setDateFormat] = useState("dd.MM.yyyy");
   const [weekStart, setWeekStart] = useState("monday");
   const [aiLanguage, setAiLanguage] = useState("auto");
-  const [automationLevel, setAutomationLevel] = useState(
-    getProfileAutomationLevelMode() || "assisted"
-  );
+  const [automationLevel, setAutomationLevel] = useState("assisted");
 
-  const handleSave = () => {
-    setProfileAutomationLevelMode(automationLevel);
-    toast({ title: "Preferences saved" });
+  useEffect(() => {
+    if (!preferences) return;
+    setCurrency(preferences.currency);
+    setUnits(preferences.units);
+    setDateFormat(preferences.dateFormat);
+    setWeekStart(preferences.weekStart);
+    setAiLanguage(preferences.aiOutputLanguage);
+    setAutomationLevel(preferences.automationLevel);
+  }, [preferences]);
+
+  const handleSave = async () => {
+    try {
+      await updatePreferences.mutateAsync({
+        currency: currency as ProfileCurrency,
+        units: units as ProfileUnits,
+        dateFormat: dateFormat as ProfileDateFormat,
+        weekStart: weekStart as ProfileWeekStart,
+        aiOutputLanguage: aiLanguage as ProfileAiOutputLanguage,
+        automationLevel: automationLevel as ProfileAutomationLevel,
+      });
+      toast({ title: "Preferences saved" });
+    } catch {
+      toast({
+        title: "Could not save preferences",
+        description: "Please try again in a moment.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -122,7 +158,13 @@ export function PreferencesPanel() {
       </SettingsSection>
 
       <div className="flex flex-wrap gap-sp-2 pt-sp-1">
-        <Button className="w-full sm:w-auto" onClick={handleSave}>Save preferences</Button>
+        <Button
+          className="w-full sm:w-auto"
+          disabled={isLoading || updatePreferences.isPending}
+          onClick={() => void handleSave()}
+        >
+          {updatePreferences.isPending ? "Saving..." : "Save preferences"}
+        </Button>
       </div>
     </div>
   );
