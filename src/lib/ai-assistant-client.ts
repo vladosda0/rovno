@@ -141,18 +141,30 @@ export function mapGroundingStatus(raw: string | undefined): AssistantGroundingS
 function formatGroundingSourceFallbackLabel(kind: string | undefined): string {
   if (!kind || typeof kind !== "string") return "Source";
   const map: Record<string, string> = {
-    client_project_context: "Project context (client)",
-    client_document_metadata: "Document metadata (client)",
-    server_verified_estimate: "Estimate (server-verified)",
-    server_verified_procurement: "Procurement (server-verified)",
-    server_verified_tasks: "Tasks (server-verified)",
-    server_verified_hr: "HR (server-verified)",
-    server_verified_participants: "Participants (server-verified)",
-    server_verified_activity: "Activity (server-verified)",
+    client_project_context: "Project context",
+    client_document_metadata: "Document metadata",
+    server_verified_estimate: "Estimate details",
+    server_verified_procurement: "Procurement records",
+    server_verified_tasks: "Task details",
+    server_verified_hr: "HR details",
+    server_verified_participants: "Project participants",
+    server_verified_activity: "Recent project activity",
     server_verified_documents_metadata: "Documents — titles/metadata only (not full text)",
     server_verified_media_metadata: "Media — filenames/metadata only (not file contents)",
   };
   return map[kind] ?? kind.replace(/_/g, " ");
+}
+
+function softenProgrammaticCopy(value: string): string {
+  return value
+    .replace(/\bserver[- ]verified\b/gi, "checked")
+    .replace(/\s*\(server\)/gi, "")
+    .replace(/\bserver\b/gi, "project system")
+    .replace(/\bfrontend\b/gi, "app")
+    .replace(/\bbackend\b/gi, "system")
+    .replace(/\bEvidence domains\b/gi, "Project areas")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
 }
 
 export function mapGroundingSources(raw: BackendGroundingSource[] | undefined): LiveTextAssistantSource[] | undefined {
@@ -165,7 +177,7 @@ export function mapGroundingSources(raw: BackendGroundingSource[] | undefined): 
       : (s.kind === "project_summary" || s.kind === "recent_activity")
         ? "Source"
         : formatGroundingSourceFallbackLabel(s.kind);
-    return { kind, label };
+    return { kind, label: softenProgrammaticCopy(label) };
   });
 }
 
@@ -247,7 +259,7 @@ function parseGroundingDetails(raw: AIInferenceResponseBody["groundingDetails"])
 function pickAnswerText(body: AIInferenceResponseBody): string {
   if (typeof body.answerText === "string" && body.answerText.trim()) return body.answerText;
   if (typeof body.explanation === "string" && body.explanation.trim()) return body.explanation;
-  return "The assistant returned an empty response.";
+  return "The assistant could not prepare a reply.";
 }
 
 export function mapInferenceResponse(body: AIInferenceResponseBody): LiveTextAssistantResult {
@@ -263,7 +275,7 @@ export function mapInferenceResponse(body: AIInferenceResponseBody): LiveTextAss
   return {
     explanation: pickAnswerText(body),
     grounding,
-    groundingNote: typeof body.groundingNote === "string" ? body.groundingNote : undefined,
+    groundingNote: typeof body.groundingNote === "string" ? softenProgrammaticCopy(body.groundingNote) : undefined,
     sources: mapGroundingSources(body.groundingSources),
     workProposal: proposal,
     responseVersion: typeof body.responseVersion === "string" ? body.responseVersion : undefined,
@@ -328,7 +340,7 @@ export function sanitizeAiInferenceUserMessage(raw: string): string {
     || lower.includes("invalid provider")
     || lower.includes("failed to parse")
   ) {
-    return "The AI service had trouble formatting its reply. Please try again in a moment.";
+    return "The assistant had trouble preparing a reliable reply. Please try again in a moment.";
   }
   if (t.length > 400) return fallback;
   return t;
@@ -411,7 +423,7 @@ async function invokeHosted(
 
   const responseBody = data as AIInferenceResponseBody | null;
   if (!responseBody || typeof responseBody !== "object") {
-    throw new Error(sanitizeAiInferenceUserMessage("AI assistant returned an unexpected response."));
+    throw new Error(sanitizeAiInferenceUserMessage("The assistant could not prepare a reliable reply."));
   }
 
   return mapInferenceResponse(responseBody);

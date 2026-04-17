@@ -60,6 +60,7 @@ import {
 } from "@/lib/ai-project-context";
 import {
   invokeLiveTextAssistant,
+  pickInferenceMode,
   shouldUseHostedLiveTextAssistantPath,
   userVisibleLiveTextAssistantError,
 } from "@/lib/ai-assistant-client";
@@ -96,6 +97,7 @@ const MAX_WIDTH = 520;
 const COLLAPSED_WIDTH = 48;
 
 const WORK_STEPS_GENERATE = ["Reading project state", "Checking permissions", "Drafting proposal", "Estimating credits", "Ready for review"];
+const WORK_STEPS_HOSTED_CONSULT = ["Checking access", "Reading visible project context", "Preparing answer"];
 const WORK_STEPS_COMMIT = ["Applying changes", "Writing event log", "Updating context pack", "Done"];
 const AUTOMATION_MODE_TO_LEVEL: Record<AutomationMode, 1 | 2 | 3 | 4> = {
   full: 1,
@@ -949,9 +951,22 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     responseMode: AIMessage["mode"] = "default",
   ) => {
     const workLogId = `wl-${Date.now()}`;
+    const hostedLivePath = Boolean(
+      targetProjectId &&
+        shouldUseHostedLiveTextAssistantPath(workspaceMode.kind, targetProjectId),
+    );
+    const hostedLiveMode = hostedLivePath
+      ? pickInferenceMode(
+        content,
+        seamForProjectCommit?.membership?.ai_access ?? "none",
+      )
+      : null;
+    const workSteps = hostedLivePath && hostedLiveMode === "consult"
+      ? WORK_STEPS_HOSTED_CONSULT
+      : WORK_STEPS_GENERATE;
     setWorkLogs((prev) => {
       const next = new Map(prev);
-      next.set(workLogId, { id: workLogId, steps: WORK_STEPS_GENERATE, phase: "generate" });
+      next.set(workLogId, { id: workLogId, steps: workSteps, phase: "generate" });
       return next;
     });
 
@@ -1069,7 +1084,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
 
     if (
       targetProjectId
-      && shouldUseHostedLiveTextAssistantPath(workspaceMode.kind, targetProjectId)
+      && hostedLivePath
     ) {
       void (async () => {
         const readiness = evaluateProjectTargetedSendReadiness(

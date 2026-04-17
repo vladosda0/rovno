@@ -10,17 +10,17 @@ const GROUNDING_COPY: Record<
   { title: string; className: string; Icon: typeof Info }
 > = {
   project_context_grounded: {
-    title: "Grounded on visible project context",
+    title: "Using project context",
     className: "border-success/30 bg-success/5 text-foreground",
     Icon: ShieldCheck,
   },
   partial: {
-    title: "Partially grounded",
+    title: "Using limited project context",
     className: "border-warning/40 bg-warning/10 text-foreground",
     Icon: AlertTriangle,
   },
   ungrounded: {
-    title: "Not grounded on project sources",
+    title: "General guidance",
     className: "border-muted-foreground/30 bg-muted/30 text-foreground",
     Icon: Info,
   },
@@ -83,7 +83,7 @@ export function GroundingCallout(props: {
     grounding === "ungrounded"
     && inferenceGroundingKind === "not_grounded_on_project_sources_but_general_guidance_available"
   ) {
-    title = "General guidance (limited project evidence)";
+    title = "General guidance with limited project context";
   }
   const Icon = cfg.Icon;
 
@@ -98,12 +98,12 @@ export function GroundingCallout(props: {
           <p className="font-medium leading-tight">{title}</p>
           {groundingDetails && groundingDetails.serverSnapshotUsed ? (
             <p className="text-muted-foreground leading-snug">
-              Server project snapshot was used for orientation (not a full data export).
+              Project summary was used for orientation, not every project record.
             </p>
           ) : null}
           {domains.length > 0 ? (
             <div className="text-muted-foreground leading-snug">
-              <p className="font-medium text-foreground/90">Evidence domains (this turn)</p>
+              <p className="font-medium text-foreground/90">Project areas used for this answer</p>
               <ul className="list-disc pl-3.5 space-y-0.5">
                 {domains.map((dom) => (
                   <li key={dom} className="break-words">{domainRetrievedToLabel(dom)}</li>
@@ -113,7 +113,7 @@ export function GroundingCallout(props: {
           ) : null}
           {groundingDetails?.evidenceTruncated ? (
             <p className="text-muted-foreground leading-snug">
-              Some retrieved evidence was truncated to stay within safe limits.
+              Some project details were shortened to keep the answer reliable.
             </p>
           ) : null}
           {freshnessLine ? (

@@ -18,7 +18,7 @@ describe("GroundingCallout", () => {
         groundingNote="Try asking about a specific trade."
       />,
     );
-    expect(screen.getByText(/General guidance \(limited project evidence\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/General guidance with limited project context/i)).toBeInTheDocument();
   });
 
   it("does not surface arbitrary freshnessHint string keys (allowlist)", () => {
@@ -44,9 +44,9 @@ describe("GroundingCallout", () => {
         }}
       />,
     );
-    expect(screen.getByText(/Evidence domains/i)).toBeInTheDocument();
+    expect(screen.getByText(/Project areas used for this answer/i)).toBeInTheDocument();
     expect(screen.getByText(/^Estimate$/)).toBeInTheDocument();
     expect(screen.getByText(/Documents \(metadata only/)).toBeInTheDocument();
-    expect(screen.getByText(/truncated/i)).toBeInTheDocument();
+    expect(screen.getByText(/shortened/i)).toBeInTheDocument();
   });
 });

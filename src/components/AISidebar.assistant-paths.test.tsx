@@ -131,7 +131,7 @@ describe("AISidebar assistant paths", () => {
       expect(invokeArg.userMessage).toBe("estimate scope question");
 
       expect(await screen.findByText("LIVE_ASSISTANT_EXPLANATION_BODY")).toBeInTheDocument();
-      expect(screen.getByText(/Grounded on visible project context/i)).toBeInTheDocument();
+      expect(screen.getByText(/Using project context/i)).toBeInTheDocument();
       expect(screen.getByRole("button", { name: /Open estimate to apply manually/i })).toBeInTheDocument();
       expect(screen.queryByText(/I've prepared \d+ proposal/i)).not.toBeInTheDocument();
       expect(screen.queryByText("PREVIEW_TITLE")).toBeInTheDocument();
@@ -160,6 +160,37 @@ describe("AISidebar assistant paths", () => {
       );
       const stored = sessionStorage.getItem("rovno:ai-chat:project-a");
       expect(stored).toBe(first.chatId);
+    });
+
+    it("uses answer-focused work log copy for hosted consult turns", async () => {
+      let resolveAssistant: ((value: Awaited<ReturnType<typeof invokeLiveTextAssistantMock>>) => void) | null = null;
+      invokeLiveTextAssistantMock.mockImplementationOnce(() =>
+        new Promise((resolve) => {
+          resolveAssistant = resolve;
+        })
+      );
+      const queryClient = createQueryClient();
+      render(
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={["/project/project-a/dashboard"]}>
+            <AISidebar collapsed={false} onCollapsedChange={vi.fn()} />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+
+      const composer = screen.getByPlaceholderText("Ask AI...");
+      fireEvent.change(composer, { target: { value: "what should I check next?" } });
+      fireEvent.keyDown(composer, { key: "Enter" });
+
+      expect(await screen.findByText("Preparing answer")).toBeInTheDocument();
+      expect(screen.queryByText("Estimating credits")).not.toBeInTheDocument();
+      expect(screen.queryByText("Ready for review")).not.toBeInTheDocument();
+
+      resolveAssistant?.({
+        explanation: "DONE",
+        grounding: "ungrounded",
+      });
+      expect(await screen.findByText("DONE")).toBeInTheDocument();
     });
   });
 

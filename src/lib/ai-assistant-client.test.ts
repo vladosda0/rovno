@@ -41,13 +41,13 @@ function minimalContextPack(overrides?: Partial<AIContextPack>): AIContextPack {
 describe("sanitizeAiInferenceUserMessage", () => {
   it("maps provider invalid JSON to a friendly line", () => {
     expect(sanitizeAiInferenceUserMessage("AI provider returned invalid JSON content")).toBe(
-      "The AI service had trouble formatting its reply. Please try again in a moment.",
+      "The assistant had trouble preparing a reliable reply. Please try again in a moment.",
     );
   });
 
   it("maps invalid provider log phrasing", () => {
     expect(sanitizeAiInferenceUserMessage("invalid provider payload")).toBe(
-      "The AI service had trouble formatting its reply. Please try again in a moment.",
+      "The assistant had trouble preparing a reliable reply. Please try again in a moment.",
     );
   });
 
@@ -217,6 +217,13 @@ describe("mapGroundingSources", () => {
     const result = mapGroundingSources([{ kind: "project_summary" }]);
     expect(result?.[0].label).toBe("Source");
   });
+
+  it("softens server-style source labels", () => {
+    const result = mapGroundingSources([
+      { kind: "server_verified_estimate", label: "Verified estimate lines (server)" },
+    ]);
+    expect(result?.[0].label).toBe("Verified estimate lines");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -320,7 +327,7 @@ describe("mapInferenceResponse", () => {
 
   it("provides fallback explanation when missing", () => {
     const result = mapInferenceResponse({});
-    expect(result.explanation).toBe("The assistant returned an empty response.");
+    expect(result.explanation).toBe("The assistant could not prepare a reply.");
   });
 
   it("prefers answerText and groundingKind when present (Wave 8 contract)", () => {
@@ -344,6 +351,7 @@ describe("mapInferenceResponse", () => {
     expect(result.grounding).toBe("partial");
     expect(result.groundingKind).toBe("partially_grounded");
     expect(result.responseVersion).toBe("0.7.0-wave7-docs-media-metadata");
+    expect(result.groundingNote).toBe("Note from project system");
     expect(result.groundingDetails?.domainsRetrieved).toEqual(["estimate", "documents_metadata"]);
     expect(result.groundingDetails?.evidenceTruncated).toBe(true);
     expect(result.followUps?.[0]?.prompt).toBe("Want procurement totals?");
