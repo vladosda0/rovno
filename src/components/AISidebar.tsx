@@ -104,6 +104,7 @@ import {
   getStages, getUserById, updateProject, getDocuments,
 } from "@/data/store";
 import { format, isToday, isYesterday } from "date-fns";
+import { MVP_SHOW_AI_AUTOMATION_MODE_UI } from "@/lib/mvp-ai-automation-ui";
 
 const PROJECT_SUGGESTIONS = ["Add tasks", "Update estimate", "Generate contract", "Buy materials"];
 const GLOBAL_SUGGESTIONS = ["Create project", "Compare estimates", "Best tile adhesive?"];
@@ -665,7 +666,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const [limitModalOpen, setLimitModalOpen] = useState(false);
   const [activityFilter, setActivityFilter] = useState<FeedFilter>("all");
   const [learnMode, setLearnMode] = useState(false);
-  const [automationMode, setAutomationMode] = useState<AutomationMode>("assisted");
+  const [automationMode, setAutomationMode] = useState<AutomationMode>("manual");
   const [pendingGeneralProposalInput, setPendingGeneralProposalInput] = useState<string | null>(null);
   const [voiceState, setVoiceState] = useState<VoiceState>("idle");
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
@@ -906,7 +907,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     const projectMode = isProjectContext ? normalizeAutomationMode(project?.automation_level) : null;
     if (projectMode) return projectMode;
     const profileMode = normalizeAutomationMode(getProfileAutomationLevelMode());
-    return profileMode ?? "assisted";
+    return profileMode ?? "manual";
   }, [isProjectContext, project?.automation_level]);
 
   useEffect(() => {
@@ -3178,6 +3179,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                             </PopoverContent>
                           </Popover>
 
+                          {MVP_SHOW_AI_AUTOMATION_MODE_UI ? (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button
@@ -3210,6 +3212,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                               })}
                             </DropdownMenuContent>
                           </DropdownMenu>
+                          ) : null}
 
                           {learnMode && (
                             <span className="group inline-flex h-9 items-center rounded-md border border-sidebar-border bg-sidebar-accent/50 px-2.5 text-caption font-medium text-foreground shrink-0">

@@ -16,6 +16,7 @@ import type {
   ProfileUnits,
   ProfileWeekStart,
 } from "@/data/workspace-source";
+import { MVP_SHOW_AI_AUTOMATION_MODE_UI } from "@/lib/mvp-ai-automation-ui";
 
 const CURRENCIES = [
   { value: "RUB", label: "₽ Russian Ruble (RUB)" },
@@ -50,7 +51,7 @@ export function PreferencesPanel() {
   const [dateFormat, setDateFormat] = useState("dd.MM.yyyy");
   const [weekStart, setWeekStart] = useState("monday");
   const [aiLanguage, setAiLanguage] = useState("auto");
-  const [automationLevel, setAutomationLevel] = useState("assisted");
+  const [automationLevel, setAutomationLevel] = useState("manual");
 
   useEffect(() => {
     if (!preferences) return;
@@ -70,7 +71,7 @@ export function PreferencesPanel() {
         dateFormat: dateFormat as ProfileDateFormat,
         weekStart: weekStart as ProfileWeekStart,
         aiOutputLanguage: aiLanguage as ProfileAiOutputLanguage,
-        automationLevel: automationLevel as ProfileAutomationLevel,
+        automationLevel: (MVP_SHOW_AI_AUTOMATION_MODE_UI ? automationLevel : "manual") as ProfileAutomationLevel,
       });
       toast({ title: "Preferences saved" });
     } catch {
@@ -138,6 +139,7 @@ export function PreferencesPanel() {
               </SelectContent>
             </Select>
           </div>
+          {MVP_SHOW_AI_AUTOMATION_MODE_UI ? (
           <div className="space-y-1.5">
             <Label>Automation level</Label>
             <Select value={automationLevel} onValueChange={setAutomationLevel}>
@@ -154,6 +156,7 @@ export function PreferencesPanel() {
               </SelectContent>
             </Select>
           </div>
+          ) : null}
         </div>
       </SettingsSection>
 

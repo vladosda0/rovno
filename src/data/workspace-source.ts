@@ -78,7 +78,7 @@ export const DEFAULT_PROFILE_PREFERENCES: ProfilePreferences = {
   dateFormat: "dd.MM.yyyy",
   weekStart: "monday",
   aiOutputLanguage: "auto",
-  automationLevel: "assisted",
+  automationLevel: "manual",
 };
 
 export interface CreateWorkspaceProjectInput {

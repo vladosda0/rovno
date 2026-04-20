@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Zap, Bot, Wrench, Eye } from "lucide-react";
+import { MVP_SHOW_AI_AUTOMATION_MODE_UI } from "@/lib/mvp-ai-automation-ui";
 
 const automationLevels = [
   {
@@ -40,26 +40,29 @@ interface OnboardingStepperProps {
 }
 
 export function OnboardingStepper({ onComplete }: OnboardingStepperProps) {
-  const [step, setStep] = useState(0);
-  const [selectedLevel, setSelectedLevel] = useState("full");
+  const showAutomationStep = MVP_SHOW_AI_AUTOMATION_MODE_UI;
+  const [step, setStep] = useState(showAutomationStep ? 0 : 1);
+  const [selectedLevel, setSelectedLevel] = useState("manual");
   const [language, setLanguage] = useState("ru");
   const [units, setUnits] = useState("metric");
+
+  const progressIndices = showAutomationStep ? [0, 1] : [0];
 
   return (
     <div className="w-full max-w-2xl mx-auto space-y-sp-4">
       {/* Progress */}
       <div className="flex items-center gap-2 justify-center">
-        {[0, 1].map((i) => (
+        {progressIndices.map((i) => (
           <div
             key={i}
             className={`h-1.5 rounded-full transition-all ${
-              i <= step ? "w-12 bg-accent" : "w-8 bg-muted"
+              (showAutomationStep ? step : step - 1) >= i ? "w-12 bg-accent" : "w-8 bg-muted"
             }`}
           />
         ))}
       </div>
 
-      {step === 0 && (
+      {showAutomationStep && step === 0 && (
         <div className="glass-elevated rounded-panel p-sp-4 space-y-sp-3">
           <div className="text-center">
             <h2 className="text-h3 text-foreground">Choose automation level</h2>
@@ -133,12 +136,14 @@ export function OnboardingStepper({ onComplete }: OnboardingStepperProps) {
             </div>
           </div>
           <div className="flex gap-sp-2">
-            <Button variant="outline" onClick={() => setStep(0)} className="flex-1">
-              Back
-            </Button>
+            {showAutomationStep ? (
+              <Button variant="outline" onClick={() => setStep(0)} className="flex-1">
+                Back
+              </Button>
+            ) : null}
             <Button
               onClick={onComplete}
-              className="flex-1 bg-accent text-accent-foreground hover:bg-accent/90"
+              className={showAutomationStep ? "flex-1 bg-accent text-accent-foreground hover:bg-accent/90" : "w-full bg-accent text-accent-foreground hover:bg-accent/90"}
             >
               Complete Setup
             </Button>

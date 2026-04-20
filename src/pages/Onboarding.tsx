@@ -20,7 +20,7 @@ export default function Onboarding() {
           <Rocket className="mx-auto mb-sp-2 h-10 w-10 text-accent" />
           <h1 className="text-h2 text-foreground">Welcome to СтройАгент</h1>
           <p className="text-body text-muted-foreground mt-1">
-            Let's set up your workspace in two quick steps.
+            Let&apos;s finish a quick setup so your workspace matches how you work.
           </p>
         </div>
         <OnboardingStepper onComplete={handleComplete} />
