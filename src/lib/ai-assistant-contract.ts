@@ -34,6 +34,8 @@ export interface LiveTextFollowUpPrompt {
 
 /** Result returned by `invokeLiveTextAssistant` (mock or hosted edge). */
 export interface LiveTextAssistantResult {
+  /** Resolved UI language for grounding chrome, mock copy, and client-side error sanitization. */
+  assistantUiLanguage?: "ru" | "en";
   /** Primary answer text (mirrors backend `answerText`; `explanation` kept for UI copy). */
   explanation: string;
   grounding: AssistantGroundingStatus;

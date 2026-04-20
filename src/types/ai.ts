@@ -31,6 +31,8 @@ import type {
 /** Structured payload for Wave 1 live text turns (not committable; no `AIProposal` queue). */
 export interface AIMessageLiveTextAssistantV1 {
   version: 1;
+  /** Language used for grounding / follow-up chrome when this turn was created. */
+  assistantUiLanguage?: "ru" | "en";
   grounding: AssistantGroundingStatus;
   groundingNote?: string;
   sources?: LiveTextAssistantSource[];

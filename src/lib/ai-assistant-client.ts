@@ -23,8 +23,25 @@ export interface InvokeLiveTextAssistantInput {
   workspaceKind: string;
   /** Effective AI access for the current user on this project. */
   aiAccess: AIAccess;
+  /** Profile preference — drives localized mock copy, empty-answer fallback, and error sanitization. */
+  aiOutputLanguage?: "ru" | "en" | "auto";
   /** Optional UUID — Layer B session continuity for hosted `ai-inference`. */
   chatId?: string;
+}
+
+/** UI language for assistant chrome (errors, mock path, source labels). */
+export type AiAssistantUiLanguage = "ru" | "en";
+
+/** Resolves UI chrome language from profile `ai_output_language` and optional user message (for `auto`). */
+export function resolveAiAssistantUiLanguage(
+  aiOutputLanguage?: "ru" | "en" | "auto",
+  userMessage?: string,
+): AiAssistantUiLanguage {
+  if (aiOutputLanguage === "ru") return "ru";
+  if (aiOutputLanguage === "en") return "en";
+  const hint = userMessage?.trim() ?? "";
+  if (hint && /[\u0400-\u04FF]/.test(hint)) return "ru";
+  return "en";
 }
 
 // ---------------------------------------------------------------------------
@@ -138,8 +155,28 @@ export function mapGroundingStatus(raw: string | undefined): AssistantGroundingS
   return "ungrounded";
 }
 
-function formatGroundingSourceFallbackLabel(kind: string | undefined): string {
-  if (!kind || typeof kind !== "string") return "Source";
+function formatGroundingSourceFallbackLabel(
+  kind: string | undefined,
+  lang: AiAssistantUiLanguage,
+): string {
+  if (!kind || typeof kind !== "string") {
+    return lang === "ru" ? "Источник" : "Source";
+  }
+  if (lang === "ru") {
+    const map: Record<string, string> = {
+      client_project_context: "Контекст проекта",
+      client_document_metadata: "Метаданные документа",
+      server_verified_estimate: "Данные сметы",
+      server_verified_procurement: "Закупки и поставки",
+      server_verified_tasks: "Задачи",
+      server_verified_hr: "Кадры",
+      server_verified_participants: "Участники проекта",
+      server_verified_activity: "Недавняя активность",
+      server_verified_documents_metadata: "Документы — только названия и метаданные (не полный текст)",
+      server_verified_media_metadata: "Медиа — только имена файлов и метаданные (не содержимое)",
+    };
+    return map[kind] ?? kind.replace(/_/g, " ");
+  }
   const map: Record<string, string> = {
     client_project_context: "Project context",
     client_document_metadata: "Document metadata",
@@ -167,16 +204,20 @@ function softenProgrammaticCopy(value: string): string {
     .trim();
 }
 
-export function mapGroundingSources(raw: BackendGroundingSource[] | undefined): LiveTextAssistantSource[] | undefined {
+export function mapGroundingSources(
+  raw: BackendGroundingSource[] | undefined,
+  assistantUiLanguage: AiAssistantUiLanguage = "en",
+): LiveTextAssistantSource[] | undefined {
   if (!raw || raw.length === 0) return undefined;
+  const defaultSource = assistantUiLanguage === "ru" ? "Источник" : "Source";
   return raw.map((s) => {
     const kind = (s.kind === "project_summary" || s.kind === "recent_activity") ? s.kind : "other";
     const hasLabel = typeof s.label === "string" && s.label.trim();
     const label = hasLabel
       ? s.label!.trim()
       : (s.kind === "project_summary" || s.kind === "recent_activity")
-        ? "Source"
-        : formatGroundingSourceFallbackLabel(s.kind);
+        ? defaultSource
+        : formatGroundingSourceFallbackLabel(s.kind, assistantUiLanguage);
     return { kind, label: softenProgrammaticCopy(label) };
   });
 }
@@ -256,13 +297,18 @@ function parseGroundingDetails(raw: AIInferenceResponseBody["groundingDetails"])
   };
 }
 
-function pickAnswerText(body: AIInferenceResponseBody): string {
+function pickAnswerText(body: AIInferenceResponseBody, lang: AiAssistantUiLanguage): string {
   if (typeof body.answerText === "string" && body.answerText.trim()) return body.answerText;
   if (typeof body.explanation === "string" && body.explanation.trim()) return body.explanation;
-  return "The assistant could not prepare a reply.";
+  return lang === "ru"
+    ? "Ассистент не смог подготовить ответ."
+    : "The assistant could not prepare a reply.";
 }
 
-export function mapInferenceResponse(body: AIInferenceResponseBody): LiveTextAssistantResult {
+export function mapInferenceResponse(
+  body: AIInferenceResponseBody,
+  assistantUiLanguage: AiAssistantUiLanguage = "en",
+): LiveTextAssistantResult {
   const fromKind = mapGroundingKind(body.groundingKind);
   const grounding = fromKind ?? mapGroundingStatus(body.groundingStatus);
   const proposal = mapWorkProposal(body.optionalWorkProposalPreview ?? body.workProposal ?? undefined);
@@ -273,10 +319,11 @@ export function mapInferenceResponse(body: AIInferenceResponseBody): LiveTextAss
     : undefined;
 
   return {
-    explanation: pickAnswerText(body),
+    assistantUiLanguage,
+    explanation: pickAnswerText(body, assistantUiLanguage),
     grounding,
     groundingNote: typeof body.groundingNote === "string" ? softenProgrammaticCopy(body.groundingNote) : undefined,
-    sources: mapGroundingSources(body.groundingSources),
+    sources: mapGroundingSources(body.groundingSources, assistantUiLanguage),
     workProposal: proposal,
     responseVersion: typeof body.responseVersion === "string" ? body.responseVersion : undefined,
     groundingKind,
@@ -329,9 +376,14 @@ function parseEdgeFunctionErrorBody(data: unknown): string | null {
 }
 
 /** User-visible copy for known provider / schema failures logged server-side. */
-export function sanitizeAiInferenceUserMessage(raw: string): string {
+export function sanitizeAiInferenceUserMessage(
+  raw: string,
+  lang: AiAssistantUiLanguage = "en",
+): string {
   const t = raw.trim();
-  const fallback = "The assistant could not complete this request. Please try again.";
+  const fallback = lang === "ru"
+    ? "Ассистент не смог выполнить запрос. Попробуйте ещё раз."
+    : "The assistant could not complete this request. Please try again.";
   if (!t) return fallback;
   const lower = t.toLowerCase();
   if (
@@ -340,15 +392,21 @@ export function sanitizeAiInferenceUserMessage(raw: string): string {
     || lower.includes("invalid provider")
     || lower.includes("failed to parse")
   ) {
-    return "The assistant had trouble preparing a reliable reply. Please try again in a moment.";
+    return lang === "ru"
+      ? "Ассистенту не удалось подготовить устойчивый ответ. Попробуйте через короткое время."
+      : "The assistant had trouble preparing a reliable reply. Please try again in a moment.";
   }
   if (t.length > 400) return fallback;
   return t;
 }
 
-async function resolveAiInferenceInvokeFailureMessage(error: unknown, data: unknown): Promise<string> {
+async function resolveAiInferenceInvokeFailureMessage(
+  error: unknown,
+  data: unknown,
+  lang: AiAssistantUiLanguage,
+): Promise<string> {
   const fromData = parseEdgeFunctionErrorBody(data);
-  if (fromData) return sanitizeAiInferenceUserMessage(fromData);
+  if (fromData) return sanitizeAiInferenceUserMessage(fromData, lang);
 
   if (error && typeof error === "object" && "context" in error) {
     const ctx = (error as { context?: unknown }).context;
@@ -359,34 +417,46 @@ async function resolveAiInferenceInvokeFailureMessage(error: unknown, data: unkn
       if (trimmed) {
         try {
           const j = JSON.parse(trimmed) as Record<string, unknown>;
-          if (typeof j.error === "string") return sanitizeAiInferenceUserMessage(j.error);
+          if (typeof j.error === "string") return sanitizeAiInferenceUserMessage(j.error, lang);
           if (j.error && typeof j.error === "object" && j.error !== null && "message" in j.error) {
             const m = (j.error as { message?: unknown }).message;
-            if (typeof m === "string") return sanitizeAiInferenceUserMessage(m);
+            if (typeof m === "string") return sanitizeAiInferenceUserMessage(m, lang);
           }
-          if (typeof j.message === "string") return sanitizeAiInferenceUserMessage(j.message);
+          if (typeof j.message === "string") return sanitizeAiInferenceUserMessage(j.message, lang);
         } catch {
           /* not JSON */
         }
         const clipped = trimmed.length <= 400 ? trimmed : `${trimmed.slice(0, 400)}…`;
-        return sanitizeAiInferenceUserMessage(clipped);
+        return sanitizeAiInferenceUserMessage(clipped, lang);
       }
       const statusText = ctx.statusText?.trim();
-      return statusText ? `Request failed (${status} ${statusText}). Please try again.` : `Request failed (HTTP ${status}). Please try again.`;
+      if (lang === "ru") {
+        return statusText
+          ? `Запрос не выполнен (${status} ${statusText}). Попробуйте снова.`
+          : `Запрос не выполнен (HTTP ${status}). Попробуйте снова.`;
+      }
+      return statusText
+        ? `Request failed (${status} ${statusText}). Please try again.`
+        : `Request failed (HTTP ${status}). Please try again.`;
     }
   }
 
   if (error && typeof error === "object" && "message" in error) {
     const m = (error as { message?: unknown }).message;
-    if (typeof m === "string" && m.trim()) return sanitizeAiInferenceUserMessage(m);
+    if (typeof m === "string" && m.trim()) return sanitizeAiInferenceUserMessage(m, lang);
   }
 
-  return sanitizeAiInferenceUserMessage("");
+  return sanitizeAiInferenceUserMessage("", lang);
 }
 
 /** Safe message to show in the assistant bubble when `invokeLiveTextAssistant` throws. */
-export function userVisibleLiveTextAssistantError(err: unknown): string {
-  const fallback = "The assistant could not complete this request. Please try again.";
+export function userVisibleLiveTextAssistantError(
+  err: unknown,
+  lang: AiAssistantUiLanguage = "en",
+): string {
+  const fallback = lang === "ru"
+    ? "Ассистент не смог выполнить запрос. Попробуйте ещё раз."
+    : "The assistant could not complete this request. Please try again.";
   if (!(err instanceof Error)) return fallback;
   const m = err.message.trim();
   if (!m) return fallback;
@@ -404,6 +474,7 @@ async function invokeHosted(
   mode: InferenceMode,
   userMessage: string,
   contextPack: AIContextPack,
+  assistantUiLanguage: AiAssistantUiLanguage,
   chatId?: string,
 ): Promise<LiveTextAssistantResult> {
   const { supabase } = await import("@/integrations/supabase/client");
@@ -413,20 +484,23 @@ async function invokeHosted(
 
   const bodyError = parseEdgeFunctionErrorBody(data);
   if (bodyError) {
-    throw new Error(sanitizeAiInferenceUserMessage(bodyError));
+    throw new Error(sanitizeAiInferenceUserMessage(bodyError, assistantUiLanguage));
   }
 
   if (error) {
-    const msg = await resolveAiInferenceInvokeFailureMessage(error, data);
+    const msg = await resolveAiInferenceInvokeFailureMessage(error, data, assistantUiLanguage);
     throw new Error(msg);
   }
 
   const responseBody = data as AIInferenceResponseBody | null;
   if (!responseBody || typeof responseBody !== "object") {
-    throw new Error(sanitizeAiInferenceUserMessage("The assistant could not prepare a reliable reply."));
+    const unreliable = assistantUiLanguage === "ru"
+      ? "Ассистент не смог подготовить устойчивый ответ."
+      : "The assistant could not prepare a reliable reply.";
+    throw new Error(sanitizeAiInferenceUserMessage(unreliable, assistantUiLanguage));
   }
 
-  return mapInferenceResponse(responseBody);
+  return mapInferenceResponse(responseBody, assistantUiLanguage);
 }
 
 // ---------------------------------------------------------------------------
@@ -437,45 +511,70 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => { window.setTimeout(resolve, ms); });
 }
 
-function buildMockSources(pack: AIContextPack): LiveTextAssistantSource[] {
+function buildMockSources(pack: AIContextPack, lang: AiAssistantUiLanguage): LiveTextAssistantSource[] {
   const sources: LiveTextAssistantSource[] = [];
   const title = pack.project.title.trim();
   if (title) {
+    const type = pack.project.type || "—";
     sources.push({
       kind: "project_summary",
-      label: `Project: ${title} (${pack.project.type || "—"}) · progress ${pack.project.progress}`,
+      label: lang === "ru"
+        ? `Проект: ${title} (${type}) · прогресс ${pack.project.progress}`
+        : `Project: ${title} (${type}) · progress ${pack.project.progress}`,
     });
   }
   if (pack.recentEvents.length > 0) {
     sources.push({
       kind: "recent_activity",
-      label: `Recent activity: ${pack.recentEvents.length} recent event type(s) (no payload text sent to the assistant).`,
+      label: lang === "ru"
+        ? `Недавняя активность: ${pack.recentEvents.length} тип(ов) событий (текст событий в ассистент не передаётся).`
+        : `Recent activity: ${pack.recentEvents.length} recent event type(s) (no payload text sent to the assistant).`,
     });
   }
   return sources;
 }
 
-function pickMockGrounding(pack: AIContextPack): {
+function pickMockGrounding(pack: AIContextPack, lang: AiAssistantUiLanguage): {
   grounding: AssistantGroundingStatus;
   groundingNote?: string;
 } {
   if (!pack.project.title.trim()) {
     return {
       grounding: "ungrounded",
-      groundingNote: "Project title is missing in the assembled context, so the answer is not tied to a specific project record.",
+      groundingNote: lang === "ru"
+        ? "В собранном контексте нет названия проекта, поэтому ответ не привязан к конкретной записи проекта."
+        : "Project title is missing in the assembled context, so the answer is not tied to a specific project record.",
     };
   }
   if (pack._meta.hiddenDomains.length > 0) {
     return {
       grounding: "partial",
-      groundingNote: `Some project areas are hidden for your role (${pack._meta.hiddenDomains.join(", ")}). This answer uses only the visible context pack.`,
+      groundingNote: lang === "ru"
+        ? `Часть областей проекта скрыта для вашей роли (${pack._meta.hiddenDomains.join(", ")}). Ответ опирается только на видимый контекст.`
+        : `Some project areas are hidden for your role (${pack._meta.hiddenDomains.join(", ")}). This answer uses only the visible context pack.`,
     };
   }
   return { grounding: "project_context_grounded" };
 }
 
-function maybeMockWorkProposal(userMessage: string, pack: AIContextPack): PresentationalWorkProposal | undefined {
+function maybeMockWorkProposal(
+  userMessage: string,
+  pack: AIContextPack,
+  lang: AiAssistantUiLanguage,
+): PresentationalWorkProposal | undefined {
   if (!PROPOSAL_INTENT_RE.test(userMessage)) return undefined;
+  if (lang === "ru") {
+    return {
+      proposalTitle: `Черновик объёма для ${pack.project.title || "этого проекта"}`,
+      proposalSummary:
+        "Примерные работы для обсуждения — в смету не записываются. Проверьте и внесите вручную на вкладке сметы.",
+      suggestedWorkItems: [
+        { label: "Обследование объекта и исходные условия", note: "Подтвердите допущения до оценки." },
+        { label: "Черновые / первичные работы", note: "Согласуйте с текущим этапом, если применимо." },
+        { label: "Отделка и сдача", note: "Скорректируйте под договорной объём." },
+      ],
+    };
+  }
   return {
     proposalTitle: `Draft scope for ${pack.project.title || "this project"}`,
     proposalSummary:
@@ -488,29 +587,46 @@ function maybeMockWorkProposal(userMessage: string, pack: AIContextPack): Presen
   };
 }
 
-async function invokeMock(input: InvokeLiveTextAssistantInput): Promise<LiveTextAssistantResult> {
+async function invokeMock(
+  input: InvokeLiveTextAssistantInput,
+  assistantUiLanguage: AiAssistantUiLanguage,
+): Promise<LiveTextAssistantResult> {
   await delay(320);
   const { contextPack, userMessage } = input;
-  const { grounding, groundingNote } = pickMockGrounding(contextPack);
-  const sources = buildMockSources(contextPack);
+  const { grounding, groundingNote } = pickMockGrounding(contextPack, assistantUiLanguage);
+  const sources = buildMockSources(contextPack, assistantUiLanguage);
   const preview = userMessage.trim().slice(0, 200);
-  const explanation = [
-    `Here is a concise take on "${preview}${userMessage.length > 200 ? "…" : ""}" for **${contextPack.project.title || "this project"}**.`,
-    "",
-    grounding === "project_context_grounded"
-      ? "This mock response is aligned with the visible project context pack (roles, hidden domains, and summaries you are allowed to see)."
-      : grounding === "partial"
-        ? "This mock response is based only on partial context because some domains are hidden for your role."
-        : "This mock response is not reliably tied to project sources (missing or insufficient context).",
-    "",
-    "_Wave 1 uses a frontend mock — replace `invokeLiveTextAssistant` with a real endpoint when ready._",
-  ].join("\n");
+  const projectTitle = contextPack.project.title || (assistantUiLanguage === "ru" ? "этого проекта" : "this project");
+  const explanation = assistantUiLanguage === "ru"
+    ? [
+      `Кратко по запросу «${preview}${userMessage.length > 200 ? "…" : ""}» для **${projectTitle}**.`,
+      "",
+      grounding === "project_context_grounded"
+        ? "Это демо-ответ: он согласован с видимым контекстом (роли, скрытые области и сводки, доступные вам)."
+        : grounding === "partial"
+        ? "Это демо-ответ: используется только часть контекста, потому что для роли скрыты некоторые области."
+        : "Это демо-ответ: он слабо привязан к источникам проекта (мало или нет контекста).",
+      "",
+      "_Локальный демо-режим без сервера — подключите развёрнутый `ai-inference`, когда будете готовы._",
+    ].join("\n")
+    : [
+      `Here is a concise take on "${preview}${userMessage.length > 200 ? "…" : ""}" for **${projectTitle}**.`,
+      "",
+      grounding === "project_context_grounded"
+        ? "This demo response matches the visible project context pack (roles, hidden domains, and summaries you are allowed to see)."
+        : grounding === "partial"
+        ? "This demo response uses partial context because some domains are hidden for your role."
+        : "This demo response is not reliably tied to project sources (missing or insufficient context).",
+      "",
+      "_Local demo mode — connect hosted `ai-inference` when you are ready._",
+    ].join("\n");
   return {
+    assistantUiLanguage,
     explanation,
     grounding,
     groundingNote,
     sources: sources.length > 0 ? sources : undefined,
-    workProposal: maybeMockWorkProposal(userMessage, contextPack),
+    workProposal: maybeMockWorkProposal(userMessage, contextPack, assistantUiLanguage),
   };
 }
 
@@ -521,6 +637,10 @@ async function invokeMock(input: InvokeLiveTextAssistantInput): Promise<LiveText
 export async function invokeLiveTextAssistant(
   input: InvokeLiveTextAssistantInput,
 ): Promise<LiveTextAssistantResult> {
+  const assistantUiLanguage = resolveAiAssistantUiLanguage(
+    input.aiOutputLanguage,
+    input.userMessage,
+  );
   if (shouldUseHostedLiveTextAssistantPath(input.workspaceKind, input.projectId)) {
     const mode = pickInferenceMode(input.userMessage, input.aiAccess);
     return invokeHosted(
@@ -528,8 +648,9 @@ export async function invokeLiveTextAssistant(
       mode,
       input.userMessage,
       input.contextPack,
+      assistantUiLanguage,
       input.chatId,
     );
   }
-  return invokeMock(input);
+  return invokeMock(input, assistantUiLanguage);
 }

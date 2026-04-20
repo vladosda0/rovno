@@ -46,6 +46,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCurrentUser, useEvents, useProject, useProjects, useTasks, useWorkspaceMode } from "@/hooks/use-mock-data";
+import { useWorkspaceProfilePreferences } from "@/hooks/use-workspace-source";
 import { useEstimateV2FinanceProjectSummaryFromWorkspace } from "@/hooks/use-estimate-v2-data";
 import { useProcurementReadProjectSummary } from "@/hooks/use-procurement-read-model";
 import {
@@ -61,8 +62,10 @@ import {
 import {
   invokeLiveTextAssistant,
   pickInferenceMode,
+  resolveAiAssistantUiLanguage,
   shouldUseHostedLiveTextAssistantPath,
   userVisibleLiveTextAssistantError,
+  type AiAssistantUiLanguage,
 } from "@/lib/ai-assistant-client";
 import { getOrCreateProjectChatSessionId } from "@/lib/ai-project-chat-session";
 import { generateProposalQueue, getTextResponse, reviseProposalWithEdits } from "@/lib/ai-engine";
@@ -406,6 +409,26 @@ function buildProposalSummaryLines(childEvents: Event[]): string[] {
   return fallbackTitles.length > 0 ? fallbackTitles : ["Execution completed"];
 }
 
+function liveAssistantPermissionsLine(
+  gate: "loading" | "unavailable",
+  lang: AiAssistantUiLanguage,
+): string {
+  if (gate === "loading") {
+    return lang === "ru"
+      ? "Загружаются права для этого проекта. Попробуйте через короткое время."
+      : "Still loading your permissions for this project. Try again in a moment.";
+  }
+  return lang === "ru"
+    ? "Ассистент не может использовать контекст проекта сейчас (нет прав)."
+    : "AI can't use this project context right now (permissions unavailable).";
+}
+
+function liveAssistantNoProjectDataLine(lang: AiAssistantUiLanguage): string {
+  return lang === "ru"
+    ? "Данные проекта для контекста ИИ пока недоступны. Попробуйте чуть позже."
+    : "Project data is not available yet for AI context. Try again shortly.";
+}
+
 export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -418,6 +441,8 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const isGuest = !isAuthenticated();
   const user = useCurrentUser();
   const workspaceMode = useWorkspaceMode();
+  const workspaceProfilePreferences = useWorkspaceProfilePreferences();
+  const profileAssistantLang = resolveAiAssistantUiLanguage(workspaceProfilePreferences?.aiOutputLanguage);
   const projects = useProjects();
   const [homeProjectMode, setHomeProjectMode] = useState<string>(GENERAL_MODE_VALUE);
 
@@ -985,10 +1010,10 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
               next.delete(workLogId);
               return next;
             });
-            const denied =
-              readiness.gate === "loading"
-                ? "Still loading your permissions for this project. Try again in a moment."
-                : "AI can't use this project context right now (permissions unavailable).";
+            const denied = liveAssistantPermissionsLine(
+              readiness.gate === "loading" ? "loading" : "unavailable",
+              profileAssistantLang,
+            );
             setMessages((prev) => [
               ...prev,
               {
@@ -1012,7 +1037,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
               {
                 id: `msg-${Date.now() + 1}`,
                 role: "assistant",
-                content: "Project data is not available yet for AI context. Try again shortly.",
+                content: liveAssistantNoProjectDataLine(profileAssistantLang),
                 timestamp: new Date().toISOString(),
                 mode: responseMode,
               },
@@ -1099,10 +1124,10 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
             next.delete(workLogId);
             return next;
           });
-          const denied =
-            readiness.gate === "loading"
-              ? "Still loading your permissions for this project. Try again in a moment."
-              : "AI can't use this project context right now (permissions unavailable).";
+          const denied = liveAssistantPermissionsLine(
+            readiness.gate === "loading" ? "loading" : "unavailable",
+            profileAssistantLang,
+          );
           setMessages((prev) => [
             ...prev,
             {
@@ -1126,7 +1151,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
             {
               id: `msg-${Date.now() + 1}`,
               role: "assistant",
-              content: "Project data is not available yet for AI context. Try again shortly.",
+              content: liveAssistantNoProjectDataLine(profileAssistantLang),
               timestamp: new Date().toISOString(),
               mode: responseMode,
             },
@@ -1146,7 +1171,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
             {
               id: `msg-${Date.now() + 1}`,
               role: "assistant",
-              content: "AI can't use this project context right now (permissions unavailable).",
+              content: liveAssistantPermissionsLine("unavailable", profileAssistantLang),
               timestamp: new Date().toISOString(),
               mode: responseMode,
             },
@@ -1178,6 +1203,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
             userMessage: content,
             workspaceKind: workspaceMode.kind,
             aiAccess: seam.membership?.ai_access ?? "none",
+            aiOutputLanguage: workspaceProfilePreferences?.aiOutputLanguage,
             chatId,
           });
           setWorkLogs((prev) => {
@@ -1194,6 +1220,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
             liveTextProjectId: targetProjectId,
             liveTextAssistantV1: {
               version: 1,
+              assistantUiLanguage: result.assistantUiLanguage,
               grounding: result.grounding,
               groundingNote: result.groundingNote,
               sources: result.sources,
@@ -1222,7 +1249,10 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
             {
               id: `msg-${Date.now() + 1}`,
               role: "assistant",
-              content: userVisibleLiveTextAssistantError(err),
+              content: userVisibleLiveTextAssistantError(
+                err,
+                resolveAiAssistantUiLanguage(workspaceProfilePreferences?.aiOutputLanguage, content),
+              ),
               timestamp: new Date().toISOString(),
               mode: responseMode,
             },
@@ -2323,15 +2353,15 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                   )}
 
                   {/* Scrollable event feed */}
-                  <div className="flex-1 min-h-0 overflow-hidden px-3 box-border" style={{ width: "100%" }}>
-                    <ScrollArea ref={scrollRef} className="h-full">
-                      <div className="space-y-2 py-2 pr-1">
+                  <div className="flex-1 min-h-0 min-w-0 overflow-hidden px-3 box-border" style={{ width: "100%" }}>
+                    <ScrollArea ref={scrollRef} className="h-full min-w-0">
+                      <div className="space-y-2 py-2 pr-1 min-w-0 max-w-full">
                         {streamRows.length === 0 ? (
                           <p className="text-caption text-muted-foreground text-center py-8">
                             No activity yet
                           </p>
                         ) : (
-                          <div className="space-y-2">
+                          <div className="space-y-2 min-w-0 max-w-full">
                             {dayBuckets.map((bucket) => {
                               const isExpanded = expandedDayKeys.has(bucket.key);
                               return (
@@ -2350,7 +2380,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                                   </button>
 
                                   {isExpanded && (
-                                    <div className="glass rounded-card divide-y divide-border">
+                                    <div className="glass rounded-card divide-y divide-border min-w-0 max-w-full overflow-hidden">
                                       {bucket.rows.map((row, rowIndex) => {
                                         if (row.kind === "event") {
                                           return (
@@ -2484,8 +2514,8 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                                         const isSaved = savedMessageIds.has(row.message.id);
                                         const isRegenerating = regeneratingMessageId === row.message.id;
                                         return (
-                                          <div key={row.id} className="px-2 py-1.5">
-                                            <div className={`rounded-md border border-border/60 px-2 py-1.5 ${
+                                          <div key={row.id} className="px-2 py-1.5 min-w-0 max-w-full">
+                                            <div className={`rounded-md border border-border/60 px-2 py-1.5 min-w-0 max-w-full ${
                                               isUserMessage ? "bg-sidebar-accent/40" : "bg-muted/20"
                                             }`}>
                                               <div className="flex items-center gap-1.5">
@@ -2506,7 +2536,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                                                   {new Date(row.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                                                 </span>
                                               </div>
-                                              <p className="mt-1 text-caption text-foreground/95 whitespace-pre-wrap break-words">
+                                              <p className="mt-1 text-caption text-foreground/95 whitespace-pre-wrap break-words [overflow-wrap:anywhere] max-w-full">
                                                 {row.message.content}
                                               </p>
                                               {!isUserMessage && row.message.liveTextAssistantV1 && row.message.liveTextProjectId ? (
@@ -2518,12 +2548,15 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                                                     inferenceGroundingKind={row.message.liveTextAssistantV1.groundingKind}
                                                     groundingDetails={row.message.liveTextAssistantV1.groundingDetails}
                                                     freshnessHint={row.message.liveTextAssistantV1.freshnessHint}
+                                                    language={row.message.liveTextAssistantV1.assistantUiLanguage ?? "en"}
                                                   />
                                                   {row.message.liveTextAssistantV1.followUps
                                                     && row.message.liveTextAssistantV1.followUps.length > 0 ? (
-                                                    <div className="mt-1.5">
+                                                    <div className="mt-1.5 min-w-0 max-w-full">
                                                       <p className="text-[10px] font-medium text-muted-foreground mb-1">
-                                                        Suggested follow-ups
+                                                        {row.message.liveTextAssistantV1.assistantUiLanguage === "ru"
+                                                          ? "Предлагаемые уточнения"
+                                                          : "Suggested follow-ups"}
                                                       </p>
                                                       <SuggestionChips
                                                         suggestions={row.message.liveTextAssistantV1.followUps.map((f) => f.prompt)}
@@ -2616,7 +2649,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                 </div>
 
                 {/* === STICKY COMMAND ZONE === */}
-                <div className="p-3 space-y-2 shrink-0 box-border border-t border-border" style={{ width: "100%" }}>
+                <div className="p-3 space-y-2 shrink-0 box-border border-t border-border min-w-0 max-w-full" style={{ width: "100%" }}>
                   {/* Keep current interactive blocks and animations */}
                   {activeWindow === "worklog" && latestWorkLog && (
                     <div className="w-full min-w-0 space-y-1.5">

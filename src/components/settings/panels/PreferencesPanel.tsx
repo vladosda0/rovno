@@ -33,7 +33,7 @@ const DATE_FORMATS = [
 const AI_LANGUAGES = [
   { value: "ru", label: "Русский" },
   { value: "en", label: "English" },
-  { value: "auto", label: "Same as interface" },
+  { value: "auto", label: "Auto (from message language)" },
 ];
 
 const AUTOMATION_LEVELS = [

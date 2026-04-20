@@ -8,7 +8,16 @@ const ScrollArea = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof ScrollAreaPrimitive.Root>
 >(({ className, children, ...props }, ref) => (
   <ScrollAreaPrimitive.Root ref={ref} className={cn("relative overflow-hidden", className)} {...props}>
-    <ScrollAreaPrimitive.Viewport className="h-full w-full rounded-[inherit]">{children}</ScrollAreaPrimitive.Viewport>
+    <ScrollAreaPrimitive.Viewport
+      className={cn(
+        "h-full w-full min-w-0 max-w-full rounded-[inherit]",
+        // Radix wraps children in `display:table; min-width:100%`, which can grow past the viewport and
+        // clip horizontally (overflow-x hidden). Force a normal block formatting context capped to width.
+        "[&>div]:!block [&>div]:!min-w-0 [&>div]:max-w-full [&>div]:w-full [&>div]:box-border",
+      )}
+    >
+      {children}
+    </ScrollAreaPrimitive.Viewport>
     <ScrollBar />
     <ScrollAreaPrimitive.Corner />
   </ScrollAreaPrimitive.Root>

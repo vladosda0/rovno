@@ -7,6 +7,11 @@ describe("domainRetrievedToLabel", () => {
     expect(domainRetrievedToLabel("documents_metadata")).toContain("metadata only");
     expect(domainRetrievedToLabel("media_metadata")).toContain("metadata only");
   });
+
+  it("uses Russian labels when language is ru", () => {
+    expect(domainRetrievedToLabel("estimate", "ru")).toBe("Смета");
+    expect(domainRetrievedToLabel("documents_metadata", "ru")).toContain("метаданные");
+  });
 });
 
 describe("GroundingCallout", () => {
@@ -48,5 +53,22 @@ describe("GroundingCallout", () => {
     expect(screen.getByText(/^Estimate$/)).toBeInTheDocument();
     expect(screen.getByText(/Documents \(metadata only/)).toBeInTheDocument();
     expect(screen.getByText(/shortened/i)).toBeInTheDocument();
+  });
+
+  it("uses Russian chrome when language is ru", () => {
+    render(
+      <GroundingCallout
+        language="ru"
+        grounding="project_context_grounded"
+        groundingDetails={{
+          serverSnapshotUsed: true,
+          domainsRetrieved: ["tasks"],
+          evidenceTruncated: false,
+        }}
+      />,
+    );
+    expect(screen.getByText(/Используется контекст проекта/i)).toBeInTheDocument();
+    expect(screen.getByText(/Области проекта/i)).toBeInTheDocument();
+    expect(screen.getByText(/^Задачи$/)).toBeInTheDocument();
   });
 });

@@ -12,6 +12,7 @@ import {
   buildInferenceRequestBody,
   sanitizeAiInferenceUserMessage,
   userVisibleLiveTextAssistantError,
+  resolveAiAssistantUiLanguage,
 } from "@/lib/ai-assistant-client";
 import type { AIContextPack } from "@/lib/ai-project-context";
 
@@ -38,6 +39,15 @@ function minimalContextPack(overrides?: Partial<AIContextPack>): AIContextPack {
 // sanitizeAiInferenceUserMessage
 // ---------------------------------------------------------------------------
 
+describe("resolveAiAssistantUiLanguage", () => {
+  it("respects explicit ru/en and uses Cyrillic hint for auto", () => {
+    expect(resolveAiAssistantUiLanguage("ru")).toBe("ru");
+    expect(resolveAiAssistantUiLanguage("en")).toBe("en");
+    expect(resolveAiAssistantUiLanguage("auto", "What is the status?")).toBe("en");
+    expect(resolveAiAssistantUiLanguage("auto", "Что по проекту?")).toBe("ru");
+  });
+});
+
 describe("sanitizeAiInferenceUserMessage", () => {
   it("maps provider invalid JSON to a friendly line", () => {
     expect(sanitizeAiInferenceUserMessage("AI provider returned invalid JSON content")).toBe(
@@ -59,6 +69,15 @@ describe("sanitizeAiInferenceUserMessage", () => {
     const long = "x".repeat(500);
     expect(sanitizeAiInferenceUserMessage(long)).toBe(
       "The assistant could not complete this request. Please try again.",
+    );
+  });
+
+  it("uses Russian copy when lang is ru", () => {
+    expect(sanitizeAiInferenceUserMessage("", "ru")).toBe(
+      "Ассистент не смог выполнить запрос. Попробуйте ещё раз.",
+    );
+    expect(sanitizeAiInferenceUserMessage("invalid provider payload", "ru")).toBe(
+      "Ассистенту не удалось подготовить устойчивый ответ. Попробуйте через короткое время.",
     );
   });
 });
@@ -218,6 +237,11 @@ describe("mapGroundingSources", () => {
     expect(result?.[0].label).toBe("Source");
   });
 
+  it("uses Russian fallback labels when lang is ru", () => {
+    const result = mapGroundingSources([{ kind: "server_verified_tasks" }], "ru");
+    expect(result?.[0].label).toContain("Задач");
+  });
+
   it("softens server-style source labels", () => {
     const result = mapGroundingSources([
       { kind: "server_verified_estimate", label: "Verified estimate lines (server)" },
@@ -328,6 +352,13 @@ describe("mapInferenceResponse", () => {
   it("provides fallback explanation when missing", () => {
     const result = mapInferenceResponse({});
     expect(result.explanation).toBe("The assistant could not prepare a reply.");
+    expect(result.assistantUiLanguage).toBe("en");
+  });
+
+  it("localizes empty answer fallback for ru", () => {
+    const result = mapInferenceResponse({}, "ru");
+    expect(result.explanation).toBe("Ассистент не смог подготовить ответ.");
+    expect(result.assistantUiLanguage).toBe("ru");
   });
 
   it("prefers answerText and groundingKind when present (Wave 8 contract)", () => {
