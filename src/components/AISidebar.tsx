@@ -3109,32 +3109,14 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                         singleLineScrollable
                       />
 
-                      <Textarea
-                        ref={composerTextareaRef}
-                        placeholder={learnMode ? "Ask AI to explain decisions and tradeoffs..." : (photoConsult ? "Edit prompt or send as-is..." : "Ask AI...")}
-                        className="min-h-[42px] max-h-[220px] w-full resize-none text-body-sm bg-sidebar-accent/50 border-sidebar-border"
-                        value={inputValue}
-                        rows={1}
-                        onChange={(e) => {
-                          setInputValue(e.target.value);
-                          resizeComposer();
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && !e.shiftKey) {
-                            e.preventDefault();
-                            handleSend();
-                          }
-                        }}
-                      />
-
-                      <div className="flex items-center justify-between gap-1.5 w-full min-w-0">
-                        <div className="flex items-center gap-1.5 min-w-0">
+                      <div className="flex w-full min-w-0 items-end gap-2 rounded-full border border-sidebar-border bg-sidebar-accent/50 px-2 py-1.5 shadow-sm transition-[box-shadow,border-color] focus-within:border-accent/40 focus-within:ring-2 focus-within:ring-accent/25">
+                        <div className="flex shrink-0 items-center gap-1 pb-0.5">
                           <Popover open={plusMenuOpen} onOpenChange={setPlusMenuOpen}>
                             <PopoverTrigger asChild>
                               <Button
                                 size="icon"
                                 variant="outline"
-                                className="h-9 w-9 shrink-0 bg-sidebar-accent/50 border-sidebar-border"
+                                className="h-9 w-9 shrink-0 rounded-full border-sidebar-border bg-transparent"
                               >
                                 <Plus className="h-4 w-4" />
                               </Button>
@@ -3184,7 +3166,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                             <DropdownMenuTrigger asChild>
                               <Button
                                 variant="outline"
-                                className="h-9 px-2.5 bg-sidebar-accent/50 border-sidebar-border text-caption font-medium"
+                                className="h-9 max-w-[11rem] shrink-0 rounded-full border-sidebar-border bg-transparent px-3 text-caption font-medium"
                               >
                                 <span className="truncate">{selectedAutomationOption.label}</span>
                                 <ChevronDown className="h-3.5 w-3.5 ml-1.5 shrink-0" />
@@ -3215,7 +3197,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                           ) : null}
 
                           {learnMode && (
-                            <span className="group inline-flex h-9 items-center rounded-md border border-sidebar-border bg-sidebar-accent/50 px-2.5 text-caption font-medium text-foreground shrink-0">
+                            <span className="group inline-flex h-9 items-center rounded-full border border-sidebar-border bg-transparent px-2.5 text-caption font-medium text-foreground shrink-0">
                               <span className="relative mr-1 inline-flex h-3.5 w-3.5 items-center justify-center">
                                 <GraduationCap className="h-3.5 w-3.5 text-accent group-hover:hidden" />
                                 <button
@@ -3232,16 +3214,40 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                           )}
                         </div>
 
-                        <div className="flex items-center gap-1.5 shrink-0">
+                        <Textarea
+                          ref={composerTextareaRef}
+                          placeholder={
+                            learnMode
+                              ? "Ask AI to explain decisions and tradeoffs..."
+                              : photoConsult
+                                ? "Edit prompt or send as-is..."
+                                : "Ask AI..."
+                          }
+                          className="min-h-[38px] max-h-[220px] flex-1 resize-none border-0 bg-transparent px-1 py-2 text-body-sm shadow-none placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 disabled:opacity-50"
+                          value={inputValue}
+                          rows={1}
+                          onChange={(e) => {
+                            setInputValue(e.target.value);
+                            resizeComposer();
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && !e.shiftKey) {
+                              e.preventDefault();
+                              handleSend();
+                            }
+                          }}
+                        />
+
+                        <div className="flex shrink-0 items-center gap-1.5 pb-0.5">
                           <Button
                             size="icon"
                             variant="outline"
-                            className={`h-9 w-9 shrink-0 border-sidebar-border ${
+                            className={`h-9 w-9 shrink-0 rounded-full border-sidebar-border bg-transparent ${
                               voiceState === "listening"
                                 ? "bg-accent/10 text-accent animate-pulse"
                                 : voiceState === "processing"
                                   ? "bg-muted text-foreground"
-                                  : "bg-sidebar-accent/50"
+                                  : ""
                             }`}
                             onClick={handleVoiceInput}
                             title={voiceState === "idle" ? "Voice input (stub)" : voiceState === "listening" ? "Listening..." : "Processing..."}
@@ -3254,7 +3260,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                           </Button>
                           <Button
                             size="icon"
-                            className="h-9 w-9 shrink-0 bg-accent text-accent-foreground hover:bg-accent/90"
+                            className="h-9 w-9 shrink-0 rounded-full bg-accent text-accent-foreground hover:bg-accent/90"
                             onClick={() => handleSend()}
                           >
                             <Send className="h-4 w-4" />
