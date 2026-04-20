@@ -41,9 +41,16 @@ import { PreviewCard } from "@/components/ai/PreviewCard";
 import { ActionBar } from "@/components/ai/ActionBar";
 import { ProposalQueueCard, type ProposalQueueItemState, type ProposalDecision } from "@/components/ai/ProposalQueueCard";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCurrentUser, useEvents, useProject, useProjects, useTasks, useWorkspaceMode } from "@/hooks/use-mock-data";
@@ -126,6 +133,8 @@ const AUTOMATION_MODE_TO_LEVEL: Record<AutomationMode, 1 | 2 | 3 | 4> = {
 };
 const VALID_AUTOMATION_MODES: Set<AutomationMode> = new Set(["full", "assisted", "manual", "observer"]);
 const COMPOSER_MAX_HEIGHT = 220;
+const AI_SIDEBAR_CHAT_MODEL_KEY = "ai-sidebar-chat-model";
+type AiChatModelChoice = "gigachat" | "qwen";
 const GENERAL_MODE_VALUE = "general";
 const ACTIONABLE_PROPOSAL_PATTERN = /\b(task|add task|create task|estimate|cost|budget|procurement|buy|purchase|material|document|contract|report|generate)\b/i;
 const LEARN_USER_PROMPT_PATTERN = /^\s*(how|what|why|explain|как|что|почему|объясни|объясните)\b/i;
@@ -667,7 +676,11 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const [learnMode, setLearnMode] = useState(false);
   const [automationMode, setAutomationMode] = useState<AutomationMode>("manual");
   const [pendingGeneralProposalInput, setPendingGeneralProposalInput] = useState<string | null>(null);
-  const [plusMenuOpen, setPlusMenuOpen] = useState(false);
+  const [aiChatModel, setAiChatModel] = useState<AiChatModelChoice>(() => {
+    if (typeof window === "undefined") return "gigachat";
+    const raw = window.localStorage.getItem(AI_SIDEBAR_CHAT_MODEL_KEY);
+    return raw === "qwen" ? "qwen" : "gigachat";
+  });
   const [tagPersonCursor, setTagPersonCursor] = useState(0);
   const [referenceTaskCursor, setReferenceTaskCursor] = useState(0);
   const [width, setWidth] = useState(() => {
@@ -913,6 +926,10 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, String(width));
   }, [width]);
+
+  useEffect(() => {
+    window.localStorage.setItem(AI_SIDEBAR_CHAT_MODEL_KEY, aiChatModel);
+  }, [aiChatModel]);
 
   useEffect(() => {
     return () => {
@@ -2266,38 +2283,32 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     setMessages([]);
     setChatArchives(loadProjectChatArchives(resolvedPermissionProjectId));
     setExpandedArchiveChatId(null);
-    setPlusMenuOpen(false);
   }, [isGuest, resolvedPermissionProjectId, messages]);
 
   const handleAttachFilePhoto = () => {
     toast({ title: "Attach file/photo", description: "UI stub for attachment flow." });
-    setPlusMenuOpen(false);
   };
 
   const handleTagPerson = () => {
     if (participantNames.length === 0) {
       appendToInput("@participant");
       toast({ title: "No participants found", description: "TODO: connect participants selector." });
-      setPlusMenuOpen(false);
       return;
     }
     const picked = participantNames[tagPersonCursor % participantNames.length];
     setTagPersonCursor((prev) => prev + 1);
     appendToInput(`@${picked}`);
-    setPlusMenuOpen(false);
   };
 
   const handleReferenceTask = () => {
     if (tasks.length === 0) {
       appendToInput("#item");
       toast({ title: "No tasks available", description: "TODO: connect task/item selector." });
-      setPlusMenuOpen(false);
       return;
     }
     const picked = tasks[referenceTaskCursor % tasks.length];
     setReferenceTaskCursor((prev) => prev + 1);
     appendToInput(`#${picked.title}`);
-    setPlusMenuOpen(false);
   };
 
   function resolveActiveProjectForLearnDocument() {
@@ -3078,8 +3089,8 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
 
                       <div className="flex w-full min-w-0 items-end gap-2 rounded-full border border-sidebar-border bg-sidebar-accent/50 px-2 py-1.5 shadow-sm transition-[box-shadow,border-color] focus-within:border-accent/40 focus-within:ring-2 focus-within:ring-accent/25">
                         <div className="flex shrink-0 items-center gap-1 pb-0.5">
-                          <Popover open={plusMenuOpen} onOpenChange={setPlusMenuOpen}>
-                            <PopoverTrigger asChild>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
                               <Button
                                 size="icon"
                                 variant="outline"
@@ -3087,46 +3098,47 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                               >
                                 <Plus className="h-4 w-4" />
                               </Button>
-                            </PopoverTrigger>
-                            <PopoverContent align="start" className="w-auto p-2">
-                              <div className="flex flex-col gap-1.5">
-                                {isPersistableAiProjectId(resolvedPermissionProjectId) && (
-                                  <Button
-                                    size="sm"
-                                    variant="secondary"
-                                    className="h-8 px-2 justify-start"
-                                    onClick={handleNewConversation}
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start" className="min-w-[11.5rem] p-1">
+                              <DropdownMenuItem className="gap-2" onSelect={() => handleReferenceTask()}>
+                                <Link2 className="h-4 w-4 shrink-0" />
+                                Reference
+                              </DropdownMenuItem>
+                              <DropdownMenuItem className="gap-2" onSelect={() => handleTagPerson()}>
+                                <AtSign className="h-4 w-4 shrink-0" />
+                                Tag
+                              </DropdownMenuItem>
+                              <DropdownMenuItem className="gap-2" onSelect={() => handleToggleLearnMode()}>
+                                <GraduationCap className="h-4 w-4 shrink-0" />
+                                <span className="flex-1 text-left">Learn mode</span>
+                                {learnMode ? <Check className="ml-auto h-4 w-4 shrink-0" /> : null}
+                              </DropdownMenuItem>
+                              <DropdownMenuSub>
+                                <DropdownMenuSubTrigger className="gap-2">
+                                  <span className="flex-1 text-left">Model</span>
+                                </DropdownMenuSubTrigger>
+                                <DropdownMenuSubContent className="p-1">
+                                  <DropdownMenuRadioGroup
+                                    value={aiChatModel}
+                                    onValueChange={(v) => setAiChatModel(v as AiChatModelChoice)}
                                   >
-                                    <RefreshCw className="h-3.5 w-3.5 mr-1" />
-                                    New conversation
-                                  </Button>
-                                )}
-                              <div className="flex items-center gap-1.5">
-                                <Button size="sm" variant="outline" className="h-8 px-2" onClick={handleAttachFilePhoto}>
-                                  <Paperclip className="h-3.5 w-3.5 mr-1" />
-                                  Attach
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant={learnMode ? "default" : "outline"}
-                                  className="h-8 px-2"
-                                  onClick={handleToggleLearnMode}
-                                >
-                                  <GraduationCap className="h-3.5 w-3.5 mr-1" />
-                                  Learn
-                                </Button>
-                                <Button size="sm" variant="outline" className="h-8 px-2" onClick={handleTagPerson}>
-                                  <AtSign className="h-3.5 w-3.5 mr-1" />
-                                  Tag
-                                </Button>
-                                <Button size="sm" variant="outline" className="h-8 px-2" onClick={handleReferenceTask}>
-                                  <Link2 className="h-3.5 w-3.5 mr-1" />
-                                  Reference
-                                </Button>
-                              </div>
-                              </div>
-                            </PopoverContent>
-                          </Popover>
+                                    <DropdownMenuRadioItem value="gigachat">GigaChat</DropdownMenuRadioItem>
+                                    <DropdownMenuRadioItem value="qwen">Qwen</DropdownMenuRadioItem>
+                                  </DropdownMenuRadioGroup>
+                                </DropdownMenuSubContent>
+                              </DropdownMenuSub>
+                              <DropdownMenuItem className="gap-2" onSelect={() => handleAttachFilePhoto()}>
+                                <Paperclip className="h-4 w-4 shrink-0" />
+                                Attach
+                              </DropdownMenuItem>
+                              {isPersistableAiProjectId(resolvedPermissionProjectId) ? (
+                                <DropdownMenuItem className="gap-2" onSelect={() => handleNewConversation()}>
+                                  <RefreshCw className="h-4 w-4 shrink-0" />
+                                  New conversation
+                                </DropdownMenuItem>
+                              ) : null}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
 
                           {MVP_SHOW_AI_AUTOMATION_MODE_UI ? (
                           <DropdownMenu>
