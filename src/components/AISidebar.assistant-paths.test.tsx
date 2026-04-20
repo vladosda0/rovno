@@ -158,7 +158,7 @@ describe("AISidebar assistant paths", () => {
       expect(first.chatId).toMatch(
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
       );
-      const stored = sessionStorage.getItem("rovno:ai-chat:project-a");
+      const stored = localStorage.getItem("rovno:ai-chat:project-a");
       expect(stored).toBe(first.chatId);
     });
 

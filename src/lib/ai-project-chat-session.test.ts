@@ -3,6 +3,7 @@ import { getOrCreateProjectChatSessionId } from "@/lib/ai-project-chat-session";
 
 describe("getOrCreateProjectChatSessionId", () => {
   afterEach(() => {
+    localStorage.clear();
     sessionStorage.clear();
   });
 
@@ -16,7 +17,7 @@ describe("getOrCreateProjectChatSessionId", () => {
     const b = getOrCreateProjectChatSessionId(pid);
     expect(a).toMatch(/^[0-9a-f-]{36}$/i);
     expect(a).toBe(b);
-    expect(sessionStorage.getItem(`rovno:ai-chat:${pid}`)).toBe(a);
+    expect(localStorage.getItem(`rovno:ai-chat:${pid}`)).toBe(a);
   });
 
   it("uses distinct ids per project", () => {

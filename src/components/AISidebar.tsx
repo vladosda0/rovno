@@ -67,7 +67,21 @@ import {
   userVisibleLiveTextAssistantError,
   type AiAssistantUiLanguage,
 } from "@/lib/ai-assistant-client";
-import { getOrCreateProjectChatSessionId } from "@/lib/ai-project-chat-session";
+import {
+  getOrCreateProjectChatSessionId,
+  rotateProjectChatSessionId,
+} from "@/lib/ai-project-chat-session";
+import {
+  buildArchivePreviewLines,
+  clearProjectTranscript,
+  isPersistableAiProjectId,
+  loadProjectChatArchives,
+  loadProjectTranscript,
+  prependProjectChatArchive,
+  saveProjectTranscript,
+  trimMessagesForArchive,
+  type AiChatArchiveEntryV1,
+} from "@/lib/ai-chat-transcript-storage";
 import { generateProposalQueue, getTextResponse, reviseProposalWithEdits } from "@/lib/ai-engine";
 import {
   commitPhotoConsultActions,
@@ -115,7 +129,142 @@ const ACTIONABLE_PROPOSAL_PATTERN = /\b(task|add task|create task|estimate|cost|
 const LEARN_USER_PROMPT_PATTERN = /^\s*(how|what|why|explain|как|что|почему|объясни|объясните)\b/i;
 const LEARN_LIST_PATTERN = /(?:^|\n)\s*(?:[-*•]|\d+\.)\s+/m;
 
-type FeedFilter = "all" | "task" | "estimate" | "document" | "photo" | "member" | "ai_actions" | "learn";
+type FeedFilter =
+  | "all"
+  | "chats"
+  | "task"
+  | "estimate"
+  | "document"
+  | "photo"
+  | "member"
+  | "ai_actions"
+  | "learn";
+
+type ChatFeedDomainFilter = "task" | "estimate" | "document" | "photo" | "member";
+
+const FEED_CHAT_DOMAIN_MARKERS: Record<ChatFeedDomainFilter, readonly string[]> = {
+  task: ["task", "tasks", "checklist", "todo", "задач", "чеклист", "этап"],
+  estimate: [
+    "estimate",
+    "budget",
+    "cost",
+    "pricing",
+    "subscription",
+    "money",
+    "spent",
+    "spend",
+    "смета",
+    "бюджет",
+    "стоимост",
+    "затрат",
+    "расход",
+    "денег",
+    "потратил",
+    "подписк",
+    "сколько стоит",
+  ],
+  document: ["document", "pdf", "contract", "file", "документ", "файл", "договор"],
+  photo: ["photo", "image", "picture", "camera", "фото", "изображен", "снимок"],
+  member: ["member", "participant", "crew", "team", "участник", "бригада", "исполнитель"],
+};
+
+function normalizeChatFeedText(text: string): string {
+  return text.toLocaleLowerCase("ru-RU").replace(/\s+/g, " ").trim();
+}
+
+function collectLearnRelatedMessageIds(messages: readonly AIMessage[]): Set<string> {
+  const ids = new Set<string>();
+  const isLearnExplicit = (message: AIMessage) => (
+    message.mode === "learn"
+    || ((message as AIMessage & { meta?: { mode?: string } }).meta?.mode === "learn")
+  );
+  const isLearnLikeUser = (message: AIMessage) => (
+    message.role === "user" && LEARN_USER_PROMPT_PATTERN.test(message.content.trim())
+  );
+  const isLearnLikeAssistant = (message: AIMessage) => (
+    message.role === "assistant"
+    && (message.content.length >= 240 || LEARN_LIST_PATTERN.test(message.content))
+  );
+
+  messages.forEach((message, index) => {
+    const qualifies = isLearnExplicit(message) || isLearnLikeUser(message) || isLearnLikeAssistant(message);
+    if (!qualifies) return;
+
+    ids.add(message.id);
+    if (message.role === "user") {
+      for (let nextIndex = index + 1; nextIndex < messages.length; nextIndex += 1) {
+        if (messages[nextIndex]?.role === "assistant") {
+          ids.add(messages[nextIndex].id);
+          break;
+        }
+      }
+    } else {
+      for (let prevIndex = index - 1; prevIndex >= 0; prevIndex -= 1) {
+        if (messages[prevIndex]?.role === "user") {
+          ids.add(messages[prevIndex].id);
+          break;
+        }
+      }
+    }
+  });
+  return ids;
+}
+
+function messageMatchesChatFeedDomain(message: AIMessage, domain: ChatFeedDomainFilter): boolean {
+  const n = normalizeChatFeedText(message.content);
+  return FEED_CHAT_DOMAIN_MARKERS[domain].some((marker) => n.includes(marker));
+}
+
+function transcriptMatchesChatFeedDomain(
+  messages: readonly AIMessage[],
+  domain: ChatFeedDomainFilter,
+): boolean {
+  return messages.some((m) => messageMatchesChatFeedDomain(m, domain));
+}
+
+/** Live-text / proposal signals that belong in “AI actions” alongside AI-tagged events. */
+function messageHasAiActionSignals(message: AIMessage): boolean {
+  if (message.proposal !== undefined) return true;
+  const lt = message.liveTextAssistantV1;
+  if (lt?.workProposal?.proposalTitle?.trim()) return true;
+  if (lt?.workProposal?.suggestedWorkItems && lt.workProposal.suggestedWorkItems.length > 0) {
+    return true;
+  }
+  return false;
+}
+
+function transcriptHasAiActionSignals(messages: readonly AIMessage[]): boolean {
+  return messages.some(messageHasAiActionSignals);
+}
+
+function archiveEntryMatchesFeedFilter(
+  entry: AiChatArchiveEntryV1,
+  filter: FeedFilter,
+): boolean {
+  const snap = entry.messagesSnapshot;
+  switch (filter) {
+    case "all":
+    case "chats":
+      return true;
+    case "learn":
+      return collectLearnRelatedMessageIds(snap).size > 0;
+    case "ai_actions":
+      return (
+        transcriptHasAiActionSignals(snap)
+        || entry.feedHints?.aiActions === true
+        || entry.feedHints?.hadDocumentOrPhotoAnalysis === true
+      );
+    case "task":
+    case "estimate":
+    case "document":
+    case "photo":
+    case "member":
+      return transcriptMatchesChatFeedDomain(snap, filter);
+    default:
+      return false;
+  }
+}
+
 type ActiveWindow = "none" | "worklog" | "proposal_queue" | "photo_consult";
 type AutomationMode = "full" | "assisted" | "manual" | "observer";
 type VoiceState = "idle" | "listening" | "processing";
@@ -179,7 +328,22 @@ interface StreamChatRow {
   message: AIMessage;
 }
 
-type StreamRow = StreamProposalGroupRow | StreamEventRow | StreamStatusRow | StreamStockUsedRow | StreamChatRow;
+interface StreamArchivedChatRow {
+  id: string;
+  kind: "archived_chat";
+  tier: StreamRowTier;
+  timestampMs: number;
+  timestamp: string;
+  archiveEntry: AiChatArchiveEntryV1;
+}
+
+type StreamRow =
+  | StreamProposalGroupRow
+  | StreamEventRow
+  | StreamStatusRow
+  | StreamStockUsedRow
+  | StreamChatRow
+  | StreamArchivedChatRow;
 
 interface DayBucket {
   key: string;
@@ -513,6 +677,8 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const [messageRatings, setMessageRatings] = useState<Record<string, "good" | "bad" | undefined>>({});
   const [savedMessageIds, setSavedMessageIds] = useState<Set<string>>(new Set());
   const [regeneratingMessageId, setRegeneratingMessageId] = useState<string | null>(null);
+  const [chatArchives, setChatArchives] = useState<AiChatArchiveEntryV1[]>([]);
+  const [expandedArchiveChatId, setExpandedArchiveChatId] = useState<string | null>(null);
 
   // Photo consult state
   const [photoConsult, setPhotoConsult] = useState<PhotoConsultContext | null>(null);
@@ -669,6 +835,26 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     projectId,
     scopeKey,
   ]);
+
+  useEffect(() => {
+    if (isGuest) return;
+    if (!isPersistableAiProjectId(resolvedPermissionProjectId)) {
+      setChatArchives([]);
+      return;
+    }
+    const loaded = loadProjectTranscript(resolvedPermissionProjectId);
+    if (loaded && loaded.messages.length > 0) {
+      setMessages(loaded.messages);
+    }
+    setChatArchives(loadProjectChatArchives(resolvedPermissionProjectId));
+    setExpandedArchiveChatId(null);
+  }, [resolvedPermissionProjectId, isGuest]);
+
+  useEffect(() => {
+    if (isGuest || !isPersistableAiProjectId(resolvedPermissionProjectId)) return;
+    const chatId = getOrCreateProjectChatSessionId(resolvedPermissionProjectId);
+    saveProjectTranscript(resolvedPermissionProjectId, { messages, activeChatId: chatId });
+  }, [messages, resolvedPermissionProjectId, isGuest]);
 
   useEffect(() => () => {
     scopedSidebarStateByKey.set(previousScopeKeyRef.current, latestScopedStateRef.current);
@@ -1721,7 +1907,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   ), [members]);
 
   const filteredEvents = useMemo(() => {
-    if (activityFilter === "learn") return [] as Event[];
+    if (activityFilter === "learn" || activityFilter === "chats") return [] as Event[];
     if (activityFilter === "all") return events;
     if (activityFilter === "ai_actions") return events.filter((event) => isAIEvent(event));
     return events.filter((event) => event.type.startsWith(activityFilter));
@@ -1746,44 +1932,11 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     return map;
   }, [events]);
 
-  const learnMessages = useMemo(() => {
-    const ids = new Set<string>();
-    const isLearnExplicit = (message: AIMessage) => (
-      message.mode === "learn"
-      || ((message as AIMessage & { meta?: { mode?: string } }).meta?.mode === "learn")
-    );
-    const isLearnLikeUser = (message: AIMessage) => (
-      message.role === "user" && LEARN_USER_PROMPT_PATTERN.test(message.content.trim())
-    );
-    const isLearnLikeAssistant = (message: AIMessage) => (
-      message.role === "assistant"
-      && (message.content.length >= 240 || LEARN_LIST_PATTERN.test(message.content))
-    );
-
-    messages.forEach((message, index) => {
-      const qualifies = isLearnExplicit(message) || isLearnLikeUser(message) || isLearnLikeAssistant(message);
-      if (!qualifies) return;
-
-      ids.add(message.id);
-      if (message.role === "user") {
-        for (let nextIndex = index + 1; nextIndex < messages.length; nextIndex += 1) {
-          if (messages[nextIndex]?.role === "assistant") {
-            ids.add(messages[nextIndex].id);
-            break;
-          }
-        }
-      } else {
-        for (let prevIndex = index - 1; prevIndex >= 0; prevIndex -= 1) {
-          if (messages[prevIndex]?.role === "user") {
-            ids.add(messages[prevIndex].id);
-            break;
-          }
-        }
-      }
-    });
-
-    return messages.filter((message) => ids.has(message.id));
-  }, [messages]);
+  const learnMessageIds = useMemo(() => collectLearnRelatedMessageIds(messages), [messages]);
+  const learnMessages = useMemo(
+    () => messages.filter((message) => learnMessageIds.has(message.id)),
+    [messages, learnMessageIds],
+  );
 
   const streamRows = useMemo<StreamRow[]>(() => {
     const visibleEventIds = new Set(chronologicalFilteredEvents.map((event) => event.id));
@@ -1881,11 +2034,28 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
       });
     });
 
-    const chatSource = activityFilter === "learn"
-      ? learnMessages
-      : activityFilter === "all"
-        ? messages
-        : [];
+    let chatSource: AIMessage[] = [];
+    switch (activityFilter) {
+      case "all":
+      case "chats":
+        chatSource = messages;
+        break;
+      case "learn":
+        chatSource = learnMessages;
+        break;
+      case "ai_actions":
+        chatSource = messages.filter(messageHasAiActionSignals);
+        break;
+      case "task":
+      case "estimate":
+      case "document":
+      case "photo":
+      case "member":
+        chatSource = messages.filter((m) => messageMatchesChatFeedDomain(m, activityFilter));
+        break;
+      default:
+        chatSource = [];
+    }
 
     if (chatSource.length > 0) {
       chatSource.forEach((message) => {
@@ -1900,6 +2070,21 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
       });
     }
 
+    if (isPersistableAiProjectId(resolvedPermissionProjectId) && chatArchives.length > 0) {
+      chatArchives.forEach((entry) => {
+        if (!archiveEntryMatchesFeedFilter(entry, activityFilter)) return;
+        const timestampMs = entry.endedAt;
+        rows.push({
+          id: `archived-chat-${entry.chatId}`,
+          kind: "archived_chat",
+          tier: 2,
+          timestamp: new Date(timestampMs).toISOString(),
+          timestampMs,
+          archiveEntry: entry,
+        });
+      });
+    }
+
     return rows
       .map((row, idx) => ({ row, idx }))
       .sort((a, b) => {
@@ -1908,7 +2093,16 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
         return a.idx - b.idx;
       })
       .map((item) => item.row);
-  }, [activityFilter, chronologicalFilteredEvents, eventById, learnMessages, messages, proposalExecutionLinks]);
+  }, [
+    activityFilter,
+    chatArchives,
+    chronologicalFilteredEvents,
+    eventById,
+    learnMessages,
+    messages,
+    proposalExecutionLinks,
+    resolvedPermissionProjectId,
+  ]);
 
   const dayBuckets = useMemo<DayBucket[]>(() => {
     const map = new Map<string, DayBucket>();
@@ -2033,6 +2227,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
 
   const filterOptions: { key: FeedFilter; label: string }[] = [
     { key: "all", label: "All" },
+    { key: "chats", label: "Chats" },
     { key: "learn", label: "Learn" },
     { key: "task", label: "Task" },
     { key: "estimate", label: "Estimate" },
@@ -2072,6 +2267,28 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const handleToggleLearnMode = () => {
     setLearnMode((prev) => !prev);
   };
+
+  const handleNewConversation = useCallback(() => {
+    if (isGuest || !isPersistableAiProjectId(resolvedPermissionProjectId)) return;
+    const endingChatId = getOrCreateProjectChatSessionId(resolvedPermissionProjectId);
+    if (messages.length > 0 && endingChatId) {
+      prependProjectChatArchive(resolvedPermissionProjectId, {
+        chatId: endingChatId,
+        endedAt: Date.now(),
+        previewLines: buildArchivePreviewLines(messages),
+        messagesSnapshot: trimMessagesForArchive(messages),
+        feedHints: {
+          aiActions: transcriptHasAiActionSignals(messages),
+        },
+      });
+    }
+    clearProjectTranscript(resolvedPermissionProjectId);
+    rotateProjectChatSessionId(resolvedPermissionProjectId);
+    setMessages([]);
+    setChatArchives(loadProjectChatArchives(resolvedPermissionProjectId));
+    setExpandedArchiveChatId(null);
+    setPlusMenuOpen(false);
+  }, [isGuest, resolvedPermissionProjectId, messages]);
 
   const handleAttachFilePhoto = () => {
     toast({ title: "Attach file/photo", description: "UI stub for attachment flow." });
@@ -2502,6 +2719,71 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                                           );
                                         }
 
+                                        if (row.kind === "archived_chat") {
+                                          const entry = row.archiveEntry;
+                                          const expanded = expandedArchiveChatId === entry.chatId;
+                                          return (
+                                            <div
+                                              key={row.id}
+                                              className={`px-2 py-1.5 min-w-0 max-w-full ${rowIndex > 0 ? "mt-2" : ""}`}
+                                            >
+                                              <div className="glass rounded-lg border border-border/60 px-2 py-1.5 min-w-0 max-w-full">
+                                                <div className="flex items-start gap-2 min-w-0">
+                                                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted">
+                                                    <Bot className="h-3.5 w-3.5 text-accent" />
+                                                  </div>
+                                                  <div className="flex-1 min-w-0">
+                                                    <p className="text-caption font-medium text-foreground">
+                                                      {format(new Date(entry.endedAt), "MMM d, yyyy · HH:mm")}
+                                                    </p>
+                                                    {entry.previewLines.map((line, i) => (
+                                                      <p
+                                                        key={`${entry.chatId}-preview-${i}`}
+                                                        className="text-[11px] text-muted-foreground leading-snug line-clamp-2"
+                                                      >
+                                                        {line}
+                                                      </p>
+                                                    ))}
+                                                  </div>
+                                                  <span className="text-[10px] text-muted-foreground whitespace-nowrap mt-0.5 shrink-0">
+                                                    {new Date(row.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                                  </span>
+                                                </div>
+                                                <div className="mt-1.5 flex items-center gap-1.5">
+                                                  <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="h-7 text-[11px] px-2"
+                                                    onClick={() => setExpandedArchiveChatId(expanded ? null : entry.chatId)}
+                                                  >
+                                                    {expanded ? "Hide" : "Open"}
+                                                  </Button>
+                                                </div>
+                                                {expanded && entry.messagesSnapshot.length > 0 && (
+                                                  <div className="mt-2 space-y-1.5 border-t border-border/50 pt-2 max-h-[280px] overflow-y-auto">
+                                                    {entry.messagesSnapshot.map((m) => (
+                                                      <div
+                                                        key={`${entry.chatId}-snap-${m.id}`}
+                                                        className={`rounded-md border border-border/50 px-2 py-1 ${
+                                                          m.role === "user" ? "bg-sidebar-accent/30" : "bg-muted/15"
+                                                        }`}
+                                                      >
+                                                        <p className="text-[10px] font-medium text-muted-foreground mb-0.5">
+                                                          {m.role === "user" ? "You" : "AI"}
+                                                        </p>
+                                                        <p className="text-[11px] text-foreground whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+                                                          {m.content}
+                                                        </p>
+                                                      </div>
+                                                    ))}
+                                                  </div>
+                                                )}
+                                              </div>
+                                            </div>
+                                          );
+                                        }
+
                                         const isLearnMessage = row.message.mode === "learn";
                                         const isLearnContext = isLearnMessage
                                           || learnMode
@@ -2798,6 +3080,18 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                               </Button>
                             </PopoverTrigger>
                             <PopoverContent align="start" className="w-auto p-2">
+                              <div className="flex flex-col gap-1.5">
+                                {isPersistableAiProjectId(resolvedPermissionProjectId) && (
+                                  <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    className="h-8 px-2 justify-start"
+                                    onClick={handleNewConversation}
+                                  >
+                                    <RefreshCw className="h-3.5 w-3.5 mr-1" />
+                                    New conversation
+                                  </Button>
+                                )}
                               <div className="flex items-center gap-1.5">
                                 <Button size="sm" variant="outline" className="h-8 px-2" onClick={handleAttachFilePhoto}>
                                   <Paperclip className="h-3.5 w-3.5 mr-1" />
@@ -2820,6 +3114,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                                   <Link2 className="h-3.5 w-3.5 mr-1" />
                                   Reference
                                 </Button>
+                              </div>
                               </div>
                             </PopoverContent>
                           </Popover>
