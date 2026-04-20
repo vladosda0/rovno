@@ -306,6 +306,18 @@ describe("mapWorkProposal", () => {
 // ---------------------------------------------------------------------------
 
 describe("mapInferenceResponse", () => {
+  it("echoes llmProvider from the edge when present", () => {
+    expect(
+      mapInferenceResponse({ answerText: "A", groundingStatus: "none", llmProvider: "qwen" }).llmProvider,
+    ).toBe("qwen");
+    expect(
+      mapInferenceResponse({ answerText: "A", groundingStatus: "none", llmProvider: "gigachat" }).llmProvider,
+    ).toBe("gigachat");
+    expect(
+      mapInferenceResponse({ answerText: "A", groundingStatus: "none" }).llmProvider,
+    ).toBeUndefined();
+  });
+
   it("maps a complete backend response", () => {
     const result = mapInferenceResponse({
       explanation: "Here is your answer.",
@@ -461,6 +473,18 @@ describe("buildInferenceRequestBody", () => {
     const pack = minimalContextPack();
     const body = buildInferenceRequestBody("pid-1", "consult", "hi", pack, "not-uuid");
     expect(body).not.toHaveProperty("chatId");
+  });
+
+  it("includes llmProvider when provided (qwen / hosted A-B switch)", () => {
+    const pack = minimalContextPack();
+    const noLlm = buildInferenceRequestBody("pid-1", "consult", "hi", pack);
+    expect(noLlm).not.toHaveProperty("llmProvider");
+    const qwen = buildInferenceRequestBody("pid-1", "consult", "hi", pack, undefined, "qwen");
+    expect(qwen.llmProvider).toBe("qwen");
+    const cid = "a1b2c3d4-e5f6-4780-abcd-ef1234567890";
+    const both = buildInferenceRequestBody("pid-1", "consult", "hi", pack, cid, "gigachat");
+    expect(both.chatId).toBe(cid);
+    expect(both.llmProvider).toBe("gigachat");
   });
 });
 

@@ -26,6 +26,7 @@ import {
   ThumbsDown,
   BookmarkPlus,
   RefreshCw,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -112,6 +113,11 @@ import {
 } from "@/data/store";
 import { format, isToday, isYesterday } from "date-fns";
 import { MVP_SHOW_AI_AUTOMATION_MODE_UI } from "@/lib/mvp-ai-automation-ui";
+import {
+  type AiLlmProvider,
+  readStoredAiLlmProvider,
+  writeStoredAiLlmProvider,
+} from "@/lib/ai-llm-provider";
 
 const PROJECT_SUGGESTIONS = ["Add tasks", "Update estimate", "Generate contract", "Buy materials"];
 const GLOBAL_SUGGESTIONS = ["Create project", "Compare estimates", "Best tile adhesive?"];
@@ -133,8 +139,6 @@ const AUTOMATION_MODE_TO_LEVEL: Record<AutomationMode, 1 | 2 | 3 | 4> = {
 };
 const VALID_AUTOMATION_MODES: Set<AutomationMode> = new Set(["full", "assisted", "manual", "observer"]);
 const COMPOSER_MAX_HEIGHT = 220;
-const AI_SIDEBAR_CHAT_MODEL_KEY = "ai-sidebar-chat-model";
-type AiChatModelChoice = "gigachat" | "qwen";
 const GENERAL_MODE_VALUE = "general";
 const ACTIONABLE_PROPOSAL_PATTERN = /\b(task|add task|create task|estimate|cost|budget|procurement|buy|purchase|material|document|contract|report|generate)\b/i;
 const LEARN_USER_PROMPT_PATTERN = /^\s*(how|what|why|explain|как|что|почему|объясни|объясните)\b/i;
@@ -676,11 +680,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const [learnMode, setLearnMode] = useState(false);
   const [automationMode, setAutomationMode] = useState<AutomationMode>("manual");
   const [pendingGeneralProposalInput, setPendingGeneralProposalInput] = useState<string | null>(null);
-  const [aiChatModel, setAiChatModel] = useState<AiChatModelChoice>(() => {
-    if (typeof window === "undefined") return "gigachat";
-    const raw = window.localStorage.getItem(AI_SIDEBAR_CHAT_MODEL_KEY);
-    return raw === "qwen" ? "qwen" : "gigachat";
-  });
+  const [aiChatModel, setAiChatModel] = useState<AiLlmProvider>(readStoredAiLlmProvider);
   const [tagPersonCursor, setTagPersonCursor] = useState(0);
   const [referenceTaskCursor, setReferenceTaskCursor] = useState(0);
   const [width, setWidth] = useState(() => {
@@ -928,7 +928,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   }, [width]);
 
   useEffect(() => {
-    window.localStorage.setItem(AI_SIDEBAR_CHAT_MODEL_KEY, aiChatModel);
+    writeStoredAiLlmProvider(aiChatModel);
   }, [aiChatModel]);
 
   useEffect(() => {
@@ -1417,6 +1417,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
             aiAccess: seam.membership?.ai_access ?? "none",
             aiOutputLanguage: workspaceProfilePreferences?.aiOutputLanguage,
             chatId,
+            llmProvider: aiChatModel,
           });
           setWorkLogs((prev) => {
             const next = new Map(prev);
@@ -1432,6 +1433,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
             liveTextProjectId: targetProjectId,
             liveTextAssistantV1: {
               version: 1,
+              llmProvider: result.llmProvider,
               assistantUiLanguage: result.assistantUiLanguage,
               grounding: result.grounding,
               groundingNote: result.groundingNote,
@@ -3115,12 +3117,13 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                               </DropdownMenuItem>
                               <DropdownMenuSub>
                                 <DropdownMenuSubTrigger className="gap-2">
+                                  <Sparkles className="h-4 w-4 shrink-0" />
                                   <span className="flex-1 text-left">Model</span>
                                 </DropdownMenuSubTrigger>
                                 <DropdownMenuSubContent className="p-1">
                                   <DropdownMenuRadioGroup
                                     value={aiChatModel}
-                                    onValueChange={(v) => setAiChatModel(v as AiChatModelChoice)}
+                                    onValueChange={(v) => setAiChatModel(v as AiLlmProvider)}
                                   >
                                     <DropdownMenuRadioItem value="gigachat">GigaChat</DropdownMenuRadioItem>
                                     <DropdownMenuRadioItem value="qwen">Qwen</DropdownMenuRadioItem>

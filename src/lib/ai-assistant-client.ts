@@ -1,4 +1,5 @@
 import type { AIContextPack } from "@/lib/ai-project-context";
+import type { AiLlmProvider } from "@/lib/ai-llm-provider";
 import type {
   AssistantGroundingStatus,
   InferenceGroundingKind,
@@ -27,6 +28,8 @@ export interface InvokeLiveTextAssistantInput {
   aiOutputLanguage?: "ru" | "en" | "auto";
   /** Optional UUID — Layer B session continuity for hosted `ai-inference`. */
   chatId?: string;
+  /** Hosted `ai-inference` — GigaChat vs Qwen (DashScope). Omit to use Edge default / env. */
+  llmProvider?: AiLlmProvider;
 }
 
 /** UI language for assistant chrome (errors, mock path, source labels). */
@@ -87,6 +90,7 @@ export function pickInferenceMode(userMessage: string, aiAccess: AIAccess): Infe
 interface AIInferenceRequestBody {
   projectId: string;
   chatId?: string;
+  llmProvider?: AiLlmProvider;
   mode: InferenceMode;
   message: string;
   contextPack: {
@@ -121,6 +125,7 @@ interface BackendWorkProposal {
 }
 
 interface AIInferenceResponseBody {
+  llmProvider?: string;
   responseVersion?: string;
   answerText?: string;
   groundingKind?: string;
@@ -319,6 +324,11 @@ function pickAnswerText(body: AIInferenceResponseBody, lang: AiAssistantUiLangua
     : "The assistant could not prepare a reply.";
 }
 
+function mapEchoLlmProvider(raw: string | undefined): AiLlmProvider | undefined {
+  if (raw === "gigachat" || raw === "qwen") return raw;
+  return undefined;
+}
+
 export function mapInferenceResponse(
   body: AIInferenceResponseBody,
   assistantUiLanguage: AiAssistantUiLanguage = "en",
@@ -333,6 +343,7 @@ export function mapInferenceResponse(
     : undefined;
 
   return {
+    llmProvider: mapEchoLlmProvider(body.llmProvider),
     assistantUiLanguage,
     explanation: pickAnswerText(body, assistantUiLanguage),
     grounding,
@@ -359,6 +370,7 @@ export function buildInferenceRequestBody(
   userMessage: string,
   contextPack: AIContextPack,
   chatId?: string,
+  llmProvider?: AiLlmProvider,
 ): AIInferenceRequestBody {
   const { _meta: _, ...safeContext } = contextPack;
   const body: AIInferenceRequestBody = {
@@ -372,6 +384,9 @@ export function buildInferenceRequestBody(
   };
   if (chatId && UUID_RE.test(chatId)) {
     body.chatId = chatId;
+  }
+  if (llmProvider) {
+    body.llmProvider = llmProvider;
   }
   return body;
 }
@@ -492,13 +507,15 @@ async function invokeHosted(
   contextPack: AIContextPack,
   assistantUiLanguage: AiAssistantUiLanguage,
   chatId?: string,
+  llmProvider?: AiLlmProvider,
 ): Promise<LiveTextAssistantResult> {
   const { supabase } = await import("@/integrations/supabase/client");
-  const body = buildInferenceRequestBody(projectId, mode, userMessage, contextPack, chatId);
+  const body = buildInferenceRequestBody(projectId, mode, userMessage, contextPack, chatId, llmProvider);
 
   const { data, error } = await supabase.functions.invoke("ai-inference", { body });
 
   const bodyError = parseEdgeFunctionErrorBody(data);
+
   if (bodyError) {
     throw new Error(sanitizeAiInferenceUserMessage(bodyError, assistantUiLanguage));
   }
@@ -637,6 +654,7 @@ async function invokeMock(
       "_Local demo mode — connect hosted `ai-inference` when you are ready._",
     ].join("\n");
   return {
+    llmProvider: input.llmProvider,
     assistantUiLanguage,
     explanation,
     grounding,
@@ -666,6 +684,7 @@ export async function invokeLiveTextAssistant(
       input.contextPack,
       assistantUiLanguage,
       input.chatId,
+      input.llmProvider,
     );
   }
   return invokeMock(input, assistantUiLanguage);
