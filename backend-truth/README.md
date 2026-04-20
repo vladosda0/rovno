@@ -80,6 +80,11 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql`
 - `supabase/migrations/20260415130000_wave7_documents_media_ai_metadata_evidence.sql`
 - `supabase/migrations/20260416100000_wave9_closeout_hardening.sql`
+- `supabase/migrations/20260416120000_session2_ai_humanize_tasks_hr.sql`
+- `supabase/migrations/20260416140000_session21_estimate_assignee_display_name.sql`
+- `supabase/migrations/20260417120000_estimate_resource_line_assignee_profile.sql`
+- `supabase/migrations/20260418120000_estimate_resource_line_assignee_label.sql`
+- `supabase/migrations/20260419120000_session3c_procurement_ai_in_stock_evidence.sql`
 
 ## Exclusions
 

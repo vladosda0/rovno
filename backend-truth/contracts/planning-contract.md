@@ -14,7 +14,7 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 - `supabase/migrations/20260306164000_hr_domain.sql`
 - `supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql`
 - `supabase/migrations/20260320110000_task_final_media_contract.sql`
-- `supabase/migrations/20260414150000_wave4_tasks_ai_operational_evidence_rpc.sql`
+- `supabase/migrations/20260416120000_session2_ai_humanize_tasks_hr.sql`
 - `supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql`
 
 ## Tables
@@ -148,7 +148,7 @@ Triggers:
 
 | Function | Returns | Auth Execute | Kind | Source |
 | --- | --- | --- | --- | --- |
-| `public.get_tasks_ai_operational_evidence(uuid, integer, integer)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260414150000_wave4_tasks_ai_operational_evidence_rpc.sql` |
+| `public.get_tasks_ai_operational_evidence(uuid, integer, integer)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260416120000_session2_ai_humanize_tasks_hr.sql` |
 
 ## RLS and Grants
 

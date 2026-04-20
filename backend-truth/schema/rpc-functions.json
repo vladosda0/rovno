@@ -1167,7 +1167,7 @@
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260406200000_track1_estimate_operational_summary_finance_visibility.sql",
+      "sourceMigration": "supabase/migrations/20260418120000_estimate_resource_line_assignee_label.sql",
       "triggerUsages": []
     },
     {
@@ -1197,7 +1197,7 @@
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql",
+      "sourceMigration": "supabase/migrations/20260416120000_session2_ai_humanize_tasks_hr.sql",
       "triggerUsages": []
     },
     {
@@ -1382,7 +1382,7 @@
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260416100000_wave9_closeout_hardening.sql",
+      "sourceMigration": "supabase/migrations/20260419120000_session3c_procurement_ai_in_stock_evidence.sql",
       "triggerUsages": []
     },
     {
@@ -1412,7 +1412,7 @@
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260414150000_wave4_tasks_ai_operational_evidence_rpc.sql",
+      "sourceMigration": "supabase/migrations/20260416120000_session2_ai_humanize_tasks_hr.sql",
       "triggerUsages": []
     },
     {

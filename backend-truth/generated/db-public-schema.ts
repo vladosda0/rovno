@@ -227,6 +227,26 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260416100000_wave9_closeout_hardening.sql",
       "sha256": "8953af6cb94106a51c8f5e6fab1821a48ad42109a1ce7fede7c1095e0afb94da"
+    },
+    {
+      "path": "supabase/migrations/20260416120000_session2_ai_humanize_tasks_hr.sql",
+      "sha256": "4e1056ae7532a90ae51328daa87fb8143cd1ac3b9fd3ba7b79ed8d13f6c38e5e"
+    },
+    {
+      "path": "supabase/migrations/20260416140000_session21_estimate_assignee_display_name.sql",
+      "sha256": "60bee943339ebdcdcfd2de2b95589963ede91ae92e65b8bce43e3450ee844874"
+    },
+    {
+      "path": "supabase/migrations/20260417120000_estimate_resource_line_assignee_profile.sql",
+      "sha256": "bec728fb96795fdf88d1da3ac1ea551ff70d554b9e5158327c516f98e720f098"
+    },
+    {
+      "path": "supabase/migrations/20260418120000_estimate_resource_line_assignee_label.sql",
+      "sha256": "efdab89eb9b92b6bf12110f2b048edb8295718dd1cc541600227131cd482cc45"
+    },
+    {
+      "path": "supabase/migrations/20260419120000_session3c_procurement_ai_in_stock_evidence.sql",
+      "sha256": "7ede71685d25398d4c9c7bf75ffe81e5bb4c1fae4a05a7abef152c4a990897d9"
     }
   ],
   "generated_artifacts": [
@@ -306,6 +326,11 @@ export const manifest = {
     "sql/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql",
     "sql/20260415130000_wave7_documents_media_ai_metadata_evidence.sql",
     "sql/20260416100000_wave9_closeout_hardening.sql",
+    "sql/20260416120000_session2_ai_humanize_tasks_hr.sql",
+    "sql/20260416140000_session21_estimate_assignee_display_name.sql",
+    "sql/20260417120000_estimate_resource_line_assignee_profile.sql",
+    "sql/20260418120000_estimate_resource_line_assignee_label.sql",
+    "sql/20260419120000_session3c_procurement_ai_in_stock_evidence.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -3452,6 +3477,33 @@ export const tables = {
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "assignee_profile_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "profiles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
+        },
+        {
+          "name": "assignee_label",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -3556,6 +3608,16 @@ export const tables = {
           "where": null,
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        },
+        {
+          "name": "idx_estimate_resource_lines_assignee_profile_id",
+          "unique": false,
+          "expressions": [
+            "assignee_profile_id"
+          ],
+          "where": "assignee_profile_id is not null",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260417120000_estimate_resource_line_assignee_profile.sql"
         }
       ],
       "triggers": []
@@ -8540,6 +8602,22 @@ export const relations = {
         "id"
       ],
       "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260417120000_estimate_resource_line_assignee_profile.sql",
+      "sourceKind": "alter_table",
+      "fromSchema": "public",
+      "fromTable": "estimate_resource_lines",
+      "fromColumns": [
+        "assignee_profile_id"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
     }
   ]
 } as const;
@@ -10767,7 +10845,7 @@ export const functions = {
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260406200000_track1_estimate_operational_summary_finance_visibility.sql",
+      "sourceMigration": "supabase/migrations/20260418120000_estimate_resource_line_assignee_label.sql",
       "triggerUsages": []
     },
     {
@@ -10797,7 +10875,7 @@ export const functions = {
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql",
+      "sourceMigration": "supabase/migrations/20260416120000_session2_ai_humanize_tasks_hr.sql",
       "triggerUsages": []
     },
     {
@@ -10982,7 +11060,7 @@ export const functions = {
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260416100000_wave9_closeout_hardening.sql",
+      "sourceMigration": "supabase/migrations/20260419120000_session3c_procurement_ai_in_stock_evidence.sql",
       "triggerUsages": []
     },
     {
@@ -11012,7 +11090,7 @@ export const functions = {
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260414150000_wave4_tasks_ai_operational_evidence_rpc.sql",
+      "sourceMigration": "supabase/migrations/20260416120000_session2_ai_humanize_tasks_hr.sql",
       "triggerUsages": []
     },
     {
@@ -13594,14 +13672,14 @@ export const sourceTrace = {
       "schema": "public",
       "name": "get_estimate_operational_summary",
       "signature": "public.get_estimate_operational_summary(uuid, uuid, integer, integer)",
-      "sourceMigration": "supabase/migrations/20260406200000_track1_estimate_operational_summary_finance_visibility.sql"
+      "sourceMigration": "supabase/migrations/20260418120000_estimate_resource_line_assignee_label.sql"
     },
     {
       "key": "public.get_hr_operational_summary",
       "schema": "public",
       "name": "get_hr_operational_summary",
       "signature": "public.get_hr_operational_summary(uuid, integer, integer)",
-      "sourceMigration": "supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql"
+      "sourceMigration": "supabase/migrations/20260416120000_session2_ai_humanize_tasks_hr.sql"
     },
     {
       "key": "public.can_access_hr_domain",
@@ -13636,14 +13714,14 @@ export const sourceTrace = {
       "schema": "public",
       "name": "get_procurement_ai_operational_evidence",
       "signature": "public.get_procurement_ai_operational_evidence(uuid, integer, integer)",
-      "sourceMigration": "supabase/migrations/20260416100000_wave9_closeout_hardening.sql"
+      "sourceMigration": "supabase/migrations/20260419120000_session3c_procurement_ai_in_stock_evidence.sql"
     },
     {
       "key": "public.get_tasks_ai_operational_evidence",
       "schema": "public",
       "name": "get_tasks_ai_operational_evidence",
       "signature": "public.get_tasks_ai_operational_evidence(uuid, integer, integer)",
-      "sourceMigration": "supabase/migrations/20260414150000_wave4_tasks_ai_operational_evidence_rpc.sql"
+      "sourceMigration": "supabase/migrations/20260416120000_session2_ai_humanize_tasks_hr.sql"
     },
     {
       "key": "public._trim_session_turns_jsonb",
@@ -14757,7 +14835,7 @@ export const sourceTrace = {
         "supabase/migrations/20260306164000_hr_domain.sql",
         "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
         "supabase/migrations/20260320110000_task_final_media_contract.sql",
-        "supabase/migrations/20260414150000_wave4_tasks_ai_operational_evidence_rpc.sql",
+        "supabase/migrations/20260416120000_session2_ai_humanize_tasks_hr.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
       ],
       "tables": [
@@ -15034,8 +15112,9 @@ export const sourceTrace = {
         "supabase/migrations/20260306164000_hr_domain.sql",
         "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
         "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql",
+        "supabase/migrations/20260417120000_estimate_resource_line_assignee_profile.sql",
         "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
-        "supabase/migrations/20260406200000_track1_estimate_operational_summary_finance_visibility.sql",
+        "supabase/migrations/20260418120000_estimate_resource_line_assignee_label.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
@@ -15153,6 +15232,11 @@ export const sourceTrace = {
           "from": "public.hr_items",
           "to": "public.estimate_resource_lines",
           "sourceMigration": "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql"
+        },
+        {
+          "from": "public.estimate_resource_lines",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260417120000_estimate_resource_line_assignee_profile.sql"
         }
       ]
     },
@@ -15164,7 +15248,7 @@ export const sourceTrace = {
         "supabase/migrations/20260306163000_inventory_foundation.sql",
         "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
         "supabase/migrations/20260406183000_procurement_operational_summary_requested_and_ordered_line_types.sql",
-        "supabase/migrations/20260416100000_wave9_closeout_hardening.sql",
+        "supabase/migrations/20260419120000_session3c_procurement_ai_in_stock_evidence.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
@@ -15320,7 +15404,7 @@ export const sourceTrace = {
       "sourceMigrations": [
         "supabase/migrations/20260306164000_hr_domain.sql",
         "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql",
-        "supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql",
+        "supabase/migrations/20260416120000_session2_ai_humanize_tasks_hr.sql",
         "supabase/migrations/20260409120000_hr_select_policies_align_can_access_hr_domain.sql",
         "supabase/migrations/20260409140000_hr_write_policies_align_can_access_hr_domain.sql"
       ],
@@ -15523,7 +15607,7 @@ export const slices = {
         "supabase/migrations/20260306164000_hr_domain.sql",
         "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
         "supabase/migrations/20260320110000_task_final_media_contract.sql",
-        "supabase/migrations/20260414150000_wave4_tasks_ai_operational_evidence_rpc.sql",
+        "supabase/migrations/20260416120000_session2_ai_humanize_tasks_hr.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
       ],
       "tableCount": 4,
@@ -15561,8 +15645,9 @@ export const slices = {
         "supabase/migrations/20260306164000_hr_domain.sql",
         "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
         "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql",
+        "supabase/migrations/20260417120000_estimate_resource_line_assignee_profile.sql",
         "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
-        "supabase/migrations/20260406200000_track1_estimate_operational_summary_finance_visibility.sql",
+        "supabase/migrations/20260418120000_estimate_resource_line_assignee_label.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
@@ -15578,7 +15663,7 @@ export const slices = {
         "supabase/migrations/20260306163000_inventory_foundation.sql",
         "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
         "supabase/migrations/20260406183000_procurement_operational_summary_requested_and_ordered_line_types.sql",
-        "supabase/migrations/20260416100000_wave9_closeout_hardening.sql",
+        "supabase/migrations/20260419120000_session3c_procurement_ai_in_stock_evidence.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
@@ -15593,7 +15678,7 @@ export const slices = {
       "sourceMigrations": [
         "supabase/migrations/20260306164000_hr_domain.sql",
         "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql",
-        "supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql",
+        "supabase/migrations/20260416120000_session2_ai_humanize_tasks_hr.sql",
         "supabase/migrations/20260409120000_hr_select_policies_align_can_access_hr_domain.sql",
         "supabase/migrations/20260409140000_hr_write_policies_align_can_access_hr_domain.sql"
       ],

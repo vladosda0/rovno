@@ -1429,6 +1429,22 @@
         "id"
       ],
       "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260417120000_estimate_resource_line_assignee_profile.sql",
+      "sourceKind": "alter_table",
+      "fromSchema": "public",
+      "fromTable": "estimate_resource_lines",
+      "fromColumns": [
+        "assignee_profile_id"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
     }
   ]
 }
