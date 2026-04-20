@@ -40,7 +40,7 @@ import { isAIEvent } from "@/components/ai/event-utils";
 import { PreviewCard } from "@/components/ai/PreviewCard";
 import { ActionBar } from "@/components/ai/ActionBar";
 import { ProposalQueueCard, type ProposalQueueItemState, type ProposalDecision } from "@/components/ai/ProposalQueueCard";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -294,7 +294,6 @@ function archiveEntryMatchesFeedFilter(
 
 type ActiveWindow = "none" | "worklog" | "proposal_queue" | "photo_consult";
 type AutomationMode = "full" | "assisted" | "manual" | "observer";
-type VoiceState = "idle" | "listening" | "processing";
 type StreamRowTier = 1 | 2 | 3;
 
 interface ProposalExecutionGroupMeta {
@@ -668,7 +667,6 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const [learnMode, setLearnMode] = useState(false);
   const [automationMode, setAutomationMode] = useState<AutomationMode>("manual");
   const [pendingGeneralProposalInput, setPendingGeneralProposalInput] = useState<string | null>(null);
-  const [voiceState, setVoiceState] = useState<VoiceState>("idle");
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const [tagPersonCursor, setTagPersonCursor] = useState(0);
   const [referenceTaskCursor, setReferenceTaskCursor] = useState(0);
@@ -685,7 +683,6 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const dragRef = useRef<{ startX: number; startW: number } | null>(null);
   const executingQueueRef = useRef(false);
   const composerTextareaRef = useRef<HTMLTextAreaElement>(null);
-  const voiceTimersRef = useRef<number[]>([]);
   const regenerateTimersRef = useRef<number[]>([]);
   const photoAnalysisTimerRef = useRef<number | null>(null);
   const previousScopeKeyRef = useRef(scopeKey);
@@ -715,13 +712,6 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
       window.clearTimeout(photoAnalysisTimerRef.current);
       photoAnalysisTimerRef.current = null;
     }
-  }, []);
-
-  const clearVoiceTimers = useCallback(() => {
-    voiceTimersRef.current.forEach((timerId) => {
-      window.clearTimeout(timerId);
-    });
-    voiceTimersRef.current = [];
   }, []);
 
   const clearRegenerateTimers = useCallback(() => {
@@ -825,7 +815,6 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     }
     previousScopeKeyRef.current = scopeKey;
 
-    clearVoiceTimers();
     clearRegenerateTimers();
     clearPhotoAnalysisTimer();
 
@@ -835,7 +824,6 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     setProposalQueue(nextState.proposalQueue);
     setPendingGeneralProposalInput(nextState.pendingGeneralProposalInput);
     setInputValue(nextState.inputValue);
-    setVoiceState("idle");
     setRegeneratingMessageId(null);
     if (scopeKey === "home") {
       setHomeProjectMode(GENERAL_MODE_VALUE);
@@ -854,7 +842,6 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   }, [
     clearPhotoAnalysisTimer,
     clearRegenerateTimers,
-    clearVoiceTimers,
     projectId,
     scopeKey,
   ]);
@@ -929,11 +916,10 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
 
   useEffect(() => {
     return () => {
-      clearVoiceTimers();
       clearRegenerateTimers();
       clearPhotoAnalysisTimer();
     };
-  }, [clearPhotoAnalysisTimer, clearRegenerateTimers, clearVoiceTimers]);
+  }, [clearPhotoAnalysisTimer, clearRegenerateTimers]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -1532,25 +1518,6 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     setHomeProjectMode(nextProjectMode);
     if (!pendingContent || nextProjectMode === GENERAL_MODE_VALUE) return;
     if (activeWindow !== "none" || proposalQueue) return;
-  }
-
-  function handleVoiceInput() {
-    // TODO: wire this UI stub to real audio capture/transcription when backend wrapper is available.
-    clearVoiceTimers();
-
-    if (voiceState !== "idle") {
-      setVoiceState("idle");
-      return;
-    }
-
-    setVoiceState("listening");
-    const toProcessing = window.setTimeout(() => {
-      setVoiceState("processing");
-    }, 1200);
-    const toIdle = window.setTimeout(() => {
-      setVoiceState("idle");
-    }, 2500);
-    voiceTimersRef.current = [toProcessing, toIdle];
   }
 
   function handleSend(text?: string) {
@@ -3239,25 +3206,25 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                         />
 
                         <div className="flex shrink-0 items-center gap-1.5 pb-0.5">
-                          <Button
-                            size="icon"
-                            variant="outline"
-                            className={`h-9 w-9 shrink-0 rounded-full border-sidebar-border bg-transparent ${
-                              voiceState === "listening"
-                                ? "bg-accent/10 text-accent animate-pulse"
-                                : voiceState === "processing"
-                                  ? "bg-muted text-foreground"
-                                  : ""
-                            }`}
-                            onClick={handleVoiceInput}
-                            title={voiceState === "idle" ? "Voice input (stub)" : voiceState === "listening" ? "Listening..." : "Processing..."}
-                          >
-                            {voiceState === "processing" ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Mic className="h-4 w-4" />
-                            )}
-                          </Button>
+                          <TooltipProvider delayDuration={200}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="inline-flex shrink-0">
+                                  <Button
+                                    type="button"
+                                    size="icon"
+                                    variant="outline"
+                                    disabled
+                                    aria-label="Voice input (coming soon)"
+                                    className="h-9 w-9 shrink-0 rounded-full border-sidebar-border bg-transparent opacity-60"
+                                  >
+                                    <Mic className="h-4 w-4" />
+                                  </Button>
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent side="top">Coming soon</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                           <Button
                             size="icon"
                             className="h-9 w-9 shrink-0 rounded-full bg-accent text-accent-foreground hover:bg-accent/90"
