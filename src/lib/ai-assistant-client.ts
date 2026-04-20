@@ -192,7 +192,21 @@ function formatGroundingSourceFallbackLabel(
   return map[kind] ?? kind.replace(/_/g, " ");
 }
 
-function softenProgrammaticCopy(value: string): string {
+function softenProgrammaticCopy(
+  value: string,
+  lang: AiAssistantUiLanguage = "en",
+): string {
+  if (lang === "ru") {
+    return value
+      .replace(/\bserver[- ]verified\b/gi, "проверено")
+      .replace(/\s*\(server\)/gi, "")
+      .replace(/\bserver\b/gi, "система проекта")
+      .replace(/\bfrontend\b/gi, "приложение")
+      .replace(/\bbackend\b/gi, "система")
+      .replace(/\bEvidence domains\b/gi, "Области проекта")
+      .replace(/[ \t]{2,}/g, " ")
+      .trim();
+  }
   return value
     .replace(/\bserver[- ]verified\b/gi, "checked")
     .replace(/\s*\(server\)/gi, "")
@@ -218,7 +232,7 @@ export function mapGroundingSources(
       : (s.kind === "project_summary" || s.kind === "recent_activity")
         ? defaultSource
         : formatGroundingSourceFallbackLabel(s.kind, assistantUiLanguage);
-    return { kind, label: softenProgrammaticCopy(label) };
+    return { kind, label: softenProgrammaticCopy(label, assistantUiLanguage) };
   });
 }
 
@@ -322,7 +336,9 @@ export function mapInferenceResponse(
     assistantUiLanguage,
     explanation: pickAnswerText(body, assistantUiLanguage),
     grounding,
-    groundingNote: typeof body.groundingNote === "string" ? softenProgrammaticCopy(body.groundingNote) : undefined,
+    groundingNote: typeof body.groundingNote === "string"
+      ? softenProgrammaticCopy(body.groundingNote, assistantUiLanguage)
+      : undefined,
     sources: mapGroundingSources(body.groundingSources, assistantUiLanguage),
     workProposal: proposal,
     responseVersion: typeof body.responseVersion === "string" ? body.responseVersion : undefined,
