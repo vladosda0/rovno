@@ -1,3 +1,5 @@
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+# Husky runs from repo root; ensure local CLIs resolve (vitest is invoked by lint-staged).
+export PATH="$(git rev-parse --show-toplevel)/node_modules/.bin:$PATH"
 
-npm test
+npx lint-staged
