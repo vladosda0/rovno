@@ -3,6 +3,7 @@ import { useEvents } from "@/hooks/use-mock-data";
 import { getUserById } from "@/data/store";
 import { usePermission, seamCanViewSensitiveDetail } from "@/lib/permissions";
 import { getActivityDisplayDetail } from "@/lib/activity-display";
+import { getEventGroupTimestampMs } from "@/lib/event-activity-timestamp";
 import { EmptyState } from "@/components/EmptyState";
 import {
   Activity,
@@ -72,7 +73,7 @@ export default function ProjectActivity() {
                 {detail ? <p className="text-caption text-muted-foreground truncate">{detail}</p> : null}
               </div>
               <span className="text-caption text-muted-foreground whitespace-nowrap">
-                {new Date(evt.timestamp).toLocaleDateString()}
+                {new Date(getEventGroupTimestampMs(evt)).toLocaleDateString()}
               </span>
             </div>
           );

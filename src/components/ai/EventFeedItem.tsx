@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { usePermission, seamCanViewSensitiveDetail } from "@/lib/permissions";
 import { getActivityDisplayDetail } from "@/lib/activity-display";
+import { getEventGroupTimestampMs } from "@/lib/event-activity-timestamp";
 import { getUserById } from "@/data/store";
 import type { Event } from "@/types/entities";
 import { isAIEvent } from "@/components/ai/event-utils";
@@ -105,7 +106,7 @@ export function EventFeedItem({ event, compact, highlighted }: EventFeedItemProp
         {detail && <p className="text-caption text-muted-foreground truncate">{detail}</p>}
       </div>
       <span className="text-[10px] text-muted-foreground whitespace-nowrap mt-0.5 shrink-0">
-        {new Date(event.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+        {new Date(getEventGroupTimestampMs(event)).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
       </span>
     </button>
   );

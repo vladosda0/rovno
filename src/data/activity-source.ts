@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import * as store from "@/data/store";
+import { resolvePayloadPreferredIsoTimestamp } from "@/lib/event-activity-timestamp";
 import { resolveWorkspaceMode, type WorkspaceMode } from "@/data/workspace-source";
 import type { Event, Notification } from "@/types/entities";
 import type { Database as ActivityDatabase, Json } from "../../backend-truth/generated/supabase-types";
@@ -162,6 +163,7 @@ function readHeroTransitionPayload(value: Json): HeroTransitionEventPayload | nu
 }
 
 export function mapActivityEventRowToEvent(row: ActivityEventRow): Event {
+  const payload = toPayloadRecord(row.payload);
   return {
     id: row.id,
     project_id: row.project_id,
@@ -169,8 +171,8 @@ export function mapActivityEventRowToEvent(row: ActivityEventRow): Event {
     type: row.action_type as Event["type"],
     object_type: row.entity_type,
     object_id: row.entity_id ?? "",
-    timestamp: row.created_at,
-    payload: toPayloadRecord(row.payload),
+    timestamp: resolvePayloadPreferredIsoTimestamp(payload, row.created_at),
+    payload,
   };
 }
 

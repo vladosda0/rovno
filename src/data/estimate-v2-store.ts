@@ -1239,6 +1239,7 @@ function emitEstimateEvent(
   payload: Record<string, unknown>,
 ) {
   const actor = getCurrentUser();
+  const ts = nowIso();
   addEvent({
     id: id("evt-estimate-v2"),
     project_id: projectId,
@@ -1246,8 +1247,8 @@ function emitEstimateEvent(
     type,
     object_type: "estimate_v2_project",
     object_id: projectId,
-    timestamp: nowIso(),
-    payload,
+    timestamp: ts,
+    payload: { activityAt: ts, ...payload },
   });
 }
 

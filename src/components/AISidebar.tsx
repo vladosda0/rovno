@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } fr
 import { flushSync } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
 import { trackEvent } from "@/lib/analytics";
+import { getEventGroupTimestampMs } from "@/lib/event-activity-timestamp";
 import {
   Bot,
   Send,
@@ -237,6 +238,31 @@ function transcriptHasAiActionSignals(messages: readonly AIMessage[]): boolean {
   return messages.some(messageHasAiActionSignals);
 }
 
+/** Live thread above collapsible activity — same subset rules as former in-feed chat rows. */
+function selectMessagesForActivityFilter(
+  filter: FeedFilter,
+  allMessages: AIMessage[],
+  learnSubset: AIMessage[],
+): AIMessage[] {
+  switch (filter) {
+    case "all":
+    case "chats":
+      return allMessages;
+    case "learn":
+      return learnSubset;
+    case "ai_actions":
+      return allMessages.filter(messageHasAiActionSignals);
+    case "task":
+    case "estimate":
+    case "document":
+    case "photo":
+    case "member":
+      return allMessages.filter((m) => messageMatchesChatFeedDomain(m, filter));
+    default:
+      return allMessages;
+  }
+}
+
 function archiveEntryMatchesFeedFilter(
   entry: AiChatArchiveEntryV1,
   filter: FeedFilter,
@@ -319,15 +345,6 @@ interface StreamStockUsedRow {
   detailLines: string[];
 }
 
-interface StreamChatRow {
-  id: string;
-  kind: "chat";
-  tier: StreamRowTier;
-  timestampMs: number;
-  timestamp: string;
-  message: AIMessage;
-}
-
 interface StreamArchivedChatRow {
   id: string;
   kind: "archived_chat";
@@ -342,7 +359,6 @@ type StreamRow =
   | StreamEventRow
   | StreamStatusRow
   | StreamStockUsedRow
-  | StreamChatRow
   | StreamArchivedChatRow;
 
 interface DayBucket {
@@ -351,6 +367,11 @@ interface DayBucket {
   rows: StreamRow[];
   olderThanYesterday: boolean;
 }
+
+/** Default number of most-recent calendar day buckets shown in the activity feed. */
+const INITIAL_VISIBLE_DAY_BUCKETS = 3;
+/** Each "Load more" reveals this many additional older day buckets. */
+const LOAD_MORE_DAY_BUCKET_INCREMENT = 7;
 
 const AUTOMATION_OPTIONS: { mode: AutomationMode; label: string; description: string }[] = [
   {
@@ -674,6 +695,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const [expandedProposalEventIds, setExpandedProposalEventIds] = useState<Set<string>>(new Set());
   const [expandedStockUsedEventIds, setExpandedStockUsedEventIds] = useState<Set<string>>(new Set());
   const [expandedDayKeys, setExpandedDayKeys] = useState<Set<string>>(new Set());
+  const [visibleDayBucketCount, setVisibleDayBucketCount] = useState(INITIAL_VISIBLE_DAY_BUCKETS);
   const [messageRatings, setMessageRatings] = useState<Record<string, "good" | "bad" | undefined>>({});
   const [savedMessageIds, setSavedMessageIds] = useState<Set<string>>(new Set());
   const [regeneratingMessageId, setRegeneratingMessageId] = useState<string | null>(null);
@@ -1917,7 +1939,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     [...filteredEvents]
       .map((event, idx) => ({ event, idx }))
       .sort((a, b) => {
-        const tsDiff = toTimestampMs(a.event.timestamp) - toTimestampMs(b.event.timestamp);
+        const tsDiff = getEventGroupTimestampMs(a.event) - getEventGroupTimestampMs(b.event);
         if (tsDiff !== 0) return tsDiff;
         return a.idx - b.idx;
       })
@@ -1938,6 +1960,11 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     [messages, learnMessageIds],
   );
 
+  const activeThreadMessages = useMemo(
+    () => selectMessagesForActivityFilter(activityFilter, messages, learnMessages),
+    [activityFilter, messages, learnMessages],
+  );
+
   const streamRows = useMemo<StreamRow[]>(() => {
     const visibleEventIds = new Set(chronologicalFilteredEvents.map((event) => event.id));
     const groupedChildIds = new Set<string>();
@@ -1952,7 +1979,8 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
 
     const rows: StreamRow[] = [];
     chronologicalFilteredEvents.forEach((event) => {
-      const timestampMs = toTimestampMs(event.timestamp);
+      const timestampMs = getEventGroupTimestampMs(event);
+      const timestampIso = new Date(timestampMs).toISOString();
       const payload = event.payload as Record<string, unknown>;
 
       if (event.type === "proposal_confirmed") {
@@ -1967,7 +1995,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
           id: `proposal-group-${event.id}`,
           kind: "proposal_group",
           tier: 1,
-          timestamp: event.timestamp,
+          timestamp: timestampIso,
           timestampMs,
           proposalEvent: event,
           summary: (typeof payload.summary === "string" && payload.summary)
@@ -1993,7 +2021,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
           id: `status-${event.id}`,
           kind: "status",
           tier: 3,
-          timestamp: event.timestamp,
+          timestamp: timestampIso,
           timestampMs,
           title,
           detail,
@@ -2014,7 +2042,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
           id: `stock-used-${event.id}`,
           kind: "stock_used",
           tier: 1,
-          timestamp: event.timestamp,
+          timestamp: timestampIso,
           timestampMs,
           event,
           title: typeof payload.title === "string" && payload.title ? payload.title : "Stock used",
@@ -2028,47 +2056,11 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
         id: `event-${event.id}`,
         kind: "event",
         tier: 2,
-        timestamp: event.timestamp,
+        timestamp: timestampIso,
         timestampMs,
         event,
       });
     });
-
-    let chatSource: AIMessage[] = [];
-    switch (activityFilter) {
-      case "all":
-      case "chats":
-        chatSource = messages;
-        break;
-      case "learn":
-        chatSource = learnMessages;
-        break;
-      case "ai_actions":
-        chatSource = messages.filter(messageHasAiActionSignals);
-        break;
-      case "task":
-      case "estimate":
-      case "document":
-      case "photo":
-      case "member":
-        chatSource = messages.filter((m) => messageMatchesChatFeedDomain(m, activityFilter));
-        break;
-      default:
-        chatSource = [];
-    }
-
-    if (chatSource.length > 0) {
-      chatSource.forEach((message) => {
-        rows.push({
-          id: `chat-${message.id}`,
-          kind: "chat",
-          tier: 2,
-          timestamp: message.timestamp,
-          timestampMs: toTimestampMs(message.timestamp),
-          message,
-        });
-      });
-    }
 
     if (isPersistableAiProjectId(resolvedPermissionProjectId) && chatArchives.length > 0) {
       chatArchives.forEach((entry) => {
@@ -2098,8 +2090,6 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     chatArchives,
     chronologicalFilteredEvents,
     eventById,
-    learnMessages,
-    messages,
     proposalExecutionLinks,
     resolvedPermissionProjectId,
   ]);
@@ -2125,7 +2115,28 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     return Array.from(map.values()).sort((a, b) => a.key.localeCompare(b.key));
   }, [streamRows]);
 
-  const latestRenderedRowId = streamRows[streamRows.length - 1]?.id ?? null;
+  const visibleDayBuckets = useMemo(() => {
+    if (dayBuckets.length === 0) return [];
+    const n = Math.min(visibleDayBucketCount, dayBuckets.length);
+    return dayBuckets.slice(-n);
+  }, [dayBuckets, visibleDayBucketCount]);
+
+  const hasMoreOlderDayBuckets = dayBuckets.length > visibleDayBucketCount;
+
+  useEffect(() => {
+    setVisibleDayBucketCount(INITIAL_VISIBLE_DAY_BUCKETS);
+  }, [scopeKey]);
+
+  const latestRenderedRowId = useMemo(() => {
+    const lastFeed = streamRows[streamRows.length - 1];
+    const lastActive = activeThreadMessages[activeThreadMessages.length - 1];
+    if (!lastActive && !lastFeed) return null;
+    if (!lastActive) return lastFeed!.id;
+    if (!lastFeed) return `active-${lastActive.id}`;
+    return toTimestampMs(lastActive.timestamp) >= lastFeed.timestampMs
+      ? `active-${lastActive.id}`
+      : lastFeed.id;
+  }, [streamRows, activeThreadMessages]);
   const activeExecutionItem = useMemo(() => {
     if (!proposalQueue || proposalQueue.phase !== "executing") return null;
     const confirmed = proposalQueue.items.filter((item) => item.decision === "confirmed");
@@ -2482,6 +2493,140 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     regenerateTimersRef.current.push(timerId);
   }
 
+  function renderLiveChatMessage(message: AIMessage) {
+    const isLearnMessage = message.mode === "learn";
+    const isLearnContext = isLearnMessage
+      || learnMode
+      || activityFilter === "learn"
+      || ((message as AIMessage & { meta?: { mode?: string } }).meta?.mode === "learn");
+    const isUserMessage = message.role === "user";
+    const rating = messageRatings[message.id];
+    const isSaved = savedMessageIds.has(message.id);
+    const isRegenerating = regeneratingMessageId === message.id;
+    return (
+      <div key={`active-chat-${message.id}`} className="px-0 py-1.5 min-w-0 max-w-full">
+        <div className={`rounded-md border border-border/60 px-2 py-1.5 min-w-0 max-w-full ${
+          isUserMessage ? "bg-sidebar-accent/40" : "bg-muted/20"
+        }`}>
+          <div className="flex items-center gap-1.5">
+            <div className="flex h-5 w-5 items-center justify-center rounded-md bg-muted">
+              {isUserMessage
+                ? <User className="h-3 w-3 text-muted-foreground" />
+                : <Bot className="h-3 w-3 text-accent" />}
+            </div>
+            <p className="text-caption font-medium text-foreground">
+              {isUserMessage ? "You" : "AI"}
+            </p>
+            {isLearnMessage && (
+              <span className="rounded-pill bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium text-accent">
+                Learn
+              </span>
+            )}
+            <span className="ml-auto text-[10px] text-muted-foreground whitespace-nowrap">
+              {new Date(message.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            </span>
+          </div>
+          <p className="mt-1 text-caption text-foreground/95 whitespace-pre-wrap break-words [overflow-wrap:anywhere] max-w-full">
+            {message.content}
+          </p>
+          {!isUserMessage && message.liveTextAssistantV1 && message.liveTextProjectId ? (
+            <>
+              <GroundingCallout
+                grounding={message.liveTextAssistantV1.grounding}
+                groundingNote={message.liveTextAssistantV1.groundingNote}
+                sources={message.liveTextAssistantV1.sources}
+                inferenceGroundingKind={message.liveTextAssistantV1.groundingKind}
+                groundingDetails={message.liveTextAssistantV1.groundingDetails}
+                freshnessHint={message.liveTextAssistantV1.freshnessHint}
+                language={message.liveTextAssistantV1.assistantUiLanguage ?? "en"}
+              />
+              {message.liveTextAssistantV1.followUps
+                && message.liveTextAssistantV1.followUps.length > 0 ? (
+                <div className="mt-1.5 min-w-0 max-w-full">
+                  <p className="text-[10px] font-medium text-muted-foreground mb-1">
+                    {message.liveTextAssistantV1.assistantUiLanguage === "ru"
+                      ? "Предлагаемые уточнения"
+                      : "Suggested follow-ups"}
+                  </p>
+                  <SuggestionChips
+                    suggestions={message.liveTextAssistantV1.followUps.map((f) => f.prompt)}
+                    onSelect={(text) => setInputValue(text)}
+                    singleLineScrollable
+                  />
+                </div>
+              ) : null}
+              {message.liveTextAssistantV1.workProposal ? (
+                <WorkProposalPreview
+                  projectId={message.liveTextProjectId}
+                  proposal={message.liveTextAssistantV1.workProposal}
+                />
+              ) : null}
+            </>
+          ) : null}
+          {!isUserMessage && isLearnContext && (
+            <div className="mt-1.5 flex items-center gap-0.5 opacity-70 hover:opacity-100 transition-opacity">
+              <button
+                type="button"
+                title="Copy"
+                className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/10 transition-colors"
+                onClick={() => { void handleCopyLearnMessage(message); }}
+              >
+                <Copy className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                title="Rate good"
+                className={`inline-flex h-6 w-6 items-center justify-center rounded-md transition-colors ${
+                  rating === "good"
+                    ? "text-accent bg-accent/15"
+                    : "text-muted-foreground hover:text-foreground hover:bg-accent/10"
+                }`}
+                onClick={() => handleRateLearnMessage(message.id, "good")}
+              >
+                <ThumbsUp className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                title="Rate bad"
+                className={`inline-flex h-6 w-6 items-center justify-center rounded-md transition-colors ${
+                  rating === "bad"
+                    ? "text-destructive bg-destructive/15"
+                    : "text-muted-foreground hover:text-foreground hover:bg-accent/10"
+                }`}
+                onClick={() => handleRateLearnMessage(message.id, "bad")}
+              >
+                <ThumbsDown className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                title="Save to Documents"
+                className={`inline-flex h-6 w-6 items-center justify-center rounded-md transition-colors ${
+                  isSaved
+                    ? "text-accent bg-accent/15"
+                    : "text-muted-foreground hover:text-foreground hover:bg-accent/10"
+                }`}
+                onClick={() => handleSaveLearnMessage(message)}
+              >
+                <BookmarkPlus className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                title={isRegenerating ? "Regenerating..." : "Regenerate"}
+                className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/10 transition-colors disabled:opacity-60"
+                disabled={isRegenerating}
+                onClick={() => handleRegenerateLearnMessage(message)}
+              >
+                {isRegenerating
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : <RefreshCw className="h-3.5 w-3.5" />}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   const placeholderColors = [
     "bg-accent/10", "bg-info/10", "bg-warning/10", "bg-muted",
     "bg-success/10", "bg-destructive/10",
@@ -2569,33 +2714,64 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                     </div>
                   )}
 
-                  {/* Scrollable event feed */}
-                  <div className="flex-1 min-h-0 min-w-0 overflow-hidden px-3 box-border" style={{ width: "100%" }}>
-                    <ScrollArea ref={scrollRef} className="h-full min-w-0">
+                  {/* Activity feed: day headers stay fixed; only rows + chat scroll */}
+                  <div
+                    className="flex-1 min-h-0 min-w-0 overflow-hidden flex flex-col px-3 box-border"
+                    style={{ width: "100%" }}
+                  >
+                    {streamRows.length > 0 ? (
+                      <div className="shrink-0 z-20 bg-sidebar border-b border-border/60 px-0 py-2 space-y-1.5">
+                        {hasMoreOlderDayBuckets ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-full text-[11px] text-muted-foreground hover:text-foreground"
+                            onClick={() =>
+                              setVisibleDayBucketCount(
+                                (c) => c + LOAD_MORE_DAY_BUCKET_INCREMENT,
+                              )}
+                          >
+                            Load more
+                          </Button>
+                        ) : null}
+                        <div className="space-y-0.5">
+                          {visibleDayBuckets.map((bucket) => {
+                            const isExpanded = expandedDayKeys.has(bucket.key);
+                            return (
+                              <button
+                                key={bucket.key}
+                                type="button"
+                                onClick={() => toggleDayBucket(bucket.key)}
+                                className="w-full flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground/90 hover:text-foreground transition-colors text-left"
+                              >
+                                {isExpanded ? (
+                                  <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+                                ) : (
+                                  <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+                                )}
+                                <span>{bucket.label}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    <ScrollArea ref={scrollRef} className="flex-1 min-h-0 min-w-0">
                       <div className="space-y-2 py-2 pr-1 min-w-0 max-w-full">
-                        {streamRows.length === 0 ? (
+                        {streamRows.length === 0 && activeThreadMessages.length === 0 ? (
                           <p className="text-caption text-muted-foreground text-center py-8">
                             No activity yet
                           </p>
                         ) : (
-                          <div className="space-y-2 min-w-0 max-w-full">
-                            {dayBuckets.map((bucket) => {
+                          <>
+                            {streamRows.length > 0 ? (
+                              <div className="space-y-2 min-w-0 max-w-full">
+                                {visibleDayBuckets.map((bucket) => {
                               const isExpanded = expandedDayKeys.has(bucket.key);
                               return (
                                 <section key={bucket.key} className="space-y-1.5">
-                                  <button
-                                    type="button"
-                                    onClick={() => toggleDayBucket(bucket.key)}
-                                    className="w-full flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground/90 hover:text-foreground transition-colors"
-                                  >
-                                    {isExpanded ? (
-                                      <ChevronDown className="h-3.5 w-3.5" />
-                                    ) : (
-                                      <ChevronRight className="h-3.5 w-3.5" />
-                                    )}
-                                    <span>{bucket.label}</span>
-                                  </button>
-
                                   {isExpanded && (
                                     <div className="glass rounded-card divide-y divide-border min-w-0 max-w-full overflow-hidden">
                                       {bucket.rows.map((row, rowIndex) => {
@@ -2784,146 +2960,29 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                                           );
                                         }
 
-                                        const isLearnMessage = row.message.mode === "learn";
-                                        const isLearnContext = isLearnMessage
-                                          || learnMode
-                                          || activityFilter === "learn"
-                                          || ((
-                                            row.message as AIMessage & { meta?: { mode?: string } }
-                                          ).meta?.mode === "learn");
-                                        const isUserMessage = row.message.role === "user";
-                                        const rating = messageRatings[row.message.id];
-                                        const isSaved = savedMessageIds.has(row.message.id);
-                                        const isRegenerating = regeneratingMessageId === row.message.id;
-                                        return (
-                                          <div key={row.id} className="px-2 py-1.5 min-w-0 max-w-full">
-                                            <div className={`rounded-md border border-border/60 px-2 py-1.5 min-w-0 max-w-full ${
-                                              isUserMessage ? "bg-sidebar-accent/40" : "bg-muted/20"
-                                            }`}>
-                                              <div className="flex items-center gap-1.5">
-                                                <div className="flex h-5 w-5 items-center justify-center rounded-md bg-muted">
-                                                  {isUserMessage
-                                                    ? <User className="h-3 w-3 text-muted-foreground" />
-                                                    : <Bot className="h-3 w-3 text-accent" />}
-                                                </div>
-                                                <p className="text-caption font-medium text-foreground">
-                                                  {isUserMessage ? "You" : "AI"}
-                                                </p>
-                                                {isLearnMessage && (
-                                                  <span className="rounded-pill bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium text-accent">
-                                                    Learn
-                                                  </span>
-                                                )}
-                                                <span className="ml-auto text-[10px] text-muted-foreground whitespace-nowrap">
-                                                  {new Date(row.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                                                </span>
-                                              </div>
-                                              <p className="mt-1 text-caption text-foreground/95 whitespace-pre-wrap break-words [overflow-wrap:anywhere] max-w-full">
-                                                {row.message.content}
-                                              </p>
-                                              {!isUserMessage && row.message.liveTextAssistantV1 && row.message.liveTextProjectId ? (
-                                                <>
-                                                  <GroundingCallout
-                                                    grounding={row.message.liveTextAssistantV1.grounding}
-                                                    groundingNote={row.message.liveTextAssistantV1.groundingNote}
-                                                    sources={row.message.liveTextAssistantV1.sources}
-                                                    inferenceGroundingKind={row.message.liveTextAssistantV1.groundingKind}
-                                                    groundingDetails={row.message.liveTextAssistantV1.groundingDetails}
-                                                    freshnessHint={row.message.liveTextAssistantV1.freshnessHint}
-                                                    language={row.message.liveTextAssistantV1.assistantUiLanguage ?? "en"}
-                                                  />
-                                                  {row.message.liveTextAssistantV1.followUps
-                                                    && row.message.liveTextAssistantV1.followUps.length > 0 ? (
-                                                    <div className="mt-1.5 min-w-0 max-w-full">
-                                                      <p className="text-[10px] font-medium text-muted-foreground mb-1">
-                                                        {row.message.liveTextAssistantV1.assistantUiLanguage === "ru"
-                                                          ? "Предлагаемые уточнения"
-                                                          : "Suggested follow-ups"}
-                                                      </p>
-                                                      <SuggestionChips
-                                                        suggestions={row.message.liveTextAssistantV1.followUps.map((f) => f.prompt)}
-                                                        onSelect={(text) => setInputValue(text)}
-                                                        singleLineScrollable
-                                                      />
-                                                    </div>
-                                                  ) : null}
-                                                  {row.message.liveTextAssistantV1.workProposal ? (
-                                                    <WorkProposalPreview
-                                                      projectId={row.message.liveTextProjectId}
-                                                      proposal={row.message.liveTextAssistantV1.workProposal}
-                                                    />
-                                                  ) : null}
-                                                </>
-                                              ) : null}
-                                              {!isUserMessage && isLearnContext && (
-                                                <div className="mt-1.5 flex items-center gap-0.5 opacity-70 hover:opacity-100 transition-opacity">
-                                                  <button
-                                                    type="button"
-                                                    title="Copy"
-                                                    className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/10 transition-colors"
-                                                    onClick={() => { void handleCopyLearnMessage(row.message); }}
-                                                  >
-                                                    <Copy className="h-3.5 w-3.5" />
-                                                  </button>
-                                                  <button
-                                                    type="button"
-                                                    title="Rate good"
-                                                    className={`inline-flex h-6 w-6 items-center justify-center rounded-md transition-colors ${
-                                                      rating === "good"
-                                                        ? "text-accent bg-accent/15"
-                                                        : "text-muted-foreground hover:text-foreground hover:bg-accent/10"
-                                                    }`}
-                                                    onClick={() => handleRateLearnMessage(row.message.id, "good")}
-                                                  >
-                                                    <ThumbsUp className="h-3.5 w-3.5" />
-                                                  </button>
-                                                  <button
-                                                    type="button"
-                                                    title="Rate bad"
-                                                    className={`inline-flex h-6 w-6 items-center justify-center rounded-md transition-colors ${
-                                                      rating === "bad"
-                                                        ? "text-destructive bg-destructive/15"
-                                                        : "text-muted-foreground hover:text-foreground hover:bg-accent/10"
-                                                    }`}
-                                                    onClick={() => handleRateLearnMessage(row.message.id, "bad")}
-                                                  >
-                                                    <ThumbsDown className="h-3.5 w-3.5" />
-                                                  </button>
-                                                  <button
-                                                    type="button"
-                                                    title="Save to Documents"
-                                                    className={`inline-flex h-6 w-6 items-center justify-center rounded-md transition-colors ${
-                                                      isSaved
-                                                        ? "text-accent bg-accent/15"
-                                                        : "text-muted-foreground hover:text-foreground hover:bg-accent/10"
-                                                    }`}
-                                                    onClick={() => handleSaveLearnMessage(row.message)}
-                                                  >
-                                                    <BookmarkPlus className="h-3.5 w-3.5" />
-                                                  </button>
-                                                  <button
-                                                    type="button"
-                                                    title={isRegenerating ? "Regenerating..." : "Regenerate"}
-                                                    className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/10 transition-colors disabled:opacity-60"
-                                                    disabled={isRegenerating}
-                                                    onClick={() => handleRegenerateLearnMessage(row.message)}
-                                                  >
-                                                    {isRegenerating
-                                                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                                      : <RefreshCw className="h-3.5 w-3.5" />}
-                                                  </button>
-                                                </div>
-                                              )}
-                                            </div>
-                                          </div>
-                                        );
+                                        {
+                                          const _exhaustiveCheck: never = row;
+                                          void _exhaustiveCheck;
+                                        }
+                                        return null;
                                       })}
                                     </div>
                                   )}
                                 </section>
                               );
-                            })}
-                          </div>
+                                })}
+                              </div>
+                            ) : null}
+                            {activeThreadMessages.length > 0 ? (
+                              <section
+                                className={`space-y-1 min-w-0 max-w-full ${
+                                  streamRows.length > 0 ? "pt-3 mt-1 border-t border-border/50" : ""
+                                }`}
+                              >
+                                {activeThreadMessages.map((m) => renderLiveChatMessage(m))}
+                              </section>
+                            ) : null}
+                          </>
                         )}
                       </div>
                     </ScrollArea>

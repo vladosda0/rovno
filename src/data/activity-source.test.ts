@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { getEventGroupTimestampMs } from "@/lib/event-activity-timestamp";
 import {
   mapActivityEventRowToEvent,
   mapNotificationRowToActivityNotification,
@@ -62,6 +63,20 @@ describe("activity-source helpers", () => {
       timestamp: "2026-03-01T09:00:00.000Z",
       payload: {},
     });
+  });
+
+  it("prefers payload semantic timestamps over created_at when mapping activity rows", () => {
+    const event = mapActivityEventRowToEvent(activityEventRow({
+      action_type: "estimate.status_changed",
+      entity_type: "estimate_v2_project",
+      created_at: "2026-04-20T12:00:00.000Z",
+      payload: {
+        activityAt: "2026-04-07T15:42:00.000Z",
+      },
+    }));
+
+    expect(event.timestamp).toBe("2026-04-07T15:42:00.000Z");
+    expect(getEventGroupTimestampMs(event)).toBe(Date.parse("2026-04-07T15:42:00.000Z"));
   });
 
   it("extracts notification linkage fields in the configured priority order", () => {
