@@ -223,6 +223,26 @@
     {
       "path": "supabase/migrations/20260416100000_wave9_closeout_hardening.sql",
       "sha256": "8953af6cb94106a51c8f5e6fab1821a48ad42109a1ce7fede7c1095e0afb94da"
+    },
+    {
+      "path": "supabase/migrations/20260416120000_session2_ai_humanize_tasks_hr.sql",
+      "sha256": "4e1056ae7532a90ae51328daa87fb8143cd1ac3b9fd3ba7b79ed8d13f6c38e5e"
+    },
+    {
+      "path": "supabase/migrations/20260416140000_session21_estimate_assignee_display_name.sql",
+      "sha256": "60bee943339ebdcdcfd2de2b95589963ede91ae92e65b8bce43e3450ee844874"
+    },
+    {
+      "path": "supabase/migrations/20260417120000_estimate_resource_line_assignee_profile.sql",
+      "sha256": "bec728fb96795fdf88d1da3ac1ea551ff70d554b9e5158327c516f98e720f098"
+    },
+    {
+      "path": "supabase/migrations/20260418120000_estimate_resource_line_assignee_label.sql",
+      "sha256": "efdab89eb9b92b6bf12110f2b048edb8295718dd1cc541600227131cd482cc45"
+    },
+    {
+      "path": "supabase/migrations/20260419120000_session3c_procurement_ai_in_stock_evidence.sql",
+      "sha256": "7ede71685d25398d4c9c7bf75ffe81e5bb4c1fae4a05a7abef152c4a990897d9"
     }
   ],
   "generated_artifacts": [
@@ -302,6 +322,11 @@
     "sql/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql",
     "sql/20260415130000_wave7_documents_media_ai_metadata_evidence.sql",
     "sql/20260416100000_wave9_closeout_hardening.sql",
+    "sql/20260416120000_session2_ai_humanize_tasks_hr.sql",
+    "sql/20260416140000_session21_estimate_assignee_display_name.sql",
+    "sql/20260417120000_estimate_resource_line_assignee_profile.sql",
+    "sql/20260418120000_estimate_resource_line_assignee_label.sql",
+    "sql/20260419120000_session3c_procurement_ai_in_stock_evidence.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],

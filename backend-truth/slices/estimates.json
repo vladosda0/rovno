@@ -14,8 +14,9 @@
     "supabase/migrations/20260306164000_hr_domain.sql",
     "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
     "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql",
+    "supabase/migrations/20260417120000_estimate_resource_line_assignee_profile.sql",
     "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
-    "supabase/migrations/20260406200000_track1_estimate_operational_summary_finance_visibility.sql",
+    "supabase/migrations/20260418120000_estimate_resource_line_assignee_label.sql",
     "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
     "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
   ],
@@ -599,6 +600,33 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "assignee_profile_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "profiles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
+        },
+        {
+          "name": "assignee_label",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -703,6 +731,16 @@
           "where": null,
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        },
+        {
+          "name": "idx_estimate_resource_lines_assignee_profile_id",
+          "unique": false,
+          "expressions": [
+            "assignee_profile_id"
+          ],
+          "where": "assignee_profile_id is not null",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260417120000_estimate_resource_line_assignee_profile.sql"
         }
       ],
       "triggers": []
@@ -1097,6 +1135,22 @@
         "id"
       ],
       "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260417120000_estimate_resource_line_assignee_profile.sql",
+      "sourceKind": "alter_table",
+      "fromSchema": "public",
+      "fromTable": "estimate_resource_lines",
+      "fromColumns": [
+        "assignee_profile_id"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
     }
   ],
   "functions": [
@@ -1179,7 +1233,7 @@
       "volatility": "stable",
       "securityDefiner": true,
       "searchPath": "public",
-      "sourceMigration": "supabase/migrations/20260406200000_track1_estimate_operational_summary_finance_visibility.sql",
+      "sourceMigration": "supabase/migrations/20260418120000_estimate_resource_line_assignee_label.sql",
       "authenticatedExecute": true,
       "triggerUsages": []
     }

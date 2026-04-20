@@ -3116,6 +3116,33 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "assignee_profile_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "profiles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
+        },
+        {
+          "name": "assignee_label",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -3220,6 +3247,16 @@
           "where": null,
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        },
+        {
+          "name": "idx_estimate_resource_lines_assignee_profile_id",
+          "unique": false,
+          "expressions": [
+            "assignee_profile_id"
+          ],
+          "where": "assignee_profile_id is not null",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260417120000_estimate_resource_line_assignee_profile.sql"
         }
       ],
       "triggers": []
