@@ -1,11 +1,13 @@
 import { Outlet, useLocation } from "react-router-dom";
-import { Suspense, lazy, useEffect, useState } from "react";
-import { PanelLeft, Wrench, X } from "lucide-react";
+import { Suspense, lazy, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { Binoculars, Crown, Handshake, HardHat, PanelLeft, X } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { subscribePhotoConsult } from "@/lib/photo-consult-store";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
 import { setAnalyticsUserId } from "@/lib/analytics";
 import { AuthSimulator } from "@/components/settings/AuthSimulator";
+import { useWorkspaceMode } from "@/hooks/use-workspace-source";
+import { getAuthRole, subscribeAuthState, type AuthRole } from "@/lib/auth-state";
 import {
   readAiSidebarSessionPreference,
   writeAiSidebarSessionPreference,
@@ -18,6 +20,30 @@ const AISidebar = lazy(() =>
 /** MVP: hide reusable project AI sidebar on `/home` (see architecture contract); code preserved in `AISidebar`. */
 const HIDE_AI_ROUTES = ["/settings", "/home"];
 
+function useSimulatedAuthRole(): AuthRole {
+  return useSyncExternalStore(subscribeAuthState, getAuthRole, getAuthRole);
+}
+
+function DevToolsRoleIcon({ role }: { readonly role: AuthRole }) {
+  const className = "h-4 w-4 text-accent";
+  switch (role) {
+    case "owner":
+      return <Crown className={className} aria-hidden />;
+    case "co_owner":
+      return <Handshake className={className} aria-hidden />;
+    case "contractor":
+      return <HardHat className={className} aria-hidden />;
+    case "viewer":
+      return <Binoculars className={className} aria-hidden />;
+    case "guest":
+      return <Binoculars className={className} aria-hidden />;
+    default: {
+      const _exhaustive: never = role;
+      return _exhaustive;
+    }
+  }
+}
+
 export default function AppLayout() {
   const [aiSidebarCollapsed, setAiSidebarCollapsed] = useState(() => readAiSidebarSessionPreference() ?? false);
   const [devToolsOpen, setDevToolsOpen] = useState(false);
@@ -25,6 +51,32 @@ export default function AppLayout() {
 
   const hideAi = HIDE_AI_ROUTES.some((r) => location.pathname.startsWith(r));
   const runtimeAuth = useRuntimeAuth();
+  const workspaceMode = useWorkspaceMode();
+  const simulatedAuthRole = useSimulatedAuthRole();
+
+  const showDevToolsFab = useMemo(() => {
+    if (!import.meta.env.DEV) return false;
+    return workspaceMode.kind === "local" || workspaceMode.kind === "demo";
+  }, [workspaceMode.kind]);
+
+  const devToolsRoleLabel = useMemo(() => {
+    switch (simulatedAuthRole) {
+      case "owner":
+        return "owner";
+      case "co_owner":
+        return "co-owner";
+      case "contractor":
+        return "contractor";
+      case "viewer":
+        return "viewer";
+      case "guest":
+        return "guest";
+      default: {
+        const _e: never = simulatedAuthRole;
+        return _e;
+      }
+    }
+  }, [simulatedAuthRole]);
 
   useEffect(() => {
     return subscribePhotoConsult(({ context }) => {
@@ -82,7 +134,7 @@ export default function AppLayout() {
         </main>
       </div>
 
-      {import.meta.env.DEV && (
+      {showDevToolsFab && (
         <>
           {devToolsOpen ? (
             <div className="fixed bottom-4 right-4 z-50 w-[420px] max-w-[calc(100vw-1rem)]">
@@ -103,11 +155,12 @@ export default function AppLayout() {
           ) : (
             <button
               type="button"
-              aria-label="Open dev tools"
+              aria-label={`Open dev tools (role: ${devToolsRoleLabel})`}
+              title={`Dev tools — simulated role: ${devToolsRoleLabel}`}
               onClick={() => setDevToolsOpen(true)}
               className="fixed bottom-4 right-4 z-50 inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border/60 bg-background/60 backdrop-blur supports-[backdrop-filter]:bg-background/70"
             >
-              <Wrench className="h-4 w-4 text-accent" />
+              <DevToolsRoleIcon role={simulatedAuthRole} />
             </button>
           )}
         </>
