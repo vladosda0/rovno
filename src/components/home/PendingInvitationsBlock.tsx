@@ -6,6 +6,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useProjects, useWorkspaceMode } from "@/hooks/use-mock-data";
+import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
+import { getStoredAuthProfile } from "@/lib/auth-state";
 import * as store from "@/data/store";
 import { getWorkspaceSource, type WorkspaceProjectInvite } from "@/data/workspace-source";
 import { acceptProjectInvite } from "@/lib/accept-project-invite";
@@ -20,10 +22,17 @@ export function PendingInvitationsBlock() {
   const { toast } = useToast();
   const mode = useWorkspaceMode();
   const projects = useProjects();
+  const runtimeAuth = useRuntimeAuth();
   const [acceptingInviteId, setAcceptingInviteId] = useState<string | null>(null);
 
+  const supabaseEmail = runtimeAuth.user?.email?.toLowerCase() ?? "";
+  const fallbackEmail = useMemo(
+    () => (mode.kind === "supabase" ? "" : (getStoredAuthProfile()?.email?.toLowerCase() ?? "")),
+    [mode.kind],
+  );
+
   const pendingInvitesQuery = useQuery({
-    queryKey: ["home", "pending-invites", mode.kind === "supabase" ? mode.profileId : mode.kind],
+    queryKey: ["home", "pending-invites", mode.kind === "supabase" ? mode.profileId : mode.kind, supabaseEmail],
     queryFn: async (): Promise<PendingInviteItem[]> => {
       const source = await getWorkspaceSource(mode.kind === "supabase" ? mode : undefined);
       const allProjects = await source.getProjects();
@@ -32,12 +41,13 @@ export function PendingInvitationsBlock() {
           const invites = await source.getProjectInvites(project.id);
           return invites
             .filter((invite) => invite.status === "pending")
+            .filter((invite) => invite.email.toLowerCase() === supabaseEmail)
             .map((invite) => ({ invite, projectTitle: project.title }));
         }),
       );
       return inviteRows.flat();
     },
-    enabled: mode.kind === "supabase",
+    enabled: mode.kind === "supabase" && supabaseEmail.length > 0,
     staleTime: 30_000,
   });
 
@@ -46,13 +56,18 @@ export function PendingInvitationsBlock() {
       return [];
     }
 
+    if (!fallbackEmail) {
+      return [];
+    }
+
     return projects.flatMap((project) =>
       store
         .getProjectInvites(project.id)
         .filter((invite) => invite.status === "pending")
+        .filter((invite) => invite.email.toLowerCase() === fallbackEmail)
         .map((invite) => ({ invite, projectTitle: project.title })),
     );
-  }, [mode.kind, projects]);
+  }, [mode.kind, projects, fallbackEmail]);
 
   const pendingInvites = mode.kind === "supabase"
     ? (pendingInvitesQuery.data ?? [])
