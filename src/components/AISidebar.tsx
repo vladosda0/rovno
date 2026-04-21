@@ -99,6 +99,7 @@ import {
   type PhotoConsultApplyAction,
 } from "@/lib/commit-proposal";
 import { toast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 import type { AIMessage, AIProposal, ProposalChange } from "@/types/ai";
 import type { Event } from "@/types/entities";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -677,6 +678,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const [workLogs, setWorkLogs] = useState<Map<string, WorkLogEntry>>(new Map());
   const [proposalQueue, setProposalQueue] = useState<ProposalQueueState | null>(null);
   const [inputValue, setInputValue] = useState("");
+  const [composerMultiline, setComposerMultiline] = useState(false);
   const [limitModalOpen, setLimitModalOpen] = useState(false);
   const [activityFilter, setActivityFilter] = useState<FeedFilter>("all");
   const [learnMode, setLearnMode] = useState(false);
@@ -986,9 +988,13 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     const textarea = composerTextareaRef.current;
     if (!textarea) return;
     textarea.style.height = "auto";
-    const nextHeight = Math.min(textarea.scrollHeight, COMPOSER_MAX_HEIGHT);
+    const scrollH = textarea.scrollHeight;
+    const nextHeight = Math.min(scrollH, COMPOSER_MAX_HEIGHT);
     textarea.style.height = `${nextHeight}px`;
-    textarea.style.overflowY = textarea.scrollHeight > COMPOSER_MAX_HEIGHT ? "auto" : "hidden";
+    textarea.style.overflowY = scrollH > COMPOSER_MAX_HEIGHT ? "auto" : "hidden";
+    const lh = parseFloat(getComputedStyle(textarea).lineHeight);
+    const lineHeightPx = Number.isFinite(lh) ? lh : 21;
+    setComposerMultiline(scrollH > lineHeightPx * 1.33);
   }, []);
 
   useEffect(() => {
@@ -2620,6 +2626,174 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     "bg-success/10", "bg-destructive/10",
   ];
 
+  const composerPlaceholder = learnMode
+    ? "Ask AI to explain decisions and tradeoffs..."
+    : photoConsult
+      ? "Edit prompt or send as-is..."
+      : "Ask AI...";
+
+  const composerTextarea = (
+    <Textarea
+      ref={composerTextareaRef}
+      placeholder={composerPlaceholder}
+      className={cn(
+        "min-h-[38px] max-h-[220px] resize-none border-0 bg-transparent px-1 text-body-sm shadow-none placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 disabled:opacity-50",
+        composerMultiline ? "w-full py-1" : "flex-1 py-2",
+      )}
+      value={inputValue}
+      rows={1}
+      onChange={(e) => {
+        setInputValue(e.target.value);
+        resizeComposer();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          handleSend();
+        }
+      }}
+    />
+  );
+
+  const composerAttachmentRow = (
+    <div className={cn("flex shrink-0 items-center gap-1", !composerMultiline && "pb-0.5")}>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            size="icon"
+            variant="outline"
+            className="h-9 w-9 shrink-0 rounded-full border-sidebar-border bg-transparent"
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="min-w-[11.5rem] p-1">
+          <DropdownMenuItem className="gap-2" onSelect={() => handleReferenceTask()}>
+            <Link2 className="h-4 w-4 shrink-0" />
+            Reference
+          </DropdownMenuItem>
+          <DropdownMenuItem className="gap-2" onSelect={() => handleTagPerson()}>
+            <AtSign className="h-4 w-4 shrink-0" />
+            Tag
+          </DropdownMenuItem>
+          <DropdownMenuItem className="gap-2" onSelect={() => handleToggleLearnMode()}>
+            <GraduationCap className="h-4 w-4 shrink-0" />
+            <span className="flex-1 text-left">Learn mode</span>
+            {learnMode ? <Check className="ml-auto h-4 w-4 shrink-0" /> : null}
+          </DropdownMenuItem>
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger className="gap-2">
+              <Sparkles className="h-4 w-4 shrink-0" />
+              <span className="flex-1 text-left">Model</span>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="p-1">
+              <DropdownMenuRadioGroup
+                value={aiChatModel}
+                onValueChange={(v) => setAiChatModel(v as AiLlmProvider)}
+              >
+                <DropdownMenuRadioItem value="gigachat">GigaChat</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="qwen">Qwen</DropdownMenuRadioItem>
+              </DropdownMenuRadioGroup>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+          <DropdownMenuItem className="gap-2" onSelect={() => handleAttachFilePhoto()}>
+            <Paperclip className="h-4 w-4 shrink-0" />
+            Attach
+          </DropdownMenuItem>
+          {isPersistableAiProjectId(resolvedPermissionProjectId) ? (
+            <DropdownMenuItem className="gap-2" onSelect={() => handleNewConversation()}>
+              <RefreshCw className="h-4 w-4 shrink-0" />
+              New conversation
+            </DropdownMenuItem>
+          ) : null}
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {MVP_SHOW_AI_AUTOMATION_MODE_UI ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              className="h-9 max-w-[11rem] shrink-0 rounded-full border-sidebar-border bg-transparent px-3 text-caption font-medium"
+            >
+              <span className="truncate">{selectedAutomationOption.label}</span>
+              <ChevronDown className="h-3.5 w-3.5 ml-1.5 shrink-0" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-64 p-1">
+            {AUTOMATION_OPTIONS.map((option) => {
+              const isCurrent = option.mode === automationMode;
+              return (
+                <Tooltip key={`automation-option-${option.mode}`}>
+                  <TooltipTrigger asChild>
+                    <DropdownMenuItem
+                      onSelect={() => persistAutomationMode(option.mode)}
+                      className="flex items-center justify-between gap-2"
+                    >
+                      <span className="text-caption text-foreground">{option.label}</span>
+                      {isCurrent && <Check className="h-3.5 w-3.5 text-accent" />}
+                    </DropdownMenuItem>
+                  </TooltipTrigger>
+                  <TooltipContent side="right" className="text-caption whitespace-nowrap">
+                    {option.description}
+                  </TooltipContent>
+                </Tooltip>
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : null}
+
+      {learnMode && (
+        <span className="group inline-flex h-9 items-center rounded-full border border-sidebar-border bg-transparent px-2.5 text-caption font-medium text-foreground shrink-0">
+          <span className="relative mr-1 inline-flex h-3.5 w-3.5 items-center justify-center">
+            <GraduationCap className="h-3.5 w-3.5 text-accent group-hover:hidden" />
+            <button
+              type="button"
+              aria-label="Disable Learn mode"
+              onClick={handleToggleLearnMode}
+              className="absolute inset-0 hidden items-center justify-center text-muted-foreground hover:text-foreground group-hover:inline-flex"
+            >
+              <XIcon className="h-3.5 w-3.5" />
+            </button>
+          </span>
+          Learn
+        </span>
+      )}
+    </div>
+  );
+
+  const composerActionRow = (
+    <div className={cn("flex shrink-0 items-center gap-1.5", !composerMultiline && "pb-0.5")}>
+      <TooltipProvider delayDuration={200}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex shrink-0">
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                disabled
+                aria-label="Voice input (coming soon)"
+                className="h-9 w-9 shrink-0 rounded-full border-sidebar-border bg-transparent opacity-60"
+              >
+                <Mic className="h-4 w-4" />
+              </Button>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="top">Coming soon</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+      <Button
+        size="icon"
+        className="h-9 w-9 shrink-0 rounded-full bg-accent text-accent-foreground hover:bg-accent/90"
+        onClick={() => handleSend()}
+      >
+        <Send className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+
   return (
     <>
       <div
@@ -3099,165 +3273,29 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                         singleLineScrollable
                       />
 
-                      <div className="flex w-full min-w-0 items-end gap-2 rounded-full border border-sidebar-border bg-sidebar-accent/50 px-2 py-1.5 shadow-sm transition-[box-shadow,border-color] focus-within:border-accent/40 focus-within:ring-2 focus-within:ring-accent/25">
-                        <div className="flex shrink-0 items-center gap-1 pb-0.5">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                size="icon"
-                                variant="outline"
-                                className="h-9 w-9 shrink-0 rounded-full border-sidebar-border bg-transparent"
-                              >
-                                <Plus className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="start" className="min-w-[11.5rem] p-1">
-                              <DropdownMenuItem className="gap-2" onSelect={() => handleReferenceTask()}>
-                                <Link2 className="h-4 w-4 shrink-0" />
-                                Reference
-                              </DropdownMenuItem>
-                              <DropdownMenuItem className="gap-2" onSelect={() => handleTagPerson()}>
-                                <AtSign className="h-4 w-4 shrink-0" />
-                                Tag
-                              </DropdownMenuItem>
-                              <DropdownMenuItem className="gap-2" onSelect={() => handleToggleLearnMode()}>
-                                <GraduationCap className="h-4 w-4 shrink-0" />
-                                <span className="flex-1 text-left">Learn mode</span>
-                                {learnMode ? <Check className="ml-auto h-4 w-4 shrink-0" /> : null}
-                              </DropdownMenuItem>
-                              <DropdownMenuSub>
-                                <DropdownMenuSubTrigger className="gap-2">
-                                  <Sparkles className="h-4 w-4 shrink-0" />
-                                  <span className="flex-1 text-left">Model</span>
-                                </DropdownMenuSubTrigger>
-                                <DropdownMenuSubContent className="p-1">
-                                  <DropdownMenuRadioGroup
-                                    value={aiChatModel}
-                                    onValueChange={(v) => setAiChatModel(v as AiLlmProvider)}
-                                  >
-                                    <DropdownMenuRadioItem value="gigachat">GigaChat</DropdownMenuRadioItem>
-                                    <DropdownMenuRadioItem value="qwen">Qwen</DropdownMenuRadioItem>
-                                  </DropdownMenuRadioGroup>
-                                </DropdownMenuSubContent>
-                              </DropdownMenuSub>
-                              <DropdownMenuItem className="gap-2" onSelect={() => handleAttachFilePhoto()}>
-                                <Paperclip className="h-4 w-4 shrink-0" />
-                                Attach
-                              </DropdownMenuItem>
-                              {isPersistableAiProjectId(resolvedPermissionProjectId) ? (
-                                <DropdownMenuItem className="gap-2" onSelect={() => handleNewConversation()}>
-                                  <RefreshCw className="h-4 w-4 shrink-0" />
-                                  New conversation
-                                </DropdownMenuItem>
-                              ) : null}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-
-                          {MVP_SHOW_AI_AUTOMATION_MODE_UI ? (
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="outline"
-                                className="h-9 max-w-[11rem] shrink-0 rounded-full border-sidebar-border bg-transparent px-3 text-caption font-medium"
-                              >
-                                <span className="truncate">{selectedAutomationOption.label}</span>
-                                <ChevronDown className="h-3.5 w-3.5 ml-1.5 shrink-0" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="start" className="w-64 p-1">
-                              {AUTOMATION_OPTIONS.map((option) => {
-                                const isCurrent = option.mode === automationMode;
-                                return (
-                                  <Tooltip key={`automation-option-${option.mode}`}>
-                                    <TooltipTrigger asChild>
-                                      <DropdownMenuItem
-                                        onSelect={() => persistAutomationMode(option.mode)}
-                                        className="flex items-center justify-between gap-2"
-                                      >
-                                        <span className="text-caption text-foreground">{option.label}</span>
-                                        {isCurrent && <Check className="h-3.5 w-3.5 text-accent" />}
-                                      </DropdownMenuItem>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="right" className="text-caption whitespace-nowrap">
-                                      {option.description}
-                                    </TooltipContent>
-                                  </Tooltip>
-                                );
-                              })}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                          ) : null}
-
-                          {learnMode && (
-                            <span className="group inline-flex h-9 items-center rounded-full border border-sidebar-border bg-transparent px-2.5 text-caption font-medium text-foreground shrink-0">
-                              <span className="relative mr-1 inline-flex h-3.5 w-3.5 items-center justify-center">
-                                <GraduationCap className="h-3.5 w-3.5 text-accent group-hover:hidden" />
-                                <button
-                                  type="button"
-                                  aria-label="Disable Learn mode"
-                                  onClick={handleToggleLearnMode}
-                                  className="absolute inset-0 hidden items-center justify-center text-muted-foreground hover:text-foreground group-hover:inline-flex"
-                                >
-                                  <XIcon className="h-3.5 w-3.5" />
-                                </button>
-                              </span>
-                              Learn
-                            </span>
-                          )}
-                        </div>
-
-                        <Textarea
-                          ref={composerTextareaRef}
-                          placeholder={
-                            learnMode
-                              ? "Ask AI to explain decisions and tradeoffs..."
-                              : photoConsult
-                                ? "Edit prompt or send as-is..."
-                                : "Ask AI..."
-                          }
-                          className="min-h-[38px] max-h-[220px] flex-1 resize-none border-0 bg-transparent px-1 py-2 text-body-sm shadow-none placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 disabled:opacity-50"
-                          value={inputValue}
-                          rows={1}
-                          onChange={(e) => {
-                            setInputValue(e.target.value);
-                            resizeComposer();
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" && !e.shiftKey) {
-                              e.preventDefault();
-                              handleSend();
-                            }
-                          }}
-                        />
-
-                        <div className="flex shrink-0 items-center gap-1.5 pb-0.5">
-                          <TooltipProvider delayDuration={200}>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span className="inline-flex shrink-0">
-                                  <Button
-                                    type="button"
-                                    size="icon"
-                                    variant="outline"
-                                    disabled
-                                    aria-label="Voice input (coming soon)"
-                                    className="h-9 w-9 shrink-0 rounded-full border-sidebar-border bg-transparent opacity-60"
-                                  >
-                                    <Mic className="h-4 w-4" />
-                                  </Button>
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent side="top">Coming soon</TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                          <Button
-                            size="icon"
-                            className="h-9 w-9 shrink-0 rounded-full bg-accent text-accent-foreground hover:bg-accent/90"
-                            onClick={() => handleSend()}
-                          >
-                            <Send className="h-4 w-4" />
-                          </Button>
-                        </div>
+                      <div
+                        className={cn(
+                          "w-full min-w-0 border border-sidebar-border bg-sidebar-accent/50 shadow-sm transition-[box-shadow,border-color] focus-within:border-accent/40 focus-within:ring-2 focus-within:ring-accent/25",
+                          composerMultiline
+                            ? "flex flex-col gap-0 overflow-hidden rounded-xl px-2 pt-2 pb-2"
+                            : "flex items-end gap-2 rounded-full px-2 py-1.5",
+                        )}
+                      >
+                        {composerMultiline ? (
+                          <>
+                            {composerTextarea}
+                            <div className="mt-1.5 flex min-h-[2.25rem] items-center justify-between gap-2 border-t border-sidebar-border/60 pt-1.5">
+                              {composerAttachmentRow}
+                              {composerActionRow}
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            {composerAttachmentRow}
+                            {composerTextarea}
+                            {composerActionRow}
+                          </>
+                        )}
                       </div>
 
                       {isHomeContext && (
