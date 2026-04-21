@@ -7,6 +7,11 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # `.env` is not committed. `vite build` uses production mode, so it does not load `.env.test`.
+    # Match `.env.test` so lint / test / build always have valid `VITE_SUPABASE_*` for the Supabase client module.
+    env:
+      VITE_SUPABASE_URL: https://ci-placeholder.supabase.co
+      VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder_only
 
     steps:
       - name: Checkout
