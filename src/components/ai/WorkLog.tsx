@@ -5,19 +5,28 @@ interface WorkLogProps {
   steps: string[];
   onComplete?: () => void;
   speed?: number;
+  /**
+   * When true, advances through steps with the timer but keeps the last step active (spinner)
+   * until this component unmounts. Use for real async work (e.g. hosted ai-inference) so the UI
+   * never shows “Done” before the request finishes.
+   */
+  holdFinalStep?: boolean;
 }
 
-export function WorkLog({ steps, onComplete, speed = 600 }: WorkLogProps) {
+export function WorkLog({ steps, onComplete, speed = 600, holdFinalStep = false }: WorkLogProps) {
   const [completedCount, setCompletedCount] = useState(0);
 
   useEffect(() => {
-    if (completedCount >= steps.length) {
-      onComplete?.();
+    const maxTimedCount = holdFinalStep ? Math.max(0, steps.length - 1) : steps.length;
+    if (completedCount >= maxTimedCount) {
+      if (!holdFinalStep && completedCount >= steps.length) {
+        onComplete?.();
+      }
       return;
     }
     const timer = setTimeout(() => setCompletedCount((c) => c + 1), speed);
     return () => clearTimeout(timer);
-  }, [completedCount, steps.length, speed, onComplete]);
+  }, [completedCount, steps.length, speed, onComplete, holdFinalStep]);
 
   return (
     <div className="glass rounded-card p-2.5 space-y-1 w-full">

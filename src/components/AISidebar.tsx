@@ -413,6 +413,8 @@ interface WorkLogEntry {
   id: string;
   steps: string[];
   phase: "generate" | "commit";
+  /** True when steps are cosmetic pacing for a real async call; WorkLog stays on the last step until removed. */
+  holdFinalStep?: boolean;
 }
 
 interface ProposalQueueState {
@@ -1203,7 +1205,12 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
       : WORK_STEPS_GENERATE;
     setWorkLogs((prev) => {
       const next = new Map(prev);
-      next.set(workLogId, { id: workLogId, steps: workSteps, phase: "generate" });
+      next.set(workLogId, {
+        id: workLogId,
+        steps: workSteps,
+        phase: "generate",
+        holdFinalStep: hostedLivePath,
+      });
       return next;
     });
 
@@ -2975,7 +2982,10 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                   {/* Keep current interactive blocks and animations */}
                   {activeWindow === "worklog" && latestWorkLog && (
                     <div className="w-full min-w-0 space-y-1.5">
-                      <WorkLog steps={latestWorkLog.steps} />
+                      <WorkLog
+                        steps={latestWorkLog.steps}
+                        holdFinalStep={Boolean(latestWorkLog.holdFinalStep)}
+                      />
                       {proposalQueue?.phase === "executing" && activeExecutionItem && (
                         <div className="glass rounded-card p-2 space-y-1">
                           <p className="text-caption text-foreground font-medium">
