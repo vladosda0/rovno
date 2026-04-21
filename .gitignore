@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Local env overrides (README: copy from `.env.example` to `.env.local`).
+# Track `.env` only in exceptional cases; prefer untracked `.env` / `.env.local`.
+.env
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
