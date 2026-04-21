@@ -32,8 +32,8 @@ describe("Login", () => {
     vi.clearAllMocks();
   });
 
-  it("sets simulated role to owner after successful sign in", async () => {
-    setAuthRole("guest");
+  it("preserves the simulated role after successful sign in", async () => {
+    setAuthRole("contractor");
     signInWithPasswordMock.mockResolvedValue({
       data: { session: { user: { id: "profile-1" } } },
       error: null,
@@ -51,7 +51,7 @@ describe("Login", () => {
 
     await waitFor(() => {
       expect(signInWithPasswordMock).toHaveBeenCalled();
-      expect(getAuthRole()).toBe("owner");
+      expect(getAuthRole()).toBe("contractor");
     });
   });
 
