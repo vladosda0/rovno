@@ -9,7 +9,17 @@ import {
   type ReactNode,
 } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { AlertTriangle, ChevronDown, ChevronRight, Download, Info, Plus, Trash2, User } from "lucide-react";
+import {
+  AlertTriangle,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Info,
+  Plus,
+  Trash2,
+  User,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -118,6 +128,7 @@ import {
   seamEstimateFinanceVisibilityMode,
   usePermission,
 } from "@/lib/permissions";
+import { cn } from "@/lib/utils";
 import { ApprovalStampCard } from "@/components/estimate-v2/ApprovalStampCard";
 import { ApprovalStampFormModal } from "@/components/estimate-v2/ApprovalStampFormModal";
 import { VersionBanner } from "@/components/estimate-v2/VersionBanner";
@@ -514,24 +525,36 @@ function WorkTableFrame({ className, children }: { className?: string; children:
   const tableRef = useRef<HTMLTableElement | null>(null);
   const [scrollState, setScrollState] = useState({
     hasOverflow: false,
-    isScrolled: false,
+    canScrollLeft: false,
+    canScrollRight: false,
   });
+
+  const updateScrollState = useCallback(() => {
+    const tableNode = tableRef.current;
+    const container = tableNode?.parentElement as HTMLDivElement | null;
+    if (!tableNode || !container) return;
+    const { scrollLeft, scrollWidth, clientWidth } = container;
+    const maxLeft = Math.max(0, scrollWidth - clientWidth);
+    const edgeSlack = 3;
+    const hasOverflow = scrollWidth > clientWidth + edgeSlack;
+    const canScrollLeft = scrollLeft > edgeSlack;
+    const canScrollRight = scrollLeft < maxLeft - edgeSlack;
+    setScrollState((current) => {
+      if (
+        current.hasOverflow === hasOverflow
+        && current.canScrollLeft === canScrollLeft
+        && current.canScrollRight === canScrollRight
+      ) {
+        return current;
+      }
+      return { hasOverflow, canScrollLeft, canScrollRight };
+    });
+  }, []);
 
   useEffect(() => {
     const tableNode = tableRef.current;
     const container = tableNode?.parentElement as HTMLDivElement | null;
     if (!tableNode || !container) return undefined;
-
-    const updateScrollState = () => {
-      const hasOverflow = container.scrollWidth > container.clientWidth + 1;
-      const isScrolled = container.scrollLeft > 0;
-      setScrollState((current) => {
-        if (current.hasOverflow === hasOverflow && current.isScrolled === isScrolled) {
-          return current;
-        }
-        return { hasOverflow, isScrolled };
-      });
-    };
 
     updateScrollState();
     container.addEventListener("scroll", updateScrollState, { passive: true });
@@ -545,16 +568,103 @@ function WorkTableFrame({ className, children }: { className?: string; children:
       container.removeEventListener("scroll", updateScrollState);
       resizeObserver?.disconnect();
     };
+  }, [updateScrollState]);
+
+  const scrollTable = useCallback((direction: "left" | "right") => {
+    const container = tableRef.current?.parentElement as HTMLDivElement | null;
+    if (!container) return;
+    const jump = Math.min(Math.round(container.clientWidth * 0.55), 420);
+    container.scrollBy({ left: direction === "right" ? jump : -jump, behavior: "smooth" });
   }, []);
 
+  const showEdgeHints = scrollState.hasOverflow;
+  const showRightCue = showEdgeHints && scrollState.canScrollRight;
+  const showLeftCue = showEdgeHints && scrollState.canScrollLeft;
+
   return (
-    <div className="relative pl-4">
-      <Table ref={tableRef} className={className}>
-        {children}
-      </Table>
-      {scrollState.hasOverflow && !scrollState.isScrolled && (
-        <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-card via-card/80 to-transparent" />
-      )}
+    <div className="relative space-y-1.5 pl-4">
+      {showEdgeHints ? (
+        <div className="flex flex-wrap items-center justify-end gap-1 pr-1">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border/60 bg-card/80 text-amber-600 shadow-sm hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                aria-label="More columns are hidden to the side of this table"
+              >
+                <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-[min(280px,calc(100vw-2rem))] text-left text-xs leading-snug">
+              More columns are hidden — scroll the table below, or use the arrows.
+            </TooltipContent>
+          </Tooltip>
+          <div className="flex shrink-0 items-center gap-1">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="h-7 w-7 border-border/80 bg-card/90 shadow-sm"
+              disabled={!scrollState.canScrollLeft}
+              aria-label="Scroll table left"
+              title="Scroll left"
+              onClick={() => scrollTable("left")}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className={cn(
+                "h-7 w-7 border-border/80 bg-card/90 shadow-sm",
+                scrollState.canScrollRight
+                && !scrollState.canScrollLeft
+                && "motion-safe:animate-pulse",
+              )}
+              disabled={!scrollState.canScrollRight}
+              aria-label="Scroll table right"
+              title="Scroll right"
+              onClick={() => scrollTable("right")}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="relative min-w-0">
+        <Table
+          ref={tableRef}
+          className={className}
+          wrapperClassName={cn(
+            "relative w-full",
+            /* Prefer a visible horizontal track (esp. Windows/Linux); still allows vertical scroll */
+            "overflow-y-auto overflow-x-scroll",
+            "[scrollbar-width:thin]",
+            "[scrollbar-color:hsl(var(--muted-foreground)/0.4)_hsl(var(--muted)/0.35)]",
+            "[&::-webkit-scrollbar]:h-2",
+            "[&::-webkit-scrollbar-thumb]:rounded-full",
+            "[&::-webkit-scrollbar-thumb]:bg-muted-foreground/35",
+            "[&::-webkit-scrollbar-track]:bg-muted/30",
+          )}
+        >
+          {children}
+        </Table>
+
+        {showLeftCue ? (
+          <div
+            className="pointer-events-none absolute inset-y-0 left-0 z-10 w-9 bg-gradient-to-r from-card/95 via-card/55 to-transparent"
+            aria-hidden
+          />
+        ) : null}
+        {showRightCue ? (
+          <div
+            className="pointer-events-none absolute inset-y-0 right-0 z-10 w-14 bg-gradient-to-l from-card via-card/90 to-transparent shadow-[inset_-12px_0_14px_-8px_hsl(var(--foreground)/0.08)]"
+            aria-hidden
+          />
+        ) : null}
+      </div>
     </div>
   );
 }
