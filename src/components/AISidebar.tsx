@@ -73,6 +73,7 @@ import {
   pickInferenceMode,
   resolveAiAssistantUiLanguage,
   shouldUseHostedLiveTextAssistantPath,
+  type AiInferencePriorTurn,
   userVisibleLiveTextAssistantError,
   type AiAssistantUiLanguage,
 } from "@/lib/ai-assistant-client";
@@ -251,6 +252,32 @@ function messageHasAiActionSignals(message: AIMessage): boolean {
 
 function transcriptHasAiActionSignals(messages: readonly AIMessage[]): boolean {
   return messages.some(messageHasAiActionSignals);
+}
+
+const MAX_INFERENCE_PRIOR_TURNS = 20;
+const MAX_INFERENCE_PRIOR_TURN_CHARS = 2000;
+
+function buildPriorTurnsForInference(
+  messages: readonly AIMessage[],
+  currentUserMessageId: string,
+): AiInferencePriorTurn[] {
+  return messages
+    .filter((message) => message.id !== currentUserMessageId)
+    .filter((message): message is AIMessage & { role: "user" | "assistant" } =>
+      message.role === "user" || message.role === "assistant"
+    )
+    .map((message) => {
+      const text = message.content.trim();
+      if (!text) return null;
+      return {
+        role: message.role,
+        text: text.length > MAX_INFERENCE_PRIOR_TURN_CHARS
+          ? text.slice(0, MAX_INFERENCE_PRIOR_TURN_CHARS)
+          : text,
+      } satisfies AiInferencePriorTurn;
+    })
+    .filter((turn): turn is AiInferencePriorTurn => turn !== null)
+    .slice(-MAX_INFERENCE_PRIOR_TURNS);
 }
 
 /** Live thread above collapsible activity — same subset rules as former in-feed chat rows. */
@@ -987,17 +1014,34 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const resizeComposer = useCallback(() => {
     const textarea = composerTextareaRef.current;
     if (!textarea) return;
-    textarea.style.height = "auto";
+    // Clear inline height so scrollHeight reflects full wrapped content. Using height: 0px
+    // breaks scrollHeight for soft-wrapped text in WebKit/Blink — the field stays one line tall
+    // and clips the caret / second line.
+    textarea.style.removeProperty("height");
+    textarea.style.overflowY = "hidden";
     const scrollH = textarea.scrollHeight;
     const nextHeight = Math.min(scrollH, COMPOSER_MAX_HEIGHT);
     textarea.style.height = `${nextHeight}px`;
     textarea.style.overflowY = scrollH > COMPOSER_MAX_HEIGHT ? "auto" : "hidden";
-    const lh = parseFloat(getComputedStyle(textarea).lineHeight);
-    const lineHeightPx = Number.isFinite(lh) ? lh : 21;
-    setComposerMultiline(scrollH > lineHeightPx * 1.33);
+    const style = getComputedStyle(textarea);
+    const lh = parseFloat(style.lineHeight);
+    const lineHeightPx = Number.isFinite(lh) && lh > 0 ? lh : 19.5;
+    const padY = (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0);
+    const oneLineScrollApprox = lineHeightPx + padY;
+    const hasSecondLineByBreak = textarea.value.includes("\n");
+    // More than one visual line at current width: soft wrap or explicit newline.
+    const byMeasure = hasSecondLineByBreak || scrollH > oneLineScrollApprox + lineHeightPx * 0.85;
+    // Sticky multiline: switching to the stacked layout widens the textarea; at the wider width
+    // the same text can fit on one line, scrollHeight drops, and we would flip back to the pill
+    // row — narrow width wraps again → oscillation and clipped second line.
+    setComposerMultiline((prev) => {
+      const hasContent = textarea.value.length > 0;
+      if (!hasContent) return false;
+      return prev || byMeasure;
+    });
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (isInputLocked) return;
     resizeComposer();
   }, [inputValue, isInputLocked, resizeComposer]);
@@ -1420,6 +1464,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
         };
         const contextPack = buildAIProjectContext(seam, contextInputs);
         const chatId = getOrCreateProjectChatSessionId(targetProjectId);
+        const priorTurns = buildPriorTurnsForInference(messages, userMessageId);
 
         try {
           const result = await invokeLiveTextAssistant({
@@ -1429,6 +1474,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
             workspaceKind: workspaceMode.kind,
             aiAccess: seam.membership?.ai_access ?? "none",
             aiOutputLanguage: workspaceProfilePreferences?.aiOutputLanguage,
+            priorTurns,
             chatId,
             llmProvider: aiChatModel,
           });
@@ -1504,6 +1550,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     seamForProjectCommit,
     user.credits_free,
     user.credits_paid,
+    messages,
     workspaceMode.kind,
   ]);
 
@@ -2637,8 +2684,9 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
       ref={composerTextareaRef}
       placeholder={composerPlaceholder}
       className={cn(
-        "min-h-[38px] max-h-[220px] resize-none border-0 bg-transparent px-1 text-body-sm shadow-none placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 disabled:opacity-50",
-        composerMultiline ? "w-full py-1" : "flex-1 py-2",
+        /* block + min-h-0: default Textarea uses flex; avoids flex row preventing autosized height growth */
+        "block min-h-[38px] max-h-[220px] w-full resize-none border-0 bg-transparent px-1 py-2 text-body-sm shadow-none placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 disabled:opacity-50",
+        !composerMultiline && "flex-1",
       )}
       value={inputValue}
       rows={1}
@@ -3277,25 +3325,33 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                         className={cn(
                           "w-full min-w-0 border border-sidebar-border bg-sidebar-accent/50 shadow-sm transition-[box-shadow,border-color] focus-within:border-accent/40 focus-within:ring-2 focus-within:ring-accent/25",
                           composerMultiline
-                            ? "flex flex-col gap-0 overflow-hidden rounded-xl px-2 pt-2 pb-2"
-                            : "flex items-end gap-2 rounded-full px-2 py-1.5",
+                            ? "flex flex-col gap-0 rounded-xl px-2 pt-2 pb-2"
+                            : "flex flex-row items-stretch gap-2 rounded-full px-2 py-1.5",
                         )}
                       >
-                        {composerMultiline ? (
-                          <>
-                            {composerTextarea}
-                            <div className="mt-1.5 flex min-h-[2.25rem] items-center justify-between gap-2 border-t border-sidebar-border/60 pt-1.5">
-                              {composerAttachmentRow}
-                              {composerActionRow}
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            {composerAttachmentRow}
-                            {composerTextarea}
-                            {composerActionRow}
-                          </>
-                        )}
+                        {/* Textarea stays first in React tree for both modes so composerMultiline toggles do not remount it (preserves focus). Visual order in pill mode uses flex order. */}
+                        <div
+                          className={cn(
+                            composerMultiline
+                              ? "w-full min-w-0"
+                              : "order-2 flex min-h-[38px] min-w-0 flex-1 flex-col",
+                          )}
+                        >
+                          {composerTextarea}
+                        </div>
+                        <div
+                          className={cn(
+                            composerMultiline
+                              ? "mt-1.5 flex min-h-[2.25rem] shrink-0 items-center justify-between gap-2 border-t border-sidebar-border/60 pt-1.5"
+                              : "order-1 flex shrink-0 self-end",
+                          )}
+                        >
+                          {composerAttachmentRow}
+                          {composerMultiline ? composerActionRow : null}
+                        </div>
+                        {!composerMultiline ? (
+                          <div className="order-3 flex shrink-0 self-end">{composerActionRow}</div>
+                        ) : null}
                       </div>
 
                       {isHomeContext && (

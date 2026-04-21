@@ -465,13 +465,13 @@ describe("buildInferenceRequestBody", () => {
   it("includes chatId when a valid UUID is provided", () => {
     const pack = minimalContextPack();
     const cid = "a1b2c3d4-e5f6-4780-abcd-ef1234567890";
-    const body = buildInferenceRequestBody("pid-1", "consult", "hi", pack, cid);
+    const body = buildInferenceRequestBody("pid-1", "consult", "hi", pack, undefined, cid);
     expect(body.chatId).toBe(cid);
   });
 
   it("omits chatId when not a UUID", () => {
     const pack = minimalContextPack();
-    const body = buildInferenceRequestBody("pid-1", "consult", "hi", pack, "not-uuid");
+    const body = buildInferenceRequestBody("pid-1", "consult", "hi", pack, undefined, "not-uuid");
     expect(body).not.toHaveProperty("chatId");
   });
 
@@ -479,12 +479,42 @@ describe("buildInferenceRequestBody", () => {
     const pack = minimalContextPack();
     const noLlm = buildInferenceRequestBody("pid-1", "consult", "hi", pack);
     expect(noLlm).not.toHaveProperty("llmProvider");
-    const qwen = buildInferenceRequestBody("pid-1", "consult", "hi", pack, undefined, "qwen");
+    const qwen = buildInferenceRequestBody("pid-1", "consult", "hi", pack, undefined, undefined, "qwen");
     expect(qwen.llmProvider).toBe("qwen");
     const cid = "a1b2c3d4-e5f6-4780-abcd-ef1234567890";
-    const both = buildInferenceRequestBody("pid-1", "consult", "hi", pack, cid, "gigachat");
+    const both = buildInferenceRequestBody("pid-1", "consult", "hi", pack, undefined, cid, "gigachat");
     expect(both.chatId).toBe(cid);
     expect(both.llmProvider).toBe("gigachat");
+  });
+
+  it("includes bounded priorTurns when provided", () => {
+    const pack = minimalContextPack();
+    const body = buildInferenceRequestBody(
+      "pid-1",
+      "consult",
+      "hi",
+      pack,
+      [
+        { role: "user", text: "  earlier question  " },
+        { role: "assistant", text: "previous answer" },
+      ],
+    );
+    expect(body.priorTurns).toEqual([
+      { role: "user", text: "earlier question" },
+      { role: "assistant", text: "previous answer" },
+    ]);
+  });
+
+  it("drops invalid or empty priorTurns", () => {
+    const pack = minimalContextPack();
+    const body = buildInferenceRequestBody(
+      "pid-1",
+      "consult",
+      "hi",
+      pack,
+      [{ role: "user", text: "   " }],
+    );
+    expect(body).not.toHaveProperty("priorTurns");
   });
 });
 

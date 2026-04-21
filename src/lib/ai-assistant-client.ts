@@ -28,8 +28,15 @@ export interface InvokeLiveTextAssistantInput {
   aiOutputLanguage?: "ru" | "en" | "auto";
   /** Optional UUID — Layer B session continuity for hosted `ai-inference`. */
   chatId?: string;
+  /** Optional bounded chat history fallback for hosted `ai-inference` when server continuity is empty. */
+  priorTurns?: ReadonlyArray<AiInferencePriorTurn>;
   /** Hosted `ai-inference` — GigaChat vs Qwen (DashScope). Omit to use Edge default / env. */
   llmProvider?: AiLlmProvider;
+}
+
+export interface AiInferencePriorTurn {
+  role: "user" | "assistant";
+  text: string;
 }
 
 /** UI language for assistant chrome (errors, mock path, source labels). */
@@ -90,6 +97,7 @@ export function pickInferenceMode(userMessage: string, aiAccess: AIAccess): Infe
 interface AIInferenceRequestBody {
   projectId: string;
   chatId?: string;
+  priorTurns?: AiInferencePriorTurn[];
   llmProvider?: AiLlmProvider;
   mode: InferenceMode;
   message: string;
@@ -97,6 +105,28 @@ interface AIInferenceRequestBody {
     projectContext: Record<string, unknown>;
     documentExcerpts: unknown[];
   };
+}
+
+const MAX_PRIOR_TURNS = 20;
+const MAX_PRIOR_TURN_TEXT_CHARS = 2000;
+
+function sanitizePriorTurns(
+  priorTurns?: ReadonlyArray<AiInferencePriorTurn>,
+): AiInferencePriorTurn[] | undefined {
+  if (!Array.isArray(priorTurns) || priorTurns.length === 0) return undefined;
+  const bounded = priorTurns
+    .slice(-MAX_PRIOR_TURNS)
+    .map((turn): AiInferencePriorTurn | null => {
+      if (!turn || (turn.role !== "user" && turn.role !== "assistant")) return null;
+      const text = turn.text.trim();
+      if (!text) return null;
+      return {
+        role: turn.role,
+        text: text.length > MAX_PRIOR_TURN_TEXT_CHARS ? text.slice(0, MAX_PRIOR_TURN_TEXT_CHARS) : text,
+      };
+    })
+    .filter((turn): turn is AiInferencePriorTurn => turn !== null);
+  return bounded.length > 0 ? bounded : undefined;
 }
 
 type BackendGroundingStatus =
@@ -369,6 +399,7 @@ export function buildInferenceRequestBody(
   mode: InferenceMode,
   userMessage: string,
   contextPack: AIContextPack,
+  priorTurns?: ReadonlyArray<AiInferencePriorTurn>,
   chatId?: string,
   llmProvider?: AiLlmProvider,
 ): AIInferenceRequestBody {
@@ -384,6 +415,10 @@ export function buildInferenceRequestBody(
   };
   if (chatId && UUID_RE.test(chatId)) {
     body.chatId = chatId;
+  }
+  const safePriorTurns = sanitizePriorTurns(priorTurns);
+  if (safePriorTurns) {
+    body.priorTurns = safePriorTurns;
   }
   if (llmProvider) {
     body.llmProvider = llmProvider;
@@ -506,11 +541,20 @@ async function invokeHosted(
   userMessage: string,
   contextPack: AIContextPack,
   assistantUiLanguage: AiAssistantUiLanguage,
+  priorTurns?: ReadonlyArray<AiInferencePriorTurn>,
   chatId?: string,
   llmProvider?: AiLlmProvider,
 ): Promise<LiveTextAssistantResult> {
   const { supabase } = await import("@/integrations/supabase/client");
-  const body = buildInferenceRequestBody(projectId, mode, userMessage, contextPack, chatId, llmProvider);
+  const body = buildInferenceRequestBody(
+    projectId,
+    mode,
+    userMessage,
+    contextPack,
+    priorTurns,
+    chatId,
+    llmProvider,
+  );
 
   const { data, error } = await supabase.functions.invoke("ai-inference", { body });
 
@@ -683,6 +727,7 @@ export async function invokeLiveTextAssistant(
       input.userMessage,
       input.contextPack,
       assistantUiLanguage,
+      input.priorTurns,
       input.chatId,
       input.llmProvider,
     );
