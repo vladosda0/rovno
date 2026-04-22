@@ -19,12 +19,19 @@ const TIMEZONES = [
   { value: "Asia/Tokyo", label: "Asia/Tokyo (UTC+9)" },
 ];
 
-const LANGUAGES = [
+const LANGUAGES: { value: string; label: string; disabled?: boolean }[] = [
   { value: "ru", label: "Русский" },
   { value: "en", label: "English" },
-  { value: "de", label: "Deutsch" },
+  { value: "de", label: "Deutsch", disabled: true },
   { value: "fr", label: "Français" },
+  { value: "es", label: "Español", disabled: true },
 ];
+
+function normalizeSelectableLanguage(locale: string | undefined): string {
+  const raw = locale || "en";
+  if (raw === "de" || raw === "es") return "en";
+  return raw;
+}
 
 export function ProfilePanel() {
   const user = useCurrentUser();
@@ -35,11 +42,11 @@ export function ProfilePanel() {
   const [roleTitle, setRoleTitle] = useState("");
   const [phone, setPhone] = useState("");
   const [timezone, setTimezone] = useState(user.timezone || "auto");
-  const [language, setLanguage] = useState(user.locale || "en");
+  const [language, setLanguage] = useState(() => normalizeSelectableLanguage(user.locale));
   const [signature, setSignature] = useState("");
   const [bio, setBio] = useState("");
 
-  const isDirty = name !== user.name || roleTitle || phone || signature || bio || timezone !== (user.timezone || "auto") || language !== (user.locale || "en");
+  const isDirty = name !== user.name || roleTitle || phone || signature || bio || timezone !== (user.timezone || "auto") || language !== normalizeSelectableLanguage(user.locale);
 
   const handleSave = () => {
     toast({ title: "Profile saved", description: "Your changes have been saved." });
@@ -50,7 +57,7 @@ export function ProfilePanel() {
     setRoleTitle("");
     setPhone("");
     setTimezone(user.timezone || "auto");
-    setLanguage(user.locale || "en");
+    setLanguage(normalizeSelectableLanguage(user.locale));
     setSignature("");
     setBio("");
   };
@@ -109,7 +116,9 @@ export function ProfilePanel() {
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {LANGUAGES.map((lang) => (
-                  <SelectItem key={lang.value} value={lang.value}>{lang.label}</SelectItem>
+                  <SelectItem key={lang.value} value={lang.value} disabled={lang.disabled}>
+                    {lang.label}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>

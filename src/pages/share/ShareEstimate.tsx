@@ -20,6 +20,7 @@ import { ApprovalStampCard } from "@/components/estimate-v2/ApprovalStampCard";
 import { ApprovalStampFormModal } from "@/components/estimate-v2/ApprovalStampFormModal";
 import type { ApprovalStamp } from "@/types/estimate-v2";
 import { isAuthenticated } from "@/lib/auth-state";
+import { SHOW_ESTIMATE_VERSION_UI } from "@/lib/estimate-v2/show-estimate-version-ui";
 
 function money(cents: number, currency: string): string {
   return new Intl.NumberFormat("ru-RU", {
@@ -182,9 +183,11 @@ export default function ShareEstimate() {
     <div className="mx-auto max-w-6xl p-sp-3 space-y-sp-2">
       <div className="rounded-card border border-border bg-card p-sp-2 space-y-2">
         <h1 className="text-lg font-semibold text-foreground">Estimate preview</h1>
-        <p className="text-caption text-muted-foreground">
-          Version #{version.number}
-        </p>
+        {SHOW_ESTIMATE_VERSION_UI ? (
+          <p className="text-caption text-muted-foreground">
+            Version #{version.number}
+          </p>
+        ) : null}
 
         {newerProposed && (
           <div className="rounded-md border border-warning/40 bg-warning/10 p-2 flex flex-wrap items-center justify-between gap-2">

@@ -47,11 +47,11 @@ const DEFAULT_GROUPS: { title: string; items: NotifToggle[] }[] = [
 ];
 
 export function NotificationsPanel() {
-  const [channels, setChannels] = useState({ inApp: true, email: false, telegram: false });
+  const [channels, setChannels] = useState({ inApp: true });
   const [groups, setGroups] = useState(DEFAULT_GROUPS);
   const [digest, setDigest] = useState("instant");
 
-  const toggleChannel = (ch: keyof typeof channels) => setChannels((prev) => ({ ...prev, [ch]: !prev[ch] }));
+  const toggleInApp = () => setChannels((prev) => ({ ...prev, inApp: !prev.inApp }));
 
   const toggleItem = (groupIdx: number, itemIdx: number) => {
     setGroups((prev) => prev.map((g, gi) => gi !== groupIdx ? g : {
@@ -65,12 +65,13 @@ export function NotificationsPanel() {
       <SettingsSection title="Channels" description="Where you receive notifications.">
         <div className="flex flex-wrap gap-sp-2">
           <div className="flex items-center gap-2">
-            <Switch checked={channels.inApp} onCheckedChange={() => toggleChannel("inApp")} />
+            <Switch checked={channels.inApp} onCheckedChange={toggleInApp} />
             <Label>In-app</Label>
           </div>
-          <div className="flex items-center gap-2">
-            <Switch checked={channels.email} onCheckedChange={() => toggleChannel("email")} />
+          <div className="flex items-center gap-2 opacity-50">
+            <Switch checked={false} disabled />
             <Label>Email</Label>
+            <Badge variant="secondary" className="text-[10px]">Coming soon</Badge>
           </div>
           <div className="flex items-center gap-2 opacity-50">
             <Switch checked={false} disabled />

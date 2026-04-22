@@ -58,7 +58,6 @@ import {
   FileText,
   ImagePlus,
   Info,
-  Plus,
   X,
 } from "lucide-react";
 import { ReceiveOrderPickerModal } from "@/components/procurement/ReceiveOrderPickerModal";
@@ -499,9 +498,6 @@ export function QuickActions({
     <>
       <div className="glass-elevated rounded-card p-sp-2 flex items-center gap-2 flex-wrap">
         <span className="text-caption text-muted-foreground mr-auto">Quick actions</span>
-        <Button size="sm" variant="outline" className="text-caption h-7" disabled={!canCreateTask} onClick={() => setOpenModal("task")}>
-          <Plus className="h-3 w-3 mr-1" /> Task
-        </Button>
         <Button size="sm" variant="outline" className="text-caption h-7" disabled={!canCreateDocument} onClick={() => setOpenModal("document")}>
           <FileText className="h-3 w-3 mr-1" /> Document
         </Button>

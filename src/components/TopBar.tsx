@@ -331,39 +331,33 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
             </Button>
           )}
 
-          <div className="flex items-center gap-1.5">
-            <Link to="/home" className="text-body font-semibold text-foreground hover:text-foreground/80 transition-colors">
-              СтройАгент
-            </Link>
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="h-8 gap-2 px-2 shrink-0">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-accent via-info to-warning text-accent-foreground">
+                  <Hammer className="h-3.5 w-3.5" />
+                </span>
+                <span className="text-body-sm font-semibold text-foreground">СтройАгент</span>
+                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-48 glass-elevated rounded-card">
+              <DropdownMenuItem asChild>
+                <Link to="/home"><User className="mr-2 h-4 w-4" />Home</Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link to="/settings"><Settings className="mr-2 h-4 w-4" />Settings</Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleLogout}>
+                <LogOut className="mr-2 h-4 w-4" />Logout
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </>
       )}
 
       <div className="flex-1" />
-
-      {!isHomePage && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
-              <Avatar className="h-7 w-7">
-                <AvatarFallback className="text-caption bg-accent text-accent-foreground">{initials}</AvatarFallback>
-              </Avatar>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48 glass-elevated rounded-card">
-            <DropdownMenuItem asChild>
-              <Link to="/home"><User className="mr-2 h-4 w-4" />Home</Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link to="/settings"><Settings className="mr-2 h-4 w-4" />Settings</Link>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleLogout}>
-              <LogOut className="mr-2 h-4 w-4" />Logout
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
     </header>
   );
 }

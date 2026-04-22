@@ -144,6 +144,7 @@ export default function ProjectDocuments() {
     [perm.seam.membership],
   );
   const canSelectInternalUpload = canViewInternalDocuments(effectiveInternalDocs);
+  const showDocumentVisibilityBadges = canSelectInternalUpload;
 
   useEffect(() => {
     if (!canSelectInternalUpload && uploadVisibilityClass === "internal") {
@@ -503,11 +504,11 @@ export default function ProjectDocuments() {
             <DocumentGridCard
               key={document.id}
               title={document.title}
-              titleAdornment={(
+              titleAdornment={showDocumentVisibilityBadges ? (
                 <span className="inline-block mr-2 align-middle">
                   <VisibilityClassBadge visibilityClass={document.visibility_class} />
                 </span>
-              )}
+              ) : undefined}
               onOpen={() => setViewDoc(document)}
               muted={archived}
               actions={archived ? (
@@ -529,11 +530,11 @@ export default function ProjectDocuments() {
             <DocumentListItem
               key={document.id}
               title={document.title}
-              titleAdornment={(
+              titleAdornment={showDocumentVisibilityBadges ? (
                 <span className="inline-block mr-2 align-middle">
                   <VisibilityClassBadge visibilityClass={document.visibility_class} />
                 </span>
-              )}
+              ) : undefined}
               muted={archived}
               details={renderDocumentMeta(document, archived)}
               onOpen={() => setViewDoc(document)}
@@ -558,11 +559,6 @@ export default function ProjectDocuments() {
             <p className="text-caption text-muted-foreground">
               {isLoading ? "Loading documents..." : `${activeDocuments.length} active · ${archivedDocuments.length} archived`}
             </p>
-            {isSupabaseMode && (
-              <p className="text-caption text-muted-foreground mt-1">
-                Each file is labeled Shared (visible to the project) or Internal (restricted by workspace internal-docs rules enforced on the server).
-              </p>
-            )}
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             {documents.length > 0 && (
@@ -768,7 +764,9 @@ export default function ProjectDocuments() {
               <DialogHeader className="border-b border-border px-5 py-4">
                 <div className="flex flex-wrap items-center gap-2">
                   <DialogTitle className="flex-1 min-w-0">{viewDoc.title}</DialogTitle>
-                  <VisibilityClassBadge visibilityClass={viewDoc.visibility_class} />
+                  {showDocumentVisibilityBadges ? (
+                    <VisibilityClassBadge visibilityClass={viewDoc.visibility_class} />
+                  ) : null}
                 </div>
                 <DialogDescription>
                   {viewedDocumentIsArchived ? "Archived document" : "Document preview"}

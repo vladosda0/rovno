@@ -51,6 +51,9 @@ function isValidActualUnitPrice(value: number | null | undefined): value is numb
   return typeof value === "number" && Number.isFinite(value) && value > 0;
 }
 
+/** Set true to show Save draft in the footer (draft-only flow is not in MVP). */
+const SHOW_ORDER_SAVE_DRAFT_BUTTON = false;
+
 export function OrderModal({
   open,
   onOpenChange,
@@ -611,17 +614,19 @@ export function OrderModal({
         <DialogFooter className="px-5 py-4 border-t border-border">
           <div className="mr-auto text-sm text-muted-foreground">Total: {fmtCost(totalAmount)}</div>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => saveOrder("draft")}
-            disabled={!hasOrderedLines || !!orderActionInFlight}
-          >
-            {orderActionInFlight === "draft"
-              ? <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-              : <Save className="h-4 w-4 mr-1" />}
-            {orderActionInFlight === "draft" ? "Saving..." : "Save draft"}
-          </Button>
+          {SHOW_ORDER_SAVE_DRAFT_BUTTON ? (
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => saveOrder("draft")}
+              disabled={!hasOrderedLines || !!orderActionInFlight}
+            >
+              {orderActionInFlight === "draft"
+                ? <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                : <Save className="h-4 w-4 mr-1" />}
+              {orderActionInFlight === "draft" ? "Saving..." : "Save draft"}
+            </Button>
+          ) : null}
           <Button
             type="button"
             onClick={() => saveOrder("place")}

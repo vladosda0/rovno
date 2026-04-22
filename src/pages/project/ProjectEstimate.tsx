@@ -104,6 +104,7 @@ import {
   roundHalfUpDiv,
   type ComputeLineTotalsOptions,
 } from "@/lib/estimate-v2/pricing";
+import { SHOW_ESTIMATE_VERSION_UI } from "@/lib/estimate-v2/show-estimate-version-ui";
 import { resolveProjectEstimateCtaState } from "@/lib/estimate-v2/project-estimate-cta";
 import { resolveSubmitToClientState } from "@/lib/estimate-v2/project-estimate-submit-state";
 import { getDefaultFinanceVisibility } from "@/lib/participant-role-policy";
@@ -2028,21 +2029,23 @@ export default function ProjectEstimate() {
                   </SelectContent>
                 </Select>
 
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span>
-                      <Badge
-                        variant="secondary"
-                        className={latestVersionApproved ? "border border-success/20 bg-success/10 text-success" : "border border-warning/20 bg-warning/10 text-warning-foreground"}
-                      >
-                        Estimate v{latestVersionNumber}
-                      </Badge>
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    Share link with client for approval of the latest estimate version.
-                  </TooltipContent>
-                </Tooltip>
+                {SHOW_ESTIMATE_VERSION_UI ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span>
+                        <Badge
+                          variant="secondary"
+                          className={latestVersionApproved ? "border border-success/20 bg-success/10 text-success" : "border border-warning/20 bg-warning/10 text-warning-foreground"}
+                        >
+                          Estimate v{latestVersionNumber}
+                        </Badge>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      Share link with client for approval of the latest estimate version.
+                    </TooltipContent>
+                  </Tooltip>
+                ) : null}
                 <EstimateSyncStatusIndicator sync={estimateSync} />
               </div>
             )}

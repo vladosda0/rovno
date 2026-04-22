@@ -1,10 +1,9 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ResourceTypeBadge } from "@/components/estimate-v2/ResourceTypeBadge";
 import { EmptyState } from "@/components/EmptyState";
 import { ProjectWorkflowEmptyState } from "@/components/ProjectWorkflowEmptyState";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -155,6 +154,7 @@ export default function ProjectHR() {
   const shouldBlockHRLaunchActions = isHRProjectionBehind || hasHRSyncError;
 
   const [paymentDraftByItemId, setPaymentDraftByItemId] = useState<Record<string, string>>({});
+  const skipPaymentBlurForItemIdRef = useRef<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [workStatusFilter, setWorkStatusFilter] = useState<"all" | HRItemStatus>("all");
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<"all" | HRPaymentStatus>("all");
@@ -174,6 +174,32 @@ export default function ProjectHR() {
   const participantNameById = useMemo(
     () => new Map(participants.map((participant) => [participant.id, participant.name])),
     [participants],
+  );
+
+  const commitPaymentDraft = useCallback(
+    (itemId: string, raw: string) => {
+      const trimmed = raw.trim();
+      if (!trimmed) return;
+      const amount = Number(trimmed);
+      if (!Number.isFinite(amount) || amount <= 0) return;
+      void hrMutations
+        .createPayment({
+          hrItemId: itemId,
+          amount,
+          paidAt: new Date().toISOString(),
+        })
+        .then(() => {
+          setPaymentDraftByItemId((prev) => ({ ...prev, [itemId]: "" }));
+          toast({ title: "Payment added" });
+        })
+        .catch((error) => {
+          toast({
+            title: error instanceof Error ? error.message : "Unable to add payment",
+            variant: "destructive",
+          });
+        });
+    },
+    [hrMutations, toast],
   );
 
   const taskById = useMemo(
@@ -424,7 +450,6 @@ export default function ProjectHR() {
                             ) : (
                               <span className="font-medium text-foreground">{title}</span>
                             )}
-                            {isHRAssigneeManagedInEstimate(item) && <Badge variant="outline">Locked</Badge>}
                             {item.orphaned && <Badge variant="destructive">Orphaned</Badge>}
                           </div>
                           {task && (
@@ -444,10 +469,8 @@ export default function ProjectHR() {
                         {isHRAssigneeManagedInEstimate(item) ? (
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <span
-                                className="inline-flex h-8 max-w-[180px] cursor-default items-center rounded-md border border-border bg-muted/40 px-3 text-sm text-foreground"
-                              >
-                                <span className="truncate">{visibleAssigneeSummary}</span>
+                              <span className="inline-block max-w-[180px] cursor-default truncate text-sm text-foreground">
+                                {visibleAssigneeSummary}
                               </span>
                             </TooltipTrigger>
                             <TooltipContent>
@@ -457,15 +480,13 @@ export default function ProjectHR() {
                         ) : (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button
+                              <button
                                 type="button"
-                                size="sm"
-                                variant="outline"
-                                className="h-8 max-w-[180px]"
+                                className="inline-block max-w-[180px] truncate text-left text-sm text-foreground underline-offset-4 hover:underline disabled:pointer-events-none disabled:opacity-50"
                                 disabled={!canEdit || shouldBlockHRLaunchActions}
                               >
-                                <span className="truncate">{visibleAssigneeSummary}</span>
-                              </Button>
+                                {visibleAssigneeSummary}
+                              </button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="start" className="w-56">
                               {participants.length === 0 ? (
@@ -518,48 +539,33 @@ export default function ProjectHR() {
                       {canViewFinancialDetail && <TableCell className="text-right">{fmt(remaining)}</TableCell>}
                       {canViewFinancialDetail && (
                       <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Input
-                            type="number"
-                            min="0"
-                            className="h-8 w-[110px]"
-                            placeholder="Amount"
-                            value={paymentDraftByItemId[item.id] ?? ""}
-                            onChange={(event) => {
-                              setPaymentDraftByItemId((prev) => ({
-                                ...prev,
-                                [item.id]: event.target.value,
-                              }));
-                            }}
-                            disabled={!canEdit || shouldBlockHRLaunchActions}
-                          />
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={!canEdit || shouldBlockHRLaunchActions || !paymentDraftByItemId[item.id]}
-                            onClick={() => {
-                              const amount = Number(paymentDraftByItemId[item.id] ?? 0);
-                              if (!Number.isFinite(amount) || amount <= 0) return;
-                              void hrMutations.createPayment({
-                                hrItemId: item.id,
-                                amount,
-                                paidAt: new Date().toISOString(),
-                              }).then(() => {
-                                setPaymentDraftByItemId((prev) => ({ ...prev, [item.id]: "" }));
-                                toast({ title: "Payment added" });
-                              }).catch((error) => {
-                                toast({
-                                  title: error instanceof Error
-                                    ? error.message
-                                    : "Unable to add payment",
-                                  variant: "destructive",
-                                });
-                              });
-                            }}
-                          >
-                            Add
-                          </Button>
-                        </div>
+                        <Input
+                          type="number"
+                          min="0"
+                          className="h-8 w-[110px]"
+                          placeholder="Amount"
+                          value={paymentDraftByItemId[item.id] ?? ""}
+                          onChange={(event) => {
+                            setPaymentDraftByItemId((prev) => ({
+                              ...prev,
+                              [item.id]: event.target.value,
+                            }));
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key !== "Enter") return;
+                            event.preventDefault();
+                            skipPaymentBlurForItemIdRef.current = item.id;
+                            commitPaymentDraft(item.id, event.currentTarget.value);
+                          }}
+                          onBlur={(event) => {
+                            if (skipPaymentBlurForItemIdRef.current === item.id) {
+                              skipPaymentBlurForItemIdRef.current = null;
+                              return;
+                            }
+                            commitPaymentDraft(item.id, event.currentTarget.value);
+                          }}
+                          disabled={!canEdit || shouldBlockHRLaunchActions}
+                        />
                       </TableCell>
                       )}
                     </TableRow>

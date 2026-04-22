@@ -14,8 +14,8 @@ import {
 
 const tabs = [
   { label: "Dashboard", path: "dashboard", icon: LayoutDashboard },
-  { label: "Tasks", path: "tasks", icon: ListTodo, domain: "tasks" as ProjectDomain },
   { label: "Estimate", path: "estimate", icon: Calculator, domain: "estimate" as ProjectDomain },
+  { label: "Tasks", path: "tasks", icon: ListTodo, domain: "tasks" as ProjectDomain },
   { label: "Procurement", path: "procurement", icon: ShoppingCart, domain: "procurement" as ProjectDomain },
   { label: "HR", path: "hr", icon: HardHat, domain: "hr" as ProjectDomain },
   { label: "Gallery", path: "gallery", icon: Image, domain: "gallery" as ProjectDomain },
