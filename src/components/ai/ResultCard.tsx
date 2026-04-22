@@ -1,5 +1,6 @@
 import { CheckCircle2, Lock, ClipboardList, FileText, ShoppingCart, Image, ListChecks } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import type { CommitResultItem } from "@/lib/commit-proposal";
 
 const entityIcons: Record<string, typeof ClipboardList> = {
@@ -18,13 +19,15 @@ interface ResultCardProps {
 }
 
 export function ResultCard({ summary, items, timestamp, canNavigate = true }: ResultCardProps) {
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const time = new Date(timestamp).toLocaleTimeString(i18n.language, { hour: "2-digit", minute: "2-digit" });
 
   return (
     <div className="glass rounded-card p-3 space-y-2 w-full box-border">
       <div className="flex items-center gap-2">
         <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
-        <span className="text-body-sm font-semibold text-foreground">Applied</span>
+        <span className="text-body-sm font-semibold text-foreground">{t("ai.result.applied")}</span>
       </div>
       <p className="text-body-sm text-foreground">{summary}</p>
       <div className="space-y-0.5">
@@ -50,7 +53,7 @@ export function ResultCard({ summary, items, timestamp, canNavigate = true }: Re
           );
         })}
       </div>
-      <p className="text-caption text-muted-foreground">Saved to Activity log · {new Date(timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
+      <p className="text-caption text-muted-foreground">{t("ai.result.savedToLog", { time })}</p>
     </div>
   );
 }

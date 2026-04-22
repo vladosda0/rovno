@@ -1,4 +1,5 @@
 import { Building2, Circle, HardHat, Package, Truck, Wrench } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { resourceLineSemanticLabel } from "@/lib/estimate-v2/resource-type-contract";
@@ -52,9 +53,10 @@ export function ResourceTypeBadge({
   iconOnly = false,
   otherPresentation = "generic",
 }: ResourceTypeBadgeProps) {
+  const { t } = useTranslation();
   const meta = type === "other" ? otherPresentationMeta[otherPresentation] : typeMeta[type];
   const Icon = meta.Icon;
-  const label = labelOverride ?? resourceLineSemanticLabel(type);
+  const label = labelOverride ?? t(resourceLineSemanticLabel(type));
 
   return (
     <Badge

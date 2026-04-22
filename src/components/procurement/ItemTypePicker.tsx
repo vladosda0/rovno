@@ -1,14 +1,15 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ChevronsUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import type { ProcurementItemType } from "@/types/entities";
 
-const TYPE_META: Record<ProcurementItemType, { label: string; className: string }> = {
-  material: { label: "Material", className: "bg-info/15 text-info" },
-  tool: { label: "Tool", className: "bg-warning/20 text-warning-foreground" },
-  other: { label: "Other", className: "bg-muted text-muted-foreground" },
+const TYPE_META: Record<ProcurementItemType, { labelKey: string; className: string }> = {
+  material: { labelKey: "procurement.itemType.material", className: "bg-info/15 text-info" },
+  tool: { labelKey: "procurement.itemType.tool", className: "bg-warning/20 text-warning-foreground" },
+  other: { labelKey: "procurement.itemType.other", className: "bg-muted text-muted-foreground" },
 };
 
 interface ItemTypePickerProps {
@@ -19,6 +20,7 @@ interface ItemTypePickerProps {
 }
 
 export function ItemTypePicker({ value, onChange, disabled, className }: ItemTypePickerProps) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
 
   return (
@@ -32,7 +34,7 @@ export function ItemTypePicker({ value, onChange, disabled, className }: ItemTyp
           className={cn("h-7 px-2 text-xs", className)}
         >
           <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", TYPE_META[value].className)}>
-            {TYPE_META[value].label}
+            {t(TYPE_META[value].labelKey)}
           </span>
           <ChevronsUpDown className="h-3 w-3 ml-1 opacity-60" />
         </Button>
@@ -49,7 +51,7 @@ export function ItemTypePicker({ value, onChange, disabled, className }: ItemTyp
             className="w-full rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted/70 transition-colors"
           >
             <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", TYPE_META[type].className)}>
-              {TYPE_META[type].label}
+              {t(TYPE_META[type].labelKey)}
             </span>
           </button>
         ))}

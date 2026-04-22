@@ -49,11 +49,11 @@ describe("resource-type-contract", () => {
 
   describe("resourceLineSemanticLabel", () => {
     it.each([
-      ["material", "Material"],
-      ["tool", "Tool"],
-      ["labor", "HR"],
-      ["subcontractor", "Subcontractor"],
-      ["other", "Other"],
+      ["material", "estimate.resource.semantic.material"],
+      ["tool", "estimate.resource.semantic.tool"],
+      ["labor", "estimate.resource.semantic.labor"],
+      ["subcontractor", "estimate.resource.semantic.subcontractor"],
+      ["other", "estimate.resource.semantic.other"],
     ] satisfies [ResourceLineType, string][])("maps '%s' -> '%s'", (type, label) => {
       expect(resourceLineSemanticLabel(type)).toBe(label);
     });

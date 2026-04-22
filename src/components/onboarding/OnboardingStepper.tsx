@@ -1,45 +1,23 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Zap, Bot, Wrench, Eye } from "lucide-react";
 import { MVP_SHOW_AI_AUTOMATION_MODE_UI } from "@/lib/mvp-ai-automation-ui";
 
 const automationLevels = [
-  {
-    id: "full",
-    icon: Zap,
-    title: "Full Automation",
-    desc: "AI manages tasks, estimates, procurement, and docs. You approve.",
-    badge: "Recommended",
-  },
-  {
-    id: "assisted",
-    icon: Bot,
-    title: "AI Assisted",
-    desc: "AI suggests changes, you review and apply manually.",
-    badge: null,
-  },
-  {
-    id: "manual",
-    icon: Wrench,
-    title: "Manual",
-    desc: "You control everything. AI is available on request.",
-    badge: null,
-  },
-  {
-    id: "observer",
-    icon: Eye,
-    title: "Observer Only",
-    desc: "AI provides insights and analytics. No changes proposed.",
-    badge: null,
-  },
-];
+  { id: "full", icon: Zap, titleKey: "onboarding.automation.full.title", descKey: "onboarding.automation.full.desc", badgeKey: "onboarding.automation.full.badge" },
+  { id: "assisted", icon: Bot, titleKey: "onboarding.automation.assisted.title", descKey: "onboarding.automation.assisted.desc", badgeKey: null },
+  { id: "manual", icon: Wrench, titleKey: "onboarding.automation.manual.title", descKey: "onboarding.automation.manual.desc", badgeKey: null },
+  { id: "observer", icon: Eye, titleKey: "onboarding.automation.observer.title", descKey: "onboarding.automation.observer.desc", badgeKey: null },
+] as const;
 
 interface OnboardingStepperProps {
   onComplete: () => void;
 }
 
 export function OnboardingStepper({ onComplete }: OnboardingStepperProps) {
+  const { t } = useTranslation();
   const showAutomationStep = MVP_SHOW_AI_AUTOMATION_MODE_UI;
   const [step, setStep] = useState(showAutomationStep ? 0 : 1);
   const [selectedLevel, setSelectedLevel] = useState("manual");
@@ -65,9 +43,9 @@ export function OnboardingStepper({ onComplete }: OnboardingStepperProps) {
       {showAutomationStep && step === 0 && (
         <div className="glass-elevated rounded-panel p-sp-4 space-y-sp-3">
           <div className="text-center">
-            <h2 className="text-h3 text-foreground">Choose automation level</h2>
+            <h2 className="text-h3 text-foreground">{t("onboarding.automation.title")}</h2>
             <p className="text-body-sm text-muted-foreground mt-1">
-              How much should AI manage in your projects?
+              {t("onboarding.automation.subtitle")}
             </p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-sp-2">
@@ -81,14 +59,14 @@ export function OnboardingStepper({ onComplete }: OnboardingStepperProps) {
                     isSelected ? "ring-2 ring-accent" : "hover:bg-accent/5"
                   }`}
                 >
-                  {level.badge && (
+                  {level.badgeKey && (
                     <span className="absolute -top-2 right-3 inline-flex items-center rounded-pill px-2 py-0.5 text-caption font-medium bg-accent text-accent-foreground">
-                      {level.badge}
+                      {t(level.badgeKey)}
                     </span>
                   )}
                   <level.icon className={`h-5 w-5 mb-sp-1 ${isSelected ? "text-accent" : "text-muted-foreground"}`} />
-                  <h3 className="text-body-sm font-semibold text-foreground">{level.title}</h3>
-                  <p className="text-caption text-muted-foreground mt-0.5">{level.desc}</p>
+                  <h3 className="text-body-sm font-semibold text-foreground">{t(level.titleKey)}</h3>
+                  <p className="text-caption text-muted-foreground mt-0.5">{t(level.descKey)}</p>
                 </button>
               );
             })}
@@ -97,7 +75,7 @@ export function OnboardingStepper({ onComplete }: OnboardingStepperProps) {
             onClick={() => setStep(1)}
             className="w-full bg-accent text-accent-foreground hover:bg-accent/90"
           >
-            Continue
+            {t("onboarding.continue")}
           </Button>
         </div>
       )}
@@ -105,12 +83,12 @@ export function OnboardingStepper({ onComplete }: OnboardingStepperProps) {
       {step === 1 && (
         <div className="glass-elevated rounded-panel p-sp-4 space-y-sp-3">
           <div className="text-center">
-            <h2 className="text-h3 text-foreground">Preferences</h2>
-            <p className="text-body-sm text-muted-foreground mt-1">Set your language and measurement units.</p>
+            <h2 className="text-h3 text-foreground">{t("onboarding.preferences.title")}</h2>
+            <p className="text-body-sm text-muted-foreground mt-1">{t("onboarding.preferences.subtitle")}</p>
           </div>
           <div className="space-y-sp-2">
             <div className="space-y-1.5">
-              <label className="text-body-sm font-medium text-foreground">Language</label>
+              <label className="text-body-sm font-medium text-foreground">{t("onboarding.preferences.languageLabel")}</label>
               <Select value={language} onValueChange={setLanguage}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
@@ -123,14 +101,14 @@ export function OnboardingStepper({ onComplete }: OnboardingStepperProps) {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <label className="text-body-sm font-medium text-foreground">Measurement units</label>
+              <label className="text-body-sm font-medium text-foreground">{t("onboarding.preferences.unitsLabel")}</label>
               <Select value={units} onValueChange={setUnits}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="metric">Metric (m, m², kg)</SelectItem>
-                  <SelectItem value="imperial">Imperial (ft, ft², lb)</SelectItem>
+                  <SelectItem value="metric">{t("onboarding.preferences.metric")}</SelectItem>
+                  <SelectItem value="imperial">{t("onboarding.preferences.imperial")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -138,14 +116,14 @@ export function OnboardingStepper({ onComplete }: OnboardingStepperProps) {
           <div className="flex gap-sp-2">
             {showAutomationStep ? (
               <Button variant="outline" onClick={() => setStep(0)} className="flex-1">
-                Back
+                {t("onboarding.back")}
               </Button>
             ) : null}
             <Button
               onClick={onComplete}
               className={showAutomationStep ? "flex-1 bg-accent text-accent-foreground hover:bg-accent/90" : "w-full bg-accent text-accent-foreground hover:bg-accent/90"}
             >
-              Complete Setup
+              {t("onboarding.complete")}
             </Button>
           </div>
         </div>

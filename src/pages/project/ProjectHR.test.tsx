@@ -340,7 +340,7 @@ describe("ProjectHR", () => {
 
     renderProjectHR("project-1");
 
-    expect(screen.getByText("HR will be ready after planning")).toBeInTheDocument();
+    expect(screen.getByText("Subcontracts will appear here soon")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Open Estimate" })).toBeInTheDocument();
     expect(screen.queryByText("Open in Tasks")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Painter crew" })).not.toBeInTheDocument();

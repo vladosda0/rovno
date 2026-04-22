@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import {
   buildMonthTicks,
   buildWeekTicks,
@@ -17,9 +19,6 @@ interface GanttHeaderProps {
   width: number;
 }
 
-const dayLabel = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
-const monthLabel = new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric" });
-
 function dayToDate(dayIndex: number): Date {
   return new Date(fromDayIndex(dayIndex));
 }
@@ -33,6 +32,15 @@ export function GanttHeader({
   pxPerDay,
   width,
 }: GanttHeaderProps) {
+  const { t, i18n } = useTranslation();
+  const dayLabel = useMemo(
+    () => new Intl.DateTimeFormat(i18n.language, { month: "short", day: "numeric" }),
+    [i18n.language],
+  );
+  const monthLabel = useMemo(
+    () => new Intl.DateTimeFormat(i18n.language, { month: "short", year: "numeric" }),
+    [i18n.language],
+  );
   const monthSeparators: number[] = [];
   for (let day = Math.max(timelineStartDay, visibleStartDay - 2); day <= Math.min(timelineEndDay, visibleEndDay + 2); day += 1) {
     const date = dayToDate(day);
@@ -78,7 +86,7 @@ export function GanttHeader({
                   width: 7 * pxPerDay,
                 }}
               >
-                <span className="text-[10px] text-muted-foreground">W{tick.weekNumber}</span>
+                <span className="text-[10px] text-muted-foreground">{t("estimate.gantt.header.week", { number: tick.weekNumber })}</span>
               </div>,
             );
           }

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import {
   Upload, Camera, Star, X,
 } from "lucide-react";
@@ -30,6 +31,7 @@ import {
 export default function ProjectGallery() {
   const { id: projectId } = useParams<{ id: string }>();
   const pid = projectId!;
+  const { t } = useTranslation();
   const photos = useMedia(pid);
   const tasks = useTasks(pid);
   const perm = usePermission(pid);
@@ -89,7 +91,7 @@ export default function ProjectGallery() {
         project_id: pid,
         task_id: uploadTaskId || undefined,
         uploader_id: user.id,
-        caption: uploadCaption || "Photo",
+        caption: uploadCaption || t("gallery.defaults.photoCaption"),
         is_final: false,
         created_at: new Date().toISOString(),
         visibility_class: uploadVisibilityClass,
@@ -106,12 +108,12 @@ export default function ProjectGallery() {
       });
       trackEvent("media_uploaded", { project_id: pid });
       closeUploadDialog();
-      toast({ title: "Photo uploaded" });
+      toast({ title: t("gallery.toast.photoUploaded") });
       return;
     }
 
     if (!uploadFile) {
-      toast({ title: "Please select a file", variant: "destructive" });
+      toast({ title: t("gallery.toast.selectFile"), variant: "destructive" });
       return;
     }
 
@@ -133,12 +135,12 @@ export default function ProjectGallery() {
 
       trackEvent("media_uploaded", { project_id: pid });
       closeUploadDialog();
-      toast({ title: "Photo uploaded" });
+      toast({ title: t("gallery.toast.photoUploaded") });
     } catch (error) {
       setUploading(false);
       toast({
-        title: "Photo upload failed",
-        description: error instanceof Error ? error.message : "Unable to upload the photo.",
+        title: t("gallery.toast.uploadFailed.title"),
+        description: error instanceof Error ? error.message : t("gallery.toast.uploadFailed.description"),
         variant: "destructive",
       });
     }
@@ -153,12 +155,12 @@ export default function ProjectGallery() {
 
       trackEvent("media_uploaded", { project_id: pid });
       closeUploadDialog();
-      toast({ title: "Photo uploaded", description: "Upload finalized successfully." });
+      toast({ title: t("gallery.toast.photoUploaded"), description: t("gallery.toast.finalized.description") });
     } catch (error) {
       setUploading(false);
       toast({
-        title: "Finalize failed",
-        description: error instanceof Error ? error.message : "Unable to finalize the upload. Try again.",
+        title: t("gallery.toast.finalizeFailed.title"),
+        description: error instanceof Error ? error.message : t("gallery.toast.finalizeFailed.description"),
         variant: "destructive",
       });
     }
@@ -177,9 +179,9 @@ export default function ProjectGallery() {
       {isEmpty ? (
         <ProjectWorkflowEmptyState
           variant="gallery"
-          title="No photos yet"
-          description="Upload project photos to document progress."
-          actionLabel={canUploadPhotos ? "Upload a photo" : undefined}
+          title={t("gallery.empty.title")}
+          description={t("gallery.empty.description")}
+          actionLabel={canUploadPhotos ? t("gallery.empty.action") : undefined}
           onAction={canUploadPhotos ? () => setUploadOpen(true) : undefined}
         />
       ) : (
@@ -187,14 +189,14 @@ export default function ProjectGallery() {
           {/* Header */}
           <div className="glass-elevated rounded-card p-sp-2 flex items-center justify-between flex-wrap gap-2">
             <div>
-              <h2 className="text-h3 text-foreground">Gallery</h2>
+              <h2 className="text-h3 text-foreground">{t("gallery.heading")}</h2>
               <p className="text-caption text-muted-foreground">
-                {photos.length} photos · {photos.filter((p) => p.is_final).length} final
+                {t("gallery.summary", { total: photos.length, final: photos.filter((p) => p.is_final).length })}
               </p>
             </div>
             {canUploadPhotos && (
               <Button size="sm" onClick={() => setUploadOpen(true)} className="bg-accent text-accent-foreground hover:bg-accent/90">
-                <Upload className="h-4 w-4 mr-1.5" /> Upload
+                <Upload className="h-4 w-4 mr-1.5" /> {t("gallery.upload")}
               </Button>
             )}
           </div>
@@ -211,7 +213,7 @@ export default function ProjectGallery() {
                     : "bg-transparent text-muted-foreground border-border hover:bg-muted/50"
                 }`}
               >
-                {f === "all" ? "All" : f === "final" ? "Final photos" : "In progress"}
+                {f === "all" ? t("gallery.filters.all") : f === "final" ? t("gallery.filters.final") : t("gallery.filters.progress")}
               </button>
             ))}
           </div>
@@ -262,17 +264,17 @@ export default function ProjectGallery() {
       <AlertDialog open={uploadOpen} onOpenChange={(open) => { if (!open) closeUploadDialog(); else setUploadOpen(true); }}>
         <AlertDialogContent className="bg-card border border-border shadow-xl rounded-modal">
           <AlertDialogHeader>
-            <AlertDialogTitle>Upload photos</AlertDialogTitle>
-            <AlertDialogDescription>Add project photos with an optional caption.</AlertDialogDescription>
+            <AlertDialogTitle>{t("gallery.upload.dialogTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("gallery.upload.dialogDescription")}</AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-3 py-2">
             {pendingFinalizeIntentId && (
               <div className="rounded-panel bg-destructive/10 p-3 text-caption text-destructive">
-                File was uploaded but finalize failed. You can retry finalization below.
+                {t("gallery.upload.retryBanner")}
               </div>
             )}
             <div className="space-y-1">
-              <label className="text-body-sm font-medium text-foreground">Photo</label>
+              <label className="text-body-sm font-medium text-foreground">{t("gallery.upload.photoLabel")}</label>
               <Input
                 type="file"
                 accept="image/*"
@@ -284,16 +286,16 @@ export default function ProjectGallery() {
               {!isSupabaseMode && (
                 <div className="border-2 border-dashed border-border rounded-lg p-8 text-center mt-2">
                   <Camera className="mx-auto h-10 w-10 text-muted-foreground/30 mb-2" />
-                  <p className="text-caption text-muted-foreground">Or drag photos here</p>
+                  <p className="text-caption text-muted-foreground">{t("gallery.upload.dropHint")}</p>
                 </div>
               )}
             </div>
             <div className="space-y-1">
-              <label className="text-body-sm font-medium text-foreground">Caption (optional)</label>
-              <Input value={uploadCaption} onChange={(e) => setUploadCaption(e.target.value)} placeholder="e.g. Kitchen wiring complete" disabled={uploading} />
+              <label className="text-body-sm font-medium text-foreground">{t("gallery.upload.captionLabel")}</label>
+              <Input value={uploadCaption} onChange={(e) => setUploadCaption(e.target.value)} placeholder={t("gallery.upload.captionPlaceholder")} disabled={uploading} />
             </div>
             <div className="space-y-2">
-              <Label className="text-body-sm font-medium text-foreground">Visibility</Label>
+              <Label className="text-body-sm font-medium text-foreground">{t("gallery.upload.visibilityLabel")}</Label>
               <RadioGroup
                 value={uploadVisibilityClass}
                 onValueChange={(v) => setUploadVisibilityClass(v as DocMediaVisibilityClass)}
@@ -302,7 +304,7 @@ export default function ProjectGallery() {
               >
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="shared_project" id="gal-vis-shared" />
-                  <Label htmlFor="gal-vis-shared" className="font-normal cursor-pointer">Shared</Label>
+                  <Label htmlFor="gal-vis-shared" className="font-normal cursor-pointer">{t("gallery.upload.visibilityShared")}</Label>
                 </div>
                 <div className="flex items-start space-x-2">
                   <RadioGroupItem value="internal" id="gal-vis-internal" disabled={!canSelectInternalUpload} />
@@ -311,10 +313,10 @@ export default function ProjectGallery() {
                       htmlFor="gal-vis-internal"
                       className={`font-normal ${canSelectInternalUpload ? "cursor-pointer" : "text-muted-foreground"}`}
                     >
-                      Internal
+                      {t("gallery.upload.visibilityInternal")}
                     </Label>
                     {!canSelectInternalUpload && (
-                      <p className="text-caption text-muted-foreground">Not available for your internal-docs access.</p>
+                      <p className="text-caption text-muted-foreground">{t("gallery.upload.visibilityInternalUnavailable")}</p>
                     )}
                   </div>
                 </div>
@@ -322,30 +324,30 @@ export default function ProjectGallery() {
             </div>
             {!isSupabaseMode && (
               <div className="space-y-1">
-                <label className="text-body-sm font-medium text-foreground">Link to task (optional)</label>
+                <label className="text-body-sm font-medium text-foreground">{t("gallery.upload.taskLabel")}</label>
                 <select
                   value={uploadTaskId}
                   onChange={(e) => setUploadTaskId(e.target.value)}
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                   disabled={uploading}
                 >
-                  <option value="">No task</option>
-                  {tasks.map((t) => (
-                    <option key={t.id} value={t.id}>{t.title}</option>
+                  <option value="">{t("gallery.upload.taskNone")}</option>
+                  {tasks.map((task) => (
+                    <option key={task.id} value={task.id}>{task.title}</option>
                   ))}
                 </select>
               </div>
             )}
           </div>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={uploading}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={uploading}>{t("common.cancel")}</AlertDialogCancel>
             {pendingFinalizeIntentId ? (
               <AlertDialogAction
                 onClick={(e) => { e.preventDefault(); handleRetryFinalize(); }}
                 className="bg-accent text-accent-foreground hover:bg-accent/90"
                 disabled={uploading}
               >
-                {uploading ? "Finalizing…" : "Retry finalize"}
+                {uploading ? t("gallery.upload.retrySubmitting") : t("gallery.upload.retrySubmit")}
               </AlertDialogAction>
             ) : (
               <AlertDialogAction
@@ -353,7 +355,7 @@ export default function ProjectGallery() {
                 className="bg-accent text-accent-foreground hover:bg-accent/90"
                 disabled={uploading || (isSupabaseMode && !uploadFile)}
               >
-                {uploading ? "Uploading…" : "Upload"}
+                {uploading ? t("gallery.upload.submitting") : t("gallery.upload.submit")}
               </AlertDialogAction>
             )}
           </AlertDialogFooter>

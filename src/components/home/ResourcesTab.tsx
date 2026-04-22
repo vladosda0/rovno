@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -7,6 +8,7 @@ import * as store from "@/data/store";
 import { allUsers } from "@/data/seed";
 
 export function ResourcesTab() {
+  const { t } = useTranslation();
   const allTasks = store.getAllTasks();
 
   const resources = useMemo(() => {
@@ -14,12 +16,12 @@ export function ResourcesTab() {
     const now = Date.now();
     const sevenDays = 7 * 24 * 60 * 60 * 1000;
 
-    for (const t of allTasks) {
-      if (t.status === "done") continue;
-      if (!map[t.assignee_id]) map[t.assignee_id] = { open: 0, dueSoon: 0 };
-      map[t.assignee_id].open++;
-      if (t.deadline && new Date(t.deadline).getTime() - now < sevenDays) {
-        map[t.assignee_id].dueSoon++;
+    for (const task of allTasks) {
+      if (task.status === "done") continue;
+      if (!map[task.assignee_id]) map[task.assignee_id] = { open: 0, dueSoon: 0 };
+      map[task.assignee_id].open++;
+      if (task.deadline && new Date(task.deadline).getTime() - now < sevenDays) {
+        map[task.assignee_id].dueSoon++;
       }
     }
 
@@ -35,7 +37,7 @@ export function ResourcesTab() {
     <div className="space-y-4 sm:space-y-6">
       <div className="flex items-center gap-2">
         <Users className="h-5 w-5 text-accent" />
-        <h2 className="text-body font-semibold text-foreground">People Workload</h2>
+        <h2 className="text-body font-semibold text-foreground">{t("resourcesTab.peopleWorkload")}</h2>
       </div>
 
       <Card>
@@ -55,14 +57,14 @@ export function ResourcesTab() {
                   <div className="flex items-center gap-3 shrink-0">
                     <div className="text-center">
                       <p className="text-body-sm font-semibold text-foreground">{r.open}</p>
-                      <p className="text-[10px] text-muted-foreground">Open</p>
+                      <p className="text-[10px] text-muted-foreground">{t("resourcesTab.open")}</p>
                     </div>
                     {r.dueSoon > 0 && (
                       <div className="text-center">
                         <p className="text-body-sm font-semibold text-warning flex items-center gap-0.5">
                           <AlertTriangle className="h-3 w-3" /> {r.dueSoon}
                         </p>
-                        <p className="text-[10px] text-muted-foreground">Due soon</p>
+                        <p className="text-[10px] text-muted-foreground">{t("resourcesTab.dueSoon")}</p>
                       </div>
                     )}
                   </div>
@@ -70,7 +72,7 @@ export function ResourcesTab() {
               );
             })}
             {resources.length === 0 && (
-              <p className="text-caption text-muted-foreground py-8 text-center">No active assignments.</p>
+              <p className="text-caption text-muted-foreground py-8 text-center">{t("resourcesTab.empty")}</p>
             )}
           </div>
         </CardContent>

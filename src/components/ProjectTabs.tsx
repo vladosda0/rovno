@@ -1,5 +1,6 @@
 import { NavLink } from "@/components/NavLink";
 import { useParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import {
   getProjectDomainAccess,
@@ -13,14 +14,14 @@ import {
 } from "lucide-react";
 
 const tabs = [
-  { label: "Dashboard", path: "dashboard", icon: LayoutDashboard },
-  { label: "Estimate", path: "estimate", icon: Calculator, domain: "estimate" as ProjectDomain },
-  { label: "Tasks", path: "tasks", icon: ListTodo, domain: "tasks" as ProjectDomain },
-  { label: "Procurement", path: "procurement", icon: ShoppingCart, domain: "procurement" as ProjectDomain },
-  { label: "HR", path: "hr", icon: HardHat, domain: "hr" as ProjectDomain },
-  { label: "Gallery", path: "gallery", icon: Image, domain: "gallery" as ProjectDomain },
-  { label: "Documents", path: "documents", icon: FileText, domain: "documents" as ProjectDomain },
-  { label: "Participants", path: "participants", icon: Users, domain: "participants" as ProjectDomain },
+  { labelKey: "projectTabs.dashboard", path: "dashboard", icon: LayoutDashboard },
+  { labelKey: "projectTabs.estimate", path: "estimate", icon: Calculator, domain: "estimate" as ProjectDomain },
+  { labelKey: "projectTabs.tasks", path: "tasks", icon: ListTodo, domain: "tasks" as ProjectDomain },
+  { labelKey: "projectTabs.procurement", path: "procurement", icon: ShoppingCart, domain: "procurement" as ProjectDomain },
+  { labelKey: "projectTabs.hr", path: "hr", icon: HardHat, domain: "hr" as ProjectDomain },
+  { labelKey: "projectTabs.gallery", path: "gallery", icon: Image, domain: "gallery" as ProjectDomain },
+  { labelKey: "projectTabs.documents", path: "documents", icon: FileText, domain: "documents" as ProjectDomain },
+  { labelKey: "projectTabs.participants", path: "participants", icon: Users, domain: "participants" as ProjectDomain },
 ];
 
 interface ProjectTabsProps {
@@ -29,6 +30,7 @@ interface ProjectTabsProps {
 }
 
 export function ProjectTabs({ className, projectId }: ProjectTabsProps) {
+  const { t } = useTranslation();
   const { id } = useParams();
   const resolvedProjectId = projectId ?? id;
   const perm = usePermission(resolvedProjectId ?? "");
@@ -50,7 +52,7 @@ export function ProjectTabs({ className, projectId }: ProjectTabsProps) {
           activeClassName="bg-accent/10 text-accent font-medium"
         >
           <tab.icon className="h-4 w-4" />
-          <span>{tab.label}</span>
+          <span>{t(tab.labelKey)}</span>
         </NavLink>
       ))}
     </nav>

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { MailPlus } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,7 @@ interface PendingInviteItem {
 }
 
 export function PendingInvitationsBlock() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { toast } = useToast();
   const mode = useWorkspaceMode();
@@ -79,14 +81,14 @@ export function PendingInvitationsBlock() {
       const result = await acceptProjectInvite(invite.invite_token);
       if (!result.ok) {
         toast({
-          title: "Invite acceptance failed",
+          title: t("invitations.acceptFailed"),
           description: result.error.message,
           variant: "destructive",
         });
         return;
       }
 
-      toast({ title: "Invite accepted" });
+      toast({ title: t("invitations.acceptedToast") });
       navigate(`/project/${result.invite.project_id}/dashboard`);
     } finally {
       setAcceptingInviteId(null);
@@ -98,11 +100,11 @@ export function PendingInvitationsBlock() {
     <Card>
       <CardContent className="p-4 sm:p-6">
         <h3 className="mb-3 flex items-center gap-2 text-body font-semibold text-foreground sm:mb-4">
-          <MailPlus className="h-4 w-4 text-accent" /> Pending invitations
+          <MailPlus className="h-4 w-4 text-accent" /> {t("invitations.pendingTitle")}
         </h3>
         {pendingInvites.length === 0 ? (
           <p className="text-caption text-muted-foreground py-2">
-            No pending invitations.
+            {t("invitations.none")}
           </p>
         ) : (
           <div className="space-y-2">
@@ -122,7 +124,7 @@ export function PendingInvitationsBlock() {
                   onClick={() => void handleAccept(invite)}
                   disabled={acceptingInviteId === invite.id}
                 >
-                  {acceptingInviteId === invite.id ? "Accepting..." : "Accept"}
+                  {acceptingInviteId === invite.id ? t("invitations.accepting") : t("invitations.accept")}
                 </Button>
               </div>
             ))}

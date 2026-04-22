@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -146,11 +147,15 @@ function resolveViewerRegime(
     ?? (projectMode === "build_myself" ? "build_myself" : "client");
 }
 
-function inviteStatusLabel(status: WorkspaceProjectInvite["status"]) {
-  if (status === "pending") return "Pending";
-  if (status === "accepted") return "Accepted";
-  if (status === "expired") return "Expired";
-  return "Revoked";
+const INVITE_STATUS_KEYS: Record<WorkspaceProjectInvite["status"], string> = {
+  pending: "participants.inviteStatus.pending",
+  accepted: "participants.inviteStatus.accepted",
+  expired: "participants.inviteStatus.expired",
+  revoked: "participants.inviteStatus.revoked",
+};
+
+function inviteStatusKey(status: WorkspaceProjectInvite["status"]) {
+  return INVITE_STATUS_KEYS[status] ?? "participants.inviteStatus.revoked";
 }
 
 function inviteStatusClassName(status: WorkspaceProjectInvite["status"]) {
@@ -226,6 +231,7 @@ function PermissionFormSections(props: {
   availableViewerRegimes: readonly ViewerRegime[];
   projectMode: "contractor" | "build_myself";
 }) {
+  const { t } = useTranslation();
   const {
     form,
     onFormChange,
@@ -244,7 +250,7 @@ function PermissionFormSections(props: {
     internalDocsVisibility: form.internalDocsVisibility,
     viewerRegime: form.role === "viewer" ? form.viewerRegime : undefined,
     creditLimit: Math.max(0, parseInt(form.creditLimit, 10) || 0),
-  });
+  }, t);
   const warnings = getPermissionWarnings({
     role: form.role,
     aiAccess: form.aiAccess,
@@ -252,7 +258,7 @@ function PermissionFormSections(props: {
     internalDocsVisibility: form.internalDocsVisibility,
     viewerRegime: form.role === "viewer" ? form.viewerRegime : undefined,
     creditLimit: Math.max(0, parseInt(form.creditLimit, 10) || 0),
-  });
+  }, t);
 
   const financeDanger = form.financeVisibility === "detail";
   const docsDanger = form.internalDocsVisibility === "edit";
@@ -265,7 +271,7 @@ function PermissionFormSections(props: {
   const nonStandardSummary = getNonStandardAccessSummary({
     role: form.role,
     financeVisibility: form.financeVisibility,
-  });
+  }, t);
   const financeExpansionOptions = financeOptions.filter((visibility) => visibility !== presetFinanceVisibility);
   const financeCanUnlock = (form.role === "viewer" || form.role === "contractor") && financeExpansionOptions.length > 0;
   const [financeUnlocked, setFinanceUnlocked] = useState(hasNonStandardFinanceAccess);
@@ -281,12 +287,12 @@ function PermissionFormSections(props: {
   return (
     <div className="space-y-sp-2">
       <SettingsSection
-        title="Role preset"
-        description="Choose the closest access preset first, then refine the bounded fields below."
+        title={t("participants.permission.rolePreset.title")}
+        description={t("participants.permission.rolePreset.description")}
       >
         <div className="space-y-3">
           <div>
-            <label className="text-caption font-medium text-foreground">Role preset</label>
+            <label className="text-caption font-medium text-foreground">{t("participants.permission.rolePreset.label")}</label>
             <Select
               value={form.role}
               onValueChange={(value) => {
@@ -305,16 +311,16 @@ function PermissionFormSections(props: {
               <SelectContent>
                 {roleOptions.map((role) => (
                   <SelectItem key={role} value={role}>
-                    {roleLabels[role]}
+                    {t(roleLabels[role])}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <p className="mt-2 text-caption text-muted-foreground">{roleDescriptions[form.role]}</p>
+            <p className="mt-2 text-caption text-muted-foreground">{t(roleDescriptions[form.role])}</p>
           </div>
 
           <div className="rounded-card border border-border/70 bg-background/70 p-3">
-            <p className="text-caption font-medium text-foreground">Current bounded summary</p>
+            <p className="text-caption font-medium text-foreground">{t("participants.permission.currentSummary")}</p>
             <ul className="mt-2 space-y-1">
               {summary.map((line) => (
                 <li key={line} className="text-caption text-muted-foreground">
@@ -327,12 +333,12 @@ function PermissionFormSections(props: {
       </SettingsSection>
 
       <SettingsSection
-        title="Bounded overrides"
-        description="Only fields already supported by the current project authority model are editable here."
+        title={t("participants.permission.overrides.title")}
+        description={t("participants.permission.overrides.description")}
       >
         <div className="grid gap-3 md:grid-cols-2">
           <div className={`rounded-card border p-3 ${aiDanger ? "border-warning/40 bg-warning/10" : "border-border/70 bg-background/70"}`}>
-            <label className="text-caption font-medium text-foreground">AI access</label>
+            <label className="text-caption font-medium text-foreground">{t("participants.permission.aiAccess")}</label>
             <Select
               value={form.aiAccess}
               onValueChange={(value) => {
@@ -345,7 +351,7 @@ function PermissionFormSections(props: {
               <SelectContent>
                 {aiOptions.map((aiAccess) => (
                   <SelectItem key={aiAccess} value={aiAccess}>
-                    {aiAccessLabels[aiAccess]}
+                    {t(aiAccessLabels[aiAccess])}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -353,16 +359,16 @@ function PermissionFormSections(props: {
           </div>
 
           <div className={`rounded-card border p-3 ${financeDanger ? "border-warning/40 bg-warning/10" : "border-border/70 bg-background/70"}`}>
-            <label className="text-caption font-medium text-foreground">Finance visibility</label>
+            <label className="text-caption font-medium text-foreground">{t("participants.permission.financeVisibility")}</label>
             {financeCanUnlock && !financeUnlocked && !hasNonStandardFinanceAccess ? (
               <div className="mt-2 space-y-3">
                 <div className="flex items-start justify-between gap-3 rounded-lg border border-border/70 bg-background/80 p-3">
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-foreground">
-                      {financeVisibilityLabels[presetFinanceVisibility]}
+                      {t(financeVisibilityLabels[presetFinanceVisibility])}
                     </p>
                     <p className="mt-1 text-caption text-muted-foreground">
-                      Broader finance visibility is non-standard for this role.
+                      {t("participants.permission.financeNonStandard")}
                     </p>
                   </div>
                   <Lock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
@@ -375,7 +381,7 @@ function PermissionFormSections(props: {
                       className="inline-flex items-center gap-1 rounded-pill border border-border/70 bg-muted/40 px-2 py-1 text-caption text-muted-foreground"
                     >
                       <Lock className="h-3 w-3" />
-                      {financeVisibilityLabels[visibility]}
+                      {t(financeVisibilityLabels[visibility])}
                     </span>
                   ))}
                 </div>
@@ -387,7 +393,7 @@ function PermissionFormSections(props: {
                   className="h-8"
                   onClick={() => setFinanceUnlocked(true)}
                 >
-                  Unlock non-standard finance access
+                  {t("participants.permission.unlockFinance")}
                 </Button>
               </div>
             ) : (
@@ -403,7 +409,7 @@ function PermissionFormSections(props: {
                 <SelectContent>
                   {financeOptions.map((visibility) => (
                     <SelectItem key={visibility} value={visibility}>
-                      {financeVisibilityLabels[visibility]}
+                      {t(financeVisibilityLabels[visibility])}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -412,7 +418,7 @@ function PermissionFormSections(props: {
           </div>
 
           <div className={`rounded-card border p-3 ${docsDanger ? "border-warning/40 bg-warning/10" : "border-border/70 bg-background/70"}`}>
-            <label className="text-caption font-medium text-foreground">Internal docs & media visibility</label>
+            <label className="text-caption font-medium text-foreground">{t("participants.permission.internalDocs")}</label>
             <Select
               value={form.internalDocsVisibility}
               onValueChange={(value) => {
@@ -425,7 +431,7 @@ function PermissionFormSections(props: {
               <SelectContent>
                 {internalDocsOptions.map((visibility) => (
                   <SelectItem key={visibility} value={visibility}>
-                    {internalDocsVisibilityLabels[visibility]}
+                    {t(internalDocsVisibilityLabels[visibility])}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -434,7 +440,7 @@ function PermissionFormSections(props: {
 
           {form.role === "viewer" && (
             <div className="rounded-card border border-border/70 bg-background/70 p-3">
-              <label className="text-caption font-medium text-foreground">Viewer regime</label>
+              <label className="text-caption font-medium text-foreground">{t("participants.permission.viewerRegime")}</label>
               <Select
                 value={form.viewerRegime}
                 onValueChange={(value) => {
@@ -447,7 +453,7 @@ function PermissionFormSections(props: {
                 <SelectContent>
                   {availableViewerRegimes.map((regime) => (
                     <SelectItem key={regime} value={regime}>
-                      {viewerRegimeLabels[regime]}
+                      {t(viewerRegimeLabels[regime])}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -456,7 +462,7 @@ function PermissionFormSections(props: {
           )}
 
           <div className="rounded-card border border-border/70 bg-background/70 p-3">
-            <label className="text-caption font-medium text-foreground">Credit limit</label>
+            <label className="text-caption font-medium text-foreground">{t("participants.permission.creditLimit")}</label>
             <Input
               type="number"
               min={0}
@@ -471,7 +477,7 @@ function PermissionFormSections(props: {
       </SettingsSection>
 
       {nonStandardSummary && (
-        <SettingsSection title="Customization summary" description="Non-standard finance access stays highlighted until you save or send the invite.">
+        <SettingsSection title={t("participants.permission.customSummary.title")} description={t("participants.permission.customSummary.description")}>
           <Alert className="border-info/30 bg-info/10 text-foreground [&>svg]:text-info">
             <SlidersHorizontal className="h-4 w-4" />
             <AlertTitle>{nonStandardSummary.title}</AlertTitle>
@@ -487,10 +493,10 @@ function PermissionFormSections(props: {
       )}
 
       {warnings.length > 0 && (
-        <SettingsSection title="Sensitive access" description="These settings grant broader access in the current app flow.">
+        <SettingsSection title={t("participants.permission.sensitive.title")} description={t("participants.permission.sensitive.description")}>
           <Alert className="border-warning/40 bg-warning/10 text-foreground [&>svg]:text-warning-foreground">
             <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>Review before saving</AlertTitle>
+            <AlertTitle>{t("participants.permission.reviewBeforeSave")}</AlertTitle>
             <AlertDescription>
               <ul className="space-y-1">
                 {warnings.map((warning) => (
@@ -506,6 +512,7 @@ function PermissionFormSections(props: {
 }
 
 export default function ProjectParticipants() {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const projectId = id!;
   const { project, members } = useProject(projectId);
@@ -594,8 +601,8 @@ export default function ProjectParticipants() {
         target: { kind: "member", userId: member.user_id },
         key: `member-${member.user_id}`,
         displayName: user?.name ?? member.user_id,
-        secondaryLabel: user?.email ?? "No email",
-        targetKindLabel: "Member",
+        secondaryLabel: user?.email ?? t("participants.noEmail"),
+        targetKindLabel: t("participants.targetKind.member"),
         role: member.role,
         aiAccess: member.ai_access,
         financeVisibility: member.finance_visibility ?? getDefaultFinanceVisibility(member.role),
@@ -612,8 +619,8 @@ export default function ProjectParticipants() {
       target: { kind: "invite", inviteId: invite.id },
       key: `invite-${invite.id}`,
       displayName: invite.email,
-      secondaryLabel: `Invited by ${getUserById(invite.invited_by)?.name ?? invite.invited_by}`,
-      targetKindLabel: "Pending invite",
+      secondaryLabel: t("participants.invitedByLabel", { name: getUserById(invite.invited_by)?.name ?? invite.invited_by }),
+      targetKindLabel: t("participants.targetKind.invite"),
       role: invite.role,
       aiAccess: invite.ai_access,
       financeVisibility: invite.finance_visibility ?? getDefaultFinanceVisibility(invite.role),
@@ -736,7 +743,7 @@ export default function ProjectParticipants() {
           },
         };
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Unable to send invite email";
+        const message = err instanceof Error ? err.message : t("participants.error.emailSendFallback");
         return {
           createdInvite,
           emailDelivery: { kind: "failed", message },
@@ -783,19 +790,19 @@ export default function ProjectParticipants() {
 
       if (emailDelivery.kind === "failed") {
         toast({
-          title: "Invite created",
-          description: `The invitation for ${createdInvite.email} was saved, but the email could not be sent (${emailDelivery.message}). You can resend from the row menu.`,
+          title: t("participants.toast.inviteCreated"),
+          description: t("participants.toast.inviteCreatedFailDesc", { email: createdInvite.email, message: emailDelivery.message }),
           variant: "destructive",
         });
       } else if (emailDelivery.kind === "sent") {
         toast({
-          title: "Invitation sent",
-          description: `${emailDelivery.recipientEmail} invited as ${roleLabels[createdInvite.role]}.`,
+          title: t("participants.toast.invitationSent"),
+          description: t("participants.toast.invitationSentDesc", { email: emailDelivery.recipientEmail, role: t(roleLabels[createdInvite.role]) }),
         });
       } else {
         toast({
-          title: "Invitation sent",
-          description: `${createdInvite.email} invited as ${roleLabels[createdInvite.role]}.`,
+          title: t("participants.toast.invitationSent"),
+          description: t("participants.toast.invitationSentDesc", { email: createdInvite.email, role: t(roleLabels[createdInvite.role]) }),
         });
       }
 
@@ -807,8 +814,8 @@ export default function ProjectParticipants() {
         queryClient.setQueryData(invitesQueryKey, context.previousInvites);
       }
       toast({
-        title: "Invite failed",
-        description: error instanceof Error ? error.message : "Unable to invite participant.",
+        title: t("participants.toast.inviteFailed"),
+        description: error instanceof Error ? error.message : t("participants.toast.inviteFailedDesc"),
         variant: "destructive",
       });
     },
@@ -822,30 +829,30 @@ export default function ProjectParticipants() {
   const resendInviteEmailMutation = useMutation({
     mutationFn: async (inviteId: string) => {
       if (workspaceMode.kind !== "supabase") {
-        throw new Error("Resend is only available in the connected workspace.");
+        throw new Error(t("participants.error.resendNotInSupabase"));
       }
       return sendWorkspaceProjectInviteEmail(workspaceMode, inviteId);
     },
     onSuccess: (result) => {
       if (result.kind === "skipped") {
         toast({
-          title: "Email not sent",
-          description: "Resend is not available in this workspace mode.",
+          title: t("participants.toast.emailNotSent"),
+          description: t("participants.toast.emailNotSentDesc"),
           variant: "destructive",
         });
         return;
       }
       toast({
-        title: "Invitation email sent",
+        title: t("participants.toast.invitationEmailSent"),
         description: result.payload.recipientEmail
-          ? `Sent to ${result.payload.recipientEmail}.`
-          : "The invitation email was sent.",
+          ? t("participants.toast.invitationEmailSentTo", { email: result.payload.recipientEmail })
+          : t("participants.toast.invitationEmailSentDefault"),
       });
     },
     onError: (error) => {
       toast({
-        title: "Resend failed",
-        description: error instanceof Error ? error.message : "Unable to resend invite email.",
+        title: t("participants.toast.resendFailed"),
+        description: error instanceof Error ? error.message : t("participants.toast.resendFailedDesc"),
         variant: "destructive",
       });
     },
@@ -909,10 +916,10 @@ export default function ProjectParticipants() {
       return { previousInvites };
     },
     onSuccess: (_result, variables) => {
-      const name = permissionTargetRecord?.displayName ?? "Participant";
+      const name = permissionTargetRecord?.displayName ?? t("participants.permissionDialog.fallbackName");
       toast({
-        title: "Access updated",
-        description: `${name} is now ${roleLabels[variables.form.role]}.`,
+        title: t("participants.toast.accessUpdated"),
+        description: t("participants.toast.accessUpdatedDesc", { name, role: t(roleLabels[variables.form.role]) }),
       });
       setPermissionDialogOpen(false);
       setPermissionTarget(null);
@@ -925,8 +932,8 @@ export default function ProjectParticipants() {
         queryClient.setQueryData(invitesQueryKey, context.previousInvites);
       }
       toast({
-        title: "Access update failed",
-        description: error instanceof Error ? error.message : "Unable to update access.",
+        title: t("participants.toast.accessUpdateFailed"),
+        description: error instanceof Error ? error.message : t("participants.toast.accessUpdateFailedDesc"),
         variant: "destructive",
       });
     },
@@ -945,8 +952,8 @@ export default function ProjectParticipants() {
     if (!trimmedEmail) return;
     if (pendingInviteEmailSet.has(trimmedEmail)) {
       toast({
-        title: "Already invited",
-        description: "This email already has a pending invitation.",
+        title: t("participants.toast.alreadyInvited"),
+        description: t("participants.toast.alreadyInvitedDesc"),
         variant: "destructive",
       });
       return;
@@ -954,8 +961,8 @@ export default function ProjectParticipants() {
     const existingMember = Array.from(memberEmailById.values()).some((email) => email === trimmedEmail);
     if (existingMember) {
       toast({
-        title: "Already added",
-        description: "This user is already a project participant.",
+        title: t("participants.toast.alreadyAdded"),
+        description: t("participants.toast.alreadyAddedDesc"),
         variant: "destructive",
       });
       return;
@@ -973,9 +980,9 @@ export default function ProjectParticipants() {
     <div className="space-y-sp-3">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-h3 text-foreground">Participants</h2>
+          <h2 className="text-h3 text-foreground">{t("participants.header")}</h2>
           <p className="text-caption text-muted-foreground">
-            {members.length} active participants · {pendingInvites.length} pending invites
+            {t("participants.summary", { active: members.length, pending: pendingInvites.length })}
           </p>
         </div>
         {canManageAccess && (
@@ -986,32 +993,32 @@ export default function ProjectParticipants() {
             }}
             className="bg-accent text-accent-foreground hover:bg-accent/90"
           >
-            <Plus className="mr-1 h-4 w-4" /> Invite
+            <Plus className="mr-1 h-4 w-4" /> {t("participants.invite")}
           </Button>
         )}
       </div>
 
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as ParticipantTab)}>
         <TabsList className="h-auto w-full justify-start gap-1 bg-transparent p-0">
-          <TabsTrigger value="members">Members</TabsTrigger>
-          <TabsTrigger value="invitations">Invitations</TabsTrigger>
-          <TabsTrigger value="permissions">Permissions</TabsTrigger>
+          <TabsTrigger value="members">{t("participants.tab.members")}</TabsTrigger>
+          <TabsTrigger value="invitations">{t("participants.tab.invitations")}</TabsTrigger>
+          <TabsTrigger value="permissions">{t("participants.tab.permissions")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="members" className="mt-3">
           <section className="space-y-2">
             <div className="flex items-center gap-2">
               <Users className="h-4 w-4 text-accent" />
-              <h3 className="text-body font-semibold text-foreground">Active members</h3>
+              <h3 className="text-body font-semibold text-foreground">{t("participants.section.activeMembers")}</h3>
             </div>
             <div className="glass overflow-hidden rounded-card">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Member</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>AI Access</TableHead>
-                    <TableHead className="text-right">Credits</TableHead>
+                    <TableHead>{t("participants.table.member")}</TableHead>
+                    <TableHead>{t("participants.table.role")}</TableHead>
+                    <TableHead>{t("participants.table.aiAccess")}</TableHead>
+                    <TableHead className="text-right">{t("participants.table.credits")}</TableHead>
                     {canManageAccess && <TableHead className="w-10" />}
                   </TableRow>
                 </TableHeader>
@@ -1019,7 +1026,7 @@ export default function ProjectParticipants() {
                   {members.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={canManageAccess ? 5 : 4} className="text-center text-muted-foreground">
-                        No active participants yet.
+                        {t("participants.empty.noActive")}
                       </TableCell>
                     </TableRow>
                   ) : members.map((member) => {
@@ -1038,16 +1045,16 @@ export default function ProjectParticipants() {
                             <div>
                               <p className="text-body-sm font-medium text-foreground">
                                 {memberUser?.name ?? member.user_id}
-                                {isSelf && <span className="ml-1 text-caption text-muted-foreground">(you)</span>}
+                                {isSelf && <span className="ml-1 text-caption text-muted-foreground">{t("participants.you")}</span>}
                               </p>
-                              <p className="text-caption text-muted-foreground">{memberUser?.email || "No email"}</p>
+                              <p className="text-caption text-muted-foreground">{memberUser?.email || t("participants.noEmail")}</p>
                             </div>
                           </div>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1.5">
                             <RoleIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                            <span className="text-body-sm">{roleLabels[member.role]}</span>
+                            <span className="text-body-sm">{t(roleLabels[member.role])}</span>
                           </div>
                         </TableCell>
                         <TableCell>
@@ -1058,7 +1065,7 @@ export default function ProjectParticipants() {
                                 ? "bg-info/10 text-info"
                                 : "bg-muted text-muted-foreground"
                           }`}>
-                            {aiAccessLabels[member.ai_access]}
+                            {t(aiAccessLabels[member.ai_access])}
                           </span>
                         </TableCell>
                         <TableCell className="text-right">
@@ -1076,12 +1083,12 @@ export default function ProjectParticipants() {
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="glass-elevated rounded-card">
                                   <DropdownMenuItem onClick={() => openPermissionEditor(record)}>
-                                    <Shield className="mr-2 h-3.5 w-3.5" /> Edit access
+                                    <Shield className="mr-2 h-3.5 w-3.5" /> {t("participants.dropdown.editAccess")}
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             ) : (
-                              <span className="text-caption text-muted-foreground">No actions</span>
+                              <span className="text-caption text-muted-foreground">{t("participants.noActions")}</span>
                             )}
                           </TableCell>
                         )}
@@ -1098,24 +1105,24 @@ export default function ProjectParticipants() {
           <section className="space-y-2">
             <div className="flex items-center gap-2">
               <Mail className="h-4 w-4 text-accent" />
-              <h3 className="text-body font-semibold text-foreground">Pending invitations</h3>
+              <h3 className="text-body font-semibold text-foreground">{t("participants.section.pendingInvites")}</h3>
             </div>
             <div className="glass overflow-hidden rounded-card">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Invited by</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Actions</TableHead>
+                    <TableHead>{t("participants.table.email")}</TableHead>
+                    <TableHead>{t("participants.table.invitedBy")}</TableHead>
+                    <TableHead>{t("participants.table.role")}</TableHead>
+                    <TableHead>{t("participants.table.status")}</TableHead>
+                    <TableHead>{t("participants.table.actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {pendingInvites.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={5} className="text-center text-muted-foreground">
-                        No pending invites.
+                        {t("participants.empty.noPending")}
                       </TableCell>
                     </TableRow>
                   ) : pendingInvites.map((invite) => {
@@ -1130,10 +1137,10 @@ export default function ProjectParticipants() {
                         <TableCell className="text-body-sm text-muted-foreground">
                           {inviter?.name ?? inviter?.email ?? invite.invited_by}
                         </TableCell>
-                        <TableCell className="text-body-sm text-foreground">{roleLabels[invite.role]}</TableCell>
+                        <TableCell className="text-body-sm text-foreground">{t(roleLabels[invite.role])}</TableCell>
                         <TableCell>
                           <span className={`rounded-pill px-2 py-0.5 text-caption font-medium ${inviteStatusClassName(invite.status)}`}>
-                            {inviteStatusLabel(invite.status)}
+                            {t(inviteStatusKey(invite.status))}
                           </span>
                         </TableCell>
                         <TableCell>
@@ -1155,18 +1162,18 @@ export default function ProjectParticipants() {
                                       resendInviteEmailMutation.mutate(invite.id);
                                     }}
                                   >
-                                    <Send className="mr-2 h-3.5 w-3.5" /> Resend email
+                                    <Send className="mr-2 h-3.5 w-3.5" /> {t("participants.dropdown.resendEmail")}
                                   </DropdownMenuItem>
                                 )}
                                 {record && canEditInvite && (
                                   <DropdownMenuItem onClick={() => openPermissionEditor(record)}>
-                                    <Shield className="mr-2 h-3.5 w-3.5" /> Edit access
+                                    <Shield className="mr-2 h-3.5 w-3.5" /> {t("participants.dropdown.editAccess")}
                                   </DropdownMenuItem>
                                 )}
                               </DropdownMenuContent>
                             </DropdownMenu>
                           ) : (
-                            <span className="text-caption text-muted-foreground">No actions</span>
+                            <span className="text-caption text-muted-foreground">{t("participants.noActions")}</span>
                           )}
                         </TableCell>
                       </TableRow>
@@ -1181,26 +1188,26 @@ export default function ProjectParticipants() {
             <section className="space-y-2">
               <div className="flex items-center gap-2">
                 <History className="h-4 w-4 text-muted-foreground" />
-                <h3 className="text-body font-semibold text-foreground">Invite history</h3>
+                <h3 className="text-body font-semibold text-foreground">{t("participants.section.inviteHistory")}</h3>
               </div>
               <div className="glass overflow-hidden rounded-card">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Role</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Created</TableHead>
+                      <TableHead>{t("participants.table.email")}</TableHead>
+                      <TableHead>{t("participants.table.role")}</TableHead>
+                      <TableHead>{t("participants.table.status")}</TableHead>
+                      <TableHead>{t("participants.table.created")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {inviteHistory.map((invite) => (
                       <TableRow key={invite.id}>
                         <TableCell className="text-body-sm text-foreground">{invite.email}</TableCell>
-                        <TableCell className="text-body-sm text-foreground">{roleLabels[invite.role]}</TableCell>
+                        <TableCell className="text-body-sm text-foreground">{t(roleLabels[invite.role])}</TableCell>
                         <TableCell>
                           <span className={`rounded-pill px-2 py-0.5 text-caption font-medium ${inviteStatusClassName(invite.status)}`}>
-                            {inviteStatusLabel(invite.status)}
+                            {t(inviteStatusKey(invite.status))}
                           </span>
                         </TableCell>
                         <TableCell className="text-body-sm text-muted-foreground">
@@ -1219,13 +1226,13 @@ export default function ProjectParticipants() {
           <section className="space-y-2">
             <div className="flex items-center gap-2">
               <SlidersHorizontal className="h-4 w-4 text-accent" />
-              <h3 className="text-body font-semibold text-foreground">Member permissions</h3>
+              <h3 className="text-body font-semibold text-foreground">{t("participants.section.memberPermissions")}</h3>
             </div>
             {permissionMemberRecords.length === 0 ? (
               <EmptyState
                 icon={Users}
-                title="No members yet"
-                description="Active members will appear here for access review."
+                title={t("participants.empty.noMembers.title")}
+                description={t("participants.empty.noMembers.description")}
               />
             ) : (
               <div className="space-y-2">
@@ -1237,7 +1244,7 @@ export default function ProjectParticipants() {
                     internalDocsVisibility: record.internalDocsVisibility,
                     viewerRegime: record.viewerRegime,
                     creditLimit: record.creditLimit,
-                  });
+                  }, t);
 
                   return (
                     <div key={record.key} className="glass rounded-card border border-border/70 p-4">
@@ -1249,38 +1256,38 @@ export default function ProjectParticipants() {
                           </div>
                           <div className="flex flex-wrap gap-2 text-caption">
                             <span className="rounded-pill bg-muted px-2 py-0.5 text-muted-foreground">{record.targetKindLabel}</span>
-                            <span className="rounded-pill bg-accent/10 px-2 py-0.5 text-accent">{roleLabels[record.role]}</span>
-                            <span className="rounded-pill bg-muted px-2 py-0.5 text-muted-foreground">{aiAccessLabels[record.aiAccess]}</span>
-                            <span className="rounded-pill bg-muted px-2 py-0.5 text-muted-foreground">{financeVisibilityLabels[record.financeVisibility]}</span>
+                            <span className="rounded-pill bg-accent/10 px-2 py-0.5 text-accent">{t(roleLabels[record.role])}</span>
+                            <span className="rounded-pill bg-muted px-2 py-0.5 text-muted-foreground">{t(aiAccessLabels[record.aiAccess])}</span>
+                            <span className="rounded-pill bg-muted px-2 py-0.5 text-muted-foreground">{t(financeVisibilityLabels[record.financeVisibility])}</span>
                           </div>
                           <div className="grid gap-1 text-caption text-muted-foreground md:grid-cols-2">
                             <div className="flex items-center gap-1.5">
                               <BrainCircuit className="h-3.5 w-3.5" />
-                              {aiAccessLabels[record.aiAccess]}
+                              {t(aiAccessLabels[record.aiAccess])}
                             </div>
                             <div className="flex items-center gap-1.5">
                               <Coins className="h-3.5 w-3.5" />
-                              Credit limit: {record.creditLimit}
-                              {typeof record.usedCredits === "number" ? ` · Used ${record.usedCredits}` : ""}
+                              {t("participants.creditLimit", { count: record.creditLimit })}
+                              {typeof record.usedCredits === "number" ? ` · ${t("participants.usedCredits", { count: record.usedCredits })}` : ""}
                             </div>
                             <div className="flex items-center gap-1.5">
                               <Shield className="h-3.5 w-3.5" />
-                              {financeVisibilityLabels[record.financeVisibility]}
+                              {t(financeVisibilityLabels[record.financeVisibility])}
                             </div>
                             <div className="flex items-center gap-1.5">
                               <FileText className="h-3.5 w-3.5" />
-                              {internalDocsVisibilityLabels[record.internalDocsVisibility]}
+                              {t(internalDocsVisibilityLabels[record.internalDocsVisibility])}
                             </div>
                             {record.role === "viewer" && record.viewerRegime && (
                               <div className="flex items-center gap-1.5 md:col-span-2">
                                 <Eye className="h-3.5 w-3.5" />
-                                Viewer regime: {viewerRegimeLabels[record.viewerRegime]}
+                                {t("participants.viewerRegimeRow", { regime: t(viewerRegimeLabels[record.viewerRegime]) })}
                               </div>
                             )}
                           </div>
                           {warnings.length > 0 && (
                             <div className="rounded-card border border-warning/40 bg-warning/10 p-3">
-                              <p className="text-caption font-medium text-foreground">Sensitive access</p>
+                              <p className="text-caption font-medium text-foreground">{t("participants.sensitiveAccess")}</p>
                               <ul className="mt-1 space-y-1 text-caption text-muted-foreground">
                                 {warnings.map((warning) => (
                                   <li key={warning}>{warning}</li>
@@ -1291,7 +1298,7 @@ export default function ProjectParticipants() {
                         </div>
                         {canEditPermissionRecord(record) && (
                           <Button variant="outline" onClick={() => openPermissionEditor(record)}>
-                            Edit access
+                            {t("participants.editAccessButton")}
                           </Button>
                         )}
                       </div>
@@ -1305,13 +1312,13 @@ export default function ProjectParticipants() {
           <section className="space-y-2">
             <div className="flex items-center gap-2">
               <Mail className="h-4 w-4 text-accent" />
-              <h3 className="text-body font-semibold text-foreground">Pending invite permissions</h3>
+              <h3 className="text-body font-semibold text-foreground">{t("participants.section.invitePermissions")}</h3>
             </div>
             {permissionInviteRecords.length === 0 ? (
               <EmptyState
                 icon={Mail}
-                title="No pending invites"
-                description="Pending invites appear here when they need access review."
+                title={t("participants.empty.noPendingInvites.title")}
+                description={t("participants.empty.noPendingInvites.description")}
               />
             ) : (
               <div className="space-y-2">
@@ -1323,7 +1330,7 @@ export default function ProjectParticipants() {
                     internalDocsVisibility: record.internalDocsVisibility,
                     viewerRegime: record.viewerRegime,
                     creditLimit: record.creditLimit,
-                  });
+                  }, t);
 
                   return (
                     <div key={record.key} className="glass rounded-card border border-border/70 p-4">
@@ -1335,34 +1342,34 @@ export default function ProjectParticipants() {
                           </div>
                           <div className="flex flex-wrap gap-2 text-caption">
                             <span className="rounded-pill bg-muted px-2 py-0.5 text-muted-foreground">{record.targetKindLabel}</span>
-                            <span className="rounded-pill bg-accent/10 px-2 py-0.5 text-accent">{roleLabels[record.role]}</span>
+                            <span className="rounded-pill bg-accent/10 px-2 py-0.5 text-accent">{t(roleLabels[record.role])}</span>
                             {record.inviteStatus && (
                               <span className={`rounded-pill px-2 py-0.5 ${inviteStatusClassName(record.inviteStatus)}`}>
-                                {inviteStatusLabel(record.inviteStatus)}
+                                {t(inviteStatusKey(record.inviteStatus))}
                               </span>
                             )}
                           </div>
                           <div className="grid gap-1 text-caption text-muted-foreground md:grid-cols-2">
                             <div className="flex items-center gap-1.5">
                               <BrainCircuit className="h-3.5 w-3.5" />
-                              {aiAccessLabels[record.aiAccess]}
+                              {t(aiAccessLabels[record.aiAccess])}
                             </div>
                             <div className="flex items-center gap-1.5">
                               <Coins className="h-3.5 w-3.5" />
-                              Credit limit: {record.creditLimit}
+                              {t("participants.creditLimit", { count: record.creditLimit })}
                             </div>
                             <div className="flex items-center gap-1.5">
                               <Shield className="h-3.5 w-3.5" />
-                              {financeVisibilityLabels[record.financeVisibility]}
+                              {t(financeVisibilityLabels[record.financeVisibility])}
                             </div>
                             <div className="flex items-center gap-1.5">
                               <FileText className="h-3.5 w-3.5" />
-                              {internalDocsVisibilityLabels[record.internalDocsVisibility]}
+                              {t(internalDocsVisibilityLabels[record.internalDocsVisibility])}
                             </div>
                           </div>
                           {warnings.length > 0 && (
                             <div className="rounded-card border border-warning/40 bg-warning/10 p-3">
-                              <p className="text-caption font-medium text-foreground">Sensitive access</p>
+                              <p className="text-caption font-medium text-foreground">{t("participants.sensitiveAccess")}</p>
                               <ul className="mt-1 space-y-1 text-caption text-muted-foreground">
                                 {warnings.map((warning) => (
                                   <li key={warning}>{warning}</li>
@@ -1373,7 +1380,7 @@ export default function ProjectParticipants() {
                         </div>
                         {canEditPermissionRecord(record) && (
                           <Button variant="outline" onClick={() => openPermissionEditor(record)}>
-                            Edit access
+                            {t("participants.editAccessButton")}
                           </Button>
                         )}
                       </div>
@@ -1395,17 +1402,17 @@ export default function ProjectParticipants() {
       >
         <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Invite participant</DialogTitle>
+            <DialogTitle>{t("participants.inviteDialog.title")}</DialogTitle>
             <DialogDescription>
-              Choose a role preset, review the current bounded access summary, and adjust only the supported overrides.
+              {t("participants.inviteDialog.description")}
             </DialogDescription>
           </DialogHeader>
 
-          <SettingsSection title="Invitation target" description="Send access to a specific email address.">
+          <SettingsSection title={t("participants.inviteDialog.section.title")} description={t("participants.inviteDialog.section.description")}>
             <div>
-              <label className="text-caption font-medium text-foreground">Email</label>
+              <label className="text-caption font-medium text-foreground">{t("participants.table.email")}</label>
               <Input
-                placeholder="member@example.com"
+                placeholder={t("participants.inviteDialog.emailPlaceholder")}
                 value={inviteEmail}
                 onChange={(event) => setInviteEmail(event.target.value)}
                 className="mt-1"
@@ -1425,9 +1432,9 @@ export default function ProjectParticipants() {
           />
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setInviteOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setInviteOpen(false)}>{t("participants.inviteDialog.cancel")}</Button>
             <Button onClick={handleInvite} disabled={createInviteMutation.isPending}>
-              {createInviteMutation.isPending ? "Sending..." : "Send Invite"}
+              {createInviteMutation.isPending ? t("participants.inviteDialog.sending") : t("participants.inviteDialog.send")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1442,15 +1449,15 @@ export default function ProjectParticipants() {
       >
         <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{permissionTargetRecord?.displayName ? `Edit access: ${permissionTargetRecord.displayName}` : "Edit access"}</DialogTitle>
+            <DialogTitle>{permissionTargetRecord?.displayName ? t("participants.permissionDialog.title", { name: permissionTargetRecord.displayName }) : t("participants.permissionDialog.titleFallback")}</DialogTitle>
             <DialogDescription>
-              This is the canonical Participants access editor. Role presets and bounded overrides are managed here together.
+              {t("participants.permissionDialog.description")}
             </DialogDescription>
           </DialogHeader>
 
           {permissionTargetRecord && (
             <>
-              <SettingsSection title="Access target" description="The same editor is used from Members, Invitations, and Permissions.">
+              <SettingsSection title={t("participants.permissionDialog.section.title")} description={t("participants.permissionDialog.section.description")}>
                 <div className="flex flex-wrap gap-2 text-caption">
                   <span className="rounded-pill bg-muted px-2 py-0.5 text-muted-foreground">{permissionTargetRecord.targetKindLabel}</span>
                   <span className="rounded-pill bg-muted px-2 py-0.5 text-muted-foreground">{permissionTargetRecord.secondaryLabel}</span>
@@ -1471,9 +1478,9 @@ export default function ProjectParticipants() {
           )}
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPermissionDialogOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setPermissionDialogOpen(false)}>{t("participants.permissionDialog.cancel")}</Button>
             <Button onClick={handleSavePermissions} disabled={savePermissionsMutation.isPending || !permissionTargetRecord}>
-              {savePermissionsMutation.isPending ? "Saving..." : "Save access"}
+              {savePermissionsMutation.isPending ? t("participants.permissionDialog.saving") : t("participants.permissionDialog.save")}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +17,7 @@ function formatCurrency(valueCents: number, currency = "RUB") {
 }
 
 export function FinanceTab() {
+  const { t } = useTranslation();
   const { snapshot, sensitiveDetailLoading } = useEstimateV2FinanceSnapshot();
   const displayCurrency = snapshot.projects[0]?.currency ?? "RUB";
 
@@ -39,7 +41,7 @@ export function FinanceTab() {
       <div className="space-y-4 sm:space-y-6">
         <Card>
           <CardContent className="p-4 sm:p-6">
-            <p className="text-body-sm text-muted-foreground animate-pulse">Loading finance access…</p>
+            <p className="text-body-sm text-muted-foreground animate-pulse">{t("financeTab.loadingAccess")}</p>
           </CardContent>
         </Card>
       </div>
@@ -54,7 +56,7 @@ export function FinanceTab() {
           <CardContent className="p-4 sm:p-6">
             <div className="flex items-center gap-2 mb-2">
               <DollarSign className="h-4 w-4 text-accent" />
-              <span className="text-caption text-muted-foreground">Total Budget</span>
+              <span className="text-caption text-muted-foreground">{t("financeTab.totalBudget")}</span>
             </div>
             <p className="text-h3 font-bold text-foreground">
               {obscureTopTotals ? REDACTED_PLACEHOLDER : formatCurrency(snapshot.totals.plannedBudgetCents, displayCurrency)}
@@ -65,7 +67,7 @@ export function FinanceTab() {
           <CardContent className="p-4 sm:p-6">
             <div className="flex items-center gap-2 mb-2">
               <TrendingDown className="h-4 w-4 text-destructive" />
-              <span className="text-caption text-muted-foreground">Actual Spend</span>
+              <span className="text-caption text-muted-foreground">{t("financeTab.actualSpend")}</span>
             </div>
             <p className="text-h3 font-bold text-foreground">
               {obscureTopTotals ? REDACTED_PLACEHOLDER : formatCurrency(snapshot.totals.spentCents, displayCurrency)}
@@ -76,7 +78,7 @@ export function FinanceTab() {
           <CardContent className="p-4 sm:p-6">
             <div className="flex items-center gap-2 mb-2">
               <TrendingUp className="h-4 w-4 text-success" />
-              <span className="text-caption text-muted-foreground">Variance</span>
+              <span className="text-caption text-muted-foreground">{t("financeTab.variance")}</span>
             </div>
             <p
               className={`text-h3 font-bold ${obscureTopTotals ? "text-foreground" : snapshot.totals.varianceCents >= 0 ? "text-success" : "text-destructive"}`}
@@ -90,7 +92,7 @@ export function FinanceTab() {
       {/* Per-project breakdown */}
       <Card>
         <CardContent className="p-0">
-          <h3 className="px-4 pt-4 pb-3 text-body font-semibold text-foreground sm:px-6 sm:pt-6 sm:pb-4">Budget by Project</h3>
+          <h3 className="px-4 pt-4 pb-3 text-body font-semibold text-foreground sm:px-6 sm:pt-6 sm:pb-4">{t("financeTab.budgetByProject")}</h3>
           <div className="divide-y divide-border px-4 pb-4 sm:px-6 sm:pb-6">
             {projectRows.map((project) => {
               const redacted = project.sensitiveFinanceVisible === false;
@@ -100,14 +102,14 @@ export function FinanceTab() {
                     <p className="text-body-sm font-medium text-foreground truncate">{project.projectTitle}</p>
                     <div className="flex items-center gap-3 mt-1 flex-wrap">
                       {redacted ? (
-                        <span className="text-caption text-muted-foreground">Financial details hidden</span>
+                        <span className="text-caption text-muted-foreground">{t("financeTab.financialDetailsHidden")}</span>
                       ) : (
                         <>
                           <span className="text-caption text-muted-foreground">
-                            Budget: {formatCurrency(project.plannedBudgetCents, project.currency)}
+                            {t("financeTab.budgetLine", { value: formatCurrency(project.plannedBudgetCents, project.currency) })}
                           </span>
                           <span className="text-caption text-muted-foreground">
-                            Spent: {formatCurrency(project.spentCents, project.currency)}
+                            {t("financeTab.spentLine", { value: formatCurrency(project.spentCents, project.currency) })}
                           </span>
                           <Badge variant={project.percentSpent > 90 ? "destructive" : "secondary"} className="text-[10px]">
                             {project.percentSpent}%
@@ -117,14 +119,14 @@ export function FinanceTab() {
                     </div>
                   </div>
                   <Link to={`/project/${project.projectId}/estimate`} className="text-caption text-accent hover:underline flex items-center gap-1 shrink-0">
-                    Details <ArrowRight className="h-3 w-3" />
+                    {t("financeTab.details")} <ArrowRight className="h-3 w-3" />
                   </Link>
                 </div>
               );
             })}
             {projectRows.length === 0 && (
               <div className="py-6 text-body-sm text-muted-foreground">
-                No estimate budget data yet. Create an estimate to see finance summaries here.
+                {t("financeTab.empty")}
               </div>
             )}
           </div>
@@ -134,11 +136,11 @@ export function FinanceTab() {
       {/* Links */}
       <div className="flex items-center gap-3 flex-wrap">
         <Button variant="outline" size="sm" asChild>
-          <Link to="/home?tab=procurement">View procurement spend</Link>
+          <Link to="/home?tab=procurement">{t("financeTab.viewProcurement")}</Link>
         </Button>
         <Button variant="outline" size="sm" disabled>
-          <FileDown className="h-3.5 w-3.5 mr-1.5" /> Export
-          <Badge variant="secondary" className="ml-1.5 text-[9px]">Soon</Badge>
+          <FileDown className="h-3.5 w-3.5 mr-1.5" /> {t("financeTab.export")}
+          <Badge variant="secondary" className="ml-1.5 text-[9px]">{t("financeTab.soon")}</Badge>
         </Button>
       </div>
     </div>

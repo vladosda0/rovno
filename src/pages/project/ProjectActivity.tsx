@@ -1,4 +1,6 @@
 import { useParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import { useMemo } from "react";
 import { useEvents } from "@/hooks/use-mock-data";
 import { getUserById } from "@/data/store";
 import { usePermission, seamCanViewSensitiveDetail } from "@/lib/permissions";
@@ -41,20 +43,26 @@ export default function ProjectActivity() {
   const events = useEvents(projectId);
   const perm = usePermission(projectId);
   const redactionCtx = { canViewFinanceDetail: seamCanViewSensitiveDetail(perm.seam) };
+  const { t, i18n } = useTranslation();
+
+  const dateFormatter = useMemo(
+    () => new Intl.DateTimeFormat(i18n.language, { year: "numeric", month: "numeric", day: "numeric" }),
+    [i18n.language],
+  );
 
   if (events.length === 0) {
     return (
       <EmptyState
         icon={Activity}
-        title="Activity"
-        description="No activity yet. Events will appear here as work progresses."
+        title={t("activity.empty.title")}
+        description={t("activity.empty.description")}
       />
     );
   }
 
   return (
     <div className="p-sp-3">
-      <h2 className="text-h3 text-foreground mb-sp-2">Activity</h2>
+      <h2 className="text-h3 text-foreground mb-sp-2">{t("activity.heading")}</h2>
       <div className="space-y-3">
         {events.map((evt) => {
           const actor = getUserById(evt.actor_id);
@@ -67,13 +75,13 @@ export default function ProjectActivity() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-body-sm">
-                  <span className="font-medium text-foreground">{actor?.name ?? "Unknown"}</span>
+                  <span className="font-medium text-foreground">{actor?.name ?? t("common.unknown")}</span>
                   <span className="text-muted-foreground"> {evt.type.replace(/[._]/g, " ")}</span>
                 </p>
                 {detail ? <p className="text-caption text-muted-foreground truncate">{detail}</p> : null}
               </div>
               <span className="text-caption text-muted-foreground whitespace-nowrap">
-                {new Date(getEventGroupTimestampMs(evt)).toLocaleDateString()}
+                {dateFormatter.format(new Date(getEventGroupTimestampMs(evt)))}
               </span>
             </div>
           );

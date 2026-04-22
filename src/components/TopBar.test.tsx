@@ -49,7 +49,7 @@ describe("TopBar", () => {
 
     expect(screen.queryByText("JD")).not.toBeInTheDocument();
 
-    fireEvent.pointerDown(screen.getByRole("button", { name: /стройагент/i }), { button: 0, ctrlKey: false });
+    fireEvent.pointerDown(screen.getByRole("button", { name: /rovno/i }), { button: 0, ctrlKey: false });
 
     expect(await screen.findByRole("menuitem", { name: "Settings" })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: "Log out" })).toBeInTheDocument();

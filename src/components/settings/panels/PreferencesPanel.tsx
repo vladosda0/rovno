@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -17,12 +18,18 @@ import type {
   ProfileWeekStart,
 } from "@/data/workspace-source";
 import { MVP_SHOW_AI_AUTOMATION_MODE_UI } from "@/lib/mvp-ai-automation-ui";
+import { type AppLanguage, getStoredLanguage, setStoredLanguage } from "@/i18n";
+
+const INTERFACE_LANGUAGES: Array<{ value: AppLanguage; labelKey: string }> = [
+  { value: "ru", labelKey: "preferences.language.ru" },
+  { value: "en", labelKey: "preferences.language.en" },
+];
 
 const CURRENCIES = [
-  { value: "RUB", label: "₽ Russian Ruble (RUB)" },
-  { value: "USD", label: "$ US Dollar (USD)" },
-  { value: "EUR", label: "€ Euro (EUR)" },
-  { value: "GBP", label: "£ British Pound (GBP)" },
+  { value: "RUB", labelKey: "preferences.currency.rub" },
+  { value: "USD", labelKey: "preferences.currency.usd" },
+  { value: "EUR", labelKey: "preferences.currency.eur" },
+  { value: "GBP", labelKey: "preferences.currency.gbp" },
 ];
 
 const DATE_FORMATS = [
@@ -34,24 +41,34 @@ const DATE_FORMATS = [
 const AI_LANGUAGES = [
   { value: "ru", label: "Русский" },
   { value: "en", label: "English" },
-  { value: "auto", label: "Auto (from message language)" },
+  { value: "auto", labelKey: "preferences.aiLanguage.auto" },
 ];
 
 const AUTOMATION_LEVELS = [
-  { value: "manual", label: "Low", description: "AI only answers questions. No auto-actions." },
-  { value: "assisted", label: "Balanced", description: "AI suggests changes, you confirm before apply." },
-  { value: "full", label: "High", description: "AI applies changes automatically when confident." },
+  { value: "manual", labelKey: "preferences.automation.low", descKey: "preferences.automation.lowDesc" },
+  { value: "assisted", labelKey: "preferences.automation.balanced", descKey: "preferences.automation.balancedDesc" },
+  { value: "full", labelKey: "preferences.automation.high", descKey: "preferences.automation.highDesc" },
 ];
 
 export function PreferencesPanel() {
+  const { t, i18n } = useTranslation();
   const { preferences, isLoading } = useWorkspaceProfilePreferencesState();
   const updatePreferences = useUpdateWorkspaceProfilePreferences();
+  const [interfaceLanguage, setInterfaceLanguage] = useState<AppLanguage>(() => getStoredLanguage());
   const [currency, setCurrency] = useState("RUB");
   const [units, setUnits] = useState("metric");
   const [dateFormat, setDateFormat] = useState("dd.MM.yyyy");
   const [weekStart, setWeekStart] = useState("monday");
   const [aiLanguage, setAiLanguage] = useState("auto");
   const [automationLevel, setAutomationLevel] = useState("manual");
+
+  const handleInterfaceLanguageChange = (next: string) => {
+    const lang = next === "en" ? "en" : "ru";
+    setInterfaceLanguage(lang);
+    setStoredLanguage(lang);
+    void i18n.changeLanguage(lang);
+    toast({ title: t("preferences.languageChangedToast") });
+  };
 
   useEffect(() => {
     if (!preferences) return;
@@ -73,11 +90,11 @@ export function PreferencesPanel() {
         aiOutputLanguage: aiLanguage as ProfileAiOutputLanguage,
         automationLevel: (MVP_SHOW_AI_AUTOMATION_MODE_UI ? automationLevel : "manual") as ProfileAutomationLevel,
       });
-      toast({ title: "Preferences saved" });
+      toast({ title: t("preferences.savedToast") });
     } catch {
       toast({
-        title: "Could not save preferences",
-        description: "Please try again in a moment.",
+        title: t("preferences.saveFailedToast"),
+        description: t("preferences.saveFailedDescription"),
         variant: "destructive",
       });
     }
@@ -85,29 +102,45 @@ export function PreferencesPanel() {
 
   return (
     <div className="space-y-sp-3">
-      <SettingsSection title="Regional" description="Currency, units, and date display preferences.">
+      <SettingsSection title={t("preferences.interface.title")} description={t("preferences.interface.description")}>
         <div className="grid gap-sp-2 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <Label>Currency</Label>
+            <Label>{t("preferences.interfaceLanguage")}</Label>
+            <Select value={interfaceLanguage} onValueChange={handleInterfaceLanguageChange}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {INTERFACE_LANGUAGES.map((l) => (
+                  <SelectItem key={l.value} value={l.value}>{t(l.labelKey)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </SettingsSection>
+
+      <SettingsSection title={t("preferences.regional.title")} description={t("preferences.regional.description")}>
+        <div className="grid gap-sp-2 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label>{t("preferences.currency")}</Label>
             <Select value={currency} onValueChange={setCurrency}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {CURRENCIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                {CURRENCIES.map((c) => <SelectItem key={c.value} value={c.value}>{t(c.labelKey)}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label>Units</Label>
+            <Label>{t("preferences.units")}</Label>
             <Select value={units} onValueChange={setUnits}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="metric">Metric (m, m², kg)</SelectItem>
-                <SelectItem value="imperial">Imperial (ft, sq ft, lb)</SelectItem>
+                <SelectItem value="metric">{t("preferences.units.metric")}</SelectItem>
+                <SelectItem value="imperial">{t("preferences.units.imperial")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label>Date format</Label>
+            <Label>{t("preferences.dateFormat")}</Label>
             <Select value={dateFormat} onValueChange={setDateFormat}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -116,40 +149,44 @@ export function PreferencesPanel() {
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label>Week starts on</Label>
+            <Label>{t("preferences.weekStart")}</Label>
             <Select value={weekStart} onValueChange={setWeekStart}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="monday">Monday</SelectItem>
-                <SelectItem value="sunday">Sunday</SelectItem>
+                <SelectItem value="monday">{t("preferences.weekStart.monday")}</SelectItem>
+                <SelectItem value="sunday">{t("preferences.weekStart.sunday")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
         </div>
       </SettingsSection>
 
-      <SettingsSection title="AI Preferences" description="Control how the AI assistant behaves.">
+      <SettingsSection title={t("preferences.ai.title")} description={t("preferences.ai.description")}>
         <div className="grid gap-sp-2 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <Label>AI output language</Label>
+            <Label>{t("preferences.aiLanguage")}</Label>
             <Select value={aiLanguage} onValueChange={setAiLanguage}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {AI_LANGUAGES.map((l) => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}
+                {AI_LANGUAGES.map((l) => (
+                  <SelectItem key={l.value} value={l.value}>
+                    {"labelKey" in l ? t(l.labelKey) : l.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
           {MVP_SHOW_AI_AUTOMATION_MODE_UI ? (
           <div className="space-y-1.5">
-            <Label>Automation level</Label>
+            <Label>{t("preferences.automation")}</Label>
             <Select value={automationLevel} onValueChange={setAutomationLevel}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {AUTOMATION_LEVELS.map((l) => (
                   <SelectItem key={l.value} value={l.value}>
                     <div>
-                      <span className="font-medium">{l.label}</span>
-                      <span className="text-muted-foreground ml-1.5 text-xs">— {l.description}</span>
+                      <span className="font-medium">{t(l.labelKey)}</span>
+                      <span className="text-muted-foreground ml-1.5 text-xs">— {t(l.descKey)}</span>
                     </div>
                   </SelectItem>
                 ))}
@@ -166,7 +203,7 @@ export function PreferencesPanel() {
           disabled={isLoading || updatePreferences.isPending}
           onClick={() => void handleSave()}
         >
-          {updatePreferences.isPending ? "Saving..." : "Save preferences"}
+          {updatePreferences.isPending ? t("preferences.saving") : t("preferences.save")}
         </Button>
       </div>
     </div>

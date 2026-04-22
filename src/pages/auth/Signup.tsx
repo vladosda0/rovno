@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,6 +11,7 @@ import { clearDemoSession, setAuthRole } from "@/lib/auth-state";
 import { clearAiSidebarSessionPreference } from "@/lib/ai-sidebar-session";
 
 export default function Signup() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [name, setName] = useState("");
@@ -22,11 +24,11 @@ export default function Signup() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !email || !password) {
-      toast({ title: "Validation error", description: "All fields are required.", variant: "destructive" });
+      toast({ title: t("auth.signup.validationTitle"), description: t("auth.signup.validationAllRequired"), variant: "destructive" });
       return;
     }
     if (password.length < 6) {
-      toast({ title: "Validation error", description: "Password must be at least 6 characters.", variant: "destructive" });
+      toast({ title: t("auth.signup.validationTitle"), description: t("auth.signup.validationPasswordLength"), variant: "destructive" });
       return;
     }
     setLoading(true);
@@ -49,12 +51,12 @@ export default function Signup() {
       clearAiSidebarSessionPreference();
       if (data.session?.user) {
         setAuthRole("owner");
-        toast({ title: "Account created!", description: "Welcome to СтройАгент." });
+        toast({ title: t("auth.signup.successTitle"), description: t("auth.signup.welcomeToApp") });
         navigate(postAuthDestination);
         return;
       }
 
-      toast({ title: "Account created!", description: "Check your email to confirm your account." });
+      toast({ title: t("auth.signup.successTitle"), description: t("auth.signup.checkEmail") });
       if (nextUrl && nextUrl.startsWith("/")) {
         navigate(`/auth/login?next=${encodeURIComponent(nextUrl)}`);
         return;
@@ -62,8 +64,8 @@ export default function Signup() {
       navigate("/auth/login");
     } catch (error) {
       toast({
-        title: "Sign up failed",
-        description: error instanceof Error ? error.message : "Unable to create your account.",
+        title: t("auth.signup.failureTitle"),
+        description: error instanceof Error ? error.message : t("auth.signup.genericFailure"),
         variant: "destructive",
       });
     } finally {
@@ -73,29 +75,29 @@ export default function Signup() {
 
   return (
     <AuthCard
-      title="Create account"
-      subtitle="Get started with StroyAgent"
+      title={t("auth.signup.title")}
+      subtitle={t("auth.signup.subtitle")}
       footer={
         <p className="text-center text-body-sm text-muted-foreground">
-          Already have an account? <Link to="/auth/login" className="text-accent hover:underline">Sign in</Link>
+          {t("auth.signup.alreadyHaveAccount")} <Link to="/auth/login" className="text-accent hover:underline">{t("auth.signup.signIn")}</Link>
         </p>
       }
     >
       <form onSubmit={handleSubmit} className="space-y-sp-2">
         <div className="space-y-1.5">
-          <Label htmlFor="name">Full Name</Label>
-          <Input id="name" placeholder="Ivan Petrov" value={name} onChange={(e) => setName(e.target.value)} />
+          <Label htmlFor="name">{t("auth.signup.fullNameLabel")}</Label>
+          <Input id="name" placeholder={t("auth.signup.fullNamePlaceholder")} value={name} onChange={(e) => setName(e.target.value)} />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="email">Email</Label>
-          <Input id="email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <Label htmlFor="email">{t("common.email")}</Label>
+          <Input id="email" type="email" placeholder={t("common.emailPlaceholder")} value={email} onChange={(e) => setEmail(e.target.value)} />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="password">Password</Label>
+          <Label htmlFor="password">{t("common.password")}</Label>
           <Input id="password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} />
         </div>
         <Button type="submit" disabled={loading} className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
-          {loading ? "Creating..." : "Create Account"}
+          {loading ? t("auth.signup.submitting") : t("auth.signup.submit")}
         </Button>
       </form>
     </AuthCard>

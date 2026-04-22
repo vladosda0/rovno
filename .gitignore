@@ -31,5 +31,8 @@ dist-ssr
 .cursor/plans/
 .cursor/debug*.log
 
+# Claude Code local noise
+.claude/
+
 # Supabase CLI local cache (do not commit)
 supabase/.temp/

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import {
   addTask,
   addDocument,
@@ -88,11 +89,11 @@ type TaskChecklistDraft = {
 
 const TASK_STATUSES: TaskStatus[] = ["not_started", "in_progress", "done", "blocked"];
 
-const TASK_STATUS_LABEL: Record<TaskStatus, string> = {
-  not_started: "Not started",
-  in_progress: "In progress",
-  done: "Done",
-  blocked: "Blocked",
+const TASK_STATUS_KEY: Record<TaskStatus, string> = {
+  not_started: "status.notStarted",
+  in_progress: "status.inProgress",
+  done: "status.done",
+  blocked: "status.blocked",
 };
 
 const CREDIT_PACKS = [50, 100, 200, 300, 400, 500] as const;
@@ -110,6 +111,7 @@ export function QuickActions({
   canManageProcurement,
   canManageParticipants,
 }: Props) {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const navigate = useNavigate();
   const currentUser = getCurrentUser();
@@ -300,7 +302,7 @@ export function QuickActions({
       created_at: new Date().toISOString(),
     };
     addTask(task);
-    toast({ title: "Task created", description: task.title });
+    toast({ title: t("quickActions.task.created"), description: task.title });
     forceClose("task");
   };
 
@@ -309,8 +311,8 @@ export function QuickActions({
     if (documentMode === "upload" && !documentFile) return;
     if (isSupabaseMode && documentMode !== "upload") {
       toast({
-        title: "Unavailable in Supabase mode",
-        description: "Manual and AI-authored document text is not persisted yet in Supabase mode.",
+        title: t("quickActions.document.unavailableSupabase"),
+        description: t("quickActions.document.unavailableSupabaseDescription"),
         variant: "destructive",
       });
       return;
@@ -318,8 +320,8 @@ export function QuickActions({
 
     const now = new Date().toISOString();
     const id = `doc-${Date.now()}`;
-    const manualTitle = manualDocTitle.trim() || "New document";
-    const uploadedTitle = documentFile?.name || "Uploaded document";
+    const manualTitle = manualDocTitle.trim() || t("quickActions.document.defaultManualTitle");
+    const uploadedTitle = documentFile?.name || t("quickActions.document.defaultUploadedTitle");
     const title = documentMode === "manual" ? manualTitle : uploadedTitle;
 
     if (isSupabaseMode) {
@@ -328,20 +330,20 @@ export function QuickActions({
           type: "specification",
           title,
           origin: "uploaded",
-          initialVersionContent: `Uploaded document placeholder for ${uploadedTitle}.`,
+          initialVersionContent: t("quickActions.document.placeholderContent", { title: uploadedTitle }),
           initialVersionStatus: "draft",
           visibilityClass: docVisibilityClass,
         });
 
         toast({
-          title: "Document created",
-          description: "Document metadata saved. File contents are not uploaded yet in Supabase mode.",
+          title: t("quickActions.document.created"),
+          description: t("quickActions.document.createdSupabaseDescription"),
         });
         forceClose("document");
       } catch (error) {
         toast({
-          title: "Document creation failed",
-          description: error instanceof Error ? error.message : "Unable to create the document.",
+          title: t("quickActions.document.creationFailed"),
+          description: error instanceof Error ? error.message : t("quickActions.document.creationFailedDescription"),
           variant: "destructive",
         });
       }
@@ -373,8 +375,8 @@ export function QuickActions({
         number: 1,
         status: "draft",
         content: documentMode === "manual"
-          ? (manualDocDescription.trim() || `Draft generated from "${manualTitle}".`)
-          : `Uploaded document placeholder for ${uploadedTitle}.`,
+          ? (manualDocDescription.trim() || t("quickActions.document.draftFromTitle", { title: manualTitle }))
+          : t("quickActions.document.placeholderContent", { title: uploadedTitle }),
       }],
     });
 
@@ -389,7 +391,7 @@ export function QuickActions({
       payload: { title },
     });
 
-    toast({ title: "Document created", description: title });
+    toast({ title: t("quickActions.document.created"), description: title });
     forceClose("document");
   };
 
@@ -397,7 +399,7 @@ export function QuickActions({
     if (!photoFile && !photoDescription.trim()) return;
 
     if (photoCreateTask && !canCreateTask) {
-      toast({ title: "Not allowed", description: "You don't have permission to create tasks." });
+      toast({ title: t("quickActions.photo.notAllowed"), description: t("quickActions.photo.notAllowedDescription") });
       setPhotoCreateTask(false);
       return;
     }
@@ -405,7 +407,7 @@ export function QuickActions({
     let linkedTaskId = photoTaskId || undefined;
     if (photoCreateTask) {
       const taskId = `task-${Date.now()}`;
-      const title = photoDescription.trim() || photoFile?.name || "Task from photo";
+      const title = photoDescription.trim() || photoFile?.name || t("quickActions.photo.defaultTaskTitle");
       const generatedTask: Task = {
         id: taskId,
         project_id: projectId,
@@ -427,7 +429,7 @@ export function QuickActions({
 
     if (isSupabaseMode) {
       if (!photoFile) {
-        toast({ title: "Please select a file", variant: "destructive" });
+        toast({ title: t("quickActions.photo.selectFile"), variant: "destructive" });
         return;
       }
       setPhotoUploading(true);
@@ -442,13 +444,13 @@ export function QuickActions({
         });
         await uploadMediaBytes(intent.bucket, intent.objectPath, photoFile);
         await finalizeMediaUpload(intent.uploadIntentId);
-        toast({ title: "Photo uploaded" });
+        toast({ title: t("quickActions.photo.uploaded") });
         forceClose("photo");
       } catch (error) {
         setPhotoUploading(false);
         toast({
-          title: "Photo upload failed",
-          description: error instanceof Error ? error.message : "Unable to upload the photo.",
+          title: t("quickActions.photo.uploadFailed"),
+          description: error instanceof Error ? error.message : t("quickActions.photo.uploadFailedDescription"),
           variant: "destructive",
         });
       }
@@ -456,7 +458,7 @@ export function QuickActions({
     }
 
     const mediaId = `media-${Date.now()}`;
-    const caption = photoDescription.trim() || photoFile?.name || "Photo";
+    const caption = photoDescription.trim() || photoFile?.name || t("quickActions.photo.defaultCaption");
     addMedia({
       id: mediaId,
       project_id: projectId,
@@ -483,7 +485,7 @@ export function QuickActions({
       timestamp: new Date().toISOString(),
       payload: { caption },
     });
-    toast({ title: "Photo uploaded" });
+    toast({ title: t("quickActions.photo.uploaded") });
     forceClose("photo");
   };
 
@@ -497,18 +499,18 @@ export function QuickActions({
   return (
     <>
       <div className="glass-elevated rounded-card p-sp-2 flex items-center gap-2 flex-wrap">
-        <span className="text-caption text-muted-foreground mr-auto">Quick actions</span>
+        <span className="text-caption text-muted-foreground mr-auto">{t("quickActions.label")}</span>
         <Button size="sm" variant="outline" className="text-caption h-7" disabled={!canCreateDocument} onClick={() => setOpenModal("document")}>
-          <FileText className="h-3 w-3 mr-1" /> Document
+          <FileText className="h-3 w-3 mr-1" /> {t("quickActions.document")}
         </Button>
         {canCreatePhoto && (
           <Button size="sm" variant="outline" className="text-caption h-7" onClick={() => setOpenModal("photo")}>
-            <ImagePlus className="h-3 w-3 mr-1" /> Photo
+            <ImagePlus className="h-3 w-3 mr-1" /> {t("quickActions.photo")}
           </Button>
         )}
         {canManageProcurement && (
           <Button size="sm" variant="outline" className="text-caption h-7" onClick={() => setReceiveOrderOpen(true)}>
-            Receive order
+            {t("quickActions.receiveOrder")}
           </Button>
         )}
 
@@ -522,11 +524,11 @@ export function QuickActions({
                   className="text-caption h-7"
                   onClick={() => setOpenModal("credits")}
                 >
-                  <Coins className="h-3 w-3 mr-1" /> Credits
+                  <Coins className="h-3 w-3 mr-1" /> {t("quickActions.credits")}
                 </Button>
               </span>
             </TooltipTrigger>
-            <TooltipContent>Only owner or co-owner can grant or purchase credits</TooltipContent>
+            <TooltipContent>{t("quickActions.creditsTooltip")}</TooltipContent>
           </Tooltip>
         )}
       </div>
@@ -549,28 +551,28 @@ export function QuickActions({
           }}
         >
           <DialogHeader>
-            <DialogTitle>Create task</DialogTitle>
-            <DialogDescription>Add a task with checklist items and assignment.</DialogDescription>
+            <DialogTitle>{t("quickActions.task.title")}</DialogTitle>
+            <DialogDescription>{t("quickActions.task.description")}</DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-1">
             <div className="space-y-1">
-              <label className="text-body-sm font-medium text-foreground">Title</label>
-              <Input value={taskTitle} onChange={(event) => setTaskTitle(event.target.value)} placeholder="Task title" />
+              <label className="text-body-sm font-medium text-foreground">{t("quickActions.task.titleLabel")}</label>
+              <Input value={taskTitle} onChange={(event) => setTaskTitle(event.target.value)} placeholder={t("quickActions.task.titlePlaceholder")} />
             </div>
             <div className="space-y-1">
-              <label className="text-body-sm font-medium text-foreground">Description</label>
+              <label className="text-body-sm font-medium text-foreground">{t("quickActions.task.descriptionLabel")}</label>
               <Textarea
                 value={taskDescription}
                 onChange={(event) => setTaskDescription(event.target.value)}
-                placeholder="Task description"
+                placeholder={t("quickActions.task.descriptionPlaceholder")}
                 rows={3}
               />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div className="space-y-1">
-                <label className="text-body-sm font-medium text-foreground">Stage</label>
+                <label className="text-body-sm font-medium text-foreground">{t("quickActions.task.stageLabel")}</label>
                 <Select value={taskStageId} onValueChange={setTaskStageId}>
-                  <SelectTrigger><SelectValue placeholder="Select stage" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t("quickActions.task.stagePlaceholder")} /></SelectTrigger>
                   <SelectContent>
                     {stages.map((stage) => (
                       <SelectItem key={stage.id} value={stage.id}>{stage.title}</SelectItem>
@@ -579,21 +581,21 @@ export function QuickActions({
                 </Select>
               </div>
               <div className="space-y-1">
-                <label className="text-body-sm font-medium text-foreground">Status</label>
+                <label className="text-body-sm font-medium text-foreground">{t("quickActions.task.statusLabel")}</label>
                 <Select value={taskStatus} onValueChange={(value) => setTaskStatus(value as TaskStatus)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {TASK_STATUSES.map((status) => (
-                      <SelectItem key={status} value={status}>{TASK_STATUS_LABEL[status]}</SelectItem>
+                      <SelectItem key={status} value={status}>{t(TASK_STATUS_KEY[status])}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
             </div>
             <div className="space-y-1">
-              <label className="text-body-sm font-medium text-foreground">Assign participant</label>
+              <label className="text-body-sm font-medium text-foreground">{t("quickActions.task.assigneeLabel")}</label>
               <Select value={taskAssignee} onValueChange={setTaskAssignee}>
-                <SelectTrigger><SelectValue placeholder="Select participant" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t("quickActions.task.assigneePlaceholder")} /></SelectTrigger>
                 <SelectContent>
                   {memberOptions.map(({ member, user }) => (
                     <SelectItem key={member.user_id} value={member.user_id}>{user?.name ?? member.user_id}</SelectItem>
@@ -604,7 +606,7 @@ export function QuickActions({
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-body-sm font-medium text-foreground">Checklist</label>
+                <label className="text-body-sm font-medium text-foreground">{t("quickActions.task.checklistLabel")}</label>
               </div>
               <div className="space-y-1.5">
                 {taskChecklistItems.map((item) => (
@@ -632,7 +634,7 @@ export function QuickActions({
                   <Input
                     value={taskChecklistInput}
                     onChange={(event) => setTaskChecklistInput(event.target.value)}
-                    placeholder="Add checklist item"
+                    placeholder={t("quickActions.task.addChecklistPlaceholder")}
                     onKeyDown={(event) => {
                       if (event.key === "Enter") {
                         event.preventDefault();
@@ -640,7 +642,7 @@ export function QuickActions({
                       }
                     }}
                   />
-                  <Button size="sm" variant="outline" onClick={handleAddChecklistItem}>Add</Button>
+                  <Button size="sm" variant="outline" onClick={handleAddChecklistItem}>{t("quickActions.task.addChecklistButton")}</Button>
                 </div>
               </div>
             </div>
@@ -649,21 +651,21 @@ export function QuickActions({
               <TooltipTrigger asChild>
                 <span className="inline-flex">
                   <Button type="button" variant="outline" size="sm" disabled>
-                    Attach photo
+                    {t("quickActions.task.attachPhoto")}
                   </Button>
                 </span>
               </TooltipTrigger>
-              <TooltipContent>Add photos after task creation.</TooltipContent>
+              <TooltipContent>{t("quickActions.task.attachPhotoTooltip")}</TooltipContent>
             </Tooltip>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => requestClose("task")}>Close</Button>
+            <Button variant="outline" onClick={() => requestClose("task")}>{t("quickActions.task.close")}</Button>
             <Button
               className="bg-accent text-accent-foreground hover:bg-accent/90"
               onClick={handleCreateTask}
               disabled={!taskTitle.trim() || !taskStageId}
             >
-              Create
+              {t("quickActions.task.create")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -687,11 +689,11 @@ export function QuickActions({
           }}
         >
           <DialogHeader>
-            <DialogTitle>Document</DialogTitle>
+            <DialogTitle>{t("quickActions.document.title")}</DialogTitle>
             <DialogDescription>
               {isSupabaseMode
-                ? "Create a document record. File bytes and authored document text are coming soon in Supabase mode."
-                : "Upload a document or create one manually."}
+                ? t("quickActions.document.supabaseDescription")
+                : t("quickActions.document.defaultDescription")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-1">
@@ -703,7 +705,7 @@ export function QuickActions({
                   className={documentMode === "upload" ? "bg-accent text-accent-foreground hover:bg-accent/90" : ""}
                   onClick={() => setDocumentMode("upload")}
                 >
-                  Upload
+                  {t("quickActions.document.modeUpload")}
                 </Button>
                 <Button
                   size="sm"
@@ -711,20 +713,20 @@ export function QuickActions({
                   className={documentMode === "manual" ? "bg-accent text-accent-foreground hover:bg-accent/90" : ""}
                   onClick={() => setDocumentMode("manual")}
                 >
-                  Manual
+                  {t("quickActions.document.modeManual")}
                 </Button>
               </div>
             )}
             {isSupabaseMode && (
               <div className="rounded-panel bg-muted/50 p-2 text-caption text-muted-foreground">
-                Supabase mode saves the document record only. File contents, download, and sharing are coming soon.
+                {t("quickActions.document.supabaseBanner")}
               </div>
             )}
 
             {documentMode === "upload" ? (
               <div className="space-y-2">
                 <div className="space-y-1">
-                  <label className="text-body-sm font-medium text-foreground">File</label>
+                  <label className="text-body-sm font-medium text-foreground">{t("quickActions.document.fileLabel")}</label>
                   <Input
                     type="file"
                     onChange={(event) => setDocumentFile(event.target.files?.[0] ?? null)}
@@ -732,7 +734,7 @@ export function QuickActions({
                 </div>
                 {isSupabaseMode ? (
                   <p className="text-caption text-muted-foreground">
-                    Choose a file name to create the document record now. The file itself will not upload yet.
+                    {t("quickActions.document.supabaseFileHint")}
                   </p>
                 ) : (
                   <label className="flex items-center gap-2 text-body-sm text-foreground">
@@ -741,7 +743,7 @@ export function QuickActions({
                       onCheckedChange={(checked) => setDocumentAiScan(!!checked)}
                     />
                     <span className="inline-flex items-center gap-1">
-                      AI scan
+                      {t("quickActions.document.aiScan")}
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <button type="button" className="text-muted-foreground hover:text-foreground">
@@ -749,7 +751,7 @@ export function QuickActions({
                           </button>
                         </TooltipTrigger>
                         <TooltipContent>
-                          Let AI scan the doc, create tasks, checklists, add media.
+                          {t("quickActions.document.aiScanTooltip")}
                         </TooltipContent>
                       </Tooltip>
                     </span>
@@ -759,26 +761,26 @@ export function QuickActions({
             ) : (
               <div className="space-y-2">
                 <div className="space-y-1">
-                  <label className="text-body-sm font-medium text-foreground">Title</label>
+                  <label className="text-body-sm font-medium text-foreground">{t("quickActions.document.titleFieldLabel")}</label>
                   <Input
                     value={manualDocTitle}
                     onChange={(event) => setManualDocTitle(event.target.value)}
-                    placeholder="Document title"
+                    placeholder={t("quickActions.document.titleFieldPlaceholder")}
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-body-sm font-medium text-foreground">Description</label>
+                  <label className="text-body-sm font-medium text-foreground">{t("quickActions.document.descriptionFieldLabel")}</label>
                   <Textarea
                     value={manualDocDescription}
                     onChange={(event) => setManualDocDescription(event.target.value)}
-                    placeholder="Describe what this document should include"
+                    placeholder={t("quickActions.document.descriptionFieldPlaceholder")}
                     rows={3}
                   />
                 </div>
                 <label className="flex items-center gap-2 text-body-sm text-foreground">
                   <Checkbox checked={manualDocAi} onCheckedChange={(checked) => setManualDocAi(!!checked)} />
                   <span className="inline-flex items-center gap-1">
-                    Create with AI
+                    {t("quickActions.document.createWithAi")}
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <button type="button" className="text-muted-foreground hover:text-foreground">
@@ -786,7 +788,7 @@ export function QuickActions({
                         </button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        Let AI create a document based on your description.
+                        {t("quickActions.document.createWithAiTooltip")}
                       </TooltipContent>
                     </Tooltip>
                   </span>
@@ -794,7 +796,7 @@ export function QuickActions({
               </div>
             )}
             <div className="space-y-2">
-              <Label className="text-body-sm font-medium text-foreground">Visibility</Label>
+              <Label className="text-body-sm font-medium text-foreground">{t("quickActions.document.visibilityLabel")}</Label>
               <RadioGroup
                 value={docVisibilityClass}
                 onValueChange={(v) => setDocVisibilityClass(v as DocMediaVisibilityClass)}
@@ -802,7 +804,7 @@ export function QuickActions({
               >
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="shared_project" id="qa-doc-vis-shared" />
-                  <Label htmlFor="qa-doc-vis-shared" className="font-normal cursor-pointer">Shared</Label>
+                  <Label htmlFor="qa-doc-vis-shared" className="font-normal cursor-pointer">{t("quickActions.document.visibilityShared")}</Label>
                 </div>
                 <div className="flex items-start space-x-2">
                   <RadioGroupItem value="internal" id="qa-doc-vis-internal" disabled={!canSelectInternalUpload} />
@@ -811,10 +813,10 @@ export function QuickActions({
                       htmlFor="qa-doc-vis-internal"
                       className={`font-normal ${canSelectInternalUpload ? "cursor-pointer" : "text-muted-foreground"}`}
                     >
-                      Internal
+                      {t("quickActions.document.visibilityInternal")}
                     </Label>
                     {!canSelectInternalUpload && (
-                      <p className="text-caption text-muted-foreground">Not available for your internal-docs access.</p>
+                      <p className="text-caption text-muted-foreground">{t("quickActions.document.visibilityInternalUnavailable")}</p>
                     )}
                   </div>
                 </div>
@@ -822,7 +824,7 @@ export function QuickActions({
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => requestClose("document")}>Close</Button>
+            <Button variant="outline" onClick={() => requestClose("document")}>{t("quickActions.document.close")}</Button>
             <Button
               className="bg-accent text-accent-foreground hover:bg-accent/90"
               onClick={handleCreateDocument}
@@ -830,7 +832,7 @@ export function QuickActions({
                 ? (isSupabaseMode || !manualDocTitle.trim())
                 : !documentFile}
             >
-              Save
+              {t("quickActions.document.save")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -854,12 +856,12 @@ export function QuickActions({
           }}
         >
           <DialogHeader>
-            <DialogTitle>Photo</DialogTitle>
-            <DialogDescription>Upload a photo and optionally link it to a task.</DialogDescription>
+            <DialogTitle>{t("quickActions.photo.title")}</DialogTitle>
+            <DialogDescription>{t("quickActions.photo.description")}</DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-1">
             <div className="space-y-1">
-              <label className="text-body-sm font-medium text-foreground">Upload photo</label>
+              <label className="text-body-sm font-medium text-foreground">{t("quickActions.photo.uploadLabel")}</label>
               <Input
                 type="file"
                 accept="image/*"
@@ -867,30 +869,30 @@ export function QuickActions({
               />
             </div>
             <div className="space-y-1">
-              <label className="text-body-sm font-medium text-foreground">Comment</label>
+              <label className="text-body-sm font-medium text-foreground">{t("quickActions.photo.commentLabel")}</label>
               <Textarea
                 value={photoDescription}
                 onChange={(event) => setPhotoDescription(event.target.value)}
-                placeholder="Photo description"
+                placeholder={t("quickActions.photo.commentPlaceholder")}
                 rows={3}
               />
             </div>
 
             {!photoCreateTask && (
               <div className="space-y-1">
-                <label className="text-body-sm font-medium text-foreground">Attach to task (optional)</label>
+                <label className="text-body-sm font-medium text-foreground">{t("quickActions.photo.attachLabel")}</label>
                 <Popover open={taskPickerOpen} onOpenChange={setTaskPickerOpen}>
                   <PopoverTrigger asChild>
                     <Button variant="outline" className="w-full justify-between">
-                      <span className="truncate">{selectedTaskTitle || "Select a task"}</span>
+                      <span className="truncate">{selectedTaskTitle || t("quickActions.photo.selectTask")}</span>
                       <Check className="h-3.5 w-3.5 opacity-50" />
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="p-0 w-[320px]" align="start">
                     <Command>
-                      <CommandInput placeholder="Search task..." />
+                      <CommandInput placeholder={t("quickActions.photo.searchTask")} />
                       <CommandList>
-                        <CommandEmpty>No tasks found.</CommandEmpty>
+                        <CommandEmpty>{t("quickActions.photo.noTasks")}</CommandEmpty>
                         <CommandGroup>
                           {tasks.map((task) => (
                             <CommandItem
@@ -914,14 +916,14 @@ export function QuickActions({
 
             <label className="flex items-center gap-2 text-body-sm text-foreground">
               <Checkbox checked={photoCreateTask} onCheckedChange={(checked) => setPhotoCreateTask(!!checked)} />
-              Create a task
+              {t("quickActions.photo.createTask")}
             </label>
 
             {photoCreateTask && (
               <div className="space-y-1">
-                <label className="text-body-sm font-medium text-foreground">Stage</label>
+                <label className="text-body-sm font-medium text-foreground">{t("quickActions.photo.stageLabel")}</label>
                 <Select value={photoTaskStageId} onValueChange={setPhotoTaskStageId}>
-                  <SelectTrigger><SelectValue placeholder="Select stage" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t("quickActions.photo.stagePlaceholder")} /></SelectTrigger>
                   <SelectContent>
                     {stages.map((stage) => (
                       <SelectItem key={stage.id} value={stage.id}>{stage.title}</SelectItem>
@@ -931,7 +933,7 @@ export function QuickActions({
               </div>
             )}
             <div className="space-y-2">
-              <Label className="text-body-sm font-medium text-foreground">Visibility</Label>
+              <Label className="text-body-sm font-medium text-foreground">{t("quickActions.photo.visibilityLabel")}</Label>
               <RadioGroup
                 value={photoVisibilityClass}
                 onValueChange={(v) => setPhotoVisibilityClass(v as DocMediaVisibilityClass)}
@@ -940,7 +942,7 @@ export function QuickActions({
               >
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="shared_project" id="qa-photo-vis-shared" />
-                  <Label htmlFor="qa-photo-vis-shared" className="font-normal cursor-pointer">Shared</Label>
+                  <Label htmlFor="qa-photo-vis-shared" className="font-normal cursor-pointer">{t("quickActions.photo.visibilityShared")}</Label>
                 </div>
                 <div className="flex items-start space-x-2">
                   <RadioGroupItem value="internal" id="qa-photo-vis-internal" disabled={!canSelectInternalUpload} />
@@ -949,10 +951,10 @@ export function QuickActions({
                       htmlFor="qa-photo-vis-internal"
                       className={`font-normal ${canSelectInternalUpload ? "cursor-pointer" : "text-muted-foreground"}`}
                     >
-                      Internal
+                      {t("quickActions.photo.visibilityInternal")}
                     </Label>
                     {!canSelectInternalUpload && (
-                      <p className="text-caption text-muted-foreground">Not available for your internal-docs access.</p>
+                      <p className="text-caption text-muted-foreground">{t("quickActions.photo.visibilityInternalUnavailable")}</p>
                     )}
                   </div>
                 </div>
@@ -960,13 +962,13 @@ export function QuickActions({
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => requestClose("photo")} disabled={photoUploading}>Close</Button>
+            <Button variant="outline" onClick={() => requestClose("photo")} disabled={photoUploading}>{t("quickActions.photo.close")}</Button>
             <Button
               className="bg-accent text-accent-foreground hover:bg-accent/90"
               onClick={handleCreatePhoto}
               disabled={photoUploading || (isSupabaseMode ? !photoFile : (!photoFile && !photoDescription.trim()))}
             >
-              {photoUploading ? "Uploading…" : "Upload"}
+              {photoUploading ? t("quickActions.photo.uploading") : t("quickActions.photo.upload")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -990,26 +992,26 @@ export function QuickActions({
           }}
         >
           <DialogHeader>
-            <DialogTitle>Credits</DialogTitle>
-            <DialogDescription>Select a credits pack.</DialogDescription>
+            <DialogTitle>{t("quickActions.credits.title")}</DialogTitle>
+            <DialogDescription>{t("quickActions.credits.description")}</DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-1">
             <div className="space-y-1">
-              <label className="text-body-sm font-medium text-foreground">Pack</label>
+              <label className="text-body-sm font-medium text-foreground">{t("quickActions.credits.packLabel")}</label>
               <Select value={creditPack} onValueChange={setCreditPack}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {CREDIT_PACKS.map((pack) => (
-                    <SelectItem key={pack} value={String(pack)}>{pack} credits</SelectItem>
+                    <SelectItem key={pack} value={String(pack)}>{t("quickActions.credits.packOption", { pack })}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => requestClose("credits")}>Close</Button>
+            <Button variant="outline" onClick={() => requestClose("credits")}>{t("quickActions.credits.close")}</Button>
             <Button className="bg-accent text-accent-foreground hover:bg-accent/90" onClick={handlePurchaseCredits}>
-              Purchase credits
+              {t("quickActions.credits.purchase")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1018,9 +1020,9 @@ export function QuickActions({
       <ConfirmModal
         open={!!discardModal}
         onOpenChange={(open) => !open && setDiscardModal(null)}
-        title="Discard changes?"
-        description="You have unsaved changes in this dialog."
-        confirmLabel="Discard"
+        title={t("quickActions.discard.title")}
+        description={t("quickActions.discard.description")}
+        confirmLabel={t("quickActions.discard.confirm")}
         onConfirm={() => {
           if (!discardModal) return;
           forceClose(discardModal);

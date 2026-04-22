@@ -1,4 +1,5 @@
 import { Outlet, Navigate, useParams, useLocation, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { AlertTriangle } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -34,6 +35,7 @@ function ProjectLayoutSkeleton() {
 }
 
 export default function ProjectLayout() {
+  const { t } = useTranslation();
   const { id } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -61,8 +63,8 @@ export default function ProjectLayout() {
       <div className="flex-1 p-sp-3">
         <EmptyState
           icon={AlertTriangle}
-          title="Project not found"
-          description="This project does not exist."
+          title={t("projectLayout.notFound.title")}
+          description={t("projectLayout.notFound.description")}
         />
       </div>
     );
@@ -73,9 +75,9 @@ export default function ProjectLayout() {
       <div className="flex-1 p-sp-3">
         <EmptyState
           icon={AlertTriangle}
-          title="No access"
-          description="You do not have access to this project section."
-          actionLabel="Back to dashboard"
+          title={t("projectLayout.noAccess.title")}
+          description={t("projectLayout.noAccess.description")}
+          actionLabel={t("projectLayout.noAccess.backToDashboard")}
           onAction={() => navigate(`/project/${id}/dashboard`)}
         />
       </div>

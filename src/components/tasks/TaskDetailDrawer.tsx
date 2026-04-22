@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,11 +11,11 @@ import { useToast } from "@/hooks/use-toast";
 import { Send, CheckSquare } from "lucide-react";
 import type { Task, TaskStatus, ChecklistItem } from "@/types/entities";
 
-const statusLabel: Record<string, string> = {
-  not_started: "Not started",
-  in_progress: "In progress",
-  done: "Done",
-  blocked: "Blocked",
+const statusLabelKey: Record<string, string> = {
+  not_started: "tasks.status.not_started",
+  in_progress: "tasks.status.in_progress",
+  done: "tasks.status.done",
+  blocked: "tasks.status.blocked",
 };
 
 const statuses: TaskStatus[] = ["not_started", "in_progress", "done", "blocked"];
@@ -27,14 +28,18 @@ interface Props {
 }
 
 export function TaskDetailDrawer({ task, open, onOpenChange, canEdit }: Props) {
+  const { t, i18n } = useTranslation();
   const { toast } = useToast();
   const [commentText, setCommentText] = useState("");
 
   const handleStatusChange = useCallback((status: TaskStatus) => {
     if (!task) return;
     updateTask(task.id, { status });
-    toast({ title: "Task updated", description: `Status changed to ${statusLabel[status]}` });
-  }, [task, toast]);
+    toast({
+      title: t("tasks.drawer.taskUpdated"),
+      description: t("tasks.drawer.statusChanged", { label: t(statusLabelKey[status]) }),
+    });
+  }, [task, toast, t]);
 
   const handleChecklistToggle = useCallback((itemId: string) => {
     if (!task) return;
@@ -48,8 +53,8 @@ export function TaskDetailDrawer({ task, open, onOpenChange, canEdit }: Props) {
     if (!task || !commentText.trim()) return;
     addComment(task.id, commentText.trim());
     setCommentText("");
-    toast({ title: "Comment added" });
-  }, [task, commentText, toast]);
+    toast({ title: t("tasks.toast.commentAdded") });
+  }, [task, commentText, toast, t]);
 
   if (!task) return null;
 
@@ -66,7 +71,7 @@ export function TaskDetailDrawer({ task, open, onOpenChange, canEdit }: Props) {
         <div className="space-y-sp-3 mt-sp-3">
           {/* Status */}
           <div>
-            <p className="text-caption text-muted-foreground mb-1">Status</p>
+            <p className="text-caption text-muted-foreground mb-1">{t("tasks.drawer.statusLabel")}</p>
             <div className="flex flex-wrap gap-1.5">
               {statuses.map((s) => (
                 <button
@@ -79,7 +84,7 @@ export function TaskDetailDrawer({ task, open, onOpenChange, canEdit }: Props) {
                       : "bg-muted text-muted-foreground hover:bg-muted/80"
                   } disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
-                  {statusLabel[s]}
+                  {t(statusLabelKey[s])}
                 </button>
               ))}
             </div>
@@ -87,14 +92,14 @@ export function TaskDetailDrawer({ task, open, onOpenChange, canEdit }: Props) {
 
           {/* Description */}
           <div>
-            <p className="text-caption text-muted-foreground mb-1">Description</p>
+            <p className="text-caption text-muted-foreground mb-1">{t("tasks.drawer.descriptionLabel")}</p>
             <p className="text-body-sm text-foreground">{task.description}</p>
           </div>
 
           {/* Assignee */}
           {assignee && (
             <div>
-              <p className="text-caption text-muted-foreground mb-1">Assignee</p>
+              <p className="text-caption text-muted-foreground mb-1">{t("tasks.drawer.assigneeLabel")}</p>
               <div className="flex items-center gap-2">
                 <div className="h-6 w-6 rounded-full bg-accent/20 flex items-center justify-center">
                   <span className="text-[10px] font-semibold text-accent">{assignee.name.charAt(0)}</span>
@@ -108,7 +113,7 @@ export function TaskDetailDrawer({ task, open, onOpenChange, canEdit }: Props) {
           {task.checklist.length > 0 && (
             <div>
               <p className="text-caption text-muted-foreground mb-1 flex items-center gap-1">
-                <CheckSquare className="h-3.5 w-3.5" /> Checklist ({checkDone}/{task.checklist.length})
+                <CheckSquare className="h-3.5 w-3.5" /> {t("tasks.drawer.checklistLabel")} ({checkDone}/{task.checklist.length})
               </p>
               <div className="space-y-1">
                 {task.checklist.map((item) => (
@@ -132,16 +137,16 @@ export function TaskDetailDrawer({ task, open, onOpenChange, canEdit }: Props) {
 
           {/* Comments */}
           <div>
-            <p className="text-caption text-muted-foreground mb-1">Comments ({task.comments.length})</p>
+            <p className="text-caption text-muted-foreground mb-1">{t("tasks.drawer.commentsLabel")} ({task.comments.length})</p>
             <div className="space-y-1.5 mb-2">
               {task.comments.map((c) => {
                 const author = getUserById(c.author_id);
                 return (
                   <div key={c.id} className="glass rounded-panel p-sp-1 px-sp-2">
                     <div className="flex items-center gap-1.5 mb-0.5">
-                      <span className="text-caption font-medium text-foreground">{author?.name ?? "Unknown"}</span>
+                      <span className="text-caption font-medium text-foreground">{author?.name ?? t("common.unknown")}</span>
                       <span className="text-[10px] text-muted-foreground">
-                        {new Date(c.created_at).toLocaleDateString()}
+                        {new Date(c.created_at).toLocaleDateString(i18n.language)}
                       </span>
                     </div>
                     <p className="text-caption text-foreground">{c.text}</p>
@@ -154,7 +159,7 @@ export function TaskDetailDrawer({ task, open, onOpenChange, canEdit }: Props) {
                 <Input
                   value={commentText}
                   onChange={(e) => setCommentText(e.target.value)}
-                  placeholder="Add a comment..."
+                  placeholder={t("tasks.drawer.commentPlaceholder")}
                   className="text-caption h-8"
                   onKeyDown={(e) => e.key === "Enter" && handleAddComment()}
                 />

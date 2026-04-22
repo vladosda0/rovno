@@ -296,7 +296,7 @@ describe("ProjectParticipants", () => {
     fireEvent.click(comboBoxes[2]);
     fireEvent.click(await screen.findByText("Finance summary"));
 
-    expect(within(dialog).getByText("Для подрядчика заданы нестандартные параметры доступа")).toBeInTheDocument();
+    expect(within(dialog).getByText("Contractor has non-standard access settings")).toBeInTheDocument();
   });
 
   describe("Invite email delivery (Supabase)", () => {

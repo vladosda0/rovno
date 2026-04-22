@@ -36,7 +36,8 @@ describe("PreferencesPanel", () => {
 
     expect(await screen.findByText("₽ Russian Ruble (RUB)")).toBeInTheDocument();
     expect(screen.getByText("Metric (m, m², kg)")).toBeInTheDocument();
-    expect(screen.getByText("Русский")).toBeInTheDocument();
+    // "Русский" appears in both the Interface Language and the AI output language selects.
+    expect(screen.getAllByText("Русский").length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole("button", { name: /save preferences/i }));
 

@@ -6,42 +6,43 @@ import type {
   ViewerRegime,
 } from "@/types/entities";
 
+// All label maps now hold i18n keys. Callers must translate via useTranslation's t().
 export const roleLabels: Record<MemberRole, string> = {
-  owner: "Owner",
-  co_owner: "Co-owner",
-  contractor: "Contractor",
-  viewer: "Viewer",
+  owner: "participants.role.owner",
+  co_owner: "participants.role.coOwner",
+  contractor: "participants.role.contractor",
+  viewer: "participants.role.viewer",
 };
 
 export const roleDescriptions: Record<MemberRole, string> = {
-  owner: "Primary project owner access.",
-  co_owner: "Shared project management access.",
-  contractor: "Working contributor access.",
-  viewer: "Read-only viewer access.",
+  owner: "participants.roleDescription.owner",
+  co_owner: "participants.roleDescription.coOwner",
+  contractor: "participants.roleDescription.contractor",
+  viewer: "participants.roleDescription.viewer",
 };
 
 export const aiAccessLabels: Record<AIAccess, string> = {
-  none: "No AI",
-  consult_only: "Consult only",
-  project_pool: "Project pool",
+  none: "participants.aiAccess.none",
+  consult_only: "participants.aiAccess.consultOnly",
+  project_pool: "participants.aiAccess.projectPool",
 };
 
 export const financeVisibilityLabels: Record<FinanceVisibility, string> = {
-  none: "No finance visibility",
-  summary: "Finance summary",
-  detail: "Full finance detail",
+  none: "participants.financeVisibility.none",
+  summary: "participants.financeVisibility.summary",
+  detail: "participants.financeVisibility.detail",
 };
 
 export const internalDocsVisibilityLabels: Record<InternalDocsVisibility, string> = {
-  none: "No internal docs & media",
-  view: "View internal docs & media",
-  edit: "Edit internal docs & media",
+  none: "participants.internalDocs.none",
+  view: "participants.internalDocs.view",
+  edit: "participants.internalDocs.edit",
 };
 
 export const viewerRegimeLabels: Record<ViewerRegime, string> = {
-  contractor: "Contractor",
-  client: "Client",
-  build_myself: "Build myself",
+  contractor: "participants.viewerRegime.contractor",
+  client: "participants.viewerRegime.client",
+  build_myself: "participants.viewerRegime.buildMyself",
 };
 
 export const MEMBER_INVITE_ROLES: readonly MemberRole[] = ["co_owner", "contractor", "viewer"];
@@ -70,6 +71,10 @@ export type NonStandardAccessSummary = {
   title: string;
   lines: string[];
 };
+
+// Minimal translator signature — matches react-i18next's t() without requiring an import
+// that would add coupling between the policy module and i18n infrastructure at type-check time.
+export type Translator = (key: string, options?: Record<string, unknown>) => string;
 
 export function getInviteRoleOptions(actorRole: MemberRole): MemberRole[] {
   return INVITE_ROLE_OPTIONS_BY_ACTOR[actorRole];
@@ -118,54 +123,54 @@ export function getInternalDocsVisibilityOptions(
   return sliceRank(INTERNAL_DOCS_VISIBILITY_RANK, actorInternalDocsVisibility, ["none"]);
 }
 
-export function describePermissionSummary(input: PermissionSummaryInput): string[] {
+export function describePermissionSummary(input: PermissionSummaryInput, t: Translator): string[] {
   const summary = [
-    roleDescriptions[input.role],
-    `AI: ${aiAccessLabels[input.aiAccess]}.`,
-    `Finance: ${financeVisibilityLabels[input.financeVisibility ?? "none"]}.`,
-    `Internal docs & media: ${internalDocsVisibilityLabels[input.internalDocsVisibility ?? "none"]}.`,
-    `Credit limit: ${input.creditLimit}.`,
+    t(roleDescriptions[input.role]),
+    t("participants.summary.ai", { value: t(aiAccessLabels[input.aiAccess]) }),
+    t("participants.summary.finance", { value: t(financeVisibilityLabels[input.financeVisibility ?? "none"]) }),
+    t("participants.summary.internalDocs", { value: t(internalDocsVisibilityLabels[input.internalDocsVisibility ?? "none"]) }),
+    t("participants.summary.creditLimit", { value: input.creditLimit }),
   ];
 
   if (input.role === "viewer") {
-    summary.push(`Viewer regime: ${viewerRegimeLabels[input.viewerRegime ?? "client"]}.`);
+    summary.push(t("participants.summary.viewerRegime", { value: t(viewerRegimeLabels[input.viewerRegime ?? "client"]) }));
   }
 
   return summary;
 }
 
-export function getPermissionWarnings(input: PermissionSummaryInput): string[] {
+export function getPermissionWarnings(input: PermissionSummaryInput, t: Translator): string[] {
   const warnings: string[] = [];
   const financeVisibility = input.financeVisibility ?? getDefaultFinanceVisibility(input.role);
 
   if (input.role === "viewer" && financeVisibility !== getDefaultFinanceVisibility("viewer")) {
-    warnings.push("Вы открываете пользователю нестандартный доступ.");
-    warnings.push("Пользователь получит доступ к важным разделам или чувствительным данным проекта.");
-    warnings.push("Перепроверьте параметры перед сохранением / отправкой инвайта.");
+    warnings.push(t("participants.warning.viewerNonStandard1"));
+    warnings.push(t("participants.warning.viewerNonStandard2"));
+    warnings.push(t("participants.warning.viewerNonStandard3"));
     return warnings;
   }
 
   if (input.role === "contractor" && financeVisibility !== getDefaultFinanceVisibility("contractor")) {
-    warnings.push("Вы расширяете доступ подрядчика за пределы стандартной роли.");
-    warnings.push("Пользователь сможет видеть или изменять дополнительные разделы проекта.");
-    warnings.push("Перепроверьте параметры перед сохранением / отправкой инвайта.");
+    warnings.push(t("participants.warning.contractorNonStandard1"));
+    warnings.push(t("participants.warning.contractorNonStandard2"));
+    warnings.push(t("participants.warning.contractorNonStandard3"));
     return warnings;
   }
 
   if (input.role === "co_owner") {
-    warnings.push("Co-owners can manage the project in the current app flow.");
+    warnings.push(t("participants.warning.coOwnerManage"));
   }
 
   if (input.aiAccess === "project_pool") {
-    warnings.push("Project pool AI access can spend project credits.");
+    warnings.push(t("participants.warning.aiProjectPool"));
   }
 
   if (financeVisibility === "detail") {
-    warnings.push("Full finance detail exposes budget and cost line items.");
+    warnings.push(t("participants.warning.financeDetail"));
   }
 
   if ((input.internalDocsVisibility ?? "none") === "edit") {
-    warnings.push("Edit access allows changing internal documents and media.");
+    warnings.push(t("participants.warning.docsEdit"));
   }
 
   return warnings;
@@ -187,24 +192,21 @@ export function hasNonStandardSupportedAccess(input: Pick<PermissionSummaryInput
 
 export function getNonStandardAccessSummary(
   input: Pick<PermissionSummaryInput, "role" | "financeVisibility">,
+  t: Translator,
 ): NonStandardAccessSummary | null {
   if (!hasNonStandardSupportedAccess(input)) return null;
 
   if (input.role === "viewer") {
     return {
-      title: "Участнику заданы нестандартные параметры доступа",
-      lines: [
-        "Проверьте расширение финансовой видимости перед сохранением / отправкой инвайта.",
-      ],
+      title: t("participants.nonStandard.viewer.title"),
+      lines: [t("participants.nonStandard.viewer.line1")],
     };
   }
 
   if (input.role === "contractor") {
     return {
-      title: "Для подрядчика заданы нестандартные параметры доступа",
-      lines: [
-        "Проверьте расширение финансовой видимости перед сохранением / отправкой инвайта.",
-      ],
+      title: t("participants.nonStandard.contractor.title"),
+      lines: [t("participants.nonStandard.contractor.line1")],
     };
   }
 

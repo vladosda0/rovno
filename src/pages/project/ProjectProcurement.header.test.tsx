@@ -97,7 +97,7 @@ describe("ProjectProcurement header redesign", () => {
 
     renderProjectProcurement(projectId);
 
-    expect(screen.getByText("Procurement will open very soon")).toBeInTheDocument();
+    expect(screen.getByText("Procurement will appear here soon")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Open Estimate" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Procurement" })).not.toBeInTheDocument();
   });

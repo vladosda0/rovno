@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useCurrentUser, useEvents } from "@/hooks/use-mock-data";
 import { getProject, getStages, getTasks } from "@/data/store";
 import { useEstimateV2FinanceProjectSummaryFromWorkspace } from "@/hooks/use-estimate-v2-data";
@@ -12,6 +13,7 @@ interface ContextInspectorProps {
 }
 
 export function ContextInspector({ projectId }: ContextInspectorProps) {
+  const { t } = useTranslation();
   const user = useCurrentUser();
   const project = getProject(projectId);
   const stages = getStages(projectId);
@@ -41,8 +43,8 @@ export function ContextInspector({ projectId }: ContextInspectorProps) {
   return (
     <div className="glass rounded-card p-2.5 text-[10px] font-mono">
       <div className="flex items-center gap-1 mb-1">
-        <span className="text-caption font-semibold text-muted-foreground">Context Pack</span>
-        <span className="text-[10px] text-accent bg-accent/10 rounded-pill px-1.5">DEV</span>
+        <span className="text-caption font-semibold text-muted-foreground">{t("ai.contextInspector.title")}</span>
+        <span className="text-[10px] text-accent bg-accent/10 rounded-pill px-1.5">{t("ai.contextInspector.devBadge")}</span>
       </div>
       <ScrollArea className="max-h-48">
         <pre className="text-muted-foreground whitespace-pre-wrap break-all leading-relaxed">

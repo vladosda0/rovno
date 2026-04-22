@@ -1,5 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
 import { trackEvent } from "@/lib/analytics";
 import {
@@ -124,22 +125,24 @@ const EMPTY_SYNC_STATE = {
 
 const TABS: ProcurementTab[] = ["requested", "ordered", "in_stock"];
 
-const TAB_META: Record<ProcurementTab, { label: string; className: string }> = {
-  requested: { label: "Requested", className: "bg-warning/15 text-warning-foreground border-warning/30" },
-  ordered: { label: "Ordered", className: "bg-info/15 text-info border-info/25" },
-  in_stock: { label: "In stock", className: "bg-success/15 text-success border-success/25" },
+type Translator = (key: string, options?: Record<string, unknown>) => string;
+
+const TAB_META: Record<ProcurementTab, { labelKey: string; className: string }> = {
+  requested: { labelKey: "procurement.tabs.requested", className: "bg-warning/15 text-warning-foreground border-warning/30" },
+  ordered: { labelKey: "procurement.tabs.ordered", className: "bg-info/15 text-info border-info/25" },
+  in_stock: { labelKey: "procurement.tabs.inStock", className: "bg-success/15 text-success border-success/25" },
 };
 
-function decodeInventoryKeyParts(inventoryKey: string): {
+function decodeInventoryKeyParts(inventoryKey: string, t: Translator): {
   title: string;
   spec: string | null;
   unit: string;
 } {
   const [rawTitle = "", rawSpec = "", rawUnit = ""] = inventoryKey.split("|");
   return {
-    title: rawTitle || "Inventory item",
+    title: rawTitle || t("procurement.inventoryItem.fallback"),
     spec: rawSpec || null,
-    unit: rawUnit || "unit",
+    unit: rawUnit || t("procurement.unit.fallback"),
   };
 }
 
@@ -175,10 +178,10 @@ function writeListState(projectId: string, state: ProcurementListState) {
   window.sessionStorage.setItem(listStateKey(projectId), JSON.stringify(state));
 }
 
-function formatDate(value?: string | null): string {
-  if (!value) return "—";
+function formatDate(value: string | null | undefined, dash: string): string {
+  if (!value) return dash;
   const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "—";
+  if (Number.isNaN(parsed.getTime())) return dash;
   return parsed.toLocaleDateString();
 }
 
@@ -205,11 +208,11 @@ function newAttachmentId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
-function orderStatusLabel(status: "draft" | "placed" | "received" | "voided"): string {
-  if (status === "draft") return "Draft";
-  if (status === "placed") return "Ordered";
-  if (status === "voided") return "Voided";
-  return "In stock";
+function orderStatusLabel(status: "draft" | "placed" | "received" | "voided", t: Translator): string {
+  if (status === "draft") return t("procurement.orderStatus.draft");
+  if (status === "placed") return t("procurement.orderStatus.ordered");
+  if (status === "voided") return t("procurement.orderStatus.voided");
+  return t("procurement.orderStatus.inStock");
 }
 
 type OrderedReceivableTarget = {
@@ -241,6 +244,8 @@ type InStockTableRow = {
 };
 
 export default function ProjectProcurement() {
+  const { t } = useTranslation();
+  const dash = "—";
   const { id: projectId, itemId, orderId } = useParams<{ id: string; itemId?: string; orderId?: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -277,9 +282,9 @@ export default function ProjectProcurement() {
   const receiveActionState = seamResolveActionState(perm.seam, "procurement", "receive");
   const useFromStockActionState = seamResolveActionState(perm.seam, "procurement", "use_from_stock");
 
-  const orderControl = actionStateToControlProps(orderActionState, { disabledReason: "You cannot place orders with your current role." });
-  const receiveControl = actionStateToControlProps(receiveActionState, { disabledReason: "You cannot receive orders with your current role." });
-  const useFromStockControl = actionStateToControlProps(useFromStockActionState, { disabledReason: "You cannot use stock with your current role." });
+  const orderControl = actionStateToControlProps(orderActionState, { disabledReason: t("procurement.disabled.orderRole") });
+  const receiveControl = actionStateToControlProps(receiveActionState, { disabledReason: t("procurement.disabled.receiveRole") });
+  const useFromStockControl = actionStateToControlProps(useFromStockActionState, { disabledReason: t("procurement.disabled.useFromStockRole") });
 
   const showProcurementActions = orderControl.visible || receiveControl.visible || useFromStockControl.visible;
   const canEdit = canManageProcurement;
@@ -291,7 +296,7 @@ export default function ProjectProcurement() {
   const useFromStockEffectiveReason = useFromStockControl.disabled
     ? useFromStockControl.disabledReason
     : useFromStockDisabledBySupabase
-      ? "Use from stock is not available yet in this version."
+      ? t("procurement.disabled.useFromStockSupabase")
       : undefined;
   const visibleTabs = TABS;
   const procurementSyncState = estimateSync.domains.procurement;
@@ -604,17 +609,15 @@ export default function ProjectProcurement() {
   );
 
   const headerDataStateHint = useMemo(() => {
-    if (!headerKpis.hasLinkedItems) return "No estimate-linked items.";
+    if (!headerKpis.hasLinkedItems) return t("procurement.hint.noLinkedItems");
     if (headerKpis.missingPlannedPriceCount > 0) {
-      const suffix = headerKpis.missingPlannedPriceCount === 1 ? "item" : "items";
-      return `Missing planned price for ${headerKpis.missingPlannedPriceCount} ${suffix}.`;
+      return t("procurement.hint.missingPlannedPrice", { count: headerKpis.missingPlannedPriceCount });
     }
     if (headerKpis.missingOrderPriceCount > 0) {
-      const suffix = headerKpis.missingOrderPriceCount === 1 ? "line" : "lines";
-      return `Missing ordered price for ${headerKpis.missingOrderPriceCount} ${suffix}.`;
+      return t("procurement.hint.missingOrderPrice", { count: headerKpis.missingOrderPriceCount });
     }
     return null;
-  }, [headerKpis]);
+  }, [headerKpis, t]);
 
   const itemById = useMemo(
     () => new Map(items.map((item) => [item.id, item])),
@@ -859,7 +862,7 @@ export default function ProjectProcurement() {
     const rows = stockRows
       .filter((row) => row.qty > 0)
       .map((row) => {
-        const decoded = decodeInventoryKeyParts(row.inventoryKey);
+        const decoded = decodeInventoryKeyParts(row.inventoryKey, t);
         const location = locationById.get(row.locationId);
         const name = row.title ?? decoded.title;
         const spec = row.spec ?? decoded.spec;
@@ -873,7 +876,7 @@ export default function ProjectProcurement() {
             procurementItemId: matchedItem.id,
             item: matchedItem,
             locationId: row.locationId,
-            locationName: location?.name ?? "Unknown location",
+            locationName: location?.name ?? t("procurement.location.unknown"),
             qty: row.qty,
             orderIds: [],
             lastReceivedAt: null,
@@ -918,7 +921,7 @@ export default function ProjectProcurement() {
             updatedAt: estimateState.project.updatedAt,
           } satisfies ProcurementItemV2,
           locationId: row.locationId,
-          locationName: location?.name ?? "Unknown location",
+          locationName: location?.name ?? t("procurement.location.unknown"),
           qty: row.qty,
           orderIds: [],
           lastReceivedAt: null,
@@ -937,7 +940,7 @@ export default function ProjectProcurement() {
       || (row.item.spec?.toLowerCase().includes(q) ?? false)
       || row.locationName.toLowerCase().includes(q)
     ));
-  }, [canManageProcurement, estimateState.project.updatedAt, items, locations, pid, search, stockRows]);
+  }, [canManageProcurement, estimateState.project.updatedAt, items, locations, pid, search, stockRows, t]);
 
   const visibleInStockRows = inStockRows.length > 0 ? inStockRows : summaryFallbackInStockRows;
 
@@ -1164,10 +1167,10 @@ export default function ProjectProcurement() {
     if (itemIds.length === 0) return;
     if (shouldBlockProcurementLaunchActions) {
       toast({
-        title: hasProcurementSyncError ? "Procurement sync needs attention" : "Procurement is still syncing",
+        title: hasProcurementSyncError ? t("procurement.sync.toast.needsAttention") : t("procurement.sync.toast.stillSyncing"),
         description: hasProcurementSyncError
-          ? (procurementSyncState.lastError ?? "Resolve the sync error before creating orders.")
-          : "Wait for estimate-driven Procurement sync to finish before creating orders.",
+          ? (procurementSyncState.lastError ?? t("procurement.sync.toast.resolveOrders"))
+          : t("procurement.sync.toast.waitOrders"),
         variant: "destructive",
       });
       return;
@@ -1207,10 +1210,10 @@ export default function ProjectProcurement() {
     if (targets.length === 0) return;
     if (shouldBlockProcurementLaunchActions) {
       toast({
-        title: hasProcurementSyncError ? "Procurement sync needs attention" : "Procurement is still syncing",
+        title: hasProcurementSyncError ? t("procurement.sync.toast.needsAttention") : t("procurement.sync.toast.stillSyncing"),
         description: hasProcurementSyncError
-          ? (procurementSyncState.lastError ?? "Resolve the sync error before receiving items.")
-          : "Wait for estimate-driven Procurement sync to finish before receiving items.",
+          ? (procurementSyncState.lastError ?? t("procurement.sync.toast.resolveReceive"))
+          : t("procurement.sync.toast.waitReceive"),
         variant: "destructive",
       });
       return;
@@ -1226,7 +1229,7 @@ export default function ProjectProcurement() {
     setReceiveModalQtyByKey(nextQtyByKey);
     setReceiveModalLocationByKey(nextLocationByKey);
     setReceiveModalOpen(true);
-  }, [defaultLocationId, shouldBlockProcurementLaunchActions, hasProcurementSyncError, procurementSyncState.lastError, toast]);
+  }, [defaultLocationId, shouldBlockProcurementLaunchActions, hasProcurementSyncError, procurementSyncState.lastError, toast, t]);
 
   const openReceiveModalForSelection = () => {
     const targets = Array.from(selectedOrderedLineKeys)
@@ -1268,12 +1271,12 @@ export default function ProjectProcurement() {
       });
 
       if (hasMissingLocation) {
-        toast({ title: "Location is required", description: "Select receive location for each item", variant: "destructive" });
+        toast({ title: t("procurement.toast.locationRequired"), description: t("procurement.toast.locationRequiredDesc"), variant: "destructive" });
         return;
       }
 
       if (payloadByOrderAndLocation.size === 0) {
-        toast({ title: "No quantities entered", description: "Set at least one quantity greater than zero", variant: "destructive" });
+        toast({ title: t("procurement.toast.noQtyEntered"), description: t("procurement.toast.noQtyEnteredDesc"), variant: "destructive" });
         return;
       }
 
@@ -1323,7 +1326,7 @@ export default function ProjectProcurement() {
           ]);
         }
 
-        toast({ title: payloadByOrderAndLocation.size > 1 ? "Items received" : "Item received" });
+        toast({ title: payloadByOrderAndLocation.size > 1 ? t("procurement.toast.itemsReceived") : t("procurement.toast.itemReceived") });
         setReceiveModalOpen(false);
         setReceiveModalTargets([]);
         setReceiveModalQtyByKey({});
@@ -1331,8 +1334,8 @@ export default function ProjectProcurement() {
         setSelectedOrderedLineKeys(new Set());
       } catch (error) {
         toast({
-          title: "Receive failed",
-          description: error instanceof Error ? error.message : "Please try again.",
+          title: t("procurement.toast.receiveFailed"),
+          description: error instanceof Error ? error.message : t("procurement.toast.receiveFallback"),
           variant: "destructive",
         });
       }
@@ -1345,8 +1348,8 @@ export default function ProjectProcurement() {
   const openUseFromStockModal = (targets: InStockTableRow[]) => {
     if (isSupabaseMode) {
       toast({
-        title: "Use from stock is disabled",
-        description: "This launch slice does not persist stock usage in Supabase mode.",
+        title: t("procurement.toast.useFromStockDisabled"),
+        description: t("procurement.toast.useFromStockDisabledDesc"),
         variant: "destructive",
       });
       return;
@@ -1374,8 +1377,8 @@ export default function ProjectProcurement() {
   const submitUseFromStock = () => {
     if (isSupabaseMode) {
       toast({
-        title: "Use from stock is disabled",
-        description: "This launch slice does not persist stock usage in Supabase mode.",
+        title: t("procurement.toast.useFromStockDisabled"),
+        description: t("procurement.toast.useFromStockDisabledDesc"),
         variant: "destructive",
       });
       return;
@@ -1393,16 +1396,16 @@ export default function ProjectProcurement() {
       const qty = Number(raw);
       if (!Number.isFinite(qty) || qty <= 0) {
         toast({
-          title: "Quantity is required",
-          description: `Enter quantity greater than zero for ${target.item.name}`,
+          title: t("procurement.toast.qtyRequired"),
+          description: t("procurement.toast.qtyRequiredDesc", { name: target.item.name }),
           variant: "destructive",
         });
         return;
       }
       if (qty > target.qty) {
         toast({
-          title: "Insufficient stock",
-          description: `Quantity exceeds available stock for ${target.item.name}`,
+          title: t("procurement.toast.insufficientStock"),
+          description: t("procurement.toast.insufficientStockDesc", { name: target.item.name }),
           variant: "destructive",
         });
         return;
@@ -1411,11 +1414,11 @@ export default function ProjectProcurement() {
     }
 
     if (rowsToConsume.length === 0) {
-      toast({ title: "No quantities entered", description: "Set at least one quantity greater than zero", variant: "destructive" });
+      toast({ title: t("procurement.toast.noQtyEntered"), description: t("procurement.toast.noQtyEnteredDesc"), variant: "destructive" });
       return;
     }
 
-    const usedByLabel = manualName || (participantId ? participantNameById.get(participantId) : "") || "—";
+    const usedByLabel = manualName || (participantId ? participantNameById.get(participantId) : "") || dash;
     const currentUser = getCurrentUser();
     for (const entry of rowsToConsume) {
       const { target, qty } = entry;
@@ -1429,11 +1432,11 @@ export default function ProjectProcurement() {
         note,
       });
       if (!result.ok) {
-        toast({ title: "Use failed", description: result.error, variant: "destructive" });
+        toast({ title: t("procurement.toast.useFailed"), description: result.error, variant: "destructive" });
         return;
       }
 
-      const summary = `Used ${qty} ${target.item.unit} of ${target.item.name} at ${target.locationName}`;
+      const summary = t("procurement.stockUsed.summary", { qty, unit: target.item.unit, name: target.item.name, location: target.locationName });
       addEvent({
         id: `evt-stock-used-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         project_id: pid,
@@ -1446,7 +1449,7 @@ export default function ProjectProcurement() {
           source: "ai",
           sidebarKind: "stock_used",
           sidebarTier: 1,
-          title: "Stock used",
+          title: t("procurement.stockUsed.title"),
           summary,
           details: {
             usedBy: usedByLabel,
@@ -1469,10 +1472,10 @@ export default function ProjectProcurement() {
     });
 
     toast({
-      title: rowsToConsume.length > 1 ? "Stock updated" : "Stock item updated",
+      title: rowsToConsume.length > 1 ? t("procurement.toast.stockUpdated") : t("procurement.toast.stockItemUpdated"),
       description: rowsToConsume.length > 1
-        ? `Used stock for ${rowsToConsume.length} items`
-        : `Used ${rowsToConsume[0]?.qty ?? 0} ${rowsToConsume[0]?.target.item.unit ?? ""}`,
+        ? t("procurement.toast.stockUsedForCount", { count: rowsToConsume.length })
+        : t("procurement.toast.stockUsedSingle", { qty: rowsToConsume[0]?.qty ?? 0, unit: rowsToConsume[0]?.target.item.unit ?? "" }),
     });
     setUseFromStockOpen(false);
     setUseFromStockTargets([]);
@@ -1489,15 +1492,15 @@ export default function ProjectProcurement() {
       id: `task-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       project_id: pid,
       stage_id: project?.current_stage_id || stages[0]?.id || "",
-      title: `Procure more: ${row.item.name}`,
+      title: t("procurement.requestMore.title", { name: row.item.name }),
       description: [
-        `Item: ${row.item.name}`,
-        `Spec: ${row.item.spec ?? "—"}`,
-        `Type: ${row.item.type}`,
-        `Location: ${row.locationName}`,
-        `Qty available: ${row.qty} ${row.item.unit}`,
-        "Suggested qty: 0",
-        `Reference: /project/${pid}/procurement/${row.procurementItemId}`,
+        t("procurement.requestMore.lineItem", { name: row.item.name }),
+        t("procurement.requestMore.lineSpec", { spec: row.item.spec ?? dash }),
+        t("procurement.requestMore.lineType", { type: row.item.type }),
+        t("procurement.requestMore.lineLocation", { location: row.locationName }),
+        t("procurement.requestMore.lineQty", { qty: row.qty, unit: row.item.unit }),
+        t("procurement.requestMore.lineSuggested"),
+        t("procurement.requestMore.lineReference", { reference: `/project/${pid}/procurement/${row.procurementItemId}` }),
       ].join("\n"),
       status: "not_started",
       assignee_id: ownerAssigneeId,
@@ -1509,7 +1512,7 @@ export default function ProjectProcurement() {
       created_at: now,
     };
     addTask(task);
-    toast({ title: "Task created", description: task.title });
+    toast({ title: t("procurement.toast.taskCreated"), description: task.title });
   };
 
   const addUrlAttachment = () => {
@@ -1567,7 +1570,7 @@ export default function ProjectProcurement() {
     }, "immediate");
   };
 
-  const formatMetric = (value: number | null) => (value === null ? "—" : fmtCost(value));
+  const formatMetric = (value: number | null) => (value === null ? dash : fmtCost(value));
   const selectionCount = effectiveActiveTab === "requested"
     ? selectedRequestedIds.size
     : effectiveActiveTab === "ordered"
@@ -1576,18 +1579,18 @@ export default function ProjectProcurement() {
   const showStickySelectionBar = showProcurementActions && selectionCount > 0;
 
   const selectionPrimaryLabel = effectiveActiveTab === "requested"
-    ? `Create order (${selectionCount})`
+    ? t("procurement.selection.createOrder", { count: selectionCount })
     : effectiveActiveTab === "ordered"
-      ? `Items received (${selectionCount})`
-      : `Use (${selectionCount})`;
+      ? t("procurement.selection.itemsReceived", { count: selectionCount })
+      : t("procurement.selection.use", { count: selectionCount });
 
   const runSelectionPrimaryAction = () => {
     if (shouldBlockProcurementLaunchActions) {
       toast({
-        title: hasProcurementSyncError ? "Procurement sync needs attention" : "Procurement is still syncing",
+        title: hasProcurementSyncError ? t("procurement.sync.toast.needsAttention") : t("procurement.sync.toast.stillSyncing"),
         description: hasProcurementSyncError
-          ? (procurementSyncState.lastError ?? "Resolve the sync error before using launch-critical procurement actions.")
-          : "Wait for estimate-driven Procurement sync to finish before creating orders or receiving items.",
+          ? (procurementSyncState.lastError ?? t("procurement.sync.toast.resolveLaunch"))
+          : t("procurement.sync.toast.waitLaunch"),
         variant: "destructive",
       });
       return;
@@ -1602,8 +1605,8 @@ export default function ProjectProcurement() {
     }
     if (isSupabaseMode) {
       toast({
-        title: "Use from stock is disabled",
-        description: "This launch slice only persists supplier order receive flows in Supabase mode.",
+        title: t("procurement.toast.useFromStockDisabled"),
+        description: t("procurement.toast.useFromStockDisabledLaunch"),
         variant: "destructive",
       });
       return;
@@ -1627,9 +1630,9 @@ export default function ProjectProcurement() {
     return (
       <ProjectWorkflowEmptyState
         variant="procurement"
-        title="Procurement will open very soon"
-        description="Great progress so far. Procurement items will appear here once your Estimate is moved to In work."
-        actionLabel="Open Estimate"
+        title={t("procurement.empty.planning.title")}
+        description={t("procurement.empty.planning.description")}
+        actionLabel={t("procurement.empty.planning.action")}
         onAction={() => navigate(`/project/${pid}/estimate`)}
       />
     );
@@ -1639,8 +1642,8 @@ export default function ProjectProcurement() {
     return (
       <EmptyState
         icon={ShoppingCart}
-        title="No procurement items"
-        description="Items will appear here from your estimate materials or task checklists."
+        title={t("procurement.empty.noItems.title")}
+        description={t("procurement.empty.noItems.description")}
       />
     );
   }
@@ -1649,12 +1652,12 @@ export default function ProjectProcurement() {
     <thead className="bg-muted/30 border-b border-border">
       <tr>
         {showProcurementActions && <th className="w-10 text-left px-2 py-2 text-xs font-medium text-muted-foreground" />}
-        <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Name / Spec</th>
-        <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">When needed</th>
-        <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Amount</th>
-        <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Unit</th>
-        {canViewSensitiveDetail && <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Planned</th>}
-        {showProcurementActions && <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Action</th>}
+        <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">{t("procurement.col.nameSpec")}</th>
+        <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">{t("procurement.col.whenNeeded")}</th>
+        <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">{t("procurement.col.amount")}</th>
+        <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">{t("procurement.col.unit")}</th>
+        {canViewSensitiveDetail && <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">{t("procurement.col.planned")}</th>}
+        {showProcurementActions && <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">{t("procurement.col.action")}</th>}
       </tr>
     </thead>
   );
@@ -1663,14 +1666,14 @@ export default function ProjectProcurement() {
     <thead className="bg-muted/30 border-b border-border">
       <tr>
         {showProcurementActions && <th className="w-10 text-left px-2 py-2 text-xs font-medium text-muted-foreground" />}
-        <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Name / Spec</th>
-        <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">When needed</th>
-        <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Delivery scheduled</th>
-        <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Amount</th>
-        <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Unit</th>
-        {canViewSensitiveDetail && <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Unit price</th>}
-        {canViewSensitiveDetail && <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Total</th>}
-        {showProcurementActions && <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Action</th>}
+        <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">{t("procurement.col.nameSpec")}</th>
+        <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">{t("procurement.col.whenNeeded")}</th>
+        <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">{t("procurement.col.deliveryScheduled")}</th>
+        <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">{t("procurement.col.amount")}</th>
+        <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">{t("procurement.col.unit")}</th>
+        {canViewSensitiveDetail && <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">{t("procurement.col.unitPrice")}</th>}
+        {canViewSensitiveDetail && <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">{t("procurement.col.total")}</th>}
+        {showProcurementActions && <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">{t("procurement.col.action")}</th>}
       </tr>
     </thead>
   );
@@ -1679,12 +1682,12 @@ export default function ProjectProcurement() {
     <thead className="bg-muted/30 border-b border-border">
       <tr>
         {showProcurementActions && <th className="w-10 text-left px-2 py-2 text-xs font-medium text-muted-foreground" />}
-        <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Name / Spec</th>
-        <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Location</th>
-        <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Qty available</th>
-        {!canManageProcurement && <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Receiver</th>}
-        <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">Date last received</th>
-        {showProcurementActions && <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">Actions</th>}
+        <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">{t("procurement.col.nameSpec")}</th>
+        <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">{t("procurement.col.location")}</th>
+        <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">{t("procurement.col.qtyAvailable")}</th>
+        {!canManageProcurement && <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">{t("procurement.col.receiver")}</th>}
+        <th className="text-left px-2 py-2 text-xs font-medium text-muted-foreground">{t("procurement.col.dateLastReceived")}</th>
+        {showProcurementActions && <th className="text-right px-2 py-2 text-xs font-medium text-muted-foreground">{t("procurement.col.actions")}</th>}
       </tr>
     </thead>
   );
@@ -1704,33 +1707,33 @@ export default function ProjectProcurement() {
           <div className="min-w-0">
             <p className="font-medium">
               {isProcurementSyncing
-                ? "Procurement is syncing from Estimate"
+                ? t("procurement.sync.syncingTitle")
                 : hasProcurementSyncError
-                  ? "Procurement sync failed"
-                  : "Procurement is behind the latest Estimate"}
+                  ? t("procurement.sync.errorTitle")
+                  : t("procurement.sync.behindTitle")}
             </p>
             <p className="text-xs opacity-80">
               {isProcurementSyncing
-                ? "Estimate-linked procurement requests are being refreshed now."
+                ? t("procurement.sync.syncingBody")
                 : hasProcurementSyncError
-                  ? (procurementSyncState.lastError ?? "Resolve the sync error before creating orders or receiving items.")
-                  : "Wait for the procurement projection to catch up before creating orders or receiving items."}
+                  ? (procurementSyncState.lastError ?? t("procurement.sync.errorFallback"))
+                  : t("procurement.sync.behindBody")}
             </p>
           </div>
         </div>
       )}
 
       <div className="glass-elevated rounded-card p-sp-3 space-y-sp-3">
-        <h2 className="text-h3 text-foreground">Procurement</h2>
+        <h2 className="text-h3 text-foreground">{t("procurement.title")}</h2>
 
         {canManageProcurement && (
           <>
             <div className="grid grid-cols-2 xl:grid-cols-4 gap-2">
               {[
-                { key: "planned", label: "Planned", value: formatMetric(headerKpis.planned), hint: "Estimate-linked qty" },
-                { key: "committed", label: "Committed", value: formatMetric(headerKpis.committed), hint: "Open ordered value" },
-                { key: "received", label: "Received", value: formatMetric(headerKpis.received), hint: "Received value" },
-                { key: "variance", label: "Variance", value: formatMetric(headerKpis.variance), hint: "Planned - used" },
+                { key: "planned", label: t("procurement.kpi.planned"), value: formatMetric(headerKpis.planned), hint: t("procurement.kpi.plannedHint") },
+                { key: "committed", label: t("procurement.kpi.committed"), value: formatMetric(headerKpis.committed), hint: t("procurement.kpi.committedHint") },
+                { key: "received", label: t("procurement.kpi.received"), value: formatMetric(headerKpis.received), hint: t("procurement.kpi.receivedHint") },
+                { key: "variance", label: t("procurement.kpi.variance"), value: formatMetric(headerKpis.variance), hint: t("procurement.kpi.varianceHint") },
               ].map((kpi) => (
                 <div key={kpi.key} className="rounded-lg border border-border bg-background/60 p-3 min-h-[96px] flex flex-col justify-between">
                   <p className="text-xs text-muted-foreground">{kpi.label}</p>
@@ -1742,7 +1745,7 @@ export default function ProjectProcurement() {
 
             <div className="grid grid-cols-1 lg:grid-cols-[minmax(220px,280px)_1fr] gap-3">
               <div className="rounded-lg border border-border bg-background/60 p-3">
-                <label className="text-xs text-muted-foreground">Budget</label>
+                <label className="text-xs text-muted-foreground">{t("procurement.budget.label")}</label>
                 <Input
                   type="text"
                   readOnly
@@ -1754,13 +1757,13 @@ export default function ProjectProcurement() {
               <div className="rounded-lg border border-border bg-background/60 p-3 space-y-2">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-xs text-muted-foreground">Used</p>
+                    <p className="text-xs text-muted-foreground">{t("procurement.budget.used")}</p>
                     <p className="text-base font-semibold text-foreground tabular-nums">
                       {formatMetric(usedBudgetMetric)}
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-xs text-muted-foreground">Remaining</p>
+                    <p className="text-xs text-muted-foreground">{t("procurement.budget.remaining")}</p>
                     <p className={cn(
                       "text-base font-semibold tabular-nums",
                       remainingBudgetMetric !== null && remainingBudgetMetric < 0 ? "text-destructive" : "text-foreground",
@@ -1772,7 +1775,7 @@ export default function ProjectProcurement() {
                 </div>
                 <Progress value={budgetProgressPct} className="h-2 bg-muted/60 [&>div]:rounded-full" />
                 <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
-                  <span>Used = Committed + Received</span>
+                  <span>{t("procurement.budget.usedFormula")}</span>
                   <span>{Math.round(budgetProgressPct)}%</span>
                 </div>
                 {headerDataStateHint && (
@@ -1806,7 +1809,7 @@ export default function ProjectProcurement() {
                       : "border-border bg-background hover:bg-muted/30",
                   )}
                 >
-                  {TAB_META[tab].label} ({stat.count})
+                  {t("procurement.tab.label", { label: t(TAB_META[tab].labelKey), count: stat.count })}
                 </button>
               );
             })}
@@ -1817,7 +1820,7 @@ export default function ProjectProcurement() {
             <Input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search by name, spec, supplier..."
+              placeholder={t("procurement.search.placeholder")}
               className="pl-8 h-9 text-sm"
             />
           </div>
@@ -1827,7 +1830,7 @@ export default function ProjectProcurement() {
       {showStickySelectionBar && (
         <div className="fixed inset-x-0 bottom-3 z-40 px-sp-2 pointer-events-none">
           <div className="mx-auto max-w-[1200px] pointer-events-auto glass-elevated rounded-card border border-border px-3 py-2 flex items-center justify-between gap-3">
-            <p className="text-sm text-foreground">{selectionCount} selected</p>
+            <p className="text-sm text-foreground">{t("procurement.selection.count", { count: selectionCount })}</p>
             <div className="flex items-center gap-2">
               <Button
                 type="button"
@@ -1853,7 +1856,7 @@ export default function ProjectProcurement() {
                 className="h-8"
                 onClick={clearSelectionForActiveTab}
               >
-                Clear
+                {t("procurement.selection.clear")}
               </Button>
             </div>
           </div>
@@ -1863,7 +1866,7 @@ export default function ProjectProcurement() {
       {effectiveActiveTab === "requested" && (
         <div className="glass rounded-card p-2 space-y-2">
           {requestedItems.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">No requested items.</p>
+            <p className="text-sm text-muted-foreground text-center py-8">{t("procurement.empty.noRequested")}</p>
           ) : (
             <>
               {Array.from(requestedStageMap.map.entries())
@@ -1885,9 +1888,11 @@ export default function ProjectProcurement() {
                         onClick={() => toggleStage(stageId)}
                       >
                         {collapsed ? <ChevronRight className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-                        <span className="text-sm font-semibold text-foreground">{stage?.title ?? "Unknown stage"}</span>
+                        <span className="text-sm font-semibold text-foreground">{stage?.title ?? t("procurement.stage.unknown")}</span>
                         <span className="ml-auto text-xs text-muted-foreground">
-                          {canViewSensitiveDetail ? `${stageItems.length} · ${fmtCost(stageTotal)}` : `${stageItems.length} items`}
+                          {canViewSensitiveDetail
+                            ? t("procurement.stage.countAndTotal", { count: stageItems.length, total: fmtCost(stageTotal) })
+                            : t("procurement.stage.itemsCount", { count: stageItems.length })}
                         </span>
                       </button>
 
@@ -1920,7 +1925,7 @@ export default function ProjectProcurement() {
                                           </div>
                                           {item.orphaned && (
                                             <span className="inline-flex rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] text-destructive">
-                                              Orphaned
+                                              {t("procurement.item.orphaned")}
                                             </span>
                                           )}
                                           {item.spec && <p className="text-xs text-muted-foreground truncate">{item.spec}</p>}
@@ -1933,7 +1938,7 @@ export default function ProjectProcurement() {
                                           </div>
                                           {item.orphaned && (
                                             <span className="inline-flex rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] text-destructive">
-                                              Orphaned
+                                              {t("procurement.item.orphaned")}
                                             </span>
                                           )}
                                           {item.spec && <p className="text-xs text-muted-foreground truncate">{item.spec}</p>}
@@ -1941,7 +1946,7 @@ export default function ProjectProcurement() {
                                       )}
                                     </td>
                                     <td className={cn("px-2 py-2 text-xs", isOverdue(item.requiredByDate) && "text-destructive")}>
-                                      {formatDate(item.requiredByDate)}
+                                      {formatDate(item.requiredByDate, dash)}
                                     </td>
                                     <td className="px-2 py-2 text-right tabular-nums text-foreground">{remaining}</td>
                                     <td className="px-2 py-2 text-foreground">{item.unit}</td>
@@ -1959,7 +1964,7 @@ export default function ProjectProcurement() {
                                             disabled={orderControl.disabled || shouldBlockProcurementLaunchActions}
                                             title={orderControl.disabledReason}
                                           >
-                                            Order
+                                            {t("procurement.action.order")}
                                           </Button>
                                         </div>
                                       </td>
@@ -2016,7 +2021,7 @@ export default function ProjectProcurement() {
                                       </div>
                                       {item.orphaned && (
                                         <span className="inline-flex rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] text-destructive">
-                                          Orphaned
+                                          {t("procurement.item.orphaned")}
                                         </span>
                                       )}
                                       {item.spec && <p className="text-xs text-muted-foreground truncate">{item.spec}</p>}
@@ -2029,14 +2034,14 @@ export default function ProjectProcurement() {
                                       </div>
                                       {item.orphaned && (
                                         <span className="inline-flex rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] text-destructive">
-                                          Orphaned
+                                          {t("procurement.item.orphaned")}
                                         </span>
                                       )}
                                       {item.spec && <p className="text-xs text-muted-foreground truncate">{item.spec}</p>}
                                     </div>
                                   )}
                                 </td>
-                                <td className={cn("px-2 py-2 text-xs", isOverdue(item.requiredByDate) && "text-destructive")}>{formatDate(item.requiredByDate)}</td>
+                                <td className={cn("px-2 py-2 text-xs", isOverdue(item.requiredByDate) && "text-destructive")}>{formatDate(item.requiredByDate, dash)}</td>
                                 <td className="px-2 py-2 text-right tabular-nums text-foreground">{remaining}</td>
                                 <td className="px-2 py-2 text-foreground">{item.unit}</td>
                                 {canViewSensitiveDetail && (
@@ -2053,7 +2058,7 @@ export default function ProjectProcurement() {
                                         disabled={orderControl.disabled || shouldBlockProcurementLaunchActions}
                                         title={orderControl.disabledReason}
                                       >
-                                        Order
+                                        {t("procurement.action.order")}
                                       </Button>
                                     </div>
                                   </td>
@@ -2075,7 +2080,7 @@ export default function ProjectProcurement() {
       {effectiveActiveTab === "ordered" && (
         <div className="glass rounded-card p-2 space-y-2">
           {placedSupplierOrders.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">No placed supplier orders.</p>
+            <p className="text-sm text-muted-foreground text-center py-8">{t("procurement.empty.noPlaced")}</p>
           ) : (
             placedSupplierOrders.map((order) => {
               const collapsed = collapsedOrderIds.has(order.id);
@@ -2094,7 +2099,7 @@ export default function ProjectProcurement() {
                       type="button"
                       className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-muted/70"
                       onClick={() => toggleOrder(order.id)}
-                      aria-label={collapsed ? "Expand order" : "Collapse order"}
+                      aria-label={collapsed ? t("procurement.order.expandAria") : t("procurement.order.collapseAria")}
                     >
                       {collapsed ? <ChevronRight className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
                     </button>
@@ -2104,11 +2109,11 @@ export default function ProjectProcurement() {
                         className="text-sm font-semibold text-foreground hover:underline"
                         onClick={() => openOrderDetail(order.id)}
                       >
-                        {`Supplier order #${orderNumber}`}
+                        {t("procurement.order.supplierN", { number: orderNumber })}
                       </button>
                     ) : (
                       <span className="text-sm font-semibold text-foreground">
-                        {`Supplier order #${orderNumber}`}
+                        {t("procurement.order.supplierN", { number: orderNumber })}
                       </span>
                     )}
                     {showSupplier && order.supplierName && (
@@ -2130,7 +2135,7 @@ export default function ProjectProcurement() {
                                   colSpan={orderedTableColumnCount}
                                   className="px-3 py-6 text-sm text-muted-foreground"
                                 >
-                                  No line items in this order.
+                                  {t("procurement.empty.noLinesInOrder")}
                                 </td>
                               </tr>
                             ) : (
@@ -2159,14 +2164,14 @@ export default function ProjectProcurement() {
                                     <div className="flex min-w-0 items-start gap-2">
                                       <ResourceTypeBadge type={line.itemType || "other"} className="shrink-0 border-transparent" />
                                       <div className="min-w-0">
-                                        <p className="font-medium text-foreground truncate">{line.title || "Ordered item"}</p>
+                                        <p className="font-medium text-foreground truncate">{line.title || t("procurement.order.orderedItemFallback")}</p>
                                       </div>
                                     </div>
                                   </td>
-                                  <td className="px-2 py-2 text-xs text-muted-foreground">{formatDate(null)}</td>
+                                  <td className="px-2 py-2 text-xs text-muted-foreground">{formatDate(null, dash)}</td>
                                   <td className="px-2 py-2">
                                     <span className="text-xs text-muted-foreground">
-                                      {order.deliveryDeadline ? formatDate(order.deliveryDeadline) : "-"}
+                                      {order.deliveryDeadline ? formatDate(order.deliveryDeadline, dash) : t("procurement.order.emptyDash")}
                                     </span>
                                   </td>
                                   <td className="px-2 py-2 text-right">
@@ -2175,12 +2180,12 @@ export default function ProjectProcurement() {
                                       {line.receivedQty > 0 && openQty > 0 && (
                                         <Tooltip>
                                           <TooltipTrigger asChild>
-                                            <button type="button" className="text-warning" aria-label="Partial receive details">
+                                            <button type="button" className="text-warning" aria-label={t("procurement.order.partialAria")}>
                                               <AlertTriangle className="h-3.5 w-3.5" />
                                             </button>
                                           </TooltipTrigger>
                                           <TooltipContent className="max-w-xs text-caption">
-                                            <p>{`Received ${line.receivedQty} out of ${line.qty}.`}</p>
+                                            <p>{t("procurement.order.partialTooltip", { received: line.receivedQty, total: line.qty })}</p>
                                             <button
                                               type="button"
                                               className="mt-1 text-accent hover:underline"
@@ -2189,7 +2194,7 @@ export default function ProjectProcurement() {
                                                 setActiveTab("in_stock");
                                               }}
                                             >
-                                              Learn more
+                                              {t("procurement.order.learnMore")}
                                             </button>
                                           </TooltipContent>
                                         </Tooltip>
@@ -2201,7 +2206,7 @@ export default function ProjectProcurement() {
                                     <td className="px-2 py-2">
                                       <div className="flex justify-end">
                                         <Button type="button" size="sm" className="h-7" disabled>
-                                          Receive
+                                          {t("procurement.action.receive")}
                                         </Button>
                                       </div>
                                     </td>
@@ -2236,7 +2241,7 @@ export default function ProjectProcurement() {
                                       </div>
                                       {item.orphaned && (
                                         <span className="inline-flex rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] text-destructive">
-                                          Orphaned
+                                          {t("procurement.item.orphaned")}
                                         </span>
                                       )}
                                     </button>
@@ -2251,25 +2256,25 @@ export default function ProjectProcurement() {
                                       </div>
                                       {item.orphaned && (
                                         <span className="inline-flex rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] text-destructive">
-                                          Orphaned
+                                          {t("procurement.item.orphaned")}
                                         </span>
                                       )}
                                     </div>
                                   )}
                                 </td>
                                 <td className={cn("px-2 py-2 text-xs", isOverdue(item.requiredByDate) && "text-destructive")}>
-                                  {formatDate(item.requiredByDate)}
+                                  {formatDate(item.requiredByDate, dash)}
                                 </td>
                                 <td className="px-2 py-2">
                                   {isSupabaseMode || !canManageProcurement ? (
                                     <span className="text-xs text-muted-foreground">
-                                      {order.deliveryDeadline ? formatDate(order.deliveryDeadline) : "-"}
+                                      {order.deliveryDeadline ? formatDate(order.deliveryDeadline, dash) : t("procurement.order.emptyDash")}
                                     </span>
                                   ) : (
                                     <Popover>
                                       <PopoverTrigger asChild>
                                         <button type="button" className="text-xs text-accent hover:underline">
-                                          {order.deliveryDeadline ? formatDate(order.deliveryDeadline) : "-"}
+                                          {order.deliveryDeadline ? formatDate(order.deliveryDeadline, dash) : t("procurement.order.emptyDash")}
                                         </button>
                                       </PopoverTrigger>
                                       <PopoverContent className="w-auto p-0" align="start">
@@ -2292,12 +2297,12 @@ export default function ProjectProcurement() {
                                     {line.receivedQty > 0 && openQty > 0 && (
                                       <Tooltip>
                                         <TooltipTrigger asChild>
-                                          <button type="button" className="text-warning" aria-label="Partial receive details">
+                                          <button type="button" className="text-warning" aria-label={t("procurement.order.partialAria")}>
                                             <AlertTriangle className="h-3.5 w-3.5" />
                                           </button>
                                         </TooltipTrigger>
                                         <TooltipContent className="max-w-xs text-caption">
-                                          <p>{`Received ${line.receivedQty} out of ${line.qty}.`}</p>
+                                          <p>{t("procurement.order.partialTooltip", { received: line.receivedQty, total: line.qty })}</p>
                                           <button
                                             type="button"
                                             className="mt-1 text-accent hover:underline"
@@ -2306,7 +2311,7 @@ export default function ProjectProcurement() {
                                               setActiveTab("in_stock");
                                             }}
                                           >
-                                            Learn more
+                                            {t("procurement.order.learnMore")}
                                           </button>
                                         </TooltipContent>
                                       </Tooltip>
@@ -2331,7 +2336,7 @@ export default function ProjectProcurement() {
                                         disabled={receiveControl.disabled || shouldBlockProcurementLaunchActions || !receivableTarget}
                                         title={receiveControl.disabledReason}
                                       >
-                                        Receive
+                                        {t("procurement.action.receive")}
                                       </Button>
                                     </div>
                                   </td>
@@ -2354,7 +2359,7 @@ export default function ProjectProcurement() {
       {effectiveActiveTab === "in_stock" && (
         <div className="glass rounded-card p-2 space-y-2">
           {visibleInStockRows.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">No inventory placements yet.</p>
+            <p className="text-sm text-muted-foreground text-center py-8">{t("procurement.empty.noInStock")}</p>
           ) : (
             <div className="rounded-lg border border-border overflow-x-auto">
               <table className="w-full text-sm">
@@ -2390,9 +2395,9 @@ export default function ProjectProcurement() {
                       <td className="px-2 py-2 text-muted-foreground">{row.locationName}</td>
                       <td className="px-2 py-2 text-right tabular-nums">{row.qty} {row.item.unit}</td>
                       {!canManageProcurement && (
-                        <td className="px-2 py-2 text-xs text-muted-foreground">{row.receiverName ?? "—"}</td>
+                        <td className="px-2 py-2 text-xs text-muted-foreground">{row.receiverName ?? dash}</td>
                       )}
-                      <td className="px-2 py-2 text-xs text-muted-foreground">{formatDate(row.lastReceivedAt)}</td>
+                      <td className="px-2 py-2 text-xs text-muted-foreground">{formatDate(row.lastReceivedAt, dash)}</td>
                       {showProcurementActions && (
                         <td className="px-2 py-2">
                           <div className="flex items-center justify-end gap-1">
@@ -2404,7 +2409,7 @@ export default function ProjectProcurement() {
                               disabled={useFromStockEffectiveDisabled}
                               title={useFromStockEffectiveReason}
                             >
-                              Use
+                              {t("procurement.action.use")}
                             </Button>
                             <Button
                               type="button"
@@ -2414,7 +2419,7 @@ export default function ProjectProcurement() {
                               onClick={() => handleRequestMore(row)}
                               disabled={!canManageProcurement}
                             >
-                              Request more
+                              {t("procurement.action.requestMore")}
                             </Button>
                           </div>
                         </td>
@@ -2443,24 +2448,24 @@ export default function ProjectProcurement() {
       >
         <DialogContent className="w-[95vw] max-w-3xl max-h-[90vh] p-0 gap-0 overflow-hidden">
           <DialogHeader className="px-5 py-4 border-b border-border">
-            <DialogTitle>Use from stock</DialogTitle>
+            <DialogTitle>{t("procurement.useModal.title")}</DialogTitle>
             <DialogDescription className="sr-only">
-              Allocate available stock quantities to the selected procurement items and capture who used them.
+              {t("procurement.useModal.description")}
             </DialogDescription>
           </DialogHeader>
 
           {useFromStockTargets.length === 0 ? (
-            <div className="px-5 py-4 text-sm text-muted-foreground">No stock item selected.</div>
+            <div className="px-5 py-4 text-sm text-muted-foreground">{t("procurement.useModal.noStockSelected")}</div>
           ) : (
             <div className="px-5 py-4 space-y-4">
               <div className="rounded-lg border border-border overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-muted/30 border-b border-border">
                     <tr>
-                      <th className="text-left px-3 py-2">Item</th>
-                      <th className="text-left px-3 py-2">Location</th>
-                      <th className="text-right px-3 py-2">Available</th>
-                      <th className="text-right px-3 py-2">Quantity to use now</th>
+                      <th className="text-left px-3 py-2">{t("procurement.col.item")}</th>
+                      <th className="text-left px-3 py-2">{t("procurement.col.location")}</th>
+                      <th className="text-right px-3 py-2">{t("procurement.col.available")}</th>
+                      <th className="text-right px-3 py-2">{t("procurement.col.qtyToUseNow")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2492,7 +2497,7 @@ export default function ProjectProcurement() {
                             }}
                             placeholder={String(target.qty)}
                             className="h-9 w-32 ml-auto"
-                            aria-label={`Quantity to use now for ${target.item.name}`}
+                            aria-label={t("procurement.useModal.qtyAria", { name: target.item.name })}
                           />
                         </td>
                       </tr>
@@ -2503,13 +2508,13 @@ export default function ProjectProcurement() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label htmlFor="use-from-stock-participant" className="text-xs text-muted-foreground">Used by (participant)</label>
+                  <label htmlFor="use-from-stock-participant" className="text-xs text-muted-foreground">{t("procurement.useModal.usedByParticipant")}</label>
                   <Select value={useFromStockParticipantId} onValueChange={setUseFromStockParticipantId}>
                     <SelectTrigger id="use-from-stock-participant" className="h-9 mt-1">
-                      <SelectValue placeholder="Not specified" />
+                      <SelectValue placeholder={t("procurement.useModal.notSpecified")} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">Not specified</SelectItem>
+                      <SelectItem value="none">{t("procurement.useModal.notSpecified")}</SelectItem>
                       {participantOptions.map((participant) => (
                         <SelectItem key={participant.id} value={participant.id}>{participant.name}</SelectItem>
                       ))}
@@ -2517,25 +2522,25 @@ export default function ProjectProcurement() {
                   </Select>
                 </div>
                 <div>
-                  <label htmlFor="use-from-stock-manual-name" className="text-xs text-muted-foreground">Manual name</label>
+                  <label htmlFor="use-from-stock-manual-name" className="text-xs text-muted-foreground">{t("procurement.useModal.manualName")}</label>
                   <Input
                     id="use-from-stock-manual-name"
                     value={useFromStockManualName}
                     onChange={(event) => setUseFromStockManualName(event.target.value)}
                     className="h-9 mt-1"
-                    placeholder="Optional"
+                    placeholder={t("procurement.useModal.optional")}
                   />
                 </div>
               </div>
 
               <div>
-                <label htmlFor="use-from-stock-note" className="text-xs text-muted-foreground">Note</label>
+                <label htmlFor="use-from-stock-note" className="text-xs text-muted-foreground">{t("procurement.useModal.note")}</label>
                 <Textarea
                   id="use-from-stock-note"
                   value={useFromStockNote}
                   onChange={(event) => setUseFromStockNote(event.target.value)}
                   className="mt-1 min-h-[72px]"
-                  placeholder="Optional note"
+                  placeholder={t("procurement.useModal.notePlaceholder")}
                 />
               </div>
             </div>
@@ -2557,14 +2562,14 @@ export default function ProjectProcurement() {
       >
         <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] p-0 gap-0 overflow-hidden">
           <DialogHeader className="px-5 py-4 border-b border-border">
-            <DialogTitle>Stock details</DialogTitle>
+            <DialogTitle>{t("procurement.stockDetail.title")}</DialogTitle>
             <DialogDescription className="sr-only">
-              Review receipt and usage history for the selected stock item across project locations.
+              {t("procurement.stockDetail.description")}
             </DialogDescription>
           </DialogHeader>
 
           {!inStockDetailTarget ? (
-            <div className="px-5 py-4 text-sm text-muted-foreground">No stock item selected.</div>
+            <div className="px-5 py-4 text-sm text-muted-foreground">{t("procurement.useModal.noStockSelected")}</div>
           ) : (
             <div className="px-5 py-4 space-y-4 overflow-y-auto">
               <div className="rounded-lg border border-border p-3">
@@ -2577,23 +2582,23 @@ export default function ProjectProcurement() {
                     )}
                   </div>
                 </div>
-                <p className="mt-2 text-xs text-muted-foreground">Current location: {inStockDetailTarget.locationName}</p>
-                <p className="text-xs text-muted-foreground">Qty available: {inStockDetailTarget.qty} {inStockDetailTarget.item.unit}</p>
+                <p className="mt-2 text-xs text-muted-foreground">{t("procurement.stockDetail.currentLocation", { location: inStockDetailTarget.locationName })}</p>
+                <p className="text-xs text-muted-foreground">{t("procurement.stockDetail.qtyAvailable", { qty: inStockDetailTarget.qty, unit: inStockDetailTarget.item.unit })}</p>
               </div>
 
               <div className="rounded-lg border border-border overflow-hidden">
-                <div className="px-3 py-2 border-b border-border bg-muted/30 text-sm font-medium text-foreground">Receipt history</div>
+                <div className="px-3 py-2 border-b border-border bg-muted/30 text-sm font-medium text-foreground">{t("procurement.stockDetail.receiptHistory")}</div>
                 {inStockDetailHistory.receiptEvents.length === 0 ? (
-                  <p className="px-3 py-3 text-xs text-muted-foreground">No receipt events yet.</p>
+                  <p className="px-3 py-3 text-xs text-muted-foreground">{t("procurement.stockDetail.noReceipts")}</p>
                 ) : (
                   <div className="divide-y divide-border">
                     {inStockDetailHistory.receiptEvents.map((entry) => {
                       const receiverLabel = entry.event.receiverName
                         || (entry.event.receiverParticipantId ? participantNameById.get(entry.event.receiverParticipantId) : "")
-                        || "—";
+                        || dash;
                       const sourceLocationLabel = entry.event.sourceLocationId
                         ? (locationById.get(entry.event.sourceLocationId)?.name ?? entry.event.sourceLocationId)
-                        : "—";
+                        : dash;
                       const docs = entry.event.documents?.length
                         ? entry.event.documents
                         : (entry.order.invoiceAttachment ? [entry.order.invoiceAttachment] : []);
@@ -2604,8 +2609,8 @@ export default function ProjectProcurement() {
                           <p className="text-sm text-foreground">
                             +{entry.event.deltaQty} {entry.line?.unit ?? inStockDetailTarget.item.unit}
                           </p>
-                          <p className="text-xs text-muted-foreground">Receiver: {receiverLabel}</p>
-                          <p className="text-xs text-muted-foreground">Source location: {sourceLocationLabel}</p>
+                          <p className="text-xs text-muted-foreground">{t("procurement.stockDetail.receiver", { name: receiverLabel })}</p>
+                          <p className="text-xs text-muted-foreground">{t("procurement.stockDetail.sourceLocation", { name: sourceLocationLabel })}</p>
                           {docs.length > 0 && (
                             <div className="flex flex-wrap items-center gap-2 pt-1">
                               {docs.map((doc) => (
@@ -2629,23 +2634,23 @@ export default function ProjectProcurement() {
               </div>
 
               <div className="rounded-lg border border-border overflow-hidden">
-                <div className="px-3 py-2 border-b border-border bg-muted/30 text-sm font-medium text-foreground">Usage history</div>
+                <div className="px-3 py-2 border-b border-border bg-muted/30 text-sm font-medium text-foreground">{t("procurement.stockDetail.usageHistory")}</div>
                 {inStockDetailHistory.usageEvents.length === 0 ? (
-                  <p className="px-3 py-3 text-xs text-muted-foreground">No usage events yet.</p>
+                  <p className="px-3 py-3 text-xs text-muted-foreground">{t("procurement.stockDetail.noUsage")}</p>
                 ) : (
                   <div className="divide-y divide-border">
                     {inStockDetailHistory.usageEvents.map((entry) => {
                       const usedByLabel = entry.event.usedByName
                         || (entry.event.usedByParticipantId ? participantNameById.get(entry.event.usedByParticipantId) : "")
-                        || "—";
+                        || dash;
                       return (
                         <div key={entry.event.id} className="px-3 py-2 space-y-1">
                           <p className="text-xs text-muted-foreground">{new Date(entry.event.createdAt).toLocaleString()}</p>
                           <p className="text-sm text-foreground">
                             {entry.event.deltaQty} {entry.line?.unit ?? inStockDetailTarget.item.unit}
                           </p>
-                          <p className="text-xs text-muted-foreground">Used by: {usedByLabel}</p>
-                          {entry.event.note && <p className="text-xs text-muted-foreground">Note: {entry.event.note}</p>}
+                          <p className="text-xs text-muted-foreground">{t("procurement.stockDetail.usedBy", { name: usedByLabel })}</p>
+                          {entry.event.note && <p className="text-xs text-muted-foreground">{t("procurement.stockDetail.noteLine", { note: entry.event.note })}</p>}
                         </div>
                       );
                     })}
@@ -2674,14 +2679,14 @@ export default function ProjectProcurement() {
       >
         <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col">
           <DialogHeader className="px-5 py-4 border-b border-border">
-            <DialogTitle>Receive items</DialogTitle>
+            <DialogTitle>{t("procurement.receiveModal.title")}</DialogTitle>
             <DialogDescription className="sr-only">
-              Confirm received quantities for the selected procurement items and assign each receipt to a location.
+              {t("procurement.receiveModal.description")}
             </DialogDescription>
           </DialogHeader>
 
           {receiveModalTargets.length === 0 ? (
-            <div className="px-5 py-4 text-sm text-muted-foreground">No items selected.</div>
+            <div className="px-5 py-4 text-sm text-muted-foreground">{t("procurement.receiveModal.noItems")}</div>
           ) : (
             <div className="px-5 py-4 flex-1 overflow-y-auto space-y-3">
               {receiveModalTargets.length === 1 && (
@@ -2697,12 +2702,12 @@ export default function ProjectProcurement() {
                 <table className="w-full text-sm">
                   <thead className="bg-muted/30 border-b border-border">
                     <tr>
-                      <th className="text-left px-3 py-2">Item</th>
-                      <th className="text-right px-3 py-2">Ordered</th>
-                      <th className="text-right px-3 py-2">Already received</th>
-                      <th className="text-right px-3 py-2">Remaining</th>
-                      <th className="text-left px-3 py-2">Location</th>
-                      <th className="text-right px-3 py-2">Quantity received now</th>
+                      <th className="text-left px-3 py-2">{t("procurement.col.item")}</th>
+                      <th className="text-right px-3 py-2">{t("procurement.col.orderedQty")}</th>
+                      <th className="text-right px-3 py-2">{t("procurement.col.alreadyReceived")}</th>
+                      <th className="text-right px-3 py-2">{t("procurement.col.remaining")}</th>
+                      <th className="text-left px-3 py-2">{t("procurement.col.location")}</th>
+                      <th className="text-right px-3 py-2">{t("procurement.col.receiveNow")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2763,7 +2768,7 @@ export default function ProjectProcurement() {
               disabled={!canEdit || receiveModalTargets.length === 0 || receiveItemsConfirmInFlight}
             >
               {receiveItemsConfirmInFlight ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}
-              {receiveItemsConfirmInFlight ? "Receiving..." : "Confirm received"}
+              {receiveItemsConfirmInFlight ? t("procurement.receiveModal.receiving") : t("procurement.receiveModal.confirmReceived")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2795,15 +2800,15 @@ export default function ProjectProcurement() {
       <Dialog open={canManageProcurement && !!itemId && !orderId} onOpenChange={(nextOpen) => !nextOpen && closeDetail()}>
         <DialogContent className="h-[95vh] w-[100vw] max-w-none rounded-none p-0 gap-0 overflow-hidden flex flex-col sm:h-auto sm:w-[75vw] sm:max-w-6xl sm:max-h-[90vh] sm:rounded-xl">
           <DialogHeader className="border-b border-border px-4 py-3 pr-12 sm:px-6 sm:py-4">
-            <DialogTitle>Procurement request</DialogTitle>
+            <DialogTitle>{t("procurement.detail.title")}</DialogTitle>
             <DialogDescription className="sr-only">
-              Review and update the selected procurement request, including quantities, suppliers, dates, and related details.
+              {t("procurement.detail.description")}
             </DialogDescription>
           </DialogHeader>
 
           {!detailItem ? (
             <div className="p-4">
-              <p className="text-sm text-muted-foreground">Item not found.</p>
+              <p className="text-sm text-muted-foreground">{t("procurement.detail.notFound")}</p>
             </div>
           ) : (
             <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
@@ -2811,19 +2816,19 @@ export default function ProjectProcurement() {
                 <div className="flex flex-wrap items-center gap-2">
                   {detailItem.lockedFromEstimate && (
                     <span className="inline-flex rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
-                      Locked from estimate
+                      {t("procurement.item.lockedFromEstimate")}
                     </span>
                   )}
                   {detailItem.orphaned && (
                     <span className="inline-flex rounded-full bg-destructive/15 px-2 py-0.5 text-[11px] text-destructive">
-                      Orphaned
+                      {t("procurement.item.orphaned")}
                     </span>
                   )}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs text-muted-foreground">Type</label>
+                    <label className="text-xs text-muted-foreground">{t("procurement.detail.type")}</label>
                     <div className="mt-1">
                       <ItemTypePicker
                         value={(editForm.type ?? "other") as ProcurementItemType}
@@ -2833,7 +2838,7 @@ export default function ProjectProcurement() {
                     </div>
                   </div>
                   <div>
-                    <label className="text-xs text-muted-foreground">When needed</label>
+                    <label className="text-xs text-muted-foreground">{t("procurement.detail.whenNeeded")}</label>
                     <div className="mt-1">
                       <Popover>
                         <PopoverTrigger asChild>
@@ -2843,7 +2848,7 @@ export default function ProjectProcurement() {
                             className={cn("h-9 w-full justify-start text-left", isOverdue(editForm.requiredByDate) && "text-destructive")}
                           >
                             <CalendarIcon className="h-4 w-4 mr-2" />
-                            {formatDate(editForm.requiredByDate)}
+                            {formatDate(editForm.requiredByDate, dash)}
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0" align="start">
@@ -2856,14 +2861,14 @@ export default function ProjectProcurement() {
                         </PopoverContent>
                       </Popover>
                       {detailItem.lockedFromEstimate && (
-                        <p className="mt-1 text-[11px] text-muted-foreground">Synced from linked work start date</p>
+                        <p className="mt-1 text-[11px] text-muted-foreground">{t("procurement.detail.syncedFromWork")}</p>
                       )}
                     </div>
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-xs text-muted-foreground">Name</label>
+                  <label className="text-xs text-muted-foreground">{t("procurement.detail.name")}</label>
                   <Input
                   value={editForm.name ?? ""}
                   onChange={(event) => patchEditForm((prev) => ({ ...prev, name: event.target.value }))}
@@ -2874,7 +2879,7 @@ export default function ProjectProcurement() {
                 </div>
 
                 <div>
-                  <label className="text-xs text-muted-foreground">Specification</label>
+                  <label className="text-xs text-muted-foreground">{t("procurement.detail.spec")}</label>
                   <Input
                     value={editForm.spec ?? ""}
                     onChange={(event) => patchEditForm((prev) => ({ ...prev, spec: event.target.value || null }))}
@@ -2886,7 +2891,7 @@ export default function ProjectProcurement() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs text-muted-foreground">Requested amount</label>
+                    <label className="text-xs text-muted-foreground">{t("procurement.detail.requestedAmount")}</label>
                     <Input
                       type="number"
                       min="0"
@@ -2901,21 +2906,21 @@ export default function ProjectProcurement() {
                     />
                   </div>
                   <div>
-                    <label className="text-xs text-muted-foreground">Unit</label>
-                    <p className="mt-1 h-9 flex items-center text-sm text-foreground">{editForm.unit ?? "—"}</p>
+                    <label className="text-xs text-muted-foreground">{t("procurement.detail.unit")}</label>
+                    <p className="mt-1 h-9 flex items-center text-sm text-foreground">{editForm.unit ?? dash}</p>
                   </div>
                 </div>
 
                 {canViewSensitiveDetail && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs text-muted-foreground">Planned unit price</label>
+                      <label className="text-xs text-muted-foreground">{t("procurement.detail.plannedUnitPrice")}</label>
                       <p className="mt-1 h-9 flex items-center justify-end tabular-nums text-sm text-foreground">
                         {fmtCost(editForm.plannedUnitPrice ?? 0)}
                       </p>
                     </div>
                     <div>
-                      <label className="text-xs text-muted-foreground">Actual unit price</label>
+                      <label className="text-xs text-muted-foreground">{t("procurement.detail.actualUnitPrice")}</label>
                       <Input
                         type="number"
                         min="0"
@@ -2926,7 +2931,7 @@ export default function ProjectProcurement() {
                         }}
                         onBlur={() => persistDraftNowIfChanged(draftRef.current)}
                         className="h-9"
-                        placeholder="RUB"
+                        placeholder={t("procurement.detail.actualUnitPricePlaceholder")}
                         disabled={!canEdit || activeTab === "ordered"}
                       />
                     </div>
@@ -2934,7 +2939,7 @@ export default function ProjectProcurement() {
                 )}
 
                 <div>
-                  <label className="text-xs text-muted-foreground">Supplier preferred</label>
+                  <label className="text-xs text-muted-foreground">{t("procurement.detail.supplierPreferred")}</label>
                   <Input
                     value={editForm.supplierPreferred ?? ""}
                     onChange={(event) => patchEditForm((prev) => ({ ...prev, supplierPreferred: event.target.value || null }))}
@@ -2945,7 +2950,7 @@ export default function ProjectProcurement() {
                 </div>
 
                 <div>
-                  <label className="text-xs text-muted-foreground">Notes</label>
+                  <label className="text-xs text-muted-foreground">{t("procurement.detail.notes")}</label>
                   <Textarea
                     value={editForm.notes ?? ""}
                     onChange={(event) => patchEditForm((prev) => ({ ...prev, notes: event.target.value || null }))}
@@ -2957,7 +2962,7 @@ export default function ProjectProcurement() {
                 </div>
 
                 <div className="rounded-lg border border-border p-3 space-y-2">
-                  <p className="text-sm font-medium text-foreground">Attachments</p>
+                  <p className="text-sm font-medium text-foreground">{t("procurement.detail.attachments")}</p>
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                     <Input
                       value={attachmentUrl}
@@ -2967,7 +2972,7 @@ export default function ProjectProcurement() {
                         event.preventDefault();
                         addUrlAttachment();
                       }}
-                      placeholder="Paste a link to receipt/invoice (PDF, Drive, etc.)"
+                      placeholder={t("procurement.detail.attachmentPlaceholder")}
                       className="h-9 sm:flex-1"
                       disabled={!canEdit}
                     />
@@ -2988,7 +2993,7 @@ export default function ProjectProcurement() {
                       onClick={() => filePickerRef.current?.click()}
                       disabled={!canEdit}
                     >
-                      Add file
+                      {t("procurement.action.addFile")}
                     </Button>
                   </div>
 
@@ -3001,13 +3006,13 @@ export default function ProjectProcurement() {
                               <p className="truncate text-foreground">{attachmentDisplayName(attachment)}</p>
                               {attachment.isLocal && (
                                 <span className="inline-flex mt-1 rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
-                                  Local
+                                  {t("procurement.detail.attachmentLocal")}
                                 </span>
                               )}
                             </div>
                             <div className="flex items-center gap-3 shrink-0">
                               <a href={attachment.url} target="_blank" rel="noreferrer" className="text-accent hover:underline">
-                                Open
+                                {t("common.open")}
                               </a>
                               <button
                                 type="button"
@@ -3015,7 +3020,7 @@ export default function ProjectProcurement() {
                                 onClick={() => removeAttachment(attachment.id)}
                                 disabled={!canEdit}
                               >
-                                Remove
+                                {t("common.remove")}
                               </button>
                             </div>
                           </div>
@@ -3023,13 +3028,13 @@ export default function ProjectProcurement() {
                       ))}
                     </div>
                   ) : (
-                    <p className="text-xs text-muted-foreground">No attachments yet.</p>
+                    <p className="text-xs text-muted-foreground">{t("procurement.detail.noAttachments")}</p>
                   )}
                 </div>
 
                 <div className="rounded-lg border border-border p-3 space-y-2">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-medium text-foreground">Fulfillment</p>
+                    <p className="text-sm font-medium text-foreground">{t("procurement.detail.fulfillment")}</p>
                     {canLaunchOrderFlows && (
                       <Button
                         type="button"
@@ -3037,7 +3042,7 @@ export default function ProjectProcurement() {
                         onClick={() => openCreateOrder([detailItem.id])}
                         disabled={!canEdit || shouldBlockProcurementLaunchActions}
                       >
-                        Create order
+                        {t("procurement.action.createOrder")}
                       </Button>
                     )}
                   </div>
@@ -3057,16 +3062,16 @@ export default function ProjectProcurement() {
                             <div className="flex items-center justify-between gap-2">
                               <div className="min-w-0">
                                 <p className="text-xs font-medium text-foreground truncate">
-                                  {order.kind === "supplier" ? (order.supplierName || "Supplier order") : "Stock allocation"}
+                                  {order.kind === "supplier" ? (order.supplierName || t("procurement.order.supplierFallback")) : t("procurement.order.stockAllocation")}
                                 </p>
                                 <p className="text-[11px] text-muted-foreground truncate">
                                   {order.kind === "supplier"
-                                    ? `To: ${locations.find((location) => location.id === order.deliverToLocationId)?.name ?? "—"}`
-                                    : `From: ${locations.find((location) => location.id === order.fromLocationId)?.name ?? "—"} · To: ${locations.find((location) => location.id === (order.toLocationId ?? order.deliverToLocationId))?.name ?? "—"}`}
+                                    ? t("procurement.location.to", { location: locations.find((location) => location.id === order.deliverToLocationId)?.name ?? dash })
+                                    : t("procurement.location.fromTo", { from: locations.find((location) => location.id === order.fromLocationId)?.name ?? dash, to: locations.find((location) => location.id === (order.toLocationId ?? order.deliverToLocationId))?.name ?? dash })}
                                 </p>
                               </div>
                               <div className="text-right shrink-0">
-                                <StatusBadge status={orderStatusLabel(order.status)} variant="procurement" className="text-[10px]" />
+                                <StatusBadge status={orderStatusLabel(order.status, t)} variant="procurement" className="text-[10px]" />
                                 <p className="text-[11px] text-muted-foreground mt-1">{qtyInfo}</p>
                               </div>
                             </div>
@@ -3075,13 +3080,13 @@ export default function ProjectProcurement() {
                       })}
                     </div>
                   ) : (
-                    <p className="text-xs text-muted-foreground">No related orders yet.</p>
+                    <p className="text-xs text-muted-foreground">{t("procurement.detail.noRelatedOrders")}</p>
                   )}
                 </div>
 
                 {detailItem.linkedTaskIds.length > 0 && (
                   <div>
-                    <label className="text-xs text-muted-foreground mb-1 block">Linked tasks</label>
+                    <label className="text-xs text-muted-foreground mb-1 block">{t("procurement.detail.linkedTasks")}</label>
                     <div className="space-y-1">
                       {detailItem.linkedTaskIds.map((taskId) => {
                         const task = getTask(taskId);
@@ -3096,7 +3101,7 @@ export default function ProjectProcurement() {
                             className="flex items-center gap-1.5 text-xs text-accent hover:underline"
                           >
                             <Link2 className="h-3 w-3" />
-                            {task?.title ?? "Task unavailable"}
+                            {task?.title ?? t("procurement.detail.taskUnavailable")}
                           </button>
                         );
                       })}
@@ -3108,17 +3113,17 @@ export default function ProjectProcurement() {
           )}
 
           <DialogFooter className="border-t border-border px-4 py-3 sm:px-6">
-            <Button type="button" variant="outline" onClick={closeDetail}>Close</Button>
+            <Button type="button" variant="outline" onClick={closeDetail}>{t("common.close")}</Button>
             {detailItem && canEdit && (
               <Button
                 type="button"
                 onClick={() => {
                   clearAutosaveTimer();
                   persistDraftNowIfChanged(draftRef.current);
-                  toast({ title: "Saved" });
+                  toast({ title: t("procurement.toast.saved") });
                 }}
               >
-                Save
+                {t("procurement.action.save")}
               </Button>
             )}
             {detailItem && canEdit && !detailItem.lockedFromEstimate && (
@@ -3128,11 +3133,11 @@ export default function ProjectProcurement() {
                 className="text-destructive hover:text-destructive"
                 onClick={() => {
                   archiveProcurementItem(detailItem.id);
-                  toast({ title: "Item archived" });
+                  toast({ title: t("procurement.toast.itemArchived") });
                   closeDetail();
                 }}
               >
-                Archive
+                {t("procurement.action.archive")}
               </Button>
             )}
           </DialogFooter>

@@ -7,6 +7,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
 
 interface OverflowMenuItem {
   label: string;
@@ -21,12 +22,13 @@ interface OverflowMenuProps {
 }
 
 export function OverflowMenu({ items, className }: OverflowMenuProps) {
+  const { t } = useTranslation();
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon" className={cn("h-8 w-8", className)}>
           <MoreHorizontal className="h-4 w-4" />
-          <span className="sr-only">More options</span>
+          <span className="sr-only">{t("overflowMenu.moreOptions")}</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="glass-elevated rounded-card">

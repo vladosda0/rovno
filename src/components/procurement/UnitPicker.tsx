@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ChevronsUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +15,7 @@ interface UnitPickerProps {
 }
 
 export function UnitPicker({ value, onChange, disabled, className }: UnitPickerProps) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [custom, setCustom] = useState("");
 
@@ -29,7 +31,7 @@ export function UnitPicker({ value, onChange, disabled, className }: UnitPickerP
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button type="button" variant="outline" size="sm" className={className} disabled={disabled}>
-          {value || "Unit"}
+          {value || t("procurement.unitPicker.default")}
           <ChevronsUpDown className="h-3 w-3 ml-1 opacity-60" />
         </Button>
       </PopoverTrigger>
@@ -55,7 +57,7 @@ export function UnitPicker({ value, onChange, disabled, className }: UnitPickerP
           <Input
             value={custom}
             onChange={(event) => setCustom(event.target.value)}
-            placeholder="Custom unit"
+            placeholder={t("procurement.unitPicker.customPlaceholder")}
             className="h-8"
             onKeyDown={(event) => {
               if (event.key !== "Enter") return;
@@ -64,7 +66,7 @@ export function UnitPicker({ value, onChange, disabled, className }: UnitPickerP
             }}
           />
           <Button type="button" size="sm" className="w-full" onClick={applyCustom} disabled={!custom.trim()}>
-            Use custom unit
+            {t("procurement.unitPicker.useCustom")}
           </Button>
         </div>
       </PopoverContent>

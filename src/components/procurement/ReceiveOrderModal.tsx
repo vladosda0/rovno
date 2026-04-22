@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -33,6 +34,7 @@ export function ReceiveOrderModal({
   orderId,
   onCompleted,
 }: ReceiveOrderModalProps) {
+  const { t } = useTranslation();
   const order = useOrder(orderId);
   const items = useProcurementV2(projectId);
   const locations = useLocations(projectId);
@@ -72,7 +74,7 @@ export function ReceiveOrderModal({
     if (!order) return;
     if (receiveInFlightRef.current) return;
     if (order.status !== "placed") {
-      toast({ title: "Order is not receivable", variant: "destructive" });
+      toast({ title: t("procurement.receiveOrder.notReceivable"), variant: "destructive" });
       return;
     }
     const lines = order.lines
@@ -80,12 +82,12 @@ export function ReceiveOrderModal({
       .filter((line) => line.qty > 0);
 
     if (lines.length === 0) {
-      toast({ title: "No quantities entered", variant: "destructive" });
+      toast({ title: t("procurement.toast.noQtyEntered"), variant: "destructive" });
       return;
     }
 
     if (!locationId) {
-      toast({ title: "Location is required", description: "Select a receive location", variant: "destructive" });
+      toast({ title: t("procurement.receiveOrder.locationRequired"), description: t("procurement.receiveOrder.locationRequiredDesc"), variant: "destructive" });
       return;
     }
 
@@ -120,13 +122,13 @@ export function ReceiveOrderModal({
         ]);
       }
 
-      toast({ title: "Order received" });
+      toast({ title: t("procurement.receiveOrder.orderReceived") });
       onCompleted?.();
       onOpenChange(false);
     } catch (error) {
       toast({
-        title: "Receive failed",
-        description: error instanceof Error ? error.message : "Please try again.",
+        title: t("procurement.toast.receiveFailed"),
+        description: error instanceof Error ? error.message : t("procurement.toast.receiveFallback"),
         variant: "destructive",
       });
     } finally {
@@ -139,15 +141,15 @@ export function ReceiveOrderModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[92vw] max-w-2xl max-h-[88vh] overflow-hidden p-0 gap-0 flex flex-col">
         <DialogHeader className="px-5 py-4 border-b border-border">
-          <DialogTitle>Receive order</DialogTitle>
+          <DialogTitle>{t("procurement.receiveOrder.title")}</DialogTitle>
         </DialogHeader>
 
         {!order ? (
-          <div className="px-5 py-4 text-sm text-muted-foreground">Order not found.</div>
+          <div className="px-5 py-4 text-sm text-muted-foreground">{t("procurement.receiveOrder.notFound")}</div>
         ) : (
           <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
             <div>
-              <label className="text-xs text-muted-foreground">Receive to location</label>
+              <label className="text-xs text-muted-foreground">{t("procurement.receiveOrder.receiveToLocation")}</label>
               <LocationPicker projectId={projectId} value={locationId} onChange={setLocationId} />
             </div>
 
@@ -155,10 +157,10 @@ export function ReceiveOrderModal({
               <table className="w-full text-sm">
                 <thead className="bg-muted/30 border-b border-border">
                   <tr>
-                    <th className="text-left px-3 py-2">Item</th>
-                    <th className="text-right px-3 py-2">Ordered</th>
-                    <th className="text-right px-3 py-2">Already received</th>
-                    <th className="text-right px-3 py-2">Receive now</th>
+                    <th className="text-left px-3 py-2">{t("procurement.col.item")}</th>
+                    <th className="text-right px-3 py-2">{t("procurement.col.orderedQty")}</th>
+                    <th className="text-right px-3 py-2">{t("procurement.col.alreadyReceived")}</th>
+                    <th className="text-right px-3 py-2">{t("procurement.col.receiveNow")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -169,7 +171,7 @@ export function ReceiveOrderModal({
                     return (
                       <tr key={line.id} className="border-b border-border/70 last:border-0">
                         <td className="px-3 py-2">
-                          <p className="font-medium text-foreground">{item?.name ?? "Unknown item"}</p>
+                          <p className="font-medium text-foreground">{item?.name ?? t("procurement.orderDetail.unknownItem")}</p>
                           {item?.spec && <p className="text-xs text-muted-foreground">{item.spec}</p>}
                         </td>
                         <td className="px-3 py-2 text-right">{line.qty} {line.unit}</td>
@@ -197,14 +199,14 @@ export function ReceiveOrderModal({
         )}
 
         <DialogFooter className="px-5 py-4 border-t border-border">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>{t("common.close")}</Button>
           <Button
             type="button"
             onClick={submit}
             disabled={!order || order.status !== "placed" || receiveInFlight}
           >
             {receiveInFlight ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}
-            {receiveInFlight ? "Receiving..." : "Receive"}
+            {receiveInFlight ? t("procurement.receiveModal.receiving") : t("procurement.action.receive")}
           </Button>
         </DialogFooter>
       </DialogContent>

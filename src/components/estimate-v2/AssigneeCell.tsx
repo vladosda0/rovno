@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Mail, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -44,6 +45,7 @@ export function AssigneeCell({
   onCommit,
   onInvite,
 }: AssigneeCellProps) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [selectedParticipantId, setSelectedParticipantId] = useState<string>("");
   const [nameInput, setNameInput] = useState("");
@@ -91,7 +93,7 @@ export function AssigneeCell({
   }, [assigneeEmail, assigneeId, assigneeName, open, selectedParticipant]);
 
   if (clientView || !editable) {
-    return <span className="text-xs text-muted-foreground">{displayName || "—"}</span>;
+    return <span className="text-xs text-muted-foreground">{displayName || t("common.emptyDash")}</span>;
   }
 
   const trimmedName = nameInput.trim();
@@ -121,21 +123,21 @@ export function AssigneeCell({
         onClick={() => setOpen(true)}
       >
         <User className="h-3.5 w-3.5" />
-        <span className="truncate">{displayName || "Assign"}</span>
+        <span className="truncate">{displayName || t("estimate.assignee.assignButton")}</span>
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Assign resource</DialogTitle>
+            <DialogTitle>{t("estimate.assignee.dialogTitle")}</DialogTitle>
             <DialogDescription>
-              Assignment does not grant project access.
+              {t("estimate.assignee.dialogDescription")}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3">
             <div className="space-y-2 rounded-md border border-border/70 p-2">
-              <p className="text-xs font-medium text-muted-foreground">Name</p>
+              <p className="text-xs font-medium text-muted-foreground">{t("estimate.assignee.nameLabel")}</p>
               <Input
                 value={nameInput}
                 onFocus={() => setShowSuggestions(true)}
@@ -151,7 +153,7 @@ export function AssigneeCell({
                   }
                 }}
                 className="h-8"
-                placeholder="Type person name"
+                placeholder={t("estimate.assignee.namePlaceholder")}
               />
               {shouldShowSuggestions && (
                 <div className="max-h-44 overflow-auto rounded-md border border-border/70 p-1">
@@ -189,21 +191,21 @@ export function AssigneeCell({
                       }}
                     >
                       <span className="text-sm text-foreground">{invite.email}</span>
-                      <span className="text-xs text-muted-foreground">Pending invite</span>
+                      <span className="text-xs text-muted-foreground">{t("estimate.assignee.pendingInvite")}</span>
                     </button>
                   ))}
                 </div>
               )}
               {selectedParticipantId && (
                 <p className="text-[11px] text-muted-foreground">
-                  Participant selected. Editing name or email switches to identity assignment.
+                  {t("estimate.assignee.participantSelectedHint")}
                 </p>
               )}
             </div>
 
             {shouldShowEmailSection && (
               <div className="space-y-2 rounded-md border border-border/70 p-2">
-                <p className="text-xs font-medium text-muted-foreground">Email (optional)</p>
+                <p className="text-xs font-medium text-muted-foreground">{t("estimate.assignee.emailLabel")}</p>
                 <div className="flex items-start gap-2">
                   <div className="relative flex-1">
                     <Mail className="pointer-events-none absolute left-2 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
@@ -216,7 +218,7 @@ export function AssigneeCell({
                         }
                       }}
                       className={cn("h-8 pl-7", hasEmail && !isEmailValid && "border-destructive focus-visible:ring-destructive")}
-                      placeholder="contractor@example.com"
+                      placeholder={t("estimate.assignee.emailPlaceholder")}
                     />
                   </div>
                   {onInvite && (
@@ -237,15 +239,15 @@ export function AssigneeCell({
                         }
                       }}
                     >
-                      Invite
+                      {t("estimate.assignee.inviteButton")}
                     </Button>
                   )}
                 </div>
                 {hasEmail && !isEmailValid && (
-                  <p className="text-[11px] text-destructive">Invalid email</p>
+                  <p className="text-[11px] text-destructive">{t("estimate.assignee.invalidEmail")}</p>
                 )}
                 <p className="text-[11px] text-muted-foreground">
-                  Invite is optional. You can assign without sending an invite.
+                  {t("estimate.assignee.inviteOptionalHint")}
                 </p>
               </div>
             )}
@@ -260,10 +262,10 @@ export function AssigneeCell({
                 setOpen(false);
               }}
             >
-              Clear
+              {t("estimate.assignee.clear")}
             </Button>
             <div className="flex items-center gap-2">
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>{t("common.cancel")}</Button>
               <Button
                 type="button"
                 disabled={!canSave}
@@ -286,7 +288,7 @@ export function AssigneeCell({
                   setOpen(false);
                 }}
               >
-                Save
+                {t("common.save")}
               </Button>
             </div>
           </DialogFooter>

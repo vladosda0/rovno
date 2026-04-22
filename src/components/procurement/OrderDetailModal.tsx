@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cancelDraftOrder, voidOrder } from "@/data/order-store";
@@ -20,11 +21,13 @@ interface OrderDetailModalProps {
   onOpenRequest?: (requestId: string) => void;
 }
 
-function orderStatusLabel(status: "draft" | "placed" | "received" | "voided") {
-  if (status === "draft") return "Draft";
-  if (status === "placed") return "Ordered";
-  if (status === "voided") return "Voided";
-  return "In stock";
+type Translator = (key: string, options?: Record<string, unknown>) => string;
+
+function orderStatusLabel(status: "draft" | "placed" | "received" | "voided", t: Translator) {
+  if (status === "draft") return t("procurement.orderStatus.draft");
+  if (status === "placed") return t("procurement.orderStatus.ordered");
+  if (status === "voided") return t("procurement.orderStatus.voided");
+  return t("procurement.orderStatus.inStock");
 }
 
 export function OrderDetailModal({
@@ -35,6 +38,7 @@ export function OrderDetailModal({
   showSensitiveDetail = true,
   onOpenRequest,
 }: OrderDetailModalProps) {
+  const { t } = useTranslation();
   const order = useOrder(orderId);
   const items = useProcurementV2(projectId);
   const locations = useLocations(projectId);
@@ -87,20 +91,20 @@ export function OrderDetailModal({
     if (!order) return;
     const result = cancelDraftOrder(order.id);
     if (!result.ok) {
-      toast({ title: "Unable to cancel draft", description: result.error, variant: "destructive" });
+      toast({ title: t("procurement.orderDetail.unableCancelDraft"), description: result.error, variant: "destructive" });
       return;
     }
-    toast({ title: "Draft cancelled" });
+    toast({ title: t("procurement.orderDetail.draftCancelled") });
   };
 
   const onVoidOrder = () => {
     if (!order) return;
     const result = voidOrder(order.id);
     if (!result.ok) {
-      toast({ title: "Unable to void order", description: result.error, variant: "destructive" });
+      toast({ title: t("procurement.orderDetail.unableVoid"), description: result.error, variant: "destructive" });
       return;
     }
-    toast({ title: "Order voided" });
+    toast({ title: t("procurement.orderDetail.orderVoided") });
   };
 
   return (
@@ -109,55 +113,55 @@ export function OrderDetailModal({
         <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col">
           <DialogHeader className="px-5 py-4 border-b border-border">
             <DialogTitle className="flex items-center gap-2">
-              Order details
-              {order && <StatusBadge status={orderStatusLabel(order.status)} variant="procurement" />}
+              {t("procurement.orderDetail.title")}
+              {order && <StatusBadge status={orderStatusLabel(order.status, t)} variant="procurement" />}
             </DialogTitle>
             <DialogDescription className="sr-only">
-              Supplier order lines, delivery targets, and receipt progress for this order.
+              {t("procurement.orderDetail.description")}
             </DialogDescription>
           </DialogHeader>
 
           {!order ? (
-            <div className="flex-1 px-5 py-4 text-sm text-muted-foreground">Order not found.</div>
+            <div className="flex-1 px-5 py-4 text-sm text-muted-foreground">{t("procurement.orderDetail.notFound")}</div>
           ) : (
             <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                 <div className="rounded-lg border border-border p-3 space-y-1">
-                  <p className="text-xs text-muted-foreground">Source</p>
-                  <p className="text-foreground capitalize">{order.kind}</p>
+                  <p className="text-xs text-muted-foreground">{t("procurement.orderDetail.source")}</p>
+                  <p className="text-foreground capitalize">{t(`procurement.orderDetail.kind.${order.kind}`)}</p>
                   {order.supplierName && (
                     <>
-                      <p className="text-xs text-muted-foreground pt-1">Supplier</p>
+                      <p className="text-xs text-muted-foreground pt-1">{t("procurement.orderDetail.supplier")}</p>
                       <p className="text-foreground">{order.supplierName}</p>
                     </>
                   )}
                 </div>
                 <div className="rounded-lg border border-border p-3 space-y-1">
-                  <p className="text-xs text-muted-foreground">Deliver to</p>
+                  <p className="text-xs text-muted-foreground">{t("procurement.orderDetail.deliverTo")}</p>
                   <p className="text-foreground">{locationById.get(order.deliverToLocationId ?? "")?.name ?? "—"}</p>
                   {order.kind === "stock" && order.fromLocationId && (
                     <>
-                      <p className="text-xs text-muted-foreground pt-1">From location</p>
+                      <p className="text-xs text-muted-foreground pt-1">{t("procurement.orderDetail.fromLocation")}</p>
                       <p className="text-foreground">{locationById.get(order.fromLocationId)?.name ?? "—"}</p>
                     </>
                   )}
                 </div>
                 <div className="rounded-lg border border-border p-3 space-y-1">
-                  <p className="text-xs text-muted-foreground">Due date</p>
+                  <p className="text-xs text-muted-foreground">{t("procurement.orderDetail.dueDate")}</p>
                   <p className="text-foreground">{order.dueDate ? new Date(order.dueDate).toLocaleDateString() : "—"}</p>
-                  <p className="text-xs text-muted-foreground pt-1">Delivery deadline</p>
+                  <p className="text-xs text-muted-foreground pt-1">{t("procurement.orderDetail.deliveryDeadline")}</p>
                   <p className="text-foreground">{order.deliveryDeadline ? new Date(order.deliveryDeadline).toLocaleDateString() : "—"}</p>
                 </div>
                 <div className="rounded-lg border border-border p-3 space-y-1">
-                  <p className="text-xs text-muted-foreground">Invoice</p>
+                  <p className="text-xs text-muted-foreground">{t("procurement.orderDetail.invoice")}</p>
                   <p className="text-foreground">{order.invoiceAttachment?.name ?? "—"}</p>
                   {showSensitiveDetail && (
                     <>
-                      <p className="text-xs text-muted-foreground pt-1">Planned total</p>
+                      <p className="text-xs text-muted-foreground pt-1">{t("procurement.orderDetail.plannedTotal")}</p>
                       <p className="text-foreground">{fmtCost(plannedTotal)}</p>
-                      <p className="text-xs text-muted-foreground pt-1">Factual total</p>
+                      <p className="text-xs text-muted-foreground pt-1">{t("procurement.orderDetail.factualTotal")}</p>
                       <p className="text-foreground">{fmtCost(factualTotal)}</p>
-                      <p className="text-xs text-muted-foreground pt-1">Open value</p>
+                      <p className="text-xs text-muted-foreground pt-1">{t("procurement.orderDetail.openValue")}</p>
                       <p className="text-foreground">{fmtCost(total)}</p>
                     </>
                   )}
@@ -166,7 +170,7 @@ export function OrderDetailModal({
 
               {order.note && (
                 <div className="rounded-lg border border-border p-3">
-                  <p className="text-xs text-muted-foreground">Note</p>
+                  <p className="text-xs text-muted-foreground">{t("procurement.orderDetail.note")}</p>
                   <p className="text-sm text-foreground mt-1 whitespace-pre-wrap">{order.note}</p>
                 </div>
               )}
@@ -175,14 +179,14 @@ export function OrderDetailModal({
                 <table className="w-full text-sm">
                   <thead className="bg-muted/30 border-b border-border">
                     <tr>
-                      <th className="text-left px-3 py-2">Item</th>
-                      <th className="text-right px-3 py-2">Qty</th>
-                      <th className="text-left px-3 py-2">Unit</th>
-                      {showSensitiveDetail && <th className="text-right px-3 py-2">Planned unit</th>}
-                      {showSensitiveDetail && <th className="text-right px-3 py-2">Factual unit</th>}
-                      {showSensitiveDetail && <th className="text-right px-3 py-2">Planned total</th>}
-                      {showSensitiveDetail && <th className="text-right px-3 py-2">Factual total</th>}
-                      <th className="text-right px-3 py-2">Received</th>
+                      <th className="text-left px-3 py-2">{t("procurement.orderDetail.colItem")}</th>
+                      <th className="text-right px-3 py-2">{t("procurement.orderDetail.colQty")}</th>
+                      <th className="text-left px-3 py-2">{t("procurement.orderDetail.colUnit")}</th>
+                      {showSensitiveDetail && <th className="text-right px-3 py-2">{t("procurement.orderDetail.colPlannedUnit")}</th>}
+                      {showSensitiveDetail && <th className="text-right px-3 py-2">{t("procurement.orderDetail.colFactualUnit")}</th>}
+                      {showSensitiveDetail && <th className="text-right px-3 py-2">{t("procurement.orderDetail.colPlannedTotal")}</th>}
+                      {showSensitiveDetail && <th className="text-right px-3 py-2">{t("procurement.orderDetail.colFactualTotal")}</th>}
+                      <th className="text-right px-3 py-2">{t("procurement.orderDetail.colReceived")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -205,7 +209,7 @@ export function OrderDetailModal({
                               className="text-left hover:underline"
                               onClick={() => onOpenRequest?.(line.procurementItemId)}
                             >
-                              <p className="font-medium text-foreground">{item?.name ?? "Unknown item"}</p>
+                              <p className="font-medium text-foreground">{item?.name ?? t("procurement.orderDetail.unknownItem")}</p>
                               {item?.spec && <p className="text-xs text-muted-foreground">{item.spec}</p>}
                             </button>
                           </td>
@@ -226,24 +230,24 @@ export function OrderDetailModal({
           )}
 
           <DialogFooter className="px-5 py-4 border-t border-border">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>{t("common.close")}</Button>
             {order?.status === "draft" && !isSupabaseMode && (
-              <Button type="button" variant="destructive" onClick={onCancelDraft}>Cancel draft</Button>
+              <Button type="button" variant="destructive" onClick={onCancelDraft}>{t("procurement.orderDetail.cancelDraft")}</Button>
             )}
             {order?.status === "draft" && isSupabaseMode && order.kind === "supplier" && (
-              <Button type="button" variant="destructive" disabled>Cancel draft</Button>
+              <Button type="button" variant="destructive" disabled>{t("procurement.orderDetail.cancelDraft")}</Button>
             )}
             {order?.status === "placed" && !isSupabaseMode && (
-              <Button type="button" variant="destructive" onClick={onVoidOrder}>Void order</Button>
+              <Button type="button" variant="destructive" onClick={onVoidOrder}>{t("procurement.orderDetail.voidOrder")}</Button>
             )}
             {order?.status === "placed" && isSupabaseMode && order.kind === "supplier" && (
-              <Button type="button" variant="destructive" disabled>Void order</Button>
+              <Button type="button" variant="destructive" disabled>{t("procurement.orderDetail.voidOrder")}</Button>
             )}
             {order?.kind === "stock" && order?.status === "received" && !isSupabaseMode && (
-              <Button type="button" variant="destructive" onClick={onVoidOrder}>Void allocation</Button>
+              <Button type="button" variant="destructive" onClick={onVoidOrder}>{t("procurement.orderDetail.voidAllocation")}</Button>
             )}
             {order?.kind === "supplier" && order.status === "placed" && (
-              <Button type="button" onClick={() => setReceiveOpen(true)}>Receive</Button>
+              <Button type="button" onClick={() => setReceiveOpen(true)}>{t("procurement.action.receive")}</Button>
             )}
           </DialogFooter>
         </DialogContent>

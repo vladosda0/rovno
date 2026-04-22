@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,34 +10,43 @@ import { DocumentListItem } from "@/components/documents/DocumentListItem";
 import { DocumentsViewModeToggle, type DocumentViewMode } from "@/components/documents/DocumentsViewModeToggle";
 
 const CATEGORIES = [
-  "All", "How-tos", "Instructions", "Catalogs", "Price lists", "Warranties", "Templates",
+  { id: "All", labelKey: "documentsTab.categories.all" },
+  { id: "How-tos", labelKey: "documentsTab.categories.howTos" },
+  { id: "Instructions", labelKey: "documentsTab.categories.instructions" },
+  { id: "Catalogs", labelKey: "documentsTab.categories.catalogs" },
+  { id: "Price lists", labelKey: "documentsTab.categories.priceLists" },
+  { id: "Warranties", labelKey: "documentsTab.categories.warranties" },
+  { id: "Templates", labelKey: "documentsTab.categories.templates" },
 ] as const;
 
 interface LibraryDoc {
   id: string;
-  title: string;
+  titleKey: string;
   category: string;
+  categoryKey: string;
   pinned: boolean;
   tags: string[];
   updatedAt: string;
 }
 
 const MOCK_DOCS: LibraryDoc[] = [
-  { id: "lib-1", title: "General Safety Instructions", category: "Instructions", pinned: true, tags: ["safety", "onboarding"], updatedAt: "2025-02-15" },
-  { id: "lib-2", title: "Material Catalog — Q1 2025", category: "Catalogs", pinned: false, tags: ["materials"], updatedAt: "2025-01-20" },
-  { id: "lib-3", title: "Warranty Policy Template", category: "Templates", pinned: false, tags: ["warranty", "template"], updatedAt: "2025-01-10" },
-  { id: "lib-4", title: "Price List — Standard Finishes", category: "Price lists", pinned: true, tags: ["pricing"], updatedAt: "2025-02-01" },
-  { id: "lib-5", title: "How to Estimate a Kitchen Remodel", category: "How-tos", pinned: false, tags: ["estimation", "kitchen"], updatedAt: "2024-12-20" },
+  { id: "lib-1", titleKey: "documentsTab.mock.safety", category: "Instructions", categoryKey: "documentsTab.categories.instructions", pinned: true, tags: ["safety", "onboarding"], updatedAt: "2025-02-15" },
+  { id: "lib-2", titleKey: "documentsTab.mock.catalog", category: "Catalogs", categoryKey: "documentsTab.categories.catalogs", pinned: false, tags: ["materials"], updatedAt: "2025-01-20" },
+  { id: "lib-3", titleKey: "documentsTab.mock.warrantyTemplate", category: "Templates", categoryKey: "documentsTab.categories.templates", pinned: false, tags: ["warranty", "template"], updatedAt: "2025-01-10" },
+  { id: "lib-4", titleKey: "documentsTab.mock.priceListFinishes", category: "Price lists", categoryKey: "documentsTab.categories.priceLists", pinned: true, tags: ["pricing"], updatedAt: "2025-02-01" },
+  { id: "lib-5", titleKey: "documentsTab.mock.kitchenHowTo", category: "How-tos", categoryKey: "documentsTab.categories.howTos", pinned: false, tags: ["estimation", "kitchen"], updatedAt: "2024-12-20" },
 ];
 
 export function DocumentsTab() {
+  const { t } = useTranslation();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<string>("All");
   const [viewMode, setViewMode] = useState<DocumentViewMode>("list");
   const [docs, setDocs] = useState(MOCK_DOCS);
 
   const filtered = docs.filter((d) => {
-    if (search && !d.title.toLowerCase().includes(search.toLowerCase()) && !d.tags.some((t) => t.includes(search.toLowerCase()))) return false;
+    const title = t(d.titleKey);
+    if (search && !title.toLowerCase().includes(search.toLowerCase()) && !d.tags.some((tag) => tag.includes(search.toLowerCase()))) return false;
     if (category !== "All" && d.category !== category) return false;
     return true;
   }).sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
@@ -51,28 +61,28 @@ export function DocumentsTab() {
       <div className="flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search documents…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-9" />
+          <Input placeholder={t("documentsTab.search")} value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-9" />
         </div>
         <Button variant="outline" size="sm" disabled>
-          <Upload className="h-3.5 w-3.5 mr-1.5" /> Upload
+          <Upload className="h-3.5 w-3.5 mr-1.5" /> {t("documentsTab.upload")}
         </Button>
         <DocumentsViewModeToggle value={viewMode} onValueChange={setViewMode} />
       </div>
       <p className="text-caption text-muted-foreground">
-        Library upload is coming soon.
+        {t("documentsTab.comingSoon")}
       </p>
 
       {/* Categories */}
       <div className="flex gap-1.5 flex-wrap">
         {CATEGORIES.map((cat) => (
           <Button
-            key={cat}
-            variant={category === cat ? "default" : "outline"}
+            key={cat.id}
+            variant={category === cat.id ? "default" : "outline"}
             size="sm"
             className="text-caption h-7"
-            onClick={() => setCategory(cat)}
+            onClick={() => setCategory(cat.id)}
           >
-            {cat}
+            {t(cat.labelKey)}
           </Button>
         ))}
       </div>
@@ -85,11 +95,11 @@ export function DocumentsTab() {
               {filtered.map((doc) => (
                 <DocumentListItem
                   key={doc.id}
-                  title={doc.title}
+                  title={t(doc.titleKey)}
                   titleAdornment={doc.pinned ? <Pin className="mr-1 inline h-3 w-3 text-accent" /> : undefined}
                   details={(
                     <>
-                      <Badge variant="secondary" className="text-[10px]">{doc.category}</Badge>
+                      <Badge variant="secondary" className="text-[10px]">{t(doc.categoryKey)}</Badge>
                       {doc.tags.map((tag) => (
                         <span key={tag} className="text-[10px] text-muted-foreground">#{tag}</span>
                       ))}
@@ -106,7 +116,7 @@ export function DocumentsTab() {
                 />
               ))}
               {filtered.length === 0 && (
-                <p className="text-caption text-muted-foreground py-8 text-center">No documents found.</p>
+                <p className="text-caption text-muted-foreground py-8 text-center">{t("documentsTab.noDocs")}</p>
               )}
             </div>
           </CardContent>
@@ -116,7 +126,7 @@ export function DocumentsTab() {
           {filtered.map((doc) => (
             <DocumentGridCard
               key={doc.id}
-              title={doc.title}
+              title={t(doc.titleKey)}
               titleAdornment={doc.pinned ? <Pin className="mr-1 inline h-3 w-3 text-accent" /> : undefined}
               actions={(
                 <Button
@@ -124,14 +134,14 @@ export function DocumentsTab() {
                   size="icon"
                   className="h-7 w-7"
                   onClick={() => togglePin(doc.id)}
-                  title={doc.pinned ? "Unpin" : "Pin"}
+                  title={doc.pinned ? t("documentsTab.unpin") : t("documentsTab.pin")}
                 >
                   <Pin className={`h-3.5 w-3.5 ${doc.pinned ? "text-accent" : "text-muted-foreground"}`} />
                 </Button>
               )}
               meta={(
                 <>
-                  <Badge variant="secondary" className="text-[10px]">{doc.category}</Badge>
+                  <Badge variant="secondary" className="text-[10px]">{t(doc.categoryKey)}</Badge>
                   {doc.tags.map((tag) => (
                     <span key={tag} className="text-[10px] text-muted-foreground">#{tag}</span>
                   ))}
@@ -143,7 +153,7 @@ export function DocumentsTab() {
           {filtered.length === 0 && (
             <Card className="sm:col-span-2 lg:col-span-3">
               <CardContent className="py-8 text-center text-caption text-muted-foreground">
-                No documents found.
+                {t("documentsTab.noDocs")}
               </CardContent>
             </Card>
           )}

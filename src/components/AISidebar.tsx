@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from "react";
 import { flushSync } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { trackEvent } from "@/lib/analytics";
 import { getEventGroupTimestampMs } from "@/lib/event-activity-timestamp";
 import {
@@ -121,8 +122,17 @@ import {
   writeStoredAiLlmProvider,
 } from "@/lib/ai-llm-provider";
 
-const PROJECT_SUGGESTIONS = ["Add tasks", "Update estimate", "Generate contract", "Buy materials"];
-const GLOBAL_SUGGESTIONS = ["Create project", "Compare estimates", "Best tile adhesive?"];
+const PROJECT_SUGGESTION_KEYS = [
+  "ai.sidebar.suggestion.addTasks",
+  "ai.sidebar.suggestion.updateEstimate",
+  "ai.sidebar.suggestion.generateContract",
+  "ai.sidebar.suggestion.buyMaterials",
+];
+const GLOBAL_SUGGESTION_KEYS = [
+  "ai.sidebar.suggestion.createProject",
+  "ai.sidebar.suggestion.compareEstimates",
+  "ai.sidebar.suggestion.bestTileAdhesive",
+];
 
 const STORAGE_KEY = "ai-sidebar-width";
 const DEFAULT_WIDTH = 420;
@@ -130,9 +140,24 @@ const MIN_WIDTH = 360;
 const MAX_WIDTH = 520;
 const COLLAPSED_WIDTH = 48;
 
-const WORK_STEPS_GENERATE = ["Reading project state", "Checking permissions", "Drafting proposal", "Estimating credits", "Ready for review"];
-const WORK_STEPS_HOSTED_CONSULT = ["Checking access", "Reading visible project context", "Preparing answer"];
-const WORK_STEPS_COMMIT = ["Applying changes", "Writing event log", "Updating context pack", "Done"];
+const WORK_STEP_KEYS_GENERATE = [
+  "ai.sidebar.workSteps.generate.readingProjectState",
+  "ai.sidebar.workSteps.generate.checkingPermissions",
+  "ai.sidebar.workSteps.generate.draftingProposal",
+  "ai.sidebar.workSteps.generate.estimatingCredits",
+  "ai.sidebar.workSteps.generate.readyForReview",
+];
+const WORK_STEP_KEYS_HOSTED_CONSULT = [
+  "ai.sidebar.workSteps.consult.checkingAccess",
+  "ai.sidebar.workSteps.consult.readingContext",
+  "ai.sidebar.workSteps.consult.preparingAnswer",
+];
+const WORK_STEP_KEYS_COMMIT = [
+  "ai.sidebar.workSteps.commit.applyingChanges",
+  "ai.sidebar.workSteps.commit.writingEventLog",
+  "ai.sidebar.workSteps.commit.updatingContextPack",
+  "ai.sidebar.workSteps.commit.done",
+];
 const AUTOMATION_MODE_TO_LEVEL: Record<AutomationMode, 1 | 2 | 3 | 4> = {
   full: 1,
   assisted: 2,
@@ -414,26 +439,26 @@ const INITIAL_VISIBLE_DAY_BUCKETS = 3;
 /** Each "Load more" reveals this many additional older day buckets. */
 const LOAD_MORE_DAY_BUCKET_INCREMENT = 7;
 
-const AUTOMATION_OPTIONS: { mode: AutomationMode; label: string; description: string }[] = [
+const AUTOMATION_OPTIONS: { mode: AutomationMode; labelKey: string; descriptionKey: string }[] = [
   {
     mode: "manual",
-    label: "Manual Control",
-    description: "Maximum user oversight.",
+    labelKey: "ai.sidebar.automation.manual.label",
+    descriptionKey: "ai.sidebar.automation.manual.description",
   },
   {
     mode: "assisted",
-    label: "Assisted",
-    description: "AI groups actions, user confirms once.",
+    labelKey: "ai.sidebar.automation.assisted.label",
+    descriptionKey: "ai.sidebar.automation.assisted.description",
   },
   {
     mode: "observer",
-    label: "Proactive",
-    description: "More editing shortcuts in the review queue. Risky changes still require your confirmation.",
+    labelKey: "ai.sidebar.automation.observer.label",
+    descriptionKey: "ai.sidebar.automation.observer.description",
   },
   {
     mode: "full",
-    label: "Autopilot",
-    description: "Faster review UX; each change is still confirmed before it is applied.",
+    labelKey: "ai.sidebar.automation.full.label",
+    descriptionKey: "ai.sidebar.automation.full.description",
   },
 ];
 
@@ -509,35 +534,43 @@ interface PhotoAnalysisResult {
   confidence: string;
 }
 
-function mockPhotoAnalysis(ctx: PhotoConsultContext): PhotoAnalysisResult {
-  const taskTitle = ctx.task?.title ?? "standalone photo";
+function mockPhotoAnalysis(ctx: PhotoConsultContext, t: Translator): PhotoAnalysisResult {
+  const taskTitle = ctx.task?.title ?? t("ai.sidebar.consult.standalonePhoto");
   const checklist = ctx.task?.checklist ?? [];
   const doneItems = checklist.filter((c) => c.done);
   const nextItem = checklist.find((c) => !c.done);
 
   return {
     stepAlignment: nextItem
-      ? `Corresponds to checklist item: "${nextItem.text}"`
+      ? t("ai.sidebar.consult.stepAlignment.matchesItem", { text: nextItem.text })
       : doneItems.length > 0
-        ? `All ${doneItems.length} checklist items completed`
-        : "No checklist items to align with",
-    observations: `Photo "${ctx.photo.caption}" shows progress on ${taskTitle}. ${
-      ctx.siblingPhotos?.length ? `${ctx.siblingPhotos.length} other photo(s) in this task for comparison.` : ""
-    }`,
+        ? t("ai.sidebar.consult.stepAlignment.allDone", { count: doneItems.length })
+        : t("ai.sidebar.consult.stepAlignment.noItems"),
+    observations: ctx.siblingPhotos?.length
+      ? t("ai.sidebar.consult.observations.withSiblings", {
+          caption: ctx.photo.caption,
+          task: taskTitle,
+          count: ctx.siblingPhotos.length,
+        })
+      : t("ai.sidebar.consult.observations.basic", { caption: ctx.photo.caption, task: taskTitle }),
     issues: [
-      { text: "Minor alignment issue visible in left section", severity: "Low" as const },
+      { text: t("ai.sidebar.consult.issues.alignment"), severity: "Low" as const },
       ...(Math.random() > 0.5
-        ? [{ text: "Potential moisture concern near joint area", severity: "Med" as const }]
+        ? [{ text: t("ai.sidebar.consult.issues.moisture"), severity: "Med" as const }]
         : []),
     ],
     nextStep: nextItem
-      ? `Proceed with: "${nextItem.text}"`
-      : "Task checklist complete — consider marking as Done",
-    confidence: "High — recommend additional close-up angle of joint area for verification",
+      ? t("ai.sidebar.consult.nextStep.proceed", { text: nextItem.text })
+      : t("ai.sidebar.consult.nextStep.complete"),
+    confidence: t("ai.sidebar.consult.confidence"),
   };
 }
 
-function buildSuggestedActions(ctx: PhotoConsultContext, analysis: PhotoAnalysisResult): ProposalChange[] {
+function buildSuggestedActions(
+  ctx: PhotoConsultContext,
+  analysis: PhotoAnalysisResult,
+  t: Translator,
+): ProposalChange[] {
   const actions: ProposalChange[] = [];
 
   // If there are medium/high severity issues, suggest a fix task
@@ -546,7 +579,7 @@ function buildSuggestedActions(ctx: PhotoConsultContext, analysis: PhotoAnalysis
     actions.push({
       entity_type: "task",
       action: "create",
-      label: `Fix issue: ${ctx.photo.caption}`,
+      label: t("ai.sidebar.consult.actions.fixIssue", { caption: ctx.photo.caption }),
       after: "not_started",
     });
   }
@@ -556,7 +589,7 @@ function buildSuggestedActions(ctx: PhotoConsultContext, analysis: PhotoAnalysis
     actions.push({
       entity_type: "comment",
       action: "create",
-      label: "Add AI observation comment to task",
+      label: t("ai.sidebar.consult.actions.addComment"),
     });
   }
 
@@ -567,7 +600,7 @@ function buildSuggestedActions(ctx: PhotoConsultContext, analysis: PhotoAnalysis
       actions.push({
         entity_type: "task",
         action: "update",
-        label: "Mark task Done",
+        label: t("ai.sidebar.consult.actions.markDone"),
         before: "in_progress",
         after: "done",
       });
@@ -597,14 +630,14 @@ function getDayKey(timestampMs: number): string {
   return format(new Date(timestampMs), "yyyy-MM-dd");
 }
 
-function getDayLabel(timestampMs: number): string {
+function getDayLabel(timestampMs: number, t: Translator): string {
   const date = new Date(timestampMs);
-  if (isToday(date)) return "Today";
-  if (isYesterday(date)) return "Yesterday";
+  if (isToday(date)) return t("ai.sidebar.day.today");
+  if (isYesterday(date)) return t("ai.sidebar.day.yesterday");
   return format(date, "MMM d, yyyy");
 }
 
-function buildProposalSummaryLines(childEvents: Event[]): string[] {
+function buildProposalSummaryLines(childEvents: Event[], t: Translator): string[] {
   let taskCount = 0;
   let documentCount = 0;
   let procurementCount = 0;
@@ -618,10 +651,10 @@ function buildProposalSummaryLines(childEvents: Event[]): string[] {
   });
 
   const lines: string[] = [];
-  if (taskCount > 0) lines.push(`${taskCount} task${taskCount === 1 ? "" : "s"} created`);
-  if (documentCount > 0) lines.push(`${documentCount} document${documentCount === 1 ? "" : "s"} drafted`);
-  if (hasEstimateUpdate) lines.push("Estimate updated");
-  if (procurementCount > 0) lines.push(`Procurement: ${procurementCount} item${procurementCount === 1 ? "" : "s"} added`);
+  if (taskCount > 0) lines.push(t("ai.sidebar.proposal.summaryLine.tasks", { count: taskCount }));
+  if (documentCount > 0) lines.push(t("ai.sidebar.proposal.summaryLine.documents", { count: documentCount }));
+  if (hasEstimateUpdate) lines.push(t("ai.sidebar.proposal.summaryLine.estimateUpdated"));
+  if (procurementCount > 0) lines.push(t("ai.sidebar.proposal.summaryLine.procurement", { count: procurementCount }));
 
   if (lines.length > 0) return lines.slice(0, 4);
 
@@ -634,30 +667,46 @@ function buildProposalSummaryLines(childEvents: Event[]): string[] {
     .filter((value): value is string => Boolean(value))
     .slice(0, 2);
 
-  return fallbackTitles.length > 0 ? fallbackTitles : ["Execution completed"];
+  return fallbackTitles.length > 0 ? fallbackTitles : [t("ai.sidebar.proposal.summaryFallback")];
 }
+
+type Translator = (key: string, options?: Record<string, unknown>) => string;
 
 function liveAssistantPermissionsLine(
   gate: "loading" | "unavailable",
-  lang: AiAssistantUiLanguage,
+  _lang: AiAssistantUiLanguage,
+  t: Translator,
 ): string {
   if (gate === "loading") {
-    return lang === "ru"
-      ? "Загружаются права для этого проекта. Попробуйте через короткое время."
-      : "Still loading your permissions for this project. Try again in a moment.";
+    return t("ai.sidebar.liveAssistant.permissionsLoading");
   }
-  return lang === "ru"
-    ? "Ассистент не может использовать контекст проекта сейчас (нет прав)."
-    : "AI can't use this project context right now (permissions unavailable).";
+  return t("ai.sidebar.liveAssistant.permissionsUnavailable");
 }
 
-function liveAssistantNoProjectDataLine(lang: AiAssistantUiLanguage): string {
-  return lang === "ru"
-    ? "Данные проекта для контекста ИИ пока недоступны. Попробуйте чуть позже."
-    : "Project data is not available yet for AI context. Try again shortly.";
+function liveAssistantNoProjectDataLine(_lang: AiAssistantUiLanguage, t: Translator): string {
+  return t("ai.sidebar.liveAssistant.noProjectData");
 }
 
 export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
+  const { t, i18n } = useTranslation();
+  const translateKeys = useCallback((keys: string[]) => keys.map((k) => t(k)), [t]);
+  const WORK_STEPS_GENERATE = useMemo(() => translateKeys(WORK_STEP_KEYS_GENERATE), [translateKeys]);
+  const WORK_STEPS_HOSTED_CONSULT = useMemo(() => translateKeys(WORK_STEP_KEYS_HOSTED_CONSULT), [translateKeys]);
+  const WORK_STEPS_COMMIT = useMemo(() => translateKeys(WORK_STEP_KEYS_COMMIT), [translateKeys]);
+  const timeFormatter = useMemo(
+    () => new Intl.DateTimeFormat(i18n.language, { hour: "2-digit", minute: "2-digit" }),
+    [i18n.language],
+  );
+  const archiveHeaderFormatter = useMemo(
+    () => new Intl.DateTimeFormat(i18n.language, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+    [i18n.language],
+  );
   const location = useLocation();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
@@ -783,8 +832,8 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
         setSelectedActions(new Set());
         closePhotoConsult(ctx.photo.project_id);
         toast({
-          title: "Access denied",
-          description: "Project permissions are still loading or unavailable.",
+          title: t("ai.sidebar.toast.accessDenied.title"),
+          description: t("ai.sidebar.toast.accessDenied.permissionsLoadingDescription"),
           variant: "destructive",
         });
         photoAnalysisTimerRef.current = null;
@@ -798,16 +847,16 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
         setSelectedActions(new Set());
         closePhotoConsult(ctx.photo.project_id);
         toast({
-          title: "Access denied",
-          description: "You don't have permission to use AI photo consult.",
+          title: t("ai.sidebar.toast.accessDenied.title"),
+          description: t("ai.sidebar.toast.accessDenied.photoConsultDescription"),
           variant: "destructive",
         });
         photoAnalysisTimerRef.current = null;
         return;
       }
 
-      const analysis = mockPhotoAnalysis(ctx);
-      const rawActions = buildSuggestedActions(ctx, analysis);
+      const analysis = mockPhotoAnalysis(ctx, t);
+      const rawActions = buildSuggestedActions(ctx, analysis, t);
       const actions = filterPhotoConsultProposalChangesBySeam(
         seamForProjectCommit,
         ctx.photo.project_id,
@@ -820,7 +869,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
       setSelectedActions(new Set(actions.map((_, index) => index)));
       photoAnalysisTimerRef.current = null;
     }, 2000);
-  }, [clearPhotoAnalysisTimer, isGuest, permResult, seamForProjectCommit]);
+  }, [clearPhotoAnalysisTimer, isGuest, permResult, seamForProjectCommit, t]);
 
   useEffect(() => {
     startPhotoConsultRef.current = startPhotoConsult;
@@ -1104,11 +1153,11 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
 
       let attempt = 0;
       let success = false;
-      let lastError = "Execution failed";
+      let lastError = t("ai.sidebar.toast.executionFailed.title");
 
       while (attempt < 5 && !success) {
         if (workspaceMode.kind === "supabase" && queueItem.proposal.type === "generate_document") {
-          lastError = "AI document generation is unavailable in Supabase mode until document text persistence is supported.";
+          lastError = t("ai.sidebar.toast.supabaseModeUnavailable.documentDescription");
           setProposalQueue((prev) => (prev
             ? {
                 ...prev,
@@ -1120,7 +1169,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
               }
             : prev));
           toast({
-            title: "Unavailable in Supabase mode",
+            title: t("ai.sidebar.toast.supabaseModeUnavailable.title"),
             description: lastError,
             variant: "destructive",
           });
@@ -1137,7 +1186,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
 
         const shouldSimulateFailure = Math.random() < 0.15;
         const result = shouldSimulateFailure
-          ? { success: false as const, error: "Temporary execution error. Retrying..." }
+          ? { success: false as const, error: t("ai.sidebar.execution.temporaryError") }
           : commitProposal(queueItem.proposal, {
               eventSource: "ai",
               eventActorId: "ai",
@@ -1162,20 +1211,20 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
             }
           }
           toast({
-            title: "Changes applied",
-            description: `${queueItem.proposal.summary} completed.`,
+            title: t("ai.sidebar.toast.changesApplied.title"),
+            description: t("ai.sidebar.toast.changesApplied.description", { summary: queueItem.proposal.summary }),
           });
           break;
         }
 
-        lastError = result.error ?? "Execution failed";
+        lastError = result.error ?? t("ai.sidebar.toast.executionFailed.title");
         setProposalQueue((prev) => (prev
           ? {
               ...prev,
               retryByItemId: { ...prev.retryByItemId, [queueItem.id]: attempt },
               executionErrorByItemId: {
                 ...prev.executionErrorByItemId,
-                [queueItem.id]: `Attempt ${attempt}/5: ${lastError}`,
+                [queueItem.id]: t("ai.sidebar.execution.attemptLabel", { attempt, error: lastError }),
               },
             }
           : prev));
@@ -1205,8 +1254,8 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
           },
         });
         toast({
-          title: "Execution failed",
-          description: `${queueItem.proposal.summary} failed after 5 retries.`,
+          title: t("ai.sidebar.toast.executionFailed.title"),
+          description: t("ai.sidebar.toast.executionFailed.description", { summary: queueItem.proposal.summary }),
           variant: "destructive",
         });
       }
@@ -1215,7 +1264,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     setWorkLogs(new Map());
     setProposalQueue(null);
     executingQueueRef.current = false;
-  }, [projectId, workspaceMode.kind, seamForProjectCommit]);
+  }, [projectId, workspaceMode.kind, seamForProjectCommit, t, WORK_STEPS_COMMIT]);
 
   const beginQueueExecution = useCallback((queueSnapshot: ProposalQueueState) => {
     if (executingQueueRef.current) return;
@@ -1282,6 +1331,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
             const denied = liveAssistantPermissionsLine(
               readiness.gate === "loading" ? "loading" : "unavailable",
               profileAssistantLang,
+              t,
             );
             setMessages((prev) => [
               ...prev,
@@ -1306,7 +1356,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
               {
                 id: `msg-${Date.now() + 1}`,
                 role: "assistant",
-                content: liveAssistantNoProjectDataLine(profileAssistantLang),
+                content: liveAssistantNoProjectDataLine(profileAssistantLang, t),
                 timestamp: new Date().toISOString(),
                 mode: responseMode,
               },
@@ -1334,7 +1384,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
           ? generateProposalQueue(content, targetProjectId, automationMode, seamForProjectCommit)
           : [];
         const assistantContent = proposals.length > 0
-          ? `I've prepared ${proposals.length} proposal${proposals.length === 1 ? "" : "s"}. Review them below.`
+          ? t("ai.sidebar.message.proposalsReady", { count: proposals.length })
           : getTextResponse();
 
         const assistantMsg: AIMessage = {
@@ -1396,6 +1446,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
           const denied = liveAssistantPermissionsLine(
             readiness.gate === "loading" ? "loading" : "unavailable",
             profileAssistantLang,
+            t,
           );
           setMessages((prev) => [
             ...prev,
@@ -1420,7 +1471,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
             {
               id: `msg-${Date.now() + 1}`,
               role: "assistant",
-              content: liveAssistantNoProjectDataLine(profileAssistantLang),
+              content: liveAssistantNoProjectDataLine(profileAssistantLang, t),
               timestamp: new Date().toISOString(),
               mode: responseMode,
             },
@@ -1440,7 +1491,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
             {
               id: `msg-${Date.now() + 1}`,
               role: "assistant",
-              content: liveAssistantPermissionsLine("unavailable", profileAssistantLang),
+              content: liveAssistantPermissionsLine("unavailable", profileAssistantLang, t),
               timestamp: new Date().toISOString(),
               mode: responseMode,
             },
@@ -1618,7 +1669,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     }
 
     if (!isGuest && resolvedPermissionProjectId && !permResult.can("ai.generate")) {
-      toast({ title: "Access denied", description: "You don't have permission to use AI generation.", variant: "destructive" });
+      toast({ title: t("ai.sidebar.toast.accessDenied.title"), description: t("ai.sidebar.toast.accessDenied.generationDescription"), variant: "destructive" });
       return;
     }
 
@@ -1633,7 +1684,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
       setMessages((prev) => [...prev, userMsg, {
         id: `msg-${Date.now() + 1}`,
         role: "assistant",
-        content: "This request needs project context. Select a project below, and I will prepare proposals.",
+        content: t("ai.sidebar.message.needsProjectContext"),
         timestamp: new Date().toISOString(),
       }]);
       setPendingGeneralProposalInput(content);
@@ -1873,16 +1924,16 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     if (!photoConsult) return;
     if (!seamForProjectCommit) {
       toast({
-        title: "Access denied",
-        description: "Project permissions are still loading or unavailable.",
+        title: t("ai.sidebar.toast.accessDenied.title"),
+        description: t("ai.sidebar.toast.accessDenied.permissionsLoadingDescription"),
         variant: "destructive",
       });
       return;
     }
     if (!isGuest && !permResult.can("ai.generate")) {
       toast({
-        title: "Access denied",
-        description: "You don't have permission to use AI generation.",
+        title: t("ai.sidebar.toast.accessDenied.title"),
+        description: t("ai.sidebar.toast.accessDenied.generationDescription"),
         variant: "destructive",
       });
       return;
@@ -1912,7 +1963,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
           kind: "task_comment",
           projectId: photoConsult.photo.project_id,
           taskId: photoConsult.task.id,
-          commentText: `AI Photo Analysis: ${photoAnalysis?.observations ?? "Analysis complete"}`,
+          commentText: t("ai.sidebar.consult.analysisCommentPrefix", { observations: photoAnalysis?.observations ?? t("ai.sidebar.consult.analysisComplete") }),
         });
       }
 
@@ -1933,14 +1984,14 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
 
     if (result.success) {
       toast({
-        title: "Changes applied",
-        description: `${result.count} action${result.count !== 1 ? "s" : ""} committed.`,
+        title: t("ai.sidebar.toast.changesApplied.title"),
+        description: t("ai.sidebar.toast.changesApplied.consultDescription", { count: result.count }),
       });
       closePhotoConsult(photoConsult.photo.project_id);
     } else {
       toast({
-        title: "Could not apply",
-        description: result.error ?? "Permission or validation failed.",
+        title: t("ai.sidebar.toast.couldNotApply.title"),
+        description: result.error ?? t("ai.sidebar.toast.couldNotApply.defaultDescription"),
         variant: "destructive",
       });
     }
@@ -1960,9 +2011,12 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     });
   }
 
-  const suggestions = (isProjectContext || (isHomeContext && homeProjectMode !== GENERAL_MODE_VALUE))
-    ? PROJECT_SUGGESTIONS
-    : GLOBAL_SUGGESTIONS;
+  const suggestions = useMemo(() => {
+    const keys = (isProjectContext || (isHomeContext && homeProjectMode !== GENERAL_MODE_VALUE))
+      ? PROJECT_SUGGESTION_KEYS
+      : GLOBAL_SUGGESTION_KEYS;
+    return keys.map((k) => t(k));
+  }, [isProjectContext, isHomeContext, homeProjectMode, t]);
   const panelWidth = collapsed ? COLLAPSED_WIDTH : (isMobile ? "100%" : width);
 
   const appendToInput = (value: string) => {
@@ -2047,8 +2101,8 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
           proposalEvent: event,
           summary: (typeof payload.summary === "string" && payload.summary)
             || link.summary
-            || "Execution completed",
-          summaryLines: buildProposalSummaryLines(childEvents),
+            || t("ai.sidebar.proposal.executed"),
+          summaryLines: buildProposalSummaryLines(childEvents, t),
           childEvents,
         });
         return;
@@ -2060,9 +2114,11 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
 
       if (event.type === "proposal_cancelled") {
         const status = typeof payload.status === "string" ? payload.status : "cancelled";
-        const summary = typeof payload.summary === "string" ? payload.summary : "Proposal";
+        const summary = typeof payload.summary === "string" ? payload.summary : t("ai.sidebar.proposal.summaryFallbackShort");
         const reason = typeof payload.reason === "string" ? payload.reason.replace(/_/g, " ") : "";
-        const title = status === "failed" ? "AI proposal failed" : "AI proposal declined";
+        const title = status === "failed"
+          ? t("ai.sidebar.proposal.statusTitle.failed")
+          : t("ai.sidebar.proposal.statusTitle.declined");
         const detail = reason ? `${summary} · ${reason}` : summary;
         rows.push({
           id: `status-${event.id}`,
@@ -2081,9 +2137,9 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
           ? payload.details as Record<string, unknown>
           : {};
         const detailLines = [
-          typeof details.usedBy === "string" && details.usedBy.trim() ? `Used by: ${details.usedBy}` : "",
-          typeof details.note === "string" && details.note.trim() ? `Note: ${details.note}` : "",
-          typeof details.remainingQty === "number" ? `Remaining qty: ${details.remainingQty}` : "",
+          typeof details.usedBy === "string" && details.usedBy.trim() ? t("ai.sidebar.stockUsed.usedBy", { value: details.usedBy }) : "",
+          typeof details.note === "string" && details.note.trim() ? t("ai.sidebar.stockUsed.note", { value: details.note }) : "",
+          typeof details.remainingQty === "number" ? t("ai.sidebar.stockUsed.remainingQty", { value: details.remainingQty }) : "",
         ].filter((line) => line.length > 0);
         rows.push({
           id: `stock-used-${event.id}`,
@@ -2092,8 +2148,8 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
           timestamp: timestampIso,
           timestampMs,
           event,
-          title: typeof payload.title === "string" && payload.title ? payload.title : "Stock used",
-          summary: typeof payload.summary === "string" && payload.summary ? payload.summary : "Stock usage recorded",
+          title: typeof payload.title === "string" && payload.title ? payload.title : t("ai.sidebar.stockUsed.title"),
+          summary: typeof payload.summary === "string" && payload.summary ? payload.summary : t("ai.sidebar.stockUsed.summary"),
           detailLines,
         });
         return;
@@ -2139,6 +2195,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     eventById,
     proposalExecutionLinks,
     resolvedPermissionProjectId,
+    t,
   ]);
 
   const dayBuckets = useMemo<DayBucket[]>(() => {
@@ -2154,13 +2211,13 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
       const date = new Date(row.timestampMs);
       map.set(dayKey, {
         key: dayKey,
-        label: getDayLabel(row.timestampMs),
+        label: getDayLabel(row.timestampMs, t),
         rows: [row],
         olderThanYesterday: !isToday(date) && !isYesterday(date),
       });
     });
     return Array.from(map.values()).sort((a, b) => a.key.localeCompare(b.key));
-  }, [streamRows]);
+  }, [streamRows, t]);
 
   const visibleDayBuckets = useMemo(() => {
     if (dayBuckets.length === 0) return [];
@@ -2284,15 +2341,15 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   }, []);
 
   const filterOptions: { key: FeedFilter; label: string }[] = [
-    { key: "all", label: "All" },
-    { key: "chats", label: "Chats" },
-    { key: "learn", label: "Learn" },
-    { key: "task", label: "Task" },
-    { key: "estimate", label: "Estimate" },
-    { key: "document", label: "Document" },
-    { key: "photo", label: "Photo" },
-    { key: "member", label: "Member" },
-    { key: "ai_actions", label: "AI actions" },
+    { key: "all", label: t("ai.sidebar.filter.all") },
+    { key: "chats", label: t("ai.sidebar.filter.chats") },
+    { key: "learn", label: t("ai.sidebar.filter.learn") },
+    { key: "task", label: t("ai.sidebar.filter.task") },
+    { key: "estimate", label: t("ai.sidebar.filter.estimate") },
+    { key: "document", label: t("ai.sidebar.filter.document") },
+    { key: "photo", label: t("ai.sidebar.filter.photo") },
+    { key: "member", label: t("ai.sidebar.filter.member") },
+    { key: "ai_actions", label: t("ai.sidebar.filter.aiActions") },
   ];
 
   const toggleProposalGroup = (proposalEventId: string) => {
@@ -2348,13 +2405,13 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   }, [isGuest, resolvedPermissionProjectId, messages]);
 
   const handleAttachFilePhoto = () => {
-    toast({ title: "Attach file/photo", description: "UI stub for attachment flow." });
+    toast({ title: t("ai.sidebar.toast.attach.title"), description: t("ai.sidebar.toast.attach.description") });
   };
 
   const handleTagPerson = () => {
     if (participantNames.length === 0) {
       appendToInput("@participant");
-      toast({ title: "No participants found", description: "TODO: connect participants selector." });
+      toast({ title: t("ai.sidebar.toast.noParticipants.title"), description: t("ai.sidebar.toast.noParticipants.description") });
       return;
     }
     const picked = participantNames[tagPersonCursor % participantNames.length];
@@ -2365,7 +2422,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const handleReferenceTask = () => {
     if (tasks.length === 0) {
       appendToInput("#item");
-      toast({ title: "No tasks available", description: "TODO: connect task/item selector." });
+      toast({ title: t("ai.sidebar.toast.noTasks.title"), description: t("ai.sidebar.toast.noTasks.description") });
       return;
     }
     const picked = tasks[referenceTaskCursor % tasks.length];
@@ -2382,9 +2439,9 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   async function handleCopyLearnMessage(message: AIMessage) {
     try {
       await navigator.clipboard.writeText(message.content);
-      toast({ title: "Copied", description: "AI message copied to clipboard." });
+      toast({ title: t("ai.sidebar.toast.copy.title"), description: t("ai.sidebar.toast.copy.description") });
     } catch {
-      toast({ title: "Copy failed", description: "Clipboard is unavailable.", variant: "destructive" });
+      toast({ title: t("ai.sidebar.toast.copyFailed.title"), description: t("ai.sidebar.toast.copyFailed.description"), variant: "destructive" });
     }
   }
 
@@ -2399,14 +2456,14 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
 
   function handleSaveLearnMessage(message: AIMessage) {
     if (savedMessageIds.has(message.id)) {
-      toast({ title: "Already saved", description: "This answer is already in Documents." });
+      toast({ title: t("ai.sidebar.toast.alreadySaved.title"), description: t("ai.sidebar.toast.alreadySaved.description") });
       return;
     }
 
     if (workspaceMode.kind === "supabase") {
       toast({
-        title: "Unavailable in Supabase mode",
-        description: "Learn-note saves need full document text persistence, which is not available yet in Supabase mode.",
+        title: t("ai.sidebar.toast.supabaseModeUnavailable.title"),
+        description: t("ai.sidebar.toast.supabaseModeUnavailable.learnNoteDescription"),
         variant: "destructive",
       });
       return;
@@ -2415,8 +2472,8 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     const targetProjectId = resolveActiveProjectForLearnDocument();
     if (!targetProjectId) {
       toast({
-        title: "Select a project",
-        description: "Choose a project before saving Learn notes.",
+        title: t("ai.sidebar.toast.selectProject.title"),
+        description: t("ai.sidebar.toast.selectProject.description"),
         variant: "destructive",
       });
       return;
@@ -2424,9 +2481,10 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
 
     const marker = `<!-- learn-msg:${message.id} -->`;
     const timestampHeader = format(new Date(), "MMM d, yyyy HH:mm");
+    const learnDocTitle = t("ai.sidebar.learnDoc.title");
     const entry = `${marker}\n## ${timestampHeader}\n\n${message.content}`;
     const docs = getDocuments(targetProjectId);
-    const learnDoc = docs.find((doc) => doc.title === "Learn notes");
+    const learnDoc = docs.find((doc) => doc.title === learnDocTitle);
     const existingDocWithMarker = docs.find((doc) => doc.versions.some((version) => version.content.includes(marker)));
     if (existingDocWithMarker) {
       setSavedMessageIds((prev) => {
@@ -2434,7 +2492,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
         next.add(message.id);
         return next;
       });
-      toast({ title: "Already saved", description: "This answer is already in Documents." });
+      toast({ title: t("ai.sidebar.toast.alreadySaved.title"), description: t("ai.sidebar.toast.alreadySaved.description") });
       return;
     }
 
@@ -2445,14 +2503,14 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
         id: docId,
         project_id: targetProjectId,
         type: "report",
-        title: "Learn notes",
+        title: learnDocTitle,
         origin: "ai_generated",
         versions: [{
           id: versionId,
           document_id: docId,
           number: 1,
           status: "draft",
-          content: `# Learn notes\n\n${entry}`,
+          content: `# ${learnDocTitle}\n\n${entry}`,
         }],
       });
       addEvent({
@@ -2463,7 +2521,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
         object_type: "document",
         object_id: docId,
         timestamp: new Date().toISOString(),
-        payload: { title: "Learn notes", source: "learn" },
+        payload: { title: learnDocTitle, source: "learn" },
       });
     } else {
       const latest = learnDoc.versions[learnDoc.versions.length - 1];
@@ -2483,7 +2541,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
         object_type: "document",
         object_id: learnDoc.id,
         timestamp: new Date().toISOString(),
-        payload: { title: "Learn notes", version: nextVersionNumber, source: "learn" },
+        payload: { title: learnDocTitle, version: nextVersionNumber, source: "learn" },
       });
     }
 
@@ -2492,12 +2550,12 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
       next.add(message.id);
       return next;
     });
-    toast({ title: "Saved to Documents", description: "Learn notes updated." });
+    toast({ title: t("ai.sidebar.toast.savedToDocuments.title"), description: t("ai.sidebar.toast.savedToDocuments.description") });
   }
 
   function handleRegenerateLearnMessage(message: AIMessage) {
     if (activeWindow !== "none" || proposalQueue) {
-      toast({ title: "AI is busy", description: "Finish the current action before regenerating.", variant: "destructive" });
+      toast({ title: t("ai.sidebar.toast.aiBusy.title"), description: t("ai.sidebar.toast.aiBusy.description"), variant: "destructive" });
       return;
     }
 
@@ -2512,7 +2570,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
       }
     }
     if (!sourceUserMessage) {
-      toast({ title: "Nothing to regenerate", description: "No user prompt found for this answer.", variant: "destructive" });
+      toast({ title: t("ai.sidebar.toast.nothingToRegenerate.title"), description: t("ai.sidebar.toast.nothingToRegenerate.description"), variant: "destructive" });
       return;
     }
 
@@ -2556,15 +2614,15 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                 : <Bot className="h-3 w-3 text-accent" />}
             </div>
             <p className="text-caption font-medium text-foreground">
-              {isUserMessage ? "You" : "AI"}
+              {isUserMessage ? t("ai.sidebar.chat.you") : t("ai.sidebar.chat.ai")}
             </p>
             {isLearnMessage && (
               <span className="rounded-pill bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium text-accent">
-                Learn
+                {t("ai.sidebar.chat.learnBadge")}
               </span>
             )}
             <span className="ml-auto text-[10px] text-muted-foreground whitespace-nowrap">
-              {new Date(message.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              {new Date(message.timestamp).toLocaleTimeString(i18n.language, { hour: "2-digit", minute: "2-digit" })}
             </span>
           </div>
           <p className="mt-1 text-caption text-foreground/95 whitespace-pre-wrap break-words [overflow-wrap:anywhere] max-w-full">
@@ -2585,9 +2643,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                 && message.liveTextAssistantV1.followUps.length > 0 ? (
                 <div className="mt-1.5 min-w-0 max-w-full">
                   <p className="text-[10px] font-medium text-muted-foreground mb-1">
-                    {message.liveTextAssistantV1.assistantUiLanguage === "ru"
-                      ? "Предлагаемые уточнения"
-                      : "Suggested follow-ups"}
+                    {t("ai.sidebar.chat.suggestedFollowUps")}
                   </p>
                   <SuggestionChips
                     suggestions={message.liveTextAssistantV1.followUps.map((f) => f.prompt)}
@@ -2608,7 +2664,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
             <div className="mt-1.5 flex items-center gap-0.5 opacity-70 hover:opacity-100 transition-opacity">
               <button
                 type="button"
-                title="Copy"
+                title={t("ai.sidebar.chat.actions.copy")}
                 className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/10 transition-colors"
                 onClick={() => { void handleCopyLearnMessage(message); }}
               >
@@ -2616,7 +2672,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
               </button>
               <button
                 type="button"
-                title="Rate good"
+                title={t("ai.sidebar.chat.actions.rateGood")}
                 className={`inline-flex h-6 w-6 items-center justify-center rounded-md transition-colors ${
                   rating === "good"
                     ? "text-accent bg-accent/15"
@@ -2628,7 +2684,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
               </button>
               <button
                 type="button"
-                title="Rate bad"
+                title={t("ai.sidebar.chat.actions.rateBad")}
                 className={`inline-flex h-6 w-6 items-center justify-center rounded-md transition-colors ${
                   rating === "bad"
                     ? "text-destructive bg-destructive/15"
@@ -2640,7 +2696,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
               </button>
               <button
                 type="button"
-                title="Save to Documents"
+                title={t("ai.sidebar.chat.actions.saveToDocuments")}
                 className={`inline-flex h-6 w-6 items-center justify-center rounded-md transition-colors ${
                   isSaved
                     ? "text-accent bg-accent/15"
@@ -2652,7 +2708,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
               </button>
               <button
                 type="button"
-                title={isRegenerating ? "Regenerating..." : "Regenerate"}
+                title={isRegenerating ? t("ai.sidebar.chat.actions.regenerating") : t("ai.sidebar.chat.actions.regenerate")}
                 className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/10 transition-colors disabled:opacity-60"
                 disabled={isRegenerating}
                 onClick={() => handleRegenerateLearnMessage(message)}
@@ -2674,10 +2730,10 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   ];
 
   const composerPlaceholder = learnMode
-    ? "Ask AI to explain decisions and tradeoffs..."
+    ? t("ai.sidebar.composer.placeholderLearn")
     : photoConsult
-      ? "Edit prompt or send as-is..."
-      : "Ask AI...";
+      ? t("ai.sidebar.composer.placeholderConsult")
+      : t("ai.sidebar.composer.placeholderDefault");
 
   const composerTextarea = (
     <Textarea
@@ -2718,21 +2774,21 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
         <DropdownMenuContent align="start" className="min-w-[11.5rem] p-1">
           <DropdownMenuItem className="gap-2" onSelect={() => handleReferenceTask()}>
             <Link2 className="h-4 w-4 shrink-0" />
-            Reference
+            {t("ai.sidebar.composer.reference")}
           </DropdownMenuItem>
           <DropdownMenuItem className="gap-2" onSelect={() => handleTagPerson()}>
             <AtSign className="h-4 w-4 shrink-0" />
-            Tag
+            {t("ai.sidebar.composer.tag")}
           </DropdownMenuItem>
           <DropdownMenuItem className="gap-2" onSelect={() => handleToggleLearnMode()}>
             <GraduationCap className="h-4 w-4 shrink-0" />
-            <span className="flex-1 text-left">Learn mode</span>
+            <span className="flex-1 text-left">{t("ai.sidebar.composer.learnMode")}</span>
             {learnMode ? <Check className="ml-auto h-4 w-4 shrink-0" /> : null}
           </DropdownMenuItem>
           <DropdownMenuSub>
             <DropdownMenuSubTrigger className="gap-2">
               <Sparkles className="h-4 w-4 shrink-0" />
-              <span className="flex-1 text-left">Model</span>
+              <span className="flex-1 text-left">{t("ai.sidebar.composer.model")}</span>
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="p-1">
               <DropdownMenuRadioGroup
@@ -2746,12 +2802,12 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
           </DropdownMenuSub>
           <DropdownMenuItem className="gap-2" onSelect={() => handleAttachFilePhoto()}>
             <Paperclip className="h-4 w-4 shrink-0" />
-            Attach
+            {t("ai.sidebar.composer.attach")}
           </DropdownMenuItem>
           {isPersistableAiProjectId(resolvedPermissionProjectId) ? (
             <DropdownMenuItem className="gap-2" onSelect={() => handleNewConversation()}>
               <RefreshCw className="h-4 w-4 shrink-0" />
-              New conversation
+              {t("ai.sidebar.composer.newConversation")}
             </DropdownMenuItem>
           ) : null}
         </DropdownMenuContent>
@@ -2764,7 +2820,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
               variant="outline"
               className="h-9 max-w-[11rem] shrink-0 rounded-full border-sidebar-border bg-transparent px-3 text-caption font-medium"
             >
-              <span className="truncate">{selectedAutomationOption.label}</span>
+              <span className="truncate">{t(selectedAutomationOption.labelKey)}</span>
               <ChevronDown className="h-3.5 w-3.5 ml-1.5 shrink-0" />
             </Button>
           </DropdownMenuTrigger>
@@ -2778,12 +2834,12 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                       onSelect={() => persistAutomationMode(option.mode)}
                       className="flex items-center justify-between gap-2"
                     >
-                      <span className="text-caption text-foreground">{option.label}</span>
+                      <span className="text-caption text-foreground">{t(option.labelKey)}</span>
                       {isCurrent && <Check className="h-3.5 w-3.5 text-accent" />}
                     </DropdownMenuItem>
                   </TooltipTrigger>
                   <TooltipContent side="right" className="text-caption whitespace-nowrap">
-                    {option.description}
+                    {t(option.descriptionKey)}
                   </TooltipContent>
                 </Tooltip>
               );
@@ -2798,14 +2854,14 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
             <GraduationCap className="h-3.5 w-3.5 text-accent group-hover:hidden" />
             <button
               type="button"
-              aria-label="Disable Learn mode"
+              aria-label={t("ai.sidebar.composer.disableLearn")}
               onClick={handleToggleLearnMode}
               className="absolute inset-0 hidden items-center justify-center text-muted-foreground hover:text-foreground group-hover:inline-flex"
             >
               <XIcon className="h-3.5 w-3.5" />
             </button>
           </span>
-          Learn
+          {t("ai.sidebar.composer.learnBadge")}
         </span>
       )}
     </div>
@@ -2822,14 +2878,14 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                 size="icon"
                 variant="outline"
                 disabled
-                aria-label="Voice input (coming soon)"
+                aria-label={t("ai.sidebar.composer.voiceInputAriaLabel")}
                 className="h-9 w-9 shrink-0 rounded-full border-sidebar-border bg-transparent opacity-60"
               >
                 <Mic className="h-4 w-4" />
               </Button>
             </span>
           </TooltipTrigger>
-          <TooltipContent side="top">Coming soon</TooltipContent>
+          <TooltipContent side="top">{t("ai.sidebar.composer.comingSoon")}</TooltipContent>
         </Tooltip>
       </TooltipProvider>
       <Button
@@ -2864,7 +2920,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
               className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/10 transition-colors hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               <PanelLeft className="h-4 w-4 text-accent" />
-              <span className="sr-only">Open AI sidebar</span>
+              <span className="sr-only">{t("ai.sidebar.openAria")}</span>
             </button>
           </div>
         ) : (
@@ -2874,13 +2930,13 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
               <div className="flex-1 flex flex-col items-center justify-center text-center px-4">
                 <div className="glass rounded-card p-sp-3 space-y-sp-2">
                   <Bot className="mx-auto h-10 w-10 text-muted-foreground/40" />
-                  <p className="text-body-sm font-semibold text-foreground">AI Assistant is locked</p>
-                  <p className="text-caption text-muted-foreground">Log in to use AI features.</p>
+                  <p className="text-body-sm font-semibold text-foreground">{t("ai.sidebar.guest.locked")}</p>
+                  <p className="text-caption text-muted-foreground">{t("ai.sidebar.guest.loginHint")}</p>
                   <Button
                     className="w-full bg-accent text-accent-foreground hover:bg-accent/90"
                     onClick={() => navigate("/auth/login")}
                   >
-                    Log in to use AI
+                    {t("ai.sidebar.guest.loginCta")}
                   </Button>
                 </div>
               </div>
@@ -2915,7 +2971,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                                 />
                               </TooltipTrigger>
                               <TooltipContent className="text-caption">
-                                Rovno will archive activity soon to clear the space
+                                {t("ai.sidebar.archive.nearLimitTooltip")}
                               </TooltipContent>
                             </Tooltip>
                           )}
@@ -2942,7 +2998,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                                 (c) => c + LOAD_MORE_DAY_BUCKET_INCREMENT,
                               )}
                           >
-                            Load more
+                            {t("ai.sidebar.archive.loadMore")}
                           </Button>
                         ) : null}
                         <div className="space-y-0.5">
@@ -2972,7 +3028,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                       <div className="space-y-2 py-2 pr-1 min-w-0 max-w-full">
                         {streamRows.length === 0 && activeThreadMessages.length === 0 ? (
                           <p className="text-caption text-muted-foreground text-center py-8">
-                            No activity yet
+                            {t("ai.sidebar.archive.noActivity")}
                           </p>
                         ) : (
                           <>
@@ -3013,7 +3069,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                                                 </div>
                                                 <div className="flex-1 min-w-0">
                                                   <p className="text-body-sm font-semibold leading-tight text-foreground">
-                                                    AI proposal executed
+                                                    {t("ai.sidebar.proposal.executedTitle")}
                                                   </p>
                                                   <div className="mt-1 space-y-0.5">
                                                     {row.summaryLines.map((line, lineIndex) => (
@@ -3024,7 +3080,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                                                   </div>
                                                 </div>
                                                 <span className="text-[10px] text-muted-foreground whitespace-nowrap mt-0.5 shrink-0">
-                                                  {new Date(row.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                                  {timeFormatter.format(new Date(row.timestamp))}
                                                 </span>
                                                 {groupExpanded ? (
                                                   <ChevronDown className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
@@ -3069,7 +3125,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                                                   <p className="mt-1 text-caption leading-5 text-muted-foreground">{row.summary}</p>
                                                 </div>
                                                 <span className="text-[10px] text-muted-foreground whitespace-nowrap mt-0.5 shrink-0">
-                                                  {new Date(row.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                                  {timeFormatter.format(new Date(row.timestamp))}
                                                 </span>
                                                 {expanded ? (
                                                   <ChevronDown className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
@@ -3098,7 +3154,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                                                   {row.detail ? `${row.title}: ${row.detail}` : row.title}
                                                 </p>
                                                 <span className="ml-auto text-[10px] text-muted-foreground/90 whitespace-nowrap shrink-0">
-                                                  {new Date(row.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                                  {timeFormatter.format(new Date(row.timestamp))}
                                                 </span>
                                               </div>
                                             </div>
@@ -3120,7 +3176,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                                                   </div>
                                                   <div className="flex-1 min-w-0">
                                                     <p className="text-caption font-medium text-foreground">
-                                                      {format(new Date(entry.endedAt), "MMM d, yyyy · HH:mm")}
+                                                      {archiveHeaderFormatter.format(new Date(entry.endedAt))}
                                                     </p>
                                                     {entry.previewLines.map((line, i) => (
                                                       <p
@@ -3132,7 +3188,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                                                     ))}
                                                   </div>
                                                   <span className="text-[10px] text-muted-foreground whitespace-nowrap mt-0.5 shrink-0">
-                                                    {new Date(row.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                                    {timeFormatter.format(new Date(row.timestamp))}
                                                   </span>
                                                 </div>
                                                 <div className="mt-1.5 flex items-center gap-1.5">
@@ -3143,7 +3199,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                                                     className="h-7 text-[11px] px-2"
                                                     onClick={() => setExpandedArchiveChatId(expanded ? null : entry.chatId)}
                                                   >
-                                                    {expanded ? "Hide" : "Open"}
+                                                    {expanded ? t("ai.sidebar.archive.hide") : t("ai.sidebar.archive.open")}
                                                   </Button>
                                                 </div>
                                                 {expanded && entry.messagesSnapshot.length > 0 && (
@@ -3156,7 +3212,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                                                         }`}
                                                       >
                                                         <p className="text-[10px] font-medium text-muted-foreground mb-0.5">
-                                                          {m.role === "user" ? "You" : "AI"}
+                                                          {m.role === "user" ? t("ai.sidebar.chat.you") : t("ai.sidebar.chat.ai")}
                                                         </p>
                                                         <p className="text-[11px] text-foreground whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
                                                           {m.content}
@@ -3211,8 +3267,10 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                       {proposalQueue?.phase === "executing" && activeExecutionItem && (
                         <div className="glass rounded-card p-2 space-y-1">
                           <p className="text-caption text-foreground font-medium">
-                            Executing {proposalQueue.executionCursor + 1}/
-                            {proposalQueue.items.filter((item) => item.decision === "confirmed").length}
+                            {t("ai.sidebar.execution.executing", {
+                              current: proposalQueue.executionCursor + 1,
+                              total: proposalQueue.items.filter((item) => item.decision === "confirmed").length,
+                            })}
                           </p>
                           <p className="text-caption text-muted-foreground truncate">
                             {activeExecutionItem.proposal.summary}
@@ -3262,7 +3320,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                         <div className="flex-1 min-w-0">
                           <p className="text-body-sm font-semibold text-foreground truncate">{photoConsult.photo.caption}</p>
                           <p className="text-[10px] text-muted-foreground">
-                            {format(new Date(photoConsult.photo.created_at), "MMM d, yyyy · HH:mm")}
+                            {archiveHeaderFormatter.format(new Date(photoConsult.photo.created_at))}
                           </p>
                         </div>
                         <button
@@ -3286,7 +3344,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
 
                       {suggestedActions.length > 0 && !photoAnalysisLoading && (
                         <div className="space-y-2">
-                          <PreviewCard summary="Suggested actions" changes={suggestedActions} />
+                          <PreviewCard summary={t("ai.sidebar.consult.suggestedActions")} changes={suggestedActions} />
                           <div className="space-y-1 px-1">
                             {suggestedActions.map((action, idx) => (
                               <label
@@ -3358,10 +3416,10 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                         <div className="w-full min-w-0">
                           <Select value={homeProjectMode} onValueChange={handleHomeProjectModeChange}>
                             <SelectTrigger className="h-8 text-caption bg-sidebar-accent/50 border-sidebar-border">
-                              <SelectValue placeholder="General mode" />
+                              <SelectValue placeholder={t("ai.sidebar.generalMode")} />
                             </SelectTrigger>
                             <SelectContent align="start">
-                              <SelectItem value={GENERAL_MODE_VALUE}>General mode</SelectItem>
+                              <SelectItem value={GENERAL_MODE_VALUE}>{t("ai.sidebar.generalMode")}</SelectItem>
                               {projects.map((projectItem) => (
                                 <SelectItem key={`home-project-mode-${projectItem.id}`} value={projectItem.id}>
                                   {projectItem.title}
@@ -3375,7 +3433,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                       <div className="flex items-center justify-end w-full">
                         {isHomeContext && homeProjectMode === GENERAL_MODE_VALUE && pendingGeneralProposalInput && (
                           <span className="text-[10px] text-muted-foreground">
-                            Select a project to continue proposal generation.
+                            {t("ai.sidebar.message.selectProjectToContinue")}
                           </span>
                         )}
                       </div>
@@ -3403,9 +3461,9 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
       <ConfirmModal
         open={limitModalOpen}
         onOpenChange={setLimitModalOpen}
-        title="Credit limit reached"
-        description="You've used all available credits. Upgrade your plan to continue using AI features."
-        confirmLabel="Upgrade"
+        title={t("ai.sidebar.limitModal.title")}
+        description={t("ai.sidebar.limitModal.description")}
+        confirmLabel={t("ai.sidebar.limitModal.confirmLabel")}
         onConfirm={() => {
           setLimitModalOpen(false);
           navigate("/pricing");

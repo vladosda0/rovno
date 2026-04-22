@@ -1,6 +1,7 @@
 import { useState, type MouseEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -32,10 +33,10 @@ import { toast } from "@/hooks/use-toast";
 import { workspaceQueryKeys } from "@/hooks/use-workspace-source";
 import type { AIProposal } from "@/types/ai";
 
-function getStatusText(progress: number): string {
-  if (progress >= 100) return "Done";
-  if (progress > 0) return "In progress";
-  return "Draft";
+function getStatusKey(progress: number): string {
+  if (progress >= 100) return "status.done";
+  if (progress > 0) return "status.inProgress";
+  return "status.draft";
 }
 function getStatusColor(progress: number): string {
   if (progress >= 100) return "bg-success/15 text-success";
@@ -43,12 +44,12 @@ function getStatusColor(progress: number): string {
   return "bg-muted text-muted-foreground";
 }
 
-const SUGGESTIONS = [
-  "Renovate a 2-bedroom apartment",
-  "Build out an office space",
-  "Kitchen remodel",
-  "Bathroom renovation",
-];
+const SUGGESTION_KEYS = [
+  "projectsTab.suggestion.renovateApartment",
+  "projectsTab.suggestion.buildOffice",
+  "projectsTab.suggestion.kitchenRemodel",
+  "projectsTab.suggestion.bathroomRenovation",
+] as const;
 
 type SortKey = "activity" | "progress" | "name";
 
@@ -69,6 +70,7 @@ interface FolderItem {
 }
 
 export function ProjectsTab() {
+  const { t } = useTranslation();
   const projects = useProjects();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -108,11 +110,11 @@ export function ProjectsTab() {
   function handleAiSubmit(text?: string) {
     if (!aiProjectSparklesEnabled) {
       toast({
-        title: "AI project setup unavailable",
+        title: t("projectsTab.aiUnavailable.title"),
         description:
           workspaceMode.kind === "supabase" || workspaceMode.kind === "pending-supabase"
-            ? "Create a project with “Create manually” while connected to your workspace."
-            : "AI-assisted project creation is not available in this mode.",
+            ? t("projectsTab.aiUnavailable.supabase")
+            : t("projectsTab.aiUnavailable.other"),
         variant: "destructive",
       });
       return;
@@ -127,20 +129,20 @@ export function ProjectsTab() {
     if (!proposal) return;
     if (!aiProjectSparklesEnabled) {
       toast({
-        title: "AI project setup unavailable",
-        description: "Confirm is disabled for this workspace mode.",
+        title: t("projectsTab.aiUnavailable.title"),
+        description: t("projectsTab.aiUnavailable.confirmDisabled"),
         variant: "destructive",
       });
       return;
     }
     const result = commitProposal(proposal, { eventSource: "user", emitProposalEvent: true });
     if (result.success) {
-      toast({ title: "Project created", description: `${result.count} items set up.` });
+      toast({ title: t("projectsTab.projectCreated"), description: t("projectsTab.projectCreatedItems", { count: result.count }) });
       setProposal(null);
       setDescription("");
       if (result.projectId) navigate(`/project/${result.projectId}/dashboard`);
     } else {
-      toast({ title: "Error", description: result.error, variant: "destructive" });
+      toast({ title: t("common.error"), description: result.error, variant: "destructive" });
     }
   }
 
@@ -148,7 +150,7 @@ export function ProjectsTab() {
     event.preventDefault();
     if (manualCreating) return;
 
-    const title = manualTitle.trim() || "Untitled Project";
+    const title = manualTitle.trim() || t("projectsTab.untitledProject");
     setManualCreating(true);
 
     try {
@@ -165,7 +167,7 @@ export function ProjectsTab() {
 
       await planningSource.createProjectStage({
         projectId: createdProject.id,
-        title: "Stage 1",
+        title: t("projectsTab.stage1"),
         description: "",
         order: 1,
         status: "open",
@@ -186,15 +188,15 @@ export function ProjectsTab() {
         });
       }
 
-      toast({ title: "Project created", description: title });
+      toast({ title: t("projectsTab.projectCreated"), description: title });
       setManualOpen(false);
       setManualTitle("");
       setManualProjectMode("contractor");
       navigate(`/project/${createdProject.id}/dashboard`);
     } catch (error) {
       toast({
-        title: "Project creation failed",
-        description: error instanceof Error ? error.message : "Unable to create project.",
+        title: t("projectsTab.projectCreationFailed"),
+        description: error instanceof Error ? error.message : t("projectsTab.projectCreationFailedGeneric"),
         variant: "destructive",
       });
     } finally {
@@ -220,15 +222,15 @@ export function ProjectsTab() {
         {!aiProjectSparklesEnabled && (
           <p className="text-caption text-muted-foreground">
             {workspaceMode.kind === "supabase" || workspaceMode.kind === "pending-supabase"
-              ? "AI-assisted project creation is not available while connected to a workspace. Use Create manually."
-              : "AI-assisted project creation is not available. Use Create manually."}
+              ? t("projectsTab.aiHint.supabase")
+              : t("projectsTab.aiHint.other")}
           </p>
         )}
         <div className="flex gap-2 items-start">
           <Textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Describe your project… e.g. 'Renovate a 60m² apartment with 2 bedrooms'"
+            placeholder={t("projectsTab.aiPlaceholder")}
             className="flex-1 min-h-[72px] resize-none bg-background/50"
             disabled={!aiProjectSparklesEnabled}
             onKeyDown={(e) => {
@@ -241,15 +243,15 @@ export function ProjectsTab() {
               disabled={!aiProjectSparklesEnabled || !description.trim()}
               className="bg-accent text-accent-foreground hover:bg-accent/90"
             >
-              <Sparkles className="h-4 w-4 mr-1.5" /> Generate
+              <Sparkles className="h-4 w-4 mr-1.5" /> {t("projectsTab.generate")}
             </Button>
-            <Button variant="outline" size="icon" className="h-9 w-9" title="Attach files">
+            <Button variant="outline" size="icon" className="h-9 w-9" title={t("projectsTab.attachFiles")}>
               <Paperclip className="h-4 w-4" />
             </Button>
           </div>
         </div>
         {!proposal && aiProjectSparklesEnabled && (
-          <SuggestionChips suggestions={SUGGESTIONS} onSelect={(s) => handleAiSubmit(s)} />
+          <SuggestionChips suggestions={SUGGESTION_KEYS.map((key) => t(key))} onSelect={(s) => handleAiSubmit(s)} />
         )}
         {proposal && (
           <div className="space-y-2 pt-1">
@@ -267,7 +269,7 @@ export function ProjectsTab() {
       <div className="flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search projects…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-9" />
+          <Input placeholder={t("projectsTab.search")} value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-9" />
         </div>
         <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortKey)}>
           <SelectTrigger className="w-[140px] h-9">
@@ -275,13 +277,13 @@ export function ProjectsTab() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="activity">Last activity</SelectItem>
-            <SelectItem value="progress">Progress</SelectItem>
-            <SelectItem value="name">Name</SelectItem>
+            <SelectItem value="activity">{t("projectsTab.sort.activity")}</SelectItem>
+            <SelectItem value="progress">{t("projectsTab.sort.progress")}</SelectItem>
+            <SelectItem value="name">{t("projectsTab.sort.name")}</SelectItem>
           </SelectContent>
         </Select>
         <Button variant="outline" size="sm" onClick={() => setManualOpen(true)}>
-          <FolderPlus className="h-4 w-4 mr-1.5" /> Create manually
+          <FolderPlus className="h-4 w-4 mr-1.5" /> {t("projectsTab.createManually")}
         </Button>
       </div>
 
@@ -292,7 +294,7 @@ export function ProjectsTab() {
             onClick={() => setSelectedFolder(null)}
             className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-body-sm transition-colors text-left ${!selectedFolder ? "bg-accent/10 text-accent font-medium" : "text-muted-foreground hover:bg-muted"}`}
           >
-            <Folder className="h-4 w-4" /> All Projects
+            <Folder className="h-4 w-4" /> {t("projectsTab.allProjects")}
           </button>
           {folders.map((f) => (
             <button
@@ -305,7 +307,7 @@ export function ProjectsTab() {
           ))}
           <div className="pt-2">
             <div className="flex gap-1">
-              <Input placeholder="New folder" value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} className="h-8 text-caption" />
+              <Input placeholder={t("projectsTab.newFolder")} value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} className="h-8 text-caption" />
               <Button size="sm" variant="ghost" className="h-8 px-2 shrink-0" onClick={handleCreateFolder} disabled={!newFolderName.trim()}>
                 <Plus className="h-3.5 w-3.5" />
               </Button>
@@ -321,17 +323,17 @@ export function ProjectsTab() {
                 <div className="flex items-start justify-between gap-2">
                   <h3 className="text-body font-semibold text-foreground truncate">{p.title}</h3>
                   <span className={`text-caption font-medium px-2 py-0.5 rounded-pill shrink-0 ${getStatusColor(p.progress_pct)}`}>
-                    {getStatusText(p.progress_pct)}
+                    {t(getStatusKey(p.progress_pct))}
                   </span>
                 </div>
                 <Progress value={p.progress_pct} className="h-1.5" />
-                <p className="text-caption text-muted-foreground">{p.progress_pct}% complete</p>
+                <p className="text-caption text-muted-foreground">{t("projectsTab.percentComplete", { percent: p.progress_pct })}</p>
               </Link>
               {folders.length > 0 && (
                 <Select value={projectFolders[p.id] || ""} onValueChange={(v) => moveToFolder(p.id, v)}>
                   <SelectTrigger className="h-7 text-caption w-auto">
                     <Folder className="h-3 w-3 mr-1" />
-                    <SelectValue placeholder="Move to folder" />
+                    <SelectValue placeholder={t("projectsTab.moveToFolder")} />
                   </SelectTrigger>
                   <SelectContent>
                     {folders.map((f) => (
@@ -343,7 +345,7 @@ export function ProjectsTab() {
             </div>
           ))}
           {filteredProjects.length === 0 && (
-            <p className="text-caption text-muted-foreground py-8 text-center col-span-full">No projects found.</p>
+            <p className="text-caption text-muted-foreground py-8 text-center col-span-full">{t("projectsTab.noProjects")}</p>
           )}
         </div>
       </div>
@@ -352,42 +354,42 @@ export function ProjectsTab() {
       <AlertDialog open={manualOpen} onOpenChange={setManualOpen}>
         <AlertDialogContent className="glass-modal rounded-modal">
           <AlertDialogHeader>
-            <AlertDialogTitle>Create project manually</AlertDialogTitle>
-            <AlertDialogDescription>Enter a name and type for your new project.</AlertDialogDescription>
+            <AlertDialogTitle>{t("projectsTab.manualTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("projectsTab.manualDescription")}</AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-3 py-2">
             <div className="space-y-1">
-              <label className="text-body-sm font-medium text-foreground">Project name</label>
-              <Input value={manualTitle} onChange={(e) => setManualTitle(e.target.value)} placeholder="e.g. Bathroom renovation" autoFocus />
+              <label className="text-body-sm font-medium text-foreground">{t("projectsTab.nameLabel")}</label>
+              <Input value={manualTitle} onChange={(e) => setManualTitle(e.target.value)} placeholder={t("projectsTab.namePlaceholder")} autoFocus />
             </div>
             <div className="space-y-1">
-              <label className="text-body-sm font-medium text-foreground">Type</label>
+              <label className="text-body-sm font-medium text-foreground">{t("projectsTab.typeLabel")}</label>
               <select value={manualType} onChange={(e) => setManualType(e.target.value)} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
-                <option value="residential">Residential</option>
-                <option value="commercial">Commercial</option>
-                <option value="industrial">Industrial</option>
+                <option value="residential">{t("projectsTab.type.residential")}</option>
+                <option value="commercial">{t("projectsTab.type.commercial")}</option>
+                <option value="industrial">{t("projectsTab.type.industrial")}</option>
               </select>
             </div>
             <div className="space-y-1">
-              <label className="text-body-sm font-medium text-foreground">Project mode</label>
+              <label className="text-body-sm font-medium text-foreground">{t("projectsTab.modeLabel")}</label>
               <select
                 value={manualProjectMode}
                 onChange={(e) => setManualProjectMode(e.target.value as "build_myself" | "contractor")}
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               >
-                <option value="build_myself">I'm building/renovating for myself</option>
-                <option value="contractor">I'm a contractor working for a client</option>
+                <option value="build_myself">{t("projectsTab.mode.selfBuild")}</option>
+                <option value="contractor">{t("projectsTab.mode.contractor")}</option>
               </select>
             </div>
           </div>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleManualCreate}
               disabled={manualCreating}
               className="bg-accent text-accent-foreground hover:bg-accent/90"
             >
-              {manualCreating ? "Creating..." : "Create"}
+              {manualCreating ? t("projectsTab.creating") : t("common.create")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

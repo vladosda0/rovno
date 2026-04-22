@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import type { PresentationalWorkProposal } from "@/lib/ai-assistant-contract";
 import { FileSpreadsheet } from "lucide-react";
@@ -8,6 +9,7 @@ export function WorkProposalPreview(props: {
   proposal: PresentationalWorkProposal;
 }) {
   const { projectId, proposal } = props;
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   return (
@@ -40,7 +42,7 @@ export function WorkProposalPreview(props: {
             className="mt-2 h-8 w-full text-caption"
             onClick={() => navigate(`/project/${projectId}/estimate`)}
           >
-            Open estimate to apply manually
+            {t("ai.workProposal.openEstimateCta")}
           </Button>
         </div>
       </div>

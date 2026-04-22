@@ -21,6 +21,7 @@ import { ApprovalStampFormModal } from "@/components/estimate-v2/ApprovalStampFo
 import type { ApprovalStamp } from "@/types/estimate-v2";
 import { isAuthenticated } from "@/lib/auth-state";
 import { SHOW_ESTIMATE_VERSION_UI } from "@/lib/estimate-v2/show-estimate-version-ui";
+import { useTranslation } from "react-i18next";
 
 function money(cents: number, currency: string): string {
   return new Intl.NumberFormat("ru-RU", {
@@ -39,6 +40,7 @@ export default function ShareEstimate() {
   const { shareId = "" } = useParams<{ shareId: string }>();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const shared = useEstimateV2Share(shareId);
 
   const [approvalModalOpen, setApprovalModalOpen] = useState(false);
@@ -138,26 +140,26 @@ export default function ShareEstimate() {
   if (!shared || !snapshot || !version) {
     return (
       <div className="p-sp-3">
-        <EmptyState icon={AlertTriangle} title="Shared estimate not found" description="The shared link is invalid or expired." />
+        <EmptyState icon={AlertTriangle} title={t("share.estimate.notFoundTitle")} description={t("share.estimate.notFoundBody")} />
       </div>
     );
   }
 
   const handleApprove = (stamp: ApprovalStamp) => {
     if (!canApprove) {
-      toast({ title: "This version can no longer be approved", variant: "destructive" });
+      toast({ title: t("share.estimate.toast.noLonger"), variant: "destructive" });
       return;
     }
 
     const ok = approveVersion(projectId, version.id, stamp, { actorId: "client" });
 
     if (!ok) {
-      toast({ title: "Unable to approve this version", variant: "destructive" });
+      toast({ title: t("share.estimate.toast.unableToApprove"), variant: "destructive" });
       return;
     }
 
     setApprovalModalOpen(false);
-    toast({ title: "Approved" });
+    toast({ title: t("share.estimate.toast.approved") });
   };
 
   const handleRegisterToApprove = () => {
@@ -173,38 +175,38 @@ export default function ShareEstimate() {
       object_type: "estimate_version",
       object_id: version.id,
       timestamp: new Date().toISOString(),
-      payload: { text: "Client asked a question from shared estimate page" },
+      payload: { text: t("share.estimate.questionEventText") },
     });
 
-    toast({ title: "Question sent" });
+    toast({ title: t("share.estimate.toast.questionSent") });
   };
 
   return (
     <div className="mx-auto max-w-6xl p-sp-3 space-y-sp-2">
       <div className="rounded-card border border-border bg-card p-sp-2 space-y-2">
-        <h1 className="text-lg font-semibold text-foreground">Estimate preview</h1>
+        <h1 className="text-lg font-semibold text-foreground">{t("share.estimate.title")}</h1>
         {SHOW_ESTIMATE_VERSION_UI ? (
           <p className="text-caption text-muted-foreground">
-            Version #{version.number}
+            {t("share.estimate.version", { number: version.number })}
           </p>
         ) : null}
 
         {newerProposed && (
           <div className="rounded-md border border-warning/40 bg-warning/10 p-2 flex flex-wrap items-center justify-between gap-2">
-            <span className="text-caption text-foreground">New version available.</span>
+            <span className="text-caption text-foreground">{t("share.estimate.newVersion")}</span>
             <Button size="sm" variant="outline" onClick={() => navigate(`/share/estimate/${newerProposed.shareId}`)}>
-              Open latest
+              {t("share.estimate.openLatest")}
             </Button>
           </div>
         )}
         {requiresRegistrationToApprove && (
           <div className="rounded-md border border-info/50 bg-info/10 p-2 text-caption text-foreground">
-            Register or sign in to approve this estimate version.
+            {t("share.estimate.registerToApproveHint")}
           </div>
         )}
         {approvalBlockedByPolicy && (
           <div className="rounded-md border border-warning/40 bg-warning/10 p-2 text-caption text-foreground">
-            Approval is unavailable until project owner upgrades plan and adds client as participant.
+            {t("share.estimate.disabledHint")}
           </div>
         )}
       </div>
@@ -218,10 +220,10 @@ export default function ShareEstimate() {
           />
         )}
         <span className="inline-flex items-center rounded-md border border-border px-2 py-1 text-caption">
-          Tax: {(snapshot.project.taxBps / 100).toFixed(2)}% ({money(totals.taxAmountCents, snapshot.project.currency)})
+          {t("share.estimate.tax", { percent: (snapshot.project.taxBps / 100).toFixed(2), amount: money(totals.taxAmountCents, snapshot.project.currency) })}
         </span>
         <span className="inline-flex items-center rounded-md border border-border px-2 py-1 text-caption font-medium">
-          Total: {money(totals.totalCents, snapshot.project.currency)}
+          {t("share.estimate.total", { amount: money(totals.totalCents, snapshot.project.currency) })}
         </span>
       </div>
 
@@ -238,11 +240,11 @@ export default function ShareEstimate() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Line</TableHead>
-                        <TableHead className="text-right">Qty</TableHead>
-                        <TableHead>Unit</TableHead>
-                        <TableHead className="text-right">Client unit</TableHead>
-                        <TableHead className="text-right">Client total</TableHead>
+                        <TableHead>{t("share.estimate.columns.line")}</TableHead>
+                        <TableHead className="text-right">{t("share.estimate.columns.qty")}</TableHead>
+                        <TableHead>{t("share.estimate.columns.unit")}</TableHead>
+                        <TableHead className="text-right">{t("share.estimate.columns.clientUnit")}</TableHead>
+                        <TableHead className="text-right">{t("share.estimate.columns.clientTotal")}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -269,20 +271,20 @@ export default function ShareEstimate() {
       })}
 
       <div className="rounded-card border border-border bg-card p-sp-2 space-y-2">
-        <h2 className="text-body-sm font-semibold text-foreground">Approval</h2>
+        <h2 className="text-body-sm font-semibold text-foreground">{t("share.estimate.approvalHeading")}</h2>
         <div className="flex flex-wrap gap-2">
-          {canApprove && <Button onClick={() => setApprovalModalOpen(true)}>Approve</Button>}
+          {canApprove && <Button onClick={() => setApprovalModalOpen(true)}>{t("share.estimate.approveButton")}</Button>}
           {requiresRegistrationToApprove && (
-            <Button onClick={handleRegisterToApprove}>Register to approve</Button>
+            <Button onClick={handleRegisterToApprove}>{t("share.estimate.registerButton")}</Button>
           )}
-          <Button variant="outline" onClick={handleAskQuestion}>Ask questions</Button>
+          <Button variant="outline" onClick={handleAskQuestion}>{t("share.estimate.askQuestions")}</Button>
         </div>
       </div>
 
       <ApprovalStampFormModal
         open={approvalModalOpen}
         onOpenChange={setApprovalModalOpen}
-        title="Approve estimate version"
+        title={t("share.estimate.approveModalTitle")}
         onSubmit={handleApprove}
       />
     </div>

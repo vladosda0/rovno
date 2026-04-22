@@ -1,4 +1,5 @@
 import { Suspense, lazy, type ReactElement } from "react";
+import { useTranslation } from "react-i18next";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -35,11 +36,14 @@ const NotFound = lazy(() => import("@/pages/NotFound"));
 
 const queryClient = new QueryClient();
 
-const RouteFallback = () => (
-  <div className="min-h-screen flex items-center justify-center text-sm text-muted-foreground">
-    Loading...
-  </div>
-);
+const RouteFallback = () => {
+  const { t } = useTranslation();
+  return (
+    <div className="min-h-screen flex items-center justify-center text-sm text-muted-foreground">
+      {t("app.loading")}
+    </div>
+  );
+};
 
 function routeElement(element: ReactElement): ReactElement {
   return <Suspense fallback={<RouteFallback />}>{element}</Suspense>;

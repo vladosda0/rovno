@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { ResourceTypeBadge } from "@/components/estimate-v2/ResourceTypeBadge";
 import { EmptyState } from "@/components/EmptyState";
 import { ProjectWorkflowEmptyState } from "@/components/ProjectWorkflowEmptyState";
@@ -69,12 +70,14 @@ const PAYMENT_STATUS_ORDER: Record<HRPaymentStatus, number> = {
   overpaid: 3,
 };
 
-function statusLabel(status: HRItemStatus): string {
-  if (status === "in_progress") return "In progress";
-  if (status === "blocked") return "Blocked";
-  if (status === "done") return "Done";
-  if (status === "cancelled") return "Cancelled";
-  return "Planned";
+type Translator = (key: string, options?: Record<string, unknown>) => string;
+
+function statusLabel(t: Translator, status: HRItemStatus): string {
+  if (status === "in_progress") return t("hr.status.in_progress");
+  if (status === "blocked") return t("hr.status.blocked");
+  if (status === "done") return t("hr.status.done");
+  if (status === "cancelled") return t("hr.status.cancelled");
+  return t("hr.status.planned");
 }
 
 function paymentStatusFromTotals(planned: number, paid: number): HRPaymentStatus {
@@ -88,11 +91,11 @@ function paymentStatusFromTotals(planned: number, paid: number): HRPaymentStatus
   return "overpaid";
 }
 
-function paymentStatusLabel(status: HRPaymentStatus): string {
-  if (status === "partial") return "Partial";
-  if (status === "paid") return "Paid";
-  if (status === "overpaid") return "Overpaid";
-  return "Unpaid";
+function paymentStatusLabel(t: Translator, status: HRPaymentStatus): string {
+  if (status === "partial") return t("hr.paymentStatus.partial");
+  if (status === "paid") return t("hr.paymentStatus.paid");
+  if (status === "overpaid") return t("hr.paymentStatus.overpaid");
+  return t("hr.paymentStatus.unpaid");
 }
 
 function paymentStatusBadgeVariant(status: HRPaymentStatus): "destructive" | "outline" | "secondary" {
@@ -107,9 +110,9 @@ function normalizeAssigneeIds(item: HRPlannedItem): string[] {
   return [];
 }
 
-function assigneeSummary(assigneeIds: string[], namesById: Map<string, string>): string {
+function assigneeSummary(t: Translator, assigneeIds: string[], namesById: Map<string, string>): string {
   const names = assigneeIds.map((id) => namesById.get(id)).filter((name): name is string => Boolean(name));
-  if (names.length === 0) return "Unassigned";
+  if (names.length === 0) return t("hr.assignees.unassigned");
   if (names.length <= 2) return names.join(", ");
   return `${names[0]}, ${names[1]} +${names.length - 2}`;
 }
@@ -128,6 +131,7 @@ export default function ProjectHR() {
   const pid = projectId!;
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   const { project, members } = useProject(pid);
   const estimateState = useEstimateV2Project(pid);
@@ -241,8 +245,8 @@ export default function ProjectHR() {
           || linkedLine?.assigneeEmail?.trim()
           || null;
         const visibleAssigneeSummary = knownAssigneeIds.length > 0
-          ? assigneeSummary(knownAssigneeIds, participantNameById)
-          : (!isDemoMode && estimateAssigneeLabel ? estimateAssigneeLabel : "Unassigned");
+          ? assigneeSummary(t, knownAssigneeIds, participantNameById)
+          : (!isDemoMode && estimateAssigneeLabel ? estimateAssigneeLabel : t("hr.assignees.unassigned"));
         const hasVisibleAssignee = knownAssigneeIds.length > 0 || (!isDemoMode && Boolean(estimateAssigneeLabel));
         const workStatus = task ? taskStatusToWorkStatus(task.status) : item.status;
         const title = linkedLine?.title ?? item.title;
@@ -279,19 +283,19 @@ export default function ProjectHR() {
         }
         return a.title.localeCompare(b.title, "ru-RU");
       });
-  }, [assigneeFilter, hrItems, isDemoMode, lineById, paidByItemId, paymentStatusFilter, participantNameById, searchQuery, taskById, workStatusFilter]);
+  }, [assigneeFilter, hrItems, isDemoMode, lineById, paidByItemId, paymentStatusFilter, participantNameById, searchQuery, t, taskById, workStatusFilter]);
 
   if (!project) {
-    return <EmptyState icon={Users} title="Not found" description="Project not found." />;
+    return <EmptyState icon={Users} title={t("hr.notFound.title")} description={t("hr.notFound.description")} />;
   }
 
   if (estimateState.project.estimateStatus === "planning") {
     return (
       <ProjectWorkflowEmptyState
         variant="hr"
-        title="HR will be ready after planning"
-        description="You are in a great place to start. HR items will appear here once your Estimate is moved to In work."
-        actionLabel="Open Estimate"
+        title={t("hr.empty.planning.title")}
+        description={t("hr.empty.planning.description")}
+        actionLabel={t("hr.empty.planning.action")}
         onAction={() => navigate(`/project/${pid}/estimate`)}
       />
     );
@@ -311,17 +315,17 @@ export default function ProjectHR() {
           <div className="min-w-0">
             <p className="font-medium">
               {isHRSyncing
-                ? "HR is syncing from Estimate"
+                ? t("hr.syncBanner.syncing.title")
                 : hasHRSyncError
-                  ? "HR sync failed"
-                  : "HR is behind the latest Estimate"}
+                  ? t("hr.syncBanner.error.title")
+                  : t("hr.syncBanner.behind.title")}
             </p>
             <p className="text-xs opacity-80">
               {isHRSyncing
-                ? "Estimate-linked HR demand is being refreshed now."
+                ? t("hr.syncBanner.syncing.description")
                 : hasHRSyncError
-                  ? (hrSyncState.lastError ?? "Resolve the sync error before assigning people or adding payments.")
-                  : "Wait for the HR projection to catch up before assigning people or adding payments."}
+                  ? (hrSyncState.lastError ?? t("hr.syncBanner.error.defaultDescription"))
+                  : t("hr.syncBanner.behind.description")}
             </p>
           </div>
         </div>
@@ -329,21 +333,21 @@ export default function ProjectHR() {
 
       <div className="rounded-card border border-border bg-card p-sp-2 space-y-3">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="text-lg font-semibold text-foreground">Human Resources</h2>
-          <Badge variant="secondary">{hrItems.length} items</Badge>
+          <h2 className="text-lg font-semibold text-foreground">{t("hr.heading")}</h2>
+          <Badge variant="secondary">{t("hr.count", { count: hrItems.length })}</Badge>
         </div>
 
         {hrItems.length === 0 ? (
           <EmptyState
             icon={Users}
-            title="No HR items"
-            description="HR planned items will appear when Estimate v2 enters In work."
+            title={t("hr.empty.noItems.title")}
+            description={t("hr.empty.noItems.description")}
           />
         ) : (
           <>
             <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
               <Input
-                placeholder="Search title"
+                placeholder={t("hr.filters.searchPlaceholder")}
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 className="h-8"
@@ -354,12 +358,12 @@ export default function ProjectHR() {
                 onValueChange={(value) => setWorkStatusFilter(value as "all" | HRItemStatus)}
               >
                 <SelectTrigger className="h-8">
-                  <SelectValue placeholder="Work status" />
+                  <SelectValue placeholder={t("hr.filters.workStatusPlaceholder")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All work statuses</SelectItem>
+                  <SelectItem value="all">{t("hr.filters.workStatusAll")}</SelectItem>
                   {STATUS_OPTIONS.map((option) => (
-                    <SelectItem key={option} value={option}>{statusLabel(option)}</SelectItem>
+                    <SelectItem key={option} value={option}>{statusLabel(t, option)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -370,12 +374,12 @@ export default function ProjectHR() {
                 onValueChange={(value) => setPaymentStatusFilter(value as "all" | HRPaymentStatus)}
               >
                 <SelectTrigger className="h-8">
-                  <SelectValue placeholder="Payment status" />
+                  <SelectValue placeholder={t("hr.filters.paymentStatusPlaceholder")} />
                 </SelectTrigger>
                 <SelectContent>
                   {PAYMENT_STATUS_OPTIONS.map((option) => (
                     <SelectItem key={option} value={option}>
-                      {option === "all" ? "All payment statuses" : paymentStatusLabel(option)}
+                      {option === "all" ? t("hr.filters.paymentStatusAll") : paymentStatusLabel(t, option)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -384,11 +388,11 @@ export default function ProjectHR() {
 
               <Select value={assigneeFilter} onValueChange={setAssigneeFilter}>
                 <SelectTrigger className="h-8">
-                  <SelectValue placeholder="Assignee" />
+                  <SelectValue placeholder={t("hr.filters.assigneePlaceholder")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="any">Any assignee</SelectItem>
-                  <SelectItem value="unassigned">Unassigned</SelectItem>
+                  <SelectItem value="any">{t("hr.filters.assigneeAny")}</SelectItem>
+                  <SelectItem value="unassigned">{t("hr.filters.assigneeUnassigned")}</SelectItem>
                   {participants.map((participant) => (
                     <SelectItem key={participant.id} value={participant.id}>{participant.name}</SelectItem>
                   ))}
@@ -400,21 +404,21 @@ export default function ProjectHR() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Title</TableHead>
-                    <TableHead>Assignees</TableHead>
-                    <TableHead>Work Status</TableHead>
-                    {canViewFinancialDetail && <TableHead>Payment status</TableHead>}
-                    {canViewFinancialDetail && <TableHead className="text-right">Planned</TableHead>}
-                    {canViewFinancialDetail && <TableHead className="text-right">Paid</TableHead>}
-                    {canViewFinancialDetail && <TableHead className="text-right">Remaining</TableHead>}
-                    {canViewFinancialDetail && <TableHead>Add payment</TableHead>}
+                    <TableHead>{t("hr.table.title")}</TableHead>
+                    <TableHead>{t("hr.table.assignees")}</TableHead>
+                    <TableHead>{t("hr.table.workStatus")}</TableHead>
+                    {canViewFinancialDetail && <TableHead>{t("hr.table.paymentStatus")}</TableHead>}
+                    {canViewFinancialDetail && <TableHead className="text-right">{t("hr.table.planned")}</TableHead>}
+                    {canViewFinancialDetail && <TableHead className="text-right">{t("hr.table.paid")}</TableHead>}
+                    {canViewFinancialDetail && <TableHead className="text-right">{t("hr.table.remaining")}</TableHead>}
+                    {canViewFinancialDetail && <TableHead>{t("hr.table.addPayment")}</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {rows.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={canViewFinancialDetail ? 8 : 3} className="text-center text-muted-foreground">
-                        No HR items match current filters.
+                        {t("hr.empty.noMatches")}
                       </TableCell>
                     </TableRow>
                   ) : rows.map(({ item, task, title, type, workStatus, planned, paid, remaining, paymentStatus, assigneeIds, hiddenAssigneeIds, visibleAssigneeSummary }) => (
@@ -429,12 +433,12 @@ export default function ProjectHR() {
                                     type={type}
                                     iconOnly
                                     className="border-transparent"
-                                    labelOverride={type === "subcontractor" ? "Subcontractor" : "Employee"}
+                                    labelOverride={type === "subcontractor" ? t("hr.type.subcontractor") : t("hr.type.employee")}
                                   />
                                 </span>
                               </TooltipTrigger>
                               <TooltipContent>
-                                {type === "subcontractor" ? "Subcontractor" : "Employee"}
+                                {type === "subcontractor" ? t("hr.type.subcontractor") : t("hr.type.employee")}
                               </TooltipContent>
                             </Tooltip>
                             {item.taskId ? (
@@ -450,7 +454,7 @@ export default function ProjectHR() {
                             ) : (
                               <span className="font-medium text-foreground">{title}</span>
                             )}
-                            {item.orphaned && <Badge variant="destructive">Orphaned</Badge>}
+                            {item.orphaned && <Badge variant="destructive">{t("hr.badge.orphaned")}</Badge>}
                           </div>
                           {task && (
                             <button
@@ -460,7 +464,7 @@ export default function ProjectHR() {
                                 navigate(`/project/${pid}/tasks`, { state: { openTaskId: task.id } });
                               }}
                             >
-                              Open in Tasks
+                              {t("hr.openInTasks")}
                             </button>
                           )}
                         </div>
@@ -474,7 +478,7 @@ export default function ProjectHR() {
                               </span>
                             </TooltipTrigger>
                             <TooltipContent>
-                              Assignees for this row are managed in the Estimate.
+                              {t("hr.assignees.lockedTooltip")}
                             </TooltipContent>
                           </Tooltip>
                         ) : (
@@ -490,7 +494,7 @@ export default function ProjectHR() {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="start" className="w-56">
                               {participants.length === 0 ? (
-                                <DropdownMenuItem disabled>No participants available</DropdownMenuItem>
+                                <DropdownMenuItem disabled>{t("hr.assignees.noParticipants")}</DropdownMenuItem>
                               ) : participants.map((participant) => {
                                 const checked = assigneeIds.includes(participant.id);
                                 return (
@@ -508,7 +512,7 @@ export default function ProjectHR() {
                                         toast({
                                           title: error instanceof Error
                                             ? error.message
-                                            : "Unable to update assignees",
+                                            : t("hr.assignees.unableToUpdate"),
                                           variant: "destructive",
                                         });
                                       });
@@ -524,13 +528,13 @@ export default function ProjectHR() {
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline">
-                          {statusLabel(workStatus)}
+                          {statusLabel(t, workStatus)}
                         </Badge>
                       </TableCell>
                       {canViewFinancialDetail && (
                       <TableCell>
                         <Badge variant={paymentStatusBadgeVariant(paymentStatus)}>
-                          {paymentStatusLabel(paymentStatus)}
+                          {paymentStatusLabel(t, paymentStatus)}
                         </Badge>
                       </TableCell>
                       )}
@@ -543,7 +547,7 @@ export default function ProjectHR() {
                           type="number"
                           min="0"
                           className="h-8 w-[110px]"
-                          placeholder="Amount"
+                          placeholder={t("hr.payment.amountPlaceholder")}
                           value={paymentDraftByItemId[item.id] ?? ""}
                           onChange={(event) => {
                             setPaymentDraftByItemId((prev) => ({

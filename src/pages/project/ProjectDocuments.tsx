@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { useParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { trackEvent } from "@/lib/analytics";
 import {
   Archive,
@@ -99,6 +100,7 @@ function formatDocumentDate(timestamp?: string) {
 }
 
 export default function ProjectDocuments() {
+  const { t } = useTranslation();
   const { id: projectId } = useParams<{ id: string }>();
   const pid = projectId!;
   const { documents, isLoading } = useProjectDocumentsState(pid);
@@ -171,7 +173,7 @@ export default function ProjectDocuments() {
   }
 
   async function handleUpload() {
-    const title = uploadTitle.trim() || uploadFile?.name || "Untitled document";
+    const title = uploadTitle.trim() || uploadFile?.name || t("documents.upload.untitled");
 
     if (!isSupabaseMode) {
       const docId = `doc-${Date.now()}`;
@@ -203,12 +205,12 @@ export default function ProjectDocuments() {
       });
       trackEvent("document_uploaded", { project_id: pid, origin: "uploaded" });
       closeUploadDialog();
-      toast({ title: "Document uploaded", description: title });
+      toast({ title: t("documents.upload.uploadedTitle"), description: title });
       return;
     }
 
     if (!uploadFile) {
-      toast({ title: "Please select a file", variant: "destructive" });
+      toast({ title: t("documents.upload.selectFile"), variant: "destructive" });
       return;
     }
 
@@ -230,12 +232,12 @@ export default function ProjectDocuments() {
 
       trackEvent("document_uploaded", { project_id: pid, origin: "uploaded" });
       closeUploadDialog();
-      toast({ title: "Document uploaded", description: title });
+      toast({ title: t("documents.upload.uploadedTitle"), description: title });
     } catch (error) {
       setUploading(false);
       toast({
-        title: "Document upload failed",
-        description: error instanceof Error ? error.message : "Unable to upload the document.",
+        title: t("documents.upload.failedTitle"),
+        description: error instanceof Error ? error.message : t("documents.upload.failedFallback"),
         variant: "destructive",
       });
     }
@@ -250,27 +252,30 @@ export default function ProjectDocuments() {
 
       trackEvent("document_uploaded", { project_id: pid, origin: "uploaded" });
       closeUploadDialog();
-      toast({ title: "Document uploaded", description: "Upload finalized successfully." });
+      toast({ title: t("documents.upload.uploadedTitle"), description: t("documents.upload.finalizedDescription") });
     } catch (error) {
       setUploading(false);
       toast({
-        title: "Finalize failed",
-        description: error instanceof Error ? error.message : "Unable to finalize the upload. Try again.",
+        title: t("documents.upload.finalizeFailedTitle"),
+        description: error instanceof Error ? error.message : t("documents.upload.finalizeFailedFallback"),
         variant: "destructive",
       });
     }
   }
 
   function handleGeneratePreview() {
-    setGenerateContent(`AI-generated document for "${generateTitle}".\n\nThis document outlines the terms and conditions for the ${project?.title ?? "project"}.`);
+    setGenerateContent(t("documents.generate.bodyTemplate", {
+      title: generateTitle,
+      projectTitle: project?.title ?? t("documents.generate.projectFallback"),
+    }));
     setShowGenPreview(true);
   }
 
   function handleGenerateConfirm() {
     if (isSupabaseMode) {
       toast({
-        title: "Unavailable in Supabase mode",
-        description: "AI-generated document text is not persisted yet in Supabase mode.",
+        title: t("documents.generate.unavailableTitle"),
+        description: t("documents.generate.unavailableDescription"),
         variant: "destructive",
       });
       return;
@@ -282,7 +287,7 @@ export default function ProjectDocuments() {
       id: docId,
       project_id: pid,
       type: DOCUMENT_DEFAULT_TYPE,
-      title: generateTitle || "Generated document",
+      title: generateTitle || t("documents.generate.defaultTitle"),
       origin: "ai_generated",
       visibility_class: "shared_project",
       versions: [{
@@ -315,7 +320,7 @@ export default function ProjectDocuments() {
     setShowGenPreview(false);
     setGenerateTitle("");
     setGenerateContent("");
-    toast({ title: "Document generated", description: generateTitle });
+    toast({ title: t("documents.generate.successTitle"), description: generateTitle });
   }
 
   async function handleArchive() {
@@ -342,7 +347,7 @@ export default function ProjectDocuments() {
         payload: { title: document.title },
       });
       setArchiveDocId(null);
-      toast({ title: "Document archived" });
+      toast({ title: t("documents.archiveConfirm.successTitle") });
       return;
     }
 
@@ -352,11 +357,11 @@ export default function ProjectDocuments() {
         content: latestVersion?.content ?? "",
       });
       setArchiveDocId(null);
-      toast({ title: "Document archived" });
+      toast({ title: t("documents.archiveConfirm.successTitle") });
     } catch (error) {
       toast({
-        title: "Archive failed",
-        description: error instanceof Error ? error.message : "Unable to archive the document.",
+        title: t("documents.archiveConfirm.failedTitle"),
+        description: error instanceof Error ? error.message : t("documents.archiveConfirm.failedFallback"),
         variant: "destructive",
       });
     }
@@ -380,7 +385,7 @@ export default function ProjectDocuments() {
       });
       setDeleteDocId(null);
       setViewDoc(null);
-      toast({ title: "Document deleted" });
+      toast({ title: t("documents.deleteConfirm.successTitle") });
       return;
     }
 
@@ -388,11 +393,11 @@ export default function ProjectDocuments() {
       await deleteDocumentMutation(deleteDocId);
       setDeleteDocId(null);
       setViewDoc(null);
-      toast({ title: "Document deleted" });
+      toast({ title: t("documents.deleteConfirm.successTitle") });
     } catch (error) {
       toast({
-        title: "Delete failed",
-        description: error instanceof Error ? error.message : "Unable to delete the document.",
+        title: t("documents.deleteConfirm.failedTitle"),
+        description: error instanceof Error ? error.message : t("documents.deleteConfirm.failedFallback"),
         variant: "destructive",
       });
     }
@@ -410,7 +415,7 @@ export default function ProjectDocuments() {
       payload: { title: document.title },
     });
     setViewDoc(null);
-    toast({ title: "Acknowledged", description: document.title });
+    toast({ title: t("documents.preview.acknowledged"), description: document.title });
   }
 
   function handleComment() {
@@ -427,7 +432,7 @@ export default function ProjectDocuments() {
     });
     setCommentOpen(false);
     setCommentText("");
-    toast({ title: "Comment added" });
+    toast({ title: t("documents.commentDialog.added") });
   }
 
   function handlePrintDocument() {
@@ -447,7 +452,7 @@ export default function ProjectDocuments() {
   }
 
   const generatePreviewChanges: ProposalChange[] = [
-    { entity_type: "document", action: "create", label: generateTitle || "Document", after: "Ready to review" },
+    { entity_type: "document", action: "create", label: generateTitle || t("documents.generate.previewChangeFallback"), after: t("documents.generate.previewChangeAfter") },
   ];
 
   const latestViewedVersion = viewDoc?.versions[viewDoc.versions.length - 1];
@@ -462,7 +467,7 @@ export default function ProjectDocuments() {
 
   function renderDocumentMeta(document: DocType, archived = false) {
     const detailItems = [
-      archived ? "Archived document" : "Open preview",
+      archived ? t("documents.meta.archived") : t("documents.meta.openPreview"),
       document.file_meta?.filename,
       formatDocumentDate(document.created_at),
     ].filter(Boolean) as string[];
@@ -477,15 +482,15 @@ export default function ProjectDocuments() {
   function renderActiveDocumentActions(document: DocType) {
     return (
       <div className="flex gap-1">
-        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setViewDoc(document)} title="Preview">
+        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setViewDoc(document)} title={t("documents.action.preview")}>
           <Eye className="h-3.5 w-3.5" />
         </Button>
         {canManageDocuments && (
           <>
-            <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setArchiveDocId(document.id)} title="Archive">
+            <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setArchiveDocId(document.id)} title={t("documents.action.archive")}>
               <Archive className="h-3.5 w-3.5" />
             </Button>
-            <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setDeleteDocId(document.id)} title="Delete">
+            <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setDeleteDocId(document.id)} title={t("documents.action.delete")}>
               <Trash2 className="h-3.5 w-3.5 text-destructive" />
             </Button>
           </>
@@ -512,7 +517,7 @@ export default function ProjectDocuments() {
               onOpen={() => setViewDoc(document)}
               muted={archived}
               actions={archived ? (
-                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setViewDoc(document)} title="Preview">
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setViewDoc(document)} title={t("documents.action.preview")}>
                   <Eye className="h-3.5 w-3.5" />
                 </Button>
               ) : renderActiveDocumentActions(document)}
@@ -539,7 +544,7 @@ export default function ProjectDocuments() {
               details={renderDocumentMeta(document, archived)}
               onOpen={() => setViewDoc(document)}
               trailing={archived ? (
-                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setViewDoc(document)} title="Preview">
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setViewDoc(document)} title={t("documents.action.preview")}>
                   <Eye className="h-3.5 w-3.5" />
                 </Button>
               ) : renderActiveDocumentActions(document)}
@@ -555,9 +560,9 @@ export default function ProjectDocuments() {
       {!showOnlyEmptyState && (
         <div className="glass-elevated rounded-card p-sp-2 flex items-center justify-between flex-wrap gap-2">
           <div>
-            <h2 className="text-h3 text-foreground">Documents</h2>
+            <h2 className="text-h3 text-foreground">{t("documents.title")}</h2>
             <p className="text-caption text-muted-foreground">
-              {isLoading ? "Loading documents..." : `${activeDocuments.length} active · ${archivedDocuments.length} archived`}
+              {isLoading ? t("documents.loading") : t("documents.counts", { active: activeDocuments.length, archived: archivedDocuments.length })}
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -567,11 +572,11 @@ export default function ProjectDocuments() {
             {canUploadDocuments && (
               <div className="flex gap-1.5">
                 <Button size="sm" variant="outline" onClick={() => setUploadOpen(true)}>
-                  <Upload className="h-4 w-4 mr-1.5" /> Upload
+                  <Upload className="h-4 w-4 mr-1.5" /> {t("documents.action.upload")}
                 </Button>
                 {!isSupabaseMode && canManageDocuments && (
                   <Button size="sm" className="bg-accent text-accent-foreground hover:bg-accent/90" onClick={() => setGenerateOpen(true)}>
-                    <Plus className="h-4 w-4 mr-1.5" /> Generate
+                    <Plus className="h-4 w-4 mr-1.5" /> {t("documents.action.generate")}
                   </Button>
                 )}
               </div>
@@ -585,11 +590,11 @@ export default function ProjectDocuments() {
       ) : documents.length === 0 ? (
         <ProjectWorkflowEmptyState
           variant="documents"
-          title="No documents"
+          title={t("documents.empty.title")}
           description={isSupabaseMode
-            ? "Upload a document to this project."
-            : "Upload a document or generate one with AI."}
-          actionLabel={canUploadDocuments ? "Upload a document" : undefined}
+            ? t("documents.empty.descriptionSupabase")
+            : t("documents.empty.descriptionLocal")}
+          actionLabel={canUploadDocuments ? t("documents.empty.action") : undefined}
           onAction={canUploadDocuments ? () => setUploadOpen(true) : undefined}
         />
       ) : (
@@ -600,7 +605,7 @@ export default function ProjectDocuments() {
 
           {archivedDocuments.length > 0 && (
             <div className="space-y-1">
-              <h3 className="text-body-sm font-semibold text-muted-foreground px-1">Archived</h3>
+              <h3 className="text-body-sm font-semibold text-muted-foreground px-1">{t("documents.archivedHeading")}</h3>
               {renderDocumentsSection(archivedDocuments, true)}
             </div>
           )}
@@ -619,30 +624,30 @@ export default function ProjectDocuments() {
       >
         <DialogContent className="bg-card border border-border rounded-modal max-w-lg shadow-xl p-0 gap-0 [&>button.absolute]:hidden">
           <DialogHeader className="border-b border-border px-5 py-4">
-            <DialogTitle>Upload document</DialogTitle>
-            <DialogDescription>Add a document to this project.</DialogDescription>
+            <DialogTitle>{t("documents.upload.title")}</DialogTitle>
+            <DialogDescription>{t("documents.upload.description")}</DialogDescription>
           </DialogHeader>
           <div className="px-5 py-4 space-y-4">
             <div className="rounded-panel bg-warning/10 p-3 text-caption text-warning">
-              Do not upload documents containing personal identification data without consent.
+              {t("documents.upload.piiWarning")}
             </div>
             {pendingFinalizeIntentId && (
               <div className="rounded-panel bg-destructive/10 p-3 text-caption text-destructive">
-                File was uploaded but finalize failed. You can retry finalization below.
+                {t("documents.upload.finalizeRetryNotice")}
               </div>
             )}
             <div className="space-y-1">
-              <label className="text-body-sm font-medium text-foreground">Title</label>
+              <label className="text-body-sm font-medium text-foreground">{t("documents.upload.titleLabel")}</label>
               <Input
                 value={uploadTitle}
                 onChange={(event) => setUploadTitle(event.target.value)}
-                placeholder="Document name"
+                placeholder={t("documents.upload.titlePlaceholder")}
                 autoFocus
                 disabled={uploading}
               />
             </div>
             <div className="space-y-1">
-              <label className="text-body-sm font-medium text-foreground">File</label>
+              <label className="text-body-sm font-medium text-foreground">{t("documents.upload.fileLabel")}</label>
               <Input
                 type="file"
                 disabled={uploading}
@@ -656,12 +661,12 @@ export default function ProjectDocuments() {
               />
               <p className="text-caption text-muted-foreground">
                 {isSupabaseMode
-                  ? "A file is required to upload a document."
-                  : "Attach a file now, or create a placeholder document with a title only."}
+                  ? t("documents.upload.fileHintSupabase")
+                  : t("documents.upload.fileHintLocal")}
               </p>
             </div>
             <div className="space-y-2">
-              <Label className="text-body-sm font-medium text-foreground">Visibility</Label>
+              <Label className="text-body-sm font-medium text-foreground">{t("documents.upload.visibilityLabel")}</Label>
               <RadioGroup
                 value={uploadVisibilityClass}
                 onValueChange={(v) => setUploadVisibilityClass(v as DocMediaVisibilityClass)}
@@ -671,7 +676,7 @@ export default function ProjectDocuments() {
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="shared_project" id="doc-vis-shared" />
                   <Label htmlFor="doc-vis-shared" className="font-normal cursor-pointer">
-                    Shared — visible to everyone on the project who can open documents
+                    {t("documents.upload.sharedLabel")}
                   </Label>
                 </div>
                 <div className="flex items-start space-x-2">
@@ -685,11 +690,11 @@ export default function ProjectDocuments() {
                       htmlFor="doc-vis-internal"
                       className={`font-normal ${canSelectInternalUpload ? "cursor-pointer" : "text-muted-foreground"}`}
                     >
-                      Internal — only participants with internal document access (server-enforced)
+                      {t("documents.upload.internalLabel")}
                     </Label>
                     {!canSelectInternalUpload && (
                       <p className="text-caption text-muted-foreground pl-0">
-                        Your role does not include internal document visibility for this project.
+                        {t("documents.upload.internalDisabledHint")}
                       </p>
                     )}
                   </div>
@@ -698,14 +703,14 @@ export default function ProjectDocuments() {
             </div>
           </div>
           <DialogFooter className="border-t border-border px-5 py-4">
-            <Button variant="outline" onClick={closeUploadDialog} disabled={uploading}>Cancel</Button>
+            <Button variant="outline" onClick={closeUploadDialog} disabled={uploading}>{t("common.cancel")}</Button>
             {pendingFinalizeIntentId ? (
               <Button
                 className="bg-accent text-accent-foreground hover:bg-accent/90"
                 onClick={handleRetryFinalize}
                 disabled={uploading}
               >
-                {uploading ? "Finalizing…" : "Retry finalize"}
+                {uploading ? t("documents.upload.finalizing") : t("documents.upload.retryFinalize")}
               </Button>
             ) : (
               <Button
@@ -713,7 +718,7 @@ export default function ProjectDocuments() {
                 onClick={handleUpload}
                 disabled={uploading || (isSupabaseMode ? !uploadFile : (!uploadTitle.trim() && !uploadFile))}
               >
-                {uploading ? "Uploading…" : "Upload"}
+                {uploading ? t("documents.upload.uploading") : t("documents.upload.submit")}
               </Button>
             )}
           </DialogFooter>
@@ -723,25 +728,25 @@ export default function ProjectDocuments() {
       <AlertDialog open={generateOpen} onOpenChange={(open) => { setGenerateOpen(open); if (!open) setShowGenPreview(false); }}>
         <AlertDialogContent className="glass-modal rounded-modal max-w-lg">
           <AlertDialogHeader>
-            <AlertDialogTitle>Generate document</AlertDialogTitle>
-            <AlertDialogDescription>AI will create a document based on your description.</AlertDialogDescription>
+            <AlertDialogTitle>{t("documents.generate.title")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("documents.generate.description")}</AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-3 py-2">
             <div className="space-y-1">
-              <label className="text-body-sm font-medium text-foreground">Document title</label>
-              <Input value={generateTitle} onChange={(event) => setGenerateTitle(event.target.value)} placeholder="e.g. Subcontractor Agreement" autoFocus />
+              <label className="text-body-sm font-medium text-foreground">{t("documents.generate.titleLabel")}</label>
+              <Input value={generateTitle} onChange={(event) => setGenerateTitle(event.target.value)} placeholder={t("documents.generate.titlePlaceholder")} autoFocus />
             </div>
             {!showGenPreview ? (
               <Button onClick={handleGeneratePreview} disabled={!generateTitle.trim()} className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
-                Generate preview
+                {t("documents.generate.previewAction")}
               </Button>
             ) : (
               <div className="space-y-2">
                 <div className="glass rounded-card p-3">
-                  <p className="text-caption text-muted-foreground mb-1">Preview</p>
+                  <p className="text-caption text-muted-foreground mb-1">{t("documents.generate.previewHeading")}</p>
                   <p className="text-body-sm text-foreground whitespace-pre-wrap">{generateContent}</p>
                 </div>
-                <PreviewCard summary="Generate document" changes={generatePreviewChanges} />
+                <PreviewCard summary={t("documents.generate.previewSummary")} changes={generatePreviewChanges} />
                 <ActionBar
                   onConfirm={handleGenerateConfirm}
                   onCancel={() => setShowGenPreview(false)}
@@ -751,7 +756,7 @@ export default function ProjectDocuments() {
           </div>
           {!showGenPreview && (
             <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             </AlertDialogFooter>
           )}
         </AlertDialogContent>
@@ -769,24 +774,24 @@ export default function ProjectDocuments() {
                   ) : null}
                 </div>
                 <DialogDescription>
-                  {viewedDocumentIsArchived ? "Archived document" : "Document preview"}
+                  {viewedDocumentIsArchived ? t("documents.preview.archivedLabel") : t("documents.preview.previewLabel")}
                 </DialogDescription>
               </DialogHeader>
               <div className="px-5 py-4 space-y-4">
                 <div className="rounded-panel border border-border bg-muted/30 p-4 max-h-72 overflow-y-auto">
                   {isSupabaseMode ? (
                     <p className="text-body-sm text-muted-foreground whitespace-pre-wrap">
-                      Document file is stored. Download and inline preview are coming soon.
+                      {t("documents.preview.supabaseNote")}
                     </p>
                   ) : latestViewedVersion.content ? (
                     <p className="text-body-sm text-foreground whitespace-pre-wrap">{latestViewedVersion.content}</p>
                   ) : (
-                    <p className="text-body-sm text-muted-foreground whitespace-pre-wrap">No content available.</p>
+                    <p className="text-body-sm text-muted-foreground whitespace-pre-wrap">{t("documents.preview.noContent")}</p>
                   )}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button size="sm" variant="outline" onClick={handlePrintDocument}>
-                    <Printer className="h-3.5 w-3.5 mr-1.5" /> Print
+                    <Printer className="h-3.5 w-3.5 mr-1.5" /> {t("documents.preview.action.print")}
                   </Button>
                   <Button
                     size="sm"
@@ -794,18 +799,18 @@ export default function ProjectDocuments() {
                     onClick={() => handleDownloadDocument(viewDoc, latestViewedVersion.content)}
                     disabled={!canDownloadViewedDocument}
                   >
-                    <Download className="h-3.5 w-3.5 mr-1.5" /> Download
+                    <Download className="h-3.5 w-3.5 mr-1.5" /> {t("documents.preview.action.download")}
                   </Button>
                   <Button size="sm" variant="outline" disabled>
-                    <Share2 className="h-3.5 w-3.5 mr-1.5" /> Share
+                    <Share2 className="h-3.5 w-3.5 mr-1.5" /> {t("documents.preview.action.share")}
                   </Button>
                 </div>
                 <p className="text-caption text-muted-foreground">
                   {isSupabaseMode
-                    ? "Download and sharing are coming soon."
+                    ? t("documents.preview.footnote.supabase")
                     : canDownloadViewedDocument
-                      ? "Sharing is coming soon."
-                      : "Download and sharing are coming soon for this document."}
+                      ? t("documents.preview.footnote.shareOnly")
+                      : t("documents.preview.footnote.bothComingSoon")}
                 </p>
               </div>
               <DialogFooter className="border-t border-border px-5 py-4 flex-wrap gap-2 sm:justify-between sm:space-x-0">
@@ -813,20 +818,20 @@ export default function ProjectDocuments() {
                   {canCommentOnDocuments && !viewedDocumentIsArchived && (
                     <>
                       <Button size="sm" onClick={() => handleAcknowledge(viewDoc)} className="bg-accent text-accent-foreground hover:bg-accent/90">
-                        <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Confirm acknowledgement
+                        <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> {t("documents.preview.acknowledge")}
                       </Button>
                       <Button size="sm" variant="outline" onClick={() => setCommentOpen(true)}>
-                        <MessageSquare className="h-3.5 w-3.5 mr-1" /> Comment
+                        <MessageSquare className="h-3.5 w-3.5 mr-1" /> {t("documents.preview.comment")}
                       </Button>
                     </>
                   )}
                   {canManageDocuments && viewedDocumentIsArchived && (
                     <Button size="sm" variant="outline" onClick={() => setDeleteDocId(viewDoc.id)} className="text-destructive hover:text-destructive">
-                      <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete
+                      <Trash2 className="h-3.5 w-3.5 mr-1" /> {t("documents.preview.delete")}
                     </Button>
                   )}
                 </div>
-                <Button size="sm" variant="outline" onClick={() => setViewDoc(null)}>Close</Button>
+                <Button size="sm" variant="outline" onClick={() => setViewDoc(null)}>{t("common.close")}</Button>
               </DialogFooter>
             </>
           )}
@@ -836,13 +841,13 @@ export default function ProjectDocuments() {
       <AlertDialog open={commentOpen} onOpenChange={setCommentOpen}>
         <AlertDialogContent className="glass-modal rounded-modal">
           <AlertDialogHeader>
-            <AlertDialogTitle>Leave a comment</AlertDialogTitle>
+            <AlertDialogTitle>{t("documents.commentDialog.title")}</AlertDialogTitle>
           </AlertDialogHeader>
-          <Textarea value={commentText} onChange={(event) => setCommentText(event.target.value)} placeholder="Your comment..." className="min-h-[60px]" />
+          <Textarea value={commentText} onChange={(event) => setCommentText(event.target.value)} placeholder={t("documents.commentDialog.placeholder")} className="min-h-[60px]" />
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction onClick={handleComment} className="bg-accent text-accent-foreground hover:bg-accent/90" disabled={!commentText.trim()}>
-              Submit
+              {t("documents.commentDialog.submit")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -851,9 +856,9 @@ export default function ProjectDocuments() {
       <ConfirmModal
         open={!!archiveDocId}
         onOpenChange={(open) => !open && setArchiveDocId(null)}
-        title="Archive document?"
-        description="This document will be moved to the archive."
-        confirmLabel="Archive"
+        title={t("documents.archiveConfirm.title")}
+        description={t("documents.archiveConfirm.description")}
+        confirmLabel={t("documents.archiveConfirm.confirm")}
         onConfirm={handleArchive}
         onCancel={() => setArchiveDocId(null)}
       />
@@ -861,9 +866,9 @@ export default function ProjectDocuments() {
       <ConfirmModal
         open={!!deleteDocId}
         onOpenChange={(open) => !open && setDeleteDocId(null)}
-        title="Delete document?"
-        description="This will permanently remove the document and all its versions."
-        confirmLabel="Delete"
+        title={t("documents.deleteConfirm.title")}
+        description={t("documents.deleteConfirm.description")}
+        confirmLabel={t("documents.deleteConfirm.confirm")}
         onConfirm={handleDelete}
         onCancel={() => setDeleteDocId(null)}
       />

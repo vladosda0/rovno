@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -28,10 +29,13 @@ export function ApprovalStampFormModal({
   open,
   onOpenChange,
   onSubmit,
-  title = "Approval stamp",
-  submitLabel = "Approve",
+  title,
+  submitLabel,
   defaults,
 }: ApprovalStampFormModalProps) {
+  const { t } = useTranslation();
+  const resolvedTitle = title ?? t("estimate.approval.modalTitle");
+  const resolvedSubmitLabel = submitLabel ?? t("estimate.approval.submit");
   const [name, setName] = useState(defaults?.name ?? "");
   const [surname, setSurname] = useState(defaults?.surname ?? "");
   const [email, setEmail] = useState(defaults?.email ?? "");
@@ -49,20 +53,20 @@ export function ApprovalStampFormModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[92vw] max-w-md p-0 gap-0 overflow-hidden">
         <DialogHeader className="border-b border-border px-5 py-4">
-          <DialogTitle>{title}</DialogTitle>
+          <DialogTitle>{resolvedTitle}</DialogTitle>
           <DialogDescription>
-            Enter approver details to generate an approval stamp.
+            {t("estimate.approval.description")}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3 px-5 py-4">
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" />
-          <Input value={surname} onChange={(e) => setSurname(e.target.value)} placeholder="Surname" />
-          <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" type="email" />
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("estimate.approval.placeholder.name")} />
+          <Input value={surname} onChange={(e) => setSurname(e.target.value)} placeholder={t("estimate.approval.placeholder.surname")} />
+          <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t("estimate.approval.placeholder.email")} type="email" />
         </div>
 
         <DialogFooter className="border-t border-border px-5 py-4">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t("common.cancel")}</Button>
           <Button
             disabled={!canSubmit}
             onClick={() => {
@@ -75,7 +79,7 @@ export function ApprovalStampFormModal({
               });
             }}
           >
-            {submitLabel}
+            {resolvedSubmitLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

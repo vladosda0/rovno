@@ -1,4 +1,5 @@
 import { Plus, Pencil, Trash2, FileText, ShoppingCart, ClipboardList } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { ProposalChange } from "@/types/ai";
 
 const iconMap: Record<string, typeof Plus> = {
@@ -26,11 +27,12 @@ interface PreviewCardProps {
 }
 
 export function PreviewCard({ summary, changes }: PreviewCardProps) {
+  const { t } = useTranslation();
   return (
     <div className="glass rounded-card p-3 space-y-2 w-full box-border min-w-0">
       <div className="flex items-center justify-between gap-2 min-w-0">
         <span className="text-body-sm font-semibold text-foreground truncate">{summary}</span>
-        <span className="text-caption text-muted-foreground shrink-0 whitespace-nowrap">{changes.length} change{changes.length !== 1 ? "s" : ""}</span>
+        <span className="text-caption text-muted-foreground shrink-0 whitespace-nowrap">{t("ai.preview.changes", { count: changes.length })}</span>
       </div>
       <div className="space-y-1">
         {changes.map((change, i) => {

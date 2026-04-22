@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { trackEvent } from "@/lib/analytics";
 import { useCurrentUser } from "@/hooks/use-mock-data";
 import { Badge } from "@/components/ui/badge";
@@ -8,23 +9,25 @@ import { Progress } from "@/components/ui/progress";
 import { SettingsSection } from "@/components/settings/SettingsSection";
 import { AlertTriangle, Coins, CreditCard, Sparkles } from "lucide-react";
 
-const PLAN_LABELS: Record<string, string> = {
-  free: "Free",
-  pro: "Pro",
-  business: "Business",
+const PLAN_KEYS: Record<string, string> = {
+  free: "billing.plan.free",
+  pro: "billing.plan.pro",
+  business: "billing.plan.business",
 };
 
 export function BillingPanel() {
+  const { t } = useTranslation();
   const user = useCurrentUser();
   const navigate = useNavigate();
   const total = user.credits_free + user.credits_paid;
   const isEmpty = total <= 0;
   const maxCredits = 300;
   const pct = Math.min((total / maxCredits) * 100, 100);
+  const planLabel = PLAN_KEYS[user.plan] ? t(PLAN_KEYS[user.plan]) : user.plan;
 
   return (
     <div className="space-y-sp-3">
-      <SettingsSection title="Billing & Credits" description="Manage your plan and AI credits.">
+      <SettingsSection title={t("billing.title")} description={t("billing.description")}>
         {/* Plan card */}
         <Card>
           <CardContent className="p-1.5 px-sp-2 flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -34,13 +37,13 @@ export function BillingPanel() {
             <div className="flex-1 min-w-0 space-y-0.5">
               <div className="flex items-center gap-1.5">
                 <p className="text-body font-semibold text-foreground">
-                  {PLAN_LABELS[user.plan] || user.plan} plan
+                  {t("billing.planSuffix", { plan: planLabel })}
                 </p>
                 <Badge variant="secondary" className="text-[10px] capitalize">{user.plan}</Badge>
               </div>
-              <p className="text-caption text-muted-foreground">Your current subscription tier</p>
+              <p className="text-caption text-muted-foreground">{t("billing.currentTier")}</p>
             </div>
-            <Button variant="outline" size="sm" className="w-full sm:w-auto sm:shrink-0" onClick={() => { trackEvent("billing_panel_compare_plans_clicked"); navigate("/pricing"); }}>Compare plans</Button>
+            <Button variant="outline" size="sm" className="w-full sm:w-auto sm:shrink-0" onClick={() => { trackEvent("billing_panel_compare_plans_clicked"); navigate("/pricing"); }}>{t("billing.comparePlans")}</Button>
           </CardContent>
         </Card>
 
@@ -48,19 +51,19 @@ export function BillingPanel() {
         <div className="space-y-sp-2">
           <div className="flex items-center gap-2">
             <Coins className="h-4 w-4 text-accent" />
-            <p className="text-body-sm font-semibold text-foreground">Credits remaining</p>
+            <p className="text-body-sm font-semibold text-foreground">{t("billing.creditsRemaining")}</p>
           </div>
 
           <div className="grid gap-sp-2 sm:grid-cols-2">
             <Card className="bg-muted/30">
               <CardContent className="p-1.5 px-sp-2 space-y-0.5">
-                <p className="text-caption text-muted-foreground">Free (daily)</p>
+                <p className="text-caption text-muted-foreground">{t("billing.free")}</p>
                 <p className="text-h3 font-bold text-foreground">{user.credits_free}</p>
               </CardContent>
             </Card>
             <Card className="bg-muted/30">
               <CardContent className="p-1.5 px-sp-2 space-y-0.5">
-                <p className="text-caption text-muted-foreground">Paid</p>
+                <p className="text-caption text-muted-foreground">{t("billing.paid")}</p>
                 <p className="text-h3 font-bold text-foreground">{user.credits_paid}</p>
               </CardContent>
             </Card>
@@ -68,8 +71,8 @@ export function BillingPanel() {
 
           <div className="rounded-panel bg-muted/40 p-1.5 px-sp-2 space-y-1.5">
             <div className="flex justify-between text-caption text-muted-foreground">
-              <span>Total: {total}</span>
-              <span>{maxCredits} max</span>
+              <span>{t("billing.total", { count: total })}</span>
+              <span>{t("billing.max", { max: maxCredits })}</span>
             </div>
             <Progress value={pct} className="h-2" />
           </div>
@@ -79,8 +82,8 @@ export function BillingPanel() {
               <CardContent className="p-1.5 px-sp-2 flex items-center gap-2">
                 <AlertTriangle className="h-5 w-5 text-warning shrink-0" />
                 <div>
-                  <p className="text-body-sm font-medium text-foreground">No credits remaining</p>
-                  <p className="text-caption text-muted-foreground">Upgrade your plan to continue using AI features.</p>
+                  <p className="text-body-sm font-medium text-foreground">{t("billing.empty")}</p>
+                  <p className="text-caption text-muted-foreground">{t("billing.emptyDescription")}</p>
                 </div>
               </CardContent>
             </Card>
@@ -89,7 +92,7 @@ export function BillingPanel() {
           <div className="flex flex-wrap gap-sp-2 pt-sp-1">
             <Button className="w-full sm:w-auto" onClick={() => { trackEvent("billing_panel_purchase_credits_clicked"); navigate("/pricing"); }}>
               <CreditCard className="h-4 w-4 mr-1.5" />
-              Purchase credits
+              {t("billing.purchase")}
             </Button>
           </div>
         </div>

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -8,45 +9,46 @@ import { SettingsSection } from "@/components/settings/SettingsSection";
 import { toast } from "@/hooks/use-toast";
 
 interface NotifToggle {
-  label: string;
+  labelKey: string;
   key: string;
   enabled: boolean;
 }
 
-const DEFAULT_GROUPS: { title: string; items: NotifToggle[] }[] = [
+const DEFAULT_GROUPS: { titleKey: string; items: NotifToggle[] }[] = [
   {
-    title: "Tasks",
+    titleKey: "notifications.group.tasks",
     items: [
-      { label: "Assigned to me", key: "task_assigned", enabled: true },
-      { label: "Due soon", key: "task_due", enabled: true },
-      { label: "Status changed", key: "task_status", enabled: false },
+      { labelKey: "notifications.group.tasks.assigned", key: "task_assigned", enabled: true },
+      { labelKey: "notifications.group.tasks.due", key: "task_due", enabled: true },
+      { labelKey: "notifications.group.tasks.status", key: "task_status", enabled: false },
     ],
   },
   {
-    title: "Documents",
+    titleKey: "notifications.group.documents",
     items: [
-      { label: "Scan finished", key: "doc_scan", enabled: true },
-      { label: "Risks found", key: "doc_risks", enabled: true },
-      { label: "Clean version ready", key: "doc_ready", enabled: false },
+      { labelKey: "notifications.group.documents.scan", key: "doc_scan", enabled: true },
+      { labelKey: "notifications.group.documents.risks", key: "doc_risks", enabled: true },
+      { labelKey: "notifications.group.documents.ready", key: "doc_ready", enabled: false },
     ],
   },
   {
-    title: "Budget & Procurement",
+    titleKey: "notifications.group.budget",
     items: [
-      { label: "Over budget warnings", key: "budget_over", enabled: true },
-      { label: "Approvals needed", key: "budget_approval", enabled: true },
+      { labelKey: "notifications.group.budget.over", key: "budget_over", enabled: true },
+      { labelKey: "notifications.group.budget.approval", key: "budget_approval", enabled: true },
     ],
   },
   {
-    title: "Mentions & Comments",
+    titleKey: "notifications.group.mentions",
     items: [
-      { label: "Someone mentions me", key: "mention", enabled: true },
-      { label: "New comment on my task", key: "comment", enabled: true },
+      { labelKey: "notifications.group.mentions.mention", key: "mention", enabled: true },
+      { labelKey: "notifications.group.mentions.comment", key: "comment", enabled: true },
     ],
   },
 ];
 
 export function NotificationsPanel() {
+  const { t } = useTranslation();
   const [channels, setChannels] = useState({ inApp: true });
   const [groups, setGroups] = useState(DEFAULT_GROUPS);
   const [digest, setDigest] = useState("instant");
@@ -62,33 +64,33 @@ export function NotificationsPanel() {
 
   return (
     <div className="space-y-sp-3">
-      <SettingsSection title="Channels" description="Where you receive notifications.">
+      <SettingsSection title={t("notifications.channels.title")} description={t("notifications.channels.description")}>
         <div className="flex flex-wrap gap-sp-2">
           <div className="flex items-center gap-2">
             <Switch checked={channels.inApp} onCheckedChange={toggleInApp} />
-            <Label>In-app</Label>
+            <Label>{t("notifications.channels.inApp")}</Label>
           </div>
           <div className="flex items-center gap-2 opacity-50">
             <Switch checked={false} disabled />
-            <Label>Email</Label>
-            <Badge variant="secondary" className="text-[10px]">Coming soon</Badge>
+            <Label>{t("notifications.channels.email")}</Label>
+            <Badge variant="secondary" className="text-[10px]">{t("notifications.channels.comingSoon")}</Badge>
           </div>
           <div className="flex items-center gap-2 opacity-50">
             <Switch checked={false} disabled />
-            <Label>Telegram</Label>
-            <Badge variant="secondary" className="text-[10px]">Coming soon</Badge>
+            <Label>{t("notifications.channels.telegram")}</Label>
+            <Badge variant="secondary" className="text-[10px]">{t("notifications.channels.comingSoon")}</Badge>
           </div>
         </div>
       </SettingsSection>
 
-      <SettingsSection title="Event preferences" description="Choose which events trigger notifications.">
+      <SettingsSection title={t("notifications.events.title")} description={t("notifications.events.description")}>
         <div className="space-y-sp-2">
           {groups.map((group, gi) => (
-            <div key={group.title} className="rounded-card bg-background/60 p-sp-2 space-y-1.5">
-              <p className="text-body-sm font-medium text-foreground">{group.title}</p>
+            <div key={group.titleKey} className="rounded-card bg-background/60 p-sp-2 space-y-1.5">
+              <p className="text-body-sm font-medium text-foreground">{t(group.titleKey)}</p>
               {group.items.map((item, ii) => (
                 <div key={item.key} className="flex items-center justify-between gap-sp-2 py-1">
-                  <span className="min-w-0 flex-1 text-caption text-muted-foreground">{item.label}</span>
+                  <span className="min-w-0 flex-1 text-caption text-muted-foreground">{t(item.labelKey)}</span>
                   <Switch checked={item.enabled} onCheckedChange={() => toggleItem(gi, ii)} />
                 </div>
               ))}
@@ -97,19 +99,19 @@ export function NotificationsPanel() {
         </div>
       </SettingsSection>
 
-      <SettingsSection title="Digest frequency" description="How often to receive email digests.">
+      <SettingsSection title={t("notifications.digest.title")} description={t("notifications.digest.description")}>
         <Select value={digest} onValueChange={setDigest}>
           <SelectTrigger className="w-full sm:w-48"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="instant">Instant</SelectItem>
-            <SelectItem value="daily">Daily</SelectItem>
-            <SelectItem value="weekly">Weekly</SelectItem>
+            <SelectItem value="instant">{t("notifications.digest.instant")}</SelectItem>
+            <SelectItem value="daily">{t("notifications.digest.daily")}</SelectItem>
+            <SelectItem value="weekly">{t("notifications.digest.weekly")}</SelectItem>
           </SelectContent>
         </Select>
       </SettingsSection>
 
       <div className="flex flex-wrap gap-sp-2 pt-sp-1">
-        <Button className="w-full sm:w-auto" onClick={() => toast({ title: "Notification preferences saved" })}>Save preferences</Button>
+        <Button className="w-full sm:w-auto" onClick={() => toast({ title: t("notifications.savedToast") })}>{t("notifications.save")}</Button>
       </div>
     </div>
   );

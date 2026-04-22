@@ -1,5 +1,6 @@
 import { useLayoutEffect, useMemo } from "react";
 import { useParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import {
   useProject,
   useTasks,
@@ -29,6 +30,7 @@ import { resolveActionState } from "@/lib/permission-contract-actions";
 import { Copy, Info, LayoutDashboard, MapPin } from "lucide-react";
 
 export default function ProjectDashboard() {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const projectId = id!;
   const { toast } = useToast();
@@ -75,9 +77,9 @@ export default function ProjectDashboard() {
     if (!project?.address) return;
     try {
       await navigator.clipboard.writeText(project.address);
-      toast({ title: "Copied" });
+      toast({ title: t("projectDashboard.copied") });
     } catch {
-      toast({ title: "Copy failed", variant: "destructive" });
+      toast({ title: t("projectDashboard.copyFailed"), variant: "destructive" });
     }
   };
 
@@ -85,11 +87,14 @@ export default function ProjectDashboard() {
     return (
       <EmptyState
         icon={LayoutDashboard}
-        title="Project not found"
-        description="This project does not exist."
+        title={t("projectDashboard.notFoundTitle")}
+        description={t("projectDashboard.notFoundDescription")}
       />
     );
   }
+
+  const typeLabel = t(`projectDashboard.type.${project.type}`, { defaultValue: project.type });
+  const automationLabel = t(`projectDashboard.automation.${project.automation_level}`, { defaultValue: project.automation_level });
 
   return (
     <div className="space-y-sp-2">
@@ -98,15 +103,15 @@ export default function ProjectDashboard() {
           <div className="space-y-2">
             <div>
               <h2 className="text-h2 text-foreground">{project.title}</h2>
-              <p className="text-body-sm text-muted-foreground mt-1 capitalize">
-                {project.type} · {project.automation_level} automation
+              <p className="text-body-sm text-muted-foreground mt-1">
+                {t("projectDashboard.typeAutomationLine", { type: typeLabel, automation: automationLabel })}
               </p>
             </div>
 
             <div className="space-y-1">
-              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">AI Description</p>
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{t("projectDashboard.aiDescription")}</p>
               <p className="text-body-sm text-foreground/90 line-clamp-2">
-                {project.ai_description || "AI summary placeholder. Project insights will appear here as activity grows."}
+                {project.ai_description || t("projectDashboard.aiDescriptionPlaceholder")}
               </p>
             </div>
 
@@ -115,12 +120,12 @@ export default function ProjectDashboard() {
               {project.address ? (
                 <>
                   <span className="text-caption text-foreground flex-1 truncate">{project.address}</span>
-                  <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={handleCopyAddress} aria-label="Copy address">
+                  <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={handleCopyAddress} aria-label={t("projectDashboard.copyAddress")}>
                     <Copy className="h-3.5 w-3.5" />
                   </Button>
                 </>
               ) : (
-                <span className="text-caption text-muted-foreground">Add address</span>
+                <span className="text-caption text-muted-foreground">{t("projectDashboard.addAddress")}</span>
               )}
             </div>
           </div>
@@ -128,19 +133,19 @@ export default function ProjectDashboard() {
           <div className="rounded-panel bg-muted/30 p-3 flex flex-col justify-between gap-3 min-h-[128px]">
             <div className="flex items-end justify-between">
               <span className="text-body-sm text-muted-foreground inline-flex items-center gap-1.5">
-                Progress
+                {t("projectDashboard.progress")}
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <button type="button" className="text-muted-foreground hover:text-foreground transition-colors" aria-label="Progress breakdown">
+                    <button type="button" className="text-muted-foreground hover:text-foreground transition-colors" aria-label={t("projectDashboard.progressBreakdown")}>
                       <Info className="h-3.5 w-3.5" />
                     </button>
                   </TooltipTrigger>
                   <TooltipContent>
                     <div className="space-y-0.5 text-[11px]">
-                      <p>Not started: {taskStatusCounts.notStarted}</p>
-                      <p>In progress: {taskStatusCounts.inProgress}</p>
-                      <p>Blocked: {taskStatusCounts.blocked}</p>
-                      <p>Done: {taskStatusCounts.done}</p>
+                      <p>{t("projectDashboard.progress.notStarted", { count: taskStatusCounts.notStarted })}</p>
+                      <p>{t("projectDashboard.progress.inProgress", { count: taskStatusCounts.inProgress })}</p>
+                      <p>{t("projectDashboard.progress.blocked", { count: taskStatusCounts.blocked })}</p>
+                      <p>{t("projectDashboard.progress.done", { count: taskStatusCounts.done })}</p>
                     </div>
                   </TooltipContent>
                 </Tooltip>
@@ -148,7 +153,7 @@ export default function ProjectDashboard() {
               <span className="text-h3 font-semibold text-foreground tabular-nums min-w-[52px] text-right">{progressPct}%</span>
             </div>
             <Progress value={progressPct} className="h-2.5 bg-muted/60 [&>div]:rounded-full" />
-            <p className="text-caption text-muted-foreground tabular-nums">{doneTasks} done / {totalTasks} total</p>
+            <p className="text-caption text-muted-foreground tabular-nums">{t("projectDashboard.tasksCount", { done: doneTasks, total: totalTasks })}</p>
           </div>
         </div>
       </div>

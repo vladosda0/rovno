@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import {
   Dialog, DialogContent, DialogDescription, DialogTitle,
 } from "@/components/ui/dialog";
@@ -34,11 +35,11 @@ import { Calendar as CalendarPicker } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import type { ResourceLineType } from "@/types/estimate-v2";
 
-const statusLabel: Record<string, string> = {
-  not_started: "Not started",
-  in_progress: "In progress",
-  done: "Done",
-  blocked: "Blocked",
+const statusLabelKey: Record<string, string> = {
+  not_started: "tasks.status.not_started",
+  in_progress: "tasks.status.in_progress",
+  done: "tasks.status.done",
+  blocked: "tasks.status.blocked",
 };
 
 const statuses: TaskStatus[] = ["not_started", "in_progress", "done", "blocked"];
@@ -93,6 +94,7 @@ export function TaskDetailModal({
   onAddComment,
 }: Props) {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { toast } = useToast();
   const projectId = task?.project_id ?? "";
   const { prepareUpload, uploadBytes, finalizeUpload } = useMediaUploadMutations(projectId);
@@ -167,15 +169,15 @@ export function TaskDetailModal({
     if (titleDraft.trim() !== task.title) {
       void Promise.resolve(onTitleChange?.(task.id, titleDraft.trim())).catch((error) => {
         toast({
-          title: "Unable to rename task",
-          description: error instanceof Error ? error.message : "Task title was not updated.",
+          title: t("tasks.modal.renameFailed.title"),
+          description: error instanceof Error ? error.message : t("tasks.modal.renameFailed.fallback"),
           variant: "destructive",
         });
         setTitleDraft(task.title);
       });
     }
     setEditingTitle(false);
-  }, [onTitleChange, structureReadOnly, task, titleDraft, toast]);
+  }, [onTitleChange, structureReadOnly, task, titleDraft, toast, t]);
 
   const handleTitleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === "Enter") { e.preventDefault(); handleTitleSave(); }
@@ -188,14 +190,14 @@ export function TaskDetailModal({
     if (descDraft !== task.description) {
       void Promise.resolve(onDescriptionChange?.(task.id, descDraft)).catch((error) => {
         toast({
-          title: "Unable to update description",
-          description: error instanceof Error ? error.message : "Task description was not updated.",
+          title: t("tasks.modal.descUpdateFailed.title"),
+          description: error instanceof Error ? error.message : t("tasks.modal.descUpdateFailed.fallback"),
           variant: "destructive",
         });
         setDescDraft(task.description);
       });
     }
-  }, [descDraft, onDescriptionChange, task, toast]);
+  }, [descDraft, onDescriptionChange, task, toast, t]);
 
   const handleDescChange = useCallback((val: string) => {
     setDescDraft(val);
@@ -204,14 +206,14 @@ export function TaskDetailModal({
       if (!task) return;
       void Promise.resolve(onDescriptionChange?.(task.id, val)).catch((error) => {
         toast({
-          title: "Unable to update description",
-          description: error instanceof Error ? error.message : "Task description was not updated.",
+          title: t("tasks.modal.descUpdateFailed.title"),
+          description: error instanceof Error ? error.message : t("tasks.modal.descUpdateFailed.fallback"),
           variant: "destructive",
         });
         setDescDraft(task.description);
       });
     }, 800);
-  }, [onDescriptionChange, task, toast]);
+  }, [onDescriptionChange, task, toast, t]);
 
   const getChecklistResourceType = useCallback((item: Task["checklist"][number]): ResourceLineType | null => {
     if (item.estimateV2ResourceType) return item.estimateV2ResourceType;
@@ -265,8 +267,8 @@ export function TaskDetailModal({
     if (!task) return;
     if (structureReadOnly && blockEstimateLinkedDelete) {
       toast({
-        title: "Task structure is managed from Estimate",
-        description: "Delete task structure from Estimate in Supabase mode.",
+        title: t("tasks.modal.structureManagedTitle"),
+        description: t("tasks.modal.structureManagedDescription"),
         variant: "destructive",
       });
       return;
@@ -275,28 +277,28 @@ export function TaskDetailModal({
       .then(() => {
         setDeleteOpen(false);
         onOpenChange(false);
-        toast({ title: "Task deleted" });
+        toast({ title: t("tasks.modal.deleted") });
       })
       .catch((error) => {
         toast({
-          title: "Unable to delete task",
-          description: error instanceof Error ? error.message : "Task was not deleted.",
+          title: t("tasks.modal.deleteFailed.title"),
+          description: error instanceof Error ? error.message : t("tasks.modal.deleteFailed.fallback"),
           variant: "destructive",
         });
       });
-  }, [blockEstimateLinkedDelete, onDeleteTask, onOpenChange, structureReadOnly, task, toast]);
+  }, [blockEstimateLinkedDelete, onDeleteTask, onOpenChange, structureReadOnly, task, toast, t]);
 
   const handleDeadlineChange = useCallback((date: Date | undefined) => {
     if (!task) return;
     if (structureReadOnly) return;
     void Promise.resolve(onDeadlineChange?.(task.id, date?.toISOString())).catch((error) => {
       toast({
-        title: "Unable to update deadline",
-        description: error instanceof Error ? error.message : "Task deadline was not updated.",
+        title: t("tasks.modal.deadlineUpdateFailed.title"),
+        description: error instanceof Error ? error.message : t("tasks.modal.deadlineUpdateFailed.fallback"),
         variant: "destructive",
       });
     });
-  }, [onDeadlineChange, structureReadOnly, task, toast]);
+  }, [onDeadlineChange, structureReadOnly, task, toast, t]);
 
   if (!task) return null;
 
@@ -307,7 +309,7 @@ export function TaskDetailModal({
       const initial = (label ?? user?.name ?? "").trim().charAt(0).toUpperCase() || "?";
       return {
         key: assignee.id ?? assignee.email ?? assignee.name ?? `assignee-${index}`,
-        label: label ?? "Unassigned",
+        label: label ?? t("common.unassigned"),
         initial,
       };
     })
@@ -341,7 +343,7 @@ export function TaskDetailModal({
         <DialogContent className="bg-card border border-border rounded-modal max-w-lg max-h-[85vh] overflow-y-auto shadow-xl p-0 [&>button.absolute]:hidden">
           <DialogTitle className="sr-only">{task.title}</DialogTitle>
           <DialogDescription className="sr-only">
-            Review task details, update checklist progress, manage comments, and browse attached media.
+            {t("tasks.modal.dialogDescription")}
           </DialogDescription>
           {/* Header */}
           <div className="flex items-start justify-between p-sp-3 pb-0">
@@ -375,7 +377,7 @@ export function TaskDetailModal({
                 <button
                   onClick={() => setDeleteOpen(true)}
                   className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                  title="Delete task"
+                  title={t("tasks.modal.deleteTaskTitle")}
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -392,7 +394,7 @@ export function TaskDetailModal({
           <div className="space-y-sp-3 p-sp-3 pt-sp-2">
             {/* Status */}
             <div>
-              <p className="text-caption text-muted-foreground mb-1">Status</p>
+              <p className="text-caption text-muted-foreground mb-1">{t("tasks.modal.sectionStatus")}</p>
               <div className="flex flex-wrap gap-1.5">
                 {statuses.map((s) => (
                   <button
@@ -408,7 +410,7 @@ export function TaskDetailModal({
                         : "bg-muted/60 text-muted-foreground hover:bg-muted"
                     } disabled:opacity-50 disabled:cursor-not-allowed`}
                   >
-                    {statusLabel[s]}
+                    {t(statusLabelKey[s])}
                   </button>
                 ))}
               </div>
@@ -416,19 +418,19 @@ export function TaskDetailModal({
 
             {/* Description */}
             <div>
-              <p className="text-caption text-muted-foreground mb-1">Description</p>
+              <p className="text-caption text-muted-foreground mb-1">{t("tasks.modal.sectionDescription")}</p>
               {canManageTask ? (
                 <Textarea
                   value={descDraft}
                   onChange={(e) => handleDescChange(e.target.value)}
                   onBlur={handleDescBlur}
                   rows={3}
-                  placeholder="Click to add description…"
+                  placeholder={t("tasks.modal.descriptionPlaceholder")}
                   className="text-sm bg-muted/30 border-border"
                 />
               ) : (
                 <p className="text-sm text-foreground whitespace-pre-wrap rounded-lg p-2 bg-muted/30">
-                  {task.description || "No description"}
+                  {task.description || t("tasks.modal.descriptionEmpty")}
                 </p>
               )}
             </div>
@@ -436,7 +438,7 @@ export function TaskDetailModal({
             {/* Assignee */}
             {visibleAssignees.length > 0 && (
               <div>
-                <p className="text-caption text-muted-foreground mb-1">Assignees</p>
+                <p className="text-caption text-muted-foreground mb-1">{t("tasks.modal.sectionAssignees")}</p>
                 <div className="flex flex-wrap items-center gap-2">
                   {visibleAssignees.map((assignee) => (
                     <div key={assignee.key} className="inline-flex items-center gap-2 rounded-full bg-muted/40 px-2 py-1">
@@ -453,13 +455,13 @@ export function TaskDetailModal({
             {/* Dates row */}
             <div className="flex gap-sp-3 flex-wrap">
               <div>
-                <p className="text-caption text-muted-foreground mb-1">Created</p>
+                <p className="text-caption text-muted-foreground mb-1">{t("tasks.modal.sectionCreated")}</p>
                 <span className="text-caption text-foreground">
-                  {task.created_at ? format(new Date(task.created_at), "MMM d, yyyy") : "—"}
+                  {task.created_at ? format(new Date(task.created_at), "MMM d, yyyy") : t("common.emptyDash")}
                 </span>
               </div>
               <div>
-                <p className="text-caption text-muted-foreground mb-1">Deadline</p>
+                <p className="text-caption text-muted-foreground mb-1">{t("tasks.modal.sectionDeadline")}</p>
                 {canManageTask && !structureReadOnly ? (
                   <Popover>
                     <PopoverTrigger asChild>
@@ -472,7 +474,7 @@ export function TaskDetailModal({
                         )}
                       >
                         <Calendar className="h-3 w-3 mr-1" />
-                        {task.deadline ? format(new Date(task.deadline), "MMM d, yyyy") : "Set deadline"}
+                        {task.deadline ? format(new Date(task.deadline), "MMM d, yyyy") : t("tasks.modal.setDeadline")}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
@@ -486,7 +488,7 @@ export function TaskDetailModal({
                   </Popover>
                 ) : (
                   <span className="text-caption text-foreground">
-                    {task.deadline ? format(new Date(task.deadline), "MMM d, yyyy") : "—"}
+                    {task.deadline ? format(new Date(task.deadline), "MMM d, yyyy") : t("common.emptyDash")}
                   </span>
                 )}
               </div>
@@ -495,8 +497,8 @@ export function TaskDetailModal({
             {/* Checklist */}
             <div>
               <p className="text-caption text-muted-foreground mb-1 flex items-center gap-1">
-                <CheckSquare className="h-3.5 w-3.5" /> Checklist
-                {task.checklist.length > 0 && ` (${checkDone}/${task.checklist.length})`}
+                <CheckSquare className="h-3.5 w-3.5" /> {t("tasks.modal.sectionChecklist")}
+                {task.checklist.length > 0 && ` ${t("tasks.modal.checklistCount", { done: checkDone, total: task.checklist.length })}`}
               </p>
                <div className="space-y-1">
                 {task.checklist.map((item) => {
@@ -544,7 +546,7 @@ export function TaskDetailModal({
                   <Input
                     value={newCheckItem}
                     onChange={(e) => setNewCheckItem(e.target.value)}
-                    placeholder="Add item…"
+                    placeholder={t("tasks.modal.checklistAddPlaceholder")}
                     className="text-caption h-7"
                     onKeyDown={(e) => e.key === "Enter" && handleAddCheckItem()}
                   />
@@ -558,7 +560,7 @@ export function TaskDetailModal({
             {/* Media section */}
             <div>
               <p className="text-caption text-muted-foreground mb-1 flex items-center gap-1">
-                <Image className="h-3.5 w-3.5" /> Media ({taskMedia.length})
+                <Image className="h-3.5 w-3.5" /> {t("tasks.modal.sectionMedia", { count: taskMedia.length })}
               </p>
               {taskMedia.length > 0 && (
                 <div className="grid grid-cols-4 gap-1.5 mb-2">
@@ -576,7 +578,7 @@ export function TaskDetailModal({
                 </div>
               )}
               {taskMedia.length === 0 && (
-                <p className="text-[11px] text-muted-foreground mb-1">No photos attached to this task.</p>
+                <p className="text-[11px] text-muted-foreground mb-1">{t("tasks.modal.mediaEmpty")}</p>
               )}
               {canUploadMedia && (
                 <Button
@@ -585,20 +587,20 @@ export function TaskDetailModal({
                   className="text-caption h-7 mt-1"
                   onClick={() => { setUploadCaption(""); setUploadOpen(true); }}
                 >
-                  <Plus className="h-3 w-3 mr-1" /> Add photos
+                  <Plus className="h-3 w-3 mr-1" /> {t("tasks.modal.addPhotos")}
                 </Button>
               )}
             </div>
 
             {/* Comments */}
             <div>
-              <p className="text-caption text-muted-foreground mb-1">Comments ({task.comments.length})</p>
+              <p className="text-caption text-muted-foreground mb-1">{t("tasks.modal.sectionComments", { count: task.comments.length })}</p>
               {canComment && (
                 <div className="flex gap-1.5 mb-2">
                   <Input
                     value={commentText}
                     onChange={(e) => setCommentText(e.target.value)}
-                    placeholder="Add a comment..."
+                    placeholder={t("tasks.modal.commentPlaceholder")}
                     className="text-caption h-8"
                     onKeyDown={(e) => e.key === "Enter" && handleAddComment()}
                   />
@@ -613,7 +615,7 @@ export function TaskDetailModal({
                   return (
                     <div key={c.id} className="rounded-lg bg-muted/40 p-1.5 px-2">
                       <div className="flex items-center gap-1.5 mb-0.5">
-                        <span className="text-caption font-medium text-foreground">{author?.name ?? "Unknown"}</span>
+                        <span className="text-caption font-medium text-foreground">{author?.name ?? t("common.unknown")}</span>
                         <span className="text-[10px] text-muted-foreground">
                           {format(new Date(c.created_at), "MMM d, HH:mm")}
                         </span>
@@ -627,7 +629,7 @@ export function TaskDetailModal({
 
             {/* Close button */}
             <div className="flex justify-end pt-sp-1">
-              <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+              <Button variant="outline" onClick={() => onOpenChange(false)}>{t("common.close")}</Button>
             </div>
           </div>
         </DialogContent>
@@ -637,9 +639,9 @@ export function TaskDetailModal({
       <ConfirmModal
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
-        title="Delete task?"
-        description="This cannot be undone."
-        confirmLabel="Delete"
+        title={t("tasks.modal.deleteConfirm.title")}
+        description={t("tasks.modal.deleteConfirm.description")}
+        confirmLabel={t("common.delete")}
         onConfirm={handleDelete}
       />
 
@@ -647,8 +649,8 @@ export function TaskDetailModal({
       <AlertDialog open={uploadOpen} onOpenChange={setUploadOpen}>
         <AlertDialogContent className="bg-card border border-border shadow-xl rounded-modal z-[70]">
           <AlertDialogHeader>
-            <AlertDialogTitle>Upload Media</AlertDialogTitle>
-            <AlertDialogDescription>Add photos to this task with an optional caption.</AlertDialogDescription>
+            <AlertDialogTitle>{t("tasks.modal.uploadMedia.title")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("tasks.modal.uploadMedia.description")}</AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-3 py-2">
             <div className="border-2 border-dashed border-border rounded-lg p-4 text-center hover:border-accent/40 transition-colors space-y-2">
@@ -660,15 +662,17 @@ export function TaskDetailModal({
                 onChange={(e) => setUploadFiles(Array.from(e.target.files ?? []))}
               />
               <p className="text-caption text-muted-foreground">
-                {uploadFiles.length > 0 ? `${uploadFiles.length} file(s) selected` : "Select one or more photos"}
+                {uploadFiles.length > 0
+                  ? t("tasks.modal.uploadMedia.filesSelected", { count: uploadFiles.length })
+                  : t("tasks.modal.uploadMedia.noFilesSelected")}
               </p>
             </div>
             <div className="space-y-1">
-              <label className="text-body-sm font-medium text-foreground">Caption (optional)</label>
-              <Input value={uploadCaption} onChange={(e) => setUploadCaption(e.target.value)} placeholder="e.g. Kitchen wiring complete" />
+              <label className="text-body-sm font-medium text-foreground">{t("tasks.modal.uploadMedia.captionLabel")}</label>
+              <Input value={uploadCaption} onChange={(e) => setUploadCaption(e.target.value)} placeholder={t("tasks.modal.uploadMedia.captionPlaceholder")} />
             </div>
             <div className="space-y-2">
-              <Label className="text-body-sm font-medium text-foreground">Visibility</Label>
+              <Label className="text-body-sm font-medium text-foreground">{t("tasks.modal.uploadMedia.visibilityLabel")}</Label>
               <RadioGroup
                 value={uploadVisibilityClass}
                 onValueChange={(v) => setUploadVisibilityClass(v as DocMediaVisibilityClass)}
@@ -677,7 +681,7 @@ export function TaskDetailModal({
               >
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="shared_project" id="task-media-vis-shared" />
-                  <Label htmlFor="task-media-vis-shared" className="font-normal cursor-pointer">Shared</Label>
+                  <Label htmlFor="task-media-vis-shared" className="font-normal cursor-pointer">{t("tasks.modal.uploadMedia.shared")}</Label>
                 </div>
                 <div className="flex items-start space-x-2">
                   <RadioGroupItem value="internal" id="task-media-vis-internal" disabled={!canSelectInternalUpload} />
@@ -685,20 +689,20 @@ export function TaskDetailModal({
                     htmlFor="task-media-vis-internal"
                     className={`font-normal ${canSelectInternalUpload ? "cursor-pointer" : "text-muted-foreground"}`}
                   >
-                    Internal
+                    {t("tasks.modal.uploadMedia.internal")}
                   </Label>
                 </div>
               </RadioGroup>
             </div>
           </div>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-accent text-accent-foreground hover:bg-accent/90"
               onClick={async (event) => {
                 event.preventDefault();
                 if (uploadFiles.length === 0) {
-                  toast({ title: "No files selected", variant: "destructive" });
+                  toast({ title: t("tasks.modal.uploadMedia.noFilesSelectedToast"), variant: "destructive" });
                   return;
                 }
                 setUploading(true);
@@ -721,11 +725,11 @@ export function TaskDetailModal({
                   setUploadCaption("");
                   setUploadFiles([]);
                   setUploadVisibilityClass("shared_project");
-                  toast({ title: "Photo uploaded" });
+                  toast({ title: t("tasks.modal.uploadMedia.photoUploaded") });
                 } catch (error) {
                   toast({
-                    title: "Upload failed",
-                    description: error instanceof Error ? error.message : "Unable to upload media.",
+                    title: t("tasks.modal.uploadMedia.uploadFailedTitle"),
+                    description: error instanceof Error ? error.message : t("tasks.modal.uploadMedia.uploadFailedFallback"),
                     variant: "destructive",
                   });
                 } finally {
@@ -733,7 +737,7 @@ export function TaskDetailModal({
                 }
               }}
             >
-              {uploading ? "Uploading..." : "Add"}
+              {uploading ? t("tasks.modal.uploadMedia.uploading") : t("tasks.modal.uploadMedia.addButton")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -742,7 +746,7 @@ export function TaskDetailModal({
       <AlertDialog open={!!pendingChecklist} onOpenChange={(nextOpen) => { if (!nextOpen) setPendingChecklist(null); }}>
         <AlertDialogContent className="bg-card border border-border shadow-xl rounded-modal z-[80]">
           <AlertDialogHeader>
-            <AlertDialogTitle>Review before completing</AlertDialogTitle>
+            <AlertDialogTitle>{t("tasks.modal.checklist.reviewTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
               {(() => {
                 const linked = task.checklist.find((i) => i.id === pendingChecklist?.itemId);
@@ -752,12 +756,12 @@ export function TaskDetailModal({
                   done: false,
                 });
                 if (linkedType === "material" || linkedType === "tool") {
-                  return "This item is linked to procurement and may still need ordering or receiving. You can still mark it complete if the work is verified on site.";
+                  return t("tasks.modal.checklist.reviewProcurement");
                 }
                 if (linkedType === "labor" || linkedType === "subcontractor") {
-                  return "This item is linked to HR and may still have pending assignments or payouts. You can still mark it complete if the work is verified.";
+                  return t("tasks.modal.checklist.reviewHr");
                 }
-                return "Please review linked data before marking this checklist item complete.";
+                return t("tasks.modal.checklist.reviewGeneric");
               })()}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -789,13 +793,13 @@ export function TaskDetailModal({
                   done: false,
                 });
                 return linkedType === "material" || linkedType === "tool"
-                  ? "Open Procurement"
-                  : "Open HR";
+                  ? t("tasks.modal.checklist.openProcurement")
+                  : t("tasks.modal.checklist.openHr");
               })()}
             </button>
           </div>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => {
@@ -804,7 +808,7 @@ export function TaskDetailModal({
                 setPendingChecklist(null);
               }}
             >
-              Mark as complete anyway
+              {t("tasks.modal.checklist.markAnyway")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

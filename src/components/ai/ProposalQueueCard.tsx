@@ -1,4 +1,5 @@
 import { Check, ChevronLeft, ChevronRight, PencilLine, Sparkles, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -46,10 +47,10 @@ const decisionStyle: Record<ProposalDecision, string> = {
   declined: "bg-destructive/20 text-destructive",
 };
 
-const decisionLabel: Record<ProposalDecision, string> = {
-  unresolved: "Pending",
-  confirmed: "Confirmed",
-  declined: "Declined",
+const decisionLabelKey: Record<ProposalDecision, string> = {
+  unresolved: "ai.proposal.queue.status.pending",
+  confirmed: "ai.proposal.queue.status.confirmed",
+  declined: "ai.proposal.queue.status.declined",
 };
 
 export function ProposalQueueCard({
@@ -73,23 +74,24 @@ export function ProposalQueueCard({
   onBack,
   onNext,
 }: ProposalQueueCardProps) {
+  const { t } = useTranslation();
   const showDirectEdit = allowDirectEdit && item.directEditMode;
 
   return (
     <div className="glass rounded-card p-3 space-y-2.5 w-full min-w-0">
       <div className="flex items-center justify-between gap-2">
         <span className="text-body-sm font-semibold text-foreground">
-          Proposal {index + 1}/{total}
+          {t("ai.proposal.queue.header", { index: index + 1, total })}
         </span>
         <span className={`text-[10px] font-medium rounded-pill px-2 py-0.5 ${decisionStyle[item.decision]}`}>
-          {decisionLabel[item.decision]}
+          {t(decisionLabelKey[item.decision])}
         </span>
       </div>
 
       {showDirectEdit ? (
         <div className="space-y-2">
           <div className="space-y-1">
-            <label className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">Summary</label>
+            <label className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">{t("ai.proposal.queue.labels.summary")}</label>
             <Input
               value={item.draftSummary}
               onChange={(e) => onDraftSummaryChange(e.target.value)}
@@ -98,7 +100,7 @@ export function ProposalQueueCard({
             />
           </div>
           <div className="space-y-1">
-            <label className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">Actions</label>
+            <label className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">{t("ai.proposal.queue.labels.actions")}</label>
             <div className="space-y-1.5">
               {item.draftChangeLabels.map((label, changeIdx) => (
                 <Input
@@ -118,7 +120,7 @@ export function ProposalQueueCard({
               onClick={onSaveDirectEdits}
               disabled={isBusy}
             >
-              Save direct edits
+              {t("ai.proposal.queue.buttons.saveDirect")}
             </Button>
             <Button
               size="sm"
@@ -127,7 +129,7 @@ export function ProposalQueueCard({
               onClick={onToggleDirectEdit}
               disabled={isBusy}
             >
-              Back
+              {t("ai.proposal.queue.buttons.back")}
             </Button>
           </div>
         </div>
@@ -137,11 +139,11 @@ export function ProposalQueueCard({
 
       {item.suggestEditMode && !showDirectEdit ? (
         <div className="space-y-1.5">
-          <label className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">Suggest edits</label>
+          <label className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">{t("ai.proposal.queue.labels.suggestEdits")}</label>
           <Textarea
             value={item.suggestEditText}
             onChange={(e) => onSuggestEditTextChange(e.target.value)}
-            placeholder="Modify proposal with these edits..."
+            placeholder={t("ai.proposal.queue.placeholder.suggestEdits")}
             className="min-h-[78px] resize-none bg-sidebar-accent/40 border-sidebar-border"
             disabled={isBusy}
           />
@@ -153,7 +155,7 @@ export function ProposalQueueCard({
               disabled={isBusy || !item.suggestEditText.trim()}
             >
               <Sparkles className="h-3.5 w-3.5 mr-1" />
-              Submit edits
+              {t("ai.proposal.queue.buttons.submitEdits")}
             </Button>
             <Button
               size="sm"
@@ -162,7 +164,7 @@ export function ProposalQueueCard({
               onClick={onCancelSuggestEdits}
               disabled={isBusy}
             >
-              Back
+              {t("ai.proposal.queue.buttons.back")}
             </Button>
           </div>
         </div>
@@ -175,7 +177,7 @@ export function ProposalQueueCard({
             disabled={isBusy}
           >
             <Check className="h-3.5 w-3.5 mr-1" />
-            Confirm
+            {t("ai.proposal.queue.buttons.confirm")}
           </Button>
           <Button
             size="sm"
@@ -185,7 +187,7 @@ export function ProposalQueueCard({
             disabled={isBusy}
           >
             <X className="h-3.5 w-3.5 mr-1" />
-            Decline
+            {t("ai.proposal.queue.buttons.decline")}
           </Button>
           <Button
             size="sm"
@@ -195,7 +197,7 @@ export function ProposalQueueCard({
             disabled={isBusy}
           >
             <Sparkles className="h-3.5 w-3.5 mr-1" />
-            Suggest edits
+            {t("ai.proposal.queue.buttons.suggestEdits")}
           </Button>
           {allowDirectEdit && (
             <Button
@@ -206,7 +208,7 @@ export function ProposalQueueCard({
               disabled={isBusy}
             >
               <PencilLine className="h-3.5 w-3.5 mr-1" />
-              Direct edit
+              {t("ai.proposal.queue.buttons.directEdit")}
             </Button>
           )}
         </div>
@@ -221,10 +223,10 @@ export function ProposalQueueCard({
           disabled={!canGoBack || isBusy}
         >
           <ChevronLeft className="h-3.5 w-3.5 mr-1" />
-          Back
+          {t("ai.proposal.queue.buttons.back")}
         </Button>
         <p className="text-[10px] text-muted-foreground text-center flex-1">
-          Execution starts after all proposals are decided
+          {t("ai.proposal.queue.navHint")}
         </p>
         <Button
           size="sm"
@@ -233,7 +235,7 @@ export function ProposalQueueCard({
           onClick={onNext}
           disabled={!canGoNext || isBusy}
         >
-          Next
+          {t("ai.proposal.queue.buttons.next")}
           <ChevronRight className="h-3.5 w-3.5 ml-1" />
         </Button>
       </div>

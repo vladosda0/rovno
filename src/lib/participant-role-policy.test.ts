@@ -12,6 +12,24 @@ import {
   internalDocsVisibilityLabels,
 } from "@/lib/participant-role-policy";
 
+// A pass-through translator used in tests: returns the key, interpolating any {{value}}
+// placeholder. When the key does not contain a placeholder for an option, the option's
+// value is appended so that assertions checking .toContain(...) still succeed on the
+// structural output (keys + their substituted values).
+const t = (key: string, options?: Record<string, unknown>): string => {
+  if (!options) return key;
+  let out = key;
+  for (const [name, value] of Object.entries(options)) {
+    const placeholder = `{{${name}}}`;
+    if (out.includes(placeholder)) {
+      out = out.replaceAll(placeholder, String(value));
+    } else {
+      out = `${out} ${String(value)}`;
+    }
+  }
+  return out;
+};
+
 function assertRolesEqual(actual: MemberRole[], expected: MemberRole[]) {
   expect(actual).toEqual(expected);
 }
@@ -86,31 +104,31 @@ describe("participant-role-policy", () => {
   });
 
   describe("internal docs & media copy", () => {
-    it("labels mention docs & media, not docs alone", () => {
-      expect(internalDocsVisibilityLabels.none).toContain("docs & media");
-      expect(internalDocsVisibilityLabels.view).toContain("docs & media");
-      expect(internalDocsVisibilityLabels.edit).toContain("docs & media");
+    it("labels resolve to distinct i18n keys for none/view/edit", () => {
+      expect(internalDocsVisibilityLabels.none).toBe("participants.internalDocs.none");
+      expect(internalDocsVisibilityLabels.view).toBe("participants.internalDocs.view");
+      expect(internalDocsVisibilityLabels.edit).toBe("participants.internalDocs.edit");
     });
 
-    it("permission summary line mentions docs & media", () => {
+    it("permission summary includes the internal docs & media line", () => {
       const summary = describePermissionSummary({
         role: "contractor",
         aiAccess: "none",
         internalDocsVisibility: "view",
         creditLimit: 0,
-      });
-      const docsLine = summary.find((l) => l.startsWith("Internal docs"));
-      expect(docsLine).toContain("docs & media");
+      }, t);
+      const docsLine = summary.find((l) => l.startsWith("participants.summary.internalDocs"));
+      expect(docsLine).toContain("participants.internalDocs.view");
     });
 
-    it("edit warning mentions documents and media", () => {
+    it("edit warning produces the docs-edit key", () => {
       const warnings = getPermissionWarnings({
         role: "contractor",
         aiAccess: "none",
         internalDocsVisibility: "edit",
         creditLimit: 0,
-      });
-      expect(warnings.some((w) => w.includes("documents and media"))).toBe(true);
+      }, t);
+      expect(warnings).toContain("participants.warning.docsEdit");
     });
   });
 
@@ -120,12 +138,14 @@ describe("participant-role-policy", () => {
       expect(hasNonStandardSupportedAccess({ role: "contractor", financeVisibility: "summary" })).toBe(true);
     });
 
-    it("returns a readable review summary when expanded", () => {
-      const viewerSummary = getNonStandardAccessSummary({ role: "viewer", financeVisibility: "summary" });
-      expect(viewerSummary?.title).toContain("нестандартные параметры доступа");
+    it("returns the expected i18n keys for the non-standard access summary", () => {
+      const viewerSummary = getNonStandardAccessSummary({ role: "viewer", financeVisibility: "summary" }, t);
+      expect(viewerSummary?.title).toBe("participants.nonStandard.viewer.title");
+      expect(viewerSummary?.lines).toEqual(["participants.nonStandard.viewer.line1"]);
 
-      const contractorSummary = getNonStandardAccessSummary({ role: "contractor", financeVisibility: "summary" });
-      expect(contractorSummary?.title).toContain("подрядчика");
+      const contractorSummary = getNonStandardAccessSummary({ role: "contractor", financeVisibility: "summary" }, t);
+      expect(contractorSummary?.title).toBe("participants.nonStandard.contractor.title");
+      expect(contractorSummary?.lines).toEqual(["participants.nonStandard.contractor.line1"]);
     });
   });
 });

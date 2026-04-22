@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Image, ArrowRight, Camera } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Media } from "@/types/entities";
@@ -10,14 +11,15 @@ interface Props {
 }
 
 export function GalleryWidget({ media, projectId, className }: Props) {
+  const { t } = useTranslation();
   return (
     <div className={cn("glass rounded-card p-sp-2 h-full flex flex-col", className)}>
       <div className="flex items-center justify-between mb-sp-2">
         <h3 className="text-body font-semibold text-foreground flex items-center gap-2">
-          <Image className="h-4 w-4 text-accent" /> Gallery
+          <Image className="h-4 w-4 text-accent" /> {t("galleryWidget.title")}
         </h3>
         <Link to={`/project/${projectId}/gallery`} className="text-caption text-accent hover:underline flex items-center gap-1">
-          View all <ArrowRight className="h-3 w-3" />
+          {t("galleryWidget.viewAll")} <ArrowRight className="h-3 w-3" />
         </Link>
       </div>
       <div className="flex-1">
@@ -35,7 +37,7 @@ export function GalleryWidget({ media, projectId, className }: Props) {
             ))}
           </div>
         ) : (
-          <p className="text-caption text-muted-foreground text-center py-sp-2">No photos yet</p>
+          <p className="text-caption text-muted-foreground text-center py-sp-2">{t("galleryWidget.empty")}</p>
         )}
       </div>
     </div>

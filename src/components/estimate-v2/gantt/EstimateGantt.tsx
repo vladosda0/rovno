@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
+import { useTranslation } from "react-i18next";
 import { Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -39,8 +40,6 @@ const SCALE_PIXELS_PER_DAY: Record<GanttScale, number> = {
   weeks: 14,
   months: 6,
 };
-
-const dayRangeLabel = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
 
 interface EstimateGanttProps {
   projectId: string;
@@ -97,6 +96,11 @@ export function EstimateGantt({
   isOwner,
 }: EstimateGanttProps) {
   const { toast } = useToast();
+  const { t, i18n } = useTranslation();
+  const dayRangeLabel = useMemo(
+    () => new Intl.DateTimeFormat(i18n.language, { month: "short", day: "numeric" }),
+    [i18n.language],
+  );
 
   const [scale, setScale] = useState<GanttScale>("weeks");
   const [dependencyEditorOpen, setDependencyEditorOpen] = useState(false);
@@ -155,8 +159,11 @@ export function EstimateGantt({
       stageWorks.forEach((work) => {
         const draft = draftWorksById[work.id] ?? work;
         const subtitle = draft.plannedStart && draft.plannedEnd
-          ? `${dayRangeLabel.format(new Date(draft.plannedStart))} - ${dayRangeLabel.format(new Date(draft.plannedEnd))}`
-          : "No planned dates";
+          ? t("estimate.gantt.row.dateRange", {
+              start: dayRangeLabel.format(new Date(draft.plannedStart)),
+              end: dayRangeLabel.format(new Date(draft.plannedEnd)),
+            })
+          : t("estimate.gantt.row.noPlannedDates");
 
         out.push({
           key: `work-${work.id}`,
@@ -170,7 +177,7 @@ export function EstimateGantt({
     });
 
     return out;
-  }, [draftWorksById, sortedStages, worksByStage]);
+  }, [dayRangeLabel, draftWorksById, sortedStages, t, worksByStage]);
 
   const pxPerDay = SCALE_PIXELS_PER_DAY[scale];
   const viewportRef = useRef<HTMLDivElement | null>(null);
@@ -342,7 +349,7 @@ export function EstimateGantt({
 
     if (!result.ok) {
       toast({
-        title: "Unable to update work dates",
+        title: t("estimate.gantt.toast.updateFailed.title"),
         description: result.reason,
         variant: "destructive",
       });
@@ -353,11 +360,11 @@ export function EstimateGantt({
 
     if (result.shiftedWorkIds.length > 0) {
       toast({
-        title: "Constraints applied",
-        description: `${result.shiftedWorkIds.length} dependent work(s) were shifted.`,
+        title: t("estimate.gantt.toast.constraintsApplied.title"),
+        description: t("estimate.gantt.toast.constraintsApplied.description", { count: result.shiftedWorkIds.length }),
       });
     }
-  }, [baseWorksById, handlePointerCancel, handlePointerMove, handlePointerUp, projectId, toast]);
+  }, [baseWorksById, handlePointerCancel, handlePointerMove, handlePointerUp, projectId, t, toast]);
 
   useEffect(() => {
     finalizeDragRef.current = finalizeDrag;
@@ -407,15 +414,15 @@ export function EstimateGantt({
     if (!result.ok) {
       if (result.reason === "cycle") {
         toast({
-          title: "Dependency creates a cycle",
-          description: result.cyclePath?.join(" -> ") || "Please choose another dependency.",
+          title: t("estimate.gantt.toast.cycle.title"),
+          description: result.cyclePath?.join(" -> ") || t("estimate.gantt.toast.cycle.descriptionFallback"),
           variant: "destructive",
         });
         return;
       }
 
       toast({
-        title: "Unable to add dependency",
+        title: t("estimate.gantt.toast.addDepFailed"),
         description: result.reason,
         variant: "destructive",
       });
@@ -424,14 +431,14 @@ export function EstimateGantt({
 
     if (result.shiftedWorkIds.length > 0) {
       toast({
-        title: "Dependency added",
-        description: `${result.shiftedWorkIds.length} work(s) shifted to satisfy FS constraints.`,
+        title: t("estimate.gantt.toast.depAdded.title"),
+        description: t("estimate.gantt.toast.depAdded.shiftDesc", { count: result.shiftedWorkIds.length }),
       });
       return;
     }
 
-    toast({ title: "Dependency added" });
-  }, [projectId, toast]);
+    toast({ title: t("estimate.gantt.toast.depAdded.title") });
+  }, [projectId, t, toast]);
 
   const handleRemoveDependency = useCallback((dependencyId: string) => {
     removeDependency(projectId, dependencyId);
@@ -441,8 +448,8 @@ export function EstimateGantt({
     <div className="rounded-card border border-border bg-card">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border p-3">
         <div>
-          <p className="text-sm font-semibold text-foreground">Work schedule</p>
-          <p className="text-xs text-muted-foreground">Drag bars to move or resize. Constraints are enforced live.</p>
+          <p className="text-sm font-semibold text-foreground">{t("estimate.gantt.title")}</p>
+          <p className="text-xs text-muted-foreground">{t("estimate.gantt.subtitle")}</p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -451,9 +458,9 @@ export function EstimateGantt({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="days">Days</SelectItem>
-              <SelectItem value="weeks">Weeks</SelectItem>
-              <SelectItem value="months">Months</SelectItem>
+              <SelectItem value="days">{t("estimate.gantt.scale.days")}</SelectItem>
+              <SelectItem value="weeks">{t("estimate.gantt.scale.weeks")}</SelectItem>
+              <SelectItem value="months">{t("estimate.gantt.scale.months")}</SelectItem>
             </SelectContent>
           </Select>
 
@@ -463,7 +470,7 @@ export function EstimateGantt({
             disabled={!isOwner}
             onClick={() => setDependencyEditorOpen(true)}
           >
-            <Link2 className="mr-1 h-4 w-4" /> Dependencies
+            <Link2 className="mr-1 h-4 w-4" /> {t("estimate.gantt.dependenciesButton")}
           </Button>
         </div>
       </div>
@@ -471,7 +478,7 @@ export function EstimateGantt({
       <div className="flex min-h-[420px]">
         <div className="shrink-0 border-r border-border" style={{ width: LEFT_PANE_WIDTH }}>
           <div className="h-12 border-b border-border px-3 py-2">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Stages / Works</p>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">{t("estimate.gantt.leftPaneHeading")}</p>
           </div>
 
           {rows.map((row) => (

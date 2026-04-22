@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 
 type StatusVariant = "task" | "estimate" | "procurement";
@@ -30,8 +31,27 @@ const statusStyles: Record<StatusVariant, Record<string, string>> = {
   },
 };
 
+const statusI18nKey: Record<string, string> = {
+  "Not started": "status.notStarted",
+  "In progress": "status.inProgress",
+  "Done": "status.done",
+  "Blocked": "status.blocked",
+  "Draft": "status.draft",
+  "Approved": "status.approved",
+  "Archived": "status.archived",
+  "To buy": "status.toBuy",
+  "Ordered": "status.ordered",
+  "In stock": "status.inStock",
+  "Voided": "status.voided",
+  "Not purchased": "status.notPurchased",
+  "Purchased": "status.purchased",
+};
+
 export function StatusBadge({ status, variant, className }: StatusBadgeProps) {
+  const { t } = useTranslation();
   const style = statusStyles[variant]?.[status] ?? "bg-muted text-muted-foreground";
+  const key = statusI18nKey[status];
+  const label = key ? t(key, { defaultValue: status }) : status;
 
   return (
     <span
@@ -41,7 +61,7 @@ export function StatusBadge({ status, variant, className }: StatusBadgeProps) {
         className,
       )}
     >
-      {status}
+      {label}
     </span>
   );
 }

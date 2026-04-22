@@ -30,6 +30,9 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { seedProjects } from "@/data/seed";
 import { enterDemoSession, isAuthenticated } from "@/lib/auth-state";
 import { toast } from "@/hooks/use-toast";
+import { useTranslation } from "react-i18next";
+
+type Translator = (key: string, options?: Record<string, unknown>) => string;
 
 const THEME_KEY = "landing-theme";
 const ACCEPTED_FILE_TYPES = ".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx";
@@ -43,77 +46,78 @@ const DEMO_COVER_IMAGE_MAP: Record<string, string> = {
 type ControlTab = "tasks" | "estimate" | "procurement" | "photos" | "documents" | "activity";
 type KanbanColumn = "todo" | "doing" | "done";
 
-type ControlRow = { label: string; value: string; tone?: string };
+type ControlRow = { labelKey: string; valueKey: string; tone?: string };
 type ControlPanelContent = {
-  title: string;
+  titleKey: string;
   rows: ControlRow[];
-  bullets: string[];
 };
 type KanbanTask = {
   id: string;
-  title: string;
+  titleKey: string;
   assignee: string;
-  meta: string;
-  linked?: string;
+  metaKey: string;
+  linkedKey?: string;
 };
 type KanbanState = Record<KanbanColumn, KanbanTask[]>;
 type EstimateVariance = "over" | "under" | "on-track" | "pending";
 type EstimateLinkedTask = {
-  title: string;
-  status: string;
+  titleKey: string;
+  statusKey: string;
 };
 type EstimateItem = {
   id: string;
-  item: string;
+  itemKey: string;
   planned: string;
   actual: string;
-  variance: string;
+  varianceAmount: string;
   varianceType: EstimateVariance;
   linkedTasks?: EstimateLinkedTask[];
-  receipts?: string;
-  note?: string;
-  aiInsight?: string;
+  receiptsKey?: string;
+  noteKey?: string;
+  aiInsightKey?: string;
 };
-type ProcurementStatusLabel = "To buy" | "Ordered" | "Partial" | "In stock" | "Delayed";
+type ProcurementStatusKey = "toBuy" | "ordered" | "partial" | "inStock" | "delayed";
 type ProcurementItem = {
   id: string;
-  material: string;
+  materialKey: string;
   neededQty: number;
   receivedQty: number;
   orderedQty: number;
-  supplier: string;
-  eta: string;
+  supplierKey: string;
+  etaKey: string;
   committedCost: string;
-  linkedTaskName: string;
-  linkedEstimate: string;
+  linkedTaskKey: string;
+  linkedEstimateKey: string;
   delayed?: boolean;
 };
 type PhotosDemoId = "photo-tile" | "photo-crack" | "photo-insulation" | "photo-landscape";
+type PhotoActionKind = "primary" | "secondary";
+type PhotoActionType =
+  | "create_task"
+  | "order"
+  | "reminder"
+  | "create_project_landscape"
+  | "materials"
+  | "plan_30d"
+  | "request_photo";
 type PhotoAction = {
-  label: string;
-  kind: "primary" | "secondary";
-  action:
-    | "create_task"
-    | "order"
-    | "reminder"
-    | "create_project_landscape"
-    | "materials"
-    | "plan_30d"
-    | "request_photo";
+  labelKey: string;
+  kind: PhotoActionKind;
+  action: PhotoActionType;
 };
 type PhotosDemoItem = {
   id: PhotosDemoId;
-  title: string;
+  titleKey: string;
   src: string;
-  submittedBy: string;
-  submittedAt: string;
-  aiQuestion: string;
-  aiVerdict: string;
-  aiReason: string;
-  aiFindings: string[];
-  aiEvidenceRequested: string[];
-  aiReferences: string[];
-  aiActionDetails: Partial<Record<PhotoAction["action"], string[]>>;
+  submittedByKey: string;
+  submittedAtKey: string;
+  aiQuestionKey: string;
+  aiVerdictKey: string;
+  aiReasonKey: string;
+  aiFindingsKeys: string[];
+  aiEvidenceKeys: string[];
+  aiReferenceKeys: string[];
+  aiActionDetailKeys: Partial<Record<PhotoActionType, string[]>>;
   aiActions: PhotoAction[];
 };
 type DocPageId = "page-1" | "page-2" | "page-3";
@@ -123,72 +127,72 @@ type Finding = {
   page: DocPageId;
   clauseId: string;
   severity: Severity;
-  title: string;
-  description: string;
-  originalText: string;
-  suggestedText: string;
+  titleKey: string;
+  descriptionKey: string;
+  originalKey: string;
+  suggestedKey: string;
   scoreImpact: number;
 };
 type ContractClause = {
   id: string;
   page: DocPageId;
-  text: string;
+  textKey: string;
 };
 
-const KANBAN_COLUMN_LABELS: Record<KanbanColumn, string> = {
-  todo: "To do",
-  doing: "In progress",
-  done: "Done",
+const KANBAN_COLUMN_KEYS: Record<KanbanColumn, string> = {
+  todo: "landing.kanban.columns.todo",
+  doing: "landing.kanban.columns.doing",
+  done: "landing.kanban.columns.done",
 };
 
 const INITIAL_KANBAN_STATE: KanbanState = {
   todo: [
     {
       id: "task-order-junction-boxes",
-      title: "Order junction boxes",
+      titleKey: "landing.kanban.tasks.orderJunctionBoxes.title",
       assignee: "MK",
-      meta: "Due Mar 3",
-      linked: "Electrical rough-in",
+      metaKey: "landing.kanban.tasks.orderJunctionBoxes.meta",
+      linkedKey: "landing.kanban.tasks.orderJunctionBoxes.linked",
     },
     {
       id: "task-confirm-tile-layout",
-      title: "Confirm tile layout with client",
+      titleKey: "landing.kanban.tasks.confirmTileLayout.title",
       assignee: "AV",
-      meta: "Due Today",
+      metaKey: "landing.kanban.tasks.confirmTileLayout.meta",
     },
     {
       id: "task-approve-cabinet-finish",
-      title: "Approve cabinet finish sample",
+      titleKey: "landing.kanban.tasks.approveCabinetFinish.title",
       assignee: "CL",
-      meta: "Awaiting decision",
+      metaKey: "landing.kanban.tasks.approveCabinetFinish.meta",
     },
   ],
   doing: [
     {
       id: "task-run-conduit",
-      title: "Run conduit to panel",
+      titleKey: "landing.kanban.tasks.runConduit.title",
       assignee: "AV",
-      meta: "Evidence: 2 photos",
+      metaKey: "landing.kanban.tasks.runConduit.meta",
     },
     {
       id: "task-install-drywall",
-      title: "Install drywall in corridor",
+      titleKey: "landing.kanban.tasks.installDrywall.title",
       assignee: "VV",
-      meta: "Checklist 4/7",
+      metaKey: "landing.kanban.tasks.installDrywall.meta",
     },
   ],
   done: [
     {
       id: "task-mark-outlets",
-      title: "Mark outlet locations",
+      titleKey: "landing.kanban.tasks.markOutlets.title",
       assignee: "AV",
-      meta: "Completed 2h ago",
+      metaKey: "landing.kanban.tasks.markOutlets.meta",
     },
     {
       id: "task-demolish-backsplash",
-      title: "Demolish old backsplash",
+      titleKey: "landing.kanban.tasks.demolishBacksplash.title",
       assignee: "MK",
-      meta: "Completed",
+      metaKey: "landing.kanban.tasks.demolishBacksplash.meta",
     },
   ],
 };
@@ -196,307 +200,310 @@ const INITIAL_KANBAN_STATE: KanbanState = {
 const ESTIMATE_ITEMS: EstimateItem[] = [
   {
     id: "estimate-drywall-finishing",
-    item: "Drywall + finishing",
+    itemKey: "landing.estimate.items.drywall.item",
     planned: "220k",
     actual: "245k",
-    variance: "+25k",
+    varianceAmount: "25k",
     varianceType: "over",
     linkedTasks: [
-      { title: "Install drywall in corridor", status: "In progress" },
-      { title: "Paint ceiling coat #1", status: "To do" },
+      { titleKey: "landing.estimate.linkedTasks.installDrywall", statusKey: "landing.estimate.taskStatus.inProgress" },
+      { titleKey: "landing.estimate.linkedTasks.paintCeiling", statusKey: "landing.estimate.taskStatus.toDo" },
     ],
-    receipts: "3 receipts uploaded",
-    note: "Additional corner beads and extra sanding after wall irregularities.",
-    aiInsight:
-      "AI: Variance is consistent with extra prep on uneven substrates. Next time: add a 10% contingency on finishing for old-panel walls.",
+    receiptsKey: "landing.estimate.items.drywall.receipts",
+    noteKey: "landing.estimate.items.drywall.note",
+    aiInsightKey: "landing.estimate.items.drywall.aiInsight",
   },
   {
     id: "estimate-electrical-materials",
-    item: "Electrical materials",
+    itemKey: "landing.estimate.items.electrical.item",
     planned: "180k",
     actual: "165k",
-    variance: "-15k",
+    varianceAmount: "15k",
     varianceType: "under",
-    linkedTasks: [{ title: "Run conduit to panel", status: "In progress" }],
-    receipts: "2 receipts uploaded",
+    linkedTasks: [{ titleKey: "landing.estimate.linkedTasks.runConduit", statusKey: "landing.estimate.taskStatus.inProgress" }],
+    receiptsKey: "landing.estimate.items.electrical.receipts",
   },
   {
     id: "estimate-bathroom-tiles-labor",
-    item: "Bathroom tiles + labor",
+    itemKey: "landing.estimate.items.tiles.item",
     planned: "310k",
     actual: "310k",
-    variance: "0",
+    varianceAmount: "0",
     varianceType: "on-track",
-    linkedTasks: [{ title: "Confirm tile layout with client", status: "To do" }],
-    receipts: "4 receipts uploaded",
+    linkedTasks: [{ titleKey: "landing.estimate.linkedTasks.confirmTile", statusKey: "landing.estimate.taskStatus.toDo" }],
+    receiptsKey: "landing.estimate.items.tiles.receipts",
   },
   {
     id: "estimate-doors-installation",
-    item: "Doors installation",
+    itemKey: "landing.estimate.items.doors.item",
     planned: "90k",
     actual: "0",
-    variance: "not started",
+    varianceAmount: "",
     varianceType: "pending",
-    linkedTasks: [{ title: "Approve cabinet finish sample", status: "To do" }],
-    receipts: "No receipts uploaded",
+    linkedTasks: [{ titleKey: "landing.estimate.linkedTasks.approveCabinet", statusKey: "landing.estimate.taskStatus.toDo" }],
   },
 ];
 
 const PROCUREMENT_ITEMS: ProcurementItem[] = [
   {
     id: "proc-drywall-sheets",
-    material: "Drywall sheets",
+    materialKey: "landing.procurement.items.drywall.material",
     neededQty: 120,
     orderedQty: 120,
     receivedQty: 80,
-    supplier: "BuildMart LLC",
-    eta: "Mar 4",
+    supplierKey: "landing.procurement.items.drywall.supplier",
+    etaKey: "landing.procurement.items.drywall.eta",
     committedCost: "₽165,000",
-    linkedTaskName: "Install drywall in corridor",
-    linkedEstimate: "Drywall + finishing",
+    linkedTaskKey: "landing.procurement.items.drywall.linkedTask",
+    linkedEstimateKey: "landing.procurement.items.drywall.linkedEstimate",
   },
   {
     id: "proc-tile-adhesive",
-    material: "Tile adhesive",
+    materialKey: "landing.procurement.items.tileAdhesive.material",
     neededQty: 20,
     orderedQty: 0,
     receivedQty: 0,
-    supplier: "KeramPro",
-    eta: "—",
+    supplierKey: "landing.procurement.items.tileAdhesive.supplier",
+    etaKey: "common.emptyDash",
     committedCost: "₽42,000",
-    linkedTaskName: "Tile installation",
-    linkedEstimate: "Bathroom tiles + labor",
+    linkedTaskKey: "landing.procurement.items.tileAdhesive.linkedTask",
+    linkedEstimateKey: "landing.procurement.items.tileAdhesive.linkedEstimate",
   },
   {
     id: "proc-electrical-cable-roll",
-    material: "Electrical cable roll",
+    materialKey: "landing.procurement.items.cable.material",
     neededQty: 6,
     orderedQty: 6,
     receivedQty: 6,
-    supplier: "ElectroHub",
-    eta: "Mar 1",
+    supplierKey: "landing.procurement.items.cable.supplier",
+    etaKey: "landing.procurement.items.cable.eta",
     committedCost: "₽55,000",
-    linkedTaskName: "Run conduit to panel",
-    linkedEstimate: "Electrical materials",
+    linkedTaskKey: "landing.procurement.items.cable.linkedTask",
+    linkedEstimateKey: "landing.procurement.items.cable.linkedEstimate",
   },
   {
     id: "proc-interior-doors",
-    material: "Interior doors",
+    materialKey: "landing.procurement.items.doors.material",
     neededQty: 6,
     orderedQty: 6,
     receivedQty: 0,
-    supplier: "DoorLine",
-    eta: "Mar 6",
+    supplierKey: "landing.procurement.items.doors.supplier",
+    etaKey: "landing.procurement.items.doors.eta",
     committedCost: "₽58,000",
-    linkedTaskName: "Doors installation",
-    linkedEstimate: "Doors installation",
+    linkedTaskKey: "landing.procurement.items.doors.linkedTask",
+    linkedEstimateKey: "landing.procurement.items.doors.linkedEstimate",
   },
 ];
 
-const PHOTOS_ANALYSIS_STEPS = ["Analyzing image...", "Checking standards...", "Drafting action plan..."];
+const PHOTOS_ANALYSIS_STEP_KEYS = [
+  "landing.photos.analysisSteps.analyzing",
+  "landing.photos.analysisSteps.standards",
+  "landing.photos.analysisSteps.plan",
+];
 
 const PHOTOS_DEMO: PhotosDemoItem[] = [
   {
     id: "photo-tile",
-    title: "Tile lippage check",
+    titleKey: "landing.photos.items.tile.title",
     src: "/demo/photos/tile-defect-lippage.png",
-    submittedBy: "AV",
-    submittedAt: "8m ago",
-    aiQuestion: "Check this tile installation. Is the lippage acceptable and what’s the correct fix?",
-    aiVerdict: "Needs rework",
-    aiReason: "Lippage and grout alignment appear outside acceptable finishing tolerance in the visible zone.",
-    aiFindings: [
-      "Edge offset appears above target plane on multiple adjacent tiles.",
-      "Grout line width variation indicates inconsistent bedding depth.",
-      "Defect location increases slip and moisture-retention risk.",
+    submittedByKey: "landing.photos.items.tile.submittedBy",
+    submittedAtKey: "landing.photos.minutesAgo",
+    aiQuestionKey: "landing.photos.items.tile.aiQuestion",
+    aiVerdictKey: "landing.photos.items.tile.aiVerdict",
+    aiReasonKey: "landing.photos.items.tile.aiReason",
+    aiFindingsKeys: [
+      "landing.photos.items.tile.finding1",
+      "landing.photos.items.tile.finding2",
+      "landing.photos.items.tile.finding3",
     ],
-    aiEvidenceRequested: [
-      "2 m straightedge photo with feeler gauge reading.",
-      "Close-up of three worst joints before removal.",
-      "Adhesive coverage photo after first tile lift.",
+    aiEvidenceKeys: [
+      "landing.photos.items.tile.evidence1",
+      "landing.photos.items.tile.evidence2",
+      "landing.photos.items.tile.evidence3",
     ],
-    aiReferences: [
-      "EN 14411",
-      "Adhesive datasheet (Mapei Keraflex / equivalent)",
-      "Wet-area tile installation best practice",
+    aiReferenceKeys: [
+      "landing.photos.items.tile.ref1",
+      "landing.photos.items.tile.ref2",
+      "landing.photos.items.tile.ref3",
     ],
-    aiActionDetails: {
+    aiActionDetailKeys: {
       create_task: [
-        "Create task: Re-bed raised corridor tiles.",
-        "Attach straightedge measurements and photos.",
-        "Set acceptance gate: max 1 mm lippage before signoff.",
+        "landing.photos.items.tile.createTask1",
+        "landing.photos.items.tile.createTask2",
+        "landing.photos.items.tile.createTask3",
       ],
       order: [
-        "Order leveling clips and wedges for one correction cycle.",
-        "Add fresh C2-class adhesive and replacement spacers.",
-        "Confirm delivery before rework slot starts.",
+        "landing.photos.items.tile.order1",
+        "landing.photos.items.tile.order2",
+        "landing.photos.items.tile.order3",
       ],
       reminder: [
-        "Request contractor quote for affected square meterage.",
-        "Include removal, reset, and cleanup in one line item.",
-        "Set reminder to review quote same day.",
+        "landing.photos.items.tile.reminder1",
+        "landing.photos.items.tile.reminder2",
+        "landing.photos.items.tile.reminder3",
       ],
     },
     aiActions: [
-      { label: "Create fix task", kind: "primary", action: "create_task" },
-      { label: "Order leveling clips", kind: "secondary", action: "order" },
-      { label: "Ask contractor for rework quote", kind: "secondary", action: "reminder" },
+      { labelKey: "landing.photos.items.tile.action1", kind: "primary", action: "create_task" },
+      { labelKey: "landing.photos.items.tile.action2", kind: "secondary", action: "order" },
+      { labelKey: "landing.photos.items.tile.action3", kind: "secondary", action: "reminder" },
     ],
   },
   {
     id: "photo-crack",
-    title: "Window corner crack",
+    titleKey: "landing.photos.items.crack.title",
     src: "/demo/photos/plaster-corner-crack.png",
-    submittedBy: "MK",
-    submittedAt: "2h ago",
-    aiQuestion: "Hairline crack near window corner. Cause and best repair approach?",
-    aiVerdict: "Acceptable with notes",
-    aiReason: "Pattern matches movement stress near opening corner with likely weak local reinforcement.",
-    aiFindings: [
-      "Crack trajectory follows a high-stress corner path from the window edge.",
-      "No visible branching suggests localized finish-layer issue.",
-      "Repair should include mesh reinforcement to prevent recurrence.",
+    submittedByKey: "landing.photos.items.crack.submittedBy",
+    submittedAtKey: "landing.photos.hoursAgo",
+    aiQuestionKey: "landing.photos.items.crack.aiQuestion",
+    aiVerdictKey: "landing.photos.items.crack.aiVerdict",
+    aiReasonKey: "landing.photos.items.crack.aiReason",
+    aiFindingsKeys: [
+      "landing.photos.items.crack.finding1",
+      "landing.photos.items.crack.finding2",
+      "landing.photos.items.crack.finding3",
     ],
-    aiEvidenceRequested: [
-      "Corner photo after V-groove opening and cleaning.",
-      "Photo confirming mesh overlap beyond crack line.",
-      "Follow-up photo after primer coat.",
+    aiEvidenceKeys: [
+      "landing.photos.items.crack.evidence1",
+      "landing.photos.items.crack.evidence2",
+      "landing.photos.items.crack.evidence3",
     ],
-    aiReferences: [
-      "Knauf reinforcement guidance",
-      "Corner stress reinforcement practice",
-    ],
-    aiActionDetails: {
+    aiReferenceKeys: ["landing.photos.items.crack.ref1", "landing.photos.items.crack.ref2"],
+    aiActionDetailKeys: {
       create_task: [
-        "Create task: Repair window corner crack.",
-        "Sequence: groove, mesh, flexible filler, repaint.",
-        "Set check: no re-opening after first week.",
+        "landing.photos.items.crack.createTask1",
+        "landing.photos.items.crack.createTask2",
+        "landing.photos.items.crack.createTask3",
       ],
       order: [
-        "Order fiberglass mesh tape and elastic filler.",
-        "Include fine-grit sanding sheets and primer.",
-        "Reserve enough material for two passes.",
+        "landing.photos.items.crack.order1",
+        "landing.photos.items.crack.order2",
+        "landing.photos.items.crack.order3",
       ],
       reminder: [
-        "Add 14-day inspection reminder.",
-        "Check if crack width changes after repaint.",
-        "Escalate to frame anchoring check if reopened.",
+        "landing.photos.items.crack.reminder1",
+        "landing.photos.items.crack.reminder2",
+        "landing.photos.items.crack.reminder3",
       ],
     },
     aiActions: [
-      { label: "Create repair task", kind: "primary", action: "create_task" },
-      { label: "Order mesh tape + elastic filler", kind: "secondary", action: "order" },
-      { label: "Add inspection reminder", kind: "secondary", action: "reminder" },
+      { labelKey: "landing.photos.items.crack.action1", kind: "primary", action: "create_task" },
+      { labelKey: "landing.photos.items.crack.action2", kind: "secondary", action: "order" },
+      { labelKey: "landing.photos.items.crack.action3", kind: "secondary", action: "reminder" },
     ],
   },
   {
     id: "photo-insulation",
-    title: "Insulation assembly ID",
+    titleKey: "landing.photos.items.insulation.title",
     src: "/demo/photos/insulation-vapor-barrier.png",
-    submittedBy: "Client",
-    submittedAt: "Yesterday",
-    aiQuestion: "What materials are shown and is the vapor barrier installed correctly?",
-    aiVerdict: "Proceed with QA checks",
-    aiReason: "Assembly appears correct in principle, but seam continuity is not fully verifiable from this angle.",
-    aiFindings: [
-      "Mineral wool infill between studs appears consistent (~100 mm class).",
-      "Polyethylene barrier is present but seam taping is incomplete.",
-      "Untaped joints may reduce thermal performance and raise condensation risk.",
+    submittedByKey: "landing.photos.client",
+    submittedAtKey: "landing.photos.yesterday",
+    aiQuestionKey: "landing.photos.items.insulation.aiQuestion",
+    aiVerdictKey: "landing.photos.items.insulation.aiVerdict",
+    aiReasonKey: "landing.photos.items.insulation.aiReason",
+    aiFindingsKeys: [
+      "landing.photos.items.insulation.finding1",
+      "landing.photos.items.insulation.finding2",
+      "landing.photos.items.insulation.finding3",
     ],
-    aiEvidenceRequested: [
-      "Close-up photos of all membrane seams.",
-      "Corner and outlet penetration sealing photos.",
-      "One full-bay continuity photo before cladding.",
+    aiEvidenceKeys: [
+      "landing.photos.items.insulation.evidence1",
+      "landing.photos.items.insulation.evidence2",
+      "landing.photos.items.insulation.evidence3",
     ],
-    aiReferences: [
-      "Rockwool / Knauf installation guides",
-      "DIN 4108 vapor-control principles",
+    aiReferenceKeys: [
+      "landing.photos.items.insulation.ref1",
+      "landing.photos.items.insulation.ref2",
     ],
-    aiActionDetails: {
+    aiActionDetailKeys: {
       create_task: [
-        "Create QA checklist task for barrier continuity.",
-        "Add checkpoints for seams, corners, and penetrations.",
-        "Require signoff photos before wall closure.",
+        "landing.photos.items.insulation.createTask1",
+        "landing.photos.items.insulation.createTask2",
+        "landing.photos.items.insulation.createTask3",
       ],
       order: [
-        "Order additional sealing tape for all exposed joints.",
-        "Include membrane patch material for puncture repair.",
-        "Confirm compatibility with installed film.",
+        "landing.photos.items.insulation.order1",
+        "landing.photos.items.insulation.order2",
+        "landing.photos.items.insulation.order3",
       ],
       request_photo: [
-        "Request close-up seam photos every 2-3 meters.",
-        "Request outlet and corner photos with tape visible.",
-        "Mark each photo by room and wall segment.",
+        "landing.photos.items.insulation.photo1",
+        "landing.photos.items.insulation.photo2",
+        "landing.photos.items.insulation.photo3",
       ],
     },
     aiActions: [
-      { label: "Create QA checklist task", kind: "primary", action: "create_task" },
-      { label: "Order sealing tape", kind: "secondary", action: "order" },
-      { label: "Request photo of seams", kind: "secondary", action: "request_photo" },
+      { labelKey: "landing.photos.items.insulation.action1", kind: "primary", action: "create_task" },
+      { labelKey: "landing.photos.items.insulation.action2", kind: "secondary", action: "order" },
+      { labelKey: "landing.photos.items.insulation.action3", kind: "secondary", action: "request_photo" },
     ],
   },
   {
     id: "photo-landscape",
-    title: "Vacation house landscape plan",
+    titleKey: "landing.photos.items.landscape.title",
     src: "/demo/photos/landscape-house.png",
-    submittedBy: "Client",
-    submittedAt: "Today",
-    aiQuestion: "Plan a practical landscape design around this vacation house. Prioritize drainage, low maintenance, and a clean modern look.",
-    aiVerdict: "Concept approved",
-    aiReason: "Site is suitable for phased low-maintenance landscape delivery with drainage-first sequencing.",
-    aiFindings: [
-      "Drainage correction should precede planting and paving to avoid rework.",
-      "Simple modern hardscape geometry suits current house lines.",
-      "Native layered planting can reduce upkeep while keeping year-round structure.",
+    submittedByKey: "landing.photos.client",
+    submittedAtKey: "landing.photos.today",
+    aiQuestionKey: "landing.photos.items.landscape.aiQuestion",
+    aiVerdictKey: "landing.photos.items.landscape.aiVerdict",
+    aiReasonKey: "landing.photos.items.landscape.aiReason",
+    aiFindingsKeys: [
+      "landing.photos.items.landscape.finding1",
+      "landing.photos.items.landscape.finding2",
+      "landing.photos.items.landscape.finding3",
     ],
-    aiEvidenceRequested: [
-      "Quick slope map with low-point markers.",
-      "Foundation distance check for planned planting zones.",
-      "Night photo to place low-voltage lighting routes.",
+    aiEvidenceKeys: [
+      "landing.photos.items.landscape.evidence1",
+      "landing.photos.items.landscape.evidence2",
+      "landing.photos.items.landscape.evidence3",
     ],
-    aiReferences: [
-      "Residential drainage best practices",
-      "Low-maintenance planting guides",
-      "Landscape lighting standards",
+    aiReferenceKeys: [
+      "landing.photos.items.landscape.ref1",
+      "landing.photos.items.landscape.ref2",
+      "landing.photos.items.landscape.ref3",
     ],
-    aiActionDetails: {
+    aiActionDetailKeys: {
       create_project_landscape: [
-        "Create landscape project with 5 phases: survey, drainage, hardscape, planting, lighting.",
-        "Set phase gates and acceptance criteria per stage.",
-        "Prefill kickoff prompt for immediate planning.",
+        "landing.photos.items.landscape.project1",
+        "landing.photos.items.landscape.project2",
+        "landing.photos.items.landscape.project3",
       ],
       materials: [
-        "Generate materials list by phase and supplier category.",
-        "Separate drainage, hardscape, and planting packages.",
-        "Include contingency line for soil amendments.",
+        "landing.photos.items.landscape.materials1",
+        "landing.photos.items.landscape.materials2",
+        "landing.photos.items.landscape.materials3",
       ],
       plan_30d: [
-        "Create 30-day schedule with week-by-week milestones.",
-        "Reserve first week for survey and drainage setup.",
-        "Set handoff checkpoints to avoid scope drift.",
+        "landing.photos.items.landscape.plan1",
+        "landing.photos.items.landscape.plan2",
+        "landing.photos.items.landscape.plan3",
       ],
     },
     aiActions: [
-      { label: "Create project: Landscape design", kind: "primary", action: "create_project_landscape" },
-      { label: "Generate materials list", kind: "secondary", action: "materials" },
-      { label: "Create 30-day plan", kind: "secondary", action: "plan_30d" },
+      { labelKey: "landing.photos.items.landscape.action1", kind: "primary", action: "create_project_landscape" },
+      { labelKey: "landing.photos.items.landscape.action2", kind: "secondary", action: "materials" },
+      { labelKey: "landing.photos.items.landscape.action3", kind: "secondary", action: "plan_30d" },
     ],
   },
 ];
 
-const DOC_SCAN_STEPS = ["Reading clauses...", "Checking risk patterns...", "Drafting corrective edits..."];
+const DOC_SCAN_STEP_KEYS = [
+  "landing.doc.scanSteps.reading",
+  "landing.doc.scanSteps.checking",
+  "landing.doc.scanSteps.drafting",
+];
 const BASE_SAFE_SCORE = 63;
 const MAX_SAFE_SCORE = 100;
 const DOC_PAGE_ORDER: DocPageId[] = ["page-1", "page-2", "page-3"];
-const DOC_PAGE_LABELS: Record<DocPageId, string> = {
-  "page-1": "Page 1",
-  "page-2": "Page 2",
-  "page-3": "Page 3",
+const DOC_PAGE_NUMBERS: Record<DocPageId, number> = {
+  "page-1": 1,
+  "page-2": 2,
+  "page-3": 3,
 };
-const DOC_SEVERITY_LABELS: Record<Severity, string> = {
-  critical: "Critical",
-  medium: "Medium",
-  low: "Low",
+const DOC_SEVERITY_KEYS: Record<Severity, string> = {
+  critical: "landing.doc.severity.critical",
+  medium: "landing.doc.severity.medium",
+  low: "landing.doc.severity.low",
 };
 const DOC_SEVERITY_CLAUSE_CLASSES: Record<Severity, string> = {
   critical: "border-l-4 border-l-rose-500/80 bg-rose-500/10",
@@ -516,54 +523,14 @@ const DOC_SEVERITY_CHIP_CLASSES: Record<Severity, string> = {
 };
 
 const CONTRACT_CLAUSES: ContractClause[] = [
-  {
-    id: "scope_vague",
-    page: "page-1",
-    text:
-      "The Contractor shall perform renovation works to modernize the apartment interiors as reasonably required to deliver a complete result acceptable to the Client.",
-  },
-  {
-    id: "milestones_vague",
-    page: "page-1",
-    text:
-      "The Works shall be completed in phases according to a mutually agreed schedule, with milestone dates to be coordinated during project execution.",
-  },
-  {
-    id: "payment_terms_unbalanced",
-    page: "page-1",
-    text:
-      "The Client shall pay a 70% advance within three business days of signing, with the remaining amount payable upon final completion; delayed payments permit immediate suspension of all works.",
-  },
-  {
-    id: "penalty_one_sided",
-    page: "page-2",
-    text:
-      "Any delay by the Client in approvals, access, or payments shall incur a penalty of 0.5% of the contract value per day, and no equivalent penalty shall apply to the Contractor.",
-  },
-  {
-    id: "variation_missing",
-    page: "page-2",
-    text:
-      "Additional works requested by the Client may be executed upon instruction and charged at the Contractor's standard rates without requiring a signed variation order.",
-  },
-  {
-    id: "warranty_ambiguous",
-    page: "page-2",
-    text:
-      "The Contractor provides a workmanship warranty for a reasonable period after completion, subject to normal use and maintenance conditions.",
-  },
-  {
-    id: "termination_unilateral",
-    page: "page-3",
-    text:
-      "The Contractor may terminate this Agreement at any time with two days' written notice, with payment due for all completed and planned works up to the termination date.",
-  },
-  {
-    id: "dispute_jurisdiction_unfair",
-    page: "page-3",
-    text:
-      "All disputes shall be resolved exclusively by the courts located at the Contractor's registered office, and the Client waives objection to venue.",
-  },
+  { id: "scope_vague", page: "page-1", textKey: "landing.doc.clauses.scope.original" },
+  { id: "milestones_vague", page: "page-1", textKey: "landing.doc.clauses.milestones.original" },
+  { id: "payment_terms_unbalanced", page: "page-1", textKey: "landing.doc.clauses.payment.original" },
+  { id: "penalty_one_sided", page: "page-2", textKey: "landing.doc.clauses.penalty.original" },
+  { id: "variation_missing", page: "page-2", textKey: "landing.doc.clauses.variation.original" },
+  { id: "warranty_ambiguous", page: "page-2", textKey: "landing.doc.clauses.warranty.original" },
+  { id: "termination_unilateral", page: "page-3", textKey: "landing.doc.clauses.termination.original" },
+  { id: "dispute_jurisdiction_unfair", page: "page-3", textKey: "landing.doc.clauses.dispute.original" },
 ];
 
 const FINDINGS: Finding[] = [
@@ -572,12 +539,10 @@ const FINDINGS: Finding[] = [
     page: "page-1",
     clauseId: "scope_vague",
     severity: "critical",
-    title: "Scope is open-ended",
-    description: "Undefined deliverables can create billing disputes and quality disagreements.",
-    originalText:
-      "The Contractor shall perform renovation works to modernize the apartment interiors as reasonably required to deliver a complete result acceptable to the Client.",
-    suggestedText:
-      "The Contractor shall perform only the works listed in Appendix A (Scope Matrix), including stated quantities, materials, and exclusions; any additional deliverable requires a signed variation order before execution.",
+    titleKey: "landing.doc.findings.scope.title",
+    descriptionKey: "landing.doc.findings.scope.description",
+    originalKey: "landing.doc.clauses.scope.original",
+    suggestedKey: "landing.doc.clauses.scope.suggested",
     scoreImpact: 8,
   },
   {
@@ -585,12 +550,10 @@ const FINDINGS: Finding[] = [
     page: "page-1",
     clauseId: "milestones_vague",
     severity: "medium",
-    title: "Milestones are not fixed",
-    description: "Missing dates and acceptance gates weaken schedule accountability.",
-    originalText:
-      "The Works shall be completed in phases according to a mutually agreed schedule, with milestone dates to be coordinated during project execution.",
-    suggestedText:
-      "The Works shall follow the milestone schedule in Appendix B with fixed target dates, acceptance criteria for each stage, and a written change log for any approved timeline adjustments.",
+    titleKey: "landing.doc.findings.milestones.title",
+    descriptionKey: "landing.doc.findings.milestones.description",
+    originalKey: "landing.doc.clauses.milestones.original",
+    suggestedKey: "landing.doc.clauses.milestones.suggested",
     scoreImpact: 4,
   },
   {
@@ -598,12 +561,10 @@ const FINDINGS: Finding[] = [
     page: "page-2",
     clauseId: "penalty_one_sided",
     severity: "critical",
-    title: "Penalty is one-sided",
-    description: "Only the client is exposed to delay penalties.",
-    originalText:
-      "Any delay by the Client in approvals, access, or payments shall incur a penalty of 0.5% of the contract value per day, and no equivalent penalty shall apply to the Contractor.",
-    suggestedText:
-      "Delay penalties shall be reciprocal: each party pays 0.2% of affected stage value per day for delays within its control, capped at 10% of the relevant stage value.",
+    titleKey: "landing.doc.findings.penalty.title",
+    descriptionKey: "landing.doc.findings.penalty.description",
+    originalKey: "landing.doc.clauses.penalty.original",
+    suggestedKey: "landing.doc.clauses.penalty.suggested",
     scoreImpact: 4,
   },
   {
@@ -611,12 +572,10 @@ const FINDINGS: Finding[] = [
     page: "page-1",
     clauseId: "payment_terms_unbalanced",
     severity: "medium",
-    title: "Payment terms are unbalanced",
-    description: "Large upfront payment and broad suspension rights increase client risk.",
-    originalText:
-      "The Client shall pay a 70% advance within three business days of signing, with the remaining amount payable upon final completion; delayed payments permit immediate suspension of all works.",
-    suggestedText:
-      "Payments shall be stage-based: 20% mobilization, 30% after rough-in acceptance, 30% after finishing acceptance, and 20% at final handover; suspension may occur only after a 7-day cure notice for undisputed amounts.",
+    titleKey: "landing.doc.findings.payment.title",
+    descriptionKey: "landing.doc.findings.payment.description",
+    originalKey: "landing.doc.clauses.payment.original",
+    suggestedKey: "landing.doc.clauses.payment.suggested",
     scoreImpact: 8,
   },
   {
@@ -624,12 +583,10 @@ const FINDINGS: Finding[] = [
     page: "page-2",
     clauseId: "variation_missing",
     severity: "medium",
-    title: "Variation control is missing",
-    description: "Extra work can be billed without prior commercial approval.",
-    originalText:
-      "Additional works requested by the Client may be executed upon instruction and charged at the Contractor's standard rates without requiring a signed variation order.",
-    suggestedText:
-      "No variation shall be executed unless both parties sign a written variation order specifying scope, price, and schedule impact, except emergency safety works documented within 24 hours.",
+    titleKey: "landing.doc.findings.variation.title",
+    descriptionKey: "landing.doc.findings.variation.description",
+    originalKey: "landing.doc.clauses.variation.original",
+    suggestedKey: "landing.doc.clauses.variation.suggested",
     scoreImpact: 4,
   },
   {
@@ -637,12 +594,10 @@ const FINDINGS: Finding[] = [
     page: "page-2",
     clauseId: "warranty_ambiguous",
     severity: "low",
-    title: "Warranty period is ambiguous",
-    description: "Undefined duration and remedy process create ambiguity after handover.",
-    originalText:
-      "The Contractor provides a workmanship warranty for a reasonable period after completion, subject to normal use and maintenance conditions.",
-    suggestedText:
-      "The Contractor provides a 12-month workmanship warranty from handover; defects reported in writing shall be inspected within 5 business days and remedied within a mutually agreed corrective timeline.",
+    titleKey: "landing.doc.findings.warranty.title",
+    descriptionKey: "landing.doc.findings.warranty.description",
+    originalKey: "landing.doc.clauses.warranty.original",
+    suggestedKey: "landing.doc.clauses.warranty.suggested",
     scoreImpact: 2,
   },
   {
@@ -650,12 +605,10 @@ const FINDINGS: Finding[] = [
     page: "page-3",
     clauseId: "termination_unilateral",
     severity: "critical",
-    title: "Termination right is unilateral",
-    description: "Contractor can exit quickly without mirrored protection for the client.",
-    originalText:
-      "The Contractor may terminate this Agreement at any time with two days' written notice, with payment due for all completed and planned works up to the termination date.",
-    suggestedText:
-      "Either party may terminate for material breach after a 10-day cure period; payment on termination is limited to accepted completed works and documented demobilization costs.",
+    titleKey: "landing.doc.findings.termination.title",
+    descriptionKey: "landing.doc.findings.termination.description",
+    originalKey: "landing.doc.clauses.termination.original",
+    suggestedKey: "landing.doc.clauses.termination.suggested",
     scoreImpact: 5,
   },
   {
@@ -663,12 +616,10 @@ const FINDINGS: Finding[] = [
     page: "page-3",
     clauseId: "dispute_jurisdiction_unfair",
     severity: "medium",
-    title: "Dispute venue is unfair",
-    description: "Single-party venue control raises enforcement burden.",
-    originalText:
-      "All disputes shall be resolved exclusively by the courts located at the Contractor's registered office, and the Client waives objection to venue.",
-    suggestedText:
-      "Disputes shall first be escalated to executive negotiation for 15 days, then submitted to arbitration in a mutually agreed neutral venue under agreed procedural rules.",
+    titleKey: "landing.doc.findings.dispute.title",
+    descriptionKey: "landing.doc.findings.dispute.description",
+    originalKey: "landing.doc.clauses.dispute.original",
+    suggestedKey: "landing.doc.clauses.dispute.suggested",
     scoreImpact: 2,
   },
 ];
@@ -681,130 +632,99 @@ const ESTIMATE_VARIANCE_BADGE_CLASSES: Record<EstimateVariance, string> = {
 };
 
 type EstimateExpandedOverride = {
-  statusInsight?: string;
-  riskLabel?: string;
+  statusInsightKey?: string;
+  riskLabelKey?: string;
   riskClass?: string;
 };
 
 const ESTIMATE_EXPANDED_OVERRIDES: Partial<Record<EstimateItem["id"], EstimateExpandedOverride>> = {
   "estimate-drywall-finishing": {
-    statusInsight: "Additional finishing prep increased labor and material scope.",
+    statusInsightKey: "landing.estimate.items.drywall.statusInsight",
   },
   "estimate-electrical-materials": {
-    statusInsight: "Bulk purchase discount applied.",
+    statusInsightKey: "landing.estimate.items.electrical.statusInsight",
   },
   "estimate-bathroom-tiles-labor": {
-    statusInsight: "Client layout confirmation pending before grouting.",
-    riskLabel: "Blocked by client",
+    statusInsightKey: "landing.estimate.items.tiles.statusInsight",
+    riskLabelKey: "landing.estimate.risk.blockedByClient",
     riskClass: "bg-warning/20 text-foreground border-warning/45",
   },
   "estimate-doors-installation": {
-    statusInsight: "Awaiting supplier invoice.",
-    riskLabel: "Payment required",
+    statusInsightKey: "landing.estimate.items.doors.statusInsight",
+    riskLabelKey: "landing.estimate.risk.paymentRequired",
     riskClass: "bg-warning/15 text-foreground border-warning/40",
   },
 };
 
 const CONTROL_CONTENT: Record<ControlTab, ControlPanelContent> = {
   tasks: {
-    title: "Task board snapshot",
+    titleKey: "landing.controlContent.tasks.title",
     rows: [
-      { label: "Electrical rough-in", value: "In progress", tone: "text-info" },
-      { label: "Plumbing rough-in", value: "Not started", tone: "text-muted-foreground" },
-      { label: "Tile installation", value: "Blocked", tone: "text-warning-foreground" },
-    ],
-    bullets: [
-      "Work moves visually, not in chat threads.",
-      "Blockers show what’s needed next and who owns it.",
-      "Evidence and comments stay attached to execution.",
+      { labelKey: "landing.controlContent.tasks.rows.electrical", valueKey: "landing.controlContent.tasks.values.inProgress", tone: "text-info" },
+      { labelKey: "landing.controlContent.tasks.rows.plumbing", valueKey: "landing.controlContent.tasks.values.notStarted", tone: "text-muted-foreground" },
+      { labelKey: "landing.controlContent.tasks.rows.tile", valueKey: "landing.controlContent.tasks.values.blocked", tone: "text-warning-foreground" },
     ],
   },
   estimate: {
-    title: "Estimate control snapshot",
+    titleKey: "landing.controlContent.estimate.title",
     rows: [
-      { label: "Version 2", value: "Approved", tone: "text-success" },
-      { label: "Planned", value: "1 240 000 RUB", tone: "text-foreground" },
-      { label: "Paid", value: "468 000 RUB", tone: "text-info" },
-    ],
-    bullets: [
-      "Keep approved versions and see exactly what changed.",
-      "Track planned vs paid vs remaining in one glance.",
-      "Explain variance with receipts and AI notes, not arguments.",
+      { labelKey: "landing.controlContent.estimate.rows.v2", valueKey: "landing.controlContent.estimate.values.approved", tone: "text-success" },
+      { labelKey: "landing.controlContent.estimate.rows.planned", valueKey: "landing.controlContent.estimate.values.planned", tone: "text-foreground" },
+      { labelKey: "landing.controlContent.estimate.rows.paid", valueKey: "landing.controlContent.estimate.values.paid", tone: "text-info" },
     ],
   },
   procurement: {
-    title: "Procurement queue snapshot",
+    titleKey: "landing.controlContent.procurement.title",
     rows: [
-      { label: "To buy", value: "7 items", tone: "text-warning-foreground" },
-      { label: "Ordered", value: "4 items", tone: "text-info" },
-      { label: "In stock", value: "3 items", tone: "text-success" },
-    ],
-    bullets: [
-      "Material status updates are tied to real task progress.",
-      "Receive/order actions update remaining quantities instantly.",
-      "Procurement links preserve traceability to estimate sources.",
+      { labelKey: "landing.controlContent.procurement.rows.toBuy", valueKey: "landing.controlContent.procurement.values.toBuy", tone: "text-warning-foreground" },
+      { labelKey: "landing.controlContent.procurement.rows.ordered", valueKey: "landing.controlContent.procurement.values.ordered", tone: "text-info" },
+      { labelKey: "landing.controlContent.procurement.rows.inStock", valueKey: "landing.controlContent.procurement.values.inStock", tone: "text-success" },
     ],
   },
   photos: {
-    title: "Photo evidence snapshot",
+    titleKey: "landing.controlContent.photos.title",
     rows: [
-      { label: "Final photos", value: "12", tone: "text-success" },
-      { label: "Open reviews", value: "5", tone: "text-warning-foreground" },
-      { label: "Linked tasks", value: "19", tone: "text-info" },
-    ],
-    bullets: [
-      "Evidence stays attached to the exact task or stage.",
-      "AI turns issues into step-by-step corrective actions.",
-      "Identify materials/tools and verify correct installation fast.",
+      { labelKey: "landing.controlContent.photos.rows.finalPhotos", valueKey: "landing.controlContent.photos.values.finalPhotos", tone: "text-success" },
+      { labelKey: "landing.controlContent.photos.rows.openReviews", valueKey: "landing.controlContent.photos.values.openReviews", tone: "text-warning-foreground" },
+      { labelKey: "landing.controlContent.photos.rows.linkedTasks", valueKey: "landing.controlContent.photos.values.linkedTasks", tone: "text-info" },
     ],
   },
   documents: {
-    title: "Documents snapshot",
+    titleKey: "landing.controlContent.documents.title",
     rows: [
-      { label: "Contracts", value: "3 active", tone: "text-foreground" },
-      { label: "Specs", value: "8 files", tone: "text-info" },
-      { label: "Approvals", value: "2 pending", tone: "text-warning-foreground" },
-    ],
-    bullets: [
-      "Draft, active, archived states keep docs lifecycle clear.",
-      "Versions are grouped by document, not scattered in chat.",
-      "Document activity can trigger team notifications.",
+      { labelKey: "landing.controlContent.documents.rows.contracts", valueKey: "landing.controlContent.documents.values.contracts", tone: "text-foreground" },
+      { labelKey: "landing.controlContent.documents.rows.specs", valueKey: "landing.controlContent.documents.values.specs", tone: "text-info" },
+      { labelKey: "landing.controlContent.documents.rows.approvals", valueKey: "landing.controlContent.documents.values.approvals", tone: "text-warning-foreground" },
     ],
   },
   activity: {
-    title: "Activity stream snapshot",
+    titleKey: "landing.controlContent.activity.title",
     rows: [
-      { label: "Task completed", value: "2m ago", tone: "text-success" },
-      { label: "Photo uploaded", value: "8m ago", tone: "text-info" },
-      { label: "Comment added", value: "11m ago", tone: "text-foreground" },
-    ],
-    bullets: [
-      "Every action is visible in a chronological project timeline.",
-      "Notifications highlight changes that need your decision.",
-      "Team accountability is built in without external tools.",
+      { labelKey: "landing.controlContent.activity.rows.taskCompleted", valueKey: "landing.controlContent.activity.values.taskCompleted", tone: "text-success" },
+      { labelKey: "landing.controlContent.activity.rows.photoUploaded", valueKey: "landing.controlContent.activity.values.photoUploaded", tone: "text-info" },
+      { labelKey: "landing.controlContent.activity.rows.commentAdded", valueKey: "landing.controlContent.activity.values.commentAdded", tone: "text-foreground" },
     ],
   },
 };
 
-function getProgressLabel(progress: number): string {
-  if (progress >= 100) return "Done";
-  if (progress > 0) return "In progress";
-  return "Draft";
+function getProgressLabel(t: Translator, progress: number): string {
+  if (progress >= 100) return t("landing.demos.progress.done");
+  if (progress > 0) return t("landing.demos.progress.inProgress");
+  return t("landing.demos.progress.draft");
 }
 
-function getEstimateVarianceLabel(row: EstimateItem): string {
-  const absoluteVariance = row.variance.replace(/^[-+]/, "");
-  if (row.varianceType === "over") return `Over +₽${absoluteVariance}`;
-  if (row.varianceType === "under") return `Saved -₽${absoluteVariance}`;
-  if (row.varianceType === "on-track") return "On track";
-  return "To be paid";
+function getEstimateVarianceLabel(t: Translator, row: EstimateItem): string {
+  if (row.varianceType === "over") return t("landing.estimate.variance.over", { amount: row.varianceAmount });
+  if (row.varianceType === "under") return t("landing.estimate.variance.under", { amount: row.varianceAmount });
+  if (row.varianceType === "on-track") return t("landing.estimate.variance.onTrack");
+  return t("landing.estimate.variance.toBePaid");
 }
 
-function getDefaultRiskFromVariance(varianceType: EstimateVariance): string {
-  if (varianceType === "over") return "Over budget";
-  if (varianceType === "under") return "Within budget";
-  if (varianceType === "on-track") return "On track";
-  return "Payment required";
+function getDefaultRiskKeyFromVariance(varianceType: EstimateVariance): string {
+  if (varianceType === "over") return "landing.estimate.risk.overBudget";
+  if (varianceType === "under") return "landing.estimate.risk.withinBudget";
+  if (varianceType === "on-track") return "landing.estimate.risk.onTrack";
+  return "landing.estimate.risk.paymentRequired";
 }
 
 function getDefaultRiskClassFromVariance(varianceType: EstimateVariance): string {
@@ -814,11 +734,18 @@ function getDefaultRiskClassFromVariance(varianceType: EstimateVariance): string
   return "bg-warning/15 text-foreground border-warning/40";
 }
 
-function getExpandedDetails(row: EstimateItem): Required<EstimateExpandedOverride> {
+function getExpandedDetails(
+  t: Translator,
+  row: EstimateItem,
+): { statusInsight: string; riskLabel: string; riskClass: string } {
   const override = ESTIMATE_EXPANDED_OVERRIDES[row.id] ?? {};
   return {
-    statusInsight: override.statusInsight ?? "Awaiting next update.",
-    riskLabel: override.riskLabel ?? getDefaultRiskFromVariance(row.varianceType),
+    statusInsight: override.statusInsightKey
+      ? t(override.statusInsightKey)
+      : t("landing.estimate.defaultStatusInsight"),
+    riskLabel: override.riskLabelKey
+      ? t(override.riskLabelKey)
+      : t(getDefaultRiskKeyFromVariance(row.varianceType)),
     riskClass: override.riskClass ?? getDefaultRiskClassFromVariance(row.varianceType),
   };
 }
@@ -833,20 +760,20 @@ function getProcStatus({
   ordered: number;
   received: number;
   delayed?: boolean;
-}): { label: ProcurementStatusLabel; className: string } {
+}): { labelKey: ProcurementStatusKey; className: string } {
   if (delayed) {
-    return { label: "Delayed", className: "border-warning/50 bg-warning/20 text-foreground transition-colors duration-300" };
+    return { labelKey: "delayed", className: "border-warning/50 bg-warning/20 text-foreground transition-colors duration-300" };
   }
   if (ordered === 0 && received === 0) {
-    return { label: "To buy", className: "border-border bg-muted/70 text-muted-foreground transition-colors duration-300" };
+    return { labelKey: "toBuy", className: "border-border bg-muted/70 text-muted-foreground transition-colors duration-300" };
   }
   if (ordered > 0 && received === 0) {
-    return { label: "Ordered", className: "border-info/45 bg-info/20 text-foreground transition-colors duration-300" };
+    return { labelKey: "ordered", className: "border-info/45 bg-info/20 text-foreground transition-colors duration-300" };
   }
   if (received >= needed) {
-    return { label: "In stock", className: "border-success/45 bg-success/20 text-foreground transition-colors duration-300" };
+    return { labelKey: "inStock", className: "border-success/45 bg-success/20 text-foreground transition-colors duration-300" };
   }
-  return { label: "Partial", className: "border-warning/45 bg-warning/20 text-foreground transition-colors duration-300" };
+  return { labelKey: "partial", className: "border-warning/45 bg-warning/20 text-foreground transition-colors duration-300" };
 }
 
 function getInitialProcurementReceived(): Record<string, number> {
@@ -877,6 +804,7 @@ function getPhotoActionClasses(kind: PhotoAction["kind"], isActive: boolean): st
 }
 
 export default function Landing() {
+  const { t } = useTranslation();
   const isGuest = !isAuthenticated();
   const createProjectTo = isGuest ? "/auth/signup" : "/home";
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -969,16 +897,16 @@ export default function Landing() {
   const procurementSummary = useMemo(
     () => ({
       totalItems: procurementView.length,
-      partialCount: procurementView.filter((item) => item.status.label === "Partial").length,
+      partialCount: procurementView.filter((item) => item.status.labelKey === "partial").length,
       waitingCount: procurementView.filter((item) => !item.isReady).length,
     }),
     [procurementView],
   );
 
   const activePhoto = useMemo(() => PHOTOS_DEMO.find((photo) => photo.id === activePhotoId) ?? null, [activePhotoId]);
-  const activePhotoActionDetails = useMemo(() => {
+  const activePhotoActionDetailKeys = useMemo(() => {
     if (!activePhoto || !activePhotoAction) return [];
-    return activePhoto.aiActionDetails[activePhotoAction] ?? [];
+    return activePhoto.aiActionDetailKeys[activePhotoAction] ?? [];
   }, [activePhoto, activePhotoAction]);
   const findingsByPage = useMemo(
     () =>
@@ -1186,7 +1114,7 @@ export default function Landing() {
   const handleCommunitySubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!communityEmail.trim()) return;
-    toast({ title: "Saved (mock)" });
+    toast({ title: t("landing.community.savedToast") });
     setCommunityEmail("");
   };
 
@@ -1234,7 +1162,7 @@ export default function Landing() {
     kanbanTimersRef.current.forEach((timer) => window.clearTimeout(timer));
     kanbanTimersRef.current = [];
 
-    setDropMessage(`Moved to ${KANBAN_COLUMN_LABELS[targetColumn]}`);
+    setDropMessage(t("landing.kanban.movedTo", { column: t(KANBAN_COLUMN_KEYS[targetColumn]) }));
     setMovedTaskId(draggingTaskId);
     setSparkleTaskId(draggingTaskId);
     setDraggingTaskId(null);
@@ -1260,7 +1188,7 @@ export default function Landing() {
       if (wowToastTimerRef.current) window.clearTimeout(wowToastTimerRef.current);
 
       setWowFlash({ materialId: item.id, on: true });
-      setWowToast("Materials complete. Task ready.");
+      setWowToast(t("landing.procurement.materialsCompleteToast"));
 
       wowFlashTimerRef.current = window.setTimeout(() => {
         setWowFlash((prev) => (prev.materialId === item.id ? { materialId: item.id, on: false } : prev));
@@ -1287,7 +1215,7 @@ export default function Landing() {
 
     analysisStepTimerRef.current = window.setInterval(() => {
       if (analysisRunIdRef.current !== runId) return;
-      setAnalysisStepIndex((prev) => (prev + 1) % PHOTOS_ANALYSIS_STEPS.length);
+      setAnalysisStepIndex((prev) => (prev + 1) % PHOTOS_ANALYSIS_STEP_KEYS.length);
     }, 800);
 
     analysisFinishTimerRef.current = window.setTimeout(() => {
@@ -1320,22 +1248,22 @@ export default function Landing() {
     setActivePhotoAction(action.action);
     setShowPhotoActionDetails(true);
 
-    let toastMessage = "Action saved in draft.";
-    if (action.action === "create_task") toastMessage = `Task created: ${photo.title} review (Draft)`;
-    if (action.action === "order") toastMessage = "Draft order list prepared.";
-    if (action.action === "reminder") toastMessage = "Reminder added to project timeline.";
-    if (action.action === "request_photo") toastMessage = "Request sent: upload close-up seam photos.";
-    if (action.action === "materials") toastMessage = "Materials list generated (Draft).";
-    if (action.action === "plan_30d") toastMessage = "30-day implementation plan drafted.";
+    let toastMessage = t("landing.photos.toast.actionSaved");
+    if (action.action === "create_task") toastMessage = t("landing.photos.toast.taskCreated", { title: t(photo.titleKey) });
+    if (action.action === "order") toastMessage = t("landing.photos.toast.orderDraft");
+    if (action.action === "reminder") toastMessage = t("landing.photos.toast.reminderAdded");
+    if (action.action === "request_photo") toastMessage = t("landing.photos.toast.photoRequested");
+    if (action.action === "materials") toastMessage = t("landing.photos.toast.materialsDraft");
+    if (action.action === "plan_30d") toastMessage = t("landing.photos.toast.plan30d");
 
     if (action.action === "create_project_landscape") {
-      setPromptText("Create a landscape design project for my vacation house");
+      setPromptText(t("landing.photos.landscapePrompt"));
       window.scrollTo({ top: 0, behavior: "smooth" });
       if (promptTextareaRef.current) {
         window.setTimeout(() => promptTextareaRef.current?.focus(), 350);
-        toastMessage = "Project draft prepared in the prompt above.";
+        toastMessage = t("landing.photos.toast.projectDraft");
       } else {
-        toastMessage = "Prompt prefilled above";
+        toastMessage = t("landing.photos.toast.prefilled");
       }
     }
 
@@ -1356,7 +1284,7 @@ export default function Landing() {
     setIsPreparingCleanDocument(false);
 
     docScanStepTimerRef.current = window.setInterval(() => {
-      setDocScanStepIndex((prev) => (prev + 1) % DOC_SCAN_STEPS.length);
+      setDocScanStepIndex((prev) => (prev + 1) % DOC_SCAN_STEP_KEYS.length);
     }, 850);
 
     docScanFinishTimerRef.current = window.setTimeout(() => {
@@ -1423,8 +1351,8 @@ export default function Landing() {
 
   const handleShareCleanDocument = async () => {
     const sharePayload = {
-      title: "Renovation Agreement v2",
-      text: "Clean contract draft prepared in demo.",
+      title: t("landing.doc.shareTitle"),
+      text: t("landing.doc.shareText"),
       url: window.location.href,
     };
 
@@ -1440,15 +1368,15 @@ export default function Landing() {
     if (navigator.clipboard?.writeText) {
       try {
         await navigator.clipboard.writeText(window.location.href);
-        toast({ title: "Link copied (demo)" });
+        toast({ title: t("landing.doc.toastLinkCopied") });
         return;
       } catch {
-        toast({ title: "Share action (demo)" });
+        toast({ title: t("landing.doc.toastShareAction") });
         return;
       }
     }
 
-    toast({ title: "Share action (demo)" });
+    toast({ title: t("landing.doc.toastShareAction") });
   };
 
   const handlePrintCleanDocument = () => {
@@ -1456,7 +1384,7 @@ export default function Landing() {
   };
 
   const handleDownloadCleanDocument = () => {
-    const blob = new Blob(["Renovation-Agreement_v2 (demo clean document)."], {
+    const blob = new Blob([t("landing.doc.downloadContent")], {
       type: "application/pdf",
     });
     const url = URL.createObjectURL(blob);
@@ -1475,6 +1403,39 @@ export default function Landing() {
     setDragOverColumn(null);
   };
 
+  const howItWorksSteps = [
+    {
+      icon: Bot,
+      titleKey: "landing.howItWorks.steps.describe.title",
+      line1Key: "landing.howItWorks.steps.describe.line1",
+      line2Key: "landing.howItWorks.steps.describe.line2",
+    },
+    {
+      icon: CloudUpload,
+      titleKey: "landing.howItWorks.steps.attach.title",
+      line1Key: "landing.howItWorks.steps.attach.line1",
+      line2Key: "landing.howItWorks.steps.attach.line2",
+    },
+    {
+      icon: Timer,
+      titleKey: "landing.howItWorks.steps.control.title",
+      line1Key: "landing.howItWorks.steps.control.line1",
+      line2Key: "landing.howItWorks.steps.control.line2",
+    },
+  ];
+
+  const trustItems = [
+    { icon: ReceiptText, titleKey: "landing.trust.items.mock.title", textKey: "landing.trust.items.mock.text" },
+    { icon: Files, titleKey: "landing.trust.items.data.title", textKey: "landing.trust.items.data.text" },
+    { icon: ShieldCheck, titleKey: "landing.trust.items.privacy.title", textKey: "landing.trust.items.privacy.text" },
+  ];
+
+  const pricingTiers = [
+    { nameKey: "landing.pricingTeaser.tiers.starter.name", valueKey: "landing.pricingTeaser.tiers.starter.value", metaKey: "landing.pricingTeaser.tiers.starter.meta" },
+    { nameKey: "landing.pricingTeaser.tiers.team.name", valueKey: "landing.pricingTeaser.tiers.team.value", metaKey: "landing.pricingTeaser.tiers.team.meta" },
+    { nameKey: "landing.pricingTeaser.tiers.business.name", valueKey: "landing.pricingTeaser.tiers.business.value", metaKey: "landing.pricingTeaser.tiers.business.meta" },
+  ];
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header
@@ -1488,20 +1449,20 @@ export default function Landing() {
               <Hammer className="h-4 w-4" />
             </span>
             <div className="leading-tight">
-              <p className="text-body font-semibold text-foreground">СтройАгент</p>
-              <p className="text-caption text-muted-foreground">AI-first construction workspace</p>
+              <p className="text-body font-semibold text-foreground">{t("landing.brand.name")}</p>
+              <p className="text-caption text-muted-foreground">{t("landing.brand.tagline")}</p>
             </div>
           </Link>
 
           <nav className="hidden items-center gap-2 md:flex">
             <button onClick={() => scrollToSection("resources")} className="rounded-md px-3 py-2 text-body-sm text-muted-foreground transition-colors hover:text-foreground">
-              Resources
+              {t("landing.nav.resources")}
             </button>
             <Link to="/pricing" className="rounded-md px-3 py-2 text-body-sm text-muted-foreground transition-colors hover:text-foreground">
-              Pricing
+              {t("landing.nav.pricing")}
             </Link>
             <button onClick={() => scrollToSection("community")} className="rounded-md px-3 py-2 text-body-sm text-muted-foreground transition-colors hover:text-foreground">
-              Community
+              {t("landing.nav.community")}
             </button>
           </nav>
 
@@ -1522,13 +1483,13 @@ export default function Landing() {
                   isDark ? "rotate-0 scale-100 opacity-100" : "-rotate-180 scale-0 opacity-0"
                 }`}
               />
-              <span className="sr-only">Toggle theme</span>
+              <span className="sr-only">{t("landing.nav.toggleTheme")}</span>
             </Button>
             <Button variant="outline" asChild>
-              <Link to="/auth/login">Log in</Link>
+              <Link to="/auth/login">{t("landing.nav.login")}</Link>
             </Button>
             <Button asChild className="bg-accent text-accent-foreground hover:bg-accent/90">
-              <Link to="/auth/signup">Get started</Link>
+              <Link to="/auth/signup">{t("landing.nav.getStarted")}</Link>
             </Button>
           </div>
 
@@ -1549,41 +1510,41 @@ export default function Landing() {
                   isDark ? "rotate-0 scale-100 opacity-100" : "-rotate-180 scale-0 opacity-0"
                 }`}
               />
-              <span className="sr-only">Toggle theme</span>
+              <span className="sr-only">{t("landing.nav.toggleTheme")}</span>
             </Button>
             <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
               <SheetTrigger asChild>
                 <Button variant="ghost" size="icon">
                   <Menu className="h-5 w-5" />
-                  <span className="sr-only">Open menu</span>
+                  <span className="sr-only">{t("landing.nav.openMenu")}</span>
                 </Button>
               </SheetTrigger>
               <SheetContent side="right" className="glass-sidebar">
                 <SheetHeader>
-                  <SheetTitle>Navigation</SheetTitle>
+                  <SheetTitle>{t("landing.nav.navigation")}</SheetTitle>
                 </SheetHeader>
                 <div className="mt-8 space-y-2">
                   <Button variant="ghost" className="w-full justify-start" onClick={() => handleMobileScroll("resources")}>
-                    Resources
+                    {t("landing.nav.resources")}
                   </Button>
                   <Button variant="ghost" asChild className="w-full justify-start">
                     <Link to="/pricing" onClick={() => setMobileMenuOpen(false)}>
-                      Pricing
+                      {t("landing.nav.pricing")}
                     </Link>
                   </Button>
                   <Button variant="ghost" className="w-full justify-start" onClick={() => handleMobileScroll("community")}>
-                    Community
+                    {t("landing.nav.community")}
                   </Button>
                 </div>
                 <div className="mt-8 space-y-2">
                   <Button variant="outline" asChild className="w-full">
                     <Link to="/auth/login" onClick={() => setMobileMenuOpen(false)}>
-                      Log in
+                      {t("landing.nav.login")}
                     </Link>
                   </Button>
                   <Button asChild className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
                     <Link to="/auth/signup" onClick={() => setMobileMenuOpen(false)}>
-                      Get started
+                      {t("landing.nav.getStarted")}
                     </Link>
                   </Button>
                 </div>
@@ -1602,10 +1563,10 @@ export default function Landing() {
 
         <section className="relative mx-auto flex min-h-[calc(100svh-4rem)] w-full max-w-3xl items-center px-sp-3 pb-sp-6 pt-sp-4">
           <div className="glass-elevated w-full rounded-panel p-sp-4 sm:p-sp-5">
-            <p className="text-caption font-medium text-accent">AI-first construction management</p>
-            <h1 className="mt-2 text-h1 text-foreground">Start your project in 60 seconds</h1>
+            <p className="text-caption font-medium text-accent">{t("landing.hero.eyebrow")}</p>
+            <h1 className="mt-2 text-h1 text-foreground">{t("landing.hero.title")}</h1>
             <p className="mt-2 max-w-2xl text-body text-muted-foreground">
-              Describe the work, attach plans and estimates. We generate a structured workspace. Mock-only for now.
+              {t("landing.hero.subtitle")}
             </p>
 
             <div className="mt-4 space-y-3">
@@ -1615,7 +1576,7 @@ export default function Landing() {
                   value={promptText}
                   onChange={(event) => setPromptText(event.target.value)}
                   className="min-h-[140px] resize-none border-0 bg-transparent p-0 text-body focus-visible:ring-0"
-                  placeholder={`Example: Renovate 54m² apartment. Budget 1.2M ₽. Timeline 8 weeks.\nNeed: demolition, plumbing/electric, finishing, materials list.`}
+                  placeholder={t("landing.hero.promptPlaceholder")}
                 />
               </div>
 
@@ -1637,13 +1598,13 @@ export default function Landing() {
                     </span>
                     <div>
                       <p className="text-body-sm font-medium leading-relaxed text-foreground">
-                        Drop plans, photos, estimates (PDF/JPG/PNG/DOCX)
+                        {t("landing.hero.dropzoneTitle")}
                       </p>
-                      <p className="text-caption leading-relaxed text-muted-foreground">Attachments stay local in this mock flow.</p>
+                      <p className="text-caption leading-relaxed text-muted-foreground">{t("landing.hero.dropzoneSubtitle")}</p>
                     </div>
                   </div>
                   <Button type="button" variant="outline" size="sm" onClick={handleBrowseFiles}>
-                    Browse files
+                    {t("landing.hero.browseFiles")}
                   </Button>
                 </div>
                 <input
@@ -1667,7 +1628,7 @@ export default function Landing() {
                           className="rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                         >
                           <X className="h-3 w-3" />
-                          <span className="sr-only">Remove file</span>
+                          <span className="sr-only">{t("landing.hero.removeFile")}</span>
                         </button>
                       </span>
                     ))}
@@ -1678,7 +1639,7 @@ export default function Landing() {
               <div className="flex flex-wrap gap-2">
                 <Button asChild className="bg-accent text-accent-foreground hover:bg-accent/90">
                   <Link to={createProjectTo}>
-                    Create project
+                    {t("landing.hero.createProject")}
                     <ArrowUpRight className="ml-1.5 h-4 w-4" />
                   </Link>
                 </Button>
@@ -1689,15 +1650,15 @@ export default function Landing() {
 
         <section id="demos" className="mx-auto w-full max-w-6xl space-y-3 px-sp-3 py-sp-6">
           <div>
-            <h2 className="text-h2 text-foreground">Open a real demo workspace</h2>
+            <h2 className="text-h2 text-foreground">{t("landing.demos.title")}</h2>
             <p className="mt-1 text-body text-muted-foreground">
-              One click opens the full UI. Seeded demo projects from the mock account.
+              {t("landing.demos.subtitle")}
             </p>
           </div>
 
           {demoProjects.length === 0 ? (
             <div className="glass rounded-panel p-sp-3">
-              <p className="text-body text-muted-foreground">Demo projects are loading or not available. Please refresh.</p>
+              <p className="text-body text-muted-foreground">{t("landing.demos.loading")}</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-sp-2 md:grid-cols-2 lg:grid-cols-3">
@@ -1715,7 +1676,7 @@ export default function Landing() {
                         onError={(event) => {
                           event.currentTarget.src = "/placeholder.svg";
                         }}
-                        alt={`${project.title} cover`}
+                        alt={t("landing.demos.coverAlt", { title: project.title })}
                         className="h-full w-full object-cover object-center"
                       />
                     </div>
@@ -1723,17 +1684,17 @@ export default function Landing() {
                       <Sparkles className="h-4 w-4" />
                     </span>
                     <span className="absolute right-3 top-3 z-20 rounded-pill bg-background/85 px-2 py-0.5 text-caption font-medium text-foreground">
-                      Demo
+                      {t("landing.demos.demoBadge")}
                     </span>
                   </div>
                   <div className="space-y-2 p-sp-3">
                     <h3 className="truncate text-body font-semibold text-foreground">{project.title}</h3>
                     <div className="flex items-center justify-between text-caption">
                       <span className="rounded-pill bg-muted px-2 py-0.5 text-muted-foreground">{project.type}</span>
-                      <span className="text-muted-foreground">{getProgressLabel(project.progress_pct)}</span>
+                      <span className="text-muted-foreground">{getProgressLabel(t, project.progress_pct)}</span>
                     </div>
                     <Progress value={project.progress_pct} className="h-1.5" />
-                    <p className="text-caption text-muted-foreground">{project.progress_pct}% complete</p>
+                    <p className="text-caption text-muted-foreground">{t("landing.demos.percentComplete", { pct: project.progress_pct })}</p>
                   </div>
                 </Link>
               ))}
@@ -1743,40 +1704,21 @@ export default function Landing() {
 
         <section id="resources" className="mx-auto w-full max-w-6xl space-y-3 px-sp-3 py-sp-6">
           <div>
-            <h2 className="text-h2 text-foreground">How it works</h2>
-            <p className="mt-1 text-body text-muted-foreground">From initial idea to execution control in three predictable steps.</p>
+            <h2 className="text-h2 text-foreground">{t("landing.howItWorks.title")}</h2>
+            <p className="mt-1 text-body text-muted-foreground">{t("landing.howItWorks.subtitle")}</p>
           </div>
           <div className="grid grid-cols-1 gap-sp-2 md:grid-cols-3">
-            {[
-              {
-                icon: Bot,
-                title: "Describe the work",
-                line1: "AI converts text into stages, tasks, and checklists.",
-                line2: "You start with structure, not a blank board.",
-              },
-              {
-                icon: CloudUpload,
-                title: "Attach evidence",
-                line1: "Plans, photos, estimates, invoices. Everything organized.",
-                line2: "Files remain local in this mock setup.",
-              },
-              {
-                icon: Timer,
-                title: "Control execution",
-                line1: "Statuses, blockers, procurement, and progress by stage.",
-                line2: "Every update stays visible to the team.",
-              },
-            ].map((step, index) => (
-              <div key={step.title} className="glass rounded-card p-sp-3">
+            {howItWorksSteps.map((step, index) => (
+              <div key={step.titleKey} className="glass rounded-card p-sp-3">
                 <div className="mb-2 flex items-center justify-between">
                   <span className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-accent/10 text-accent transition-colors group-hover:bg-accent/20">
                     <step.icon className="h-4 w-4" />
                   </span>
-                  <span className="text-caption text-muted-foreground">Step {index + 1}</span>
+                  <span className="text-caption text-muted-foreground">{t("landing.howItWorks.step", { number: index + 1 })}</span>
                 </div>
-                <h3 className="text-body font-semibold text-foreground">{step.title}</h3>
-                <p className="mt-1 text-body-sm text-muted-foreground">{step.line1}</p>
-                <p className="mt-1 text-caption text-muted-foreground">{step.line2}</p>
+                <h3 className="text-body font-semibold text-foreground">{t(step.titleKey)}</h3>
+                <p className="mt-1 text-body-sm text-muted-foreground">{t(step.line1Key)}</p>
+                <p className="mt-1 text-caption text-muted-foreground">{t(step.line2Key)}</p>
               </div>
             ))}
           </div>
@@ -1784,9 +1726,9 @@ export default function Landing() {
 
         <section className="mx-auto w-full max-w-6xl space-y-3 px-sp-3 py-sp-6">
           <div>
-            <h2 className="text-h2 text-foreground">Everything in one workspace</h2>
+            <h2 className="text-h2 text-foreground">{t("landing.control.title")}</h2>
             <p className="mt-1 text-body text-muted-foreground">
-              Tasks, estimates, procurement, photos, and documents stay in sync.
+              {t("landing.control.subtitle")}
             </p>
           </div>
 
@@ -1794,12 +1736,12 @@ export default function Landing() {
             <div className="rounded-panel border border-border bg-card/50">
               <div className="border-b border-border px-sp-3 py-1.5">
                 <TabsList className="h-auto w-full flex-wrap justify-start gap-1 bg-transparent p-0">
-                  <TabsTrigger value="tasks">Tasks</TabsTrigger>
-                  <TabsTrigger value="estimate">Estimate</TabsTrigger>
-                  <TabsTrigger value="procurement">Procurement</TabsTrigger>
-                  <TabsTrigger value="photos">Photos</TabsTrigger>
-                  <TabsTrigger value="documents">Documents</TabsTrigger>
-                  <TabsTrigger value="activity">Activity</TabsTrigger>
+                  <TabsTrigger value="tasks">{t("landing.control.tabs.tasks")}</TabsTrigger>
+                  <TabsTrigger value="estimate">{t("landing.control.tabs.estimate")}</TabsTrigger>
+                  <TabsTrigger value="procurement">{t("landing.control.tabs.procurement")}</TabsTrigger>
+                  <TabsTrigger value="photos">{t("landing.control.tabs.photos")}</TabsTrigger>
+                  <TabsTrigger value="documents">{t("landing.control.tabs.documents")}</TabsTrigger>
+                  <TabsTrigger value="activity">{t("landing.control.tabs.activity")}</TabsTrigger>
                 </TabsList>
               </div>
 
@@ -1815,10 +1757,10 @@ export default function Landing() {
                     <div className={`glass min-w-0 w-full rounded-card p-sp-3 ${tab === "photos" ? "overflow-hidden" : ""}`}>
                       {tab === "tasks" ? (
                         <>
-                          <p className="text-caption text-muted-foreground">{content.title}</p>
+                          <p className="text-caption text-muted-foreground">{t(content.titleKey)}</p>
                           {dropMessage && <p className="mt-2 text-caption text-accent">{dropMessage}</p>}
                           <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
-                            {(Object.keys(KANBAN_COLUMN_LABELS) as KanbanColumn[]).map((column) => (
+                            {(Object.keys(KANBAN_COLUMN_KEYS) as KanbanColumn[]).map((column) => (
                               <div
                                 key={column}
                                 onDragOver={(event) => handleColumnDragOver(event, column)}
@@ -1831,7 +1773,7 @@ export default function Landing() {
                               >
                                 <div className="mb-2 flex items-center justify-between gap-2">
                                   <span className="text-body-sm font-semibold text-foreground">
-                                    {KANBAN_COLUMN_LABELS[column]}
+                                    {t(KANBAN_COLUMN_KEYS[column])}
                                   </span>
                                   <span className="rounded-pill bg-muted px-2 py-0.5 text-caption text-muted-foreground">
                                     {kanban[column].length}
@@ -1852,15 +1794,15 @@ export default function Landing() {
                                       {sparkleTaskId === task.id && (
                                         <Sparkles className="pointer-events-none absolute right-1.5 top-1.5 h-3 w-3 text-accent animate-ping" />
                                       )}
-                                      <p className="pr-5 text-body-sm font-medium text-foreground">{task.title}</p>
+                                      <p className="pr-5 text-body-sm font-medium text-foreground">{t(task.titleKey)}</p>
                                       <div className="mt-2 flex items-center gap-2">
                                         <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-muted px-1.5 text-[10px] font-semibold text-foreground">
                                           {task.assignee}
                                         </span>
-                                        <span className="truncate text-caption text-muted-foreground">{task.meta}</span>
+                                        <span className="truncate text-caption text-muted-foreground">{t(task.metaKey)}</span>
                                       </div>
-                                      {task.linked && (
-                                        <p className="mt-1 truncate text-caption text-info">Linked: {task.linked}</p>
+                                      {task.linkedKey && (
+                                        <p className="mt-1 truncate text-caption text-info">{t("landing.kanban.linked", { title: t(task.linkedKey) })}</p>
                                       )}
                                     </div>
                                   ))}
@@ -1872,45 +1814,45 @@ export default function Landing() {
                       ) : tab === "estimate" ? (
                         <>
                           <div className="flex items-center justify-between gap-2">
-                            <h3 className="text-body font-semibold text-foreground">Estimate</h3>
+                            <h3 className="text-body font-semibold text-foreground">{t("landing.estimate.heading")}</h3>
                             <span className="rounded-pill border border-success/30 bg-success/10 px-2 py-0.5 text-caption text-success">
-                              Version 2 (Approved)
+                              {t("landing.estimate.versionBadge")}
                             </span>
                           </div>
-                          <p className="mt-1 text-caption text-muted-foreground">Last updated: 3h ago by MK</p>
+                          <p className="mt-1 text-caption text-muted-foreground">{t("landing.estimate.lastUpdated")}</p>
 
                           <div className="mt-3 grid grid-cols-3 gap-2">
                             <div className="rounded-md border border-border bg-background/55 px-2.5 py-2">
-                              <p className="text-caption text-muted-foreground">Planned</p>
+                              <p className="text-caption text-muted-foreground">{t("landing.estimate.summary.planned")}</p>
                               <p className="mt-0.5 text-body-sm font-semibold text-foreground">₽ 1,240,000</p>
                             </div>
                             <div className="rounded-md border border-border bg-background/55 px-2.5 py-2">
-                              <p className="text-caption text-muted-foreground">Paid</p>
+                              <p className="text-caption text-muted-foreground">{t("landing.estimate.summary.paid")}</p>
                               <p className="mt-0.5 text-body-sm font-semibold text-foreground">₽ 468,000</p>
                             </div>
                             <div className="rounded-md border border-border bg-background/55 px-2.5 py-2">
-                              <p className="text-caption text-muted-foreground">Remaining</p>
+                              <p className="text-caption text-muted-foreground">{t("landing.estimate.summary.remaining")}</p>
                               <p className="mt-0.5 text-body-sm font-semibold text-foreground">₽ 772,000</p>
                             </div>
                           </div>
 
                           <div className="mt-3">
-                            <p className="mb-1 text-caption text-muted-foreground">Paid ₽468,000 (38%)</p>
+                            <p className="mb-1 text-caption text-muted-foreground">{t("landing.estimate.paidLabel")}</p>
                             <Progress value={38} className="h-1.5" />
                           </div>
 
                           <div className="mt-3 w-full min-w-0">
                             <div className="w-full min-w-0 rounded-md border border-border bg-background/35">
                               <div className="grid grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.1fr)_28px] border-b border-border px-3 py-2 text-caption font-medium text-muted-foreground">
-                                <span>Item</span>
-                                <span>Planned</span>
-                                <span>Actual</span>
-                                <span>Variance</span>
+                                <span>{t("landing.estimate.columns.item")}</span>
+                                <span>{t("landing.estimate.columns.planned")}</span>
+                                <span>{t("landing.estimate.columns.actual")}</span>
+                                <span>{t("landing.estimate.columns.variance")}</span>
                                 <span />
                               </div>
                               {ESTIMATE_ITEMS.map((row) => {
                                 const isExpanded = expandedEstimateItemId === row.id;
-                                const expandedDetails = getExpandedDetails(row);
+                                const expandedDetails = getExpandedDetails(t, row);
                                 return (
                                   <div key={row.id}>
                                     <button
@@ -1922,14 +1864,14 @@ export default function Landing() {
                                         isExpanded ? "border-b-0" : "border-b border-border"
                                       }`}
                                     >
-                                      <span className="truncate text-body-sm text-foreground">{row.item}</span>
+                                      <span className="truncate text-body-sm text-foreground">{t(row.itemKey)}</span>
                                       <span className="text-body-sm text-muted-foreground">{row.planned}</span>
                                       <span className="text-body-sm text-muted-foreground">{row.actual}</span>
                                       <span className="justify-self-start">
                                         <span
                                           className={`inline-flex rounded-pill border px-2 py-0.5 text-caption font-medium ${ESTIMATE_VARIANCE_BADGE_CLASSES[row.varianceType]}`}
                                         >
-                                          {getEstimateVarianceLabel(row)}
+                                          {getEstimateVarianceLabel(t, row)}
                                         </span>
                                       </span>
                                       <ChevronDown
@@ -1942,37 +1884,37 @@ export default function Landing() {
                                       <div className="space-y-2 border-b border-t border-border/60 bg-background/60 px-3 py-2.5">
                                         <div className="space-y-1">
                                           <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/80">
-                                            Linked tasks
+                                            {t("landing.estimate.expanded.linkedTasks")}
                                           </p>
                                           <div className="mt-1 flex flex-wrap gap-1.5">
                                             {row.linkedTasks?.map((task) => (
                                               <span
-                                                key={`${row.id}-${task.title}`}
+                                                key={`${row.id}-${task.titleKey}`}
                                                 className="inline-flex items-center gap-1 rounded-pill border border-border bg-muted/60 px-2 py-0.5 text-caption text-foreground"
                                               >
-                                                {task.title}
-                                                <span className="text-muted-foreground">({task.status})</span>
+                                                {t(task.titleKey)}
+                                                <span className="text-muted-foreground">({t(task.statusKey)})</span>
                                               </span>
                                             ))}
                                           </div>
                                         </div>
                                         <div className="space-y-1">
                                           <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/80">
-                                            Receipts
+                                            {t("landing.estimate.expanded.receipts")}
                                           </p>
                                           <p className="text-caption text-muted-foreground">
-                                            {row.receipts ?? "No receipts uploaded"}
+                                            {row.receiptsKey ? t(row.receiptsKey) : t("landing.estimate.noReceipts")}
                                           </p>
                                         </div>
                                         <div className="space-y-1">
                                           <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/80">
-                                            Status insight
+                                            {t("landing.estimate.expanded.statusInsight")}
                                           </p>
                                           <p className="text-caption text-muted-foreground">{expandedDetails.statusInsight}</p>
                                         </div>
                                         <div className="space-y-1">
                                           <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/80">
-                                            Risk / next action
+                                            {t("landing.estimate.expanded.riskNext")}
                                           </p>
                                           <span
                                             className={`inline-flex rounded-pill border px-2 py-0.5 text-caption font-medium ${expandedDetails.riskClass}`}
@@ -1980,9 +1922,9 @@ export default function Landing() {
                                             {expandedDetails.riskLabel}
                                           </span>
                                         </div>
-                                        {row.varianceType === "over" && row.aiInsight && (
+                                        {row.varianceType === "over" && row.aiInsightKey && (
                                           <div className="rounded-md border border-info/30 bg-info/10 px-2 py-1.5">
-                                            <p className="text-caption text-foreground">{row.aiInsight}</p>
+                                            <p className="text-caption text-foreground">{t(row.aiInsightKey)}</p>
                                           </div>
                                         )}
                                       </div>
@@ -1995,19 +1937,19 @@ export default function Landing() {
                         </>
                       ) : tab === "procurement" ? (
                         <>
-                          <p className="text-caption text-muted-foreground">{content.title}</p>
+                          <p className="text-caption text-muted-foreground">{t(content.titleKey)}</p>
                           <div className="mt-2 flex flex-wrap gap-1.5">
                             <span className="rounded-pill border border-border bg-muted/70 px-2 py-0.5 text-caption text-foreground">
-                              {procurementSummary.totalItems} items
+                              {t("landing.procurement.itemsCount", { count: procurementSummary.totalItems })}
                             </span>
                             <span className="rounded-pill border border-warning/45 bg-warning/20 px-2 py-0.5 text-caption text-foreground">
-                              {procurementSummary.partialCount} partial
+                              {t("landing.procurement.partialCount", { count: procurementSummary.partialCount })}
                             </span>
                             <span className="rounded-pill border border-border bg-muted/70 px-2 py-0.5 text-caption text-muted-foreground">
-                              {procurementSummary.waitingCount} waiting
+                              {t("landing.procurement.waitingCount", { count: procurementSummary.waitingCount })}
                             </span>
                             <span className="rounded-pill border border-info/45 bg-info/20 px-2 py-0.5 text-caption text-foreground">
-                              ₽320k committed
+                              {t("landing.procurement.committed")}
                             </span>
                           </div>
 
@@ -2029,16 +1971,16 @@ export default function Landing() {
                                   >
                                     <div className="flex items-start justify-between gap-2">
                                       <div className="min-w-0">
-                                        <p className="truncate text-body-sm font-medium text-foreground">{item.material}</p>
+                                        <p className="truncate text-body-sm font-medium text-foreground">{t(item.materialKey)}</p>
                                         <p className="truncate text-caption text-muted-foreground">
-                                          Received {item.received} / Needed {item.neededQty}
+                                          {t("landing.procurement.receivedNeeded", { received: item.received, needed: item.neededQty })}
                                         </p>
                                       </div>
                                       <div className="flex items-center gap-1.5">
                                         <span
                                           className={`inline-flex rounded-pill border px-2 py-0.5 text-caption font-medium ${item.status.className}`}
                                         >
-                                          {item.status.label}
+                                          {t(`landing.procurement.status.${item.status.labelKey}`)}
                                         </span>
                                         <ChevronDown
                                           className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 ${
@@ -2048,7 +1990,7 @@ export default function Landing() {
                                       </div>
                                     </div>
                                     <p className="mt-1 truncate text-caption text-muted-foreground">
-                                      Linked task: {item.linkedTaskName}
+                                      {t("landing.procurement.linkedTask", { name: t(item.linkedTaskKey) })}
                                     </p>
                                   </button>
 
@@ -2056,33 +1998,33 @@ export default function Landing() {
                                     <div className="space-y-2 border-t border-border/60 bg-background/60 px-2.5 py-2">
                                       <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
                                         <p className="text-caption text-muted-foreground">
-                                          Supplier: <span className="text-foreground">{item.supplier}</span>
+                                          {t("landing.procurement.supplier")}: <span className="text-foreground">{t(item.supplierKey)}</span>
                                         </p>
                                         <p className="text-caption text-muted-foreground">
-                                          ETA: <span className="text-foreground">{item.eta}</span>
+                                          {t("landing.procurement.eta")}: <span className="text-foreground">{t(item.etaKey)}</span>
                                         </p>
                                         <p className="truncate text-caption text-muted-foreground">
-                                          Linked task: <span className="text-foreground">{item.linkedTaskName}</span>
+                                          {t("landing.procurement.supplier") && t("landing.procurement.linkedTask", { name: "" }).split(":")[0]}: <span className="text-foreground">{t(item.linkedTaskKey)}</span>
                                         </p>
                                         <p className="truncate text-caption text-muted-foreground">
-                                          Linked estimate: <span className="text-foreground">{item.linkedEstimate}</span>
+                                          {t("landing.procurement.linkedEstimate")}: <span className="text-foreground">{t(item.linkedEstimateKey)}</span>
                                         </p>
                                         <p className="text-caption text-muted-foreground">
-                                          Committed cost: <span className="text-foreground">{item.committedCost}</span>
+                                          {t("landing.procurement.committedCost")}: <span className="text-foreground">{item.committedCost}</span>
                                         </p>
                                       </div>
 
                                       <div className="space-y-1.5">
                                         <div className="flex items-center justify-between gap-2 text-caption">
                                           <span className="text-muted-foreground">
-                                            Received: {item.received} / {item.neededQty}
+                                            {t("landing.procurement.received", { received: item.received, needed: item.neededQty })}
                                           </span>
                                           <span
                                             className={`transition-colors duration-300 ${
                                               item.remaining === 0 ? "text-success" : "text-muted-foreground"
                                             }`}
                                           >
-                                            Remaining: {item.remaining}
+                                            {t("landing.procurement.remaining", { count: item.remaining })}
                                           </span>
                                         </div>
                                         <input
@@ -2100,7 +2042,7 @@ export default function Landing() {
                                       </div>
 
                                       <div className="flex items-center justify-between gap-2">
-                                        <span className="truncate text-caption text-muted-foreground">Task readiness</span>
+                                        <span className="truncate text-caption text-muted-foreground">{t("landing.procurement.taskReadiness")}</span>
                                         <span
                                           className={`inline-flex rounded-pill border px-2 py-0.5 text-caption font-medium transition-colors duration-300 ${
                                             item.isReady
@@ -2112,7 +2054,7 @@ export default function Landing() {
                                               : ""
                                           }`}
                                         >
-                                          {item.isReady ? "Ready" : "Waiting"}
+                                          {item.isReady ? t("landing.procurement.ready") : t("landing.procurement.waiting")}
                                         </span>
                                       </div>
                                     </div>
@@ -2164,31 +2106,40 @@ export default function Landing() {
                           `}</style>
                           {activePhoto === null ? (
                             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                              {PHOTOS_DEMO.map((photo) => (
-                                <div key={photo.id} className="min-w-0 rounded-md border border-border bg-background/45 p-2">
-                                  <div className="overflow-hidden rounded-md">
-                                    <img
-                                      src={photo.src}
-                                      alt={photo.title}
-                                      className="h-36 w-full transform-gpu object-cover object-center transition-transform duration-300 will-change-transform hover:scale-[1.03] sm:h-40"
-                                    />
+                              {PHOTOS_DEMO.map((photo) => {
+                                const photoTitle = t(photo.titleKey);
+                                const submittedAt =
+                                  photo.submittedAtKey === "landing.photos.minutesAgo"
+                                    ? t("landing.photos.minutesAgo", { count: 8 })
+                                    : photo.submittedAtKey === "landing.photos.hoursAgo"
+                                      ? t("landing.photos.hoursAgo", { count: 2 })
+                                      : t(photo.submittedAtKey);
+                                return (
+                                  <div key={photo.id} className="min-w-0 rounded-md border border-border bg-background/45 p-2">
+                                    <div className="overflow-hidden rounded-md">
+                                      <img
+                                        src={photo.src}
+                                        alt={photoTitle}
+                                        className="h-36 w-full transform-gpu object-cover object-center transition-transform duration-300 will-change-transform hover:scale-[1.03] sm:h-40"
+                                      />
+                                    </div>
+                                    <div className="mt-2 rounded-md bg-gradient-to-r from-warning/50 via-accent/45 to-info/45 p-[1px] transition-all duration-200 hover:shadow-[0_0_0_1px_rgba(251,191,36,0.25),0_8px_18px_-12px_rgba(251,191,36,0.5)]">
+                                      <button
+                                        type="button"
+                                        onClick={() => startPhotoAnalysis(photo.id)}
+                                        aria-label={t("landing.photos.consultAria", { title: photoTitle })}
+                                        className="flex w-full items-center justify-center gap-1.5 rounded-[7px] bg-background/90 px-3 py-2 text-caption font-semibold tracking-tight text-foreground drop-shadow-[0_1px_0_rgba(0,0,0,0.45)] shadow-[0_0_0_1px_rgba(255,255,255,0.06)] backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-background/95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                                      >
+                                        <Sparkles className="h-3.5 w-3.5" />
+                                        {t("landing.photos.consultAi")}
+                                      </button>
+                                    </div>
+                                    <p className="mt-1 text-center text-caption text-muted-foreground">
+                                      {t(photo.submittedByKey)} · {submittedAt}
+                                    </p>
                                   </div>
-                                  <div className="mt-2 rounded-md bg-gradient-to-r from-warning/50 via-accent/45 to-info/45 p-[1px] transition-all duration-200 hover:shadow-[0_0_0_1px_rgba(251,191,36,0.25),0_8px_18px_-12px_rgba(251,191,36,0.5)]">
-                                    <button
-                                      type="button"
-                                      onClick={() => startPhotoAnalysis(photo.id)}
-                                      aria-label={`Consult AI for ${photo.title}`}
-                                      className="flex w-full items-center justify-center gap-1.5 rounded-[7px] bg-background/90 px-3 py-2 text-caption font-semibold tracking-tight text-foreground drop-shadow-[0_1px_0_rgba(0,0,0,0.45)] shadow-[0_0_0_1px_rgba(255,255,255,0.06)] backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-background/95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                                    >
-                                      <Sparkles className="h-3.5 w-3.5" />
-                                      Consult AI
-                                    </button>
-                                  </div>
-                                  <p className="mt-1 text-center text-caption text-muted-foreground">
-                                    {photo.submittedBy} · {photo.submittedAt}
-                                  </p>
-                                </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           ) : (
                             <div className="relative flex min-h-[620px] min-w-0 flex-col overflow-hidden">
@@ -2199,7 +2150,7 @@ export default function Landing() {
                                     variant="ghost"
                                     size="icon"
                                     onClick={handleBackFromPhotoAnalysis}
-                                    aria-label="Back to photos grid"
+                                    aria-label={t("landing.photos.backAria")}
                                     className="h-7 w-7 p-0"
                                   >
                                     <ChevronLeft className="h-4 w-4" />
@@ -2211,7 +2162,7 @@ export default function Landing() {
                                     <div className="relative w-full rounded-[14px] border border-border bg-background/20 overflow-hidden">
                                       <img
                                         src={activePhoto.src}
-                                        alt={activePhoto.title}
+                                        alt={t(activePhoto.titleKey)}
                                         className="h-[260px] w-full object-contain"
                                       />
                                       {isAnalyzing && (
@@ -2223,9 +2174,9 @@ export default function Landing() {
                                     </div>
 
                                     <div className="mt-2 w-full rounded-[14px] border border-border bg-background/40 px-2 py-1 text-right">
-                                      <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/85">You</p>
+                                      <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/85">{t("landing.photos.youLabel")}</p>
                                       <p className="text-[14px] leading-snug text-foreground break-words">
-                                        {activePhoto.aiQuestion}
+                                        {t(activePhoto.aiQuestionKey)}
                                       </p>
                                     </div>
                                   </div>
@@ -2236,7 +2187,7 @@ export default function Landing() {
                                     <div className="mb-2 flex items-center justify-between gap-2">
                                       <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-foreground">
                                         <Sparkles className="h-3.5 w-3.5 text-accent" />
-                                        AI Inspector
+                                        {t("landing.photos.inspectorTitle")}
                                       </div>
                                       <div className="inline-flex items-center gap-1.5">
                                         {isAnalyzing && (
@@ -2247,14 +2198,14 @@ export default function Landing() {
                                           </span>
                                         )}
                                         <span className="rounded-pill border border-border bg-muted/70 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-                                          AI generated
+                                          {t("landing.photos.aiGenerated")}
                                         </span>
                                       </div>
                                     </div>
                                     <div className="flex-1 min-h-0 min-w-0 overflow-y-auto pr-1 text-[14px] leading-snug">
                                       {isAnalyzing ? (
                                         <div className="space-y-2">
-                                          <p className="text-sm text-muted-foreground">{PHOTOS_ANALYSIS_STEPS[analysisStepIndex]}</p>
+                                          <p className="text-sm text-muted-foreground">{t(PHOTOS_ANALYSIS_STEP_KEYS[analysisStepIndex])}</p>
                                           <div className="space-y-1.5">
                                             <div className="ph-skeleton h-2 rounded-md" />
                                             <div className="ph-skeleton h-2 w-4/5 rounded-md" />
@@ -2264,37 +2215,37 @@ export default function Landing() {
                                         <div className="ph-inspector-reveal min-w-0 break-words space-y-2.5">
                                           <div className="flex flex-wrap items-start justify-between gap-2">
                                             <div className="min-w-0">
-                                              <p className="text-xs font-semibold text-foreground">Verdict</p>
-                                              <p className="mt-0.5 text-[14px] leading-snug text-muted-foreground">{activePhoto.aiReason}</p>
+                                              <p className="text-xs font-semibold text-foreground">{t("landing.photos.verdictHeading")}</p>
+                                              <p className="mt-0.5 text-[14px] leading-snug text-muted-foreground">{t(activePhoto.aiReasonKey)}</p>
                                             </div>
                                             <span className="rounded-pill border border-warning/50 bg-warning/20 px-2 py-0.5 text-caption font-medium text-foreground">
-                                              {activePhoto.aiVerdict}
+                                              {t(activePhoto.aiVerdictKey)}
                                             </span>
                                           </div>
 
                                           <div className="border-t border-border/50 pt-2">
-                                            <p className="text-xs font-semibold text-foreground">Findings</p>
+                                            <p className="text-xs font-semibold text-foreground">{t("landing.photos.findingsHeading")}</p>
                                             <ul className="mt-1 space-y-1">
-                                              {activePhoto.aiFindings.slice(0, 3).map((finding) => (
-                                                <li key={finding} className="flex items-start gap-1.5 text-[14px] leading-snug text-foreground">
+                                              {activePhoto.aiFindingsKeys.slice(0, 3).map((findingKey) => (
+                                                <li key={findingKey} className="flex items-start gap-1.5 text-[14px] leading-snug text-foreground">
                                                   <span className="mt-1 h-1 w-1 rounded-full bg-warning/80" />
-                                                  <span className="break-words">{finding}</span>
+                                                  <span className="break-words">{t(findingKey)}</span>
                                                 </li>
                                               ))}
                                             </ul>
                                           </div>
 
                                           <div className="border-t border-border/50 pt-2">
-                                            <p className="mb-1 text-xs font-semibold text-foreground">Actions</p>
+                                            <p className="mb-1 text-xs font-semibold text-foreground">{t("landing.photos.actionsHeading")}</p>
                                             <div className="flex flex-wrap gap-2">
                                               {activePhoto.aiActions.map((action) => (
                                                 <button
-                                                  key={`${activePhoto.id}-${action.label}`}
+                                                  key={`${activePhoto.id}-${action.labelKey}`}
                                                   type="button"
                                                   onClick={() => handlePhotoAction(action, activePhoto)}
                                                   className={getPhotoActionClasses(action.kind, activePhotoAction === action.action)}
                                                 >
-                                                  {action.label}
+                                                  {t(action.labelKey)}
                                                 </button>
                                               ))}
                                             </div>
@@ -2305,15 +2256,18 @@ export default function Landing() {
                                               <div className="ph-detail-swap space-y-1.5">
                                                 <div className="flex flex-wrap items-center gap-2">
                                                   <span className="h-4 w-1 rounded-full bg-success/70" />
-                                                  <span className="text-xs font-semibold text-success">Selected action:</span>
+                                                  <span className="text-xs font-semibold text-success">{t("landing.photos.selectedAction")}</span>
                                                   <span className="text-[14px] leading-snug text-foreground">
-                                                    {activePhoto.aiActions.find((action) => action.action === activePhotoAction)?.label}
+                                                    {(() => {
+                                                      const found = activePhoto.aiActions.find((action) => action.action === activePhotoAction);
+                                                      return found ? t(found.labelKey) : "";
+                                                    })()}
                                                   </span>
                                                 </div>
                                                 <ul className="space-y-1">
-                                                  {activePhotoActionDetails.map((detail) => (
-                                                    <li key={detail} className="text-[14px] leading-snug text-muted-foreground break-words">
-                                                      • {detail}
+                                                  {activePhotoActionDetailKeys.map((detailKey) => (
+                                                    <li key={detailKey} className="text-[14px] leading-snug text-muted-foreground break-words">
+                                                      • {t(detailKey)}
                                                     </li>
                                                   ))}
                                                 </ul>
@@ -2325,31 +2279,31 @@ export default function Landing() {
                                                   }}
                                                   className="text-caption text-muted-foreground transition-colors hover:text-foreground"
                                                 >
-                                                  Show summary
+                                                  {t("landing.photos.showSummary")}
                                                 </button>
                                               </div>
                                             ) : (
                                               <div className="ph-detail-swap space-y-2">
                                                 <div>
-                                                  <p className="text-xs font-semibold text-foreground">Evidence requested</p>
+                                                  <p className="text-xs font-semibold text-foreground">{t("landing.photos.evidenceRequested")}</p>
                                                   <ul className="mt-1 space-y-1">
-                                                    {activePhoto.aiEvidenceRequested.map((item) => (
-                                                      <li key={item} className="flex items-start gap-1.5 text-[14px] leading-snug text-muted-foreground">
+                                                    {activePhoto.aiEvidenceKeys.map((evidenceKey) => (
+                                                      <li key={evidenceKey} className="flex items-start gap-1.5 text-[14px] leading-snug text-muted-foreground">
                                                         <span className="mt-0.5 h-3.5 w-3.5 rounded border border-success/45 bg-success/10" />
-                                                        <span className="break-words">{item}</span>
+                                                        <span className="break-words">{t(evidenceKey)}</span>
                                                       </li>
                                                     ))}
                                                   </ul>
                                                 </div>
                                                 <div className="border-t border-border/50 pt-2">
-                                                  <p className="text-xs font-semibold text-foreground">References</p>
+                                                  <p className="text-xs font-semibold text-foreground">{t("landing.photos.referencesHeading")}</p>
                                                   <div className="mt-1 flex min-w-0 flex-wrap gap-1">
-                                                    {activePhoto.aiReferences.map((reference) => (
+                                                    {activePhoto.aiReferenceKeys.map((referenceKey) => (
                                                       <span
-                                                        key={reference}
+                                                        key={referenceKey}
                                                         className="rounded-pill border border-border bg-muted/70 px-2 py-0.5 text-caption text-muted-foreground"
                                                       >
-                                                        {reference}
+                                                        {t(referenceKey)}
                                                       </span>
                                                     ))}
                                                   </div>
@@ -2441,11 +2395,11 @@ export default function Landing() {
                                   <div className="mb-3 flex items-start justify-between gap-2 border-b border-stone-300/60 pb-2">
                                     <div>
                                       <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-600">
-                                        Renovation Agreement
+                                        {t("landing.doc.renovationAgreement")}
                                       </p>
-                                      <p className="mt-1 text-[11px] text-stone-500">Internal legal draft</p>
+                                      <p className="mt-1 text-[11px] text-stone-500">{t("landing.doc.internalDraft")}</p>
                                     </div>
-                                    <p className="text-[11px] font-medium text-stone-600">{DOC_PAGE_LABELS[activeDocPage]}</p>
+                                    <p className="text-[11px] font-medium text-stone-600">{t("landing.doc.page", { number: DOC_PAGE_NUMBERS[activeDocPage] })}</p>
                                   </div>
 
                                   <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto pr-1">
@@ -2462,9 +2416,9 @@ export default function Landing() {
                                       const clauseText =
                                         hasDocScanned && finding
                                           ? isApplied
-                                            ? finding.suggestedText
-                                            : finding.originalText
-                                          : clause.text;
+                                            ? t(finding.suggestedKey)
+                                            : t(finding.originalKey)
+                                          : t(clause.textKey);
 
                                       return (
                                         <div
@@ -2491,7 +2445,7 @@ export default function Landing() {
                             <div className="flex h-full max-h-full min-h-0 min-w-0 flex-col gap-2 overflow-hidden rounded-md border border-border bg-background/40 p-3 xl:h-full xl:max-h-full xl:min-h-0">
                               <div className="shrink-0 space-y-2 border-b border-border/60 pb-2">
                                 <div className="flex flex-wrap items-center justify-between gap-2">
-                                  <h3 className="text-body font-semibold text-foreground">Contract Risk Scan</h3>
+                                  <h3 className="text-body font-semibold text-foreground">{t("landing.doc.scanTitle")}</h3>
                                   <div className="flex items-center gap-2">
                                     <div className="flex items-center gap-1">
                                       {DOC_PAGE_ORDER.map((pageId, index) => (
@@ -2517,41 +2471,41 @@ export default function Landing() {
                                     >
                                       <Sparkles className="h-3.5 w-3.5 shrink-0" />
                                       <span className="inline-flex min-w-[116px] items-center justify-center text-[12px] font-semibold leading-none whitespace-nowrap">
-                                        {hasDocScanned ? "Scan completed" : isDocScanning ? "Scanning..." : "Scan document"}
+                                        {hasDocScanned ? t("landing.doc.scanButton.done") : isDocScanning ? t("landing.doc.scanButton.scanning") : t("landing.doc.scanButton.idle")}
                                       </span>
                                     </Button>
                                   </div>
                                 </div>
                                 <div className="flex flex-wrap items-center justify-between gap-2">
                                   <span className="inline-flex rounded-pill border border-border bg-muted/65 px-2 py-0.5 text-caption font-medium text-foreground">
-                                    Safe Score: {displaySafeScore}/100
+                                    {t("landing.doc.safeScore", { score: displaySafeScore })}
                                   </span>
                                   {isSafeToSign ? (
                                     <span className="inline-flex items-center gap-1 rounded-pill border border-success/45 bg-success/15 px-2 py-0.5 text-caption font-medium text-success">
                                       <ShieldCheck className="h-3.5 w-3.5" />
-                                      Safe to sign
+                                      {t("landing.doc.safeToSign")}
                                     </span>
                                   ) : (
                                     <span className="rounded-pill border border-warning/45 bg-warning/15 px-2 py-0.5 text-caption text-foreground">
-                                      Risk remains
+                                      {t("landing.doc.riskRemains")}
                                     </span>
                                   )}
                                 </div>
                                 <p className="text-caption text-muted-foreground">
-                                  {isSafeToSign ? "All high-risk clauses are mitigated." : "Review and apply corrective edits."}
+                                  {isSafeToSign ? t("landing.doc.safeHint") : t("landing.doc.reviewHint")}
                                 </p>
                               </div>
 
                               <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overflow-x-hidden pr-1">
                                 {isDocScanning && (
                                   <div className="rounded-md border border-info/35 bg-info/10 px-2.5 py-2">
-                                    <p className="text-caption font-medium text-foreground">{DOC_SCAN_STEPS[docScanStepIndex]}</p>
+                                    <p className="text-caption font-medium text-foreground">{t(DOC_SCAN_STEP_KEYS[docScanStepIndex])}</p>
                                   </div>
                                 )}
 
                                 {!hasDocScanned && !isDocScanning ? (
                                   <div className="rounded-md border border-border bg-background/35 px-2.5 py-2 text-caption text-muted-foreground">
-                                    Run scan to detect risks and generate corrective edits.
+                                    {t("landing.doc.runScanHint")}
                                   </div>
                                 ) : null}
 
@@ -2560,7 +2514,7 @@ export default function Landing() {
                                     {DOC_PAGE_ORDER.map((pageId) => (
                                       <div key={pageId} className="space-y-1.5">
                                         <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                                          {DOC_PAGE_LABELS[pageId]}
+                                          {t("landing.doc.page", { number: DOC_PAGE_NUMBERS[pageId] })}
                                         </p>
                                         <div className="space-y-1.5">
                                           {findingsByPage[pageId].map((finding) => {
@@ -2584,31 +2538,31 @@ export default function Landing() {
                                                       <span
                                                         className={`inline-flex rounded-pill border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${DOC_SEVERITY_CHIP_CLASSES[finding.severity]}`}
                                                       >
-                                                        {DOC_SEVERITY_LABELS[finding.severity]}
+                                                        {t(DOC_SEVERITY_KEYS[finding.severity])}
                                                       </span>
                                                       {isApplied && (
                                                         <span className="inline-flex rounded-pill border border-success/45 bg-success/15 px-2 py-0.5 text-[10px] font-semibold text-success">
-                                                          Applied
+                                                          {t("landing.doc.applied")}
                                                         </span>
                                                       )}
                                                       {isSkipped && (
                                                         <span className="inline-flex rounded-pill border border-muted-foreground/35 bg-muted/35 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
-                                                          Ignored
+                                                          {t("landing.doc.ignored")}
                                                         </span>
                                                       )}
                                                     </div>
-                                                    <p className="mt-1 text-body-sm font-medium text-foreground">{finding.title}</p>
-                                                    <p className="mt-0.5 text-caption text-muted-foreground">{finding.description}</p>
+                                                    <p className="mt-1 text-body-sm font-medium text-foreground">{t(finding.titleKey)}</p>
+                                                    <p className="mt-0.5 text-caption text-muted-foreground">{t(finding.descriptionKey)}</p>
                                                   </div>
                                                   <div className="shrink-0">
                                                     <div className="flex min-w-[62px] flex-col items-end">
                                                       <Switch
                                                         checked={isApplied}
                                                         onCheckedChange={() => toggleFix(finding.id)}
-                                                        aria-label={`Apply fix for ${finding.title}`}
+                                                        aria-label={t("landing.doc.applyFixAria", { title: t(finding.titleKey) })}
                                                         disabled={!hasDocScanned || isDocScanning}
                                                       />
-                                                      <span className="mt-1 text-xs text-muted-foreground">Apply fix</span>
+                                                      <span className="mt-1 text-xs text-muted-foreground">{t("landing.doc.applyFix")}</span>
                                                       <span className="text-[10px] font-medium text-success">+{finding.scoreImpact}</span>
                                                       <button
                                                         type="button"
@@ -2616,7 +2570,7 @@ export default function Landing() {
                                                         className="mt-1 text-[11px] text-muted-foreground underline underline-offset-2 transition-colors hover:text-foreground"
                                                         disabled={!hasDocScanned || isDocScanning}
                                                       >
-                                                        Skip
+                                                        {t("landing.doc.skip")}
                                                       </button>
                                                     </div>
                                                   </div>
@@ -2639,16 +2593,16 @@ export default function Landing() {
                                   disabled={!hasDocScanned || isDocScanning || isPreparingCleanDocument}
                                   className="w-full"
                                 >
-                                  {allFindingsApproved ? "Prepare clean document" : "Apply all fixes"}
+                                  {allFindingsApproved ? t("landing.doc.prepareClean") : t("landing.doc.applyAll")}
                                 </Button>
                                 {isPreparingCleanDocument && (
                                   <div className="mt-2 rounded-md border border-info/35 bg-info/10 px-2.5 py-2">
-                                    <p className="text-caption font-medium text-foreground">Applying changes...</p>
+                                    <p className="text-caption font-medium text-foreground">{t("landing.doc.applyingChanges")}</p>
                                   </div>
                                 )}
                                 {showCleanVersionPanel && allFindingsApproved && (
                                   <div className="mt-2 rounded-md border border-success/45 bg-success/10 px-2.5 py-2">
-                                    <p className="text-caption text-foreground">Renovation-Agreement_v2.pdf ready</p>
+                                    <p className="text-caption text-foreground">{t("landing.doc.cleanReady")}</p>
                                     <div className="mt-2 flex flex-wrap items-center gap-1.5">
                                       <button
                                         type="button"
@@ -2658,7 +2612,7 @@ export default function Landing() {
                                         className="inline-flex items-center gap-1 rounded-md border border-border bg-background/65 px-2 py-1 text-[11px] text-foreground transition-colors hover:bg-background/85"
                                       >
                                         <Share2 className="h-3.5 w-3.5" />
-                                        Share
+                                        {t("landing.doc.share")}
                                       </button>
                                       <button
                                         type="button"
@@ -2666,7 +2620,7 @@ export default function Landing() {
                                         className="inline-flex items-center gap-1 rounded-md border border-border bg-background/65 px-2 py-1 text-[11px] text-foreground transition-colors hover:bg-background/85"
                                       >
                                         <Printer className="h-3.5 w-3.5" />
-                                        Print
+                                        {t("landing.doc.print")}
                                       </button>
                                       <button
                                         type="button"
@@ -2674,7 +2628,7 @@ export default function Landing() {
                                         className="inline-flex items-center gap-1 rounded-md border border-border bg-background/65 px-2 py-1 text-[11px] text-foreground transition-colors hover:bg-background/85"
                                       >
                                         <Download className="h-3.5 w-3.5" />
-                                        Download
+                                        {t("landing.doc.download")}
                                       </button>
                                     </div>
                                   </div>
@@ -2685,16 +2639,16 @@ export default function Landing() {
                         </>
                       ) : (
                         <>
-                          <p className="text-caption text-muted-foreground">{content.title}</p>
+                          <p className="text-caption text-muted-foreground">{t(content.titleKey)}</p>
                           <div className="mt-2 space-y-2">
                             {content.rows.map((row) => (
                               <div
-                                key={row.label}
+                                key={row.labelKey}
                                 className="flex items-center justify-between rounded-md bg-background/60 px-2 py-1.5"
                               >
-                                <span className="text-body-sm text-foreground">{row.label}</span>
+                                <span className="text-body-sm text-foreground">{t(row.labelKey)}</span>
                                 <span className={`text-caption font-medium ${row.tone ?? "text-foreground"}`}>
-                                  {row.value}
+                                  {t(row.valueKey)}
                                 </span>
                               </div>
                             ))}
@@ -2712,31 +2666,15 @@ export default function Landing() {
 
         <section className="mx-auto w-full max-w-6xl space-y-3 px-sp-3 py-sp-6">
           <div>
-            <h2 className="text-h2 text-foreground">Trust and transparency</h2>
-            <p className="mt-1 text-body text-muted-foreground">Built to be clear from day one, even in mock mode.</p>
+            <h2 className="text-h2 text-foreground">{t("landing.trust.title")}</h2>
+            <p className="mt-1 text-body text-muted-foreground">{t("landing.trust.subtitle")}</p>
           </div>
           <div className="grid grid-cols-1 gap-sp-2 md:grid-cols-3">
-            {[
-              {
-                icon: ReceiptText,
-                title: "Mock-first: no surprise costs",
-                text: "We keep AI and cloud spend off until you are ready.",
-              },
-              {
-                icon: Files,
-                title: "Clear data ownership",
-                text: "Exports and portability are part of the product direction.",
-              },
-              {
-                icon: ShieldCheck,
-                title: "Privacy by design",
-                text: "Attachments stay local in demo and never leave your browser.",
-              },
-            ].map((item) => (
-              <div key={item.title} className="glass rounded-card p-sp-3">
+            {trustItems.map((item) => (
+              <div key={item.titleKey} className="glass rounded-card p-sp-3">
                 <item.icon className="h-5 w-5 text-accent" />
-                <h3 className="mt-2 text-body font-semibold text-foreground">{item.title}</h3>
-                <p className="mt-1 text-body-sm text-muted-foreground">{item.text}</p>
+                <h3 className="mt-2 text-body font-semibold text-foreground">{t(item.titleKey)}</h3>
+                <p className="mt-1 text-body-sm text-muted-foreground">{t(item.textKey)}</p>
               </div>
             ))}
           </div>
@@ -2744,19 +2682,15 @@ export default function Landing() {
 
         <section className="mx-auto w-full max-w-6xl space-y-3 px-sp-3 py-sp-6">
           <div className="glass-elevated rounded-panel p-sp-4">
-            <h2 className="text-h2 text-foreground">Pricing when you&rsquo;re ready</h2>
-            <p className="mt-1 text-body text-muted-foreground">Start with demo. Upgrade later.</p>
+            <h2 className="text-h2 text-foreground">{t("landing.pricingTeaser.title")}</h2>
+            <p className="mt-1 text-body text-muted-foreground">{t("landing.pricingTeaser.subtitle")}</p>
 
             <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-              {[
-                { name: "Starter", value: "Mock + core workflow", meta: "For individual projects" },
-                { name: "Team", value: "Shared workspace + roles", meta: "For active contractors" },
-                { name: "Business", value: "Advanced controls + scale", meta: "For multi-project teams" },
-              ].map((tier) => (
-                <div key={tier.name} className="rounded-card border border-border bg-background/50 p-sp-2">
-                  <p className="text-caption text-muted-foreground">{tier.name}</p>
-                  <p className="mt-1 text-body font-semibold text-foreground">{tier.value}</p>
-                  <p className="mt-1 text-caption text-muted-foreground">{tier.meta}</p>
+              {pricingTiers.map((tier) => (
+                <div key={tier.nameKey} className="rounded-card border border-border bg-background/50 p-sp-2">
+                  <p className="text-caption text-muted-foreground">{t(tier.nameKey)}</p>
+                  <p className="mt-1 text-body font-semibold text-foreground">{t(tier.valueKey)}</p>
+                  <p className="mt-1 text-caption text-muted-foreground">{t(tier.metaKey)}</p>
                 </div>
               ))}
             </div>
@@ -2764,7 +2698,7 @@ export default function Landing() {
             <div className="mt-3">
               <Button asChild variant="outline">
                 <Link to="/pricing">
-                  View pricing
+                  {t("landing.pricingTeaser.viewPricing")}
                   <ArrowUpRight className="ml-1.5 h-4 w-4" />
                 </Link>
               </Button>
@@ -2774,33 +2708,33 @@ export default function Landing() {
 
         <section id="community" className="mx-auto w-full max-w-6xl space-y-3 px-sp-3 py-sp-6">
           <div>
-            <h2 className="text-h2 text-foreground">Join the community</h2>
-            <p className="mt-1 text-body text-muted-foreground">Updates, templates, and best practices.</p>
+            <h2 className="text-h2 text-foreground">{t("landing.community.title")}</h2>
+            <p className="mt-1 text-body text-muted-foreground">{t("landing.community.subtitle")}</p>
           </div>
           <div className="grid gap-sp-2 md:grid-cols-2">
             <div className="glass rounded-card p-sp-3">
-              <p className="text-body font-semibold text-foreground">Channels</p>
-              <p className="mt-1 text-body-sm text-muted-foreground">Community links are placeholders while mock mode is active.</p>
+              <p className="text-body font-semibold text-foreground">{t("landing.community.channels")}</p>
+              <p className="mt-1 text-body-sm text-muted-foreground">{t("landing.community.channelsHint")}</p>
               <div className="mt-3 flex flex-wrap gap-2">
-                <Button type="button" variant="outline" onClick={() => toast({ title: "Telegram link (mock)" })}>
-                  Telegram
+                <Button type="button" variant="outline" onClick={() => toast({ title: t("landing.community.telegramToast") })}>
+                  {t("landing.community.telegram")}
                 </Button>
-                <Button type="button" variant="outline" onClick={() => toast({ title: "Discord link (mock)" })}>
-                  Discord
+                <Button type="button" variant="outline" onClick={() => toast({ title: t("landing.community.discordToast") })}>
+                  {t("landing.community.discord")}
                 </Button>
               </div>
             </div>
             <form onSubmit={handleCommunitySubmit} className="glass rounded-card p-sp-3">
-              <p className="text-body font-semibold text-foreground">Get updates</p>
-              <p className="mt-1 text-body-sm text-muted-foreground">Receive product notes and new workspace templates.</p>
+              <p className="text-body font-semibold text-foreground">{t("landing.community.getUpdates")}</p>
+              <p className="mt-1 text-body-sm text-muted-foreground">{t("landing.community.getUpdatesHint")}</p>
               <div className="mt-3 flex gap-2">
                 <Input
                   type="email"
                   value={communityEmail}
                   onChange={(event) => setCommunityEmail(event.target.value)}
-                  placeholder="you@company.com"
+                  placeholder={t("landing.community.emailPlaceholder")}
                 />
-                <Button type="submit">Subscribe</Button>
+                <Button type="submit">{t("landing.community.subscribe")}</Button>
               </div>
             </form>
           </div>
@@ -2809,16 +2743,16 @@ export default function Landing() {
 
       <footer className="mt-sp-6 border-t border-border px-sp-3 py-sp-3">
         <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-2 text-caption text-muted-foreground sm:flex-row">
-          <span>© 2026 СтройАгент</span>
+          <span>{t("landing.footer.copyright", { year: 2026 })}</span>
           <div className="flex items-center gap-3">
             <button onClick={() => scrollToSection("resources")} className="hover:text-foreground">
-              Resources
+              {t("landing.nav.resources")}
             </button>
             <Link to="/pricing" className="hover:text-foreground">
-              Pricing
+              {t("landing.nav.pricing")}
             </Link>
             <button onClick={() => scrollToSection("community")} className="hover:text-foreground">
-              Community
+              {t("landing.nav.community")}
             </button>
           </div>
         </div>

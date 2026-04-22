@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import {
   User, SlidersHorizontal, Bell, Shield, Database, CreditCard,
@@ -8,18 +9,19 @@ export type SettingsTab =
 
 interface NavItem {
   tab: SettingsTab;
-  label: string;
+  labelKey: string;
   icon: React.ElementType;
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { tab: "profile", label: "Profile", icon: User },
-  { tab: "preferences", label: "Preferences", icon: SlidersHorizontal },
-  { tab: "notifications", label: "Notifications", icon: Bell },
-  { tab: "security", label: "Security", icon: Shield },
-  { tab: "privacy", label: "Data & Privacy", icon: Database },
-  { tab: "billing", label: "Billing & Credits", icon: CreditCard },
+  { tab: "profile", labelKey: "settingsNav.personal.profile", icon: User },
+  { tab: "preferences", labelKey: "settingsNav.personal.preferences", icon: SlidersHorizontal },
+  { tab: "notifications", labelKey: "settingsNav.personal.notifications", icon: Bell },
+  { tab: "security", labelKey: "settingsNav.personal.security", icon: Shield },
+  { tab: "privacy", labelKey: "settingsNav.personal.privacy", icon: Database },
+  { tab: "billing", labelKey: "settingsNav.personal.billing", icon: CreditCard },
 ];
+
 
 interface SettingsNavProps {
   activeTab: SettingsTab;
@@ -27,6 +29,8 @@ interface SettingsNavProps {
 }
 
 export function SettingsNav({ activeTab, onTabChange }: SettingsNavProps) {
+  const { t } = useTranslation();
+
   return (
     <nav className="glass rounded-panel p-sp-2 space-y-sp-2">
       <div className="space-y-1">
@@ -43,7 +47,7 @@ export function SettingsNav({ activeTab, onTabChange }: SettingsNavProps) {
             )}
           >
             <item.icon className="h-4 w-4 shrink-0" />
-            <span className="flex-1 min-w-0">{item.label}</span>
+            <span className="flex-1 min-w-0">{t(item.labelKey)}</span>
           </button>
         ))}
       </div>

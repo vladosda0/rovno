@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useActivityNotificationsBridge, useNotificationEventMap } from "@/hooks/use-activity-source";
 import { markNotificationRead } from "@/data/store";
 import { EventFeedItem } from "./EventFeedItem";
@@ -11,6 +12,7 @@ interface NotificationDrawerProps {
 }
 
 export function NotificationDrawer({ open, onClose }: NotificationDrawerProps) {
+  const { t } = useTranslation();
   const { notifications, bridges } = useActivityNotificationsBridge();
   const eventMap = useNotificationEventMap(bridges);
 
@@ -28,7 +30,7 @@ export function NotificationDrawer({ open, onClose }: NotificationDrawerProps) {
       <div className="flex items-center justify-between p-3 border-b border-border shrink-0">
         <div className="flex items-center gap-2">
           <Bell className="h-4 w-4 text-accent" />
-          <span className="text-body-sm font-semibold text-foreground">Notifications</span>
+          <span className="text-body-sm font-semibold text-foreground">{t("ai.notifications.title")}</span>
         </div>
         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}>
           <X className="h-4 w-4" />
@@ -37,7 +39,7 @@ export function NotificationDrawer({ open, onClose }: NotificationDrawerProps) {
       <ScrollArea className="flex-1">
         <div className="p-2 space-y-0.5">
           {allEvents.length === 0 ? (
-            <p className="text-caption text-muted-foreground text-center py-6">No notifications</p>
+            <p className="text-caption text-muted-foreground text-center py-6">{t("ai.notifications.empty")}</p>
           ) : (
             allEvents.map(({ notification, event }) => (
               <div

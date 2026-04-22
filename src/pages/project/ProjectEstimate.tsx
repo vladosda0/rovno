@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import {
   AlertTriangle,
   ChevronDown,
@@ -138,10 +139,11 @@ import { EstimateGantt } from "@/components/estimate-v2/gantt/EstimateGantt";
 import {
   buildUnitSelectOptions,
   CUSTOM_UNIT_SENTINEL,
+  getUnitLabel,
   getUnitOptionsForType,
   resolveUnitSelectValue,
 } from "@/lib/estimate-v2/resource-units";
-import { buildDefaultResourceLineName } from "@/lib/estimate-v2/default-resource-line-name";
+import { buildDefaultResourceLineName, getDefaultResourceLinePrefix } from "@/lib/estimate-v2/default-resource-line-name";
 import {
   parsePersistedEstimateResourceType,
   resourceLineSemanticLabel,
@@ -219,14 +221,18 @@ function labelForType(type: ResourceLineType): string {
   return resourceLineSemanticLabel(type);
 }
 
+function semanticLabelKeyForType(type: ResourceLineType): string {
+  return `estimate.resource.semantic.${type}`;
+}
+
 /** `other` lines created as “Overheads” default to titles like “Overhead 1”; use truck badge for those vs generic “Other”. */
 function isDeliveryOverheadsOtherLine(type: ResourceLineType, title: string): boolean {
   return type === "other" && title.toLowerCase().includes("overhead");
 }
 
-function labelForRpcResourceTypeKey(key: string): string {
+function labelForRpcResourceTypeKey(key: string, t: (k: string) => string): string {
   const parsed = parsePersistedEstimateResourceType(key);
-  return parsed.ok ? labelForType(resourceLineTypeFromPersisted(parsed.db)) : key;
+  return parsed.ok ? t(semanticLabelKeyForType(resourceLineTypeFromPersisted(parsed.db))) : key;
 }
 
 function isAssignableResourceType(type: ResourceLineType): boolean {
@@ -309,11 +315,11 @@ function effectiveDiscountForDisplay(line: EstimateV2ResourceLine, stage: Estima
   return projectDiscountBps;
 }
 
-function estimateStatusLabel(status: EstimateExecutionStatus): string {
-  if (status === "planning") return "Planning";
-  if (status === "in_work") return "In work";
-  if (status === "paused") return "Paused";
-  return "Finished";
+function estimateStatusLabelKey(status: EstimateExecutionStatus): string {
+  if (status === "planning") return "estimate.status.planning";
+  if (status === "in_work") return "estimate.status.inWork";
+  if (status === "paused") return "estimate.status.paused";
+  return "estimate.status.finished";
 }
 
 function estimateStatusClassName(status: EstimateExecutionStatus): string {
@@ -350,14 +356,14 @@ const dayRangeFormatter = new Intl.DateTimeFormat("ru-RU", {
   year: "numeric",
 });
 
-const TIMING_TOOLTIP_TEXT: Record<
+const TIMING_TOOLTIP_KEYS: Record<
   "durationPlanned" | "durationEstimated" | "daysToEnd" | "behindSchedule",
   string
 > = {
-  durationPlanned: "Planned calendar days between scheduled start and end dates.",
-  durationEstimated: "Estimated calendar days based on current progress and velocity, if available.",
-  daysToEnd: "Days remaining until scheduled end date.",
-  behindSchedule: "How many days the estimated finish exceeds the planned finish.",
+  durationPlanned: "estimate.tooltip.durationPlanned",
+  durationEstimated: "estimate.tooltip.durationEstimated",
+  daysToEnd: "estimate.tooltip.daysToEnd",
+  behindSchedule: "estimate.tooltip.behindSchedule",
 };
 
 function formatDayIndex(dayIndex: number | null): string {
@@ -379,24 +385,22 @@ function buildCsv(rows: string[][]): string {
     .join("\n");
 }
 
-const RESOURCE_TYPE_OPTIONS: Array<{ value: ResourceLineType; label: string }> = [
-  { value: "material", label: "Material" },
-  { value: "tool", label: "Tool" },
-  { value: "labor", label: "Labor" },
-  { value: "subcontractor", label: "Subcontractor" },
-  { value: "other", label: "Other" },
+const RESOURCE_TYPE_OPTIONS: Array<{ value: ResourceLineType; labelKey: string }> = [
+  { value: "material", labelKey: "estimate.resource.type.material" },
+  { value: "tool", labelKey: "estimate.resource.type.tool" },
+  { value: "labor", labelKey: "estimate.resource.type.labor" },
+  { value: "subcontractor", labelKey: "estimate.resource.type.subcontractor" },
+  { value: "other", labelKey: "estimate.resource.type.other" },
 ];
 
-const RESOURCE_CREATE_OPTIONS: Array<{ label: string; value: ResourceLineType }> = [
-  { label: "Material", value: "material" },
-  { label: "Tool", value: "tool" },
-  { label: "HR", value: "labor" },
-  { label: "Overheads", value: "other" },
-  { label: "Subcontractor", value: "subcontractor" },
-  { label: "Other", value: "other" },
+const RESOURCE_CREATE_OPTIONS: Array<{ labelKey: string; overheadLabelKey?: string; value: ResourceLineType }> = [
+  { labelKey: "estimate.resource.createOption.material", value: "material" },
+  { labelKey: "estimate.resource.createOption.tool", value: "tool" },
+  { labelKey: "estimate.resource.createOption.hr", value: "labor" },
+  { labelKey: "estimate.resource.createOption.overheads", overheadLabelKey: "estimate.resource.overheadsLabel", value: "other" },
+  { labelKey: "estimate.resource.createOption.subcontractor", value: "subcontractor" },
+  { labelKey: "estimate.resource.createOption.other", value: "other" },
 ];
-
-const FOOTER_HELPER_TOOLTIP = "Review total cost, client total and VAT for the full estimate.";
 
 const PLAN_PARTICIPANT_CAP: Record<UserPlan, number> = {
   free: 1,
@@ -415,83 +419,87 @@ interface PendingDeleteState {
   step: DeleteDialogStep;
 }
 
-function deleteEntityLabel(kind: DeleteAssessment["kind"]): string {
-  if (kind === "resource") return "resource";
-  if (kind === "work") return "work";
-  return "stage";
+type TFn = (key: string, options?: Record<string, unknown>) => string;
+
+function deleteEntityLabel(kind: DeleteAssessment["kind"], t: TFn): string {
+  if (kind === "resource") return t("estimate.delete.entity.resource");
+  if (kind === "work") return t("estimate.delete.entity.work");
+  return t("estimate.delete.entity.stage");
 }
 
-function deleteDialogTitle(assessment: DeleteAssessment, step: DeleteDialogStep): string {
-  const label = deleteEntityLabel(assessment.kind);
-  if (step === "financial") return `Delete ${label} permanently?`;
-  return `Delete ${label}?`;
+function deleteDialogTitle(assessment: DeleteAssessment, step: DeleteDialogStep, t: TFn): string {
+  const label = deleteEntityLabel(assessment.kind, t);
+  if (step === "financial") return t("estimate.delete.title.permanent", { entity: label });
+  return t("estimate.delete.title.simple", { entity: label });
 }
 
-function simpleDeleteDescription(assessment: DeleteAssessment): string {
+function simpleDeleteDescription(assessment: DeleteAssessment, t: TFn): string {
   if (assessment.kind === "resource") {
-    return "This resource will be removed from the estimate. This action cannot be undone.";
+    return t("estimate.delete.desc.simple.resource");
   }
   if (assessment.kind === "work") {
-    return "This work and all resources inside it will be removed from the estimate. This action cannot be undone.";
+    return t("estimate.delete.desc.simple.work");
   }
-  return "This stage and all works and resources inside it will be removed from the estimate. This action cannot be undone.";
+  return t("estimate.delete.desc.simple.stage");
 }
 
-function workExecutionDescription(assessment: DeleteAssessment): string {
+function workExecutionDescription(assessment: DeleteAssessment, t: TFn): string {
   if (assessment.kind !== "work") return "";
   if (assessment.execution.isDone) {
-    return "This work is already completed. Deleting it will discard estimate context for work that has already been executed.";
+    return t("estimate.delete.desc.execution.work.done");
   }
   if (assessment.execution.status === "in_progress") {
-    return "This work is already in progress. Deleting it will discard estimate context for work that has already started.";
+    return t("estimate.delete.desc.execution.work.inProgress");
   }
   if (assessment.execution.status === "blocked") {
-    return "This work has already started and is currently blocked. Deleting it will discard estimate context for that execution.";
+    return t("estimate.delete.desc.execution.work.blocked");
   }
-  return "This work has already started. Deleting it will discard estimate context for that execution.";
+  return t("estimate.delete.desc.execution.work.started");
 }
 
-function executionDeleteDescription(assessment: DeleteAssessment): string {
-  if (assessment.kind === "work") return workExecutionDescription(assessment);
+function executionDeleteDescription(assessment: DeleteAssessment, t: TFn): string {
+  if (assessment.kind === "work") return workExecutionDescription(assessment, t);
   if (assessment.kind === "stage") {
-    return "This stage already contains work that has started and is not Done. Review the list below before you continue.";
+    return t("estimate.delete.desc.execution.stage");
   }
-  return simpleDeleteDescription(assessment);
+  return simpleDeleteDescription(assessment, t);
 }
 
-function financialDeleteDescription(assessment: DeleteAssessment): string {
-  const label = deleteEntityLabel(assessment.kind);
-  return `Deleting this ${label} will remove estimate context that is already tied to ordered, stocked, or paid work and materials. This can affect financial and operational records, and the data cannot be recovered through the normal UI flow.`;
+function financialDeleteDescription(assessment: DeleteAssessment, t: TFn): string {
+  const label = deleteEntityLabel(assessment.kind, t);
+  return t("estimate.delete.desc.financial", { entity: label });
 }
 
-function pendingDeleteDescription(pendingDelete: PendingDeleteState): string {
-  if (pendingDelete.step === "simple") return simpleDeleteDescription(pendingDelete.assessment);
-  if (pendingDelete.step === "execution") return executionDeleteDescription(pendingDelete.assessment);
-  return financialDeleteDescription(pendingDelete.assessment);
+function pendingDeleteDescription(pendingDelete: PendingDeleteState, t: TFn): string {
+  if (pendingDelete.step === "simple") return simpleDeleteDescription(pendingDelete.assessment, t);
+  if (pendingDelete.step === "execution") return executionDeleteDescription(pendingDelete.assessment, t);
+  return financialDeleteDescription(pendingDelete.assessment, t);
 }
 
-function pendingDeleteConfirmLabel(pendingDelete: PendingDeleteState): string {
-  if (pendingDelete.step === "financial") return "Delete permanently";
+function pendingDeleteConfirmLabel(pendingDelete: PendingDeleteState, t: TFn): string {
+  if (pendingDelete.step === "financial") return t("estimate.delete.confirm.permanent");
   if (pendingDelete.step === "execution" && getNextDeleteStep(pendingDelete.assessment, pendingDelete.step)) {
-    return "Continue";
+    return t("estimate.delete.confirm.continue");
   }
-  return "Delete";
+  return t("common.delete");
 }
 
 function procurementConsequenceLabel(
   consequence: DeleteAssessment["financial"]["procurement"][number],
+  t: TFn,
 ): string {
   const statuses: string[] = [];
-  if (consequence.orderedState === "partial") statuses.push("Partially ordered");
-  if (consequence.orderedState === "full") statuses.push("Fully ordered");
-  if (consequence.inStock) statuses.push("In stock");
+  if (consequence.orderedState === "partial") statuses.push(t("estimate.delete.procurement.partial"));
+  if (consequence.orderedState === "full") statuses.push(t("estimate.delete.procurement.full"));
+  if (consequence.inStock) statuses.push(t("estimate.delete.procurement.inStock"));
   return statuses.join(", ");
 }
 
 function hrConsequenceLabel(
   consequence: DeleteAssessment["financial"]["hr"][number],
+  t: TFn,
 ): string {
-  return consequence.paymentState === "full" ? "Fully paid" : "Partially paid";
+  return consequence.paymentState === "full" ? t("estimate.delete.hr.full") : t("estimate.delete.hr.partial");
 }
 
 function ProjectEstimateSkeleton() {
@@ -523,6 +531,7 @@ function ProjectEstimateSkeleton() {
 }
 
 function WorkTableFrame({ className, children }: { className?: string; children: ReactNode }) {
+  const { t } = useTranslation();
   const tableRef = useRef<HTMLTableElement | null>(null);
   const [scrollState, setScrollState] = useState({
     hasOverflow: false,
@@ -591,13 +600,13 @@ function WorkTableFrame({ className, children }: { className?: string; children:
               <button
                 type="button"
                 className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border/60 bg-card/80 text-amber-600 shadow-sm hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                aria-label="More columns are hidden to the side of this table"
+                aria-label={t("estimate.table.hiddenColumnsAria")}
               >
                 <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
               </button>
             </TooltipTrigger>
             <TooltipContent side="top" className="max-w-[min(280px,calc(100vw-2rem))] text-left text-xs leading-snug">
-              More columns are hidden — scroll the table below, or use the arrows.
+              {t("estimate.table.hiddenColumnsTooltip")}
             </TooltipContent>
           </Tooltip>
           <div className="flex shrink-0 items-center gap-1">
@@ -607,8 +616,8 @@ function WorkTableFrame({ className, children }: { className?: string; children:
               size="icon"
               className="h-7 w-7 border-border/80 bg-card/90 shadow-sm"
               disabled={!scrollState.canScrollLeft}
-              aria-label="Scroll table left"
-              title="Scroll left"
+              aria-label={t("estimate.table.scrollLeftAria")}
+              title={t("estimate.table.scrollLeftTitle")}
               onClick={() => scrollTable("left")}
             >
               <ChevronLeft className="h-4 w-4" />
@@ -624,8 +633,8 @@ function WorkTableFrame({ className, children }: { className?: string; children:
                 && "motion-safe:animate-pulse",
               )}
               disabled={!scrollState.canScrollRight}
-              aria-label="Scroll table right"
-              title="Scroll right"
+              aria-label={t("estimate.table.scrollRightAria")}
+              title={t("estimate.table.scrollRightTitle")}
               onClick={() => scrollTable("right")}
             >
               <ChevronRight className="h-4 w-4" />
@@ -670,21 +679,22 @@ function WorkTableFrame({ className, children }: { className?: string; children:
   );
 }
 
-function formatRelativeTime(iso: string | null): string | null {
+function formatRelativeTime(iso: string | null, t: TFn): string | null {
   if (!iso) return null;
   const diff = Date.now() - new Date(iso).getTime();
-  if (diff < 5_000) return "just now";
-  if (diff < 60_000) return `${Math.round(diff / 1_000)}s ago`;
-  if (diff < 3_600_000) return `${Math.round(diff / 60_000)}m ago`;
+  if (diff < 5_000) return t("common.time.justNow");
+  if (diff < 60_000) return t("common.time.secondsAgo", { count: Math.round(diff / 1_000) });
+  if (diff < 3_600_000) return t("common.time.minutesAgo", { count: Math.round(diff / 60_000) });
   return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
 function EstimateSyncStatusIndicator({ sync }: { sync: EstimateV2ProjectSyncState }) {
+  const { t } = useTranslation();
   const status = sync.draftSaveStatus ?? "idle";
-  const label = status === "saving" ? "Saving…"
-    : status === "pending" ? "Pending…"
-    : status === "saved" ? `Saved ${formatRelativeTime(sync.draftSaveLastSucceededAt) ?? ""}`
-    : status === "error" ? "Save error"
+  const label = status === "saving" ? t("estimate.sync.saving")
+    : status === "pending" ? t("estimate.sync.pending")
+    : status === "saved" ? t("estimate.sync.saved", { time: formatRelativeTime(sync.draftSaveLastSucceededAt, t) ?? "" })
+    : status === "error" ? t("estimate.sync.error")
     : null;
 
   if (!label) return null;
@@ -703,6 +713,7 @@ function EstimateSyncStatusIndicator({ sync }: { sync: EstimateV2ProjectSyncStat
 }
 
 export default function ProjectEstimate() {
+  const { t } = useTranslation();
   const { id: projectId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const pid = projectId!;
@@ -926,7 +937,7 @@ export default function ProjectEstimate() {
         list.push({
           id: item.estimateV2LineId ?? `checklist-${task.id}-${item.id}`,
           workId,
-          title: item.text || "Checklist item",
+          title: item.text || t("estimate.checklist.fallbackItemTitle"),
           type,
           typeLabel: resolveChecklistFallbackRowLabel(task, index),
           qtyMilli: Number.isFinite(item.estimateV2QtyMilli)
@@ -983,29 +994,33 @@ export default function ProjectEstimate() {
     if (!canEditEstimate) return;
     if (workspaceMode.kind === "pending-supabase") {
       toast({
-        title: "Invite unavailable",
-        description: "Wait for workspace sync to complete, then try again.",
+        title: t("estimate.toast.inviteUnavailable.title"),
+        description: t("estimate.toast.inviteUnavailable.description"),
         variant: "destructive",
       });
       return;
     }
     if (!currentUser.id) {
-      toast({ title: "Unable to create invite", description: "Current user is unavailable.", variant: "destructive" });
+      toast({
+        title: t("estimate.toast.inviteCreateFailed.title"),
+        description: t("estimate.toast.inviteCreateFailed.description"),
+        variant: "destructive",
+      });
       return;
     }
 
     const normalizedEmail = identity.email.trim().toLowerCase();
     if (memberEmailSet.has(normalizedEmail)) {
       toast({
-        title: "Already a participant",
-        description: `${normalizedEmail} already has project access.`,
+        title: t("estimate.toast.alreadyParticipant.title"),
+        description: t("estimate.toast.alreadyParticipant.description", { email: normalizedEmail }),
       });
       return;
     }
     if (pendingInviteEmailSet.has(normalizedEmail)) {
       toast({
-        title: "Invite already pending",
-        description: `An invite for ${normalizedEmail} already exists.`,
+        title: t("estimate.toast.invitePending.title"),
+        description: t("estimate.toast.invitePending.description", { email: normalizedEmail }),
       });
       return;
     }
@@ -1027,38 +1042,41 @@ export default function ProjectEstimate() {
           const delivery = await sendWorkspaceProjectInviteEmail(workspaceMode, createdInvite.id);
           if (delivery.kind === "sent") {
             toast({
-              title: "Invite sent",
-              description: `Invitation email sent to ${delivery.payload.recipientEmail || normalizedEmail} for ${identity.name}.`,
+              title: t("estimate.toast.inviteSent.title"),
+              description: t("estimate.toast.inviteSent.description", {
+                email: delivery.payload.recipientEmail || normalizedEmail,
+                name: identity.name,
+              }),
             });
           } else {
             toast({
-              title: "Invite created",
-              description: `Pending invite created for ${identity.name} (${normalizedEmail}).`,
+              title: t("estimate.toast.inviteCreated.title"),
+              description: t("estimate.toast.inviteCreated.description", { name: identity.name, email: normalizedEmail }),
             });
           }
         } catch (sendErr) {
-          const message = sendErr instanceof Error ? sendErr.message : "Unable to send invite email";
+          const message = sendErr instanceof Error ? sendErr.message : t("estimate.toast.inviteSendFailedFallback");
           toast({
-            title: "Invite created, email not sent",
+            title: t("estimate.toast.inviteCreatedEmailFailed.title"),
             description: message,
             variant: "destructive",
           });
         }
       } else {
         toast({
-          title: "Invite created",
-          description: `Pending invite created for ${identity.name} (${normalizedEmail}).`,
+          title: t("estimate.toast.inviteCreated.title"),
+          description: t("estimate.toast.inviteCreated.description", { name: identity.name, email: normalizedEmail }),
         });
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Unable to create invite";
+      const message = err instanceof Error ? err.message : t("estimate.toast.inviteCreateFailedFallback");
       toast({
-        title: "Invite failed",
+        title: t("estimate.toast.inviteFailed.title"),
         description: message,
         variant: "destructive",
       });
     }
-  }, [canEditEstimate, currentUser.id, memberEmailSet, pendingInviteEmailSet, pid, projectMode, toast, workspaceMode]);
+  }, [canEditEstimate, currentUser.id, memberEmailSet, pendingInviteEmailSet, pid, projectMode, t, toast, workspaceMode]);
 
   const clientRecipients = useMemo<ClientRecipient[]>(() => (
     members
@@ -1350,22 +1368,22 @@ export default function ProjectEstimate() {
     latestApproved
     && (!latestProposed || latestApproved.number >= latestProposed.number),
   );
-  const financialBreakdownTypeRows = [
-    { label: "Material cost", amountCents: totals.breakdownByType.material },
-    { label: "Tool cost", amountCents: totals.breakdownByType.tool },
-    { label: "Labor cost", amountCents: totals.breakdownByType.labor },
-    { label: "Subcontractor cost", amountCents: totals.breakdownByType.subcontractor },
-    { label: "Other cost", amountCents: totals.breakdownByType.other },
+  const financialBreakdownTypeRows: Array<{ label: string; amountCents: number }> = [
+    { label: t("estimate.breakdown.materialCost"), amountCents: totals.breakdownByType.material },
+    { label: t("estimate.breakdown.toolCost"), amountCents: totals.breakdownByType.tool },
+    { label: t("estimate.breakdown.laborCost"), amountCents: totals.breakdownByType.labor },
+    { label: t("estimate.breakdown.subcontractorCost"), amountCents: totals.breakdownByType.subcontractor },
+    { label: t("estimate.breakdown.otherCost"), amountCents: totals.breakdownByType.other },
   ];
-  const financialBreakdownSummaryRows = [
-    ...(isContractorMode ? [{ label: "Markup", amountCents: totals.markupTotalCents }] : []),
-    { label: "Subtotal (ex VAT)", amountCents: totals.subtotalBeforeDiscountCents },
-    { label: "Discount", amountCents: totals.discountTotalCents },
-    { label: "VAT amount", amountCents: totals.taxAmountCents },
-    { label: "Total (inc VAT)", amountCents: totals.totalCents, emphasized: true },
+  const financialBreakdownSummaryRows: Array<{ label: string; amountCents: number; emphasized?: boolean }> = [
+    ...(isContractorMode ? [{ label: t("estimate.breakdown.markup"), amountCents: totals.markupTotalCents }] : []),
+    { label: t("estimate.breakdown.subtotalExVat"), amountCents: totals.subtotalBeforeDiscountCents },
+    { label: t("estimate.breakdown.discount"), amountCents: totals.discountTotalCents },
+    { label: t("estimate.breakdown.vatAmount"), amountCents: totals.taxAmountCents },
+    { label: t("estimate.breakdown.totalIncVat"), amountCents: totals.totalCents, emphasized: true },
   ];
   const planVsActualRows = (["material", "tool", "labor", "subcontractor", "other"] as const).map((type) => ({
-    label: labelForType(type),
+    label: t(semanticLabelKeyForType(type)),
     planned: money(combinedPlanFact.planned.plannedCostByTypeCents[type], estimateProject.currency),
     actual: hasActualFinancialData ? money(combinedPlanFact.fact.spentByTypeCents[type], estimateProject.currency) : "—",
   }));
@@ -1404,14 +1422,14 @@ export default function ProjectEstimate() {
 
         if (result.reason === "transition_failed" || result.reason === "transition_blocked") {
           toast({
-            title: result.blocking ? "Transition blocked" : "Status update failed",
-            description: result.errorMessage ?? "The transition did not complete and must be retried.",
+            title: result.blocking ? t("estimate.toast.transitionBlocked") : t("estimate.toast.statusUpdateFailed"),
+            description: result.errorMessage ?? t("estimate.toast.transitionRetryFallback"),
             variant: "destructive",
           });
           return;
         }
 
-        toast({ title: "Only project owner can change status", variant: "destructive" });
+        toast({ title: t("estimate.toast.ownerOnly"), variant: "destructive" });
         return;
       }
 
@@ -1437,11 +1455,11 @@ export default function ProjectEstimate() {
       ]);
 
       if (result.autoScheduled) {
-        toast({ title: "Status updated", description: "Missing work dates were auto-scheduled." });
+        toast({ title: t("estimate.toast.statusUpdated"), description: t("estimate.toast.autoScheduledDesc") });
         return;
       }
 
-      toast({ title: "Status updated" });
+      toast({ title: t("estimate.toast.statusUpdated") });
       return;
     }
 
@@ -1465,7 +1483,7 @@ export default function ProjectEstimate() {
         setIncompleteTaskBlocks(result.incompleteTasks ?? []);
         return;
       }
-      toast({ title: "Only project owner can change status", variant: "destructive" });
+      toast({ title: t("estimate.toast.ownerOnly"), variant: "destructive" });
       return;
     }
 
@@ -1473,10 +1491,10 @@ export default function ProjectEstimate() {
     setIncompleteTaskBlocks([]);
 
     if (result.autoScheduled) {
-      toast({ title: "Status updated", description: "Missing work dates were auto-scheduled." });
+      toast({ title: t("estimate.toast.statusUpdated"), description: t("estimate.toast.autoScheduledDesc") });
       return;
     }
-    toast({ title: "Status updated" });
+    toast({ title: t("estimate.toast.statusUpdated") });
   };
 
   const handleSkipSetup = async () => {
@@ -1516,15 +1534,15 @@ export default function ProjectEstimate() {
 
       setIncompleteTaskBlocks([]);
       setBulkFinishedTasks(nextTasks);
-      toast({ title: "All project tasks marked done" });
+      toast({ title: t("estimate.toast.allTasksDone") });
     } catch (error) {
       toast({
-        title: "Unable to mark all tasks done",
-        description: error instanceof Error ? error.message : "Retry the action.",
+        title: t("estimate.toast.markAllTasksFailed.title"),
+        description: error instanceof Error ? error.message : t("estimate.toast.markAllTasksFailed.description"),
         variant: "destructive",
       });
     }
-  }, [canEditEstimate, pid, queryClient, tasks, toast, workspaceMode]);
+  }, [canEditEstimate, pid, queryClient, t, tasks, toast, workspaceMode]);
 
   const handleConfirmFinishAfterBulkDone = useCallback(async () => {
     if (!bulkFinishedTasks) return;
@@ -1548,23 +1566,23 @@ export default function ProjectEstimate() {
 
   const copyShareLink = useCallback(async (link: string) => {
     if (!navigator.clipboard?.writeText) {
-      toast({ title: "Copy failed", description: "Clipboard is unavailable.", variant: "destructive" });
+      toast({ title: t("estimate.toast.copyFailed.title"), description: t("estimate.toast.copyFailed.description"), variant: "destructive" });
       return false;
     }
     try {
       await navigator.clipboard.writeText(link);
-      toast({ title: "Share link copied" });
+      toast({ title: t("estimate.toast.shareCopied") });
       return true;
     } catch {
-      toast({ title: "Copy failed", description: "Clipboard is unavailable.", variant: "destructive" });
+      toast({ title: t("estimate.toast.copyFailed.title"), description: t("estimate.toast.copyFailed.description"), variant: "destructive" });
       return false;
     }
-  }, [toast]);
+  }, [t, toast]);
 
   const submitToClientRecipients = useCallback((recipients: ClientRecipient[]) => {
     if (!canSubmitToClient) return;
     if (submitState.submitDisabled) {
-      toast({ title: submitState.submitDisabledReason ?? "No changes since last submission", variant: "destructive" });
+      toast({ title: submitState.submitDisabledReason ?? t("estimate.toast.noChangesFallback"), variant: "destructive" });
       return;
     }
 
@@ -1592,14 +1610,14 @@ export default function ProjectEstimate() {
     }
 
     if (!ok) {
-      toast({ title: "Only owner or co-owner can submit versions", variant: "destructive" });
+      toast({ title: t("estimate.toast.submitRoleRequired"), variant: "destructive" });
       return;
     }
 
     if (hasDirectRecipients) {
       const recipientEmails = recipients.map((recipient) => recipient.email).join(", ");
       toast({
-        title: pendingProposed && latestProposed ? "Estimate resubmitted to client" : "Estimate submitted to client",
+        title: pendingProposed && latestProposed ? t("estimate.toast.resubmitted") : t("estimate.toast.submitted"),
         description: recipientEmails,
       });
       return;
@@ -1609,16 +1627,16 @@ export default function ProjectEstimate() {
     void copyShareLink(shareLink);
     if (previewOnly) {
       setShareLinkModalState({
-        title: "Client not added and no participant slots",
-        description: "Client can preview this estimate via link. Approval is disabled until you upgrade the plan and add client as participant.",
+        title: t("estimate.share.noSlotsTitle"),
+        description: t("estimate.share.noSlotsDesc"),
         link: shareLink,
         suggestUpgrade: true,
       });
       return;
     }
     setShareLinkModalState({
-      title: "Client not added",
-      description: "Share this link with client. They can preview without registration and register in app to approve.",
+      title: t("estimate.share.noClientTitle"),
+      description: t("estimate.share.noClientDesc"),
       link: shareLink,
       suggestUpgrade: false,
     });
@@ -1633,6 +1651,7 @@ export default function ProjectEstimate() {
     pid,
     submitState.submitDisabled,
     submitState.submitDisabledReason,
+    t,
     toast,
   ]);
 
@@ -1649,7 +1668,7 @@ export default function ProjectEstimate() {
   const handleSubmitToSelectedRecipients = () => {
     const selectedRecipients = clientRecipients.filter((recipient) => selectedRecipientIds.includes(recipient.userId));
     if (selectedRecipients.length === 0) {
-      toast({ title: "Select at least one client recipient", variant: "destructive" });
+      toast({ title: t("estimate.toast.selectRecipient"), variant: "destructive" });
       return;
     }
     setRecipientPickerOpen(false);
@@ -1665,11 +1684,11 @@ export default function ProjectEstimate() {
     if (!latestProposed) return;
     const ok = approveVersion(pid, latestProposed.id, stamp, { actorId: currentUser.id });
     if (!ok) {
-      toast({ title: "Unable to approve version", variant: "destructive" });
+      toast({ title: t("estimate.toast.approveFailed"), variant: "destructive" });
       return;
     }
     setApprovalModalOpen(false);
-    toast({ title: "Approved" });
+    toast({ title: t("estimate.toast.approved") });
   };
 
   const handleAskQuestions = () => {
@@ -1682,18 +1701,18 @@ export default function ProjectEstimate() {
       object_type: "estimate_version",
       object_id: latestProposed.id,
       timestamp: new Date().toISOString(),
-      payload: { text: "Client asked a question about estimate changes" },
+      payload: { text: t("estimate.event.clientQuestion") },
     });
-    toast({ title: "Question sent" });
+    toast({ title: t("estimate.toast.questionSent") });
   };
 
   const handleExportCsv = () => {
     if (!canExportEstimateCsv) return;
 
     const rows: string[][] = [];
-    rows.push(["Estimate v2 export"]);
-    rows.push(["Project", estimateProject.title]);
-    rows.push(["Mode", projectMode]);
+    rows.push([t("estimate.csv.title")]);
+    rows.push([t("estimate.csv.project"), estimateProject.title]);
+    rows.push([t("estimate.csv.mode"), projectMode]);
     rows.push([]);
 
     const summaryFinancialExport = !canViewSensitiveDetail
@@ -1704,18 +1723,33 @@ export default function ProjectEstimate() {
       (line) => typeof line.summaryDiscountedClientTotalCents === "number",
     );
 
+    const csvH = {
+      stage: t("estimate.csv.header.stage"),
+      work: t("estimate.csv.header.work"),
+      line: t("estimate.csv.header.line"),
+      qty: t("estimate.csv.header.qty"),
+      unit: t("estimate.csv.header.unit"),
+      type: t("estimate.csv.header.type"),
+      costUnit: t("estimate.csv.header.costUnit"),
+      costTotal: t("estimate.csv.header.costTotal"),
+      markupPct: t("estimate.csv.header.markupPct"),
+      discountPct: t("estimate.csv.header.discountPct"),
+      clientUnit: t("estimate.csv.header.clientUnit"),
+      clientTotal: t("estimate.csv.header.clientTotal"),
+      discountedClientTotal: t("estimate.csv.header.discountedClientTotal"),
+    };
     if (!canViewSensitiveDetail && !summaryFinancialExport) {
-      rows.push(["Stage", "Work", "Line", "Qty", "Unit"]);
+      rows.push([csvH.stage, csvH.work, csvH.line, csvH.qty, csvH.unit]);
     } else if (!canViewSensitiveDetail && summaryFinancialExport) {
       rows.push(
         exportDiscountedColumn
-          ? ["Stage", "Work", "Line", "Qty", "Unit", "Client unit", "Client total", "Discounted client total"]
-          : ["Stage", "Work", "Line", "Qty", "Unit", "Client unit", "Client total"],
+          ? [csvH.stage, csvH.work, csvH.line, csvH.qty, csvH.unit, csvH.clientUnit, csvH.clientTotal, csvH.discountedClientTotal]
+          : [csvH.stage, csvH.work, csvH.line, csvH.qty, csvH.unit, csvH.clientUnit, csvH.clientTotal],
       );
     } else if (projectMode === "contractor") {
-      rows.push(["Stage", "Work", "Line", "Type", "Qty", "Unit", "Cost unit", "Cost total", "Markup %", "Discount %", "Client unit", "Client total"]);
+      rows.push([csvH.stage, csvH.work, csvH.line, csvH.type, csvH.qty, csvH.unit, csvH.costUnit, csvH.costTotal, csvH.markupPct, csvH.discountPct, csvH.clientUnit, csvH.clientTotal]);
     } else if (projectMode === "build_myself") {
-      rows.push(["Stage", "Work", "Line", "Type", "Qty", "Unit", "Cost unit", "Cost total", "Discount %", "Client unit", "Client total"]);
+      rows.push([csvH.stage, csvH.work, csvH.line, csvH.type, csvH.qty, csvH.unit, csvH.costUnit, csvH.costTotal, csvH.discountPct, csvH.clientUnit, csvH.clientTotal]);
     }
 
     sortedStages.forEach((stage) => {
@@ -1778,7 +1812,7 @@ export default function ProjectEstimate() {
               stage.title,
               work.title,
               line.title,
-              labelForType(line.type),
+              t(semanticLabelKeyForType(line.type)),
               qtyFromMilli(line.qtyMilli),
               line.unit,
               money(line.costUnitCents, estimateProject.currency),
@@ -1795,7 +1829,7 @@ export default function ProjectEstimate() {
             stage.title,
             work.title,
             line.title,
-            labelForType(line.type),
+            t(semanticLabelKeyForType(line.type)),
             qtyFromMilli(line.qtyMilli),
             line.unit,
             money(line.costUnitCents, estimateProject.currency),
@@ -1810,16 +1844,16 @@ export default function ProjectEstimate() {
 
     rows.push([]);
     if (canViewSensitiveDetail) {
-      rows.push(["Subtotal (ex VAT)", money(totals.subtotalBeforeDiscountCents, estimateProject.currency)]);
-      rows.push(["Discount", money(totals.discountTotalCents, estimateProject.currency)]);
-      rows.push(["Taxable base (ex VAT)", money(totals.taxableBaseCents, estimateProject.currency)]);
+      rows.push([t("estimate.csv.subtotalExVat"), money(totals.subtotalBeforeDiscountCents, estimateProject.currency)]);
+      rows.push([t("estimate.csv.discount"), money(totals.discountTotalCents, estimateProject.currency)]);
+      rows.push([t("estimate.csv.taxableBaseExVat"), money(totals.taxableBaseCents, estimateProject.currency)]);
     }
     rows.push([
-      "Tax",
+      t("estimate.csv.tax"),
       `${((operationalUpperBlock?.vatBps ?? estimateProject.taxBps) / 100).toFixed(2)}%`,
     ]);
-    rows.push(["Tax amount", money(uiTaxAmountCents, estimateProject.currency)]);
-    rows.push(["Total (inc VAT)", money(uiTotalIncVatCents, estimateProject.currency)]);
+    rows.push([t("estimate.csv.taxAmount"), money(uiTaxAmountCents, estimateProject.currency)]);
+    rows.push([t("estimate.csv.totalIncVat"), money(uiTotalIncVatCents, estimateProject.currency)]);
 
     const csv = buildCsv(rows);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -1832,7 +1866,7 @@ export default function ProjectEstimate() {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
 
-    toast({ title: "Estimate export generated" });
+    toast({ title: t("estimate.toast.exportDone") });
   };
 
   const toggleStageCollapsed = (stageId: string) => {
@@ -1853,14 +1887,14 @@ export default function ProjectEstimate() {
   };
 
   const handleCreateStage = () => {
-    const created = createStage(pid, { title: "Add stage" });
+    const created = createStage(pid, { title: t("estimate.stage.newTitle") });
     if (!created) return;
     trackEvent("estimate_stage_created", { project_id: pid });
     setPendingStageTitleEditId(created.id);
   };
 
   const handleCreateWork = (stageId: string) => {
-    const created = createWork(pid, { stageId, title: "Add work" });
+    const created = createWork(pid, { stageId, title: t("estimate.work.newTitle") });
     if (!created) return;
     trackEvent("estimate_work_created", { project_id: pid, stage_id: stageId });
     setPendingWorkTitleEditId(created.id);
@@ -1871,13 +1905,22 @@ export default function ProjectEstimate() {
     workId: string,
     option: { value: ResourceLineType },
   ) => {
-    const defaultTitle = buildDefaultResourceLineName(linesByWork.get(workId) ?? [], option.value);
+    const localizedPrefix = t(`estimate.resource.defaultPrefix.${option.value}`);
+    const canonicalPrefix = getDefaultResourceLinePrefix(option.value);
+    const detectPrefixes =
+      localizedPrefix === canonicalPrefix ? [localizedPrefix] : [localizedPrefix, canonicalPrefix];
+    const defaultTitle = buildDefaultResourceLineName(linesByWork.get(workId) ?? [], option.value, {
+      prefix: localizedPrefix,
+      detectPrefixes,
+    });
     suppressResourceCreateAutoFocusRef.current = true;
+    const defaultUnit = getUnitOptionsForType(option.value)[0] ?? "pcs";
     const created = createLine(pid, {
       stageId,
       workId,
       title: defaultTitle,
       type: option.value,
+      unit: defaultUnit,
       qtyMilli: 1_000,
       costUnitCents: 0,
     });
@@ -2001,7 +2044,7 @@ export default function ProjectEstimate() {
   }
 
   if (!project) {
-    return <EmptyState icon={AlertTriangle} title="Not found" description="Project not found." />;
+    return <EmptyState icon={AlertTriangle} title={t("estimate.error.notFound.title")} description={t("estimate.error.notFound.description")} />;
   }
 
   return (
@@ -2012,20 +2055,20 @@ export default function ProjectEstimate() {
             <h2 className="truncate text-xl font-semibold text-foreground">{project.title}</h2>
             {showEstimateWorkspace && (
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Status</span>
+                <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">{t("estimate.header.statusLabel")}</span>
                 <Select
                   value={estimateProject.estimateStatus}
                   onValueChange={(value) => handleEstimateStatusChange(value as EstimateExecutionStatus)}
                   disabled={!canEditEstimate}
                 >
                   <SelectTrigger className={`h-8 w-auto min-w-[116px] rounded-md border px-3 text-xs font-semibold shadow-none ${estimateStatusClassName(estimateProject.estimateStatus)}`}>
-                    <SelectValue placeholder={estimateStatusLabel(estimateProject.estimateStatus)} />
+                    <SelectValue placeholder={t(estimateStatusLabelKey(estimateProject.estimateStatus))} />
                   </SelectTrigger>
                   <SelectContent>
-                    {estimateProject.estimateStatus !== "in_work" && <SelectItem value="planning">Planning</SelectItem>}
-                    <SelectItem value="in_work">In work</SelectItem>
-                    <SelectItem value="paused">Paused</SelectItem>
-                    <SelectItem value="finished">Finished</SelectItem>
+                    {estimateProject.estimateStatus !== "in_work" && <SelectItem value="planning">{t("estimate.status.planning")}</SelectItem>}
+                    <SelectItem value="in_work">{t("estimate.status.inWork")}</SelectItem>
+                    <SelectItem value="paused">{t("estimate.status.paused")}</SelectItem>
+                    <SelectItem value="finished">{t("estimate.status.finished")}</SelectItem>
                   </SelectContent>
                 </Select>
 
@@ -2037,12 +2080,12 @@ export default function ProjectEstimate() {
                           variant="secondary"
                           className={latestVersionApproved ? "border border-success/20 bg-success/10 text-success" : "border border-warning/20 bg-warning/10 text-warning-foreground"}
                         >
-                          Estimate v{latestVersionNumber}
+                          {t("estimate.header.versionBadge", { version: latestVersionNumber })}
                         </Badge>
                       </span>
                     </TooltipTrigger>
                     <TooltipContent>
-                      Share link with client for approval of the latest estimate version.
+                      {t("estimate.header.versionTooltip")}
                     </TooltipContent>
                   </Tooltip>
                 ) : null}
@@ -2056,7 +2099,7 @@ export default function ProjectEstimate() {
               <div className="flex w-full flex-wrap items-center gap-2 lg:justify-end">
                 {canExportEstimateCsv && (
                   <Button variant="outline" size="sm" onClick={handleExportCsv}>
-                    <Download className="mr-1 h-4 w-4" /> Export CSV
+                    <Download className="mr-1 h-4 w-4" /> {t("estimate.header.exportCsv")}
                   </Button>
                 )}
 
@@ -2069,7 +2112,7 @@ export default function ProjectEstimate() {
                     disabled={submitState.submitDisabled}
                     title={submitState.submitDisabledReason ?? undefined}
                   >
-                    Submit to client
+                    {t("estimate.header.submitToClient")}
                   </Button>
                 )}
 
@@ -2082,14 +2125,14 @@ export default function ProjectEstimate() {
                     disabled={ctaState.approveDisabled}
                     title={ctaState.approveDisabledReason ?? undefined}
                   >
-                    Approve
+                    {t("estimate.header.approve")}
                   </Button>
                 )}
               </div>
 
               {(!canEditEstimate || (ctaState.showApprove && ctaState.approveDisabledReason) || (ctaState.showSubmit && submitState.submitDisabledReason)) && (
                 <div className="flex flex-wrap gap-x-3 gap-y-1 text-caption text-muted-foreground lg:justify-end">
-                  {!canEditEstimate && <span>Owner only</span>}
+                  {!canEditEstimate && <span>{t("estimate.header.ownerOnly")}</span>}
                   {ctaState.showApprove && ctaState.approveDisabledReason && <span>{ctaState.approveDisabledReason}</span>}
                   {ctaState.showSubmit && submitState.submitDisabledReason && <span>{submitState.submitDisabledReason}</span>}
                 </div>
@@ -2104,21 +2147,21 @@ export default function ProjectEstimate() {
                 <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4">
                   {estimateFinanceMode === "detail" && (
                     <>
-                      <p className="col-span-2 text-sm font-semibold text-foreground md:col-span-3 lg:col-span-4">Financial</p>
+                      <p className="col-span-2 text-sm font-semibold text-foreground md:col-span-3 lg:col-span-4">{t("estimate.summary.financial")}</p>
                       <div className="rounded-md bg-muted/30 px-2.5 py-2">
-                        <p className="text-[11px] text-muted-foreground">Planned total</p>
+                        <p className="text-[11px] text-muted-foreground">{t("estimate.summary.plannedTotal")}</p>
                         <p className="text-sm font-semibold tabular-nums text-foreground">
                           {money(combinedPlanFact.planned.plannedBudgetCents, estimateProject.currency)}
                         </p>
                       </div>
                       <div className="rounded-md bg-muted/30 px-2.5 py-2">
-                        <p className="text-[11px] text-muted-foreground">Actual spent</p>
+                        <p className="text-[11px] text-muted-foreground">{t("estimate.summary.actualSpent")}</p>
                         <p className="text-sm font-semibold tabular-nums text-foreground">
                           {hasActualFinancialData ? money(combinedPlanFact.fact.spentCents, estimateProject.currency) : "—"}
                         </p>
                       </div>
                       <div className="rounded-md bg-muted/30 px-2.5 py-2">
-                        <p className="text-[11px] text-muted-foreground">Over/Under</p>
+                        <p className="text-[11px] text-muted-foreground">{t("estimate.summary.overUnder")}</p>
                         <p className="text-sm font-semibold tabular-nums text-foreground">
                           {hasActualFinancialData
                             ? money(combinedPlanFact.fact.spentCents - combinedPlanFact.planned.plannedBudgetCents, estimateProject.currency)
@@ -2126,7 +2169,7 @@ export default function ProjectEstimate() {
                         </p>
                       </div>
                       <div className="rounded-md bg-muted/30 px-2.5 py-2">
-                        <p className="text-[11px] text-muted-foreground">To be paid</p>
+                        <p className="text-[11px] text-muted-foreground">{t("estimate.summary.toBePaid")}</p>
                         <p className="text-sm font-semibold tabular-nums text-foreground">
                           {money(combinedPlanFact.fact.toBePaidPlannedCents, estimateProject.currency)}
                         </p>
@@ -2135,24 +2178,24 @@ export default function ProjectEstimate() {
                   )}
                   {useReadOnlySummaryPricing && operationalUpperBlock && (
                     <>
-                      <p className="col-span-2 text-sm font-semibold text-foreground md:col-span-3 lg:col-span-4">Financial</p>
+                      <p className="col-span-2 text-sm font-semibold text-foreground md:col-span-3 lg:col-span-4">{t("estimate.summary.financial")}</p>
                       {operationalUpperBlock.clientTotalCents != null && (
                         <div className="rounded-md bg-muted/30 px-2.5 py-2">
-                          <p className="text-[11px] text-muted-foreground">Client total (ex VAT)</p>
+                          <p className="text-[11px] text-muted-foreground">{t("estimate.summary.clientTotalExVat")}</p>
                           <p className="text-sm font-semibold tabular-nums text-foreground">
                             {money(operationalUpperBlock.clientTotalCents, estimateProject.currency)}
                           </p>
                         </div>
                       )}
                       <div className="rounded-md bg-muted/30 px-2.5 py-2">
-                        <p className="text-[11px] text-muted-foreground">VAT rate</p>
+                        <p className="text-[11px] text-muted-foreground">{t("estimate.summary.vatRate")}</p>
                         <p className="text-sm font-semibold tabular-nums text-foreground">
                           {fromBpsToPercent(operationalUpperBlock.vatBps ?? estimateProject.taxBps)}%
                         </p>
                       </div>
                       {operationalUpperBlock.discountBps != null && operationalUpperBlock.discountBps > 0 && (
                         <div className="rounded-md bg-muted/30 px-2.5 py-2">
-                          <p className="text-[11px] text-muted-foreground">Discount (max)</p>
+                          <p className="text-[11px] text-muted-foreground">{t("estimate.summary.discountMax")}</p>
                           <p className="text-sm font-semibold tabular-nums text-foreground">
                             {fromBpsToPercent(operationalUpperBlock.discountBps)}%
                           </p>
@@ -2160,7 +2203,7 @@ export default function ProjectEstimate() {
                       )}
                       {rpcSummaryTotalIncVatCents != null && (
                         <div className="rounded-md bg-muted/30 px-2.5 py-2">
-                          <p className="text-[11px] text-muted-foreground">Total (inc VAT)</p>
+                          <p className="text-[11px] text-muted-foreground">{t("estimate.summary.totalIncVat")}</p>
                           <p className="text-sm font-semibold tabular-nums text-foreground">
                             {money(rpcSummaryTotalIncVatCents, estimateProject.currency)}
                           </p>
@@ -2169,11 +2212,11 @@ export default function ProjectEstimate() {
                       {operationalUpperBlock.resourceCostBreakdownClientSafeOnly
                         && Object.keys(operationalUpperBlock.resourceCostBreakdownClientSafeOnly).length > 0 && (
                         <div className="col-span-2 rounded-md bg-muted/30 px-2.5 py-2 md:col-span-3 lg:col-span-4">
-                          <p className="text-[11px] text-muted-foreground">By resource type (client)</p>
+                          <p className="text-[11px] text-muted-foreground">{t("estimate.summary.byResourceTypeClient")}</p>
                           <div className="mt-1 space-y-1">
                             {Object.entries(operationalUpperBlock.resourceCostBreakdownClientSafeOnly).map(([key, cents]) => (
                               <div key={key} className="flex justify-between text-sm">
-                                <span className="text-muted-foreground">{labelForRpcResourceTypeKey(key)}</span>
+                                <span className="text-muted-foreground">{labelForRpcResourceTypeKey(key, t)}</span>
                                 <span className="font-medium tabular-nums text-foreground">{money(cents, estimateProject.currency)}</span>
                               </div>
                             ))}
@@ -2182,67 +2225,67 @@ export default function ProjectEstimate() {
                       )}
                     </>
                   )}
-                  <p className="col-span-2 text-sm font-semibold text-foreground md:col-span-3 lg:col-span-4">Timing</p>
+                  <p className="col-span-2 text-sm font-semibold text-foreground md:col-span-3 lg:col-span-4">{t("estimate.summary.timing")}</p>
                   <div className="rounded-md bg-muted/30 px-2.5 py-2">
                     <p className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                      Days to end
+                      {t("estimate.summary.daysToEnd")}
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <button type="button" className="text-muted-foreground hover:text-foreground">
                             <Info className="h-3 w-3" />
                           </button>
                         </TooltipTrigger>
-                        <TooltipContent>{TIMING_TOOLTIP_TEXT.daysToEnd}</TooltipContent>
+                        <TooltipContent>{t(TIMING_TOOLTIP_KEYS.daysToEnd)}</TooltipContent>
                       </Tooltip>
                     </p>
                     <p className="text-sm font-semibold tabular-nums text-foreground">
-                      {timingMetrics.daysToEnd == null ? "—" : `${timingMetrics.daysToEnd} d`}
+                      {timingMetrics.daysToEnd == null ? "—" : t("estimate.summary.dayUnit", { count: timingMetrics.daysToEnd })}
                     </p>
                   </div>
                   <div className="rounded-md bg-muted/30 px-2.5 py-2">
                     <p className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                      Behind schedule
+                      {t("estimate.summary.behindSchedule")}
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <button type="button" className="text-muted-foreground hover:text-foreground">
                             <Info className="h-3 w-3" />
                           </button>
                         </TooltipTrigger>
-                        <TooltipContent>{TIMING_TOOLTIP_TEXT.behindSchedule}</TooltipContent>
+                        <TooltipContent>{t(TIMING_TOOLTIP_KEYS.behindSchedule)}</TooltipContent>
                       </Tooltip>
                     </p>
-                    <p className="text-sm font-semibold tabular-nums text-foreground">{timingMetrics.behindScheduleDays} d</p>
+                    <p className="text-sm font-semibold tabular-nums text-foreground">{t("estimate.summary.dayUnit", { count: timingMetrics.behindScheduleDays })}</p>
                   </div>
                   <div className="rounded-md bg-muted/30 px-2.5 py-2">
                     <p className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                      Duration planned
+                      {t("estimate.summary.durationPlanned")}
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <button type="button" className="text-muted-foreground hover:text-foreground">
                             <Info className="h-3 w-3" />
                           </button>
                         </TooltipTrigger>
-                        <TooltipContent>{TIMING_TOOLTIP_TEXT.durationPlanned}</TooltipContent>
+                        <TooltipContent>{t(TIMING_TOOLTIP_KEYS.durationPlanned)}</TooltipContent>
                       </Tooltip>
                     </p>
                     <p className="text-sm font-semibold tabular-nums text-foreground">
-                      {timingMetrics.durationPlannedDays == null ? "—" : `${timingMetrics.durationPlannedDays} d`}
+                      {timingMetrics.durationPlannedDays == null ? "—" : t("estimate.summary.dayUnit", { count: timingMetrics.durationPlannedDays })}
                     </p>
                   </div>
                   <div className="rounded-md bg-muted/30 px-2.5 py-2">
                     <p className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                      Duration estimated
+                      {t("estimate.summary.durationEstimated")}
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <button type="button" className="text-muted-foreground hover:text-foreground">
                             <Info className="h-3 w-3" />
                           </button>
                         </TooltipTrigger>
-                        <TooltipContent>{TIMING_TOOLTIP_TEXT.durationEstimated}</TooltipContent>
+                        <TooltipContent>{t(TIMING_TOOLTIP_KEYS.durationEstimated)}</TooltipContent>
                       </Tooltip>
                     </p>
                     <p className="text-sm font-semibold tabular-nums text-foreground">
-                      {timingMetrics.durationEstimatedDays == null ? "—" : `${timingMetrics.durationEstimatedDays} d`}
+                      {timingMetrics.durationEstimatedDays == null ? "—" : t("estimate.summary.dayUnit", { count: timingMetrics.durationEstimatedDays })}
                     </p>
                   </div>
                 </div>
@@ -2258,7 +2301,7 @@ export default function ProjectEstimate() {
                         >
                           <span className="inline-flex items-center gap-2 text-sm font-semibold text-foreground">
                             {detailedCostOverviewOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                            Detailed cost overview
+                            {t("estimate.costOverview.title")}
                           </span>
                           <span className="text-caption tabular-nums text-muted-foreground">
                             {money(totals.totalCents, estimateProject.currency)}
@@ -2269,7 +2312,7 @@ export default function ProjectEstimate() {
                       <CollapsibleContent className="border-t border-border/60 px-3 py-3">
                         <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
                           <div className="space-y-2 rounded-md border border-border/60 bg-background/30 p-3">
-                            <p className="text-sm font-semibold text-foreground">Financial breakdown</p>
+                            <p className="text-sm font-semibold text-foreground">{t("estimate.costOverview.financialBreakdown")}</p>
                             <div className="space-y-2">
                               <button
                                 type="button"
@@ -2278,7 +2321,7 @@ export default function ProjectEstimate() {
                               >
                                 <span className="inline-flex items-center gap-1 text-muted-foreground">
                                   {financialResourcesExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                                  Resources
+                                  {t("estimate.costOverview.resources")}
                                 </span>
                                 <span className="font-medium tabular-nums text-foreground">{money(resourcesTotalCents, estimateProject.currency)}</span>
                               </button>
@@ -2313,11 +2356,11 @@ export default function ProjectEstimate() {
                           </div>
 
                           <div className="space-y-2 rounded-md border border-border/60 bg-background/30 p-3">
-                            <p className="text-sm font-semibold text-foreground">Plan vs actual</p>
+                            <p className="text-sm font-semibold text-foreground">{t("estimate.costOverview.planVsActual")}</p>
                             <div className="grid grid-cols-[minmax(0,1fr)_minmax(112px,auto)_minmax(112px,auto)] gap-3 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                              <span>Category</span>
-                              <span className="text-right">Planned</span>
-                              <span className="text-right">Actual</span>
+                              <span>{t("estimate.costOverview.col.category")}</span>
+                              <span className="text-right">{t("estimate.costOverview.col.planned")}</span>
+                              <span className="text-right">{t("estimate.costOverview.col.actual")}</span>
                             </div>
                             <div className="space-y-2">
                               {planVsActualRows.map((row) => (
@@ -2328,7 +2371,7 @@ export default function ProjectEstimate() {
                                 </div>
                               ))}
                               <div className="grid grid-cols-[minmax(0,1fr)_minmax(112px,auto)_minmax(112px,auto)] items-center gap-3 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-sm">
-                                <span className="font-medium text-foreground">Total</span>
+                                <span className="font-medium text-foreground">{t("estimate.costOverview.total")}</span>
                                 <span className="text-right font-semibold tabular-nums text-foreground">
                                   {money(combinedPlanFact.planned.plannedBudgetCents, estimateProject.currency)}
                                 </span>
@@ -2349,54 +2392,54 @@ export default function ProjectEstimate() {
         ) : (
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
             <div className="rounded-lg border border-border p-3">
-              <p className="text-sm font-semibold text-foreground">Timing</p>
+              <p className="text-sm font-semibold text-foreground">{t("estimate.summary.timing")}</p>
               <div className="mt-2 grid grid-cols-2 gap-2 text-caption">
                 <div className="rounded-md border border-border/70 p-2">
-                  <p className="text-muted-foreground">Duration range</p>
+                  <p className="text-muted-foreground">{t("estimate.planning.durationRange")}</p>
                   <p className="text-sm font-medium text-foreground">{planningRangeLabel}</p>
                 </div>
                 <div className="rounded-md border border-border/70 p-2">
-                  <p className="text-muted-foreground">Duration days</p>
-                  <p className="text-sm font-medium text-foreground">{planningDurationDays == null ? "—" : `${planningDurationDays} d`}</p>
+                  <p className="text-muted-foreground">{t("estimate.planning.durationDays")}</p>
+                  <p className="text-sm font-medium text-foreground">{planningDurationDays == null ? "—" : t("estimate.summary.dayUnit", { count: planningDurationDays })}</p>
                 </div>
                 <div className="rounded-md border border-border/70 p-2">
-                  <p className="text-muted-foreground">Days to end</p>
+                  <p className="text-muted-foreground">{t("estimate.summary.daysToEnd")}</p>
                   <p className="text-sm font-medium text-foreground">
-                    {timingMetrics.daysToEnd == null ? "—" : `${timingMetrics.daysToEnd} d`}
+                    {timingMetrics.daysToEnd == null ? "—" : t("estimate.summary.dayUnit", { count: timingMetrics.daysToEnd })}
                   </p>
                 </div>
                 <div className="rounded-md border border-border/70 p-2">
-                  <p className="text-muted-foreground">Behind schedule</p>
-                  <p className="text-sm font-medium text-foreground">{timingMetrics.behindScheduleDays} d</p>
+                  <p className="text-muted-foreground">{t("estimate.summary.behindSchedule")}</p>
+                  <p className="text-sm font-medium text-foreground">{t("estimate.summary.dayUnit", { count: timingMetrics.behindScheduleDays })}</p>
                 </div>
               </div>
             </div>
 
             <div className="rounded-lg border border-border p-3">
-              <p className="text-sm font-semibold text-foreground">Financial</p>
+              <p className="text-sm font-semibold text-foreground">{t("estimate.summary.financial")}</p>
               {estimateFinanceMode === "none" ? (
                 <p className="mt-2 text-caption text-muted-foreground">
-                  Financial details are not shown for your access level.
+                  {t("estimate.planning.financeHidden")}
                 </p>
               ) : useReadOnlySummaryPricing && operationalUpperBlock ? (
                 <div className="mt-2 space-y-2 text-caption">
                   {operationalUpperBlock.clientTotalCents != null && (
                     <div className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
-                      <span className="text-muted-foreground">Client total (ex VAT)</span>
+                      <span className="text-muted-foreground">{t("estimate.summary.clientTotalExVat")}</span>
                       <span className="font-medium tabular-nums text-foreground">
                         {money(operationalUpperBlock.clientTotalCents, estimateProject.currency)}
                       </span>
                     </div>
                   )}
                   <div className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
-                    <span className="text-muted-foreground">VAT rate</span>
+                    <span className="text-muted-foreground">{t("estimate.summary.vatRate")}</span>
                     <span className="font-medium tabular-nums text-foreground">
                       {fromBpsToPercent(operationalUpperBlock.vatBps ?? estimateProject.taxBps)}%
                     </span>
                   </div>
                   {operationalUpperBlock.discountBps != null && operationalUpperBlock.discountBps > 0 && (
                     <div className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
-                      <span className="text-muted-foreground">Discount (max)</span>
+                      <span className="text-muted-foreground">{t("estimate.summary.discountMax")}</span>
                       <span className="font-medium tabular-nums text-foreground">
                         {fromBpsToPercent(operationalUpperBlock.discountBps)}%
                       </span>
@@ -2405,17 +2448,17 @@ export default function ProjectEstimate() {
                   {operationalUpperBlock.resourceCostBreakdownClientSafeOnly
                     && Object.keys(operationalUpperBlock.resourceCostBreakdownClientSafeOnly).length > 0 && (
                     <div className="space-y-1 rounded-md border border-border/70 px-2 py-2">
-                      <span className="text-muted-foreground">By resource type (client)</span>
+                      <span className="text-muted-foreground">{t("estimate.summary.byResourceTypeClient")}</span>
                       {Object.entries(operationalUpperBlock.resourceCostBreakdownClientSafeOnly).map(([key, cents]) => (
                         <div key={key} className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">{labelForRpcResourceTypeKey(key)}</span>
+                          <span className="text-muted-foreground">{labelForRpcResourceTypeKey(key, t)}</span>
                           <span className="tabular-nums text-foreground">{money(cents, estimateProject.currency)}</span>
                         </div>
                       ))}
                     </div>
                   )}
                   <div className="flex items-center justify-between rounded-md border border-border/70 bg-muted/30 px-2 py-1">
-                    <span className="font-medium text-foreground">Total (inc VAT)</span>
+                    <span className="font-medium text-foreground">{t("estimate.summary.totalIncVat")}</span>
                     <span className="font-semibold tabular-nums text-foreground">
                       {money(uiTotalIncVatCents, estimateProject.currency)}
                     </span>
@@ -2423,7 +2466,7 @@ export default function ProjectEstimate() {
                 </div>
               ) : !canViewSensitiveDetail ? (
                 <div className="mt-2 rounded-md border border-border/70 p-2">
-                  <p className="text-xs text-muted-foreground">Total (inc VAT)</p>
+                  <p className="text-xs text-muted-foreground">{t("estimate.summary.totalIncVat")}</p>
                   <p className="text-2xl font-semibold text-foreground">{money(uiTotalIncVatCents, estimateProject.currency)}</p>
                 </div>
               ) : (
@@ -2435,64 +2478,64 @@ export default function ProjectEstimate() {
                   >
                     <span className="inline-flex items-center gap-1 text-muted-foreground">
                       {financialResourcesExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                      Resources
+                      {t("estimate.costOverview.resources")}
                     </span>
                     <span className="font-medium tabular-nums text-foreground">{money(resourcesTotalCents, estimateProject.currency)}</span>
                   </button>
                   {financialResourcesExpanded && (
                     <div className="space-y-1 pl-5">
                       <div className="flex items-center justify-between rounded-md border border-border/60 px-2 py-1">
-                        <span className="text-muted-foreground">Material cost</span>
+                        <span className="text-muted-foreground">{t("estimate.breakdown.materialCost")}</span>
                         <span className="tabular-nums text-foreground">{money(totals.breakdownByType.material, estimateProject.currency)}</span>
                       </div>
                       <div className="flex items-center justify-between rounded-md border border-border/60 px-2 py-1">
-                        <span className="text-muted-foreground">Tool cost</span>
+                        <span className="text-muted-foreground">{t("estimate.breakdown.toolCost")}</span>
                         <span className="tabular-nums text-foreground">{money(totals.breakdownByType.tool, estimateProject.currency)}</span>
                       </div>
                       <div className="flex items-center justify-between rounded-md border border-border/60 px-2 py-1">
-                        <span className="text-muted-foreground">Labor cost</span>
+                        <span className="text-muted-foreground">{t("estimate.breakdown.laborCost")}</span>
                         <span className="tabular-nums text-foreground">{money(totals.breakdownByType.labor, estimateProject.currency)}</span>
                       </div>
                       <div className="flex items-center justify-between rounded-md border border-border/60 px-2 py-1">
-                        <span className="text-muted-foreground">Subcontractor cost</span>
+                        <span className="text-muted-foreground">{t("estimate.breakdown.subcontractorCost")}</span>
                         <span className="tabular-nums text-foreground">{money(totals.breakdownByType.subcontractor, estimateProject.currency)}</span>
                       </div>
                       <div className="flex items-center justify-between rounded-md border border-border/60 px-2 py-1">
-                        <span className="text-muted-foreground">Other cost</span>
+                        <span className="text-muted-foreground">{t("estimate.breakdown.otherCost")}</span>
                         <span className="tabular-nums text-foreground">{money(totals.breakdownByType.other, estimateProject.currency)}</span>
                       </div>
                     </div>
                   )}
                   {showEstimateCommercialSummary && (
                     <div className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
-                      <span className="text-muted-foreground">Markup</span>
+                      <span className="text-muted-foreground">{t("estimate.breakdown.markup")}</span>
                       <span className="tabular-nums text-foreground">{money(totals.markupTotalCents, estimateProject.currency)}</span>
                     </div>
                   )}
                   <div className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
-                    <span className="text-muted-foreground">Subtotal (ex VAT)</span>
+                    <span className="text-muted-foreground">{t("estimate.breakdown.subtotalExVat")}</span>
                     <span className="tabular-nums text-foreground">{money(totals.subtotalBeforeDiscountCents, estimateProject.currency)}</span>
                   </div>
                   <div className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
-                    <span className="text-muted-foreground">Discount</span>
+                    <span className="text-muted-foreground">{t("estimate.breakdown.discount")}</span>
                     <span className="tabular-nums text-foreground">{money(totals.discountTotalCents, estimateProject.currency)}</span>
                   </div>
                   <div className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
-                    <span className="text-muted-foreground">VAT amount</span>
+                    <span className="text-muted-foreground">{t("estimate.breakdown.vatAmount")}</span>
                     <span className="tabular-nums text-foreground">{money(totals.taxAmountCents, estimateProject.currency)}</span>
                   </div>
                   <div className="flex items-center justify-between rounded-md border border-border/70 bg-muted/30 px-2 py-1">
-                    <span className="font-medium text-foreground">Total (inc VAT)</span>
+                    <span className="font-medium text-foreground">{t("estimate.breakdown.totalIncVat")}</span>
                     <span className="font-semibold tabular-nums text-foreground">{money(totals.totalCents, estimateProject.currency)}</span>
                   </div>
                   {showEstimateCommercialSummary && (
                     <div className="mt-2 grid grid-cols-2 gap-2">
                       <div className="rounded-md border border-border/70 p-2">
-                        <p className="text-muted-foreground">Profit (ex VAT)</p>
+                        <p className="text-muted-foreground">{t("estimate.planning.profitExVat")}</p>
                         <p className="text-sm font-medium text-foreground">{money(profitExVatCents, estimateProject.currency)}</p>
                       </div>
                       <div className="rounded-md border border-border/70 p-2">
-                        <p className="text-muted-foreground">Profitability (%)</p>
+                        <p className="text-muted-foreground">{t("estimate.planning.profitabilityPct")}</p>
                         <p className="text-sm font-medium text-foreground">{profitabilityPct == null ? "—" : formatPercent(profitabilityPct)}</p>
                       </div>
                     </div>
@@ -2506,10 +2549,10 @@ export default function ProjectEstimate() {
         {showEstimateWorkspace && <VersionBanner
           hasPending={pendingProposed && Boolean(latestProposed)}
           isOpenByDefault={reviewExpandedByDefault}
-          title="New version submitted"
+          title={t("estimate.versionBanner.title")}
           secondaryActions={undefined}
         >
-          <p className="mb-2 text-caption font-medium text-foreground">Changed items</p>
+          <p className="mb-2 text-caption font-medium text-foreground">{t("estimate.versionBanner.changedItems")}</p>
           <VersionDiffList
             changes={diff.changes}
             projectMode={projectMode}
@@ -2520,19 +2563,19 @@ export default function ProjectEstimate() {
 
         <Tabs value={activeTab} onValueChange={handleTabChange}>
           <TabsList className="h-auto w-full justify-start gap-1 bg-transparent p-0">
-            <TabsTrigger value="estimate">Estimate</TabsTrigger>
-            <TabsTrigger value="work_schedule" disabled={!showEstimateWorkspace}>Work schedule</TabsTrigger>
+            <TabsTrigger value="estimate">{t("estimate.tabs.estimate")}</TabsTrigger>
+            <TabsTrigger value="work_schedule" disabled={!showEstimateWorkspace}>{t("estimate.tabs.workSchedule")}</TabsTrigger>
             <Tooltip>
               <TooltipTrigger asChild>
                 <span>
                   <TabsTrigger value="work_log" disabled={!showEstimateWorkspace}>
-                    Work log
+                    {t("estimate.tabs.workLog")}
                   </TabsTrigger>
                 </span>
               </TooltipTrigger>
               {!showEstimateWorkspace && (
                 <TooltipContent>
-                  Create an estimate first. Tasks are available from here, and Procurement/HR unlock after In work.
+                  {t("estimate.tabs.workLogDisabledTooltip")}
                 </TooltipContent>
               )}
             </Tooltip>
@@ -2542,9 +2585,9 @@ export default function ProjectEstimate() {
             {!showEstimateWorkspace ? (
               <EmptyState
                 icon={AlertTriangle}
-                title="No estimate created yet"
-                description="Create the estimate when you are ready to start building stages, works and resources."
-                actionLabel={canEditEstimate ? "Create estimate" : undefined}
+                title={t("estimate.empty.title")}
+                description={t("estimate.empty.description")}
+                actionLabel={canEditEstimate ? t("estimate.empty.createAction") : undefined}
                 onAction={canEditEstimate ? handleStartEstimate : undefined}
               />
             ) : (
@@ -2558,9 +2601,9 @@ export default function ProjectEstimate() {
 
             {sortedStages.length === 0 ? (
               <div className="rounded-md border border-dashed border-border/70 bg-background/40 p-4">
-                <p className="text-sm font-medium text-foreground">No stages yet</p>
+                <p className="text-sm font-medium text-foreground">{t("estimate.empty.noStagesTitle")}</p>
                 <p className="mt-1 text-caption text-muted-foreground">
-                  Start with a stage. Works appear after a stage is added, and resources appear after a work is added.
+                  {t("estimate.empty.noStagesDescription")}
                 </p>
               </div>
             ) : (
@@ -2601,7 +2644,7 @@ export default function ProjectEstimate() {
                         <div className="flex items-center gap-2">
                           {canViewSensitiveDetail && (
                             <div className="flex items-center gap-1">
-                              <span className="text-caption text-muted-foreground">Stage discount:</span>
+                              <span className="text-caption text-muted-foreground">{t("estimate.stage.discountLabel")}</span>
                               {canEditEstimate ? (
                                 <InlineEditableNumber
                                   value={stage.discountBps}
@@ -2618,7 +2661,7 @@ export default function ProjectEstimate() {
                           )}
                           {estimateFinanceMode !== "none" && (
                             <div className="flex items-center gap-1">
-                              <span className="text-caption text-muted-foreground">Stage total:</span>
+                              <span className="text-caption text-muted-foreground">{t("estimate.stage.totalLabel")}</span>
                               <span className="text-sm font-semibold tabular-nums text-foreground">
                                 {money(stageTotals?.totalCents ?? 0, estimateProject.currency)}
                               </span>
@@ -2629,8 +2672,8 @@ export default function ProjectEstimate() {
                               size="icon"
                               variant="ghost"
                               className="h-7 w-7"
-                              aria-label={`Delete stage ${stage.title}`}
-                              title="Delete stage"
+                              aria-label={t("estimate.stage.deleteAria", { title: stage.title })}
+                              title={t("estimate.stage.deleteTitle")}
                               onClick={() => openStageDelete(stage.id)}
                             >
                               <Trash2 className="h-4 w-4 text-destructive" />
@@ -2685,8 +2728,8 @@ export default function ProjectEstimate() {
                                       size="icon"
                                       variant="ghost"
                                       className="h-7 w-7"
-                                      aria-label={`Delete work ${work.title}`}
-                                      title="Delete work"
+                                      aria-label={t("estimate.work.deleteAria", { title: work.title })}
+                                      title={t("estimate.work.deleteTitle")}
                                       onClick={() => openWorkDelete(work.id)}
                                     >
                                       <Trash2 className="h-4 w-4 text-destructive" />
@@ -2698,37 +2741,37 @@ export default function ProjectEstimate() {
                                     <TableHeader>
                                       <TableRow>
                                         <TableHead className="sticky left-0 z-30 h-9 w-[180px] border-r border-border bg-card py-1 pr-2 shadow-[6px_0_10px_-10px_hsl(var(--foreground)/0.45)]">
-                                          Resource
+                                          {t("estimate.table.col.resource")}
                                         </TableHead>
                                         {showAssignmentColumn && (
                                           <TableHead className="h-9 w-[170px] py-1 pr-2">
                                             <span
                                               className="inline-flex items-center gap-1"
-                                              title="Assignment identifies responsibility only. Project access is managed separately."
+                                              title={t("estimate.table.assignedTitle")}
                                             >
                                               <User className="h-3.5 w-3.5" />
-                                              <span>Assigned</span>
+                                              <span>{t("estimate.table.col.assigned")}</span>
                                             </span>
                                           </TableHead>
                                         )}
-                                        <TableHead className="h-9 w-[92px] py-1 pr-2 text-right tabular-nums">Qty</TableHead>
-                                        <TableHead className="h-9 w-[128px] py-1 pr-2">Unit</TableHead>
-                                        {showEstimateInternalPricing && <TableHead className="h-9 w-[120px] py-1 pr-2 text-right tabular-nums">Cost unit</TableHead>}
-                                        {showEstimateInternalPricing && <TableHead className="h-9 w-[120px] py-1 pr-2 text-right tabular-nums">Cost total</TableHead>}
+                                        <TableHead className="h-9 w-[92px] py-1 pr-2 text-right tabular-nums">{t("estimate.table.col.qty")}</TableHead>
+                                        <TableHead className="h-9 w-[128px] py-1 pr-2">{t("estimate.table.col.unit")}</TableHead>
+                                        {showEstimateInternalPricing && <TableHead className="h-9 w-[120px] py-1 pr-2 text-right tabular-nums">{t("estimate.table.col.costUnit")}</TableHead>}
+                                        {showEstimateInternalPricing && <TableHead className="h-9 w-[120px] py-1 pr-2 text-right tabular-nums">{t("estimate.table.col.costTotal")}</TableHead>}
                                         {showEstimateMarkup && (
-                                          <TableHead className="h-9 w-[92px] whitespace-nowrap py-1 pr-2 text-right tabular-nums">Markup %</TableHead>
+                                          <TableHead className="h-9 w-[92px] whitespace-nowrap py-1 pr-2 text-right tabular-nums">{t("estimate.table.col.markupPct")}</TableHead>
                                         )}
                                         {showEstimateInternalPricing && (
-                                          <TableHead className="h-9 w-[92px] whitespace-nowrap py-1 pr-2 text-right tabular-nums">Discount %</TableHead>
+                                          <TableHead className="h-9 w-[92px] whitespace-nowrap py-1 pr-2 text-right tabular-nums">{t("estimate.table.col.discountPct")}</TableHead>
                                         )}
                                         {showClientPricingColumns && (
-                                          <TableHead className="h-9 w-[120px] py-1 pr-2 text-right tabular-nums">Client unit</TableHead>
+                                          <TableHead className="h-9 w-[120px] py-1 pr-2 text-right tabular-nums">{t("estimate.table.col.clientUnit")}</TableHead>
                                         )}
                                         {showClientPricingColumns && (
-                                          <TableHead className="h-9 w-[126px] py-1 pr-2 text-right tabular-nums">Client total</TableHead>
+                                          <TableHead className="h-9 w-[126px] py-1 pr-2 text-right tabular-nums">{t("estimate.table.col.clientTotal")}</TableHead>
                                         )}
                                         {showDiscountedClientColumn && (
-                                          <TableHead className="h-9 w-[140px] py-1 pr-2 text-right tabular-nums">Discounted client</TableHead>
+                                          <TableHead className="h-9 w-[140px] py-1 pr-2 text-right tabular-nums">{t("estimate.table.col.discountedClient")}</TableHead>
                                         )}
                                         {canEditEstimate && <TableHead className="h-9 w-10 py-1 pr-0" />}
                                       </TableRow>
@@ -2743,8 +2786,8 @@ export default function ProjectEstimate() {
                                           { financeMode: lineClientDisplayMode },
                                         );
                                         const typeLabel = isDeliveryOverheadsOtherLine(line.type, line.title)
-                                          ? "Overheads"
-                                          : labelForType(line.type);
+                                          ? t("estimate.resource.overheadsLabel")
+                                          : t(semanticLabelKeyForType(line.type));
                                         const otherPresentation = isDeliveryOverheadsOtherLine(line.type, line.title)
                                           ? "overhead"
                                           : "generic";
@@ -2837,7 +2880,7 @@ export default function ProjectEstimate() {
                                                       size={Math.min(18, Math.max(3, (customDraft ?? "").length + 1))}
                                                       value={customDraft}
                                                       placeholder=""
-                                                      aria-label="Unit"
+                                                      aria-label={t("estimate.table.unitAria")}
                                                       onChange={(event) => {
                                                         const nextValue = event.target.value;
                                                         setCustomUnitDraftByLineId((current) => ({
@@ -2859,7 +2902,7 @@ export default function ProjectEstimate() {
                                                           variant="ghost"
                                                           size="icon"
                                                           className="h-7 w-7 shrink-0 border border-transparent bg-transparent text-foreground shadow-none hover:bg-muted/60 focus-visible:ring-1 focus-visible:ring-ring/40"
-                                                          aria-label="Preset units"
+                                                          aria-label={t("estimate.unit.presetAria")}
                                                         >
                                                           <ChevronDown className="h-4 w-4 opacity-50" />
                                                         </Button>
@@ -2873,7 +2916,7 @@ export default function ProjectEstimate() {
                                                               updateLine(pid, line.id, { unit });
                                                             }}
                                                           >
-                                                            {unit}
+                                                            {getUnitLabel(unit, t)}
                                                           </DropdownMenuItem>
                                                         ))}
                                                       </DropdownMenuContent>
@@ -2895,7 +2938,7 @@ export default function ProjectEstimate() {
                                                       <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                      {buildUnitSelectOptions(line.type).map((option) => (
+                                                      {buildUnitSelectOptions(line.type, t).map((option) => (
                                                         <SelectItem key={`${line.id}-${option.value}`} value={option.value}>
                                                           {option.label}
                                                         </SelectItem>
@@ -2905,7 +2948,7 @@ export default function ProjectEstimate() {
                                                 )
                                               ) : (
                                                 <div className="min-h-7 px-1 py-0.5 text-sm text-foreground">
-                                                  {line.unit || "—"}
+                                                  {line.unit ? getUnitLabel(line.unit, t) : "—"}
                                                 </div>
                                               )}
                                             </TableCell>
@@ -2984,8 +3027,8 @@ export default function ProjectEstimate() {
                                                   size="icon"
                                                   variant="ghost"
                                                   className="h-7 w-7"
-                                                  aria-label={`Delete resource ${line.title}`}
-                                                  title="Delete resource"
+                                                  aria-label={t("estimate.resource.deleteAria", { title: line.title })}
+                                                  title={t("estimate.resource.deleteTitle")}
                                                   onClick={() => openResourceDelete(line.id)}
                                                 >
                                                   <Trash2 className="h-4 w-4 text-destructive" />
@@ -2997,7 +3040,7 @@ export default function ProjectEstimate() {
                                       })}
 
                                       {fallbackChecklistRows.map((row) => {
-                                        const typeLabel = row.typeLabel ?? labelForType(row.type);
+                                        const typeLabel = row.typeLabel ?? t(semanticLabelKeyForType(row.type));
                                         const fallbackOtherPresentation = isDeliveryOverheadsOtherLine(row.type, row.title)
                                           ? "overhead"
                                           : "generic";
@@ -3059,7 +3102,7 @@ export default function ProjectEstimate() {
                                                     className="h-6 gap-1 px-2 text-xs"
                                                   >
                                                     <Plus className="h-3.5 w-3.5" />
-                                                    Add resource
+                                                    {t("estimate.resource.addButton")}
                                                   </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent
@@ -3070,23 +3113,26 @@ export default function ProjectEstimate() {
                                                     suppressResourceCreateAutoFocusRef.current = false;
                                                   }}
                                                 >
-                                                  {RESOURCE_CREATE_OPTIONS.map((option) => (
-                                                    <DropdownMenuItem
-                                                      key={`${work.id}-${option.label}`}
-                                                      onSelect={() => handleCreateResourceLine(stage.id, work.id, option)}
-                                                    >
-                                                      <ResourceTypeBadge
-                                                        type={option.value}
-                                                        labelOverride={option.label}
-                                                        className="border-transparent"
-                                                        otherPresentation={
-                                                          option.value === "other" && option.label === "Overheads"
-                                                            ? "overhead"
-                                                            : "generic"
-                                                        }
-                                                      />
-                                                    </DropdownMenuItem>
-                                                  ))}
+                                                  {RESOURCE_CREATE_OPTIONS.map((option) => {
+                                                    const optionLabel = t(option.labelKey);
+                                                    return (
+                                                      <DropdownMenuItem
+                                                        key={`${work.id}-${option.labelKey}`}
+                                                        onSelect={() => handleCreateResourceLine(stage.id, work.id, option)}
+                                                      >
+                                                        <ResourceTypeBadge
+                                                          type={option.value}
+                                                          labelOverride={optionLabel}
+                                                          className="border-transparent"
+                                                          otherPresentation={
+                                                            option.overheadLabelKey
+                                                              ? "overhead"
+                                                              : "generic"
+                                                          }
+                                                        />
+                                                      </DropdownMenuItem>
+                                                    );
+                                                  })}
                                                 </DropdownMenuContent>
                                               </DropdownMenu>
                                             </div>
@@ -3111,7 +3157,7 @@ export default function ProjectEstimate() {
                                   onClick={() => handleCreateWork(stage.id)}
                                 >
                                   <Plus className="h-3.5 w-3.5" />
-                                  Add work
+                                  {t("estimate.work.addButton")}
                                 </Button>
                               </div>
                             </div>
@@ -3135,27 +3181,27 @@ export default function ProjectEstimate() {
                   onClick={handleCreateStage}
                 >
                   <Plus className="h-3.5 w-3.5" />
-                  Add stage
+                  {t("estimate.stage.addButton")}
                 </Button>
               </div>
             )}
             <div className="rounded-lg border border-border p-3">
               <div className="grid items-center gap-x-4 gap-y-2 md:grid-cols-[minmax(0,1fr)_max-content_max-content]">
                 <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-foreground">
-                  <span className="truncate">Total across all stages</span>
+                  <span className="truncate">{t("estimate.footer.totalAcrossStages")}</span>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button type="button" className="shrink-0 text-muted-foreground hover:text-foreground">
                         <Info className="h-3.5 w-3.5" />
                       </button>
                     </TooltipTrigger>
-                    <TooltipContent>{FOOTER_HELPER_TOOLTIP}</TooltipContent>
+                    <TooltipContent>{t("estimate.footer.helperTooltip")}</TooltipContent>
                   </Tooltip>
                 </div>
 
                 {showEstimateInternalPricing && (
                   <div className="flex items-center justify-between gap-2 whitespace-nowrap text-sm md:min-w-[170px] md:justify-end">
-                    <span className="text-muted-foreground">Total cost</span>
+                    <span className="text-muted-foreground">{t("estimate.footer.totalCost")}</span>
                     <span className="font-semibold tabular-nums text-foreground">
                       {money(totals.costTotalCents, estimateProject.currency)}
                     </span>
@@ -3164,7 +3210,7 @@ export default function ProjectEstimate() {
 
                 {estimateFinanceMode !== "none" && (
                   <div className="flex items-center justify-between gap-2 whitespace-nowrap text-sm md:min-w-[190px] md:justify-end">
-                    <span className="text-muted-foreground">Total for client</span>
+                    <span className="text-muted-foreground">{t("estimate.footer.totalForClient")}</span>
                     <span className="font-semibold tabular-nums text-foreground">
                       {money(uiTotalIncVatCents, estimateProject.currency)}
                     </span>
@@ -3175,7 +3221,7 @@ export default function ProjectEstimate() {
               {estimateFinanceMode !== "none" && (
               <div className="mt-2 grid items-center gap-x-4 gap-y-2 md:grid-cols-[minmax(0,1fr)_max-content_max-content]">
                 <div className="flex flex-wrap items-center gap-2 text-sm">
-                  <span className="text-muted-foreground">VAT</span>
+                  <span className="text-muted-foreground">{t("estimate.footer.vat")}</span>
                   {canEditEstimate ? (
                     <InlineEditableNumber
                       value={estimateProject.taxBps}
@@ -3221,10 +3267,10 @@ export default function ProjectEstimate() {
         <ConfirmModal
           open={Boolean(pendingDelete)}
           onOpenChange={handlePendingDeleteOpenChange}
-          title={pendingDelete ? deleteDialogTitle(pendingDelete.assessment, pendingDelete.step) : "Delete"}
-          description={pendingDelete ? pendingDeleteDescription(pendingDelete) : ""}
-          confirmLabel={pendingDelete ? pendingDeleteConfirmLabel(pendingDelete) : "Delete"}
-          cancelLabel="Cancel"
+          title={pendingDelete ? deleteDialogTitle(pendingDelete.assessment, pendingDelete.step, t) : t("common.delete")}
+          description={pendingDelete ? pendingDeleteDescription(pendingDelete, t) : ""}
+          confirmLabel={pendingDelete ? pendingDeleteConfirmLabel(pendingDelete, t) : t("common.delete")}
+          cancelLabel={t("common.cancel")}
           onConfirm={confirmPendingDelete}
           onCancel={() => {
             pendingDeleteNextStepRef.current = null;
@@ -3233,11 +3279,13 @@ export default function ProjectEstimate() {
         >
           {pendingDelete?.step === "execution" && pendingDelete.assessment.kind === "stage" && pendingDelete.assessment.startedEntries.length > 0 && (
             <div className="max-h-48 overflow-auto rounded-md border border-border p-2">
-              <p className="mb-2 text-caption text-muted-foreground">Started work and tasks in this stage</p>
+              <p className="mb-2 text-caption text-muted-foreground">{t("estimate.delete.startedHeading")}</p>
               <ul className="space-y-1">
                 {pendingDelete.assessment.startedEntries.map((entry) => (
                   <li key={`${entry.kind}-${entry.id}`} className="text-caption text-foreground">
-                    {entry.title} ({entry.kind === "work" ? "Work" : "Task"}: {entry.statusLabel})
+                    {entry.kind === "work"
+                      ? t("estimate.delete.startedEntry.work", { title: entry.title, status: entry.statusLabel })
+                      : t("estimate.delete.startedEntry.task", { title: entry.title, status: entry.statusLabel })}
                   </li>
                 ))}
               </ul>
@@ -3248,11 +3296,11 @@ export default function ProjectEstimate() {
             <div className="max-h-56 overflow-auto rounded-md border border-border p-2 space-y-3">
               {pendingDelete.assessment.financial.procurement.length > 0 && (
                 <div>
-                  <p className="mb-2 text-caption text-muted-foreground">Procurement and stock already affected</p>
+                  <p className="mb-2 text-caption text-muted-foreground">{t("estimate.delete.procurementHeading")}</p>
                   <ul className="space-y-1">
                     {pendingDelete.assessment.financial.procurement.map((item) => (
                       <li key={item.procurementItemId} className="text-caption text-foreground">
-                        {item.title} ({procurementConsequenceLabel(item)})
+                        {item.title} ({procurementConsequenceLabel(item, t)})
                       </li>
                     ))}
                   </ul>
@@ -3261,11 +3309,11 @@ export default function ProjectEstimate() {
 
               {pendingDelete.assessment.financial.hr.length > 0 && (
                 <div>
-                  <p className="mb-2 text-caption text-muted-foreground">HR and payment records already affected</p>
+                  <p className="mb-2 text-caption text-muted-foreground">{t("estimate.delete.hrHeading")}</p>
                   <ul className="space-y-1">
                     {pendingDelete.assessment.financial.hr.map((item) => (
                       <li key={item.hrItemId} className="text-caption text-foreground">
-                        {item.title} ({hrConsequenceLabel(item)})
+                        {item.title} ({hrConsequenceLabel(item, t)})
                       </li>
                     ))}
                   </ul>
@@ -3280,10 +3328,10 @@ export default function ProjectEstimate() {
           onOpenChange={(open) => {
             if (!open) setMissingDatesWorkIds([]);
           }}
-          title="Missing work dates"
-          description="Some works are missing planned start/end dates. You can skip setup to auto-generate a sequential schedule."
-          confirmLabel="Skip setup"
-          cancelLabel="Cancel"
+          title={t("estimate.missingDates.title")}
+          description={t("estimate.missingDates.description")}
+          confirmLabel={t("estimate.missingDates.skipSetup")}
+          cancelLabel={t("common.cancel")}
           onConfirm={handleSkipSetup}
           onCancel={() => setMissingDatesWorkIds([])}
         >
@@ -3306,11 +3354,11 @@ export default function ProjectEstimate() {
           onOpenChange={(open) => {
             if (!open) setIncompleteTaskBlocks([]);
           }}
-          title="Cannot mark as Finished"
-          description="All project tasks must be Done before project status can move to Finished."
-          confirmLabel="Mark all tasks done"
-          cancelLabel="Close"
-          tertiaryLabel="Go to Work log"
+          title={t("estimate.finish.blockedTitle")}
+          description={t("estimate.finish.blockedDescription")}
+          confirmLabel={t("estimate.finish.markAllDone")}
+          cancelLabel={t("common.close")}
+          tertiaryLabel={t("estimate.finish.goToWorkLog")}
           onTertiary={handleGoToWorkLog}
           onConfirm={() => {
             void handleMarkAllTasksDone();
@@ -3333,10 +3381,10 @@ export default function ProjectEstimate() {
           onOpenChange={(open) => {
             if (!open) setBulkFinishedTasks(null);
           }}
-          title="All tasks are Done"
-          description="Do you want to mark the estimate as Finished now?"
-          confirmLabel="Mark estimate Finished"
-          cancelLabel="Not now"
+          title={t("estimate.finish.allDoneTitle")}
+          description={t("estimate.finish.allDoneDescription")}
+          confirmLabel={t("estimate.finish.markFinished")}
+          cancelLabel={t("estimate.finish.notNow")}
           onConfirm={() => {
             void handleConfirmFinishAfterBulkDone();
           }}
@@ -3349,10 +3397,10 @@ export default function ProjectEstimate() {
             setRecipientPickerOpen(open);
             if (!open) setSelectedRecipientIds([]);
           }}
-          title="Choose client recipients"
-          description="Select client emails that should receive this submission."
-          confirmLabel="Submit to selected"
-          cancelLabel="Cancel"
+          title={t("estimate.recipients.title")}
+          description={t("estimate.recipients.description")}
+          confirmLabel={t("estimate.recipients.submitSelected")}
+          cancelLabel={t("common.cancel")}
           onConfirm={handleSubmitToSelectedRecipients}
           onCancel={() => {
             setRecipientPickerOpen(false);
@@ -3393,12 +3441,12 @@ export default function ProjectEstimate() {
           onOpenChange={(open) => {
             if (!open) setShareLinkModalState(null);
           }}
-          title={shareLinkModalState?.title ?? "Share estimate"}
+          title={shareLinkModalState?.title ?? t("estimate.share.defaultTitle")}
           description={shareLinkModalState?.description ?? ""}
-          confirmLabel={shareLinkModalState?.suggestUpgrade ? "Upgrade plan" : "Close"}
+          confirmLabel={shareLinkModalState?.suggestUpgrade ? t("estimate.share.upgradePlan") : t("common.close")}
           showCancel={Boolean(shareLinkModalState?.suggestUpgrade)}
-          cancelLabel="Close"
-          tertiaryLabel="Copy link"
+          cancelLabel={t("common.close")}
+          tertiaryLabel={t("estimate.share.copyLink")}
           onTertiary={handleCopyShareLink}
           onConfirm={() => {
             if (shareLinkModalState?.suggestUpgrade) {
@@ -3409,7 +3457,7 @@ export default function ProjectEstimate() {
           onCancel={() => setShareLinkModalState(null)}
         >
           <div className="space-y-2 py-1">
-            <p className="text-caption text-muted-foreground">Share estimate link</p>
+            <p className="text-caption text-muted-foreground">{t("estimate.share.linkLabel")}</p>
             <Input readOnly value={shareLinkModalState?.link ?? ""} />
           </div>
         </ConfirmModal>
@@ -3417,7 +3465,7 @@ export default function ProjectEstimate() {
         <ApprovalStampFormModal
           open={approvalModalOpen}
           onOpenChange={setApprovalModalOpen}
-          title="Approve estimate version"
+          title={t("estimate.approve.title")}
           defaults={{
             name: currentUser.name.split(" ")[0] ?? "",
             surname: currentUser.name.split(" ").slice(1).join(" "),

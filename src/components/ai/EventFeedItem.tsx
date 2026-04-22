@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { usePermission, seamCanViewSensitiveDetail } from "@/lib/permissions";
 import { getActivityDisplayDetail } from "@/lib/activity-display";
 import { getEventGroupTimestampMs } from "@/lib/event-activity-timestamp";
@@ -70,6 +71,7 @@ interface EventFeedItemProps {
 
 export function EventFeedItem({ event, compact, highlighted }: EventFeedItemProps) {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const perm = usePermission(event.project_id);
   const actor = getUserById(event.actor_id);
   const detail = getActivityDisplayDetail(event, {
@@ -78,7 +80,7 @@ export function EventFeedItem({ event, compact, highlighted }: EventFeedItemProp
   const route = getEventRoute(event);
   const isAiOrigin = isAIEvent(event);
   const Icon = isAiOrigin ? Bot : (typeIcons[event.type] ?? Activity);
-  const actorLabel = isAiOrigin ? "AI" : (actor?.name ?? "System");
+  const actorLabel = isAiOrigin ? t("ai.event.actorAI") : (actor?.name ?? t("ai.event.actorSystem"));
 
   const handleClick = () => {
     if (route) navigate(route);

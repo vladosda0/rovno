@@ -18,6 +18,7 @@ import {
 import { openPhotoConsult } from "@/lib/photo-consult-store";
 import { format } from "date-fns";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { Media as MediaType } from "@/types/entities";
 import { VisibilityClassBadge } from "@/components/documents/VisibilityClassBadge";
 
@@ -38,6 +39,7 @@ interface PhotoViewerProps {
 
 export function PhotoViewer({ photo, open, onOpenChange, source, allPhotos = [] }: PhotoViewerProps) {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { id: routeProjectId } = useParams<{ id: string }>();
   const [deleteOpen, setDeleteOpen] = useState(false);
 
@@ -67,7 +69,7 @@ export function PhotoViewer({ photo, open, onOpenChange, source, allPhotos = [] 
     if (!photo) return;
     if (perm.actionState("documents_media", "rename_or_archive") !== "enabled") return;
     updateMedia(photo.id, { is_final: !photo.is_final });
-    toast({ title: photo.is_final ? "Unmarked as final" : "Marked as final" });
+    toast({ title: photo.is_final ? t("photoViewer.toast.unmarkedFinal") : t("photoViewer.toast.markedFinal") });
   }
 
   function handleDelete() {
@@ -86,7 +88,7 @@ export function PhotoViewer({ photo, open, onOpenChange, source, allPhotos = [] 
     });
     setDeleteOpen(false);
     close();
-    toast({ title: "Photo deleted" });
+    toast({ title: t("photoViewer.toast.deleted") });
   }
 
   function handleTaskClick() {
@@ -126,7 +128,7 @@ export function PhotoViewer({ photo, open, onOpenChange, source, allPhotos = [] 
               className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
             >
               <ArrowLeft className="h-4 w-4" />
-              <span className="text-caption font-medium">Back</span>
+              <span className="text-caption font-medium">{t("photoViewer.back")}</span>
             </button>
 
             <div className="flex flex-col items-center max-w-[50%] min-w-0 gap-1">
@@ -151,10 +153,10 @@ export function PhotoViewer({ photo, open, onOpenChange, source, allPhotos = [] 
                   }`}
                   title={
                     markFinalControl.disabled
-                      ? (markFinalControl.disabledReason ?? "Not available")
+                      ? (markFinalControl.disabledReason ?? t("photoViewer.notAvailable"))
                       : photo.is_final
-                        ? "Unmark as final"
-                        : "Mark as final"
+                        ? t("photoViewer.unmarkAsFinal")
+                        : t("photoViewer.markAsFinal")
                   }
                 >
                   <Star className="h-4 w-4" fill={photo.is_final ? "currentColor" : "none"} />
@@ -170,7 +172,7 @@ export function PhotoViewer({ photo, open, onOpenChange, source, allPhotos = [] 
                       ? "opacity-50 cursor-not-allowed text-muted-foreground"
                       : "text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                   }`}
-                  title={deleteMediaControl.disabled ? (deleteMediaControl.disabledReason ?? "Not available") : "Delete photo"}
+                  title={deleteMediaControl.disabled ? (deleteMediaControl.disabledReason ?? t("photoViewer.notAvailable")) : t("photoViewer.deletePhoto")}
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -191,7 +193,7 @@ export function PhotoViewer({ photo, open, onOpenChange, source, allPhotos = [] 
               {photo.is_final && (
                 <div className="absolute top-3 right-3 bg-accent rounded-full px-2.5 py-0.5 flex items-center gap-1">
                   <Star className="h-3 w-3 text-accent-foreground" fill="currentColor" />
-                  <span className="text-caption text-accent-foreground font-medium">Final</span>
+                  <span className="text-caption text-accent-foreground font-medium">{t("photoViewer.final")}</span>
                 </div>
               )}
             </div>
@@ -220,7 +222,7 @@ export function PhotoViewer({ photo, open, onOpenChange, source, allPhotos = [] 
                   </button>
                 ) : (
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-muted/40 px-3 py-1 text-caption text-muted-foreground">
-                    Task unavailable
+                    {t("photoViewer.taskUnavailable")}
                   </span>
                 )}
               </div>
@@ -236,7 +238,7 @@ export function PhotoViewer({ photo, open, onOpenChange, source, allPhotos = [] 
                 size="sm"
               >
                 <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-                AI Consult
+                {t("photoViewer.aiConsult")}
               </Button>
             )}
             {markFinalControl.visible ? (
@@ -248,7 +250,7 @@ export function PhotoViewer({ photo, open, onOpenChange, source, allPhotos = [] 
                 title={markFinalControl.disabled ? markFinalControl.disabledReason : undefined}
               >
                 <Star className="h-3.5 w-3.5 mr-1.5" />
-                {photo.is_final ? "Unmark final" : "Mark as final"}
+                {photo.is_final ? t("photoViewer.unmarkFinal") : t("photoViewer.markAsFinal")}
               </Button>
             ) : null}
           </div>
@@ -259,9 +261,9 @@ export function PhotoViewer({ photo, open, onOpenChange, source, allPhotos = [] 
       <ConfirmModal
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
-        title="Delete photo?"
-        description="This will remove the photo from the project and tasks."
-        confirmLabel="Delete"
+        title={t("photoViewer.confirmDelete.title")}
+        description={t("photoViewer.confirmDelete.description")}
+        confirmLabel={t("photoViewer.confirmDelete.confirm")}
         onConfirm={handleDelete}
         onCancel={() => setDeleteOpen(false)}
       />

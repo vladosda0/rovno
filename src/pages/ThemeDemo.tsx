@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 
 const ColorSwatch = ({ name, variable, className }: { name: string; variable: string; className?: string }) => (
   <div className="flex flex-col items-center gap-2">
@@ -12,6 +13,7 @@ const ColorSwatch = ({ name, variable, className }: { name: string; variable: st
 );
 
 const ThemeDemo = () => {
+  const { t } = useTranslation();
   const [isDark, setIsDark] = useState(false);
 
   const toggleTheme = () => {
@@ -24,12 +26,12 @@ const ThemeDemo = () => {
       {/* Header */}
       <header className="sticky top-0 z-10 glass px-sp-4 py-sp-2">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <h1 className="text-h3">StroyAgent Design System</h1>
+          <h1 className="text-h3">{t("themeDemo.title")}</h1>
           <button
             onClick={toggleTheme}
             className="px-sp-2 py-sp-1 rounded-pill glass text-body-sm font-medium hover:scale-[1.02] transition-transform duration-150"
           >
-            {isDark ? "☀️ Light" : "🌙 Dark"}
+            {isDark ? t("themeDemo.theme.light") : t("themeDemo.theme.dark")}
           </button>
         </div>
       </header>
@@ -37,30 +39,30 @@ const ThemeDemo = () => {
       <main className="max-w-6xl mx-auto px-sp-4 py-sp-6 space-y-sp-6">
         {/* === Colors === */}
         <section>
-          <h2 className="text-h2 mb-sp-3">Color System</h2>
+          <h2 className="text-h2 mb-sp-3">{t("themeDemo.sections.colors")}</h2>
 
           <div className="space-y-sp-4">
             <div>
-              <h3 className="text-h3 mb-sp-2 text-muted-foreground">Base</h3>
+              <h3 className="text-h3 mb-sp-2 text-muted-foreground">{t("themeDemo.sections.colorsBase")}</h3>
               <div className="flex flex-wrap gap-sp-3">
-                <ColorSwatch name="Background" variable="background" />
-                <ColorSwatch name="Foreground" variable="foreground" />
-                <ColorSwatch name="Card" variable="card" />
-                <ColorSwatch name="Primary" variable="primary" />
-                <ColorSwatch name="Secondary" variable="secondary" />
-                <ColorSwatch name="Muted" variable="muted" />
-                <ColorSwatch name="Border" variable="border" />
+                <ColorSwatch name={t("themeDemo.colors.background")} variable="background" />
+                <ColorSwatch name={t("themeDemo.colors.foreground")} variable="foreground" />
+                <ColorSwatch name={t("themeDemo.colors.card")} variable="card" />
+                <ColorSwatch name={t("themeDemo.colors.primary")} variable="primary" />
+                <ColorSwatch name={t("themeDemo.colors.secondary")} variable="secondary" />
+                <ColorSwatch name={t("themeDemo.colors.muted")} variable="muted" />
+                <ColorSwatch name={t("themeDemo.colors.border")} variable="border" />
               </div>
             </div>
 
             <div>
-              <h3 className="text-h3 mb-sp-2 text-muted-foreground">Semantic</h3>
+              <h3 className="text-h3 mb-sp-2 text-muted-foreground">{t("themeDemo.sections.colorsSemantic")}</h3>
               <div className="flex flex-wrap gap-sp-3">
-                <ColorSwatch name="Accent" variable="accent" />
-                <ColorSwatch name="Success" variable="success" />
-                <ColorSwatch name="Warning" variable="warning" />
-                <ColorSwatch name="Destructive" variable="destructive" />
-                <ColorSwatch name="Info" variable="info" />
+                <ColorSwatch name={t("themeDemo.colors.accent")} variable="accent" />
+                <ColorSwatch name={t("themeDemo.colors.success")} variable="success" />
+                <ColorSwatch name={t("themeDemo.colors.warning")} variable="warning" />
+                <ColorSwatch name={t("themeDemo.colors.destructive")} variable="destructive" />
+                <ColorSwatch name={t("themeDemo.colors.info")} variable="info" />
               </div>
             </div>
           </div>
@@ -68,20 +70,20 @@ const ThemeDemo = () => {
 
         {/* === Typography === */}
         <section>
-          <h2 className="text-h2 mb-sp-3">Typography Scale</h2>
+          <h2 className="text-h2 mb-sp-3">{t("themeDemo.sections.typography")}</h2>
           <div className="space-y-sp-2 glass rounded-panel p-sp-4">
-            <p className="text-h1">H1 — 52px Bold</p>
-            <p className="text-h2">H2 — 30px Semibold</p>
-            <p className="text-h3">H3 — 22px Semibold</p>
-            <p className="text-body">Body — 15px Regular — The quick brown fox jumps over the lazy dog.</p>
-            <p className="text-body-sm text-muted-foreground">Body Small — 13px — Secondary information and helper text.</p>
-            <p className="text-caption text-muted-foreground">Caption — 12px Medium — Labels, timestamps, metadata.</p>
+            <p className="text-h1">{t("themeDemo.typography.h1")}</p>
+            <p className="text-h2">{t("themeDemo.typography.h2")}</p>
+            <p className="text-h3">{t("themeDemo.typography.h3")}</p>
+            <p className="text-body">{t("themeDemo.typography.body")}</p>
+            <p className="text-body-sm text-muted-foreground">{t("themeDemo.typography.bodySmall")}</p>
+            <p className="text-caption text-muted-foreground">{t("themeDemo.typography.caption")}</p>
           </div>
         </section>
 
         {/* === Spacing === */}
         <section>
-          <h2 className="text-h2 mb-sp-3">Spacing (8pt Grid)</h2>
+          <h2 className="text-h2 mb-sp-3">{t("themeDemo.sections.spacing")}</h2>
           <div className="flex items-end gap-sp-2">
             {[
               { label: "8px", size: "sp-1" },
@@ -103,17 +105,17 @@ const ThemeDemo = () => {
 
         {/* === Radii === */}
         <section>
-          <h2 className="text-h2 mb-sp-3">Border Radii</h2>
+          <h2 className="text-h2 mb-sp-3">{t("themeDemo.sections.radii")}</h2>
           <div className="flex flex-wrap gap-sp-3">
             {[
-              { label: "Card — 16px", cls: "rounded-card" },
-              { label: "Panel — 20px", cls: "rounded-panel" },
-              { label: "Modal — 24px", cls: "rounded-modal" },
-              { label: "Pill — 999px", cls: "rounded-pill" },
-            ].map(({ label, cls }) => (
+              { labelKey: "themeDemo.radii.card", cls: "rounded-card" },
+              { labelKey: "themeDemo.radii.panel", cls: "rounded-panel" },
+              { labelKey: "themeDemo.radii.modal", cls: "rounded-modal" },
+              { labelKey: "themeDemo.radii.pill", cls: "rounded-pill" },
+            ].map(({ labelKey, cls }) => (
               <div key={cls} className="flex flex-col items-center gap-2">
                 <div className={`w-24 h-16 border-2 border-accent ${cls}`} />
-                <span className="text-caption text-muted-foreground">{label}</span>
+                <span className="text-caption text-muted-foreground">{t(labelKey)}</span>
               </div>
             ))}
           </div>
@@ -121,7 +123,7 @@ const ThemeDemo = () => {
 
         {/* === Glass Surfaces === */}
         <section>
-          <h2 className="text-h2 mb-sp-3">Glass Surfaces</h2>
+          <h2 className="text-h2 mb-sp-3">{t("themeDemo.sections.glass")}</h2>
           <div className="relative">
             {/* Background pattern to show glass effect */}
             <div className="absolute inset-0 rounded-panel overflow-hidden">
@@ -133,20 +135,20 @@ const ThemeDemo = () => {
 
             <div className="relative grid grid-cols-1 md:grid-cols-2 gap-sp-3 p-sp-4">
               <div className="glass rounded-card p-sp-3 grain">
-                <h3 className="text-h3 relative z-10">Default Glass</h3>
-                <p className="text-body-sm text-muted-foreground relative z-10">backdrop-blur 20px, 8% opacity</p>
+                <h3 className="text-h3 relative z-10">{t("themeDemo.glass.default.title")}</h3>
+                <p className="text-body-sm text-muted-foreground relative z-10">{t("themeDemo.glass.default.subtitle")}</p>
               </div>
               <div className="glass-elevated rounded-panel p-sp-3 grain">
-                <h3 className="text-h3 relative z-10">Elevated Glass</h3>
-                <p className="text-body-sm text-muted-foreground relative z-10">backdrop-blur 24px, 12% opacity</p>
+                <h3 className="text-h3 relative z-10">{t("themeDemo.glass.elevated.title")}</h3>
+                <p className="text-body-sm text-muted-foreground relative z-10">{t("themeDemo.glass.elevated.subtitle")}</p>
               </div>
               <div className="glass-modal rounded-modal p-sp-3 grain">
-                <h3 className="text-h3 relative z-10">Modal Glass</h3>
-                <p className="text-body-sm text-muted-foreground relative z-10">backdrop-blur 24px, 14% opacity</p>
+                <h3 className="text-h3 relative z-10">{t("themeDemo.glass.modal.title")}</h3>
+                <p className="text-body-sm text-muted-foreground relative z-10">{t("themeDemo.glass.modal.subtitle")}</p>
               </div>
               <div className="glass-sidebar rounded-card p-sp-3 grain">
-                <h3 className="text-h3 relative z-10">Sidebar Glass</h3>
-                <p className="text-body-sm text-muted-foreground relative z-10">backdrop-blur 16px, 6% opacity</p>
+                <h3 className="text-h3 relative z-10">{t("themeDemo.glass.sidebar.title")}</h3>
+                <p className="text-body-sm text-muted-foreground relative z-10">{t("themeDemo.glass.sidebar.subtitle")}</p>
               </div>
             </div>
           </div>
@@ -154,12 +156,12 @@ const ThemeDemo = () => {
 
         {/* === Grain Overlay === */}
         <section>
-          <h2 className="text-h2 mb-sp-3">Grain / Noise Overlay</h2>
+          <h2 className="text-h2 mb-sp-3">{t("themeDemo.sections.grain")}</h2>
           <div className="flex gap-sp-3">
             <div className="w-40 h-24 rounded-card bg-gradient-to-br from-accent to-info" />
             <div className="w-40 h-24 rounded-card bg-gradient-to-br from-accent to-info grain" />
           </div>
-          <p className="text-body-sm text-muted-foreground mt-sp-1">Left: without grain — Right: with 3% grain overlay</p>
+          <p className="text-body-sm text-muted-foreground mt-sp-1">{t("themeDemo.grain.caption")}</p>
         </section>
       </main>
     </div>

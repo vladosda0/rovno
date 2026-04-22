@@ -1,5 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { CalendarIcon, Loader2, Save, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -62,6 +63,7 @@ export function OrderModal({
   showSensitiveDetail = true,
   onCompleted,
 }: OrderModalProps) {
+  const { t } = useTranslation();
   const baseItems = useProcurementV2(projectId);
   const orders = useOrders(projectId);
   const locations = useLocations(projectId);
@@ -200,16 +202,16 @@ export function OrderModal({
     }));
 
     if (payloadLines.length === 0) {
-      toast({ title: "No lines selected", description: "Add at least one line with quantity", variant: "destructive" });
+      toast({ title: t("procurement.orderModal.toast.noLines"), description: t("procurement.orderModal.toast.noLinesDesc"), variant: "destructive" });
       return;
     }
     if (action === "place" && !allOrderedLinesHaveValidActualPrices) {
-      toast({ title: "Actual price required", description: "Set a valid actual price for each ordered line", variant: "destructive" });
+      toast({ title: t("procurement.orderModal.toast.actualPriceRequired"), description: t("procurement.orderModal.toast.actualPriceRequiredDesc"), variant: "destructive" });
       return;
     }
 
     if (kind === "stock" && !fromLocationId) {
-      toast({ title: "From location is required", variant: "destructive" });
+      toast({ title: t("procurement.orderModal.toast.fromRequired"), variant: "destructive" });
       return;
     }
 
@@ -223,8 +225,8 @@ export function OrderModal({
         const available = getStock(projectId, fromLocationId, toInventoryKey(item));
         if (line.qty > available) {
           toast({
-            title: "Not enough stock",
-            description: `${item.name}: available ${available} ${item.unit}`,
+            title: t("procurement.orderModal.toast.notEnoughStock"),
+            description: t("procurement.orderModal.toast.notEnoughStockDesc", { name: item.name, available, unit: item.unit }),
             variant: "destructive",
           });
           return;
@@ -259,18 +261,18 @@ export function OrderModal({
       if (action === "place") {
         const placed = placeOrder(created.id);
         if (!placed.ok) {
-          toast({ title: "Unable to place order", description: placed.error, variant: "destructive" });
+          toast({ title: t("procurement.orderModal.toast.unablePlace"), description: placed.error, variant: "destructive" });
           return;
         }
         trackEvent("procurement_order_placed", { project_id: projectId, kind: "stock", line_count: payloadLines.length });
-        toast({ title: "Stock allocation completed" });
+        toast({ title: t("procurement.orderModal.toast.stockCompleted") });
         onCompleted?.(created.id);
         onOpenChange(false);
         return;
       }
 
       trackEvent("procurement_order_draft_created", { project_id: projectId, kind: "stock", line_count: payloadLines.length });
-      toast({ title: "Draft saved" });
+      toast({ title: t("procurement.orderModal.toast.draftSaved") });
       onCompleted?.(created.id);
       onOpenChange(false);
       return;
@@ -296,7 +298,7 @@ export function OrderModal({
         note: note || null,
         lines: positiveLines.map((line) => ({
           procurementItemId: line.procurementItemId,
-          title: itemById.get(line.procurementItemId)?.name ?? "Untitled item",
+          title: itemById.get(line.procurementItemId)?.name ?? t("procurement.orderModal.untitledItem"),
           qty: line.qty,
           unit: line.unit,
           plannedUnitPrice: line.plannedUnitPrice,
@@ -336,13 +338,13 @@ export function OrderModal({
         ]);
       }
 
-      toast({ title: action === "place" ? "Order placed" : "Draft saved" });
+      toast({ title: action === "place" ? t("procurement.orderModal.toast.orderPlaced") : t("procurement.orderModal.toast.draftSaved") });
       onCompleted?.(finalOrderId);
       onOpenChange(false);
     } catch (error) {
-      const description = error instanceof Error ? error.message : "Please try again.";
+      const description = error instanceof Error ? error.message : t("procurement.orderModal.toast.unablePlaceFallback");
       toast({
-        title: action === "place" ? "Unable to place order" : "Unable to save draft",
+        title: action === "place" ? t("procurement.orderModal.toast.unablePlace") : t("procurement.orderModal.toast.unableDraft"),
         description,
         variant: "destructive",
       });
@@ -361,18 +363,18 @@ export function OrderModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[96vw] max-w-5xl max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col">
         <DialogHeader className="px-5 py-4 border-b border-border">
-          <DialogTitle>Create order</DialogTitle>
+          <DialogTitle>{t("procurement.orderModal.createTitle")}</DialogTitle>
         </DialogHeader>
 
         {!showSensitiveDetail ? (
           <>
             <div className="flex-1 px-5 py-4">
               <p className="text-sm text-muted-foreground">
-                Supplier pricing detail is unavailable for your current access level.
+                {t("procurement.orderModal.noSensitive")}
               </p>
             </div>
             <DialogFooter className="px-5 py-4 border-t border-border">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>{t("common.close")}</Button>
             </DialogFooter>
           </>
         ) : (
@@ -386,7 +388,7 @@ export function OrderModal({
               onClick={() => setKind("supplier")}
               className={cn(kind === "supplier" && "bg-accent text-accent-foreground hover:bg-accent/90")}
             >
-              Supplier
+              {t("procurement.orderModal.kindSupplier")}
             </Button>
             <Button
               type="button"
@@ -396,56 +398,56 @@ export function OrderModal({
               disabled={isSupabaseMode}
               className={cn(kind === "stock" && "bg-accent text-accent-foreground hover:bg-accent/90")}
             >
-              Stock
+              {t("procurement.orderModal.kindStock")}
             </Button>
           </div>
           {isSupabaseMode && (
             <p className="text-xs text-muted-foreground">
-              Stock allocation stays local-only for now and is disabled in Supabase mode.
+              {t("procurement.orderModal.supabaseStockNote")}
             </p>
           )}
 
           {kind === "supplier" ? (
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Supplier</label>
-                <Input value={supplierName} onChange={(event) => setSupplierName(event.target.value)} className="h-9" placeholder="Supplier name" />
+                <label className="text-xs text-muted-foreground">{t("procurement.orderModal.supplier")}</label>
+                <Input value={supplierName} onChange={(event) => setSupplierName(event.target.value)} className="h-9" placeholder={t("procurement.orderModal.supplierPlaceholder")} />
               </div>
               <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Deliver to</label>
+                <label className="text-xs text-muted-foreground">{t("procurement.orderModal.deliverTo")}</label>
                 <LocationPicker
                   projectId={projectId}
                   value={deliverToLocationId}
                   onChange={setDeliverToLocationId}
                   className="h-9"
-                  placeholder={isSupabaseMode ? "Choose at receive time" : "Select location"}
+                  placeholder={isSupabaseMode ? t("procurement.orderModal.deliverPlaceholderSupabase") : t("procurement.locationPicker.placeholder")}
                   disabled={isSupabaseMode}
                 />
                 {isSupabaseMode && (
-                  <p className="text-[11px] text-muted-foreground">Receive location is saved when the order is received.</p>
+                  <p className="text-[11px] text-muted-foreground">{t("procurement.orderModal.deliverHintSupabase")}</p>
                 )}
               </div>
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">From location</label>
+                <label className="text-xs text-muted-foreground">{t("procurement.orderModal.fromLocation")}</label>
                 <LocationPicker projectId={projectId} value={fromLocationId} onChange={setFromLocationId} className="h-9" />
               </div>
               <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">To location</label>
+                <label className="text-xs text-muted-foreground">{t("procurement.orderModal.toLocation")}</label>
                 <LocationPicker projectId={projectId} value={toLocationId} onChange={setToLocationId} className="h-9" />
               </div>
             </div>
           )}
 
           <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">Delivery date</label>
+            <label className="text-xs text-muted-foreground">{t("procurement.orderModal.deliveryDate")}</label>
             <Popover>
               <PopoverTrigger asChild>
                 <Button variant="outline" className="w-full justify-start h-9 text-left font-normal">
                   <CalendarIcon className="h-4 w-4 mr-2" />
-                  {deliveryDeadline ? deliveryDeadline.toLocaleDateString() : "Set date"}
+                  {deliveryDeadline ? deliveryDeadline.toLocaleDateString() : t("procurement.orderModal.setDate")}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start">
@@ -455,11 +457,11 @@ export function OrderModal({
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">Invoice attachment</label>
+            <label className="text-xs text-muted-foreground">{t("procurement.orderModal.invoiceAttachment")}</label>
             <Input
               type="file"
               className="h-9"
-              aria-label="Invoice attachment"
+              aria-label={t("procurement.orderModal.invoiceAria")}
               disabled={isSupabaseMode}
               onChange={(event) => {
                 const file = event.target.files?.[0];
@@ -475,21 +477,21 @@ export function OrderModal({
               }}
             />
             {isSupabaseMode && (
-              <p className="text-[11px] text-muted-foreground">Invoice uploads are not persisted in this Supabase slice yet.</p>
+              <p className="text-[11px] text-muted-foreground">{t("procurement.orderModal.invoiceSupabaseHint")}</p>
             )}
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">Note</label>
+            <label className="text-xs text-muted-foreground">{t("procurement.orderModal.note")}</label>
             <Input
               value={note}
               onChange={(event) => setNote(event.target.value)}
               className="h-9"
-              placeholder="Optional note"
+              placeholder={t("procurement.orderModal.notePlaceholder")}
               disabled={isSupabaseMode}
             />
             {isSupabaseMode && (
-              <p className="text-[11px] text-muted-foreground">Order notes are not persisted in this Supabase slice yet.</p>
+              <p className="text-[11px] text-muted-foreground">{t("procurement.orderModal.noteSupabaseHint")}</p>
             )}
           </div>
 
@@ -505,12 +507,12 @@ export function OrderModal({
               </colgroup>
               <thead className="bg-muted/30 border-b border-border">
                 <tr>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">Item</th>
-                  <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">Qty</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">Unit</th>
-                  <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">Planned</th>
-                  <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">Factual price</th>
-                  {kind === "stock" && <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">Available</th>}
+                  <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">{t("procurement.orderModal.colItem")}</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">{t("procurement.orderModal.colQty")}</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">{t("procurement.orderModal.colUnit")}</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">{t("procurement.orderModal.colPlanned")}</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">{t("procurement.orderModal.colFactual")}</th>
+                  {kind === "stock" && <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">{t("procurement.orderModal.colAvailable")}</th>}
                 </tr>
               </thead>
               <tbody>
@@ -523,7 +525,9 @@ export function OrderModal({
                   const requestedRemaining = requestedRemainingByItemId.get(line.procurementItemId) ?? 0;
                   const remainingAfterThisOrder = Math.max(requestedRemaining - line.qty, 0);
                   const showUnderOrderWarning = remainingAfterThisOrder > 0;
-                  const deliveryDateFragment = deliveryDeadline ? ` by ${deliveryDeadline.toLocaleDateString()}` : "";
+                  const underOrderMessage = deliveryDeadline
+                    ? t("procurement.orderModal.underOrderBy", { count: remainingAfterThisOrder, date: deliveryDeadline.toLocaleDateString() })
+                    : t("procurement.orderModal.underOrder", { count: remainingAfterThisOrder });
                   const actualPriceInvalid = line.qty > 0 && !isValidActualUnitPrice(line.actualUnitPrice);
                   const showFeedback = showUnderOrderWarning || actualPriceInvalid;
 
@@ -593,12 +597,12 @@ export function OrderModal({
                         <tr className="border-b border-border/70">
                           <td className="px-3 pb-2 pt-0" />
                           <td className="px-3 pb-2 pt-0 text-right text-[11px] leading-4 text-destructive">
-                            {showUnderOrderWarning ? `⚠️ ${remainingAfterThisOrder} more materials requested${deliveryDateFragment}` : ""}
+                            {showUnderOrderWarning ? underOrderMessage : ""}
                           </td>
                           <td className="px-3 pb-2 pt-0" />
                           <td className="px-3 pb-2 pt-0" />
                           <td className="px-3 pb-2 pt-0 text-right text-[11px] leading-4 text-destructive">
-                            {actualPriceInvalid ? "Actual price required" : ""}
+                            {actualPriceInvalid ? t("procurement.orderModal.actualRequired") : ""}
                           </td>
                           {kind === "stock" && <td className="px-3 pb-2 pt-0" />}
                         </tr>
@@ -612,8 +616,8 @@ export function OrderModal({
         </div>
 
         <DialogFooter className="px-5 py-4 border-t border-border">
-          <div className="mr-auto text-sm text-muted-foreground">Total: {fmtCost(totalAmount)}</div>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+          <div className="mr-auto text-sm text-muted-foreground">{t("procurement.orderModal.total", { amount: fmtCost(totalAmount) })}</div>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>{t("common.close")}</Button>
           {SHOW_ORDER_SAVE_DRAFT_BUTTON ? (
             <Button
               type="button"
@@ -624,7 +628,7 @@ export function OrderModal({
               {orderActionInFlight === "draft"
                 ? <Loader2 className="h-4 w-4 mr-1 animate-spin" />
                 : <Save className="h-4 w-4 mr-1" />}
-              {orderActionInFlight === "draft" ? "Saving..." : "Save draft"}
+              {orderActionInFlight === "draft" ? t("procurement.orderModal.saving") : t("procurement.orderModal.saveDraft")}
             </Button>
           ) : null}
           <Button
@@ -635,7 +639,7 @@ export function OrderModal({
             {orderActionInFlight === "place"
               ? <Loader2 className="h-4 w-4 mr-1 animate-spin" />
               : <Send className="h-4 w-4 mr-1" />}
-            {orderActionInFlight === "place" ? "Placing..." : "Place order"}
+            {orderActionInFlight === "place" ? t("procurement.orderModal.placing") : t("procurement.orderModal.placeOrder")}
           </Button>
         </DialogFooter>
         </>

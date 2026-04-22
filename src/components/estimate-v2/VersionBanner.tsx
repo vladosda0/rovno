@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -21,6 +22,7 @@ export function VersionBanner({
   secondaryActions,
   children,
 }: VersionBannerProps) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(isOpenByDefault);
 
   useEffect(() => {
@@ -39,7 +41,7 @@ export function VersionBanner({
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => setOpen((prev) => !prev)}>
             {open ? <ChevronDown className="mr-1 h-4 w-4" /> : <ChevronRight className="mr-1 h-4 w-4" />}
-            Review changes
+            {t("estimate.versionBanner.review")}
           </Button>
           {secondaryActions}
           {primaryCta}

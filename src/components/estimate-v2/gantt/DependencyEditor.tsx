@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +38,7 @@ export function DependencyEditor({
   onAddDependency,
   onRemoveDependency,
 }: DependencyEditorProps) {
+  const { t } = useTranslation();
   const [fromWorkId, setFromWorkId] = useState("");
   const [toWorkId, setToWorkId] = useState("");
   const [lagDays, setLagDays] = useState("0");
@@ -56,19 +58,19 @@ export function DependencyEditor({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-lg">
         <SheetHeader>
-          <SheetTitle>Dependencies</SheetTitle>
+          <SheetTitle>{t("estimate.gantt.dep.title")}</SheetTitle>
           <SheetDescription>
-            Finish-to-start constraints with lag days. Lag days means waiting time between tasks, e.g., concrete drying for 3 days before next work starts.
+            {t("estimate.gantt.dep.description")}
           </SheetDescription>
         </SheetHeader>
 
         <div className="mt-4 space-y-4">
           <div className="rounded-md border border-border p-3">
-            <p className="mb-2 text-sm font-medium text-foreground">Add dependency</p>
+            <p className="mb-2 text-sm font-medium text-foreground">{t("estimate.gantt.dep.addHeading")}</p>
             <div className="grid gap-2">
               <Select value={fromWorkId} onValueChange={setFromWorkId}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Predecessor" />
+                  <SelectValue placeholder={t("estimate.gantt.dep.predecessorPlaceholder")} />
                 </SelectTrigger>
                 <SelectContent>
                   {sortedWorks.map((work) => (
@@ -79,7 +81,7 @@ export function DependencyEditor({
 
               <Select value={toWorkId} onValueChange={setToWorkId}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Successor" />
+                  <SelectValue placeholder={t("estimate.gantt.dep.successorPlaceholder")} />
                 </SelectTrigger>
                 <SelectContent>
                   {sortedWorks.map((work) => (
@@ -92,13 +94,13 @@ export function DependencyEditor({
                 type="number"
                 value={lagDays}
                 onChange={(event) => setLagDays(event.target.value)}
-                placeholder="Lag days"
+                placeholder={t("estimate.gantt.dep.lagPlaceholder")}
               />
 
               <Input
                 value={comment}
                 onChange={(event) => setComment(event.target.value)}
-                placeholder="Comment (optional)"
+                placeholder={t("estimate.gantt.dep.commentPlaceholder")}
               />
 
               <Button
@@ -112,14 +114,14 @@ export function DependencyEditor({
                   setComment("");
                 }}
               >
-                Add FS dependency
+                {t("estimate.gantt.dep.addButton")}
               </Button>
             </div>
           </div>
 
           <div className="space-y-2">
             {dependencies.length === 0 && (
-              <p className="text-sm text-muted-foreground">No dependencies yet.</p>
+              <p className="text-sm text-muted-foreground">{t("estimate.gantt.dep.empty")}</p>
             )}
 
             {dependencies.map((dependency) => {
@@ -133,10 +135,10 @@ export function DependencyEditor({
                   <div>
                     <p className="text-sm text-foreground">
                       {from?.title ?? dependency.fromWorkId}
-                      {" -> "}
+                      {t("estimate.gantt.dep.arrow")}
                       {to?.title ?? dependency.toWorkId}
                     </p>
-                    <p className="text-xs text-muted-foreground">FS, lag {dependency.lagDays}d</p>
+                    <p className="text-xs text-muted-foreground">{t("estimate.gantt.dep.lagDisplay", { days: dependency.lagDays })}</p>
                   </div>
 
                   <Button

@@ -1,6 +1,7 @@
 import { Link, useLocation, useMatch, useNavigate } from "react-router-dom";
 import { ChevronDown, Hammer, LogOut, PanelLeft, Settings, User } from "lucide-react";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -61,6 +62,7 @@ interface TopBarProps {
 }
 
 export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const projectMatch = useMatch("/project/:id/*");
@@ -72,9 +74,9 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
   const user = useCurrentUser();
   const projects = useProjects();
   const currentProject = projects.find((project) => project.id === projectId);
-  const projectName = currentProject?.title ?? "Project";
+  const projectName = currentProject?.title ?? t("nav.projectFallback");
   const [credits, setCredits] = useState<MockCredits>(DEFAULT_CREDITS);
-  const displayName = user.name || user.email || (runtimeAuth.status === "authenticated" ? "Workspace" : "Guest");
+  const displayName = user.name || user.email || (runtimeAuth.status === "authenticated" ? t("nav.displayName.workspace") : t("nav.displayName.guest"));
   const initials = displayName.split(" ").map((word) => word[0]).join("").slice(0, 2).toUpperCase();
 
   const dailyRemaining = Math.max(credits.dailyTotal - credits.dailyUsed, 0);
@@ -99,12 +101,12 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
       clearAiSidebarSessionPreference();
       clearStoredAuthProfile();
       setAuthRole("guest");
-      toast({ title: "Logged out" });
+      toast({ title: t("nav.loggedOutToast") });
       navigate("/");
     } catch (error) {
       toast({
-        title: "Logout failed",
-        description: error instanceof Error ? error.message : "Unable to log out.",
+        title: t("nav.logoutFailed"),
+        description: error instanceof Error ? error.message : t("nav.logoutGeneric"),
         variant: "destructive",
       });
     }
@@ -120,7 +122,7 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-accent via-info to-warning text-accent-foreground">
                   <Hammer className="h-3.5 w-3.5" />
                 </span>
-                <span className="text-body-sm font-semibold text-foreground">СтройАгент</span>
+                <span className="text-body-sm font-semibold text-foreground">{t("nav.appName")}</span>
                 <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
               </Button>
             </DropdownMenuTrigger>
@@ -151,7 +153,7 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
                   }}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-caption font-semibold text-foreground">Credits</span>
+                    <span className="text-caption font-semibold text-foreground">{t("nav.credits")}</span>
                     <span className="inline-flex items-center gap-1 text-body-sm font-semibold text-foreground">
                       {totalRemaining}
                       <ChevronDown className="h-3.5 w-3.5 -rotate-90 text-muted-foreground" />
@@ -167,7 +169,7 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
                     )}
                   </div>
 
-                  <p className="mt-1.5 text-[11px] text-muted-foreground">{dailyRemaining > 0 ? "Daily credits used" : "Paid credits used"}</p>
+                  <p className="mt-1.5 text-[11px] text-muted-foreground">{dailyRemaining > 0 ? t("nav.credits.daily") : t("nav.credits.paid")}</p>
                 </div>
               </div>
 
@@ -176,12 +178,12 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
               <DropdownMenuItem asChild>
                 <Link to="/settings">
                   <Settings className="mr-2 h-4 w-4" />
-                  Settings
+                  {t("nav.settings")}
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleLogout}>
                 <LogOut className="mr-2 h-4 w-4" />
-                Log out
+                {t("nav.logout")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -222,7 +224,7 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
               onClick={onToggleAiSidebar}
             >
               <PanelLeft className="h-4 w-4" />
-              <span className="sr-only">Toggle AI sidebar</span>
+              <span className="sr-only">{t("nav.toggleAiSidebar")}</span>
             </Button>
           )}
 
@@ -249,7 +251,7 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-accent via-info to-warning text-accent-foreground">
                   <Hammer className="h-3.5 w-3.5" />
                 </span>
-                <span className="text-body-sm font-semibold text-foreground">СтройАгент</span>
+                <span className="text-body-sm font-semibold text-foreground">{t("nav.appName")}</span>
                 <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
               </Button>
             </DropdownMenuTrigger>
@@ -280,7 +282,7 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
                   }}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-caption font-semibold text-foreground">Credits</span>
+                    <span className="text-caption font-semibold text-foreground">{t("nav.credits")}</span>
                     <span className="inline-flex items-center gap-1 text-body-sm font-semibold text-foreground">
                       {totalRemaining}
                       <ChevronDown className="h-3.5 w-3.5 -rotate-90 text-muted-foreground" />
@@ -296,7 +298,7 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
                     )}
                   </div>
 
-                  <p className="mt-1.5 text-[11px] text-muted-foreground">{dailyRemaining > 0 ? "Daily credits used" : "Paid credits used"}</p>
+                  <p className="mt-1.5 text-[11px] text-muted-foreground">{dailyRemaining > 0 ? t("nav.credits.daily") : t("nav.credits.paid")}</p>
                 </div>
               </div>
 
@@ -305,12 +307,12 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
               <DropdownMenuItem asChild>
                 <Link to="/settings">
                   <Settings className="mr-2 h-4 w-4" />
-                  Settings
+                  {t("nav.settings")}
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleLogout}>
                 <LogOut className="mr-2 h-4 w-4" />
-                Log out
+                {t("nav.logout")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -318,7 +320,7 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
           {!aiSidebarCollapsed && (
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onToggleAiSidebar}>
               <PanelLeft className="h-4 w-4" />
-              <span className="sr-only">Toggle Sidebar</span>
+              <span className="sr-only">{t("nav.toggleSidebar")}</span>
             </Button>
           )}
         </div>
@@ -327,7 +329,7 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
           {!aiSidebarCollapsed && (
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onToggleAiSidebar}>
               <PanelLeft className="h-4 w-4" />
-              <span className="sr-only">Toggle Sidebar</span>
+              <span className="sr-only">{t("nav.toggleSidebar")}</span>
             </Button>
           )}
 
@@ -337,20 +339,20 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-accent via-info to-warning text-accent-foreground">
                   <Hammer className="h-3.5 w-3.5" />
                 </span>
-                <span className="text-body-sm font-semibold text-foreground">СтройАгент</span>
+                <span className="text-body-sm font-semibold text-foreground">{t("nav.appName")}</span>
                 <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-48 glass-elevated rounded-card">
               <DropdownMenuItem asChild>
-                <Link to="/home"><User className="mr-2 h-4 w-4" />Home</Link>
+                <Link to="/home"><User className="mr-2 h-4 w-4" />{t("nav.home")}</Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
-                <Link to="/settings"><Settings className="mr-2 h-4 w-4" />Settings</Link>
+                <Link to="/settings"><Settings className="mr-2 h-4 w-4" />{t("nav.settings")}</Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleLogout}>
-                <LogOut className="mr-2 h-4 w-4" />Logout
+                <LogOut className="mr-2 h-4 w-4" />{t("nav.logout")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

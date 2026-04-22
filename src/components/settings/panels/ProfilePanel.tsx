@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useCurrentUser } from "@/hooks/use-mock-data";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -11,13 +12,13 @@ import { Camera } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 const TIMEZONES = [
-  { value: "auto", label: "Browser (auto-detect)" },
+  { value: "auto", labelKey: "profile.timezoneOption.auto" },
   { value: "Europe/Moscow", label: "Europe/Moscow (UTC+3)" },
   { value: "Europe/London", label: "Europe/London (UTC+0)" },
   { value: "America/New_York", label: "America/New York (UTC-5)" },
   { value: "America/Los_Angeles", label: "America/Los Angeles (UTC-8)" },
   { value: "Asia/Tokyo", label: "Asia/Tokyo (UTC+9)" },
-];
+] as const;
 
 const LANGUAGES: { value: string; label: string; disabled?: boolean }[] = [
   { value: "ru", label: "Русский" },
@@ -34,6 +35,7 @@ function normalizeSelectableLanguage(locale: string | undefined): string {
 }
 
 export function ProfilePanel() {
+  const { t } = useTranslation();
   const user = useCurrentUser();
   const initials = user.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
 
@@ -49,7 +51,7 @@ export function ProfilePanel() {
   const isDirty = name !== user.name || roleTitle || phone || signature || bio || timezone !== (user.timezone || "auto") || language !== normalizeSelectableLanguage(user.locale);
 
   const handleSave = () => {
-    toast({ title: "Profile saved", description: "Your changes have been saved." });
+    toast({ title: t("profile.savedToast"), description: t("profile.savedToastDescription") });
   };
 
   const handleDiscard = () => {
@@ -64,7 +66,7 @@ export function ProfilePanel() {
 
   return (
     <div className="space-y-sp-3">
-      <SettingsSection title="Profile" description="Your personal information and public identity.">
+      <SettingsSection title={t("profile.section.title")} description={t("profile.section.description")}>
         {/* Avatar */}
         <div className="flex flex-wrap items-center gap-sp-2">
           <div className="relative">
@@ -77,41 +79,43 @@ export function ProfilePanel() {
           </div>
           <div>
             <p className="text-body-sm font-medium text-foreground">{user.name}</p>
-            <p className="text-caption text-muted-foreground">Upload a photo (coming soon)</p>
+            <p className="text-caption text-muted-foreground">{t("profile.avatar.uploadComingSoon")}</p>
           </div>
         </div>
 
         {/* Fields */}
         <div className="grid gap-sp-2 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <Label>Full name</Label>
+            <Label>{t("profile.fullName")}</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label>Email</Label>
+            <Label>{t("profile.email")}</Label>
             <Input value={email} disabled className="opacity-60" />
           </div>
           <div className="space-y-1.5">
-            <Label>Role title</Label>
-            <Input value={roleTitle} onChange={(e) => setRoleTitle(e.target.value)} placeholder="e.g. Project Manager" />
+            <Label>{t("profile.roleTitle")}</Label>
+            <Input value={roleTitle} onChange={(e) => setRoleTitle(e.target.value)} placeholder={t("profile.roleTitlePlaceholder")} />
           </div>
           <div className="space-y-1.5">
-            <Label>Phone</Label>
-            <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+7 (___) ___-__-__" />
+            <Label>{t("profile.phone")}</Label>
+            <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t("profile.phonePlaceholder")} />
           </div>
           <div className="space-y-1.5">
-            <Label>Timezone</Label>
+            <Label>{t("profile.timezone")}</Label>
             <Select value={timezone} onValueChange={setTimezone}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {TIMEZONES.map((tz) => (
-                  <SelectItem key={tz.value} value={tz.value}>{tz.label}</SelectItem>
+                  <SelectItem key={tz.value} value={tz.value}>
+                    {"labelKey" in tz ? t(tz.labelKey) : tz.label}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label>Language</Label>
+            <Label>{t("profile.language")}</Label>
             <Select value={language} onValueChange={setLanguage}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -126,21 +130,21 @@ export function ProfilePanel() {
         </div>
 
         <div className="space-y-1.5">
-          <Label>About me</Label>
-          <Textarea value={bio} onChange={(e) => setBio(e.target.value)} placeholder="A short bio..." rows={2} />
+          <Label>{t("profile.bio")}</Label>
+          <Textarea value={bio} onChange={(e) => setBio(e.target.value)} placeholder={t("profile.bioPlaceholder")} rows={2} />
         </div>
 
         <div className="space-y-1.5">
-          <Label>Signature block</Label>
-          <Textarea value={signature} onChange={(e) => setSignature(e.target.value)} placeholder="Used in documents and contracts" rows={3} />
+          <Label>{t("profile.signature")}</Label>
+          <Textarea value={signature} onChange={(e) => setSignature(e.target.value)} placeholder={t("profile.signaturePlaceholder")} rows={3} />
         </div>
       </SettingsSection>
 
       {/* Actions */}
       <div className="flex flex-wrap gap-sp-2 pt-sp-1">
-        <Button className="w-full sm:w-auto" onClick={handleSave} disabled={!isDirty}>Save changes</Button>
+        <Button className="w-full sm:w-auto" onClick={handleSave} disabled={!isDirty}>{t("profile.save")}</Button>
         {isDirty && (
-          <Button variant="ghost" className="w-full sm:w-auto" onClick={handleDiscard}>Discard</Button>
+          <Button variant="ghost" className="w-full sm:w-auto" onClick={handleDiscard}>{t("profile.discard")}</Button>
         )}
       </div>
     </div>

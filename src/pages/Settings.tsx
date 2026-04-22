@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { ChevronLeft, Settings as SettingsIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SettingsNav, type SettingsTab } from "@/components/settings/SettingsNav";
@@ -20,6 +21,7 @@ function getTabFromParam(param: string | null): SettingsTab {
 }
 
 export default function Settings() {
+  const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<SettingsTab>(() => getTabFromParam(searchParams.get("tab")));
 
@@ -45,7 +47,7 @@ export default function Settings() {
       case "billing": return <BillingPanel />;
       default: return (
         <div className="flex items-center justify-center h-40">
-          <p className="text-muted-foreground text-body-sm">This section is coming soon.</p>
+          <p className="text-muted-foreground text-body-sm">{t("settings.comingSoon")}</p>
         </div>
       );
     }
@@ -62,10 +64,10 @@ export default function Settings() {
             </Link>
           </Button>
           <SettingsIcon className="h-5 w-5 shrink-0" />
-          Settings
+          {t("settings.header")}
         </h1>
         <p className="text-body-sm text-muted-foreground">
-          Manage your account, preferences, and billing.
+          {t("settings.subheader")}
         </p>
       </div>
 

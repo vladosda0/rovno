@@ -9,6 +9,7 @@ import {
   AlertDialogCancel,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { useTranslation } from "react-i18next";
 
 interface ConfirmModalProps {
   open: boolean;
@@ -30,8 +31,8 @@ export function ConfirmModal({
   onOpenChange,
   title,
   description,
-  confirmLabel = "Confirm",
-  cancelLabel = "Cancel",
+  confirmLabel,
+  cancelLabel,
   onConfirm,
   onCancel,
   tertiaryLabel,
@@ -39,6 +40,9 @@ export function ConfirmModal({
   showCancel = true,
   children,
 }: ConfirmModalProps) {
+  const { t } = useTranslation();
+  const resolvedConfirm = confirmLabel ?? t("confirmModal.defaults.confirm");
+  const resolvedCancel = cancelLabel ?? t("confirmModal.defaults.cancel");
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent className="bg-card border border-border shadow-xl rounded-modal">
@@ -53,9 +57,9 @@ export function ConfirmModal({
               {tertiaryLabel}
             </Button>
           )}
-          {showCancel && <AlertDialogCancel onClick={onCancel}>{cancelLabel}</AlertDialogCancel>}
+          {showCancel && <AlertDialogCancel onClick={onCancel}>{resolvedCancel}</AlertDialogCancel>}
           <AlertDialogAction onClick={onConfirm} className="bg-accent text-accent-foreground hover:bg-accent/90">
-            {confirmLabel}
+            {resolvedConfirm}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

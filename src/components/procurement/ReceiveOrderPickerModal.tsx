@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Building2, Search } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -19,6 +20,7 @@ export function ReceiveOrderPickerModal({
   onOpenChange,
   projectId,
 }: ReceiveOrderPickerModalProps) {
+  const { t } = useTranslation();
   const [search, setSearch] = useState("");
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -55,7 +57,7 @@ export function ReceiveOrderPickerModal({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="w-[95vw] max-w-3xl max-h-[88vh] overflow-hidden p-0 gap-0 flex flex-col">
           <DialogHeader className="px-5 py-4 border-b border-border">
-            <DialogTitle>Receive purchase order</DialogTitle>
+            <DialogTitle>{t("procurement.receivePicker.title")}</DialogTitle>
           </DialogHeader>
 
           <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
@@ -64,14 +66,14 @@ export function ReceiveOrderPickerModal({
               <Input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search by supplier or project"
+                placeholder={t("procurement.receivePicker.searchPlaceholder")}
                 className="pl-9 h-9"
               />
             </div>
 
             <div className="space-y-2">
               {filtered.length === 0 && (
-                <p className="text-sm text-muted-foreground py-8 text-center">No placed supplier orders found.</p>
+                <p className="text-sm text-muted-foreground py-8 text-center">{t("procurement.receivePicker.noPlaced")}</p>
               )}
               {filtered.map((order) => {
                 const projectTitle = projectById.get(order.projectId) ?? getProject(order.projectId)?.title ?? order.projectId;
@@ -89,9 +91,9 @@ export function ReceiveOrderPickerModal({
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">{order.supplierName || "Supplier order"}</p>
+                        <p className="text-sm font-medium text-foreground truncate">{order.supplierName || t("procurement.receivePicker.supplierFallback")}</p>
                         <p className="text-xs text-muted-foreground truncate">
-                          {totalLines} lines · {totalQty} units remaining to receive
+                          {t("procurement.receivePicker.summary", { lines: totalLines, qty: totalQty })}
                         </p>
                         {!projectId && (
                           <p className="text-xs text-muted-foreground mt-1 inline-flex items-center gap-1">
@@ -101,7 +103,7 @@ export function ReceiveOrderPickerModal({
                         )}
                       </div>
                       <span className="text-xs text-muted-foreground shrink-0">
-                        {order.deliveryDeadline ? new Date(order.deliveryDeadline).toLocaleDateString() : "No deadline"}
+                        {order.deliveryDeadline ? new Date(order.deliveryDeadline).toLocaleDateString() : t("procurement.receivePicker.noDeadline")}
                       </span>
                     </div>
                   </button>
@@ -110,7 +112,7 @@ export function ReceiveOrderPickerModal({
             </div>
 
             <div className="flex justify-end pt-2">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>{t("common.close")}</Button>
             </div>
           </div>
         </DialogContent>

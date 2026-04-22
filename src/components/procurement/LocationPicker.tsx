@@ -1,5 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Check, ChevronsUpDown, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,11 +25,12 @@ export function LocationPicker({
   projectId,
   value,
   onChange,
-  placeholder = "Select location",
+  placeholder,
   className,
   allowCreate = true,
   disabled = false,
 }: LocationPickerProps) {
+  const { t } = useTranslation();
   const locations = useLocations(projectId);
   const workspaceMode = useWorkspaceMode();
   const supabaseMode = workspaceMode.kind === "supabase" ? workspaceMode : null;
@@ -37,6 +39,7 @@ export function LocationPicker({
   const [open, setOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newAddress, setNewAddress] = useState("");
+  const effectivePlaceholder = placeholder ?? t("procurement.locationPicker.placeholder");
 
   const selected = useMemo(
     () => locations.find((location) => location.id === value) ?? null,
@@ -60,8 +63,8 @@ export function LocationPicker({
       setOpen(false);
     } catch (error) {
       toast({
-        title: "Unable to create location",
-        description: error instanceof Error ? error.message : "Please try again.",
+        title: t("procurement.locationPicker.unableCreate"),
+        description: error instanceof Error ? error.message : t("procurement.locationPicker.tryAgain"),
         variant: "destructive",
       });
     }
@@ -78,7 +81,7 @@ export function LocationPicker({
     >
       <PopoverTrigger asChild>
         <Button type="button" variant="outline" className={cn("w-full justify-between", className)} disabled={disabled}>
-          <span className="truncate text-left">{selected ? selected.name : placeholder}</span>
+          <span className="truncate text-left">{selected ? selected.name : effectivePlaceholder}</span>
           <ChevronsUpDown className="ml-2 h-4 w-4 opacity-60" />
         </Button>
       </PopoverTrigger>
@@ -109,18 +112,18 @@ export function LocationPicker({
 
         {allowCreate && (
           <div className="mt-2 border-t border-border pt-2 space-y-2">
-            <p className="text-xs font-medium text-muted-foreground">+ Create location</p>
+            <p className="text-xs font-medium text-muted-foreground">{t("procurement.locationPicker.createHeading")}</p>
             <Input
               value={newName}
               onChange={(event) => setNewName(event.target.value)}
-              placeholder="Location name"
+              placeholder={t("procurement.locationPicker.namePlaceholder")}
               className="h-8"
               disabled={disabled}
             />
             <Input
               value={newAddress}
               onChange={(event) => setNewAddress(event.target.value)}
-              placeholder="Address (optional)"
+              placeholder={t("procurement.locationPicker.addressPlaceholder")}
               className="h-8"
               disabled={disabled}
             />
@@ -135,7 +138,7 @@ export function LocationPicker({
               disabled={disabled || !newName.trim()}
             >
               <Plus className="h-3.5 w-3.5 mr-1" />
-              Add location
+              {t("procurement.locationPicker.addButton")}
             </Button>
           </div>
         )}

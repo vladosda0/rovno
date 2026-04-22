@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Loader2, CheckCircle2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 interface WorkLogProps {
   steps: string[];
@@ -14,6 +15,7 @@ interface WorkLogProps {
 }
 
 export function WorkLog({ steps, onComplete, speed = 600, holdFinalStep = false }: WorkLogProps) {
+  const { t } = useTranslation();
   const [completedCount, setCompletedCount] = useState(0);
 
   useEffect(() => {
@@ -31,7 +33,7 @@ export function WorkLog({ steps, onComplete, speed = 600, holdFinalStep = false 
   return (
     <div className="glass rounded-card p-2.5 space-y-1 w-full">
       <span className="text-caption font-semibold text-muted-foreground">
-        {completedCount < steps.length ? "Working…" : "Done"}
+        {completedCount < steps.length ? t("ai.workLog.working") : t("ai.workLog.done")}
       </span>
       {steps.map((step, i) => {
         const done = i < completedCount;

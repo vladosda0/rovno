@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { useParams, useLocation } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useProject, useTasks, usePermission, useMedia, useWorkspaceMode } from "@/hooks/use-mock-data";
 import {
   getUserById, getCurrentUser, updateTask, addTask, deleteTask as storeDeleteTask,
@@ -37,16 +38,18 @@ import { useEstimateV2Project } from "@/hooks/use-estimate-v2-data";
 import { useMediaUploadMutations } from "@/hooks/use-documents-media-source";
 import type { Task } from "@/types/entities";
 
-const statusMeta: Record<TaskStatus, { label: string; Icon: typeof Circle; colorClass: string; bgClass: string }> = {
-  not_started: { label: "Not started", Icon: Circle, colorClass: "text-muted-foreground", bgClass: "bg-muted" },
-  in_progress: { label: "In progress", Icon: Clock, colorClass: "text-info", bgClass: "bg-info/15" },
-  done: { label: "Done", Icon: CheckCircle2, colorClass: "text-success", bgClass: "bg-success/15" },
-  blocked: { label: "Blocked", Icon: AlertTriangle, colorClass: "text-destructive", bgClass: "bg-destructive/15" },
+const statusMeta: Record<TaskStatus, { labelKey: string; Icon: typeof Circle; colorClass: string; bgClass: string }> = {
+  not_started: { labelKey: "tasks.status.not_started", Icon: Circle, colorClass: "text-muted-foreground", bgClass: "bg-muted" },
+  in_progress: { labelKey: "tasks.status.in_progress", Icon: Clock, colorClass: "text-info", bgClass: "bg-info/15" },
+  done: { labelKey: "tasks.status.done", Icon: CheckCircle2, colorClass: "text-success", bgClass: "bg-success/15" },
+  blocked: { labelKey: "tasks.status.blocked", Icon: AlertTriangle, colorClass: "text-destructive", bgClass: "bg-destructive/15" },
 };
 
 const allStatuses: TaskStatus[] = ["not_started", "in_progress", "done", "blocked"];
 
-function getTaskAssigneeEntries(task: Task): Array<{ key: string; id: string | null; label: string; initial: string }> {
+type Translator = (key: string, options?: Record<string, unknown>) => string;
+
+function getTaskAssigneeEntries(task: Task, t: Translator): Array<{ key: string; id: string | null; label: string; initial: string }> {
   const entries = (task.assignees ?? [])
     .map((assignee, index) => {
       const user = assignee.id ? getUserById(assignee.id) : null;
@@ -54,7 +57,7 @@ function getTaskAssigneeEntries(task: Task): Array<{ key: string; id: string | n
       return {
         key: assignee.id ?? assignee.email ?? assignee.name ?? `assignee-${index}`,
         id: assignee.id,
-        label: label ?? "Unassigned",
+        label: label ?? t("common.unassigned"),
         initial: (label ?? user?.name ?? "").trim().charAt(0).toUpperCase() || "?",
       };
     })
@@ -69,7 +72,7 @@ function getTaskAssigneeEntries(task: Task): Array<{ key: string; id: string | n
   }
 
   const user = getUserById(task.assignee_id);
-  const label = user?.name ?? "Unassigned";
+  const label = user?.name ?? t("common.unassigned");
   return [{
     key: task.assignee_id,
     id: task.assignee_id,
@@ -78,8 +81,8 @@ function getTaskAssigneeEntries(task: Task): Array<{ key: string; id: string | n
   }];
 }
 
-function getTaskAssigneeIds(task: Task): string[] {
-  return getTaskAssigneeEntries(task)
+function getTaskAssigneeIds(task: Task, t: Translator): string[] {
+  return getTaskAssigneeEntries(task, t)
     .map((entry) => entry.id)
     .filter((id): id is string => Boolean(id));
 }
@@ -94,6 +97,7 @@ const EMPTY_SYNC_STATE = {
 } as const;
 
 export default function ProjectTasks() {
+  const { t } = useTranslation();
   const { id: projectId } = useParams<{ id: string }>();
   const pid = projectId!;
   const { project, stages, members } = useProject(pid);
@@ -137,7 +141,7 @@ export default function ProjectTasks() {
 
   // Task detail modal
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const selectedTask = tasks.find((t) => t.id === selectedTaskId) ?? null;
+  const selectedTask = tasks.find((entry) => entry.id === selectedTaskId) ?? null;
 
   // Deep-link: open task from navigation state (e.g. from PhotoViewer)
   useEffect(() => {
@@ -184,20 +188,20 @@ export default function ProjectTasks() {
 
   // Derived
   const deleteStage_ = stages.find((s) => s.id === deleteStageId);
-  const deleteTaskCount = deleteStage_ ? tasks.filter((t) => t.stage_id === deleteStage_?.id).length : 0;
+  const deleteTaskCount = deleteStage_ ? tasks.filter((entry) => entry.stage_id === deleteStage_?.id).length : 0;
   const completeStage_ = stages.find((s) => s.id === completeStageId);
   const incompleteTasks = useMemo(
     () => (completeStage_
-      ? tasks.filter((t) => t.stage_id === completeStage_.id && t.status !== "done")
+      ? tasks.filter((entry) => entry.stage_id === completeStage_.id && entry.status !== "done")
       : []),
     [completeStage_, tasks],
   );
 
   // Filter tasks
-  let filteredTasks = activeTab === "all" ? tasks : tasks.filter((t) => t.stage_id === activeTab);
-  if (assignedToMe) filteredTasks = filteredTasks.filter((t) => getTaskAssigneeIds(t).includes(currentUser.id));
+  let filteredTasks = activeTab === "all" ? tasks : tasks.filter((entry) => entry.stage_id === activeTab);
+  if (assignedToMe) filteredTasks = filteredTasks.filter((entry) => getTaskAssigneeIds(entry, t).includes(currentUser.id));
 
-  const getColumnTasks = (status: TaskStatus) => filteredTasks.filter((t) => t.status === status);
+  const getColumnTasks = (status: TaskStatus) => filteredTasks.filter((entry) => entry.status === status);
   const invalidateProjectStages = useCallback(async () => {
     if (workspaceMode.kind !== "supabase") return;
     await queryClient.invalidateQueries({
@@ -227,23 +231,23 @@ export default function ProjectTasks() {
     if (!canChangeTaskStatus) return;
     if (shouldBlockTaskLaunchActions) {
       toast({
-        title: hasTaskSyncError ? "Tasks sync needs attention" : "Tasks are still syncing",
+        title: hasTaskSyncError ? t("tasks.sync.toast.needsAttention") : t("tasks.sync.toast.stillSyncing"),
         description: hasTaskSyncError
-          ? (taskSyncState.lastError ?? "Resolve the sync error before changing task status.")
-          : "Wait for estimate-driven Tasks sync to finish before changing task status.",
+          ? (taskSyncState.lastError ?? t("tasks.sync.toast.resolveStatus"))
+          : t("tasks.sync.toast.waitStatus"),
         variant: "destructive",
       });
       return;
     }
-    const task = tasks.find((t) => t.id === taskId);
+    const task = tasks.find((entry) => entry.id === taskId);
     if (!task || task.status === newStatus) return;
 
     if (newStatus === "done") {
       const unresolvedChecklistItems = task.checklist.filter((item) => !item.done);
       if (unresolvedChecklistItems.length > 0) {
         toast({
-          title: "Cannot mark as Done",
-          description: "All checklist items must be checked or resolved first.",
+          title: t("tasks.toast.cannotMarkDone.title"),
+          description: t("tasks.toast.cannotMarkDone.description"),
           variant: "destructive",
         });
         return;
@@ -269,26 +273,26 @@ export default function ProjectTasks() {
         );
         await source.updateProjectTask(taskId, { status: newStatus });
         await invalidateProjectTasks();
-        toast({ title: "Status updated", description: statusMeta[newStatus].label });
+        toast({ title: t("tasks.toast.statusUpdated"), description: t(statusMeta[newStatus].labelKey) });
       } catch (error) {
         toast({
-          title: "Status update failed",
-          description: error instanceof Error ? error.message : "Unable to update task status.",
+          title: t("tasks.toast.statusUpdateFailed.title"),
+          description: error instanceof Error ? error.message : t("tasks.toast.statusUpdateFailed.fallback"),
           variant: "destructive",
         });
       }
     })();
-  }, [canChangeTaskStatus, shouldBlockTaskLaunchActions, hasTaskSyncError, taskSyncState.lastError, tasks, toast, workspaceMode, invalidateProjectTasks]);
+  }, [canChangeTaskStatus, shouldBlockTaskLaunchActions, hasTaskSyncError, taskSyncState.lastError, tasks, toast, workspaceMode, invalidateProjectTasks, t]);
 
   // Confirm Done
   const handleConfirmDone = useCallback(async () => {
     if (!donePrompt) return;
     if (shouldBlockTaskLaunchActions) {
       toast({
-        title: hasTaskSyncError ? "Tasks sync needs attention" : "Tasks are still syncing",
+        title: hasTaskSyncError ? t("tasks.sync.toast.needsAttention") : t("tasks.sync.toast.stillSyncing"),
         description: hasTaskSyncError
-          ? (taskSyncState.lastError ?? "Resolve the sync error before completing tasks.")
-          : "Wait for estimate-driven Tasks sync to finish before completing tasks.",
+          ? (taskSyncState.lastError ?? t("tasks.sync.toast.resolveComplete"))
+          : t("tasks.sync.toast.waitComplete"),
         variant: "destructive",
       });
       return;
@@ -298,16 +302,16 @@ export default function ProjectTasks() {
     if (!task) return;
     if (task.checklist.some((item) => !item.done)) {
       toast({
-        title: "Cannot mark as Done",
-        description: "All checklist items must be checked or resolved first.",
+        title: t("tasks.toast.cannotMarkDone.title"),
+        description: t("tasks.toast.cannotMarkDone.description"),
         variant: "destructive",
       });
       return;
     }
     if (doneFiles.length === 0) {
       toast({
-        title: "No media uploaded",
-        description: "Add at least one final-result photo before confirming Done.",
+        title: t("tasks.toast.noMediaUploaded.title"),
+        description: t("tasks.toast.noMediaUploaded.description"),
         variant: "destructive",
       });
       return;
@@ -342,11 +346,11 @@ export default function ProjectTasks() {
       setDonePrompt(null);
       setDoneFiles([]);
       setDoneComment("");
-      toast({ title: "Task marked as Done" });
+      toast({ title: t("tasks.toast.markedDone") });
     } catch (error) {
       toast({
-        title: "Unable to complete task",
-        description: error instanceof Error ? error.message : "Final-result upload failed.",
+        title: t("tasks.toast.cannotComplete.title"),
+        description: error instanceof Error ? error.message : t("tasks.toast.cannotComplete.fallback"),
         variant: "destructive",
       });
     } finally {
@@ -367,6 +371,7 @@ export default function ProjectTasks() {
     shouldBlockTaskLaunchActions,
     hasTaskSyncError,
     taskSyncState.lastError,
+    t,
   ]);
 
   // Confirm Blocked
@@ -374,10 +379,10 @@ export default function ProjectTasks() {
     if (!blockedPrompt) return;
     if (shouldBlockTaskLaunchActions) {
       toast({
-        title: hasTaskSyncError ? "Tasks sync needs attention" : "Tasks are still syncing",
+        title: hasTaskSyncError ? t("tasks.sync.toast.needsAttention") : t("tasks.sync.toast.stillSyncing"),
         description: hasTaskSyncError
-          ? (taskSyncState.lastError ?? "Resolve the sync error before marking tasks blocked.")
-          : "Wait for estimate-driven Tasks sync to finish before changing task status.",
+          ? (taskSyncState.lastError ?? t("tasks.sync.toast.resolveBlocked"))
+          : t("tasks.sync.toast.waitBlocked"),
         variant: "destructive",
       });
       return;
@@ -387,20 +392,20 @@ export default function ProjectTasks() {
         workspaceMode.kind === "pending-supabase" ? undefined : workspaceMode,
       );
       const authorId = workspaceMode.kind === "supabase" ? workspaceMode.profileId : currentUser.id;
-      await source.createTaskComment(blockedPrompt.taskId, `Blocker reason: ${blockedReason.trim()}`, authorId);
+      await source.createTaskComment(blockedPrompt.taskId, t("tasks.toast.blockerPrefix", { reason: blockedReason.trim() }), authorId);
       await source.updateProjectTask(blockedPrompt.taskId, { status: "blocked" });
       await invalidateProjectTasks();
       setBlockedPrompt(null);
       setBlockedReason("");
-      toast({ title: "Task marked as Blocked" });
+      toast({ title: t("tasks.toast.markedBlocked") });
     } catch (error) {
       toast({
-        title: "Unable to mark task as blocked",
-        description: error instanceof Error ? error.message : "Failed to persist blocked status.",
+        title: t("tasks.toast.cannotBlock.title"),
+        description: error instanceof Error ? error.message : t("tasks.toast.cannotBlock.fallback"),
         variant: "destructive",
       });
     }
-  }, [blockedPrompt, blockedReason, workspaceMode, currentUser.id, invalidateProjectTasks, toast, shouldBlockTaskLaunchActions, hasTaskSyncError, taskSyncState.lastError]);
+  }, [blockedPrompt, blockedReason, workspaceMode, currentUser.id, invalidateProjectTasks, toast, shouldBlockTaskLaunchActions, hasTaskSyncError, taskSyncState.lastError, t]);
 
   const handleChecklistToggle = useCallback(async (
     taskId: string,
@@ -416,13 +421,13 @@ export default function ProjectTasks() {
       await invalidateProjectTasks();
     } catch (error) {
       toast({
-        title: "Unable to update checklist",
-        description: error instanceof Error ? error.message : "Checklist update failed.",
+        title: t("tasks.toast.checklistUpdateFailed.title"),
+        description: error instanceof Error ? error.message : t("tasks.toast.checklistUpdateFailed.fallback"),
         variant: "destructive",
       });
       throw error;
     }
-  }, [canEditChecklist, workspaceMode, invalidateProjectTasks, toast]);
+  }, [canEditChecklist, workspaceMode, invalidateProjectTasks, toast, t]);
 
   const handleAddChecklistItem = useCallback(async (taskId: string, text: string) => {
     if (!canEditChecklist) return;
@@ -434,12 +439,12 @@ export default function ProjectTasks() {
       await invalidateProjectTasks();
     } catch (error) {
       toast({
-        title: "Unable to add checklist item",
-        description: error instanceof Error ? error.message : "Checklist item was not added.",
+        title: t("tasks.toast.checklistAddFailed.title"),
+        description: error instanceof Error ? error.message : t("tasks.toast.checklistAddFailed.fallback"),
         variant: "destructive",
       });
     }
-  }, [canEditChecklist, workspaceMode, invalidateProjectTasks, toast]);
+  }, [canEditChecklist, workspaceMode, invalidateProjectTasks, toast, t]);
 
   const handleDeleteChecklistItem = useCallback(async (taskId: string, itemId: string) => {
     if (!canEditChecklist) return;
@@ -451,12 +456,12 @@ export default function ProjectTasks() {
       await invalidateProjectTasks();
     } catch (error) {
       toast({
-        title: "Unable to delete checklist item",
-        description: error instanceof Error ? error.message : "Checklist item was not deleted.",
+        title: t("tasks.toast.checklistDeleteFailed.title"),
+        description: error instanceof Error ? error.message : t("tasks.toast.checklistDeleteFailed.fallback"),
         variant: "destructive",
       });
     }
-  }, [canEditChecklist, workspaceMode, invalidateProjectTasks, toast]);
+  }, [canEditChecklist, workspaceMode, invalidateProjectTasks, toast, t]);
 
   const handleTaskCommentCreate = useCallback(async (taskId: string, body: string) => {
     if (!canCommentOnTasks) return;
@@ -467,15 +472,15 @@ export default function ProjectTasks() {
       const authorId = workspaceMode.kind === "supabase" ? workspaceMode.profileId : currentUser.id;
       await source.createTaskComment(taskId, body.trim(), authorId);
       await invalidateProjectTasks();
-      toast({ title: "Comment added" });
+      toast({ title: t("tasks.toast.commentAdded") });
     } catch (error) {
       toast({
-        title: "Unable to add comment",
-        description: error instanceof Error ? error.message : "Comment was not saved.",
+        title: t("tasks.toast.commentFailed.title"),
+        description: error instanceof Error ? error.message : t("tasks.toast.commentFailed.fallback"),
         variant: "destructive",
       });
     }
-  }, [canCommentOnTasks, workspaceMode, currentUser.id, invalidateProjectTasks, toast]);
+  }, [canCommentOnTasks, workspaceMode, currentUser.id, invalidateProjectTasks, toast, t]);
 
   const handleTaskTitleChange = useCallback(async (taskId: string, title: string) => {
     await updateTaskFact(taskId, { title });
@@ -491,11 +496,11 @@ export default function ProjectTasks() {
 
   const handleTaskDelete = useCallback(async (taskId: string) => {
     if (isSupabaseMode) {
-      throw new Error("Task structure is managed from Estimate in Supabase mode.");
+      throw new Error(t("tasks.error.supabaseStructure"));
     }
 
     storeDeleteTask(taskId);
-  }, [isSupabaseMode]);
+  }, [isSupabaseMode, t]);
 
   // --- Handlers ---
   const openNewTask = useCallback((prefillStatus?: TaskStatus) => {
@@ -529,11 +534,11 @@ export default function ProjectTasks() {
         });
         await invalidateProjectTasks();
         setTaskModalOpen(false);
-        toast({ title: "Task created", description: createdTask.title });
+        toast({ title: t("tasks.toast.taskCreated"), description: createdTask.title });
       } catch (error) {
         toast({
-          title: "Task creation failed",
-          description: error instanceof Error ? error.message : "Unable to create task.",
+          title: t("tasks.toast.taskCreationFailed.title"),
+          description: error instanceof Error ? error.message : t("tasks.toast.taskCreationFailed.fallback"),
           variant: "destructive",
         });
       }
@@ -552,6 +557,7 @@ export default function ProjectTasks() {
     toast,
     workspaceMode,
     invalidateProjectTasks,
+    t,
   ]);
 
   const handleCreateStage = useCallback(() => {
@@ -571,10 +577,11 @@ export default function ProjectTasks() {
         });
 
         if (createWithAI && newStageDesc.trim()) {
+          const name = newStageTitle.trim();
           const aiTasks = [
-            `Prepare ${newStageTitle.trim()} workspace`,
-            `Execute main ${newStageTitle.trim()} work`,
-            `QA check for ${newStageTitle.trim()}`,
+            t("tasks.createStage.aiTask.prepare", { name }),
+            t("tasks.createStage.aiTask.execute", { name }),
+            t("tasks.createStage.aiTask.qa", { name }),
           ];
           aiTasks.forEach((title, i) => {
             const aiTask = {
@@ -582,7 +589,7 @@ export default function ProjectTasks() {
               project_id: pid,
               stage_id: createdStage.id,
               title,
-              description: `Auto-generated from: ${newStageDesc.trim()}`,
+              description: t("tasks.createStage.aiTask.autoGenerated", { desc: newStageDesc.trim() }),
               status: "not_started" as const,
               assignee_id: currentUser.id,
               checklist: [],
@@ -603,11 +610,11 @@ export default function ProjectTasks() {
         setNewStageDesc("");
         setCreateWithAI(false);
         setActiveTab(createdStage.id);
-        toast({ title: "Stage created", description: createdStage.title });
+        toast({ title: t("tasks.toast.stageCreated"), description: createdStage.title });
       } catch (error) {
         toast({
-          title: "Stage creation failed",
-          description: error instanceof Error ? error.message : "Unable to create stage.",
+          title: t("tasks.toast.stageCreationFailed.title"),
+          description: error instanceof Error ? error.message : t("tasks.toast.stageCreationFailed.fallback"),
           variant: "destructive",
         });
       }
@@ -623,6 +630,7 @@ export default function ProjectTasks() {
     toast,
     workspaceMode,
     invalidateProjectStages,
+    t,
   ]);
 
   const handleDeleteStage = useCallback(() => {
@@ -631,17 +639,17 @@ export default function ProjectTasks() {
     storeDeleteStage(deleteStageId);
     if (activeTab === deleteStageId) setActiveTab("all");
     setDeleteStageId(null);
-    toast({ title: "Stage deleted" });
-  }, [deleteStageId, activeTab, isSupabaseMode, toast]);
+    toast({ title: t("tasks.toast.stageDeleted") });
+  }, [deleteStageId, activeTab, isSupabaseMode, toast, t]);
 
   const handleCompleteStage = useCallback(() => {
     if (isSupabaseMode) return;
     if (!completeStageId) return;
-    incompleteTasks.forEach((t) => updateTask(t.id, { status: "done" }));
+    incompleteTasks.forEach((entry) => updateTask(entry.id, { status: "done" }));
     storeCompleteStage(completeStageId);
     setCompleteStageId(null);
-    toast({ title: "Stage completed" });
-  }, [completeStageId, incompleteTasks, isSupabaseMode, toast]);
+    toast({ title: t("tasks.toast.stageCompleted") });
+  }, [completeStageId, incompleteTasks, isSupabaseMode, toast, t]);
 
   // DnD handlers
   const handleDragStart = (e: React.DragEvent, taskId: string) => {
@@ -664,14 +672,14 @@ export default function ProjectTasks() {
   };
 
   if (!project) {
-    return <EmptyState icon={ListTodo} title="Not found" description="Project not found." />;
+    return <EmptyState icon={ListTodo} title={t("tasks.notFound.title")} description={t("tasks.notFound.description")} />;
   }
 
   return (
     <div className="p-sp-2 flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center justify-between mb-sp-2 flex-wrap gap-2">
-        <h2 className="text-lg font-semibold text-foreground">Tasks</h2>
+        <h2 className="text-lg font-semibold text-foreground">{t("tasks.title")}</h2>
         <div className="flex items-center gap-2">
           {(authRole === "contractor" || role === "contractor") && (
             <button
@@ -680,7 +688,7 @@ export default function ProjectTasks() {
                 assignedToMe ? "bg-accent text-accent-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"
               }`}
             >
-              <User className="h-3 w-3 inline mr-1" /> Assigned to me
+              <User className="h-3 w-3 inline mr-1" /> {t("tasks.assignedToMe")}
             </button>
           )}
           {canAuthorTaskStructure && (
@@ -689,7 +697,7 @@ export default function ProjectTasks() {
               className="bg-accent text-accent-foreground hover:bg-accent/90"
               onClick={() => openNewTask()}
             >
-              <Plus className="mr-1 h-4 w-4" /> New task
+              <Plus className="mr-1 h-4 w-4" /> {t("tasks.newTask")}
             </Button>
           )}
         </div>
@@ -707,17 +715,17 @@ export default function ProjectTasks() {
           <div className="min-w-0">
             <p className="font-medium">
               {isTaskSyncing
-                ? "Tasks are syncing from Estimate"
+                ? t("tasks.sync.syncingTitle")
                 : hasTaskSyncError
-                  ? "Tasks sync failed"
-                  : "Tasks are behind the latest Estimate"}
+                  ? t("tasks.sync.failedTitle")
+                  : t("tasks.sync.behindTitle")}
             </p>
             <p className="text-xs opacity-80">
               {isTaskSyncing
-                ? "Estimate-linked task updates are being projected now."
+                ? t("tasks.sync.syncingBody")
                 : hasTaskSyncError
-                  ? (taskSyncState.lastError ?? "Resolve the sync error before using launch-critical task actions.")
-                  : "Wait for the task projection to catch up before changing task statuses."}
+                  ? (taskSyncState.lastError ?? t("tasks.sync.failedFallback"))
+                  : t("tasks.sync.behindBody")}
             </p>
           </div>
         </div>
@@ -731,7 +739,7 @@ export default function ProjectTasks() {
             activeTab === "all" ? "bg-accent text-accent-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"
           }`}
         >
-          All
+          {t("tasks.allStages")}
         </button>
         {stages.map((stage) => (
           <button
@@ -750,7 +758,7 @@ export default function ProjectTasks() {
             onClick={() => setStageModalOpen(true)}
             className="rounded-full px-3 py-1.5 text-caption font-medium whitespace-nowrap text-muted-foreground hover:bg-muted/80 transition-colors border border-dashed border-border"
           >
-            <Plus className="h-3 w-3 inline mr-0.5" /> New stage
+            <Plus className="h-3 w-3 inline mr-0.5" /> {t("tasks.newStage")}
           </button>
         )}
       </div>
@@ -762,10 +770,10 @@ export default function ProjectTasks() {
         return (
           <div className="flex gap-1.5 mb-sp-2">
             <Button variant="outline" size="sm" className="h-7 text-caption" onClick={() => setCompleteStageId(stage.id)}>
-              <Check className="h-3 w-3 mr-1" /> Complete stage
+              <Check className="h-3 w-3 mr-1" /> {t("tasks.stage.complete")}
             </Button>
             <Button variant="outline" size="sm" className="h-7 text-caption text-destructive hover:bg-destructive/10" onClick={() => setDeleteStageId(stage.id)}>
-              <Trash2 className="h-3 w-3 mr-1" /> Delete
+              <Trash2 className="h-3 w-3 mr-1" /> {t("tasks.stage.delete")}
             </Button>
           </div>
         );
@@ -792,7 +800,7 @@ export default function ProjectTasks() {
               <div className="flex items-center justify-between mb-sp-2">
                 <div className="flex items-center gap-1.5">
                   <meta.Icon className={`h-4 w-4 ${meta.colorClass}`} />
-                  <span className="text-sm font-semibold text-foreground">{meta.label}</span>
+                  <span className="text-sm font-semibold text-foreground">{t(meta.labelKey)}</span>
                   <span className="text-caption text-muted-foreground">({columnTasks.length})</span>
                 </div>
                 {canAuthorTaskStructure && (
@@ -808,7 +816,7 @@ export default function ProjectTasks() {
               {/* Task cards */}
               <div className="space-y-2 flex-1 overflow-y-auto py-1 px-0.5">
                 {columnTasks.map((task) => {
-                  const assignees = getTaskAssigneeEntries(task);
+                  const assignees = getTaskAssigneeEntries(task, t);
                   const checkDone = task.checklist.filter((c) => c.done).length;
                   const taskPhotos = media.filter((m) => m.task_id === task.id);
 
@@ -873,7 +881,7 @@ export default function ProjectTasks() {
                   );
                 })}
                 {columnTasks.length === 0 && (
-                  <p className="text-[10px] text-muted-foreground text-center py-sp-3">No tasks</p>
+                  <p className="text-[10px] text-muted-foreground text-center py-sp-3">{t("tasks.column.empty")}</p>
                 )}
               </div>
             </div>
@@ -911,26 +919,26 @@ export default function ProjectTasks() {
       {taskModalOpen && canAuthorTaskStructure && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="bg-card border border-border rounded-xl p-sp-3 w-full max-w-md space-y-sp-2 relative z-[52] shadow-xl">
-            <h3 className="text-lg font-semibold text-foreground">New Task</h3>
-            <Input placeholder="Title *" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} autoFocus />
-            <Textarea placeholder="Description" value={taskDesc} onChange={(e) => setTaskDesc(e.target.value)} rows={2} />
+            <h3 className="text-lg font-semibold text-foreground">{t("tasks.newTaskModal.title")}</h3>
+            <Input placeholder={t("tasks.newTaskModal.titlePlaceholder")} value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} autoFocus />
+            <Textarea placeholder={t("tasks.newTaskModal.descriptionPlaceholder")} value={taskDesc} onChange={(e) => setTaskDesc(e.target.value)} rows={2} />
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="text-caption text-muted-foreground mb-1 block">Status</label>
+                <label className="text-caption text-muted-foreground mb-1 block">{t("tasks.newTaskModal.statusLabel")}</label>
                 <Select value={taskStatus} onValueChange={(v) => setTaskStatus(v as TaskStatus)}>
                   <SelectTrigger className="h-8 text-caption"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {allStatuses.map((s) => (
-                      <SelectItem key={s} value={s}>{statusMeta[s].label}</SelectItem>
+                      <SelectItem key={s} value={s}>{t(statusMeta[s].labelKey)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <label className="text-caption text-muted-foreground mb-1 block">Assignee</label>
+                <label className="text-caption text-muted-foreground mb-1 block">{t("tasks.newTaskModal.assigneeLabel")}</label>
                 <Select value={taskAssignee} onValueChange={setTaskAssignee}>
-                  <SelectTrigger className="h-8 text-caption"><SelectValue placeholder="Unassigned" /></SelectTrigger>
+                  <SelectTrigger className="h-8 text-caption"><SelectValue placeholder={t("tasks.newTaskModal.assigneePlaceholder")} /></SelectTrigger>
                   <SelectContent>
                     {members.map((m) => {
                       const u = getUserById(m.user_id);
@@ -943,7 +951,7 @@ export default function ProjectTasks() {
 
             {activeTab === "all" && stages.length > 0 && (
               <div>
-                <label className="text-caption text-muted-foreground mb-1 block">Stage</label>
+                <label className="text-caption text-muted-foreground mb-1 block">{t("tasks.newTaskModal.stageLabel")}</label>
                 <Select value={taskStageId} onValueChange={setTaskStageId}>
                   <SelectTrigger className="h-8 text-caption"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -954,7 +962,7 @@ export default function ProjectTasks() {
             )}
 
             <div>
-              <label className="text-caption text-muted-foreground mb-1 block">Deadline</label>
+              <label className="text-caption text-muted-foreground mb-1 block">{t("tasks.newTaskModal.deadlineLabel")}</label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
@@ -963,7 +971,7 @@ export default function ProjectTasks() {
                     className={cn("h-8 text-caption justify-start w-full", !taskDeadline && "text-muted-foreground")}
                   >
                     <CalendarIcon className="h-3 w-3 mr-1.5" />
-                    {taskDeadline ? format(taskDeadline, "MMM d, yyyy") : "Pick a date"}
+                    {taskDeadline ? format(taskDeadline, "MMM d, yyyy") : t("tasks.newTaskModal.pickDate")}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
@@ -978,13 +986,13 @@ export default function ProjectTasks() {
             </div>
 
             <div className="flex justify-end gap-2 pt-sp-1">
-              <Button variant="outline" onClick={() => setTaskModalOpen(false)}>Cancel</Button>
+              <Button variant="outline" onClick={() => setTaskModalOpen(false)}>{t("common.cancel")}</Button>
               <Button
                 className="bg-accent text-accent-foreground hover:bg-accent/90"
                 onClick={handleCreateTask}
                 disabled={!taskTitle.trim()}
               >
-                Create
+                {t("common.create")}
               </Button>
             </div>
           </div>
@@ -996,15 +1004,15 @@ export default function ProjectTasks() {
       {stageModalOpen && canAuthorTaskStructure && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="bg-card border border-border rounded-xl p-sp-3 w-full max-w-md space-y-sp-2 relative z-[52] shadow-xl">
-            <h3 className="text-lg font-semibold text-foreground">New Stage</h3>
+            <h3 className="text-lg font-semibold text-foreground">{t("tasks.newStageModal.title")}</h3>
             <Input
-              placeholder="Stage name *"
+              placeholder={t("tasks.newStageModal.namePlaceholder")}
               value={newStageTitle}
               onChange={(e) => setNewStageTitle(e.target.value)}
               autoFocus
             />
             <Textarea
-              placeholder="Describe what tasks this stage usually includes."
+              placeholder={t("tasks.newStageModal.descriptionPlaceholder")}
               value={newStageDesc}
               onChange={(e) => {
                 setNewStageDesc(e.target.value);
@@ -1019,18 +1027,18 @@ export default function ProjectTasks() {
                 onCheckedChange={(checked) => setCreateWithAI(!!checked)}
                 disabled={!newStageDesc.trim()}
               />
-              Create with AI
+              {t("tasks.newStageModal.createWithAi")}
             </label>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => { setStageModalOpen(false); setNewStageTitle(""); setNewStageDesc(""); setCreateWithAI(false); }}>
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button
                 className="bg-accent text-accent-foreground hover:bg-accent/90"
                 onClick={handleCreateStage}
                 disabled={!newStageTitle.trim()}
               >
-                Create
+                {t("common.create")}
               </Button>
             </div>
           </div>
@@ -1042,8 +1050,8 @@ export default function ProjectTasks() {
       {donePrompt && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center">
           <div className="bg-card border border-border rounded-xl p-sp-3 w-full max-w-md space-y-sp-2 relative z-[62] shadow-xl">
-            <h3 className="text-lg font-semibold text-foreground">Add final result photos</h3>
-            <p className="text-sm text-muted-foreground">Upload at least one photo to confirm completion.</p>
+            <h3 className="text-lg font-semibold text-foreground">{t("tasks.donePrompt.title")}</h3>
+            <p className="text-sm text-muted-foreground">{t("tasks.donePrompt.description")}</p>
 
             <div className="space-y-2">
               <Input
@@ -1054,28 +1062,28 @@ export default function ProjectTasks() {
                 onChange={(e) => setDoneFiles(Array.from(e.target.files ?? []))}
               />
               <p className="text-caption text-muted-foreground">
-                {doneFiles.length > 0 ? `${doneFiles.length} file(s) selected` : "No files selected"}
+                {doneFiles.length > 0 ? t("tasks.donePrompt.filesSelected", { count: doneFiles.length }) : t("tasks.donePrompt.noFilesSelected")}
               </p>
             </div>
 
             <div>
-              <label className="text-caption text-muted-foreground mb-1 block">Comment (optional)</label>
+              <label className="text-caption text-muted-foreground mb-1 block">{t("tasks.donePrompt.commentLabel")}</label>
               <Input
                 value={doneComment}
                 onChange={(e) => setDoneComment(e.target.value)}
-                placeholder="Any notes about completion…"
+                placeholder={t("tasks.donePrompt.commentPlaceholder")}
                 className="text-sm h-8"
               />
             </div>
 
             <div className="flex justify-end gap-2 pt-sp-1">
-              <Button variant="outline" onClick={() => setDonePrompt(null)}>Back</Button>
+              <Button variant="outline" onClick={() => setDonePrompt(null)}>{t("common.back")}</Button>
               <Button
                 className="bg-success text-success-foreground hover:bg-success/90"
                 onClick={() => void handleConfirmDone()}
                 disabled={doneUploading || doneFiles.length === 0}
               >
-                <CheckCircle2 className="h-4 w-4 mr-1" /> {doneUploading ? "Uploading..." : "Mark Done"}
+                <CheckCircle2 className="h-4 w-4 mr-1" /> {doneUploading ? t("tasks.donePrompt.uploading") : t("tasks.donePrompt.markDone")}
               </Button>
             </div>
           </div>
@@ -1087,26 +1095,26 @@ export default function ProjectTasks() {
       {blockedPrompt && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center">
           <div className="bg-card border border-border rounded-xl p-sp-3 w-full max-w-md space-y-sp-2 relative z-[62] shadow-xl">
-            <h3 className="text-lg font-semibold text-foreground">Why is this blocked?</h3>
-            <p className="text-sm text-muted-foreground">Explain the blocker so the team can resolve it.</p>
+            <h3 className="text-lg font-semibold text-foreground">{t("tasks.blockedPrompt.title")}</h3>
+            <p className="text-sm text-muted-foreground">{t("tasks.blockedPrompt.description")}</p>
 
             <Textarea
               value={blockedReason}
               onChange={(e) => setBlockedReason(e.target.value)}
-              placeholder="Describe the reason this task is blocked…"
+              placeholder={t("tasks.blockedPrompt.placeholder")}
               rows={3}
               autoFocus
               className="text-sm"
             />
 
             <div className="flex justify-end gap-2 pt-sp-1">
-              <Button variant="outline" onClick={() => setBlockedPrompt(null)}>Cancel</Button>
+              <Button variant="outline" onClick={() => setBlockedPrompt(null)}>{t("common.cancel")}</Button>
               <Button
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 onClick={() => void handleConfirmBlocked()}
                 disabled={blockedReason.trim().length < 5}
               >
-                <AlertTriangle className="h-4 w-4 mr-1" /> Mark Blocked
+                <AlertTriangle className="h-4 w-4 mr-1" /> {t("tasks.blockedPrompt.markBlocked")}
               </Button>
             </div>
           </div>
@@ -1118,13 +1126,13 @@ export default function ProjectTasks() {
       <ConfirmModal
         open={!!deleteStageId}
         onOpenChange={(open) => { if (!open) setDeleteStageId(null); }}
-        title="Delete Stage"
+        title={t("tasks.deleteStage.title")}
         description={
           deleteTaskCount > 0
-            ? `This stage has ${deleteTaskCount} task(s). They will be unassigned. Are you sure?`
-            : "Are you sure you want to delete this stage?"
+            ? t("tasks.deleteStage.descriptionWithTasks", { count: deleteTaskCount })
+            : t("tasks.deleteStage.descriptionEmpty")
         }
-        confirmLabel="Delete"
+        confirmLabel={t("common.delete")}
         onConfirm={handleDeleteStage}
       />
 
@@ -1132,13 +1140,13 @@ export default function ProjectTasks() {
       <ConfirmModal
         open={!!completeStageId}
         onOpenChange={(open) => { if (!open) setCompleteStageId(null); }}
-        title="Complete Stage"
+        title={t("tasks.completeStage.title")}
         description={
           incompleteTasks.length > 0
-            ? `${incompleteTasks.length} task(s) are not done yet. They will be marked as done. Continue?`
-            : "All tasks are complete. Mark this stage as done?"
+            ? t("tasks.completeStage.descriptionPending", { count: incompleteTasks.length })
+            : t("tasks.completeStage.descriptionAllDone")
         }
-        confirmLabel="Complete"
+        confirmLabel={t("tasks.completeStage.confirmLabel")}
         onConfirm={handleCompleteStage}
       />
     </div>

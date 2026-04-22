@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Check, X, GitBranch } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 interface ActionBarProps {
   onConfirm: () => void;
@@ -10,6 +11,7 @@ interface ActionBarProps {
 }
 
 export function ActionBar({ onConfirm, onCancel, onNewVersion, showNewVersion, disabled }: ActionBarProps) {
+  const { t } = useTranslation();
   return (
     <div className="flex items-center gap-1.5 pt-1">
       <Button
@@ -19,7 +21,7 @@ export function ActionBar({ onConfirm, onCancel, onNewVersion, showNewVersion, d
         className="h-7 px-3 text-xs bg-accent text-accent-foreground hover:bg-accent/90"
       >
         <Check className="h-3.5 w-3.5 mr-1" />
-        Confirm
+        {t("ai.actionBar.confirm")}
       </Button>
       <Button
         size="sm"
@@ -29,7 +31,7 @@ export function ActionBar({ onConfirm, onCancel, onNewVersion, showNewVersion, d
         className="h-7 px-3 text-xs"
       >
         <X className="h-3.5 w-3.5 mr-1" />
-        Cancel
+        {t("ai.actionBar.cancel")}
       </Button>
       {showNewVersion && onNewVersion && (
         <Button
@@ -40,7 +42,7 @@ export function ActionBar({ onConfirm, onCancel, onNewVersion, showNewVersion, d
           className="h-7 px-3 text-xs ml-auto"
         >
           <GitBranch className="h-3.5 w-3.5 mr-1" />
-          New version
+          {t("ai.actionBar.newVersion")}
         </Button>
       )}
     </div>

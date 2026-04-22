@@ -1,4 +1,5 @@
 import { Bot } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { AIMessage } from "@/types/ai";
 import { PreviewCard } from "./PreviewCard";
 import { ActionBar } from "./ActionBar";
@@ -11,6 +12,7 @@ interface ChatMessageProps {
 }
 
 export function ChatMessage({ message, onConfirm, onCancel, onNewVersion }: ChatMessageProps) {
+  const { t } = useTranslation();
   const isUser = message.role === "user";
   const proposal = message.proposal;
   const isPending = proposal?.status === "pending";
@@ -45,10 +47,10 @@ export function ChatMessage({ message, onConfirm, onCancel, onNewVersion }: Chat
               />
             )}
             {proposal.status === "confirmed" && (
-              <span className="text-caption text-success">✓ Confirmed</span>
+              <span className="text-caption text-success">{t("ai.chat.confirmed")}</span>
             )}
             {proposal.status === "cancelled" && (
-              <span className="text-caption text-muted-foreground">✗ Cancelled</span>
+              <span className="text-caption text-muted-foreground">{t("ai.chat.cancelled")}</span>
             )}
           </div>
         )}

@@ -43,12 +43,13 @@ export function resourceLineTypeFromPersisted(db: DbEstimateResourceType): Resou
 // Display / semantic labels
 // ---------------------------------------------------------------------------
 
+// Labels are i18n keys; callers must translate via useTranslation's t() before display.
 const SEMANTIC_LABELS: Record<ResourceLineType, string> = {
-  material: "Material",
-  tool: "Tool",
-  labor: "HR",
-  subcontractor: "Subcontractor",
-  other: "Other",
+  material: "estimate.resource.semantic.material",
+  tool: "estimate.resource.semantic.tool",
+  labor: "estimate.resource.semantic.labor",
+  subcontractor: "estimate.resource.semantic.subcontractor",
+  other: "estimate.resource.semantic.other",
 };
 
 export function resourceLineSemanticLabel(type: ResourceLineType): string {

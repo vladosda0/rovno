@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { getUserById } from "@/data/store";
 import { StatusBadge } from "@/components/StatusBadge";
 import { cn } from "@/lib/utils";
@@ -33,6 +34,7 @@ interface Props {
 }
 
 export function TaskSummaryWidget({ tasks, projectId, className }: Props) {
+  const { t } = useTranslation();
   const sortedTasks = [...tasks].sort(
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
   );
@@ -41,14 +43,14 @@ export function TaskSummaryWidget({ tasks, projectId, className }: Props) {
     <div className={cn("glass rounded-card p-sp-2", className)}>
       <div className="flex items-center justify-between mb-sp-2">
         <h3 className="text-body font-semibold text-foreground flex items-center gap-2">
-          <ListTodo className="h-4 w-4 text-accent" /> Tasks
+          <ListTodo className="h-4 w-4 text-accent" /> {t("taskSummary.title")}
         </h3>
         <Link to={`/project/${projectId}/tasks`} className="text-caption text-accent hover:underline flex items-center gap-1">
-          View all <ArrowRight className="h-3 w-3" />
+          {t("taskSummary.viewAll")} <ArrowRight className="h-3 w-3" />
         </Link>
       </div>
       {sortedTasks.length === 0 ? (
-        <p className="text-caption text-muted-foreground text-center py-sp-2">No tasks yet</p>
+        <p className="text-caption text-muted-foreground text-center py-sp-2">{t("taskSummary.empty")}</p>
       ) : (
         <div className="space-y-1.5">
           {sortedTasks.slice(0, 8).map((task) => {
@@ -61,7 +63,7 @@ export function TaskSummaryWidget({ tasks, projectId, className }: Props) {
                 <StatusBadge status={taskStatusLabel(task.status)} variant="task" className="text-[10px] px-1.5 py-0" />
                 <span className="text-caption text-foreground flex-1 truncate">{task.title}</span>
                 <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">
-                  {assignee?.name ?? "Unassigned"}
+                  {assignee?.name ?? t("taskSummary.unassigned")}
                 </span>
               </div>
             );

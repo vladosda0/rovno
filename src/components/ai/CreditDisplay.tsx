@@ -1,8 +1,10 @@
 import { Coins, ChevronRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useCurrentUser } from "@/hooks/use-mock-data";
 
 export function CreditDisplay({ onLimitReached }: { onLimitReached: () => void }) {
+  const { t } = useTranslation();
   const user = useCurrentUser();
   const navigate = useNavigate();
   const total = user.credits_free + user.credits_paid;
@@ -25,7 +27,7 @@ export function CreditDisplay({ onLimitReached }: { onLimitReached: () => void }
       <div className="flex items-center justify-between mb-1.5">
         <div className="flex items-center gap-1.5">
           <Coins className={`h-3.5 w-3.5 ${isLow ? "text-warning" : "text-accent"}`} />
-          <span className="text-caption font-semibold text-foreground">Credits</span>
+          <span className="text-caption font-semibold text-foreground">{t("ai.credits.title")}</span>
         </div>
         <div className="flex items-center gap-1">
           <span className={`text-body-sm font-bold ${isLow ? "text-warning" : "text-foreground"}`}>{total}</span>
@@ -38,7 +40,7 @@ export function CreditDisplay({ onLimitReached }: { onLimitReached: () => void }
       </div>
       <div className="flex items-center justify-between mt-1">
         <span className="text-caption text-muted-foreground">
-          {user.credits_free > 0 ? "Using daily credits" : "Using paid credits"}
+          {user.credits_free > 0 ? t("ai.credits.usingDaily") : t("ai.credits.usingPaid")}
         </span>
       </div>
     </button>

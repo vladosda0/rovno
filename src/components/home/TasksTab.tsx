@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,11 +19,11 @@ const STATUS_ICON: Record<TaskStatus, React.ElementType> = {
   done: CheckCircle2,
   blocked: Ban,
 };
-const STATUS_LABEL: Record<TaskStatus, string> = {
-  not_started: "Not started",
-  in_progress: "In progress",
-  done: "Done",
-  blocked: "Blocked",
+const STATUS_LABEL_KEY: Record<TaskStatus, string> = {
+  not_started: "status.notStarted",
+  in_progress: "status.inProgress",
+  done: "status.done",
+  blocked: "status.blocked",
 };
 const STATUS_COLOR: Record<TaskStatus, string> = {
   not_started: "text-muted-foreground",
@@ -32,6 +33,7 @@ const STATUS_COLOR: Record<TaskStatus, string> = {
 };
 
 export function TasksTab() {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -64,8 +66,8 @@ export function TasksTab() {
     if (!task) return;
     if (task.checklist.some((item) => !item.done)) {
       toast({
-        title: "Cannot mark as Done",
-        description: "All checklist items must be checked or resolved first.",
+        title: t("tasksTab.markDoneBlocked"),
+        description: t("tasksTab.markDoneBlockedBody"),
         variant: "destructive",
       });
       return;
@@ -76,8 +78,8 @@ export function TasksTab() {
       .some((mediaItem) => mediaItem.task_id === task.id && mediaItem.is_final);
     if (!hasFinalMedia) {
       toast({
-        title: "No final-result media",
-        description: "Upload at least one final-result photo before moving this task to Done.",
+        title: t("tasksTab.markDoneNoFinal"),
+        description: t("tasksTab.markDoneNoFinalBody"),
         variant: "destructive",
       });
       return;
@@ -92,22 +94,22 @@ export function TasksTab() {
       <div className="flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search tasks…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-9" />
+          <Input placeholder={t("tasksTab.search")} value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-9" />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[140px] h-9"><SelectValue placeholder="Status" /></SelectTrigger>
+          <SelectTrigger className="w-[140px] h-9"><SelectValue placeholder={t("tasksTab.statusPlaceholder")} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            <SelectItem value="not_started">Not started</SelectItem>
-            <SelectItem value="in_progress">In progress</SelectItem>
-            <SelectItem value="done">Done</SelectItem>
-            <SelectItem value="blocked">Blocked</SelectItem>
+            <SelectItem value="all">{t("tasksTab.allStatuses")}</SelectItem>
+            <SelectItem value="not_started">{t("status.notStarted")}</SelectItem>
+            <SelectItem value="in_progress">{t("status.inProgress")}</SelectItem>
+            <SelectItem value="done">{t("status.done")}</SelectItem>
+            <SelectItem value="blocked">{t("status.blocked")}</SelectItem>
           </SelectContent>
         </Select>
         <Select value={projectFilter} onValueChange={setProjectFilter}>
-          <SelectTrigger className="w-[180px] h-9"><SelectValue placeholder="Project" /></SelectTrigger>
+          <SelectTrigger className="w-[180px] h-9"><SelectValue placeholder={t("tasksTab.projectPlaceholder")} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All projects</SelectItem>
+            <SelectItem value="all">{t("tasksTab.allProjects")}</SelectItem>
             {projects.map((p) => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
           </SelectContent>
         </Select>
@@ -118,13 +120,13 @@ export function TasksTab() {
         <Card className="border-destructive/30">
           <CardContent className="p-4 sm:p-6">
             <h3 className="mb-3 flex items-center gap-2 text-body font-semibold text-destructive sm:mb-4">
-              <AlertTriangle className="h-4 w-4" /> Overdue ({overdue.length})
+              <AlertTriangle className="h-4 w-4" /> {t("tasksTab.overdue")} ({overdue.length})
             </h3>
             <div className="space-y-1">
-              {overdue.map((t) => {
-                const project = store.getProject(t.project_id);
+              {overdue.map((task) => {
+                const project = store.getProject(task.project_id);
                 return (
-                  <TaskRow key={t.id} task={t} projectTitle={project?.title} onToggle={handleToggleDone} />
+                  <TaskRow key={task.id} task={task} projectTitle={project?.title} onToggle={handleToggleDone} />
                 );
               })}
             </div>
@@ -136,15 +138,15 @@ export function TasksTab() {
       <Card>
         <CardContent className="p-4 sm:p-6">
           <h3 className="mb-3 text-body font-semibold text-foreground sm:mb-4">
-            Tasks ({filtered.length})
+            {t("tasksTab.tasksHeading")} ({filtered.length})
           </h3>
           <div className="space-y-1">
-            {filtered.map((t) => {
-              const project = store.getProject(t.project_id);
-              return <TaskRow key={t.id} task={t} projectTitle={project?.title} onToggle={handleToggleDone} />;
+            {filtered.map((task) => {
+              const project = store.getProject(task.project_id);
+              return <TaskRow key={task.id} task={task} projectTitle={project?.title} onToggle={handleToggleDone} />;
             })}
             {filtered.length === 0 && (
-              <p className="text-caption text-muted-foreground py-6 text-center">No tasks match your filters.</p>
+              <p className="text-caption text-muted-foreground py-6 text-center">{t("tasksTab.noMatch")}</p>
             )}
           </div>
         </CardContent>
@@ -158,6 +160,7 @@ function TaskRow({ task, projectTitle, onToggle }: {
   projectTitle?: string;
   onToggle: (id: string, status: TaskStatus) => void;
 }) {
+  const { t } = useTranslation();
   const Icon = STATUS_ICON[task.status];
   return (
     <div className="flex items-center gap-2 p-2 rounded-lg hover:bg-muted/50 transition-colors group">
@@ -172,7 +175,7 @@ function TaskRow({ task, projectTitle, onToggle }: {
       {projectTitle && (
         <Badge variant="secondary" className="text-[10px] shrink-0">{projectTitle}</Badge>
       )}
-      <span className="text-caption text-muted-foreground shrink-0">{STATUS_LABEL[task.status]}</span>
+      <span className="text-caption text-muted-foreground shrink-0">{t(STATUS_LABEL_KEY[task.status])}</span>
     </div>
   );
 }

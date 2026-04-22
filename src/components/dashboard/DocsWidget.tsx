@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { FileText, ArrowRight, Pin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Document } from "@/types/entities";
@@ -19,16 +20,17 @@ function getPreviewDocuments(documents: Document[]): { items: Document[]; hasPin
 }
 
 export function DocsWidget({ documents, projectId, className }: Props) {
+  const { t } = useTranslation();
   const { items, hasPinned } = getPreviewDocuments(documents);
 
   return (
     <div className={cn("glass rounded-card p-sp-2 h-full flex flex-col", className)}>
       <div className="flex items-center justify-between mb-sp-2">
         <h3 className="text-body font-semibold text-foreground flex items-center gap-2">
-          <FileText className="h-4 w-4 text-accent" /> Documents
+          <FileText className="h-4 w-4 text-accent" /> {t("docsWidget.title")}
         </h3>
         <Link to={`/project/${projectId}/documents`} className="text-caption text-accent hover:underline flex items-center gap-1">
-          View all <ArrowRight className="h-3 w-3" />
+          {t("docsWidget.viewAll")} <ArrowRight className="h-3 w-3" />
         </Link>
       </div>
       <div className="flex-1">
@@ -42,16 +44,16 @@ export function DocsWidget({ documents, projectId, className }: Props) {
                   <span className="text-caption text-foreground flex-1 truncate">{d.title}</span>
                   {hasPinned && (
                     <span className="inline-flex items-center gap-1 rounded-pill bg-accent/10 px-1.5 py-0.5 text-[10px] text-accent">
-                      <Pin className="h-2.5 w-2.5" /> Pinned
+                      <Pin className="h-2.5 w-2.5" /> {t("docsWidget.pinned")}
                     </span>
                   )}
-                  <span className="text-[10px] text-muted-foreground">Document</span>
+                  <span className="text-[10px] text-muted-foreground">{t("docsWidget.docLabel")}</span>
                 </div>
               );
             })}
           </div>
         ) : (
-          <p className="text-caption text-muted-foreground text-center py-sp-2">No documents yet</p>
+          <p className="text-caption text-muted-foreground text-center py-sp-2">{t("docsWidget.empty")}</p>
         )}
       </div>
     </div>
