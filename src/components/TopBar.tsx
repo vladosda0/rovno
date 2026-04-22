@@ -1,5 +1,5 @@
 import { Link, useLocation, useMatch, useNavigate } from "react-router-dom";
-import { ChevronDown, Hammer, LogOut, PanelLeft, Settings, User } from "lucide-react";
+import { ChevronDown, LogOut, PanelLeft, Settings, User } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -119,10 +119,11 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="h-8 gap-2 px-2 shrink-0">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-accent via-info to-warning text-accent-foreground">
-                  <Hammer className="h-3.5 w-3.5" />
-                </span>
-                <span className="text-body-sm font-semibold text-foreground">{t("nav.appName")}</span>
+                <img
+                  src="/logo.svg"
+                  alt={t("nav.appName")}
+                  className="h-6 w-auto"
+                />
                 <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
               </Button>
             </DropdownMenuTrigger>
@@ -248,10 +249,11 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="h-8 gap-2 px-2 shrink-0">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-accent via-info to-warning text-accent-foreground">
-                  <Hammer className="h-3.5 w-3.5" />
-                </span>
-                <span className="text-body-sm font-semibold text-foreground">{t("nav.appName")}</span>
+                <img
+                  src="/logo.svg"
+                  alt={t("nav.appName")}
+                  className="h-6 w-auto"
+                />
                 <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
               </Button>
             </DropdownMenuTrigger>
@@ -336,10 +338,11 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="h-8 gap-2 px-2 shrink-0">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-accent via-info to-warning text-accent-foreground">
-                  <Hammer className="h-3.5 w-3.5" />
-                </span>
-                <span className="text-body-sm font-semibold text-foreground">{t("nav.appName")}</span>
+                <img
+                  src="/logo.svg"
+                  alt={t("nav.appName")}
+                  className="h-6 w-auto"
+                />
                 <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
               </Button>
             </DropdownMenuTrigger>

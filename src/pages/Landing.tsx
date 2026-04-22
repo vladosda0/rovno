@@ -8,15 +8,12 @@ import {
   CloudUpload,
   Download,
   Files,
-  Hammer,
   Menu,
-  Moon,
   Printer,
   ReceiptText,
   Share2,
   ShieldCheck,
   Sparkles,
-  Sun,
   Timer,
   X,
 } from "lucide-react";
@@ -34,7 +31,6 @@ import { useTranslation } from "react-i18next";
 
 type Translator = (key: string, options?: Record<string, unknown>) => string;
 
-const THEME_KEY = "landing-theme";
 const ACCEPTED_FILE_TYPES = ".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx";
 
 const DEMO_COVER_IMAGE_MAP: Record<string, string> = {
@@ -810,7 +806,6 @@ export default function Landing() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const promptTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
-  const [isDark, setIsDark] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [promptText, setPromptText] = useState("");
@@ -963,21 +958,6 @@ export default function Landing() {
     docScanFinishTimerRef.current = null;
     docScanStepTimerRef.current = null;
   };
-
-  useEffect(() => {
-    const storedTheme = localStorage.getItem(THEME_KEY);
-    const theme = storedTheme === "light" || storedTheme === "dark" ? storedTheme : "dark";
-    setIsDark(theme === "dark");
-    document.documentElement.classList.toggle("dark", theme === "dark");
-    if (!storedTheme) {
-      localStorage.setItem(THEME_KEY, theme);
-    }
-  }, []);
-
-  useEffect(() => {
-    document.documentElement.classList.toggle("dark", isDark);
-    localStorage.setItem(THEME_KEY, isDark ? "dark" : "light");
-  }, [isDark]);
 
   useEffect(() => {
     const onScroll = () => setIsScrolled(window.scrollY > 8);
@@ -1444,14 +1424,15 @@ export default function Landing() {
         }`}
       >
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-sp-3">
-          <Link to="/" className="flex items-center gap-2">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-accent via-info to-warning text-accent-foreground shadow-md">
-              <Hammer className="h-4 w-4" />
+          <Link to="/" className="flex items-center gap-3">
+            <img
+              src="/logo.svg"
+              alt={t("landing.brand.name")}
+              className="h-8 w-auto"
+            />
+            <span className="hidden text-caption text-muted-foreground sm:inline leading-tight">
+              {t("landing.brand.tagline")}
             </span>
-            <div className="leading-tight">
-              <p className="text-body font-semibold text-foreground">{t("landing.brand.name")}</p>
-              <p className="text-caption text-muted-foreground">{t("landing.brand.tagline")}</p>
-            </div>
           </Link>
 
           <nav className="hidden items-center gap-2 md:flex">
@@ -1467,24 +1448,6 @@ export default function Landing() {
           </nav>
 
           <div className="hidden items-center gap-2 md:flex">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setIsDark((prev) => !prev)}
-              className="relative h-9 w-9 overflow-hidden"
-            >
-              <Sun
-                className={`absolute h-4 w-4 transition-all duration-200 ${
-                  isDark ? "rotate-180 scale-0 opacity-0" : "rotate-0 scale-100 opacity-100"
-                }`}
-              />
-              <Moon
-                className={`absolute h-4 w-4 transition-all duration-200 ${
-                  isDark ? "rotate-0 scale-100 opacity-100" : "-rotate-180 scale-0 opacity-0"
-                }`}
-              />
-              <span className="sr-only">{t("landing.nav.toggleTheme")}</span>
-            </Button>
             <Button variant="outline" asChild>
               <Link to="/auth/login">{t("landing.nav.login")}</Link>
             </Button>
@@ -1494,24 +1457,6 @@ export default function Landing() {
           </div>
 
           <div className="flex items-center gap-1 md:hidden">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setIsDark((prev) => !prev)}
-              className="relative h-9 w-9 overflow-hidden"
-            >
-              <Sun
-                className={`absolute h-4 w-4 transition-all duration-200 ${
-                  isDark ? "rotate-180 scale-0 opacity-0" : "rotate-0 scale-100 opacity-100"
-                }`}
-              />
-              <Moon
-                className={`absolute h-4 w-4 transition-all duration-200 ${
-                  isDark ? "rotate-0 scale-100 opacity-100" : "-rotate-180 scale-0 opacity-0"
-                }`}
-              />
-              <span className="sr-only">{t("landing.nav.toggleTheme")}</span>
-            </Button>
             <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
               <SheetTrigger asChild>
                 <Button variant="ghost" size="icon">

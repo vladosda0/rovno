@@ -33,52 +33,53 @@
     --glass-border-opacity: 0.12;
     --glass-highlight-opacity: 0.06;
 
-    /* === Light Theme — "Cloud Dancer" === */
-    --background: 220 20% 97%;
-    --foreground: 220 25% 10%;
+    /* === Light Theme — rovno brand === */
+    /* Background & surface */
+    --background: 55 38% 89%;       /* #EDEBD7 warm cream */
+    --foreground: 52 40% 4%;        /* #0E0D06 near-black */
 
-    --card: 0 0% 100%;
-    --card-foreground: 220 25% 10%;
+    --card: 55 30% 93%;             /* slightly lighter cream for cards */
+    --card-foreground: 52 40% 4%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 220 25% 10%;
+    --popover: 55 30% 93%;
+    --popover-foreground: 52 40% 4%;
 
-    /* Neutral primary — dark slate */
-    --primary: 220 25% 12%;
-    --primary-foreground: 220 20% 97%;
+    /* Primary — near-black (used for strong elements) */
+    --primary: 52 40% 4%;
+    --primary-foreground: 55 38% 89%;
 
-    /* Soft secondary */
-    --secondary: 220 15% 93%;
-    --secondary-foreground: 220 25% 12%;
+    /* Secondary — soft olive tint */
+    --secondary: 66 12% 88%;
+    --secondary-foreground: 52 40% 10%;
 
-    /* Muted for subtle text */
-    --muted: 220 15% 93%;
-    --muted-foreground: 220 10% 46%;
+    /* Muted — olive */
+    --muted: 66 12% 84%;
+    --muted-foreground: 66 12% 38%;
 
-    /* Accent — Construction Green */
-    --accent: 152 55% 42%;
+    /* Accent — brand blue (main CTA, links, active states) */
+    --accent: 218 74% 46%;          /* #1E5CCB */
     --accent-foreground: 0 0% 100%;
 
-    /* Warning — Amber */
-    --warning: 38 92% 50%;
-    --warning-foreground: 38 92% 14%;
-
-    /* Danger — Red */
-    --destructive: 0 72% 51%;
+    /* Destructive — brand orange (warnings, errors, danger) */
+    --destructive: 15 82% 63%;      /* #EE7A53 */
     --destructive-foreground: 0 0% 100%;
 
-    /* Success — Green (alias of accent for semantic use) */
-    --success: 152 55% 42%;
+    /* Warning — keep orange consistent */
+    --warning: 15 82% 63%;
+    --warning-foreground: 0 0% 100%;
+
+    /* Success — keep a visible green (do not replace with brand colors) */
+    --success: 152 55% 38%;
     --success-foreground: 0 0% 100%;
 
-    /* Info — Blue */
-    --info: 210 80% 52%;
+    /* Info — use brand blue */
+    --info: 218 74% 46%;
     --info-foreground: 0 0% 100%;
 
     /* Borders & inputs */
-    --border: 220 15% 89%;
-    --input: 220 15% 89%;
-    --ring: 152 55% 42%;
+    --border: 55 20% 80%;
+    --input: 55 20% 80%;
+    --ring: 218 74% 46%;            /* focus ring = brand blue */
 
     /* Glass surfaces (light) */
     --glass-bg: 0 0% 100%;
@@ -87,70 +88,16 @@
     --glass-shadow-edge: 220 25% 10%;
 
     /* Sidebar */
-    --sidebar-background: 220 20% 98%;
-    --sidebar-foreground: 220 15% 30%;
-    --sidebar-primary: 220 25% 12%;
-    --sidebar-primary-foreground: 220 20% 97%;
-    --sidebar-accent: 220 15% 94%;
-    --sidebar-accent-foreground: 220 25% 12%;
-    --sidebar-border: 220 15% 91%;
-    --sidebar-ring: 152 55% 42%;
+    --sidebar-background: 55 35% 86%;
+    --sidebar-foreground: 52 40% 15%;
+    --sidebar-primary: 52 40% 4%;
+    --sidebar-primary-foreground: 55 38% 89%;
+    --sidebar-accent: 55 30% 82%;
+    --sidebar-accent-foreground: 52 40% 10%;
+    --sidebar-border: 55 20% 78%;
+    --sidebar-ring: 218 74% 46%;
   }
 
-  .dark {
-    /* === Dark Theme — "Night Glass" === */
-    --background: 222 30% 8%;
-    --foreground: 220 15% 90%;
-
-    --card: 222 25% 11%;
-    --card-foreground: 220 15% 90%;
-
-    --popover: 222 25% 11%;
-    --popover-foreground: 220 15% 90%;
-
-    --primary: 220 15% 93%;
-    --primary-foreground: 222 30% 8%;
-
-    --secondary: 222 20% 16%;
-    --secondary-foreground: 220 15% 90%;
-
-    --muted: 222 20% 16%;
-    --muted-foreground: 220 10% 55%;
-
-    --accent: 152 55% 48%;
-    --accent-foreground: 0 0% 100%;
-
-    --warning: 38 92% 50%;
-    --warning-foreground: 38 92% 14%;
-
-    --destructive: 0 62% 45%;
-    --destructive-foreground: 0 0% 100%;
-
-    --success: 152 55% 48%;
-    --success-foreground: 0 0% 100%;
-
-    --info: 210 80% 58%;
-    --info-foreground: 0 0% 100%;
-
-    --border: 222 15% 18%;
-    --input: 222 15% 18%;
-    --ring: 152 55% 48%;
-
-    /* Glass surfaces (dark) — "Cloud Dancer" light panels on dark */
-    --glass-bg: 220 15% 90%;
-    --glass-border: 220 15% 90%;
-    --glass-shadow-ambient: 0 0% 0%;
-    --glass-shadow-edge: 0 0% 0%;
-
-    --sidebar-background: 222 25% 10%;
-    --sidebar-foreground: 220 10% 75%;
-    --sidebar-primary: 152 55% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 222 20% 14%;
-    --sidebar-accent-foreground: 220 15% 90%;
-    --sidebar-border: 222 15% 16%;
-    --sidebar-ring: 152 55% 48%;
-  }
 }
 
 @layer base {
