@@ -7,8 +7,10 @@ export default function AuthLayout() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-sp-2">
       <div className="w-full max-w-md">
-        <div className="mb-sp-4 text-center">
-          <Link to="/" className="text-h2 font-bold text-foreground">{t("nav.appName")}</Link>
+        <div className="mb-sp-4 flex justify-center">
+          <Link to="/" aria-label={t("nav.appName")}>
+            <img src="/logo.svg" alt={t("nav.appName")} className="h-12 w-auto" />
+          </Link>
         </div>
         <Outlet />
       </div>

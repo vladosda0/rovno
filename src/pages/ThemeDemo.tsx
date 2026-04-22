@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 const ColorSwatch = ({ name, variable, className }: { name: string; variable: string; className?: string }) => (
@@ -14,25 +13,13 @@ const ColorSwatch = ({ name, variable, className }: { name: string; variable: st
 
 const ThemeDemo = () => {
   const { t } = useTranslation();
-  const [isDark, setIsDark] = useState(false);
-
-  const toggleTheme = () => {
-    setIsDark(!isDark);
-    document.documentElement.classList.toggle("dark");
-  };
 
   return (
-    <div className="min-h-screen bg-background text-foreground transition-colors duration-300">
+    <div className="min-h-screen bg-background text-foreground">
       {/* Header */}
       <header className="sticky top-0 z-10 glass px-sp-4 py-sp-2">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <h1 className="text-h3">{t("themeDemo.title")}</h1>
-          <button
-            onClick={toggleTheme}
-            className="px-sp-2 py-sp-1 rounded-pill glass text-body-sm font-medium hover:scale-[1.02] transition-transform duration-150"
-          >
-            {isDark ? t("themeDemo.theme.light") : t("themeDemo.theme.dark")}
-          </button>
         </div>
       </header>
 
