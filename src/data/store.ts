@@ -36,6 +36,7 @@ import {
   seedMedia,
   seedEvents,
   seedNotifications,
+  seedInvites,
   allUsers,
 } from "@/data/seed";
 import type { Database as WorkspaceDatabase } from "../../backend-truth/generated/supabase-types";
@@ -106,7 +107,7 @@ function createSeededDemoState(): BrowserWorkspaceState {
     events: [...seedEvents],
     notifications: [...seedNotifications],
     contractorProposals: [],
-    invites: [],
+    invites: [...seedInvites],
   };
 }
 
@@ -171,7 +172,7 @@ function loadPersistedDemoState(): BrowserWorkspaceState | null {
       events: parsed.events ?? [...seedEvents],
       notifications: parsed.notifications ?? [...seedNotifications],
       contractorProposals: parsed.contractorProposals ?? [],
-      invites: parsed.invites ?? [],
+      invites: parsed.invites ?? [...seedInvites],
     });
   } catch {
     return null;
