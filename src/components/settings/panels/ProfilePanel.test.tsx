@@ -47,8 +47,8 @@ describe("ProfilePanel", () => {
       </QueryClientProvider>,
     );
 
-    expect(screen.getByDisplayValue("Alex Petrov")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("alex@stroyagent.io")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Алексей Петров")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("alex@rovno.ai")).toBeInTheDocument();
     expect(screen.queryByDisplayValue("Real Workspace User")).not.toBeInTheDocument();
     expect(screen.queryByDisplayValue("real-user@example.com")).not.toBeInTheDocument();
   });

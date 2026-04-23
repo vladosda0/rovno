@@ -41,7 +41,7 @@ describe("store", () => {
     ]);
 
     expect(getUserById("user-2")?.name).toBe("Supabase Maria");
-    expect(getUserById("user-3")?.name).toBe("Dmitry Sokolov");
+    expect(getUserById("user-3")?.name).toBe("Дмитрий Соколов");
   });
 
   it("ignores cached workspace users while demo session is active", () => {
@@ -62,10 +62,10 @@ describe("store", () => {
 
     expect(getCurrentUser()).toMatchObject({
       id: "user-1",
-      email: "alex@stroyagent.io",
-      name: "Alex Petrov",
+      email: "alex@rovno.ai",
+      name: "Алексей Петров",
     });
-    expect(getUserById("user-2")?.name).toBe("Maria Ivanova");
+    expect(getUserById("user-2")?.name).toBe("Мария Иванова");
   });
 
   it("starts authenticated local workspaces empty instead of inheriting demo projects", () => {
@@ -126,8 +126,8 @@ describe("store", () => {
 
     expect(getCurrentUser()).toMatchObject({
       id: "user-1",
-      email: "alex@stroyagent.io",
-      name: "Alex Petrov",
+      email: "alex@rovno.ai",
+      name: "Алексей Петров",
     });
   });
 });

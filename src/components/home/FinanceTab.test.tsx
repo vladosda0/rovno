@@ -91,7 +91,7 @@ describe("FinanceTab", () => {
 
     expect(screen.getByText("Budget by Project")).toBeInTheDocument();
     expect(screen.getAllByText(expectedBudgetPattern).length).toBeGreaterThan(0);
-    expect(screen.getByText("Apartment Renovation")).toBeInTheDocument();
+    expect(screen.getByText("Ремонт квартиры")).toBeInTheDocument();
     expect(screen.queryByText(inflatedLegacyText)).not.toBeInTheDocument();
   });
 
