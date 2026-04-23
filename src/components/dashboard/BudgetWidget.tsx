@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { ChevronRight, Wallet } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import type { EstimateV2FinanceProjectSummary } from "@/lib/estimate-v2/finance-read-model";
@@ -24,7 +25,9 @@ export function BudgetWidget({ summary, projectId, className }: Props) {
   if (!summary?.hasEstimate) {
     return (
       <div className={cn("glass rounded-card p-sp-2 space-y-3", className)}>
-        <h3 className="text-body font-semibold text-foreground">{t("budgetWidget.title")}</h3>
+        <h3 className="text-body font-semibold text-foreground flex items-center gap-2">
+          <Wallet className="h-4 w-4 text-accent" /> {t("budgetWidget.title")}
+        </h3>
         <p className="text-body-sm text-muted-foreground">
           {t("budgetWidget.emptyDescription")}
         </p>
@@ -48,10 +51,16 @@ export function BudgetWidget({ summary, projectId, className }: Props) {
   return (
     <div className={cn("glass rounded-card p-sp-2", className)}>
       <div className="flex items-center justify-between gap-2 mb-sp-2">
-        <h3 className="text-body font-semibold text-foreground">{t("budgetWidget.title")}</h3>
-        <Button asChild size="sm" variant="outline" className="h-7 text-caption">
-          <Link to={`/project/${projectId}/estimate`}>{t("budgetWidget.manage")}</Link>
-        </Button>
+        <h3 className="text-body font-semibold text-foreground flex items-center gap-2 min-w-0">
+          <Wallet className="h-4 w-4 shrink-0 text-accent" /> {t("budgetWidget.title")}
+        </h3>
+        <Link
+          to={`/project/${projectId}/estimate`}
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-accent hover:bg-accent/10 transition-colors"
+          aria-label="Manage budget"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Link>
       </div>
 
       <div className="grid grid-cols-2 gap-2 mb-2">

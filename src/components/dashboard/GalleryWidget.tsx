@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Image, ArrowRight, Camera } from "lucide-react";
+import { Image, ChevronRight, Camera } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Media } from "@/types/entities";
 
@@ -18,8 +18,12 @@ export function GalleryWidget({ media, projectId, className }: Props) {
         <h3 className="text-body font-semibold text-foreground flex items-center gap-2">
           <Image className="h-4 w-4 text-accent" /> {t("galleryWidget.title")}
         </h3>
-        <Link to={`/project/${projectId}/gallery`} className="text-caption text-accent hover:underline flex items-center gap-1">
-          {t("galleryWidget.viewAll")} <ArrowRight className="h-3 w-3" />
+        <Link
+          to={`/project/${projectId}/gallery`}
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-accent hover:bg-accent/10 transition-colors"
+          aria-label="View all gallery"
+        >
+          <ChevronRight className="h-4 w-4" />
         </Link>
       </div>
       <div className="flex-1">

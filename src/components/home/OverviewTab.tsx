@@ -7,7 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import {
   Plus, FileText, Upload, CreditCard, AlertTriangle,
-  Clock, CheckCircle2, FolderOpen,
+  Clock, CheckCircle2, FolderOpen, ChevronRight,
 } from "lucide-react";
 import { useProjects, useCurrentUser } from "@/hooks/use-mock-data";
 import { useProjectsRecentEventsMap } from "@/hooks/use-activity-source";
@@ -90,8 +90,15 @@ export function OverviewTab() {
                 <h3 className="text-body font-semibold text-foreground flex items-center gap-2">
                   <FolderOpen className="h-4 w-4 text-accent" /> {t("overview.myProjects")}
                 </h3>
-                <Button variant="ghost" size="sm" className="text-caption" onClick={() => navigate("/home?tab=projects")}>
-                  {t("overview.viewAll")}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 shrink-0 text-accent"
+                  onClick={() => navigate("/home?tab=projects")}
+                  aria-label="View all projects"
+                >
+                  <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
               <div className="space-y-2">
@@ -124,8 +131,15 @@ export function OverviewTab() {
                 <h3 className="text-body font-semibold text-foreground flex items-center gap-2">
                   <Clock className="h-4 w-4 text-info" /> {t("overview.upcomingTasks")}
                 </h3>
-                <Button variant="ghost" size="sm" className="text-caption" onClick={() => navigate("/home?tab=tasks")}>
-                  {t("overview.viewAll")}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 shrink-0 text-accent"
+                  onClick={() => navigate("/home?tab=tasks")}
+                  aria-label="View all tasks"
+                >
+                  <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
               <div className="space-y-1.5">
@@ -185,7 +199,19 @@ export function OverviewTab() {
           {/* Credits */}
           <Card>
             <CardContent className="p-4 sm:p-6">
-              <h3 className="mb-3 text-body font-semibold text-foreground sm:mb-4">{t("overview.credits")}</h3>
+              <div className="mb-3 flex items-center justify-between sm:mb-4">
+                <h3 className="text-body font-semibold text-foreground">{t("overview.credits")}</h3>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 shrink-0 text-accent"
+                  onClick={() => navigate("/settings?tab=billing")}
+                  aria-label="Manage billing"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
               <div className="flex items-baseline gap-2 mb-1">
                 <span className="text-h3 font-bold text-foreground">{totalCredits}</span>
                 <span className="text-caption text-muted-foreground">{t("overview.credits.remaining")}</span>
@@ -199,9 +225,6 @@ export function OverviewTab() {
                   {t("overview.credits.empty")}
                 </div>
               )}
-              <Button variant="outline" size="sm" className="w-full" onClick={() => navigate("/settings?tab=billing")}>
-                <CreditCard className="h-3.5 w-3.5 mr-1.5" /> {t("overview.credits.manageBilling")}
-              </Button>
             </CardContent>
           </Card>
 

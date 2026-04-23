@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { getUserById } from "@/data/store";
 import { StatusBadge } from "@/components/StatusBadge";
 import { cn } from "@/lib/utils";
-import { ListTodo, ArrowRight, CheckCircle2, Circle, Clock, AlertTriangle } from "lucide-react";
+import { ListTodo, ChevronRight, CheckCircle2, Circle, Clock, AlertTriangle } from "lucide-react";
 import type { Task } from "@/types/entities";
 
 const taskStatusIcon: Record<string, typeof Circle> = {
@@ -45,8 +45,12 @@ export function TaskSummaryWidget({ tasks, projectId, className }: Props) {
         <h3 className="text-body font-semibold text-foreground flex items-center gap-2">
           <ListTodo className="h-4 w-4 text-accent" /> {t("taskSummary.title")}
         </h3>
-        <Link to={`/project/${projectId}/tasks`} className="text-caption text-accent hover:underline flex items-center gap-1">
-          {t("taskSummary.viewAll")} <ArrowRight className="h-3 w-3" />
+        <Link
+          to={`/project/${projectId}/tasks`}
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-accent hover:bg-accent/10 transition-colors"
+          aria-label="View all tasks"
+        >
+          <ChevronRight className="h-4 w-4" />
         </Link>
       </div>
       {sortedTasks.length === 0 ? (

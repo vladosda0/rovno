@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { FileText, ArrowRight, Pin } from "lucide-react";
+import { FileText, ChevronRight, Pin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Document } from "@/types/entities";
 
@@ -29,8 +29,12 @@ export function DocsWidget({ documents, projectId, className }: Props) {
         <h3 className="text-body font-semibold text-foreground flex items-center gap-2">
           <FileText className="h-4 w-4 text-accent" /> {t("docsWidget.title")}
         </h3>
-        <Link to={`/project/${projectId}/documents`} className="text-caption text-accent hover:underline flex items-center gap-1">
-          {t("docsWidget.viewAll")} <ArrowRight className="h-3 w-3" />
+        <Link
+          to={`/project/${projectId}/documents`}
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-accent hover:bg-accent/10 transition-colors"
+          aria-label="View all documents"
+        >
+          <ChevronRight className="h-4 w-4" />
         </Link>
       </div>
       <div className="flex-1">
