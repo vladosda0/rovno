@@ -1,5 +1,5 @@
 import { Link, useLocation, useMatch, useNavigate } from "react-router-dom";
-import { ChevronDown, LogOut, PanelLeft, Settings, User } from "lucide-react";
+import { ChevronDown, LogOut, PanelLeft, Settings, User, UserCog } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -9,16 +9,41 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ProjectTabs } from "@/components/ProjectTabs";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
-import { useCurrentUser, useProjects } from "@/hooks/use-mock-data";
+import { useCurrentUser, useProjects, useWorkspaceMode } from "@/hooks/use-mock-data";
 import { supabase } from "@/integrations/supabase/client";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
 import { clearDemoSession, clearStoredAuthProfile, setAuthRole } from "@/lib/auth-state";
 import { clearAiSidebarSessionPreference } from "@/lib/ai-sidebar-session";
+import type { AIAccess, FinanceVisibility, MemberRole } from "@/types/entities";
+import { addMember, updateMember, type BrowserWorkspaceKind } from "@/data/store";
+import { getDefaultFinanceVisibility } from "@/lib/participant-role-policy";
+
+type DemoSwitchableRole = Extract<MemberRole, "owner" | "co_owner" | "contractor" | "viewer">;
+
+function mapDemoRoleToMembership(role: DemoSwitchableRole): {
+  aiAccess: AIAccess;
+  financeVisibility: FinanceVisibility;
+  creditLimit: number;
+} {
+  switch (role) {
+    case "owner":
+      return { aiAccess: "project_pool", financeVisibility: getDefaultFinanceVisibility("owner"), creditLimit: 500 };
+    case "co_owner":
+      return { aiAccess: "project_pool", financeVisibility: getDefaultFinanceVisibility("co_owner"), creditLimit: 500 };
+    case "contractor":
+      return { aiAccess: "consult_only", financeVisibility: getDefaultFinanceVisibility("contractor"), creditLimit: 100 };
+    case "viewer":
+      return { aiAccess: "none", financeVisibility: getDefaultFinanceVisibility("viewer"), creditLimit: 0 };
+  }
+}
 
 interface MockCredits {
   dailyTotal: number;
@@ -73,6 +98,8 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
 
   const user = useCurrentUser();
   const projects = useProjects();
+  const workspaceMode = useWorkspaceMode();
+  const showRoleSwitcher = workspaceMode.kind === "demo" || workspaceMode.kind === "local";
   const currentProject = projects.find((project) => project.id === projectId);
   const projectName = currentProject?.title ?? t("nav.projectFallback");
   const [credits, setCredits] = useState<MockCredits>(DEFAULT_CREDITS);
@@ -88,6 +115,53 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
   const handleCreditsCardClick = () => {
     navigate("/settings?tab=billing");
   };
+
+  const handleRoleChange = (role: DemoSwitchableRole) => {
+    if (!projectId || !user.id) {
+      setAuthRole(role);
+      toast({ title: t("demo.roleChanged") });
+      return;
+    }
+    const membership = mapDemoRoleToMembership(role);
+    const mutationMode = (workspaceMode.kind === "demo" || workspaceMode.kind === "local"
+      ? workspaceMode.kind
+      : "demo") as BrowserWorkspaceKind;
+    const updated = updateMember(
+      projectId,
+      user.id,
+      { role, ai_access: membership.aiAccess, finance_visibility: membership.financeVisibility },
+      mutationMode,
+    );
+    if (!updated) {
+      addMember({
+        project_id: projectId,
+        user_id: user.id,
+        role,
+        ai_access: membership.aiAccess,
+        finance_visibility: membership.financeVisibility,
+        credit_limit: membership.creditLimit,
+        used_credits: 0,
+      });
+    }
+    setAuthRole(role);
+    toast({ title: t("demo.roleChanged") });
+    window.location.reload();
+  };
+
+  const renderRoleSwitcher = () => (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger>
+        <UserCog className="mr-2 h-4 w-4" />
+        {t("demo.changeRole")}
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent className="glass-elevated rounded-card">
+        <DropdownMenuItem onClick={() => handleRoleChange("owner")}>{t("demo.roles.owner")}</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => handleRoleChange("co_owner")}>{t("demo.roles.co_owner")}</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => handleRoleChange("contractor")}>{t("demo.roles.contractor")}</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => handleRoleChange("viewer")}>{t("demo.roles.viewer")}</DropdownMenuItem>
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
+  );
 
   const handleLogout = async () => {
     try {
@@ -182,6 +256,7 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
                   {t("nav.settings")}
                 </Link>
               </DropdownMenuItem>
+              {showRoleSwitcher && renderRoleSwitcher()}
               <DropdownMenuItem onClick={handleLogout}>
                 <LogOut className="mr-2 h-4 w-4" />
                 {t("nav.logout")}
@@ -312,6 +387,7 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
                   {t("nav.settings")}
                 </Link>
               </DropdownMenuItem>
+              {showRoleSwitcher && renderRoleSwitcher()}
               <DropdownMenuItem onClick={handleLogout}>
                 <LogOut className="mr-2 h-4 w-4" />
                 {t("nav.logout")}
@@ -353,6 +429,7 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
               <DropdownMenuItem asChild>
                 <Link to="/settings"><Settings className="mr-2 h-4 w-4" />{t("nav.settings")}</Link>
               </DropdownMenuItem>
+              {showRoleSwitcher && renderRoleSwitcher()}
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleLogout}>
                 <LogOut className="mr-2 h-4 w-4" />{t("nav.logout")}
