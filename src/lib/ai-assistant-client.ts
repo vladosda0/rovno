@@ -1,3 +1,4 @@
+import { isDemoSessionActive } from "@/lib/auth-state";
 import type { AIContextPack } from "@/lib/ai-project-context";
 import type { AiLlmProvider } from "@/lib/ai-llm-provider";
 import type {
@@ -51,6 +52,13 @@ export function resolveAiAssistantUiLanguage(
   if (aiOutputLanguage === "en") return "en";
   const hint = userMessage?.trim() ?? "";
   if (hint && /[\u0400-\u04FF]/.test(hint)) return "ru";
+  if (hint && /[A-Za-z]/.test(hint)) return "en";
+  // Default to Russian in the demo so the mock assistant matches the seeded RU content.
+  try {
+    if (isDemoSessionActive()) return "ru";
+  } catch {
+    // isDemoSessionActive relies on sessionStorage; ignore SSR/test environments without it.
+  }
   return "en";
 }
 

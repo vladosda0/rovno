@@ -131,11 +131,20 @@ const PROJECT_SUGGESTION_KEYS = [
   "ai.sidebar.suggestion.updateEstimate",
   "ai.sidebar.suggestion.generateContract",
   "ai.sidebar.suggestion.buyMaterials",
+  "ai.sidebar.suggestion.draftWeeklyReport",
+  "ai.sidebar.suggestion.nextRiskyTasks",
+  "ai.sidebar.suggestion.explainVariance",
+  "ai.sidebar.suggestion.suggestSchedule",
+  "ai.sidebar.suggestion.proposeMaterials",
 ];
 const GLOBAL_SUGGESTION_KEYS = [
   "ai.sidebar.suggestion.createProject",
   "ai.sidebar.suggestion.compareEstimates",
   "ai.sidebar.suggestion.bestTileAdhesive",
+  "ai.sidebar.suggestion.draftInvite",
+  "ai.sidebar.suggestion.typicalRenovationStages",
+  "ai.sidebar.suggestion.plasterVsDrywall",
+  "ai.sidebar.suggestion.paverCalculator",
 ];
 
 const STORAGE_KEY = "ai-sidebar-width";
