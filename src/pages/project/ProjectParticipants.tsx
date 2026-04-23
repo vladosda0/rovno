@@ -1087,9 +1087,7 @@ export default function ProjectParticipants() {
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
-                            ) : (
-                              <span className="text-caption text-muted-foreground">{t("participants.noActions")}</span>
-                            )}
+                            ) : null}
                           </TableCell>
                         )}
                       </TableRow>
@@ -1172,9 +1170,7 @@ export default function ProjectParticipants() {
                                 )}
                               </DropdownMenuContent>
                             </DropdownMenu>
-                          ) : (
-                            <span className="text-caption text-muted-foreground">{t("participants.noActions")}</span>
-                          )}
+                          ) : null}
                         </TableCell>
                       </TableRow>
                     );
