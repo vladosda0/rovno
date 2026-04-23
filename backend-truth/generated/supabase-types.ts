@@ -28,6 +28,8 @@ export type Database = {
           "credits_paid": number
           "created_at": string
           "updated_at": string
+          "onboarding_completed_at": string | null
+          "tutorials_completed": unknown
           }
           Insert: {
           "id"?: string
@@ -41,6 +43,8 @@ export type Database = {
           "credits_paid"?: number
           "created_at"?: string
           "updated_at"?: string
+          "onboarding_completed_at"?: string | null
+          "tutorials_completed"?: unknown
           }
           Update: {
           "id"?: string
@@ -54,6 +58,8 @@ export type Database = {
           "credits_paid"?: number
           "created_at"?: string
           "updated_at"?: string
+          "onboarding_completed_at"?: string | null
+          "tutorials_completed"?: unknown
           }
           Relationships: []
         }

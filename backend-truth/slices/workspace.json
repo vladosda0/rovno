@@ -149,6 +149,26 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "onboarding_completed_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "tutorials_completed",
+          "sqlType": "text[]",
+          "tsType": "unknown",
+          "nullable": false,
+          "defaultSql": "'{}'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [

@@ -43,6 +43,8 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 | `credits_paid` | `integer` | no | `0` | no |
 | `created_at` | `timestamptz` | no | `now()` | no |
 | `updated_at` | `timestamptz` | no | `now()` | no |
+| `onboarding_completed_at` | `timestamptz` | yes |   | no |
+| `tutorials_completed` | `text[]` | no | `'{}'` | no |
 
 Constraints:
 - unnamed check (expression `locale in ('ru', 'en', 'de', 'fr')`)
