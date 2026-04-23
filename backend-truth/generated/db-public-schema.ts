@@ -247,6 +247,10 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260419120000_session3c_procurement_ai_in_stock_evidence.sql",
       "sha256": "7ede71685d25398d4c9c7bf75ffe81e5bb4c1fae4a05a7abef152c4a990897d9"
+    },
+    {
+      "path": "supabase/migrations/20260423000000_profile_tutorial_state.sql",
+      "sha256": "1955bf9be8624074a20b279d8ae0607283e63d7b4127e229f8fa24a3a0b5ee6b"
     }
   ],
   "generated_artifacts": [
@@ -331,6 +335,7 @@ export const manifest = {
     "sql/20260417120000_estimate_resource_line_assignee_profile.sql",
     "sql/20260418120000_estimate_resource_line_assignee_label.sql",
     "sql/20260419120000_session3c_procurement_ai_in_stock_evidence.sql",
+    "sql/20260423000000_profile_tutorial_state.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -485,6 +490,26 @@ export const tables = {
           "tsType": "string",
           "nullable": false,
           "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "onboarding_completed_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "tutorials_completed",
+          "sqlType": "text[]",
+          "tsType": "unknown",
+          "nullable": false,
+          "defaultSql": "'{}'",
           "primaryKey": false,
           "unique": false,
           "references": null
@@ -11297,6 +11322,31 @@ export const functions = {
       "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260415130000_wave7_documents_media_ai_metadata_evidence.sql",
       "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "append_tutorial_completed",
+      "signature": "public.append_tutorial_completed(uuid, text)",
+      "args": [
+        {
+          "name": "p_profile_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_key",
+          "type": "text",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "void",
+      "language": "sql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": null,
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260423000000_profile_tutorial_state.sql",
+      "triggerUsages": []
     }
   ]
 } as const;
@@ -13771,6 +13821,13 @@ export const sourceTrace = {
       "name": "get_project_media_ai_metadata_evidence",
       "signature": "public.get_project_media_ai_metadata_evidence(uuid, integer, integer)",
       "sourceMigration": "supabase/migrations/20260415130000_wave7_documents_media_ai_metadata_evidence.sql"
+    },
+    {
+      "key": "public.append_tutorial_completed",
+      "schema": "public",
+      "name": "append_tutorial_completed",
+      "signature": "public.append_tutorial_completed(uuid, text)",
+      "sourceMigration": "supabase/migrations/20260423000000_profile_tutorial_state.sql"
     }
   ],
   "policies": [

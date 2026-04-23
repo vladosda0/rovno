@@ -1619,6 +1619,31 @@
       "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260415130000_wave7_documents_media_ai_metadata_evidence.sql",
       "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "append_tutorial_completed",
+      "signature": "public.append_tutorial_completed(uuid, text)",
+      "args": [
+        {
+          "name": "p_profile_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_key",
+          "type": "text",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "void",
+      "language": "sql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": null,
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260423000000_profile_tutorial_state.sql",
+      "triggerUsages": []
     }
   ]
 }

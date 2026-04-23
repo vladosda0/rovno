@@ -663,6 +663,13 @@
       "name": "get_project_media_ai_metadata_evidence",
       "signature": "public.get_project_media_ai_metadata_evidence(uuid, integer, integer)",
       "sourceMigration": "supabase/migrations/20260415130000_wave7_documents_media_ai_metadata_evidence.sql"
+    },
+    {
+      "key": "public.append_tutorial_completed",
+      "schema": "public",
+      "name": "append_tutorial_completed",
+      "signature": "public.append_tutorial_completed(uuid, text)",
+      "sourceMigration": "supabase/migrations/20260423000000_profile_tutorial_state.sql"
     }
   ],
   "policies": [
