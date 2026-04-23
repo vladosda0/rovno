@@ -1,4 +1,4 @@
-import { getAuthRole, isDemoSessionActive } from "@/lib/auth-state";
+import { getAuthRole, isDemoSessionActive, subscribeAuthState } from "@/lib/auth-state";
 import {
   getProjectDomainAccessForRole,
   projectDomainAllowsManage,
@@ -202,6 +202,27 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-
 
 let crossSyncInProgress = false;
 let mainStoreUnsubscribe: (() => void) | null = null;
+
+// Invalidate any stale default-seeded states for demo projects when the demo
+// session becomes active. Without this, any state cached before the demo session
+// was entered (e.g. during app boot) would stick at estimateStatus="planning".
+let lastKnownDemoActive = false;
+if (typeof window !== "undefined") {
+  lastKnownDemoActive = isDemoSessionActive();
+  subscribeAuthState(() => {
+    const active = isDemoSessionActive();
+    if (active && !lastKnownDemoActive) {
+      DEMO_PROJECT_IDS.forEach((projectId) => {
+        const existing = statesByProjectId.get(projectId);
+        if (existing && existing.lines.length === 0) {
+          statesByProjectId.delete(projectId);
+        }
+      });
+      listeners.forEach((listener) => listener());
+    }
+    lastKnownDemoActive = active;
+  });
+}
 const remoteHydrationPromises = new Map<string, Promise<void>>();
 const remoteDraftSyncTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const remoteDraftSyncErrorSignatureByProjectId = new Map<string, string>();
@@ -2031,11 +2052,29 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
 
 function ensureProjectState(projectId: string): EstimateV2ProjectState {
   const existing = statesByProjectId.get(projectId);
+  const demoActive = DEMO_PROJECT_IDS.has(projectId) && isDemoSessionActive();
+
+  // Replace stale default-seeded state (created before the demo session was entered)
+  // with the curated demo seed so HR / Tasks / Procurement reflect the correct status.
+  if (existing && demoActive && existing.lines.length === 0) {
+    const createdAt = nowIso();
+    const demoState = getDemoEstimateV2State(projectId, createdAt);
+    if (demoState) {
+      const state: EstimateV2ProjectState = {
+        ...demoState,
+        sync: createEmptyProjectSyncState(),
+      };
+      ensureProjectSyncState(state);
+      statesByProjectId.set(projectId, state);
+      return state;
+    }
+  }
+
   if (existing) return existing;
 
   const createdAt = nowIso();
 
-  if (DEMO_PROJECT_IDS.has(projectId) && isDemoSessionActive()) {
+  if (demoActive) {
     const demoState = getDemoEstimateV2State(projectId, createdAt);
     if (demoState) {
       const state: EstimateV2ProjectState = {
