@@ -622,6 +622,19 @@ export function addProject(project: Project) {
   });
 }
 
+export function removeProject(projectId: string, mode?: BrowserWorkspaceKind) {
+  updateWorkspaceState((state) => {
+    state.projects = state.projects.filter((project) => project.id !== projectId);
+    state.members = state.members.filter((member) => member.project_id !== projectId);
+    state.invites = state.invites.filter((invite) => invite.project_id !== projectId);
+    state.stages = state.stages.filter((stage) => stage.project_id !== projectId);
+    state.tasks = state.tasks.filter((task) => task.project_id !== projectId);
+    state.documents = state.documents.filter((doc) => doc.project_id !== projectId);
+    state.media = state.media.filter((m) => m.project_id !== projectId);
+    state.events = state.events.filter((event) => event.project_id !== projectId);
+  }, mode);
+}
+
 export function addMember(member: Member) {
   updateWorkspaceState((state) => {
     state.members = [...state.members, member];

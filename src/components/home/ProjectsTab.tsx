@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import {
   Plus, Sparkles, FolderPlus, Paperclip, Search, SortAsc,
-  Folder,
+  Folder, Trash2,
 } from "lucide-react";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -95,6 +95,11 @@ export function ProjectsTab() {
   const [manualProjectMode, setManualProjectMode] = useState<"build_myself" | "contractor">("contractor");
   const [manualCreating, setManualCreating] = useState(false);
 
+  // Deletion
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
+  const [deleteConfirmInput, setDeleteConfirmInput] = useState("");
+  const [deleting, setDeleting] = useState(false);
+
   const filteredProjects = projects
     .filter((p) => {
       if (search && !p.title.toLowerCase().includes(search.toLowerCase())) return false;
@@ -140,7 +145,7 @@ export function ProjectsTab() {
       toast({ title: t("projectsTab.projectCreated"), description: t("projectsTab.projectCreatedItems", { count: result.count }) });
       setProposal(null);
       setDescription("");
-      if (result.projectId) navigate(`/project/${result.projectId}/dashboard`);
+      if (result.projectId) navigate(`/project/${result.projectId}/estimate`);
     } else {
       toast({ title: t("common.error"), description: result.error, variant: "destructive" });
     }
@@ -192,7 +197,7 @@ export function ProjectsTab() {
       setManualOpen(false);
       setManualTitle("");
       setManualProjectMode("contractor");
-      navigate(`/project/${createdProject.id}/dashboard`);
+      navigate(`/project/${createdProject.id}/estimate`);
     } catch (error) {
       toast({
         title: t("projectsTab.projectCreationFailed"),
@@ -201,6 +206,50 @@ export function ProjectsTab() {
       });
     } finally {
       setManualCreating(false);
+    }
+  }
+
+  function requestDeleteProject(event: MouseEvent<HTMLButtonElement>, project: { id: string; title: string }) {
+    event.preventDefault();
+    event.stopPropagation();
+    setDeleteTarget(project);
+    setDeleteConfirmInput("");
+  }
+
+  async function handleConfirmDelete() {
+    if (!deleteTarget || deleting) return;
+    if (deleteConfirmInput.trim() !== deleteTarget.title.trim()) return;
+
+    setDeleting(true);
+    try {
+      const resolvedWorkspaceMode = workspaceMode.kind === "pending-supabase"
+        ? await resolveWorkspaceMode()
+        : workspaceMode;
+      const workspaceSource = await getWorkspaceSource(resolvedWorkspaceMode);
+      await workspaceSource.deleteProject(deleteTarget.id);
+
+      if (resolvedWorkspaceMode.kind === "supabase") {
+        await queryClient.invalidateQueries({
+          queryKey: workspaceQueryKeys.projects(resolvedWorkspaceMode.profileId),
+        });
+      }
+
+      toast({ title: t("projectsTab.deleteSuccess"), description: deleteTarget.title });
+      setProjectFolders((prev) => {
+        const next = { ...prev };
+        delete next[deleteTarget.id];
+        return next;
+      });
+      setDeleteTarget(null);
+      setDeleteConfirmInput("");
+    } catch (error) {
+      toast({
+        title: t("projectsTab.deleteFailed"),
+        description: error instanceof Error ? error.message : t("projectsTab.deleteFailedGeneric"),
+        variant: "destructive",
+      });
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -319,8 +368,17 @@ export function ProjectsTab() {
         <div className="grid flex-1 grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2">
           {filteredProjects.map((p) => (
             <div key={p.id} className="glass group relative space-y-2 rounded-card p-4 sm:p-6">
+              <button
+                type="button"
+                onClick={(event) => requestDeleteProject(event, { id: p.id, title: p.title })}
+                className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
+                aria-label={t("projectsTab.deleteProjectAria", { title: p.title })}
+                title={t("projectsTab.deleteProject")}
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
               <Link to={`/project/${p.id}/dashboard`} className="space-y-2">
-                <div className="flex items-start justify-between gap-2">
+                <div className="flex items-start justify-between gap-2 pr-8">
                   <h3 className="text-body font-semibold text-foreground truncate">{p.title}</h3>
                   <span className={`text-caption font-medium px-2 py-0.5 rounded-pill shrink-0 ${getStatusColor(p.progress_pct)}`}>
                     {t(getStatusKey(p.progress_pct))}
@@ -345,7 +403,17 @@ export function ProjectsTab() {
             </div>
           ))}
           {filteredProjects.length === 0 && (
-            <p className="text-caption text-muted-foreground py-8 text-center col-span-full">{t("projectsTab.noProjects")}</p>
+            <div className="col-span-full flex flex-col items-center gap-sp-2 py-sp-4 text-center">
+              <p className="text-body text-muted-foreground">{t("projectsTab.noProjects")}</p>
+              <p className="text-caption text-muted-foreground">{t("projectsTab.emptySubtitle")}</p>
+              <Button
+                size="lg"
+                onClick={() => setManualOpen(true)}
+                className="bg-accent text-accent-foreground hover:bg-accent/90 mt-sp-1"
+              >
+                <Plus className="h-4 w-4 mr-1.5" /> {t("projectsTab.createManually")}
+              </Button>
+            </div>
           )}
         </div>
       </div>
@@ -390,6 +458,57 @@ export function ProjectsTab() {
               className="bg-accent text-accent-foreground hover:bg-accent/90"
             >
               {manualCreating ? t("projectsTab.creating") : t("common.create")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Confirmation Modal */}
+      <AlertDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteTarget(null);
+            setDeleteConfirmInput("");
+          }
+        }}
+      >
+        <AlertDialogContent className="glass-modal rounded-modal">
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("projectsTab.deleteTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("projectsTab.deleteDescription", { title: deleteTarget?.title ?? "" })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2 py-2">
+            <label className="text-body-sm font-medium text-foreground">
+              {t("projectsTab.deleteConfirmLabel", { title: deleteTarget?.title ?? "" })}
+            </label>
+            <Input
+              value={deleteConfirmInput}
+              onChange={(e) => setDeleteConfirmInput(e.target.value)}
+              placeholder={deleteTarget?.title ?? ""}
+              autoFocus
+              autoComplete="off"
+              spellCheck={false}
+            />
+            <p className="text-caption text-muted-foreground">{t("projectsTab.deleteIrreversible")}</p>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>{t("common.cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                void handleConfirmDelete();
+              }}
+              disabled={
+                deleting ||
+                !deleteTarget ||
+                deleteConfirmInput.trim() !== (deleteTarget?.title.trim() ?? "")
+              }
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? t("projectsTab.deleting") : t("projectsTab.deleteConfirm")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

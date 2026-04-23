@@ -52,6 +52,7 @@ export interface WorkspaceSource {
   getProjectMembers: (projectId: string) => Promise<Member[]>;
   getProjectInvites: (projectId: string) => Promise<WorkspaceProjectInvite[]>;
   createProject: (input: CreateWorkspaceProjectInput) => Promise<Project>;
+  deleteProject: (projectId: string) => Promise<void>;
 }
 
 export type ProfileCurrency = "RUB" | "USD" | "EUR" | "GBP";
@@ -253,6 +254,9 @@ function createBrowserWorkspaceSource(mode: store.BrowserWorkspaceKind): Workspa
       });
 
       return project;
+    },
+    async deleteProject(projectId: string) {
+      store.removeProject(projectId, mode);
     },
   };
 }
@@ -699,6 +703,17 @@ function createSupabaseWorkspaceSource(
       });
 
       return mapProjectRowToProject(data);
+    },
+    async deleteProject(projectId: string) {
+      const { error } = await supabase
+        .from("projects")
+        .delete()
+        .eq("id", projectId)
+        .eq("owner_profile_id", profileId);
+
+      if (error) {
+        throw error;
+      }
     },
   };
 }
