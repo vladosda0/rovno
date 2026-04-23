@@ -169,6 +169,27 @@ export function subscribeHR(listener: Listener): () => void {
   return () => listeners.delete(listener);
 }
 
+// TODO: cascade delete in DB — the in-memory store is the only surface cleaned up here.
+export function removeHRItemsByEstimateV2LineIds(projectId: string, lineIds: string[]): number {
+  if (lineIds.length === 0) return 0;
+  const toRemove = new Set(lineIds);
+  const removedHrItemIds = new Set<string>();
+  items.forEach((item) => {
+    if (
+      item.projectId === projectId
+      && item.sourceEstimateV2LineId != null
+      && toRemove.has(item.sourceEstimateV2LineId)
+    ) {
+      removedHrItemIds.add(item.id);
+    }
+  });
+  if (removedHrItemIds.size === 0) return 0;
+  items = items.filter((item) => !removedHrItemIds.has(item.id));
+  payments = payments.filter((payment) => !removedHrItemIds.has(payment.hrItemId));
+  notify();
+  return removedHrItemIds.size;
+}
+
 export function getHRItems(projectId: string): HRPlannedItem[] {
   return items.filter((item) => item.projectId === projectId);
 }

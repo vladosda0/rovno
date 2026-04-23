@@ -42,7 +42,8 @@ import {
 } from "@/lib/estimate-v2/schedule";
 import { syncProcurementFromEstimateV2 } from "@/lib/estimate-v2/procurement-sync";
 import { syncProjectHRFromEstimate } from "@/data/hr-source";
-import { syncHRFromEstimateV2 } from "@/data/hr-store";
+import { removeHRItemsByEstimateV2LineIds, syncHRFromEstimateV2 } from "@/data/hr-store";
+import { removeProcurementItemsByEstimateV2LineIds } from "@/data/procurement-store";
 import type { ChecklistItem, ChecklistItemType, FinanceVisibility, MemberRole, Task, TaskStatus } from "@/types/entities";
 import type {
   ApprovalStamp,
@@ -471,6 +472,7 @@ function buildEstimateProjectionRevision(state: Pick<EstimateV2ProjectState, "pr
         costUnitCents: line.costUnitCents,
         markupBps: line.markupBps,
         discountBpsOverride: line.discountBpsOverride ?? null,
+        taxBpsOverride: line.taxBpsOverride ?? null,
         assigneeId: line.assigneeId ?? null,
       })),
   };
@@ -1550,6 +1552,7 @@ const PRICING_DRIVER_LINE_FIELDS = [
   "costUnitCents",
   "markupBps",
   "discountBpsOverride",
+  "taxBpsOverride",
   "type",
 ] as const;
 
@@ -1856,6 +1859,7 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
           ...summaryDiscountedClientField(line.discounted_client_total_price_cents),
           markupBps: 0,
           discountBpsOverride: null,
+          taxBpsOverride: cachedLine?.taxBpsOverride ?? null,
           assigneeId: line.assignee_profile_id ?? cachedLine?.assigneeId ?? null,
           assigneeName: line.assignee_label?.trim() || cachedLine?.assigneeName || null,
           assigneeEmail: cachedLine?.assigneeEmail ?? null,
@@ -1902,6 +1906,7 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
             costUnitCents: Math.max(0, Math.round(cachedLine?.costUnitCents ?? 0)),
             markupBps: cachedLine?.markupBps ?? currentState.project.markupBps,
             discountBpsOverride: cachedLine?.discountBpsOverride ?? null,
+            taxBpsOverride: cachedLine?.taxBpsOverride ?? null,
             assigneeId: resolvedAssigneeId,
             assigneeName: checklistLabel || display.name || cachedLine?.assigneeName || null,
             assigneeEmail: display.email || cachedLine?.assigneeEmail || null,
@@ -1949,6 +1954,7 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
             ...summaryClientFieldsFromOptionalCents(line.client_unit_price_cents, line.client_total_price_cents),
             markupBps: persistedMarkupBps ?? cachedLine?.markupBps ?? currentState.project.markupBps,
             discountBpsOverride: persistedDiscountOverride ?? cachedLine?.discountBpsOverride ?? null,
+            taxBpsOverride: cachedLine?.taxBpsOverride ?? null,
             assigneeId: resolvedAssigneeId,
             assigneeName: lineAssigneeLabel
               || overlayLabel
@@ -1962,6 +1968,31 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
             updatedAt: cachedLine?.updatedAt ?? line.created_at,
           } satisfies EstimateV2ResourceLine;
         });
+
+    // Preserve the user's resource line ordering across hero transition: lines that existed
+    // in the pre-hydration state keep their position; new lines from remote go to the end
+    // in the order the server returned them. Without this, hydration from RPC/Supabase (which
+    // does not guarantee row order) reshuffles the table every time the project reloads.
+    const preHydrationLineOrder = new Map<string, number>();
+    currentState.lines.forEach((line, index) => {
+      preHydrationLineOrder.set(line.id, index);
+    });
+    if (preHydrationLineOrder.size === 0 && cached?.lines) {
+      cached.lines.forEach((line, index) => {
+        preHydrationLineOrder.set(line.id, index);
+      });
+    }
+    const orderedLines = lines
+      .map((line, index) => ({ line, index }))
+      .sort((left, right) => {
+        const leftKnown = preHydrationLineOrder.get(left.line.id);
+        const rightKnown = preHydrationLineOrder.get(right.line.id);
+        if (leftKnown != null && rightKnown != null) return leftKnown - rightKnown;
+        if (leftKnown != null) return -1;
+        if (rightKnown != null) return 1;
+        return left.index - right.index;
+      })
+      .map(({ line }) => line);
 
     const dependencies = draft.dependencies.map((dependency) => {
       const cachedDependency = cachedDependenciesById.get(dependency.id);
@@ -2001,7 +2032,7 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
       project: nextProject,
       stages,
       works,
-      lines,
+      lines: orderedLines,
       dependencies,
       versions: cached?.versions.map((version) => ({
         ...version,
@@ -2467,6 +2498,13 @@ function buildLineFieldChanges(
     prevLine.discountBpsOverride ?? null,
     nextLine.discountBpsOverride ?? null,
   );
+  pushFieldChange(
+    fieldChanges,
+    "taxBpsOverride",
+    "VAT",
+    prevLine.taxBpsOverride ?? null,
+    nextLine.taxBpsOverride ?? null,
+  );
 
   const prevClientTotals = prevSnapshot ? lineClientTotals(prevSnapshot, prevLine) : null;
   const nextClientTotals = lineClientTotals(nextSnapshot, nextLine);
@@ -2563,11 +2601,18 @@ export function deleteStage(projectId: string, stageId: string) {
   const state = ensureProjectState(projectId);
   if (!canEditEstimateState(projectId, state)) return;
   const workIdsToDelete = new Set(state.works.filter((work) => work.stageId === stageId).map((work) => work.id));
+  const removedLineIds = state.lines
+    .filter((line) => line.stageId === stageId || workIdsToDelete.has(line.workId))
+    .map((line) => line.id);
 
   state.stages = state.stages.filter((stage) => stage.id !== stageId);
   state.works = state.works.filter((work) => !workIdsToDelete.has(work.id));
   state.lines = state.lines.filter((line) => line.stageId !== stageId && !workIdsToDelete.has(line.workId));
   state.dependencies = state.dependencies.filter((dep) => !workIdsToDelete.has(dep.fromWorkId) && !workIdsToDelete.has(dep.toWorkId));
+  if (removedLineIds.length > 0) {
+    removeProcurementItemsByEstimateV2LineIds(projectId, removedLineIds);
+    removeHRItemsByEstimateV2LineIds(projectId, removedLineIds);
+  }
   syncExternalDomainsFromEstimate(projectId, state);
   state.project.updatedAt = nowIso();
   commitProjectStateChange(projectId);
@@ -2686,9 +2731,14 @@ export function updateWorkDates(
 export function deleteWork(projectId: string, workId: string) {
   const state = ensureProjectState(projectId);
   if (!canEditEstimateState(projectId, state)) return;
+  const removedLineIds = state.lines.filter((line) => line.workId === workId).map((line) => line.id);
   state.works = state.works.filter((work) => work.id !== workId);
   state.lines = state.lines.filter((line) => line.workId !== workId);
   state.dependencies = state.dependencies.filter((dep) => dep.fromWorkId !== workId && dep.toWorkId !== workId);
+  if (removedLineIds.length > 0) {
+    removeProcurementItemsByEstimateV2LineIds(projectId, removedLineIds);
+    removeHRItemsByEstimateV2LineIds(projectId, removedLineIds);
+  }
   syncExternalDomainsFromEstimate(projectId, state);
   state.project.updatedAt = nowIso();
   commitProjectStateChange(projectId);
@@ -2721,8 +2771,9 @@ export function createLine(
     unit: input.unit?.trim() || "unit",
     qtyMilli: Math.max(1, Math.round(input.qtyMilli ?? 1_000)),
     costUnitCents: Math.max(0, Math.round(input.costUnitCents ?? 0)),
-    markupBps: Math.max(0, Math.round(input.markupBps ?? state.project.markupBps ?? 0)),
+    markupBps: Math.max(0, Math.round(input.markupBps ?? 0)),
     discountBpsOverride: input.discountBpsOverride == null ? null : Math.max(0, Math.round(input.discountBpsOverride)),
+    taxBpsOverride: null,
     assigneeId: null,
     assigneeName: null,
     assigneeEmail: null,
@@ -2784,6 +2835,8 @@ export function deleteLine(projectId: string, lineId: string) {
   if (existing) {
     const parentWork = state.works.find((work) => work.id === existing.workId);
     if (parentWork) syncChecklistForWork(state, parentWork);
+    removeProcurementItemsByEstimateV2LineIds(projectId, [existing.id]);
+    removeHRItemsByEstimateV2LineIds(projectId, [existing.id]);
   }
   syncExternalDomainsFromEstimate(projectId, state);
   state.project.updatedAt = nowIso();

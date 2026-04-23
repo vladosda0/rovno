@@ -515,10 +515,9 @@ describe("estimate-v2 execution foundation", () => {
     if (!existingHr) return;
 
     deleteLine(projectId, laborLine.id);
-    const orphanedHr = getHRItems(projectId).find((item) => item.id === existingHr.id);
-    expect(orphanedHr?.orphaned).toBe(true);
-    expect(orphanedHr?.orphanedReason).toBe("estimate_line_deleted");
-    expect(orphanedHr?.sourceEstimateV2LineId).toBeNull();
+    // On line delete, the linked HR entry is removed (not orphaned). See removeHRItemsByEstimateV2LineIds.
+    const removedHr = getHRItems(projectId).find((item) => item.id === existingHr.id);
+    expect(removedHr).toBeUndefined();
   });
 
   it("blocks dependency creation when it introduces a cycle", () => {

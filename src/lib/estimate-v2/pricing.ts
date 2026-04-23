@@ -91,16 +91,32 @@ function emptyBreakdownByType(): Record<ResourceLineType, number> {
 
 export function computeEffectiveDiscountBps(
   line: Pick<EstimateV2ResourceLine, "discountBpsOverride">,
-  stage: Pick<EstimateV2Stage, "discountBps">,
+  _stage: Pick<EstimateV2Stage, "discountBps">,
   project: Pick<EstimateV2Project, "discountBps">,
 ): number {
-  if (line.discountBpsOverride != null) {
+  // Treat null or 0 as "inherit from project" so global changes propagate to unset lines.
+  if (line.discountBpsOverride != null && line.discountBpsOverride > 0) {
     return clampBps(line.discountBpsOverride);
   }
-  if (stage.discountBps > 0) {
-    return clampBps(stage.discountBps);
-  }
   return clampBps(project.discountBps);
+}
+
+export function computeEffectiveMarkupBps(
+  line: Pick<EstimateV2ResourceLine, "markupBps">,
+  project: Pick<EstimateV2Project, "markupBps">,
+): number {
+  if (line.markupBps > 0) return clampBps(line.markupBps);
+  return clampBps(project.markupBps);
+}
+
+export function computeEffectiveTaxBps(
+  line: Pick<EstimateV2ResourceLine, "taxBpsOverride">,
+  project: Pick<EstimateV2Project, "taxBps">,
+): number {
+  if (line.taxBpsOverride != null && line.taxBpsOverride > 0) {
+    return clampBps(line.taxBpsOverride);
+  }
+  return clampBps(project.taxBps);
 }
 
 export function computeClientUnitCents(
@@ -173,7 +189,7 @@ export function computeLineTotals(
   }
 
   const effectiveDiscountBps = computeEffectiveDiscountBps(line, stage, project);
-  const effectiveMarkupBps = projectMode === "build_myself" ? 0 : clampBps(line.markupBps);
+  const effectiveMarkupBps = projectMode === "build_myself" ? 0 : computeEffectiveMarkupBps(line, project);
 
   const costTotalCents = multiplyQtyMilli(line.costUnitCents, qtyMilli);
   const preDiscountUnitCents = line.costUnitCents + multiplyBps(line.costUnitCents, effectiveMarkupBps);
@@ -211,6 +227,7 @@ export function computeProjectTotals(
   let markupTotalCents = 0;
   let discountTotalCents = 0;
 
+  let taxAmountCents = 0;
   lines.forEach((line) => {
     const stage = stageById.get(line.stageId);
     if (!stage) return;
@@ -221,11 +238,11 @@ export function computeProjectTotals(
     markupTotalCents += totals.markupCents;
     discountTotalCents += totals.discountCents;
     breakdownByType[line.type] += totals.costTotalCents;
+    taxAmountCents += multiplyBps(totals.clientTotalCents, computeEffectiveTaxBps(line, project));
   });
 
   const taxableBaseCents = subtotalCents;
   const subtotalBeforeDiscountCents = taxableBaseCents + discountTotalCents;
-  const taxAmountCents = multiplyBps(taxableBaseCents, clampBps(project.taxBps));
   return {
     subtotalCents: taxableBaseCents,
     taxableBaseCents,
@@ -247,17 +264,19 @@ export function computeStageTotals(
   options?: ComputeLineTotalsOptions,
 ): StageTotals[] {
   const stageById = new Map(stages.map((stage) => [stage.id, stage]));
-  const totalsByStageId = new Map<string, Omit<StageTotals, "stageId" | "taxAmountCents" | "totalCents" | "subtotalBeforeDiscountCents" | "subtotalCents">>();
+  type StageAccumulator = Omit<StageTotals, "stageId" | "totalCents" | "subtotalBeforeDiscountCents" | "subtotalCents">;
+  const totalsByStageId = new Map<string, StageAccumulator>();
 
   lines.forEach((line) => {
     const stage = stageById.get(line.stageId);
     if (!stage) return;
 
-    const current = totalsByStageId.get(stage.id) ?? {
+    const current: StageAccumulator = totalsByStageId.get(stage.id) ?? {
       taxableBaseCents: 0,
       costTotalCents: 0,
       markupTotalCents: 0,
       discountTotalCents: 0,
+      taxAmountCents: 0,
       breakdownByType: emptyBreakdownByType(),
     };
 
@@ -266,21 +285,23 @@ export function computeStageTotals(
     current.costTotalCents += lineTotals.costTotalCents;
     current.markupTotalCents += lineTotals.markupCents;
     current.discountTotalCents += lineTotals.discountCents;
+    current.taxAmountCents += multiplyBps(lineTotals.clientTotalCents, computeEffectiveTaxBps(line, project));
     current.breakdownByType[line.type] += lineTotals.costTotalCents;
 
     totalsByStageId.set(stage.id, current);
   });
 
   return stages.map((stage) => {
-    const byStage = totalsByStageId.get(stage.id) ?? {
+    const byStage: StageAccumulator = totalsByStageId.get(stage.id) ?? {
       taxableBaseCents: 0,
       costTotalCents: 0,
       markupTotalCents: 0,
       discountTotalCents: 0,
+      taxAmountCents: 0,
       breakdownByType: emptyBreakdownByType(),
     };
     const subtotalBeforeDiscountCents = byStage.taxableBaseCents + byStage.discountTotalCents;
-    const taxAmountCents = multiplyBps(byStage.taxableBaseCents, clampBps(project.taxBps));
+    const taxAmountCents = byStage.taxAmountCents;
     const totalCents = byStage.taxableBaseCents + taxAmountCents;
 
     return {

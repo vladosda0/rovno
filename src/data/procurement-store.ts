@@ -200,6 +200,21 @@ export function archiveProcurementItem(id: string) {
   updateProcurementItem(id, { archived: true });
 }
 
+// TODO: cascade delete in DB — the in-memory store is the only surface cleaned up here.
+export function removeProcurementItemsByEstimateV2LineIds(projectId: string, lineIds: string[]): number {
+  if (lineIds.length === 0) return 0;
+  const toRemove = new Set(lineIds);
+  const before = items.length;
+  items = items.filter((item) => (
+    !(item.projectId === projectId
+      && item.sourceEstimateV2LineId != null
+      && toRemove.has(item.sourceEstimateV2LineId))
+  ));
+  const removed = before - items.length;
+  if (removed > 0) notify();
+  return removed;
+}
+
 export function receiveProcurementItem(id: string, qty: number, actualUnitPrice?: number | null) {
   const item = getProcurementItemById(id);
   if (!item) return;

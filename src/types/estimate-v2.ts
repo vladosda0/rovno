@@ -18,7 +18,9 @@ export interface EstimateV2Project {
   discountBps: number;
   markupBps: number;
   estimateStatus: EstimateExecutionStatus;
+  /** @deprecated not yet wired — do not read in UI */
   receivedCents: number;
+  /** @deprecated not yet wired — do not read in UI */
   pnlPlaceholderCents: number;
   createdAt: string;
   updatedAt: string;
@@ -66,10 +68,14 @@ export interface EstimateV2ResourceLine {
   summaryDiscountedClientTotalCents?: number | null;
   markupBps: number;
   discountBpsOverride: number | null;
+  /** When null or 0, inherits `project.taxBps`. Otherwise overrides the project VAT rate for this line. */
+  taxBpsOverride?: number | null;
   assigneeId: string | null;
   assigneeName: string | null;
   assigneeEmail: string | null;
+  /** @deprecated not yet wired — do not read in UI */
   receivedCents: number;
+  /** @deprecated not yet wired — do not read in UI */
   pnlPlaceholderCents: number;
   createdAt: string;
   updatedAt: string;

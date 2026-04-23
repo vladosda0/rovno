@@ -231,6 +231,7 @@ function buildLines(spec: DemoProjectSpec, createdAt: string): EstimateV2Resourc
     summaryDiscountedClientTotalCents: null,
     markupBps: line.markupBps ?? DEFAULT_MARKUP_BPS[line.type],
     discountBpsOverride: line.discountBpsOverride ?? null,
+    taxBpsOverride: null,
     assigneeId: null,
     assigneeName: null,
     assigneeEmail: null,

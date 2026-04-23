@@ -73,15 +73,14 @@ function createLine(partial: Partial<EstimateV2ResourceLine> = {}): EstimateV2Re
 }
 
 describe("estimate-v2 pricing", () => {
-  it("applies stage discount cascade when line override is absent", () => {
+  it("inherits project discount when line override is absent or zero (stage tier removed)", () => {
     const project = createProject({ discountBps: 300 });
     const stage = createStage({ discountBps: 1200 });
-    const line = createLine({ discountBpsOverride: null });
-
-    expect(computeEffectiveDiscountBps(line, stage, project)).toBe(1200);
+    expect(computeEffectiveDiscountBps(createLine({ discountBpsOverride: null }), stage, project)).toBe(300);
+    expect(computeEffectiveDiscountBps(createLine({ discountBpsOverride: 0 }), stage, project)).toBe(300);
   });
 
-  it("prefers line discount override over stage and project discounts", () => {
+  it("prefers positive line discount override over the project discount", () => {
     const project = createProject({ discountBps: 300 });
     const stage = createStage({ discountBps: 1200 });
     const line = createLine({ discountBpsOverride: 2500 });
@@ -103,9 +102,9 @@ describe("estimate-v2 pricing", () => {
   });
 
   it("forces markup to zero in build_myself regime", () => {
-    const project = createProject();
+    const project = createProject({ discountBps: 0, markupBps: 0 });
     const stage = createStage();
-    const line = createLine({ markupBps: 4000, discountBpsOverride: 0 });
+    const line = createLine({ markupBps: 4000, discountBpsOverride: null });
 
     const totals = computeLineTotals(line, stage, project, "build_myself");
 
@@ -114,11 +113,11 @@ describe("estimate-v2 pricing", () => {
   });
 
   it("computes tax and total deterministically", () => {
-    const project = createProject({ taxBps: 1000 });
+    const project = createProject({ taxBps: 1000, markupBps: 0, discountBps: 0 });
     const stage = createStage();
     const lines = [
-      createLine({ id: "l1", type: "material" as ResourceLineType, costUnitCents: 10_000, qtyMilli: 1_000, markupBps: 0, discountBpsOverride: 0 }),
-      createLine({ id: "l2", type: "labor" as ResourceLineType, costUnitCents: 5_000, qtyMilli: 2_000, markupBps: 0, discountBpsOverride: 0 }),
+      createLine({ id: "l1", type: "material" as ResourceLineType, costUnitCents: 10_000, qtyMilli: 1_000, markupBps: 0, discountBpsOverride: null }),
+      createLine({ id: "l2", type: "labor" as ResourceLineType, costUnitCents: 5_000, qtyMilli: 2_000, markupBps: 0, discountBpsOverride: null }),
     ];
 
     const totals = computeProjectTotals(project, [stage], [], lines, "contractor");
@@ -134,24 +133,24 @@ describe("estimate-v2 pricing", () => {
     const unit = computeClientUnitCents(1, 5000, 0); // 1.5 => 2 with half-up
     expect(unit).toBe(2);
 
-    const project = createProject({ taxBps: 5000 });
+    const project = createProject({ taxBps: 5000, markupBps: 0, discountBps: 0 });
     const stage = createStage();
-    const line = createLine({ costUnitCents: 1, qtyMilli: 1_000, markupBps: 0, discountBpsOverride: 0 });
+    const line = createLine({ costUnitCents: 1, qtyMilli: 1_000, markupBps: 0, discountBpsOverride: null });
     const totals = computeLineTotals(line, stage, project, "contractor" as ProjectMode);
 
     expect(totals.clientTotalCents).toBe(1);
   });
 
   it("computes stage subtotals from client line totals", () => {
-    const project = createProject({ taxBps: 0, discountBps: 0 });
+    const project = createProject({ taxBps: 0, discountBps: 0, markupBps: 0 });
     const stages = [
       createStage({ id: "stage-a", order: 1 }),
       createStage({ id: "stage-b", order: 2 }),
     ];
     const lines = [
-      createLine({ id: "l1", stageId: "stage-a", costUnitCents: 1_000, qtyMilli: 1_000, markupBps: 0, discountBpsOverride: 0 }),
-      createLine({ id: "l2", stageId: "stage-a", costUnitCents: 2_000, qtyMilli: 2_000, markupBps: 0, discountBpsOverride: 0 }),
-      createLine({ id: "l3", stageId: "stage-b", costUnitCents: 3_000, qtyMilli: 1_000, markupBps: 0, discountBpsOverride: 0 }),
+      createLine({ id: "l1", stageId: "stage-a", costUnitCents: 1_000, qtyMilli: 1_000, markupBps: 0, discountBpsOverride: null }),
+      createLine({ id: "l2", stageId: "stage-a", costUnitCents: 2_000, qtyMilli: 2_000, markupBps: 0, discountBpsOverride: null }),
+      createLine({ id: "l3", stageId: "stage-b", costUnitCents: 3_000, qtyMilli: 1_000, markupBps: 0, discountBpsOverride: null }),
     ];
 
     const subtotals = computeStageSubtotals(project, stages, lines, "contractor");
@@ -162,7 +161,7 @@ describe("estimate-v2 pricing", () => {
   });
 
   it("applies project-level discount and tax to total", () => {
-    const project = createProject({ discountBps: 1_000, taxBps: 2_200 });
+    const project = createProject({ discountBps: 1_000, taxBps: 2_200, markupBps: 0 });
     const stage = createStage();
     const lines = [
       createLine({ id: "l1", costUnitCents: 10_000, qtyMilli: 1_000, markupBps: 0, discountBpsOverride: null }),
@@ -178,14 +177,14 @@ describe("estimate-v2 pricing", () => {
   });
 
   it("computes stage totals with tax applied to post-discount base", () => {
-    const project = createProject({ discountBps: 0, taxBps: 2_000 });
+    const project = createProject({ discountBps: 0, taxBps: 2_000, markupBps: 0 });
     const stages = [
       createStage({ id: "stage-a", order: 1 }),
       createStage({ id: "stage-b", order: 2 }),
     ];
     const lines = [
       createLine({ id: "l1", stageId: "stage-a", costUnitCents: 10_000, qtyMilli: 1_000, markupBps: 0, discountBpsOverride: 1_000 }),
-      createLine({ id: "l2", stageId: "stage-b", costUnitCents: 5_000, qtyMilli: 1_000, markupBps: 0, discountBpsOverride: 0 }),
+      createLine({ id: "l2", stageId: "stage-b", costUnitCents: 5_000, qtyMilli: 1_000, markupBps: 0, discountBpsOverride: null }),
     ];
 
     const totals = computeStageTotals(project, stages, lines, "contractor");
