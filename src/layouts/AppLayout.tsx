@@ -129,7 +129,7 @@ export default function AppLayout() {
             </Suspense>
           )
         )}
-        <main className="flex-1 min-w-0 overflow-x-hidden">
+        <main className="flex-1 min-w-0">
           <Outlet />
         </main>
       </div>
