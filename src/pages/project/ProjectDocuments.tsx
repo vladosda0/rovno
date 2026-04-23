@@ -48,6 +48,7 @@ import { PreviewCard } from "@/components/ai/PreviewCard";
 import { ActionBar } from "@/components/ai/ActionBar";
 import { ProjectWorkflowEmptyState } from "@/components/ProjectWorkflowEmptyState";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser, useProject, useWorkspaceMode } from "@/hooks/use-mock-data";
 import {
   useProjectDocumentMutations,
@@ -140,6 +141,8 @@ export default function ProjectDocuments() {
   const [commentOpen, setCommentOpen] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [viewMode, setViewMode] = useState<DocumentViewMode>("list");
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const effectiveInternalDocs = useMemo(
     () => effectiveInternalDocsVisibilityForSeam(perm.seam.membership),
@@ -205,7 +208,10 @@ export default function ProjectDocuments() {
       });
       trackEvent("document_uploaded", { project_id: pid, origin: "uploaded" });
       closeUploadDialog();
-      toast({ title: t("documents.upload.uploadedTitle"), description: title });
+      // Defer the toast until after the dialog close animation so it doesn't flash over the modal.
+      window.setTimeout(() => {
+        toast({ title: t("documents.upload.uploadedTitle"), description: title });
+      }, 250);
       return;
     }
 
@@ -232,7 +238,9 @@ export default function ProjectDocuments() {
 
       trackEvent("document_uploaded", { project_id: pid, origin: "uploaded" });
       closeUploadDialog();
-      toast({ title: t("documents.upload.uploadedTitle"), description: title });
+      window.setTimeout(() => {
+        toast({ title: t("documents.upload.uploadedTitle"), description: title });
+      }, 250);
     } catch (error) {
       setUploading(false);
       toast({
@@ -252,7 +260,9 @@ export default function ProjectDocuments() {
 
       trackEvent("document_uploaded", { project_id: pid, origin: "uploaded" });
       closeUploadDialog();
-      toast({ title: t("documents.upload.uploadedTitle"), description: t("documents.upload.finalizedDescription") });
+      window.setTimeout(() => {
+        toast({ title: t("documents.upload.uploadedTitle"), description: t("documents.upload.finalizedDescription") });
+      }, 250);
     } catch (error) {
       setUploading(false);
       toast({
@@ -457,11 +467,49 @@ export default function ProjectDocuments() {
 
   const latestViewedVersion = viewDoc?.versions[viewDoc.versions.length - 1];
   const viewedDocumentIsArchived = latestViewedVersion?.status === "archived";
+  const viewedStorage = latestViewedVersion?.storage;
+  const viewedMimeType = viewedStorage?.mimeType ?? viewDoc?.file_meta?.mime ?? null;
   const canDownloadViewedDocument = Boolean(
     viewDoc
-    && !isSupabaseMode
-    && latestViewedVersion?.content.trim(),
+    && (
+      (!isSupabaseMode && latestViewedVersion?.content.trim())
+      || (isSupabaseMode && previewUrl)
+    ),
   );
+
+  useEffect(() => {
+    if (!isSupabaseMode || !viewDoc || !viewedStorage?.bucket || !viewedStorage?.objectPath) {
+      setPreviewUrl(null);
+      setPreviewLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setPreviewLoading(true);
+    setPreviewUrl(null);
+
+    supabase.storage
+      .from(viewedStorage.bucket)
+      .createSignedUrl(viewedStorage.objectPath, 3600)
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error || !data?.signedUrl) {
+          setPreviewUrl(null);
+        } else {
+          setPreviewUrl(data.signedUrl);
+        }
+        setPreviewLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setPreviewUrl(null);
+        setPreviewLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isSupabaseMode, viewDoc, viewedStorage?.bucket, viewedStorage?.objectPath]);
 
   const showOnlyEmptyState = !isLoading && documents.length === 0;
 
@@ -486,14 +534,14 @@ export default function ProjectDocuments() {
           <Eye className="h-3.5 w-3.5" />
         </Button>
         {canManageDocuments && (
-          <>
-            <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setArchiveDocId(document.id)} title={t("documents.action.archive")}>
-              <Archive className="h-3.5 w-3.5" />
-            </Button>
-            <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setDeleteDocId(document.id)} title={t("documents.action.delete")}>
-              <Trash2 className="h-3.5 w-3.5 text-destructive" />
-            </Button>
-          </>
+          <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setArchiveDocId(document.id)} title={t("documents.action.archive")}>
+            <Archive className="h-3.5 w-3.5" />
+          </Button>
+        )}
+        {canDeleteDocuments && (
+          <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setDeleteDocId(document.id)} title={t("documents.action.delete")}>
+            <Trash2 className="h-3.5 w-3.5 text-destructive" />
+          </Button>
         )}
       </div>
     );
@@ -780,9 +828,24 @@ export default function ProjectDocuments() {
               <div className="px-5 py-4 space-y-4">
                 <div className="rounded-panel border border-border bg-muted/30 p-4 max-h-72 overflow-y-auto">
                   {isSupabaseMode ? (
-                    <p className="text-body-sm text-muted-foreground whitespace-pre-wrap">
-                      {t("documents.preview.supabaseNote")}
-                    </p>
+                    previewLoading ? (
+                      <Skeleton className="h-40 w-full" />
+                    ) : previewUrl ? (
+                      viewedMimeType?.startsWith("image/") ? (
+                        <img src={previewUrl} alt={viewDoc.title} className="max-w-full max-h-72 object-contain mx-auto" />
+                      ) : viewedMimeType === "application/pdf" ? (
+                        <iframe src={previewUrl} title={viewDoc.title} className="w-full h-72 border-0" />
+                      ) : (
+                        <div className="flex flex-col items-start gap-2 text-body-sm text-muted-foreground">
+                          <span className="text-foreground">{viewedStorage?.filename ?? viewDoc.title}</span>
+                          <span className="text-caption">{t("documents.preview.inlineUnsupported")}</span>
+                        </div>
+                      )
+                    ) : (
+                      <p className="text-body-sm text-muted-foreground whitespace-pre-wrap">
+                        {t("documents.preview.supabaseNote")}
+                      </p>
+                    )
                   ) : latestViewedVersion.content ? (
                     <p className="text-body-sm text-foreground whitespace-pre-wrap">{latestViewedVersion.content}</p>
                   ) : (
@@ -796,7 +859,13 @@ export default function ProjectDocuments() {
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => handleDownloadDocument(viewDoc, latestViewedVersion.content)}
+                    onClick={() => {
+                      if (isSupabaseMode && previewUrl) {
+                        window.open(previewUrl, "_blank", "noopener,noreferrer");
+                        return;
+                      }
+                      handleDownloadDocument(viewDoc, latestViewedVersion.content);
+                    }}
                     disabled={!canDownloadViewedDocument}
                   >
                     <Download className="h-3.5 w-3.5 mr-1.5" /> {t("documents.preview.action.download")}
@@ -807,7 +876,9 @@ export default function ProjectDocuments() {
                 </div>
                 <p className="text-caption text-muted-foreground">
                   {isSupabaseMode
-                    ? t("documents.preview.footnote.supabase")
+                    ? previewUrl
+                      ? t("documents.preview.footnote.shareOnly")
+                      : t("documents.preview.footnote.supabase")
                     : canDownloadViewedDocument
                       ? t("documents.preview.footnote.shareOnly")
                       : t("documents.preview.footnote.bothComingSoon")}
@@ -825,7 +896,7 @@ export default function ProjectDocuments() {
                       </Button>
                     </>
                   )}
-                  {canManageDocuments && viewedDocumentIsArchived && (
+                  {canDeleteDocuments && viewedDocumentIsArchived && (
                     <Button size="sm" variant="outline" onClick={() => setDeleteDocId(viewDoc.id)} className="text-destructive hover:text-destructive">
                       <Trash2 className="h-3.5 w-3.5 mr-1" /> {t("documents.preview.delete")}
                     </Button>
