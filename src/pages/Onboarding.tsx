@@ -1,18 +1,26 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Rocket } from "lucide-react";
 import { OnboardingStepper } from "@/components/onboarding/OnboardingStepper";
 import { completeOnboarding } from "@/lib/auth-state";
+import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
 import { toast } from "@/hooks/use-toast";
 
 export default function Onboarding() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const runtimeAuth = useRuntimeAuth();
+  const [createdProjectId, setCreatedProjectId] = useState<string | null>(null);
 
   const handleComplete = () => {
-    completeOnboarding();
+    completeOnboarding(runtimeAuth.profileId);
     toast({ title: t("onboarding.setupCompleteTitle"), description: t("onboarding.setupCompleteDescription") });
-    navigate("/home");
+    if (createdProjectId) {
+      navigate(`/project/${createdProjectId}/estimate`);
+    } else {
+      navigate("/home");
+    }
   };
 
   return (
@@ -25,7 +33,10 @@ export default function Onboarding() {
             {t("onboarding.welcomeSubtitle")}
           </p>
         </div>
-        <OnboardingStepper onComplete={handleComplete} />
+        <OnboardingStepper
+          onComplete={handleComplete}
+          onProjectCreated={(id) => setCreatedProjectId(id)}
+        />
       </div>
     </div>
   );
