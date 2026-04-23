@@ -153,6 +153,7 @@ export function isDemoSessionActive(): boolean {
 }
 
 export function enterDemoSession(projectId?: string) {
+  setAuthRole("owner");
   writeJson(sessionStorage, DEMO_SESSION_KEY, {
     active: true,
     projectId: projectId ?? null,
