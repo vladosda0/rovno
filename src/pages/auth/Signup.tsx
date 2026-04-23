@@ -33,10 +33,12 @@ export default function Signup() {
     }
     setLoading(true);
     try {
+      const emailRedirectTo = `${window.location.origin}/auth/callback`;
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
         options: {
+          emailRedirectTo,
           data: {
             full_name: name.trim(),
           },
@@ -56,12 +58,7 @@ export default function Signup() {
         return;
       }
 
-      toast({ title: t("auth.signup.successTitle"), description: t("auth.signup.checkEmail") });
-      if (nextUrl && nextUrl.startsWith("/")) {
-        navigate(`/auth/login?next=${encodeURIComponent(nextUrl)}`);
-        return;
-      }
-      navigate("/auth/login");
+      navigate(`/auth/email-sent?email=${encodeURIComponent(email.trim())}`);
     } catch (error) {
       toast({
         title: t("auth.signup.failureTitle"),

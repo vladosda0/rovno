@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { clearDemoSession, isOnboarded } from "@/lib/auth-state";
+import { clearDemoSession, isOnboarded, setAuthRole } from "@/lib/auth-state";
 import { clearAiSidebarSessionPreference } from "@/lib/ai-sidebar-session";
 
 export default function Login() {
@@ -18,7 +18,21 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const nextUrl = searchParams.get("next");
-  const postAuthDestination = nextUrl && nextUrl.startsWith("/") ? nextUrl : (isOnboarded() ? "/home" : "/onboarding");
+  const confirmed = searchParams.get("confirmed") === "1";
+
+  useEffect(() => {
+    if (confirmed) {
+      toast({
+        title: t("auth.login.emailConfirmedTitle"),
+        description: t("auth.login.emailConfirmedDescription"),
+      });
+    }
+  }, [confirmed, t]);
+
+  const resolveDestination = (userId: string | null | undefined): string => {
+    if (nextUrl && nextUrl.startsWith("/")) return nextUrl;
+    return isOnboarded(userId) ? "/home" : "/onboarding";
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,8 +58,9 @@ export default function Login() {
 
       clearDemoSession();
       clearAiSidebarSessionPreference();
+      setAuthRole("owner");
       toast({ title: t("auth.login.successTitle"), description: t("auth.login.successDescription") });
-      navigate(postAuthDestination);
+      navigate(resolveDestination(data.session.user.id));
     } catch (error) {
       toast({
         title: t("auth.login.failureTitle"),

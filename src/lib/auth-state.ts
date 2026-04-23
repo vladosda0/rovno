@@ -86,12 +86,20 @@ export function isAuthenticated(): boolean {
   return getAuthRole() !== "guest";
 }
 
-export function isOnboarded(): boolean {
-  return localStorage.getItem("onboarding-complete") === "true";
+const ONBOARDING_KEY_PREFIX = "onboarding-complete";
+const LEGACY_ONBOARDING_KEY = "onboarding-complete";
+
+function onboardingStorageKey(userId?: string | null): string {
+  if (userId && userId.trim()) return `${ONBOARDING_KEY_PREFIX}:${userId.trim()}`;
+  return LEGACY_ONBOARDING_KEY;
 }
 
-export function completeOnboarding() {
-  localStorage.setItem("onboarding-complete", "true");
+export function isOnboarded(userId?: string | null): boolean {
+  return localStorage.getItem(onboardingStorageKey(userId)) === "true";
+}
+
+export function completeOnboarding(userId?: string | null) {
+  localStorage.setItem(onboardingStorageKey(userId), "true");
   notifyListeners();
 }
 
