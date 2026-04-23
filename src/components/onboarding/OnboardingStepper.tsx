@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Zap, Bot, Wrench, Eye } from "lucide-react";
+import { Zap, Bot, Wrench, Eye, Plus, Trash2 } from "lucide-react";
 import { MVP_SHOW_AI_AUTOMATION_MODE_UI } from "@/lib/mvp-ai-automation-ui";
 import { getPlanningSource } from "@/data/planning-source";
 import { getWorkspaceSource, resolveWorkspaceMode } from "@/data/workspace-source";
@@ -12,6 +12,8 @@ import { useWorkspaceMode } from "@/hooks/use-mock-data";
 import { workspaceQueryKeys } from "@/hooks/use-workspace-source";
 import { planningQueryKeys } from "@/hooks/use-planning-source";
 import { toast } from "@/hooks/use-toast";
+
+const MAX_ONBOARDING_STAGES = 5;
 
 const automationLevels = [
   { id: "full", icon: Zap, titleKey: "onboarding.automation.full.title", descKey: "onboarding.automation.full.desc", badgeKey: "onboarding.automation.full.badge" },
@@ -40,7 +42,10 @@ export function OnboardingStepper({ onComplete, onProjectCreated }: OnboardingSt
   const [creatingProject, setCreatingProject] = useState(false);
   const [createdProjectId, setCreatedProjectId] = useState<string | null>(null);
 
-  const [estimateTitle, setEstimateTitle] = useState("");
+  const [stageTitles, setStageTitles] = useState<string[]>([
+    t("onboarding.estimate.defaultStageLabel", { n: 1 }),
+  ]);
+  const [savingStages, setSavingStages] = useState(false);
 
   const progressIndices = showAutomationStep ? [0, 1, 2, 3] : [1, 2, 3];
 
@@ -56,19 +61,10 @@ export function OnboardingStepper({ onComplete, onProjectCreated }: OnboardingSt
         ? await resolveWorkspaceMode()
         : workspaceMode;
       const workspaceSource = await getWorkspaceSource(resolvedMode);
-      const planningSource = await getPlanningSource(resolvedMode);
       const createdProject = await workspaceSource.createProject({
         title,
         type: projectType,
         projectMode: "contractor",
-      });
-
-      await planningSource.createProjectStage({
-        projectId: createdProject.id,
-        title: t("projectsTab.stage1"),
-        description: "",
-        order: 1,
-        status: "open",
       });
 
       if (resolvedMode.kind === "supabase") {
@@ -80,9 +76,6 @@ export function OnboardingStepper({ onComplete, onProjectCreated }: OnboardingSt
         });
         await queryClient.invalidateQueries({
           queryKey: workspaceQueryKeys.projectMembers(resolvedMode.profileId, createdProject.id),
-        });
-        await queryClient.invalidateQueries({
-          queryKey: planningQueryKeys.projectStages(resolvedMode.profileId, createdProject.id),
         });
       }
 
@@ -102,6 +95,79 @@ export function OnboardingStepper({ onComplete, onProjectCreated }: OnboardingSt
 
   function handleSkipProject() {
     setStep(3);
+  }
+
+  async function persistProjectStages(resolvedTitles: string[]) {
+    if (!createdProjectId) return;
+    const resolvedMode =
+      workspaceMode.kind === "pending-supabase" ? await resolveWorkspaceMode() : workspaceMode;
+    const planningSource = await getPlanningSource(resolvedMode);
+
+    for (let i = 0; i < resolvedTitles.length; i++) {
+      await planningSource.createProjectStage({
+        projectId: createdProjectId,
+        title: resolvedTitles[i],
+        description: "",
+        order: i + 1,
+        status: "open",
+      });
+    }
+
+    if (resolvedMode.kind === "supabase") {
+      await queryClient.invalidateQueries({
+        queryKey: planningQueryKeys.projectStages(resolvedMode.profileId, createdProjectId),
+      });
+    }
+  }
+
+  async function handleSaveStages() {
+    if (!createdProjectId || savingStages) return;
+    setSavingStages(true);
+    try {
+      const resolvedTitles = stageTitles.map((raw, i) => {
+        const trimmed = raw.trim();
+        return trimmed || t("onboarding.estimate.defaultStageLabel", { n: i + 1 });
+      });
+      await persistProjectStages(resolvedTitles);
+      onComplete();
+    } catch (error) {
+      toast({
+        title: t("projectsTab.projectCreationFailed"),
+        description: error instanceof Error ? error.message : t("projectsTab.projectCreationFailedGeneric"),
+        variant: "destructive",
+      });
+    } finally {
+      setSavingStages(false);
+    }
+  }
+
+  async function handleSkipStages() {
+    if (!createdProjectId || savingStages) return;
+    setSavingStages(true);
+    try {
+      await persistProjectStages([t("projectsTab.stage1")]);
+      onComplete();
+    } catch (error) {
+      toast({
+        title: t("projectsTab.projectCreationFailed"),
+        description: error instanceof Error ? error.message : t("projectsTab.projectCreationFailedGeneric"),
+        variant: "destructive",
+      });
+    } finally {
+      setSavingStages(false);
+    }
+  }
+
+  function addStageRow() {
+    setStageTitles((rows) => {
+      if (rows.length >= MAX_ONBOARDING_STAGES) return rows;
+      const nextIndex = rows.length + 1;
+      return [...rows, t("onboarding.estimate.defaultStageLabel", { n: nextIndex })];
+    });
+  }
+
+  function removeStageRow(index: number) {
+    setStageTitles((rows) => (rows.length <= 1 ? rows : rows.filter((_, i) => i !== index)));
   }
 
   return (
@@ -270,28 +336,65 @@ export function OnboardingStepper({ onComplete, onProjectCreated }: OnboardingSt
 
       {step === 3 && createdProjectId && (
         <div className="glass-elevated rounded-panel p-sp-4 space-y-sp-3">
-          <div className="text-center">
+          <div className="text-center space-y-sp-1">
             <h2 className="text-h3 text-foreground">{t("onboarding.estimate.title")}</h2>
-            <p className="text-body-sm text-muted-foreground mt-1">{t("onboarding.estimate.subtitle")}</p>
+            <p className="text-body-sm text-muted-foreground">{t("onboarding.estimate.subtitle")}</p>
+            <p className="text-caption text-muted-foreground">{t("onboarding.estimate.hint")}</p>
           </div>
           <div className="space-y-1.5">
-            <Input
-              value={estimateTitle}
-              onChange={(e) => setEstimateTitle(e.target.value)}
-              placeholder={t("onboarding.estimate.namePlaceholder")}
-              autoFocus
-            />
+            {stageTitles.map((title, index) => (
+              <div key={index} className="flex gap-2 items-center">
+                <Input
+                  className="flex-1 min-w-0"
+                  value={title}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setStageTitles((rows) => rows.map((row, i) => (i === index ? value : row)));
+                  }}
+                  disabled={savingStages}
+                  autoFocus={index === 0}
+                />
+                {stageTitles.length > 1 ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="shrink-0"
+                    onClick={() => removeStageRow(index)}
+                    disabled={savingStages}
+                    aria-label={t("onboarding.estimate.removeStage")}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                ) : null}
+                {index === stageTitles.length - 1 && stageTitles.length < MAX_ONBOARDING_STAGES ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="shrink-0"
+                    onClick={addStageRow}
+                    disabled={savingStages}
+                    aria-label={t("onboarding.estimate.addStage")}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                ) : null}
+              </div>
+            ))}
           </div>
           <Button
-            onClick={onComplete}
+            onClick={handleSaveStages}
+            disabled={savingStages}
             className="w-full bg-accent text-accent-foreground hover:bg-accent/90"
           >
-            {t("onboarding.estimate.create")}
+            {savingStages ? t("onboarding.estimate.creating") : t("onboarding.continue")}
           </Button>
           <button
             type="button"
-            onClick={onComplete}
-            className="w-full text-center text-body-sm text-muted-foreground hover:text-foreground transition-colors"
+            onClick={handleSkipStages}
+            disabled={savingStages}
+            className="w-full text-center text-body-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
           >
             {t("onboarding.estimate.skip")}
           </button>
