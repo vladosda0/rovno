@@ -26,6 +26,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { seedProjects } from "@/data/seed";
 import { enterDemoSession, isAuthenticated } from "@/lib/auth-state";
+import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
 import { toast } from "@/hooks/use-toast";
 import { useTranslation } from "react-i18next";
 
@@ -801,7 +802,10 @@ function getPhotoActionClasses(kind: PhotoAction["kind"], isActive: boolean): st
 
 export default function Landing() {
   const { t } = useTranslation();
-  const isGuest = !isAuthenticated();
+  const { status: runtimeAuthStatus } = useRuntimeAuth();
+  const isLoggedIn = runtimeAuthStatus === "authenticated" || isAuthenticated();
+  const isGuest = !isLoggedIn;
+  const getStartedPath = isLoggedIn ? "/home" : "/auth/signup";
   const createProjectTo = isGuest ? "/auth/signup" : "/home";
   const fileInputRef = useRef<HTMLInputElement>(null);
   const promptTextareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -1452,7 +1456,7 @@ export default function Landing() {
               <Link to="/auth/login">{t("landing.nav.login")}</Link>
             </Button>
             <Button asChild className="bg-accent text-accent-foreground hover:bg-accent/90">
-              <Link to="/auth/signup">{t("landing.nav.getStarted")}</Link>
+              <Link to={getStartedPath}>{t("landing.nav.getStarted")}</Link>
             </Button>
           </div>
 
@@ -1488,7 +1492,7 @@ export default function Landing() {
                     </Link>
                   </Button>
                   <Button asChild className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
-                    <Link to="/auth/signup" onClick={() => setMobileMenuOpen(false)}>
+                    <Link to={getStartedPath} onClick={() => setMobileMenuOpen(false)}>
                       {t("landing.nav.getStarted")}
                     </Link>
                   </Button>

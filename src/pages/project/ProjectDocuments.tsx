@@ -7,6 +7,7 @@ import {
   Archive,
   Download,
   Eye,
+  Lock,
   MessageSquare,
   Plus,
   Printer,
@@ -47,6 +48,7 @@ import { DocumentsViewModeToggle, type DocumentViewMode } from "@/components/doc
 import { PreviewCard } from "@/components/ai/PreviewCard";
 import { ActionBar } from "@/components/ai/ActionBar";
 import { ProjectWorkflowEmptyState } from "@/components/ProjectWorkflowEmptyState";
+import { TutorialModal } from "@/components/onboarding/TutorialModal";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser, useProject, useWorkspaceMode } from "@/hooks/use-mock-data";
@@ -605,6 +607,51 @@ export default function ProjectDocuments() {
 
   return (
     <div className="space-y-sp-2">
+      <TutorialModal
+        tutorialKey="documents"
+        steps={[
+          {
+            titleKey: "tutorial.documents.step1.title",
+            descriptionKey: "tutorial.documents.step1.description",
+            visual: (
+              <div className="flex items-center justify-center gap-2">
+                <div className="flex flex-col items-center gap-1 rounded-md border border-border bg-card px-3 py-2">
+                  <Upload className="h-4 w-4 text-accent" />
+                  <span className="text-caption text-foreground">{t("tutorial.documents.step1.upload")}</span>
+                </div>
+                <div className="flex flex-col items-center gap-1 rounded-md border border-border bg-card px-3 py-2">
+                  <Printer className="h-4 w-4 text-accent" />
+                  <span className="text-caption text-foreground">{t("tutorial.documents.step1.print")}</span>
+                </div>
+                <div className="flex flex-col items-center gap-1 rounded-md border border-border bg-card px-3 py-2">
+                  <Download className="h-4 w-4 text-accent" />
+                  <span className="text-caption text-foreground">{t("tutorial.documents.step1.download")}</span>
+                </div>
+              </div>
+            ),
+            icon: <Upload className="h-8 w-8 text-accent" />,
+          },
+          {
+            titleKey: "tutorial.documents.step2.title",
+            descriptionKey: "tutorial.documents.step2.description",
+            visual: (
+              <div className="w-full space-y-1.5">
+                <div className="flex items-center gap-2 rounded-md border border-border bg-card px-2.5 py-1.5">
+                  <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  <span className="text-caption text-foreground truncate">{t("tutorial.documents.step2.internalExample")}</span>
+                  <span className="ml-auto rounded-pill bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">{t("tutorial.documents.step2.internalBadge")}</span>
+                </div>
+                <div className="flex items-center gap-2 rounded-md border border-accent/30 bg-accent/5 px-2.5 py-1.5">
+                  <Share2 className="h-3.5 w-3.5 text-accent shrink-0" />
+                  <span className="text-caption text-foreground truncate">{t("tutorial.documents.step2.sharedExample")}</span>
+                  <span className="ml-auto rounded-pill bg-accent/20 px-2 py-0.5 text-[10px] font-medium text-accent">{t("tutorial.documents.step2.sharedBadge")}</span>
+                </div>
+              </div>
+            ),
+            icon: <Share2 className="h-8 w-8 text-accent" />,
+          },
+        ]}
+      />
       {!showOnlyEmptyState && (
         <div className="glass-elevated rounded-card p-sp-2 flex items-center justify-between flex-wrap gap-2">
           <div>

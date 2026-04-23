@@ -1,5 +1,5 @@
 import { useLayoutEffect, useMemo } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   useProject,
@@ -8,7 +8,10 @@ import {
   useMedia,
   usePermission,
 } from "@/hooks/use-mock-data";
-import { useEstimateV2FinanceProjectSummaryFromWorkspace } from "@/hooks/use-estimate-v2-data";
+import {
+  useEstimateV2FinanceProjectSummaryFromWorkspace,
+  useEstimateV2Project,
+} from "@/hooks/use-estimate-v2-data";
 import { EmptyState } from "@/components/EmptyState";
 import { BudgetWidget } from "@/components/dashboard/BudgetWidget";
 import { TaskSummaryWidget } from "@/components/dashboard/TaskSummaryWidget";
@@ -33,6 +36,7 @@ export default function ProjectDashboard() {
   const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const projectId = id!;
+  const navigate = useNavigate();
   const { toast } = useToast();
 
   useLayoutEffect(() => {
@@ -48,6 +52,12 @@ export default function ProjectDashboard() {
   const financeSummary = useEstimateV2FinanceProjectSummaryFromWorkspace(projectId, project ?? null, {
     hrReadsEnabled,
   });
+  const estimateProject = useEstimateV2Project(projectId);
+  const hasEstimate =
+    estimateProject.stages.length > 0 ||
+    estimateProject.works.length > 0 ||
+    estimateProject.lines.length > 0 ||
+    estimateProject.versions.length > 0;
   const actorRole = perm.seam.membership?.role ?? "viewer";
   const actorAiAccess = perm.seam.membership?.ai_access ?? "none";
   const participantsAccess = getProjectDomainAccess(perm.seam, "participants");
@@ -157,6 +167,22 @@ export default function ProjectDashboard() {
           </div>
         </div>
       </div>
+
+      {!hasEstimate && !estimateProject.isLoading && (
+        <div className="rounded-panel border border-accent/30 bg-accent/5 p-sp-3 flex items-center justify-between gap-sp-2">
+          <div>
+            <p className="text-body-sm font-medium text-foreground">{t("dashboard.noEstimate.title")}</p>
+            <p className="text-caption text-muted-foreground">{t("dashboard.noEstimate.subtitle")}</p>
+          </div>
+          <Button
+            size="sm"
+            className="bg-accent text-accent-foreground hover:bg-accent/90 shrink-0"
+            onClick={() => navigate(`/project/${projectId}/estimate`)}
+          >
+            {t("dashboard.noEstimate.cta")}
+          </Button>
+        </div>
+      )}
 
       <QuickActions
         projectId={projectId}

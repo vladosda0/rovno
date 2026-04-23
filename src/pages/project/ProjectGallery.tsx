@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
-  Upload, Camera, Star, X,
+  Upload, Camera, Star, X, ImageIcon, Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { PhotoViewer } from "@/components/PhotoViewer";
 import { ProjectWorkflowEmptyState } from "@/components/ProjectWorkflowEmptyState";
+import { TutorialModal } from "@/components/onboarding/TutorialModal";
 import { toast } from "@/hooks/use-toast";
 import { useMedia, useTasks, useWorkspaceMode } from "@/hooks/use-mock-data";
 import { useMediaUploadMutations } from "@/hooks/use-documents-media-source";
@@ -176,6 +177,32 @@ export default function ProjectGallery() {
 
   return (
     <>
+      <TutorialModal
+        tutorialKey="media"
+        steps={[
+          {
+            titleKey: "tutorial.media.step1.title",
+            descriptionKey: "tutorial.media.step1.description",
+            visual: (
+              <div className="w-full space-y-2">
+                <div className="grid grid-cols-3 gap-1.5">
+                  <div className="flex aspect-square items-center justify-center rounded-md border border-border bg-muted/50">
+                    <ImageIcon className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <div className="flex aspect-square items-center justify-center rounded-md border border-border bg-muted/50">
+                    <ImageIcon className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <div className="flex aspect-square items-center justify-center rounded-md border border-accent/40 bg-accent/10">
+                    <Sparkles className="h-5 w-5 text-accent" />
+                  </div>
+                </div>
+                <p className="text-caption text-muted-foreground text-center">{t("tutorial.media.step1.aiHint")}</p>
+              </div>
+            ),
+            icon: <Camera className="h-8 w-8 text-accent" />,
+          },
+        ]}
+      />
       {isEmpty ? (
         <ProjectWorkflowEmptyState
           variant="gallery"

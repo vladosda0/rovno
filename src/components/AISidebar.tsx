@@ -28,7 +28,9 @@ import {
   BookmarkPlus,
   RefreshCw,
   Sparkles,
+  FileText,
 } from "lucide-react";
+import { TutorialModal } from "@/components/onboarding/TutorialModal";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -57,6 +59,8 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCurrentUser, useEvents, useProject, useProjects, useTasks, useWorkspaceMode } from "@/hooks/use-mock-data";
 import { useWorkspaceProfilePreferences } from "@/hooks/use-workspace-source";
+import { supabase } from "@/integrations/supabase/client";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { useEstimateV2FinanceProjectSummaryFromWorkspace } from "@/hooks/use-estimate-v2-data";
 import { useProcurementReadProjectSummary } from "@/hooks/use-procurement-read-model";
 import {
@@ -722,6 +726,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const profileAssistantLang = resolveAiAssistantUiLanguage(workspaceProfilePreferences?.aiOutputLanguage);
   const projects = useProjects();
   const [homeProjectMode, setHomeProjectMode] = useState<string>(GENERAL_MODE_VALUE);
+  const [aiSidebarClickedInside, setAiSidebarClickedInside] = useState(false);
 
   const resolvedPermissionProjectId = useMemo(() => {
     if (isProjectContext) return projectId;
@@ -2454,18 +2459,45 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     });
   }
 
-  function handleSaveLearnMessage(message: AIMessage) {
+  async function handleSaveLearnMessage(message: AIMessage) {
     if (savedMessageIds.has(message.id)) {
       toast({ title: t("ai.sidebar.toast.alreadySaved.title"), description: t("ai.sidebar.toast.alreadySaved.description") });
       return;
     }
 
     if (workspaceMode.kind === "supabase") {
-      toast({
-        title: t("ai.sidebar.toast.supabaseModeUnavailable.title"),
-        description: t("ai.sidebar.toast.supabaseModeUnavailable.learnNoteDescription"),
-        variant: "destructive",
-      });
+      const profileId = workspaceMode.profileId;
+      const rawSupabase = supabase as unknown as SupabaseClient;
+      const title = message.content.slice(0, 120).replace(/\n/g, " ").trim()
+        || t("ai.sidebar.learnNote.defaultTitle");
+      try {
+        const { error } = await rawSupabase
+          .from("workspace_documents")
+          .insert({
+            owner_profile_id: profileId,
+            title,
+            type: "knowledge_base",
+            origin: "ai_generated",
+            description: message.content,
+            created_by: profileId,
+          });
+        if (error) throw error;
+        setSavedMessageIds((prev) => {
+          const next = new Set(prev);
+          next.add(message.id);
+          return next;
+        });
+        toast({
+          title: t("ai.sidebar.toast.saved.title"),
+          description: t("ai.sidebar.toast.saved.description"),
+        });
+      } catch {
+        toast({
+          title: t("ai.sidebar.toast.saveError.title"),
+          description: t("ai.sidebar.toast.saveError.description"),
+          variant: "destructive",
+        });
+      }
       return;
     }
 
@@ -2900,7 +2932,79 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
 
   return (
     <>
+      {!collapsed && !isGuest && (
+        <TutorialModal
+          tutorialKey="ai_sidebar"
+          shouldOpen={aiSidebarClickedInside}
+          openDelayMs={250}
+          steps={[
+            {
+              titleKey: "tutorial.aiSidebar.step1.title",
+              descriptionKey: "tutorial.aiSidebar.step1.description",
+              visual: (
+                <div className="w-full space-y-2">
+                  <div className="flex items-start gap-2">
+                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent/15">
+                      <Bot className="h-3.5 w-3.5 text-accent" />
+                    </div>
+                    <div className="rounded-lg bg-muted/50 px-2.5 py-1.5 text-caption text-foreground">
+                      {t("tutorial.aiSidebar.step1.bubble")}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-2.5 py-1.5">
+                    <span className="flex-1 text-caption text-muted-foreground">{t("tutorial.aiSidebar.step1.inputPlaceholder")}</span>
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-accent text-accent-foreground">
+                      <Send className="h-3 w-3" />
+                    </div>
+                  </div>
+                </div>
+              ),
+              icon: <Bot className="h-8 w-8 text-accent" />,
+            },
+            {
+              titleKey: "tutorial.aiSidebar.step2.title",
+              descriptionKey: "tutorial.aiSidebar.step2.description",
+              visual: (
+                <div className="w-full space-y-1.5">
+                  <div className="rounded-lg border border-border bg-card px-2.5 py-2 text-caption text-foreground">
+                    {t("tutorial.aiSidebar.step2.answerPreview")}
+                  </div>
+                  <div className="flex items-center justify-end gap-1.5">
+                    <span className="text-caption text-muted-foreground">{t("tutorial.aiSidebar.step2.saveHint")}</span>
+                    <div className="flex h-7 w-7 items-center justify-center rounded-md border border-accent/40 bg-accent/10">
+                      <BookmarkPlus className="h-3.5 w-3.5 text-accent" />
+                    </div>
+                  </div>
+                </div>
+              ),
+              icon: <BookmarkPlus className="h-8 w-8 text-accent" />,
+            },
+            {
+              titleKey: "tutorial.aiSidebar.step3.title",
+              descriptionKey: "tutorial.aiSidebar.step3.description",
+              visual: (
+                <div className="w-full space-y-1.5">
+                  <div className="flex items-center gap-2 rounded-md border border-border bg-card px-2.5 py-1.5">
+                    <FileText className="h-3.5 w-3.5 text-accent shrink-0" />
+                    <span className="flex-1 truncate text-caption text-foreground">{t("tutorial.aiSidebar.step3.note1")}</span>
+                  </div>
+                  <div className="flex items-center gap-2 rounded-md border border-border bg-card px-2.5 py-1.5">
+                    <FileText className="h-3.5 w-3.5 text-accent shrink-0" />
+                    <span className="flex-1 truncate text-caption text-foreground">{t("tutorial.aiSidebar.step3.note2")}</span>
+                  </div>
+                </div>
+              ),
+              icon: <FileText className="h-8 w-8 text-accent" />,
+            },
+          ]}
+        />
+      )}
       <div
+        onPointerDownCapture={() => {
+          if (!aiSidebarClickedInside && !collapsed && !isGuest) {
+            setAiSidebarClickedInside(true);
+          }
+        }}
         className="glass-sidebar flex flex-col h-[calc(100svh-48px)] shrink-0 relative box-border"
         style={{
           width: panelWidth,

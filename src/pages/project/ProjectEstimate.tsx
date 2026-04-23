@@ -12,15 +12,19 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   AlertTriangle,
+  ArrowRight,
+  BookOpen,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   Download,
   Info,
+  Layers,
   Plus,
   Trash2,
   User,
 } from "lucide-react";
+import { TutorialModal } from "@/components/onboarding/TutorialModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -2049,6 +2053,61 @@ export default function ProjectEstimate() {
 
   return (
     <div className="space-y-sp-2 p-sp-2">
+      <TutorialModal
+        tutorialKey="estimate_flow"
+        steps={[
+          {
+            titleKey: "tutorial.estimateFlow.step1.title",
+            descriptionKey: "tutorial.estimateFlow.step1.description",
+            visual: (
+              <div className="w-full space-y-1.5 text-left">
+                <div className="flex items-center justify-between rounded-md border border-border bg-card px-3 py-2 text-caption">
+                  <span className="font-medium text-foreground">{t("tutorial.estimateFlow.step1.row1Label")}</span>
+                  <span className="tabular-nums text-muted-foreground">10 × 1 500 ₽</span>
+                </div>
+                <div className="flex items-center justify-between rounded-md border border-border bg-card px-3 py-2 text-caption">
+                  <span className="font-medium text-foreground">{t("tutorial.estimateFlow.step1.row2Label")}</span>
+                  <span className="tabular-nums text-muted-foreground">6 × 4 200 ₽</span>
+                </div>
+                <div className="flex items-center justify-between rounded-md border border-accent/40 bg-accent/10 px-3 py-2 text-caption">
+                  <span className="font-medium text-foreground">{t("tutorial.estimateFlow.step1.totalLabel")}</span>
+                  <span className="tabular-nums font-semibold text-foreground">40 200 ₽</span>
+                </div>
+              </div>
+            ),
+            icon: <BookOpen className="h-8 w-8 text-accent" />,
+          },
+          {
+            titleKey: "tutorial.estimateFlow.step2.title",
+            descriptionKey: "tutorial.estimateFlow.step2.description",
+            visual: (
+              <div className="flex items-center justify-center gap-2">
+                <span className="rounded-md border border-sky-500/40 bg-sky-500/10 px-3 py-1.5 text-caption font-semibold text-sky-600 dark:text-sky-300">{t("estimate.status.planning")}</span>
+                <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                <span className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-caption font-semibold text-emerald-600 dark:text-emerald-300">{t("estimate.status.inWork")}</span>
+              </div>
+            ),
+            icon: <ArrowRight className="h-8 w-8 text-accent" />,
+          },
+          {
+            titleKey: "tutorial.estimateFlow.step3.title",
+            descriptionKey: "tutorial.estimateFlow.step3.description",
+            visual: (
+              <div className="w-full space-y-1.5">
+                <div className="flex items-center justify-between rounded-md border border-border bg-card px-3 py-2 text-caption">
+                  <span className="font-medium text-muted-foreground">{t("tutorial.estimateFlow.step3.internalLabel")}</span>
+                  <span className="tabular-nums text-muted-foreground">32 000 ₽</span>
+                </div>
+                <div className="flex items-center justify-between rounded-md border border-accent/40 bg-accent/10 px-3 py-2 text-caption">
+                  <span className="font-semibold text-foreground">{t("tutorial.estimateFlow.step3.clientLabel")}</span>
+                  <span className="tabular-nums font-semibold text-foreground">40 200 ₽</span>
+                </div>
+              </div>
+            ),
+            icon: <Layers className="h-8 w-8 text-accent" />,
+          },
+        ]}
+      />
       <div className="rounded-card border border-border bg-card p-sp-2 space-y-3">
         <div className="flex flex-wrap items-start justify-between gap-3 lg:flex-nowrap">
           <div className="min-w-0 flex-1 space-y-2">
