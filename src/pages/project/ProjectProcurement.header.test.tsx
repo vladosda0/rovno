@@ -203,8 +203,8 @@ describe("ProjectProcurement header redesign", () => {
     expect(screen.getByRole("button", { name: /^Requested \(/i })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /^Requested \(/i }));
-    const orderBtn = screen.getByRole("button", { name: "Order" });
-    expect(orderBtn).toBeInTheDocument();
-    expect(orderBtn).toBeDisabled();
+    const orderBtns = screen.getAllByRole("button", { name: "Order" });
+    expect(orderBtns.length).toBeGreaterThan(0);
+    orderBtns.forEach((btn) => expect(btn).toBeDisabled());
   });
 });

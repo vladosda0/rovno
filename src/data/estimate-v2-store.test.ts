@@ -211,7 +211,7 @@ describe("estimate-v2 store computeVersionDiff", () => {
 });
 
 describe("estimate-v2 bootstrap", () => {
-  it("initializes from current stages/work shells and does not read legacy stage estimate items", () => {
+  it("seeds demo projects with curated estimate data without reading legacy stage estimate items", () => {
     __unsafeResetStoreForTests();
     __unsafeResetEstimateV2ForTests();
     clearDemoSession();
@@ -220,14 +220,13 @@ describe("estimate-v2 bootstrap", () => {
 
     const legacyReadSpy = vi.spyOn(estimateStore, "getStageEstimateItems");
     const state = getEstimateV2ProjectState("project-1");
-    const currentStages = [...getStages("project-1")].sort((a, b) => a.order - b.order);
 
     expect(legacyReadSpy).not.toHaveBeenCalled();
-    expect(state.lines).toHaveLength(0);
-    expect(state.stages.map((stageItem) => stageItem.id)).toEqual(currentStages.map((stageItem) => stageItem.id));
-    expect(state.works).toHaveLength(state.stages.length);
-    expect(state.works.every((workItem) => workItem.title === "General work" && workItem.order === 1)).toBe(true);
-    expect(state.lines.some((lineItem) => lineItem.type === "labor")).toBe(false);
+    expect(state.lines.length).toBeGreaterThan(0);
+    expect(state.stages.length).toBeGreaterThan(0);
+    expect(state.works.length).toBeGreaterThanOrEqual(state.stages.length);
+    expect(state.lines.some((lineItem) => lineItem.type === "labor")).toBe(true);
+    expect(state.lines.some((lineItem) => lineItem.type === "material")).toBe(true);
 
     legacyReadSpy.mockRestore();
   });

@@ -1,4 +1,4 @@
-import { getAuthRole } from "@/lib/auth-state";
+import { getAuthRole, isDemoSessionActive } from "@/lib/auth-state";
 import {
   getProjectDomainAccessForRole,
   projectDomainAllowsManage,
@@ -66,6 +66,7 @@ import type {
   ScheduleBaseline,
 } from "@/types/estimate-v2";
 import { resourceLineTypeFromPersisted, parsePersistedEstimateResourceType } from "@/lib/estimate-v2/resource-type-contract";
+import { getDemoEstimateV2State } from "@/data/estimate-v2-seed";
 
 interface EstimateV2ProjectState {
   project: EstimateV2Project;
@@ -2033,6 +2034,21 @@ function ensureProjectState(projectId: string): EstimateV2ProjectState {
   if (existing) return existing;
 
   const createdAt = nowIso();
+
+  if (DEMO_PROJECT_IDS.has(projectId) && isDemoSessionActive()) {
+    const demoState = getDemoEstimateV2State(projectId, createdAt);
+    if (demoState) {
+      const state: EstimateV2ProjectState = {
+        ...demoState,
+        sync: createEmptyProjectSyncState(),
+      };
+      ensureProjectSyncState(state);
+      ensureMainStoreSubscription();
+      statesByProjectId.set(projectId, state);
+      return state;
+    }
+  }
+
   const projectEntity = getProject(projectId);
   const storeStages = getStages(projectId);
   const orderedStages = [...storeStages].sort((a, b) => a.order - b.order);
