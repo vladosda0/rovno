@@ -2124,7 +2124,6 @@ export default function ProjectEstimate() {
                     <SelectValue placeholder={t(estimateStatusLabelKey(estimateProject.estimateStatus))} />
                   </SelectTrigger>
                   <SelectContent>
-                    {estimateProject.estimateStatus !== "in_work" && <SelectItem value="planning">{t("estimate.status.planning")}</SelectItem>}
                     <SelectItem value="in_work">{t("estimate.status.inWork")}</SelectItem>
                     <SelectItem value="paused">{t("estimate.status.paused")}</SelectItem>
                     <SelectItem value="finished">{t("estimate.status.finished")}</SelectItem>
