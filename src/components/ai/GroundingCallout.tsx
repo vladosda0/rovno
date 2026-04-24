@@ -1,10 +1,12 @@
+import { useState } from "react";
 import type {
   AssistantGroundingStatus,
   InferenceGroundingKind,
   LiveTextAssistantSource,
 } from "@/lib/ai-assistant-contract";
 import type { AiAssistantUiLanguage } from "@/lib/ai-assistant-client";
-import { Info, AlertTriangle, ShieldCheck } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Info, AlertTriangle, ShieldCheck, ChevronDown } from "lucide-react";
 
 const GROUNDING_TITLE: Record<
   AssistantGroundingStatus,
@@ -155,46 +157,87 @@ export function GroundingCallout(props: {
   const freshnessLine = formatFreshnessHintLine(freshnessHint);
   const copy = CHROME[language];
 
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const hasSnapshotNote = Boolean(groundingDetails && groundingDetails.serverSnapshotUsed);
+  const hasNote = Boolean(typeof groundingNote === "string" && groundingNote.trim().length > 0);
+  const hasSources = Boolean(sources && sources.length > 0);
+  const hasExpandableBody =
+    hasSnapshotNote
+    || domains.length > 0
+    || Boolean(groundingDetails?.evidenceTruncated)
+    || Boolean(freshnessLine)
+    || hasNote
+    || hasSources;
+
+  const body = (
+    <div className="space-y-1 pt-1.5">
+      {groundingDetails && groundingDetails.serverSnapshotUsed ? (
+        <p className="text-muted-foreground leading-snug">
+          {copy.snapshotNote}
+        </p>
+      ) : null}
+      {domains.length > 0 ? (
+        <div className="text-muted-foreground leading-snug">
+          <p className="font-medium text-foreground/90">{copy.domainsHeading}</p>
+          <ul className="list-disc pl-3.5 space-y-0.5">
+            {domains.map((dom) => (
+              <li key={dom} className="break-words">{domainRetrievedToLabel(dom, language)}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {groundingDetails?.evidenceTruncated ? (
+        <p className="text-muted-foreground leading-snug">
+          {copy.truncatedNote}
+        </p>
+      ) : null}
+      {freshnessLine ? (
+        <p className="text-muted-foreground leading-snug break-words">{freshnessLine}</p>
+      ) : null}
+      {groundingNote ? (
+        <p className="text-muted-foreground leading-snug whitespace-pre-wrap break-words">{groundingNote}</p>
+      ) : null}
+      {sources && sources.length > 0 ? (
+        <ul className="list-disc pl-3.5 space-y-0.5 text-muted-foreground leading-snug">
+          {sources.map((s, i) => (
+            <li key={`${s.kind}-${i}`} className="break-words">{s.label}</li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+
   return (
     <div className={`mt-2 rounded-lg border px-2.5 py-2 text-caption min-w-0 max-w-full ${boxClass}`}>
       <div className="flex items-start gap-2 min-w-0">
         <Icon className="h-3.5 w-3.5 shrink-0 mt-0.5 opacity-80" aria-hidden />
-        <div className="min-w-0 space-y-1">
-          <p className="font-medium leading-tight">{title}</p>
-          {groundingDetails && groundingDetails.serverSnapshotUsed ? (
-            <p className="text-muted-foreground leading-snug">
-              {copy.snapshotNote}
-            </p>
-          ) : null}
-          {domains.length > 0 ? (
-            <div className="text-muted-foreground leading-snug">
-              <p className="font-medium text-foreground/90">{copy.domainsHeading}</p>
-              <ul className="list-disc pl-3.5 space-y-0.5">
-                {domains.map((dom) => (
-                  <li key={dom} className="break-words">{domainRetrievedToLabel(dom, language)}</li>
-                ))}
-              </ul>
+        {hasExpandableBody ? (
+          <Collapsible
+            className="min-w-0 flex-1"
+            open={detailsOpen}
+            onOpenChange={setDetailsOpen}
+          >
+            <div className="min-w-0">
+              <CollapsibleTrigger asChild>
+                <button
+                  type="button"
+                  className="flex w-full min-w-0 items-start justify-between gap-1.5 rounded-sm text-left outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                >
+                  <span className="min-w-0 flex-1 font-medium leading-tight">{title}</span>
+                  <ChevronDown
+                    className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform mt-0.5 opacity-80 ${detailsOpen ? "rotate-180" : ""}`}
+                    aria-hidden
+                  />
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>{body}</CollapsibleContent>
             </div>
-          ) : null}
-          {groundingDetails?.evidenceTruncated ? (
-            <p className="text-muted-foreground leading-snug">
-              {copy.truncatedNote}
-            </p>
-          ) : null}
-          {freshnessLine ? (
-            <p className="text-muted-foreground leading-snug break-words">{freshnessLine}</p>
-          ) : null}
-          {groundingNote ? (
-            <p className="text-muted-foreground leading-snug whitespace-pre-wrap break-words">{groundingNote}</p>
-          ) : null}
-          {sources && sources.length > 0 ? (
-            <ul className="list-disc pl-3.5 space-y-0.5 text-muted-foreground leading-snug">
-              {sources.map((s, i) => (
-                <li key={`${s.kind}-${i}`} className="break-words">{s.label}</li>
-              ))}
-            </ul>
-          ) : null}
-        </div>
+          </Collapsible>
+        ) : (
+          <div className="min-w-0 flex-1">
+            <p className="font-medium leading-tight">{title}</p>
+          </div>
+        )}
       </div>
     </div>
   );

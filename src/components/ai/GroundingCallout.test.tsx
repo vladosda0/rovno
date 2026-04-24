@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { domainRetrievedToLabel, GroundingCallout } from "@/components/ai/GroundingCallout";
 
 describe("domainRetrievedToLabel", () => {
@@ -35,6 +35,7 @@ describe("GroundingCallout", () => {
     );
     expect(container.textContent).not.toContain("owner_email");
     expect(container.textContent).not.toContain("x@y.com");
+    fireEvent.click(screen.getByRole("button", { name: /Using limited project context/i }));
     expect(screen.getByText(/message: Dashboard may be stale/i)).toBeInTheDocument();
   });
 
@@ -49,6 +50,7 @@ describe("GroundingCallout", () => {
         }}
       />,
     );
+    fireEvent.click(screen.getByRole("button", { name: /Using project context/i }));
     expect(screen.getByText(/Project areas used for this answer/i)).toBeInTheDocument();
     expect(screen.getByText(/^Estimate$/)).toBeInTheDocument();
     expect(screen.getByText(/Documents \(metadata only/)).toBeInTheDocument();
@@ -67,6 +69,7 @@ describe("GroundingCallout", () => {
         }}
       />,
     );
+    fireEvent.click(screen.getByRole("button", { name: /Используется контекст проекта/i }));
     expect(screen.getByText(/Используется контекст проекта/i)).toBeInTheDocument();
     expect(screen.getByText(/Области проекта/i)).toBeInTheDocument();
     expect(screen.getByText(/^Задачи$/)).toBeInTheDocument();
