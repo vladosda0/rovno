@@ -88,6 +88,14 @@ export interface CreateWorkspaceProjectInput {
   projectMode: NonNullable<Project["project_mode"]>;
 }
 
+function requireNonEmptyProjectTitle(input: CreateWorkspaceProjectInput): string {
+  const title = input.title?.trim() ?? "";
+  if (!title) {
+    throw new Error("Project name is required.");
+  }
+  return title;
+}
+
 const SUPABASE_WORKSPACE_SOURCE = "supabase";
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -231,10 +239,11 @@ function createBrowserWorkspaceSource(mode: store.BrowserWorkspaceKind): Workspa
     },
     async createProject(input: CreateWorkspaceProjectInput) {
       const user = store.getCurrentUserForMode(mode);
+      const title = requireNonEmptyProjectTitle(input);
       const project: Project = {
         id: `project-manual-${Date.now()}`,
         owner_id: user.id,
-        title: input.title.trim() || "Untitled Project",
+        title,
         type: input.type,
         project_mode: input.projectMode,
         automation_level: "manual",
@@ -678,9 +687,10 @@ function createSupabaseWorkspaceSource(
     },
 
     async createProject(input: CreateWorkspaceProjectInput) {
+      const title = requireNonEmptyProjectTitle(input);
       const insert: ProjectInsert = {
         owner_profile_id: profileId,
-        title: input.title.trim() || "Untitled Project",
+        title,
         project_type: input.type,
         project_mode: input.projectMode,
         automation_level: "manual",
