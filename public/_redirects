@@ -1,0 +1,3 @@
+# Cloudflare Pages SPA fallback: serve index.html for all non-asset paths
+# so client-side react-router routes (e.g. /auth/callback, /home/...) resolve.
+/*  /index.html  200
