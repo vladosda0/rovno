@@ -4,10 +4,9 @@ import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import {
-  Plus, Sparkles, FolderPlus, Paperclip, Search, SortAsc,
+  Plus, Search, SortAsc,
   Folder, Trash2,
 } from "lucide-react";
 import {
@@ -18,20 +17,11 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel,
 } from "@/components/ui/alert-dialog";
 import { useProjects, useWorkspaceMode } from "@/hooks/use-mock-data";
-import { PreviewCard } from "@/components/ai/PreviewCard";
-import { ActionBar } from "@/components/ai/ActionBar";
-import { SuggestionChips } from "@/components/ai/SuggestionChips";
 import { getPlanningSource } from "@/data/planning-source";
 import { getWorkspaceSource, resolveWorkspaceMode } from "@/data/workspace-source";
-import { getAuthRole } from "@/lib/auth-state";
-import { generateProjectProposal } from "@/lib/ai-engine";
-import { commitProposal } from "@/lib/commit-proposal";
-import { can } from "@/lib/permission-matrix";
-import type { AIAccess, MemberRole } from "@/types/entities";
 import { planningQueryKeys } from "@/hooks/use-planning-source";
 import { toast } from "@/hooks/use-toast";
 import { workspaceQueryKeys } from "@/hooks/use-workspace-source";
-import type { AIProposal } from "@/types/ai";
 
 function getStatusKey(progress: number): string {
   if (progress >= 100) return "status.done";
@@ -44,25 +34,7 @@ function getStatusColor(progress: number): string {
   return "bg-muted text-muted-foreground";
 }
 
-const SUGGESTION_KEYS = [
-  "projectsTab.suggestion.renovateApartment",
-  "projectsTab.suggestion.buildOffice",
-  "projectsTab.suggestion.kitchenRemodel",
-  "projectsTab.suggestion.bathroomRenovation",
-] as const;
-
 type SortKey = "activity" | "progress" | "name";
-
-/** AI project sparkles: local/demo store only; Supabase must use real project APIs. */
-function homeAiProjectSparklesAllowed(workspaceMode: ReturnType<typeof useWorkspaceMode>): boolean {
-  if (workspaceMode.kind !== "demo" && workspaceMode.kind !== "local") return false;
-  const role = getAuthRole();
-  if (role === "guest") return false;
-  const memberRole = role as MemberRole;
-  const aiAccess: AIAccess =
-    memberRole === "contractor" ? "consult_only" : memberRole === "viewer" ? "none" : "project_pool";
-  return can(memberRole, "ai.generate", aiAccess);
-}
 
 interface FolderItem {
   id: string;
@@ -75,7 +47,6 @@ export function ProjectsTab() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const workspaceMode = useWorkspaceMode();
-  const aiProjectSparklesEnabled = homeAiProjectSparklesAllowed(workspaceMode);
 
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortKey>("activity");
@@ -84,12 +55,7 @@ export function ProjectsTab() {
   const [projectFolders, setProjectFolders] = useState<Record<string, string>>({});
   const [newFolderName, setNewFolderName] = useState("");
 
-  // AI project creation
-  const [description, setDescription] = useState("");
-  const [proposal, setProposal] = useState<AIProposal | null>(null);
-
-  // Manual creation
-  const [manualOpen, setManualOpen] = useState(false);
+  // Manual project creation (inline on tab)
   const [manualTitle, setManualTitle] = useState("");
   const [manualType, setManualType] = useState("residential");
   const [manualProjectMode, setManualProjectMode] = useState<"build_myself" | "contractor">("contractor");
@@ -112,50 +78,19 @@ export function ProjectsTab() {
       return 0; // activity — keep original order
     });
 
-  function handleAiSubmit(text?: string) {
-    if (!aiProjectSparklesEnabled) {
-      toast({
-        title: t("projectsTab.aiUnavailable.title"),
-        description:
-          workspaceMode.kind === "supabase" || workspaceMode.kind === "pending-supabase"
-            ? t("projectsTab.aiUnavailable.supabase")
-            : t("projectsTab.aiUnavailable.other"),
-        variant: "destructive",
-      });
-      return;
-    }
-    const input = (text ?? description).trim();
-    if (!input) return;
-    setDescription(input);
-    setProposal(generateProjectProposal(input));
-  }
-
-  function handleConfirm() {
-    if (!proposal) return;
-    if (!aiProjectSparklesEnabled) {
-      toast({
-        title: t("projectsTab.aiUnavailable.title"),
-        description: t("projectsTab.aiUnavailable.confirmDisabled"),
-        variant: "destructive",
-      });
-      return;
-    }
-    const result = commitProposal(proposal, { eventSource: "user", emitProposalEvent: true });
-    if (result.success) {
-      toast({ title: t("projectsTab.projectCreated"), description: t("projectsTab.projectCreatedItems", { count: result.count }) });
-      setProposal(null);
-      setDescription("");
-      if (result.projectId) navigate(`/project/${result.projectId}/estimate`);
-    } else {
-      toast({ title: t("common.error"), description: result.error, variant: "destructive" });
-    }
-  }
-
   async function handleManualCreate(event: MouseEvent<HTMLButtonElement>) {
     event.preventDefault();
     if (manualCreating) return;
 
-    const title = manualTitle.trim() || t("projectsTab.untitledProject");
+    const title = manualTitle.trim();
+    if (!title) {
+      toast({
+        title: t("projectsTab.nameRequiredTitle"),
+        description: t("projectsTab.nameRequiredDescription"),
+        variant: "destructive",
+      });
+      return;
+    }
     setManualCreating(true);
 
     try {
@@ -194,8 +129,8 @@ export function ProjectsTab() {
       }
 
       toast({ title: t("projectsTab.projectCreated"), description: title });
-      setManualOpen(false);
       setManualTitle("");
+      setManualType("residential");
       setManualProjectMode("contractor");
       navigate(`/project/${createdProject.id}/estimate`);
     } catch (error) {
@@ -266,63 +201,91 @@ export function ProjectsTab() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* AI Project Input — local/demo only; no authority bypass vs Supabase */}
-      <div className="glass space-y-3 rounded-card p-4 sm:space-y-4 sm:p-6">
-        {!aiProjectSparklesEnabled && (
-          <p className="text-caption text-muted-foreground">
-            {workspaceMode.kind === "supabase" || workspaceMode.kind === "pending-supabase"
-              ? t("projectsTab.aiHint.supabase")
-              : t("projectsTab.aiHint.other")}
-          </p>
-        )}
-        <div className="flex gap-2 items-start">
-          <Textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder={t("projectsTab.aiPlaceholder")}
-            className="flex-1 min-h-[72px] resize-none bg-background/50"
-            disabled={!aiProjectSparklesEnabled}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAiSubmit(); }
-            }}
-          />
-          <div className="flex flex-col gap-1.5 shrink-0">
-            <Button
-              onClick={() => handleAiSubmit()}
-              disabled={!aiProjectSparklesEnabled || !description.trim()}
-              className="bg-accent text-accent-foreground hover:bg-accent/90"
-            >
-              <Sparkles className="h-4 w-4 mr-1.5" /> {t("projectsTab.generate")}
-            </Button>
-            <Button variant="outline" size="icon" className="h-9 w-9" title={t("projectsTab.attachFiles")}>
-              <Paperclip className="h-4 w-4" />
-            </Button>
-          </div>
+      {/* Create project — inline questionnaire (replaces the former AI description block) */}
+      <div className="glass space-y-4 rounded-card p-4 sm:space-y-5 sm:p-6" id="projects-create-form">
+        <div>
+          <h2 className="text-body font-semibold text-foreground">{t("projectsTab.manualTitle")}</h2>
+          <p className="text-caption text-muted-foreground mt-1">{t("projectsTab.manualDescription")}</p>
         </div>
-        {!proposal && aiProjectSparklesEnabled && (
-          <SuggestionChips suggestions={SUGGESTION_KEYS.map((key) => t(key))} onSelect={(s) => handleAiSubmit(s)} />
-        )}
-        {proposal && (
-          <div className="space-y-2 pt-1">
-            <PreviewCard summary={proposal.summary} changes={proposal.changes} />
-            <ActionBar
-              onConfirm={handleConfirm}
-              onCancel={() => setProposal(null)}
-              disabled={!aiProjectSparklesEnabled}
+        <div className="space-y-3 max-w-2xl">
+          <div className="space-y-1.5">
+            <label className="text-body-sm font-medium text-foreground" htmlFor="manual-project-name">
+              {t("projectsTab.nameLabel")}
+              <span className="text-destructive" aria-hidden> *</span>
+            </label>
+            <Input
+              id="manual-project-name"
+              value={manualTitle}
+              onChange={(e) => setManualTitle(e.target.value)}
+              placeholder={t("projectsTab.namePlaceholder")}
+              autoFocus
+              required
             />
           </div>
-        )}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <span className="text-body-sm font-medium text-foreground" id="manual-project-type-label">
+                {t("projectsTab.typeLabel")}
+              </span>
+              <Select value={manualType} onValueChange={setManualType}>
+                <SelectTrigger
+                  className="h-10 w-full"
+                  id="manual-project-type"
+                  aria-labelledby="manual-project-type-label"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="residential">{t("projectsTab.type.residential")}</SelectItem>
+                  <SelectItem value="commercial">{t("projectsTab.type.commercial")}</SelectItem>
+                  <SelectItem value="industrial">{t("projectsTab.type.industrial")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <span className="text-body-sm font-medium text-foreground" id="manual-project-mode-label">
+                {t("projectsTab.modeLabel")}
+              </span>
+              <Select
+                value={manualProjectMode}
+                onValueChange={(v) => setManualProjectMode(v as "build_myself" | "contractor")}
+              >
+                <SelectTrigger
+                  className="h-10 w-full"
+                  id="manual-project-mode"
+                  aria-labelledby="manual-project-mode-label"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="build_myself">{t("projectsTab.mode.selfBuild")}</SelectItem>
+                  <SelectItem value="contractor">{t("projectsTab.mode.contractor")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </div>
+        <div className="max-w-2xl">
+          <Button
+            type="button"
+            className="w-full h-12 text-base font-semibold bg-primary text-primary-foreground hover:bg-primary/90"
+            onClick={handleManualCreate}
+            disabled={manualCreating || !manualTitle.trim()}
+          >
+            {manualCreating ? t("projectsTab.creating") : t("overview.createProject")}
+          </Button>
+        </div>
       </div>
 
-      {/* Toolbar */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      {/* Toolbar: search, sort, folder filters, new folder — single horizontal band */}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
+        <div className="relative min-w-0 w-full max-w-56 sm:shrink-0">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
           <Input placeholder={t("projectsTab.search")} value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-9" />
         </div>
         <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortKey)}>
-          <SelectTrigger className="w-[140px] h-9">
-            <SortAsc className="h-3.5 w-3.5 mr-1.5" />
+          <SelectTrigger className="w-[min(100%,9rem)] sm:w-[140px] h-9 shrink-0">
+            <SortAsc className="h-3.5 w-3.5 mr-1.5 shrink-0" />
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -331,41 +294,43 @@ export function ProjectsTab() {
             <SelectItem value="name">{t("projectsTab.sort.name")}</SelectItem>
           </SelectContent>
         </Select>
-        <Button variant="outline" size="sm" onClick={() => setManualOpen(true)}>
-          <FolderPlus className="h-4 w-4 mr-1.5" /> {t("projectsTab.createManually")}
-        </Button>
-      </div>
-
-      <div className="flex gap-4 sm:gap-6">
-        {/* Folders sidebar */}
-        <div className="w-48 shrink-0 space-y-1">
+        <div className="hidden sm:block h-6 w-px bg-border shrink-0" aria-hidden />
+        <div className="flex flex-wrap items-center gap-1.5 min-w-0">
           <button
+            type="button"
             onClick={() => setSelectedFolder(null)}
-            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-body-sm transition-colors text-left ${!selectedFolder ? "bg-accent/10 text-accent font-medium" : "text-muted-foreground hover:bg-muted"}`}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 h-9 text-body-sm transition-colors shrink-0 ${!selectedFolder ? "bg-accent/10 text-accent font-medium" : "text-muted-foreground hover:bg-muted"}`}
           >
-            <Folder className="h-4 w-4" /> {t("projectsTab.allProjects")}
+            <Folder className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate max-w-[9rem] sm:max-w-[11rem]">{t("projectsTab.allProjects")}</span>
           </button>
           {folders.map((f) => (
             <button
+              type="button"
               key={f.id}
               onClick={() => setSelectedFolder(f.id)}
-              className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-body-sm transition-colors text-left ${selectedFolder === f.id ? "bg-accent/10 text-accent font-medium" : "text-muted-foreground hover:bg-muted"}`}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 h-9 text-body-sm transition-colors shrink-0 max-w-[10rem] ${selectedFolder === f.id ? "bg-accent/10 text-accent font-medium" : "text-muted-foreground hover:bg-muted"}`}
             >
-              <Folder className="h-4 w-4" /> {f.name}
+              <Folder className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{f.name}</span>
             </button>
           ))}
-          <div className="pt-2">
-            <div className="flex gap-1">
-              <Input placeholder={t("projectsTab.newFolder")} value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} className="h-8 text-caption" />
-              <Button size="sm" variant="ghost" className="h-8 px-2 shrink-0" onClick={handleCreateFolder} disabled={!newFolderName.trim()}>
-                <Plus className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          </div>
         </div>
+        <div className="flex items-center gap-1.5 shrink-0 w-full min-[500px]:w-auto min-[500px]:max-w-xs">
+          <Input
+            placeholder={t("projectsTab.newFolder")}
+            value={newFolderName}
+            onChange={(e) => setNewFolderName(e.target.value)}
+            className="h-9 text-caption min-w-0 flex-1 sm:flex-initial sm:w-40"
+          />
+          <Button size="icon" variant="ghost" className="h-9 w-9 shrink-0" onClick={handleCreateFolder} disabled={!newFolderName.trim()} title={t("projectsTab.newFolder")}>
+            <Plus className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
 
-        {/* Projects grid */}
-        <div className="grid flex-1 grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2">
+      {/* Projects grid — full width, three columns on large screens */}
+      <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
           {filteredProjects.map((p) => (
             <div key={p.id} className="glass group relative space-y-2 rounded-card p-4 sm:p-6">
               <button
@@ -403,65 +368,12 @@ export function ProjectsTab() {
             </div>
           ))}
           {filteredProjects.length === 0 && (
-            <div className="col-span-full flex flex-col items-center gap-sp-2 py-sp-4 text-center">
+            <div className="col-span-full flex flex-col items-center gap-sp-1 py-sp-4 text-center">
               <p className="text-body text-muted-foreground">{t("projectsTab.noProjects")}</p>
-              <p className="text-caption text-muted-foreground">{t("projectsTab.emptySubtitle")}</p>
-              <Button
-                size="lg"
-                onClick={() => setManualOpen(true)}
-                className="bg-accent text-accent-foreground hover:bg-accent/90 mt-sp-1"
-              >
-                <Plus className="h-4 w-4 mr-1.5" /> {t("projectsTab.createManually")}
-              </Button>
+              <p className="text-caption text-muted-foreground max-w-sm">{t("projectsTab.emptyInlineHint")}</p>
             </div>
           )}
-        </div>
       </div>
-
-      {/* Manual Create Modal */}
-      <AlertDialog open={manualOpen} onOpenChange={setManualOpen}>
-        <AlertDialogContent className="glass-modal rounded-modal">
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("projectsTab.manualTitle")}</AlertDialogTitle>
-            <AlertDialogDescription>{t("projectsTab.manualDescription")}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="space-y-3 py-2">
-            <div className="space-y-1">
-              <label className="text-body-sm font-medium text-foreground">{t("projectsTab.nameLabel")}</label>
-              <Input value={manualTitle} onChange={(e) => setManualTitle(e.target.value)} placeholder={t("projectsTab.namePlaceholder")} autoFocus />
-            </div>
-            <div className="space-y-1">
-              <label className="text-body-sm font-medium text-foreground">{t("projectsTab.typeLabel")}</label>
-              <select value={manualType} onChange={(e) => setManualType(e.target.value)} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
-                <option value="residential">{t("projectsTab.type.residential")}</option>
-                <option value="commercial">{t("projectsTab.type.commercial")}</option>
-                <option value="industrial">{t("projectsTab.type.industrial")}</option>
-              </select>
-            </div>
-            <div className="space-y-1">
-              <label className="text-body-sm font-medium text-foreground">{t("projectsTab.modeLabel")}</label>
-              <select
-                value={manualProjectMode}
-                onChange={(e) => setManualProjectMode(e.target.value as "build_myself" | "contractor")}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-              >
-                <option value="build_myself">{t("projectsTab.mode.selfBuild")}</option>
-                <option value="contractor">{t("projectsTab.mode.contractor")}</option>
-              </select>
-            </div>
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleManualCreate}
-              disabled={manualCreating}
-              className="bg-accent text-accent-foreground hover:bg-accent/90"
-            >
-              {manualCreating ? t("projectsTab.creating") : t("common.create")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       {/* Delete Confirmation Modal */}
       <AlertDialog
