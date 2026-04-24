@@ -958,6 +958,98 @@ export default function Landing() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  useEffect(() => {
+    let consumed = false;
+    let animating = false;
+    let touchStartY: number | null = null;
+
+    const triggerTransition = () => {
+      if (consumed || animating) return;
+      const target = document.getElementById("demos");
+      if (!target) return;
+      const stickyHeader = document.querySelector("header") as HTMLElement | null;
+      const headerOffset = (stickyHeader?.offsetHeight ?? 0) + 16;
+      const targetY = target.getBoundingClientRect().top + window.scrollY - headerOffset;
+      const startY = window.scrollY;
+      const distance = targetY - startY;
+      if (distance <= 0) {
+        consumed = true;
+        return;
+      }
+      animating = true;
+      const duration = 1100;
+      const startTime = performance.now();
+      const ease = (t: number) => t * t * t;
+      const step = (now: number) => {
+        const progress = Math.min((now - startTime) / duration, 1);
+        window.scrollTo(0, startY + distance * ease(progress));
+        if (progress < 1) {
+          requestAnimationFrame(step);
+        } else {
+          consumed = true;
+          animating = false;
+        }
+      };
+      requestAnimationFrame(step);
+    };
+
+    const handleWheel = (event: WheelEvent) => {
+      if (consumed) return;
+      if (event.deltaY <= 0) return;
+      if (window.scrollY > window.innerHeight * 0.1) {
+        consumed = true;
+        return;
+      }
+      event.preventDefault();
+      triggerTransition();
+    };
+
+    const handleTouchStart = (event: TouchEvent) => {
+      if (consumed) return;
+      touchStartY = event.touches[0]?.clientY ?? null;
+    };
+
+    const handleTouchMove = (event: TouchEvent) => {
+      if (consumed || touchStartY == null) return;
+      const currentY = event.touches[0]?.clientY ?? touchStartY;
+      if (touchStartY - currentY <= 10) return;
+      if (window.scrollY > window.innerHeight * 0.1) {
+        consumed = true;
+        return;
+      }
+      event.preventDefault();
+      triggerTransition();
+    };
+
+    const handleKey = (event: KeyboardEvent) => {
+      if (consumed) return;
+      if (
+        event.key === "ArrowDown" ||
+        event.key === "PageDown" ||
+        event.key === " " ||
+        event.key === "Spacebar"
+      ) {
+        if (window.scrollY > window.innerHeight * 0.1) {
+          consumed = true;
+          return;
+        }
+        event.preventDefault();
+        triggerTransition();
+      }
+    };
+
+    window.addEventListener("wheel", handleWheel, { passive: false });
+    window.addEventListener("touchstart", handleTouchStart, { passive: true });
+    window.addEventListener("touchmove", handleTouchMove, { passive: false });
+    window.addEventListener("keydown", handleKey);
+    return () => {
+      window.removeEventListener("wheel", handleWheel);
+      window.removeEventListener("touchstart", handleTouchStart);
+      window.removeEventListener("touchmove", handleTouchMove);
+      window.removeEventListener("keydown", handleKey);
+    };
+  }, []);
+
   useLayoutEffect(() => {
     if (activeControlTab !== "documents") return;
     const node = docViewerRef.current;
@@ -1496,7 +1588,7 @@ export default function Landing() {
           <div className="absolute right-[8%] top-24 h-56 w-56 rounded-full bg-info/20 blur-3xl" />
         </div>
 
-        <section className="relative mx-auto w-full max-w-4xl px-sp-3 pb-sp-6 pt-sp-6 sm:pt-sp-8">
+        <section className="relative mx-auto flex min-h-[calc(100svh-4.5rem)] w-full max-w-4xl flex-col justify-center px-sp-3 pb-sp-6 pt-sp-4">
           <p className="text-caption font-medium uppercase tracking-wide text-accent">
             {t("landing.hero.eyebrow")}
           </p>
