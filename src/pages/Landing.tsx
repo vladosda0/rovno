@@ -7,23 +7,20 @@ import {
   ChevronDown,
   CloudUpload,
   Download,
-  Files,
   Menu,
   Printer,
-  ReceiptText,
   Share2,
   ShieldCheck,
   Sparkles,
   Timer,
-  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { BetaBar } from "@/components/BetaBar";
 import { seedProjects } from "@/data/seed";
 import { enterDemoSession } from "@/lib/auth-state";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
@@ -31,8 +28,6 @@ import { toast } from "@/hooks/use-toast";
 import { useTranslation } from "react-i18next";
 
 type Translator = (key: string, options?: Record<string, unknown>) => string;
-
-const ACCEPTED_FILE_TYPES = ".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx";
 
 const DEMO_COVER_IMAGE_MAP: Record<string, string> = {
   "project-1": "/demo/apt-demo.png",
@@ -805,15 +800,9 @@ export default function Landing() {
   const { status: runtimeAuthStatus } = useRuntimeAuth();
   const isSupabaseAuthed = runtimeAuthStatus === "authenticated";
   const getStartedPath = isSupabaseAuthed ? "/home" : "/auth/signup";
-  const createProjectTo = getStartedPath;
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const promptTextareaRef = useRef<HTMLTextAreaElement | null>(null);
-
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [promptText, setPromptText] = useState("");
-  const [dragActive, setDragActive] = useState(false);
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [isSubscribing, setIsSubscribing] = useState(false);
   const [activeControlTab, setActiveControlTab] = useState<ControlTab>("tasks");
   const [communityEmail, setCommunityEmail] = useState("");
   const [kanban, setKanban] = useState<KanbanState>(INITIAL_KANBAN_STATE);
@@ -1053,37 +1042,6 @@ export default function Landing() {
     [],
   );
 
-  const addFiles = (incoming: File[]) => {
-    setSelectedFiles((prev) => {
-      const existing = new Set(prev.map((file) => `${file.name}-${file.size}-${file.lastModified}`));
-      const deduped = incoming.filter((file) => !existing.has(`${file.name}-${file.size}-${file.lastModified}`));
-      return [...prev, ...deduped];
-    });
-  };
-
-  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    setDragActive(false);
-    if (event.dataTransfer.files.length > 0) {
-      addFiles(Array.from(event.dataTransfer.files));
-    }
-  };
-
-  const handleBrowseFiles = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files?.length) {
-      addFiles(Array.from(event.target.files));
-      event.target.value = "";
-    }
-  };
-
-  const removeFile = (index: number) => {
-    setSelectedFiles((prev) => prev.filter((_, idx) => idx !== index));
-  };
-
   const scrollToSection = (id: string) => {
     const target = document.getElementById(id);
     if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1094,11 +1052,29 @@ export default function Landing() {
     setMobileMenuOpen(false);
   };
 
-  const handleCommunitySubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleCommunitySubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!communityEmail.trim()) return;
-    toast({ title: t("landing.community.savedToast") });
-    setCommunityEmail("");
+    const email = communityEmail.trim();
+    if (!email || isSubscribing) return;
+
+    setIsSubscribing(true);
+    try {
+      const response = await fetch("https://formsubmit.co/ajax/vlad@rovno.ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          email,
+          _subject: "Rovno: newsletter subscription",
+        }),
+      });
+      if (!response.ok) throw new Error("subscribe failed");
+      toast({ title: t("landing.community.savedToast") });
+      setCommunityEmail("");
+    } catch {
+      toast({ title: t("landing.community.errorToast"), variant: "destructive" });
+    } finally {
+      setIsSubscribing(false);
+    }
   };
 
   const handleTaskDragStart = (
@@ -1240,14 +1216,8 @@ export default function Landing() {
     if (action.action === "plan_30d") toastMessage = t("landing.photos.toast.plan30d");
 
     if (action.action === "create_project_landscape") {
-      setPromptText(t("landing.photos.landscapePrompt"));
       window.scrollTo({ top: 0, behavior: "smooth" });
-      if (promptTextareaRef.current) {
-        window.setTimeout(() => promptTextareaRef.current?.focus(), 350);
-        toastMessage = t("landing.photos.toast.projectDraft");
-      } else {
-        toastMessage = t("landing.photos.toast.prefilled");
-      }
+      toastMessage = t("landing.photos.toast.projectDraft");
     }
 
     setPhotoInlineToast(toastMessage);
@@ -1407,20 +1377,33 @@ export default function Landing() {
     },
   ];
 
-  const trustItems = [
-    { icon: ReceiptText, titleKey: "landing.trust.items.mock.title", textKey: "landing.trust.items.mock.text" },
-    { icon: Files, titleKey: "landing.trust.items.data.title", textKey: "landing.trust.items.data.text" },
-    { icon: ShieldCheck, titleKey: "landing.trust.items.privacy.title", textKey: "landing.trust.items.privacy.text" },
-  ];
-
-  const pricingTiers = [
-    { nameKey: "landing.pricingTeaser.tiers.starter.name", valueKey: "landing.pricingTeaser.tiers.starter.value", metaKey: "landing.pricingTeaser.tiers.starter.meta" },
-    { nameKey: "landing.pricingTeaser.tiers.team.name", valueKey: "landing.pricingTeaser.tiers.team.value", metaKey: "landing.pricingTeaser.tiers.team.meta" },
-    { nameKey: "landing.pricingTeaser.tiers.business.name", valueKey: "landing.pricingTeaser.tiers.business.value", metaKey: "landing.pricingTeaser.tiers.business.meta" },
-  ];
+  const pricingTeaserTiers = [
+    {
+      key: "free",
+      nameKey: "landing.pricingTeaser.free.name",
+      priceKey: "landing.pricingTeaser.free.price",
+      briefKey: "landing.pricingTeaser.free.brief",
+      active: true,
+    },
+    {
+      key: "home",
+      nameKey: "landing.pricingTeaser.home.name",
+      priceKey: "landing.pricingTeaser.home.price",
+      briefKey: "landing.pricingTeaser.home.brief",
+      active: false,
+    },
+    {
+      key: "brigade",
+      nameKey: "landing.pricingTeaser.brigade.name",
+      priceKey: "landing.pricingTeaser.brigade.price",
+      briefKey: "landing.pricingTeaser.brigade.brief",
+      active: false,
+    },
+  ] as const;
 
   return (
     <div className="min-h-screen bg-background text-foreground">
+      <BetaBar />
       <header
         className={`sticky top-0 z-50 border-b border-border transition-all duration-200 ${
           isScrolled ? "bg-background/90 py-2 backdrop-blur-xl" : "bg-background/70 py-3 backdrop-blur-md"
@@ -1513,90 +1496,28 @@ export default function Landing() {
           <div className="absolute right-[8%] top-24 h-56 w-56 rounded-full bg-info/20 blur-3xl" />
         </div>
 
-        <section className="relative mx-auto flex min-h-[calc(100svh-4rem)] w-full max-w-3xl items-center px-sp-3 pb-sp-6 pt-sp-4">
-          <div className="glass-elevated w-full rounded-panel p-sp-4 sm:p-sp-5">
-            <p className="text-caption font-medium text-accent">{t("landing.hero.eyebrow")}</p>
-            <h1 className="mt-2 text-h1 text-foreground">{t("landing.hero.title")}</h1>
-            <p className="mt-2 max-w-2xl text-body text-muted-foreground">
-              {t("landing.hero.subtitle")}
-            </p>
-
-            <div className="mt-4 space-y-3">
-              <div className="rounded-card border border-border bg-background/60 p-sp-2">
-                <Textarea
-                  ref={promptTextareaRef}
-                  value={promptText}
-                  onChange={(event) => setPromptText(event.target.value)}
-                  className="min-h-[140px] resize-none border-0 bg-transparent p-0 text-body focus-visible:ring-0"
-                  placeholder={t("landing.hero.promptPlaceholder")}
-                />
-              </div>
-
-              <div
-                onDrop={handleDrop}
-                onDragOver={(event) => {
-                  event.preventDefault();
-                  setDragActive(true);
-                }}
-                onDragLeave={() => setDragActive(false)}
-                className={`rounded-card border-2 border-dashed p-sp-4 transition-colors ${
-                  dragActive ? "border-accent bg-accent/10" : "border-border bg-background/40"
-                }`}
-              >
-                <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex items-start gap-3">
-                    <span className="mt-0.5 rounded-md bg-accent/10 p-2">
-                      <CloudUpload className="h-4 w-4 text-accent" />
-                    </span>
-                    <div>
-                      <p className="text-body-sm font-medium leading-relaxed text-foreground">
-                        {t("landing.hero.dropzoneTitle")}
-                      </p>
-                      <p className="text-caption leading-relaxed text-muted-foreground">{t("landing.hero.dropzoneSubtitle")}</p>
-                    </div>
-                  </div>
-                  <Button type="button" variant="outline" size="sm" onClick={handleBrowseFiles}>
-                    {t("landing.hero.browseFiles")}
-                  </Button>
-                </div>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  accept={ACCEPTED_FILE_TYPES}
-                  onChange={handleFileChange}
-                  className="hidden"
-                />
-
-                {selectedFiles.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {selectedFiles.map((file, index) => (
-                      <span key={`${file.name}-${file.size}-${index}`} className="inline-flex items-center gap-1 rounded-pill border border-border bg-muted/60 px-2.5 py-1 text-caption text-foreground">
-                        <Files className="h-3.5 w-3.5 text-muted-foreground" />
-                        {file.name}
-                        <button
-                          type="button"
-                          onClick={() => removeFile(index)}
-                          className="rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                        >
-                          <X className="h-3 w-3" />
-                          <span className="sr-only">{t("landing.hero.removeFile")}</span>
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <Button asChild className="bg-accent text-accent-foreground hover:bg-accent/90">
-                  <Link to={createProjectTo}>
-                    {t("landing.hero.createProject")}
-                    <ArrowUpRight className="ml-1.5 h-4 w-4" />
-                  </Link>
-                </Button>
-              </div>
-            </div>
+        <section className="relative mx-auto w-full max-w-4xl px-sp-3 pb-sp-6 pt-sp-6 sm:pt-sp-8">
+          <p className="text-caption font-medium uppercase tracking-wide text-accent">
+            {t("landing.hero.eyebrow")}
+          </p>
+          <h1 className="mt-3 max-w-3xl text-h1 text-foreground">{t("landing.hero.title")}</h1>
+          <p className="mt-4 max-w-2xl text-body text-muted-foreground">
+            {t("landing.hero.subtitle")}
+          </p>
+          <div className="mt-sp-4 flex flex-wrap gap-3">
+            <Button asChild className="bg-accent text-accent-foreground hover:bg-accent/90">
+              <Link to={getStartedPath}>
+                {t("landing.hero.ctaPrimary")}
+                <ArrowUpRight className="ml-1.5 h-4 w-4" />
+              </Link>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => scrollToSection("demos")}
+            >
+              {t("landing.hero.ctaSecondary")}
+            </Button>
           </div>
         </section>
 
@@ -2616,44 +2537,49 @@ export default function Landing() {
           </Tabs>
         </section>
 
-        <section className="mx-auto w-full max-w-6xl space-y-3 px-sp-3 py-sp-6">
-          <div>
-            <h2 className="text-h2 text-foreground">{t("landing.trust.title")}</h2>
-            <p className="mt-1 text-body text-muted-foreground">{t("landing.trust.subtitle")}</p>
-          </div>
-          <div className="grid grid-cols-1 gap-sp-2 md:grid-cols-3">
-            {trustItems.map((item) => (
-              <div key={item.titleKey} className="glass rounded-card p-sp-3">
-                <item.icon className="h-5 w-5 text-accent" />
-                <h3 className="mt-2 text-body font-semibold text-foreground">{t(item.titleKey)}</h3>
-                <p className="mt-1 text-body-sm text-muted-foreground">{t(item.textKey)}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="mx-auto w-full max-w-6xl space-y-3 px-sp-3 py-sp-6">
+        <section id="pricing" className="mx-auto w-full max-w-6xl space-y-3 px-sp-3 py-sp-6">
           <div className="glass-elevated rounded-panel p-sp-4">
             <h2 className="text-h2 text-foreground">{t("landing.pricingTeaser.title")}</h2>
             <p className="mt-1 text-body text-muted-foreground">{t("landing.pricingTeaser.subtitle")}</p>
 
-            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-              {pricingTiers.map((tier) => (
-                <div key={tier.nameKey} className="rounded-card border border-border bg-background/50 p-sp-2">
-                  <p className="text-caption text-muted-foreground">{t(tier.nameKey)}</p>
-                  <p className="mt-1 text-body font-semibold text-foreground">{t(tier.valueKey)}</p>
-                  <p className="mt-1 text-caption text-muted-foreground">{t(tier.metaKey)}</p>
+            <div className="mt-sp-3 grid grid-cols-1 gap-sp-2 sm:grid-cols-3">
+              {pricingTeaserTiers.map((tier) => (
+                <div
+                  key={tier.key}
+                  className={`flex flex-col rounded-card border p-sp-3 ${
+                    tier.active
+                      ? "border-accent/40 bg-background/60"
+                      : "border-border bg-background/30 opacity-70"
+                  }`}
+                >
+                  <p className="text-body font-semibold text-foreground">{t(tier.nameKey)}</p>
+                  <p className="mt-1 text-h3 text-foreground">{t(tier.priceKey)}</p>
+                  <p className="mt-2 text-body-sm text-muted-foreground">{t(tier.briefKey)}</p>
+                  {!tier.active ? (
+                    <span className="mt-3 inline-flex w-fit items-center rounded-pill border border-border bg-muted/60 px-2.5 py-1 text-caption text-muted-foreground">
+                      {t("landing.pricingTeaser.soonCta")}
+                    </span>
+                  ) : null}
                 </div>
               ))}
             </div>
 
-            <div className="mt-3">
+            <div className="mt-sp-3 flex flex-wrap items-center gap-3">
               <Button asChild variant="outline">
                 <Link to="/pricing">
                   {t("landing.pricingTeaser.viewPricing")}
                   <ArrowUpRight className="ml-1.5 h-4 w-4" />
                 </Link>
               </Button>
+              <p className="text-body-sm text-muted-foreground">
+                {t("landing.pricingTeaser.enterpriseNote")}{" "}
+                <Link
+                  to="/pricing#enterprise"
+                  className="font-medium text-accent hover:text-accent/80"
+                >
+                  {t("landing.pricingTeaser.enterpriseCta")} →
+                </Link>
+              </p>
             </div>
           </div>
         </section>
@@ -2666,13 +2592,20 @@ export default function Landing() {
           <div className="grid gap-sp-2 md:grid-cols-2">
             <div className="glass rounded-card p-sp-3">
               <p className="text-body font-semibold text-foreground">{t("landing.community.channels")}</p>
-              <p className="mt-1 text-body-sm text-muted-foreground">{t("landing.community.channelsHint")}</p>
               <div className="mt-3 flex flex-wrap gap-2">
-                <Button type="button" variant="outline" onClick={() => toast({ title: t("landing.community.telegramToast") })}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => toast({ title: t("landing.community.telegramToast") })}
+                >
                   {t("landing.community.telegram")}
                 </Button>
-                <Button type="button" variant="outline" onClick={() => toast({ title: t("landing.community.discordToast") })}>
-                  {t("landing.community.discord")}
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => toast({ title: t("landing.community.maxToast") })}
+                >
+                  {t("landing.community.max")}
                 </Button>
               </div>
             </div>
@@ -2682,11 +2615,15 @@ export default function Landing() {
               <div className="mt-3 flex gap-2">
                 <Input
                   type="email"
+                  required
                   value={communityEmail}
                   onChange={(event) => setCommunityEmail(event.target.value)}
                   placeholder={t("landing.community.emailPlaceholder")}
+                  disabled={isSubscribing}
                 />
-                <Button type="submit">{t("landing.community.subscribe")}</Button>
+                <Button type="submit" disabled={isSubscribing}>
+                  {t("landing.community.subscribe")}
+                </Button>
               </div>
             </form>
           </div>
@@ -2697,15 +2634,14 @@ export default function Landing() {
         <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-2 text-caption text-muted-foreground sm:flex-row">
           <span>{t("landing.footer.copyright", { year: 2026 })}</span>
           <div className="flex items-center gap-3">
-            <button onClick={() => scrollToSection("resources")} className="hover:text-foreground">
-              {t("landing.nav.resources")}
-            </button>
-            <Link to="/pricing" className="hover:text-foreground">
-              {t("landing.nav.pricing")}
-            </Link>
-            <button onClick={() => scrollToSection("community")} className="hover:text-foreground">
-              {t("landing.nav.community")}
-            </button>
+            <a
+              href={`mailto:${t("landing.footer.contactEmail")}`}
+              className="hover:text-foreground"
+            >
+              {t("landing.footer.contactEmail")}
+            </a>
+            <span>{t("landing.footer.privacyPolicy")}</span>
+            <span>{t("landing.footer.terms")}</span>
           </div>
         </div>
       </footer>
