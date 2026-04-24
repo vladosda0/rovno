@@ -1,77 +1,118 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { trackEvent } from "@/lib/analytics";
-import { Check, Info } from "lucide-react";
+import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { BetaBar } from "@/components/BetaBar";
+import { toast } from "@/hooks/use-toast";
 import { useTranslation } from "react-i18next";
 
-type BillingCycle = "monthly" | "annual";
-type CreditsOption = 100 | 200 | 300 | 400 | 500;
-
-const CREDIT_OPTIONS: CreditsOption[] = [100, 200, 300, 400, 500];
-
-function TooltipLabel({ label, tooltip, ariaMoreInfo }: { label: string; tooltip: string; ariaMoreInfo: string }) {
-  return (
-    <span className="inline-flex items-center gap-1">
-      <span>{label}</span>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            className="inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
-            aria-label={ariaMoreInfo}
-          >
-            <Info className="h-3.5 w-3.5" />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent className="max-w-xs text-body-sm">{tooltip}</TooltipContent>
-      </Tooltip>
-    </span>
-  );
-}
-
-function computeDisplayPrice(unitPrice: number, credits: CreditsOption): number {
-  return unitPrice * (credits / 100);
-}
+const TBANK_SUPPORT_URL = "https://tbank.ru/cf/6qGvCG7ivel";
+const ENTERPRISE_FORM_ENDPOINT = "https://formsubmit.co/ajax/vlad@rovno.ai";
 
 export default function Pricing() {
   const { t } = useTranslation();
-  useEffect(() => { trackEvent("pricing_page_viewed"); }, []);
-  const [billingCycle, setBillingCycle] = useState<BillingCycle>("monthly");
-  const [selectedCreditsMaster, setSelectedCreditsMaster] = useState<CreditsOption>(100);
-  const [selectedCreditsBusiness, setSelectedCreditsBusiness] = useState<CreditsOption>(100);
+  useEffect(() => {
+    trackEvent("pricing_page_viewed");
+  }, []);
 
-  const masterUnitPrice = billingCycle === "annual" ? 8 : 10;
-  const businessUnitPrice = billingCycle === "annual" ? 25 : 30;
+  const [enterpriseName, setEnterpriseName] = useState("");
+  const [enterpriseEmail, setEnterpriseEmail] = useState("");
+  const [enterpriseMessage, setEnterpriseMessage] = useState("");
+  const [isSubmittingEnterprise, setIsSubmittingEnterprise] = useState(false);
 
-  const masterPrice = useMemo(
-    () => computeDisplayPrice(masterUnitPrice, selectedCreditsMaster),
-    [masterUnitPrice, selectedCreditsMaster],
-  );
-  const businessPrice = useMemo(
-    () => computeDisplayPrice(businessUnitPrice, selectedCreditsBusiness),
-    [businessUnitPrice, selectedCreditsBusiness],
-  );
+  const handleEnterpriseSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (isSubmittingEnterprise) return;
+    const name = enterpriseName.trim();
+    const email = enterpriseEmail.trim();
+    const message = enterpriseMessage.trim();
+    if (!name || !email || !message) return;
 
-  const ariaMoreInfo = t("pricing.tooltips.moreInfo");
-  const freeKbTooltip = t("pricing.tooltips.freeKb");
-  const creditsTooltip = t("pricing.tooltips.credits");
+    setIsSubmittingEnterprise(true);
+    try {
+      const response = await fetch(ENTERPRISE_FORM_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          name,
+          email,
+          message,
+          _subject: "Rovno: enterprise inquiry",
+        }),
+      });
+      if (!response.ok) throw new Error("enterprise submit failed");
+      toast({ title: t("pricing.enterprise.form.success") });
+      setEnterpriseName("");
+      setEnterpriseEmail("");
+      setEnterpriseMessage("");
+    } catch {
+      toast({ title: t("pricing.enterprise.form.error"), variant: "destructive" });
+    } finally {
+      setIsSubmittingEnterprise(false);
+    }
+  };
+
+  const plans = [
+    {
+      key: "free",
+      name: t("pricing.plans.free.name"),
+      description: t("pricing.plans.free.description"),
+      priceLabel: t("pricing.plans.free.priceLabel"),
+      features: [
+        t("pricing.plans.free.f1"),
+        t("pricing.plans.free.f2"),
+        t("pricing.plans.free.f3"),
+        t("pricing.plans.free.f4"),
+        t("pricing.plans.free.f5"),
+        t("pricing.plans.free.f6"),
+      ],
+      active: true,
+    },
+    {
+      key: "home",
+      name: t("pricing.plans.master.name"),
+      description: t("pricing.plans.master.description"),
+      priceLabel: "2 600 ₽/мес",
+      features: [
+        t("pricing.plans.master.everythingIn"),
+        t("pricing.plans.master.f1"),
+        t("pricing.plans.master.f2"),
+        t("pricing.plans.master.f5"),
+        t("pricing.plans.master.f6"),
+      ],
+      active: false,
+    },
+    {
+      key: "brigade",
+      name: t("pricing.plans.business.name"),
+      description: t("pricing.plans.business.description"),
+      priceLabel: "5 900 ₽/мес",
+      features: [
+        t("pricing.plans.business.everythingIn"),
+        t("pricing.plans.business.f1"),
+        t("pricing.plans.business.f2"),
+        t("pricing.plans.business.f3"),
+        t("pricing.plans.business.f4"),
+      ],
+      active: false,
+    },
+  ];
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="flex items-center justify-between px-sp-4 py-sp-2">
-        <Link to="/" className="text-h3 font-bold text-foreground">{t("landing.brand.name")}</Link>
+      <BetaBar />
+      <header className="flex items-center justify-between border-b border-border px-sp-4 py-sp-2">
+        <Link to="/" className="flex items-center gap-3">
+          <img src="/logo.svg" alt={t("landing.brand.name")} className="h-8 w-auto" />
+          <span className="text-body font-semibold text-foreground">{t("landing.brand.name")}</span>
+        </Link>
         <div className="flex items-center gap-sp-1">
-          <Button variant="outline" asChild><Link to="/auth/login">{t("pricing.header.login")}</Link></Button>
+          <Button variant="outline" asChild>
+            <Link to="/auth/login">{t("pricing.header.login")}</Link>
+          </Button>
           <Button asChild className="bg-accent text-accent-foreground hover:bg-accent/90">
             <Link to="/auth/signup">{t("pricing.header.getStarted")}</Link>
           </Button>
@@ -79,250 +120,159 @@ export default function Pricing() {
       </header>
 
       <main className="px-sp-3 py-sp-4 lg:px-sp-4 lg:py-sp-6">
-        <section className="space-y-sp-4">
+        <section className="mx-auto w-full max-w-6xl space-y-sp-4">
           <div className="max-w-3xl">
             <h1 className="text-h1 text-foreground">{t("pricing.title")}</h1>
-            <p className="mt-2 text-body text-muted-foreground">
-              {t("pricing.subtitle")}
-            </p>
+            <p className="mt-2 text-body text-muted-foreground">{t("pricing.subtitle")}</p>
           </div>
 
-          <div className="grid w-full auto-rows-fr grid-cols-1 gap-sp-3 md:grid-cols-2 xl:grid-cols-4">
-            {/* Free */}
-            <article className="glass rounded-panel p-sp-3 h-full flex flex-col">
-              <h2 className="text-h3 text-foreground">{t("pricing.plans.free.name")}</h2>
-              <p className="mt-2 text-body-sm text-muted-foreground">
-                {t("pricing.plans.free.description")}
-              </p>
-              <div className="mt-3">
-                <p className="text-h2 font-bold text-foreground">{t("pricing.plans.free.priceLabel")}</p>
-              </div>
-              <div className="mt-3 min-h-[56px]" aria-hidden="true" />
-              <div className="mt-1">
-                <Button asChild className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
-                  <Link to="/auth/signup">{t("pricing.cta.continue")}</Link>
-                </Button>
-              </div>
-              <div className="mt-3 min-h-[76px]" aria-hidden="true" />
-              <ul className="mt-3 flex-1 space-y-2">
-                <li className="flex items-start gap-2 text-body-sm text-muted-foreground">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
-                  <span>{t("pricing.plans.free.f1")}</span>
-                </li>
-                <li className="flex items-start gap-2 text-body-sm text-muted-foreground">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
-                  <span>{t("pricing.plans.free.f2")}</span>
-                </li>
-                <li className="flex items-start gap-2 text-body-sm text-muted-foreground">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
-                  <span>{t("pricing.plans.free.f3")}</span>
-                </li>
-                <li className="flex items-start gap-2 text-body-sm text-muted-foreground">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
-                  <span>{t("pricing.plans.free.f4")}</span>
-                </li>
-                <li className="flex items-start gap-2 text-body-sm text-muted-foreground">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
-                  <TooltipLabel label={t("pricing.plans.free.f5")} tooltip={freeKbTooltip} ariaMoreInfo={ariaMoreInfo} />
-                </li>
-                <li className="flex items-start gap-2 text-body-sm text-muted-foreground">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
-                  <span>{t("pricing.plans.free.f6")}</span>
-                </li>
-              </ul>
-            </article>
-
-            {/* Master */}
-            <article className="glass rounded-panel p-sp-3 h-full flex flex-col">
-              <h2 className="text-h3 text-foreground">{t("pricing.plans.master.name")}</h2>
-              <p className="mt-2 text-body-sm text-muted-foreground">
-                {t("pricing.plans.master.description")}
-              </p>
-              <div className="mt-3">
-                <p className="text-h2 font-bold text-foreground">{masterPrice}{t("pricing.perMonth")}</p>
-                {billingCycle === "annual" && (
-                  <p className="text-caption text-muted-foreground">{t("pricing.billedAnnually")}</p>
-                )}
-              </div>
-              <div className="mt-3 min-h-[56px] rounded-card border border-border bg-background/50 p-2">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-body-sm text-foreground">{t("pricing.annualBilling")}</span>
-                  <Switch
-                    checked={billingCycle === "annual"}
-                    onCheckedChange={(checked) => setBillingCycle(checked ? "annual" : "monthly")}
-                    aria-label={t("pricing.annualBillingAria")}
-                  />
-                </div>
-                <p className="mt-1 text-caption text-accent">{t("pricing.plans.master.savePercent")}</p>
-              </div>
-              <div className="mt-1">
-                <Button asChild className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
-                  <Link to="/auth/signup">{t("pricing.cta.continue")}</Link>
-                </Button>
-              </div>
-              <div className="mt-3 min-h-[76px] rounded-card border border-border bg-background/50 p-2">
-                <div className="mb-1 text-caption text-muted-foreground">
-                  <TooltipLabel label={t("pricing.aiCreditsLabel")} tooltip={creditsTooltip} ariaMoreInfo={ariaMoreInfo} />
-                </div>
-                <Select
-                  value={String(selectedCreditsMaster)}
-                  onValueChange={(value) => setSelectedCreditsMaster(Number(value) as CreditsOption)}
+          <div className="grid w-full auto-rows-fr grid-cols-1 gap-sp-3 md:grid-cols-3">
+            {plans.map((plan) => {
+              const isFree = plan.key === "free";
+              return (
+                <article
+                  key={plan.key}
+                  className={`rounded-panel p-sp-3 h-full flex flex-col ${
+                    plan.active
+                      ? "glass border border-accent/30"
+                      : "glass border border-border opacity-75"
+                  }`}
                 >
-                  <SelectTrigger className="h-9">
-                    <SelectValue placeholder={t("pricing.selectCreditsPlaceholder")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CREDIT_OPTIONS.map((credits) => (
-                      <SelectItem key={credits} value={String(credits)}>
-                        {credits}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="mt-3 text-caption font-medium text-muted-foreground">{t("pricing.plans.master.everythingIn")}</div>
-              <ul className="mt-2 flex-1 space-y-2">
-                <li className="flex items-start gap-2 text-body-sm text-muted-foreground">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
-                  <span>{t("pricing.plans.master.f1")}</span>
-                </li>
-                <li className="flex items-start gap-2 text-body-sm text-muted-foreground">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
-                  <span>{t("pricing.plans.master.f2")}</span>
-                </li>
-                <li className="flex items-start gap-2 text-body-sm text-muted-foreground">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
-                  <TooltipLabel label={t("pricing.plans.master.f3")} tooltip={creditsTooltip} ariaMoreInfo={ariaMoreInfo} />
-                </li>
-                <li className="flex items-start gap-2 text-body-sm text-muted-foreground">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
-                  <span>{t("pricing.plans.master.f4")}</span>
-                </li>
-                <li className="flex items-start gap-2 text-body-sm text-muted-foreground">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
-                  <span>{t("pricing.plans.master.f5")}</span>
-                </li>
-                <li className="flex items-start gap-2 text-body-sm text-muted-foreground">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
-                  <span>{t("pricing.plans.master.f6")}</span>
-                </li>
-              </ul>
-            </article>
+                  <div className="flex items-center justify-between gap-2">
+                    <h2 className="text-h3 text-foreground">{plan.name}</h2>
+                    {!plan.active ? (
+                      <span className="inline-flex items-center rounded-pill border border-border bg-muted/60 px-2.5 py-1 text-caption text-muted-foreground">
+                        {t("pricing.soonBadge")}
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-2 text-body-sm text-muted-foreground">{plan.description}</p>
+                  <div className="mt-3">
+                    <p className="text-h2 font-bold text-foreground">{plan.priceLabel}</p>
+                  </div>
+                  <div className="mt-3">
+                    {plan.active ? (
+                      <Button asChild className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
+                        <Link to="/auth/signup">{t("pricing.cta.start")}</Link>
+                      </Button>
+                    ) : (
+                      <Button disabled className="w-full" variant="outline">
+                        {t("pricing.cta.soon")}
+                      </Button>
+                    )}
+                  </div>
 
-            {/* Business */}
-            <article className="glass rounded-panel p-sp-3 h-full flex flex-col">
-              <h2 className="text-h3 text-foreground">{t("pricing.plans.business.name")}</h2>
-              <p className="mt-2 text-body-sm text-muted-foreground">
-                {t("pricing.plans.business.description")}
-              </p>
-              <div className="mt-3">
-                <p className="text-h2 font-bold text-foreground">{businessPrice}{t("pricing.perMonth")}</p>
-                {billingCycle === "annual" && (
-                  <p className="text-caption text-muted-foreground">{t("pricing.billedAnnually")}</p>
-                )}
-              </div>
-              <div className="mt-3 min-h-[56px] rounded-card border border-border bg-background/50 p-2">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-body-sm text-foreground">{t("pricing.annualBilling")}</span>
-                  <Switch
-                    checked={billingCycle === "annual"}
-                    onCheckedChange={(checked) => setBillingCycle(checked ? "annual" : "monthly")}
-                    aria-label={t("pricing.annualBillingAria")}
-                  />
-                </div>
-                <p className="mt-1 text-caption text-accent">{t("pricing.plans.business.savePercent")}</p>
-              </div>
-              <div className="mt-1">
-                <Button asChild className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
-                  <Link to="/auth/signup">{t("pricing.cta.continue")}</Link>
-                </Button>
-              </div>
-              <div className="mt-3 min-h-[76px] rounded-card border border-border bg-background/50 p-2">
-                <div className="mb-1 text-caption text-muted-foreground">
-                  <TooltipLabel label={t("pricing.aiCreditsLabel")} tooltip={creditsTooltip} ariaMoreInfo={ariaMoreInfo} />
-                </div>
-                <Select
-                  value={String(selectedCreditsBusiness)}
-                  onValueChange={(value) => setSelectedCreditsBusiness(Number(value) as CreditsOption)}
-                >
-                  <SelectTrigger className="h-9">
-                    <SelectValue placeholder={t("pricing.selectCreditsPlaceholder")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CREDIT_OPTIONS.map((credits) => (
-                      <SelectItem key={credits} value={String(credits)}>
-                        {credits}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="mt-3 text-caption font-medium text-muted-foreground">{t("pricing.plans.business.everythingIn")}</div>
-              <ul className="mt-2 flex-1 space-y-2">
-                <li className="flex items-start gap-2 text-body-sm text-muted-foreground">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
-                  <span>{t("pricing.plans.business.f1")}</span>
-                </li>
-                <li className="flex items-start gap-2 text-body-sm text-muted-foreground">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
-                  <span>{t("pricing.plans.business.f2")}</span>
-                </li>
-                <li className="flex items-start gap-2 text-body-sm text-muted-foreground">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
-                  <span>{t("pricing.plans.business.f3")}</span>
-                </li>
-                <li className="flex items-start gap-2 text-body-sm text-muted-foreground">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
-                  <span>{t("pricing.plans.business.f4")}</span>
-                </li>
-              </ul>
-            </article>
+                  {isFree ? (
+                    <div className="mt-3 rounded-card border border-accent/30 bg-accent/10 p-sp-2">
+                      <p className="text-body-sm text-foreground">
+                        {t("pricing.plans.free.betaNote")}
+                      </p>
+                      <a
+                        href={TBANK_SUPPORT_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-2 inline-flex text-body-sm font-medium text-accent hover:text-accent/80"
+                      >
+                        {t("pricing.plans.free.supportCta")}
+                      </a>
+                    </div>
+                  ) : null}
 
-            {/* Enterprise */}
-            <article className="glass rounded-panel p-sp-3 h-full flex flex-col">
-              <h2 className="text-h3 text-foreground">{t("pricing.plans.enterprise.name")}</h2>
-              <p className="mt-2 text-body-sm text-muted-foreground">
-                {t("pricing.plans.enterprise.description")}
-              </p>
-              <div className="mt-3">
-                <p className="text-h2 font-bold text-foreground">{t("pricing.plans.enterprise.priceLabel")}</p>
-              </div>
-              <div className="mt-3 min-h-[56px]" aria-hidden="true" />
-              <div className="mt-1">
-                <Button asChild className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
-                  <Link to="/auth/signup">{t("pricing.cta.continue")}</Link>
-                </Button>
-              </div>
-              <div className="mt-3 min-h-[76px]" aria-hidden="true" />
-              <div className="mt-3 text-caption font-medium text-muted-foreground">{t("pricing.plans.enterprise.everythingIn")}</div>
-              <ul className="mt-2 flex-1 space-y-2">
-                <li className="flex items-start gap-2 text-body-sm text-muted-foreground">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
-                  <span>{t("pricing.plans.enterprise.f1")}</span>
-                </li>
-                <li className="flex items-start gap-2 text-body-sm text-muted-foreground">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
-                  <span>{t("pricing.plans.enterprise.f2")}</span>
-                </li>
-                <li className="flex items-start gap-2 text-body-sm text-muted-foreground">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
-                  <span>{t("pricing.plans.enterprise.f3")}</span>
-                </li>
-                <li className="flex items-start gap-2 text-body-sm text-muted-foreground">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
-                  <span>{t("pricing.plans.enterprise.f4")}</span>
-                </li>
-                <li className="flex items-start gap-2 text-body-sm text-muted-foreground">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
-                  <span>{t("pricing.plans.enterprise.f5")}</span>
-                </li>
-                <li className="flex items-start gap-2 text-body-sm text-muted-foreground">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
-                  <span>{t("pricing.plans.enterprise.f6")}</span>
-                </li>
-              </ul>
-            </article>
+                  <ul className="mt-3 flex-1 space-y-2">
+                    {plan.features.map((feature) => (
+                      <li
+                        key={feature}
+                        className="flex items-start gap-2 text-body-sm text-muted-foreground"
+                      >
+                        <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
+                        <span>{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </article>
+              );
+            })}
           </div>
+
+          <section
+            id="enterprise"
+            className="glass-elevated mt-sp-6 rounded-panel p-sp-4 scroll-mt-24"
+          >
+            <div className="grid gap-sp-4 md:grid-cols-2">
+              <div>
+                <h2 className="text-h2 text-foreground">{t("pricing.enterprise.title")}</h2>
+                <p className="mt-2 text-body text-muted-foreground">
+                  {t("pricing.enterprise.subtitle")}
+                </p>
+              </div>
+              <form onSubmit={handleEnterpriseSubmit} className="space-y-3">
+                <div>
+                  <label
+                    htmlFor="enterprise-name"
+                    className="text-body-sm font-medium text-foreground"
+                  >
+                    {t("pricing.enterprise.form.name")}
+                  </label>
+                  <Input
+                    id="enterprise-name"
+                    name="name"
+                    required
+                    value={enterpriseName}
+                    onChange={(event) => setEnterpriseName(event.target.value)}
+                    placeholder={t("pricing.enterprise.form.namePlaceholder")}
+                    disabled={isSubmittingEnterprise}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="enterprise-email"
+                    className="text-body-sm font-medium text-foreground"
+                  >
+                    {t("pricing.enterprise.form.email")}
+                  </label>
+                  <Input
+                    id="enterprise-email"
+                    name="email"
+                    type="email"
+                    required
+                    value={enterpriseEmail}
+                    onChange={(event) => setEnterpriseEmail(event.target.value)}
+                    placeholder={t("pricing.enterprise.form.emailPlaceholder")}
+                    disabled={isSubmittingEnterprise}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="enterprise-message"
+                    className="text-body-sm font-medium text-foreground"
+                  >
+                    {t("pricing.enterprise.form.message")}
+                  </label>
+                  <Textarea
+                    id="enterprise-message"
+                    name="message"
+                    required
+                    value={enterpriseMessage}
+                    onChange={(event) => setEnterpriseMessage(event.target.value)}
+                    placeholder={t("pricing.enterprise.form.messagePlaceholder")}
+                    disabled={isSubmittingEnterprise}
+                    className="mt-1 min-h-[120px]"
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  disabled={isSubmittingEnterprise}
+                  className="bg-accent text-accent-foreground hover:bg-accent/90"
+                >
+                  {isSubmittingEnterprise
+                    ? t("pricing.enterprise.form.submitting")
+                    : t("pricing.enterprise.form.submit")}
+                </Button>
+              </form>
+            </div>
+          </section>
         </section>
       </main>
     </div>
