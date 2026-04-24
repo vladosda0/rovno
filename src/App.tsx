@@ -16,6 +16,7 @@ const Login = lazy(() => import("@/pages/auth/Login"));
 const Signup = lazy(() => import("@/pages/auth/Signup"));
 const ForgotPassword = lazy(() => import("@/pages/auth/ForgotPassword"));
 const AuthResetPassword = lazy(() => import("@/pages/auth/AuthResetPassword"));
+const AuthConfirm = lazy(() => import("@/pages/auth/AuthConfirm"));
 const EmailSent = lazy(() => import("@/pages/auth/EmailSent"));
 const AuthCallback = lazy(() => import("@/pages/auth/AuthCallback"));
 const Onboarding = lazy(() => import("@/pages/Onboarding"));
@@ -73,6 +74,7 @@ const App = () => (
             <Route path="/auth/signup" element={routeElement(<Signup />)} />
             <Route path="/auth/forgot" element={routeElement(<ForgotPassword />)} />
             <Route path="/auth/reset-password" element={routeElement(<AuthResetPassword />)} />
+            <Route path="/auth/confirm" element={routeElement(<AuthConfirm />)} />
             <Route path="/auth/email-sent" element={routeElement(<EmailSent />)} />
             <Route path="/auth/callback" element={routeElement(<AuthCallback />)} />
           </Route>
