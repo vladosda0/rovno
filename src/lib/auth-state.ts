@@ -1,4 +1,7 @@
 import type { MemberRole } from "@/types/entities";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { supabase } from "@/integrations/supabase/client";
+import type { Database as WorkspaceDatabase } from "../../backend-truth/generated/supabase-types";
 
 const STORAGE_KEY = "auth-simulated-role";
 const PROFILE_AUTOMATION_LEVEL_KEY = "profile-automation-level";
@@ -17,8 +20,10 @@ export interface StoredAuthProfile {
 }
 
 type Listener = () => void;
+type TypedSupabaseClient = SupabaseClient<WorkspaceDatabase>;
 
 const listeners = new Set<Listener>();
+const profileStateClient = supabase as unknown as TypedSupabaseClient;
 
 function notifyListeners() {
   listeners.forEach((listener) => listener());
@@ -98,9 +103,47 @@ export function isOnboarded(userId?: string | null): boolean {
   return localStorage.getItem(onboardingStorageKey(userId)) === "true";
 }
 
-export function completeOnboarding(userId?: string | null) {
+export async function hasCompletedOnboarding(userId?: string | null): Promise<boolean> {
+  if (isOnboarded(userId)) return true;
+  const normalizedUserId = userId?.trim();
+  if (!normalizedUserId) return false;
+
+  try {
+    const { data, error } = await profileStateClient
+      .from("profiles")
+      .select("onboarding_completed_at")
+      .eq("id", normalizedUserId)
+      .maybeSingle();
+
+    if (error) return false;
+    const completed = Boolean(data?.onboarding_completed_at);
+    if (completed) {
+      localStorage.setItem(onboardingStorageKey(normalizedUserId), "true");
+      notifyListeners();
+    }
+    return completed;
+  } catch {
+    return false;
+  }
+}
+
+export async function completeOnboarding(userId?: string | null) {
   localStorage.setItem(onboardingStorageKey(userId), "true");
   notifyListeners();
+
+  const normalizedUserId = userId?.trim();
+  if (!normalizedUserId) return;
+
+  try {
+    const { error } = await profileStateClient
+      .from("profiles")
+      .update({ onboarding_completed_at: new Date().toISOString() })
+      .eq("id", normalizedUserId);
+
+    if (error) throw error;
+  } catch {
+    // Local state remains the fallback when the remote profile is unavailable.
+  }
 }
 
 export function getProfileAutomationLevelMode(): string | null {

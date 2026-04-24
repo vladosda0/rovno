@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { clearDemoSession, isOnboarded, setAuthRole } from "@/lib/auth-state";
+import { clearDemoSession, hasCompletedOnboarding, setAuthRole } from "@/lib/auth-state";
 import { clearAiSidebarSessionPreference } from "@/lib/ai-sidebar-session";
 
 export default function Login() {
@@ -29,9 +29,9 @@ export default function Login() {
     }
   }, [confirmed, t]);
 
-  const resolveDestination = (userId: string | null | undefined): string => {
+  const resolveDestination = async (userId: string | null | undefined): Promise<string> => {
     if (nextUrl && nextUrl.startsWith("/")) return nextUrl;
-    return isOnboarded(userId) ? "/home" : "/onboarding";
+    return await hasCompletedOnboarding(userId) ? "/home" : "/onboarding";
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -60,7 +60,7 @@ export default function Login() {
       clearAiSidebarSessionPreference();
       setAuthRole("owner");
       toast({ title: t("auth.login.successTitle"), description: t("auth.login.successDescription") });
-      navigate(resolveDestination(data.session.user.id));
+      navigate(await resolveDestination(data.session.user.id));
     } catch (error) {
       toast({
         title: t("auth.login.failureTitle"),

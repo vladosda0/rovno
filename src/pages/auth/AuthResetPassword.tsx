@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { clearDemoSession, isOnboarded, setAuthRole } from "@/lib/auth-state";
+import { clearDemoSession, hasCompletedOnboarding, setAuthRole } from "@/lib/auth-state";
 import { clearAiSidebarSessionPreference } from "@/lib/ai-sidebar-session";
 
 export default function AuthResetPassword() {
@@ -105,7 +105,7 @@ export default function AuthResetPassword() {
         description: t("auth.reset.successDescription"),
       });
 
-      const destination = isOnboarded(userId) ? "/home" : "/onboarding";
+      const destination = await hasCompletedOnboarding(userId) ? "/home" : "/onboarding";
       navigate(destination, { replace: true });
     } catch (error) {
       toast({

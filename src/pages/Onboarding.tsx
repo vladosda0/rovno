@@ -14,7 +14,7 @@ export default function Onboarding() {
   const [createdProjectId, setCreatedProjectId] = useState<string | null>(null);
 
   const handleComplete = () => {
-    completeOnboarding(runtimeAuth.profileId);
+    void completeOnboarding(runtimeAuth.profileId);
     toast({ title: t("onboarding.setupCompleteTitle"), description: t("onboarding.setupCompleteDescription") });
     if (createdProjectId) {
       navigate(`/project/${createdProjectId}/estimate`);
