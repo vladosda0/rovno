@@ -17,18 +17,23 @@ export default function Signup() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
   const [loading, setLoading] = useState(false);
   const nextUrl = searchParams.get("next");
   const postAuthDestination = nextUrl && nextUrl.startsWith("/") ? nextUrl : "/onboarding";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !email || !password) {
+    if (!name || !email || !password || !passwordConfirm) {
       toast({ title: t("auth.signup.validationTitle"), description: t("auth.signup.validationAllRequired"), variant: "destructive" });
       return;
     }
     if (password.length < 6) {
       toast({ title: t("auth.signup.validationTitle"), description: t("auth.signup.validationPasswordLength"), variant: "destructive" });
+      return;
+    }
+    if (password !== passwordConfirm) {
+      toast({ title: t("auth.signup.validationTitle"), description: t("auth.signup.validationPasswordMismatch"), variant: "destructive" });
       return;
     }
     setLoading(true);
@@ -47,6 +52,19 @@ export default function Signup() {
 
       if (error) {
         throw error;
+      }
+
+      const hasSession = Boolean(data.session?.user);
+      const identities = data.user?.identities ?? [];
+      const looksLikeExistingEmail = !hasSession && data.user != null && identities.length === 0;
+
+      if (looksLikeExistingEmail) {
+        toast({
+          title: t("auth.signup.duplicateEmailTitle"),
+          description: t("auth.signup.duplicateEmailDescription"),
+          variant: "destructive",
+        });
+        return;
       }
 
       clearDemoSession();
@@ -91,7 +109,18 @@ export default function Signup() {
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="password">{t("common.password")}</Label>
-          <Input id="password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <Input id="password" type="password" autoComplete="new-password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="password-confirm">{t("auth.signup.confirmPasswordLabel")}</Label>
+          <Input
+            id="password-confirm"
+            type="password"
+            autoComplete="new-password"
+            placeholder="••••••••"
+            value={passwordConfirm}
+            onChange={(e) => setPasswordConfirm(e.target.value)}
+          />
         </div>
         <Button type="submit" disabled={loading} className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
           {loading ? t("auth.signup.submitting") : t("auth.signup.submit")}

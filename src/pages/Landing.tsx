@@ -25,7 +25,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { seedProjects } from "@/data/seed";
-import { enterDemoSession, isAuthenticated } from "@/lib/auth-state";
+import { enterDemoSession } from "@/lib/auth-state";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
 import { toast } from "@/hooks/use-toast";
 import { useTranslation } from "react-i18next";
@@ -803,10 +803,9 @@ function getPhotoActionClasses(kind: PhotoAction["kind"], isActive: boolean): st
 export default function Landing() {
   const { t } = useTranslation();
   const { status: runtimeAuthStatus } = useRuntimeAuth();
-  const isLoggedIn = runtimeAuthStatus === "authenticated" || isAuthenticated();
-  const isGuest = !isLoggedIn;
-  const getStartedPath = isLoggedIn ? "/home" : "/auth/signup";
-  const createProjectTo = isGuest ? "/auth/signup" : "/home";
+  const isSupabaseAuthed = runtimeAuthStatus === "authenticated";
+  const getStartedPath = isSupabaseAuthed ? "/home" : "/auth/signup";
+  const createProjectTo = getStartedPath;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const promptTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -1452,9 +1451,11 @@ export default function Landing() {
           </nav>
 
           <div className="hidden items-center gap-2 md:flex">
-            <Button variant="outline" asChild>
-              <Link to="/auth/login">{t("landing.nav.login")}</Link>
-            </Button>
+            {runtimeAuthStatus === "guest" && (
+              <Button variant="outline" asChild>
+                <Link to="/auth/login">{t("landing.nav.login")}</Link>
+              </Button>
+            )}
             <Button asChild className="bg-accent text-accent-foreground hover:bg-accent/90">
               <Link to={getStartedPath}>{t("landing.nav.getStarted")}</Link>
             </Button>
@@ -1486,11 +1487,13 @@ export default function Landing() {
                   </Button>
                 </div>
                 <div className="mt-8 space-y-2">
-                  <Button variant="outline" asChild className="w-full">
-                    <Link to="/auth/login" onClick={() => setMobileMenuOpen(false)}>
-                      {t("landing.nav.login")}
-                    </Link>
-                  </Button>
+                  {runtimeAuthStatus === "guest" && (
+                    <Button variant="outline" asChild className="w-full">
+                      <Link to="/auth/login" onClick={() => setMobileMenuOpen(false)}>
+                        {t("landing.nav.login")}
+                      </Link>
+                    </Button>
+                  )}
                   <Button asChild className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
                     <Link to={getStartedPath} onClick={() => setMobileMenuOpen(false)}>
                       {t("landing.nav.getStarted")}

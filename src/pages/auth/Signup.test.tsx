@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import Signup from "@/pages/auth/Signup";
 import { getAuthRole, setAuthRole } from "@/lib/auth-state";
+import { toast } from "@/hooks/use-toast";
 
 const { signUpMock } = vi.hoisted(() => ({
   signUpMock: vi.fn(),
@@ -48,6 +49,7 @@ describe("Signup", () => {
     fireEvent.change(screen.getByLabelText("Full Name"), { target: { value: "Jane Owner" } });
     fireEvent.change(screen.getByLabelText("Email"), { target: { value: "owner@example.com" } });
     fireEvent.change(screen.getByLabelText("Password"), { target: { value: "password123" } });
+    fireEvent.change(screen.getByLabelText("Confirm password"), { target: { value: "password123" } });
     fireEvent.click(screen.getByRole("button", { name: "Create Account" }));
 
     await waitFor(() => {
@@ -75,10 +77,67 @@ describe("Signup", () => {
     fireEvent.change(screen.getByLabelText("Full Name"), { target: { value: "Jane Owner" } });
     fireEvent.change(screen.getByLabelText("Email"), { target: { value: "owner@example.com" } });
     fireEvent.change(screen.getByLabelText("Password"), { target: { value: "password123" } });
+    fireEvent.change(screen.getByLabelText("Confirm password"), { target: { value: "password123" } });
     fireEvent.click(screen.getByRole("button", { name: "Create Account" }));
 
     await waitFor(() => {
       expect(screen.getByTestId("location-marker")).toHaveTextContent("/invite/accept/token-123");
+    });
+  });
+
+  it("does not navigate to email-sent when Supabase returns duplicate-email shape (no identities)", async () => {
+    setAuthRole("guest");
+    signUpMock.mockResolvedValue({
+      data: {
+        user: { id: "existing-user", identities: [] },
+        session: null,
+      },
+      error: null,
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/auth/signup"]}>
+        <Routes>
+          <Route path="/auth/signup" element={<Signup />} />
+          <Route path="/auth/email-sent" element={<div data-testid="email-sent-page">sent</div>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.change(screen.getByLabelText("Full Name"), { target: { value: "Jane Owner" } });
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "taken@example.com" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "password123" } });
+    fireEvent.change(screen.getByLabelText("Confirm password"), { target: { value: "password123" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create Account" }));
+
+    await waitFor(() => {
+      expect(signUpMock).toHaveBeenCalled();
+    });
+    expect(screen.queryByTestId("email-sent-page")).toBeNull();
+    expect(screen.getByRole("button", { name: "Create Account" })).toBeInTheDocument();
+    expect(vi.mocked(toast)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        variant: "destructive",
+      }),
+    );
+  });
+
+  it("does not call signUp when passwords do not match", async () => {
+    setAuthRole("guest");
+    render(
+      <MemoryRouter>
+        <Signup />
+      </MemoryRouter>,
+    );
+
+    fireEvent.change(screen.getByLabelText("Full Name"), { target: { value: "Jane Owner" } });
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "owner@example.com" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "password123" } });
+    fireEvent.change(screen.getByLabelText("Confirm password"), { target: { value: "otherpass" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create Account" }));
+
+    await waitFor(() => {
+      expect(signUpMock).not.toHaveBeenCalled();
     });
   });
 });
