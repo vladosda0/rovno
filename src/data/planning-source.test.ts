@@ -12,13 +12,19 @@ type MockSupabaseClient = {
   from: (table: string) => unknown;
 };
 
-let mockSupabase: MockSupabaseClient | null = null;
+const supabaseRef = vi.hoisted(() => ({
+  current: null as { from: (table: string) => unknown } | null,
+}));
 
 vi.mock("@/integrations/supabase/client", () => ({
   get supabase() {
-    return mockSupabase;
+    return supabaseRef.current;
   },
 }));
+
+function setMockSupabase(client: MockSupabaseClient | null) {
+  supabaseRef.current = client;
+}
 
 function projectStageRow(
   overrides: Partial<Parameters<typeof mapProjectStageRowToStage>[0]> = {},
@@ -237,7 +243,7 @@ function createTaskSyncSupabaseMock(input: {
 
 describe("planning-source helpers", () => {
   afterEach(() => {
-    mockSupabase = null;
+    setMockSupabase(null);
   });
 
   it("maps project stage rows to the frontend Stage contract", () => {
@@ -322,7 +328,7 @@ describe("planning-source helpers", () => {
       ],
     });
 
-    mockSupabase = client;
+    setMockSupabase(client);
 
     const result = await syncProjectTasksFromEstimate({
       projectId: "project-1",
@@ -394,7 +400,7 @@ describe("planning-source helpers", () => {
       ],
     });
 
-    mockSupabase = client;
+    setMockSupabase(client);
 
     const result = await syncProjectTasksFromEstimate({
       projectId: "project-1",
@@ -474,7 +480,7 @@ describe("planning-source helpers", () => {
       ],
     });
 
-    mockSupabase = client;
+    setMockSupabase(client);
 
     await syncProjectTasksFromEstimate({
       projectId: "project-1",
