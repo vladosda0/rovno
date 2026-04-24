@@ -26,6 +26,10 @@ import type { AIAccess, FinanceVisibility, MemberRole } from "@/types/entities";
 import { addMember, updateMember, type BrowserWorkspaceKind } from "@/data/store";
 import { getDefaultFinanceVisibility } from "@/lib/participant-role-policy";
 
+/** Logo lives on brand blue; ghost default uses hover:bg-accent and hides it — use muted from the same palette. */
+const LOGO_MENU_TRIGGER_CLASS =
+  "h-8 gap-2 px-2 shrink-0 hover:bg-muted hover:text-foreground data-[state=open]:bg-muted data-[state=open]:text-foreground";
+
 type DemoSwitchableRole = Extract<MemberRole, "owner" | "co_owner" | "contractor" | "viewer">;
 
 function mapDemoRoleToMembership(role: DemoSwitchableRole): {
@@ -192,7 +196,7 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-8 gap-2 px-2 shrink-0">
+              <Button variant="ghost" className={LOGO_MENU_TRIGGER_CLASS}>
                 <img
                   src="/logo.svg"
                   alt={t("nav.appName")}
@@ -323,7 +327,7 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
         <div className="flex items-center gap-1.5">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-8 gap-2 px-2 shrink-0">
+              <Button variant="ghost" className={LOGO_MENU_TRIGGER_CLASS}>
                 <img
                   src="/logo.svg"
                   alt={t("nav.appName")}
@@ -413,7 +417,7 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-8 gap-2 px-2 shrink-0">
+              <Button variant="ghost" className={LOGO_MENU_TRIGGER_CLASS}>
                 <img
                   src="/logo.svg"
                   alt={t("nav.appName")}
