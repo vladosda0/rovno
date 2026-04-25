@@ -669,7 +669,7 @@
       "schema": "public",
       "name": "append_tutorial_completed",
       "signature": "public.append_tutorial_completed(uuid, text)",
-      "sourceMigration": "supabase/migrations/20260423000000_profile_tutorial_state.sql"
+      "sourceMigration": "supabase/migrations/20260425092624_profile_tutorial_state.sql"
     }
   ],
   "policies": [

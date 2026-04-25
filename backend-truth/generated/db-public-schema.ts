@@ -249,7 +249,7 @@ export const manifest = {
       "sha256": "7ede71685d25398d4c9c7bf75ffe81e5bb4c1fae4a05a7abef152c4a990897d9"
     },
     {
-      "path": "supabase/migrations/20260423000000_profile_tutorial_state.sql",
+      "path": "supabase/migrations/20260425092624_profile_tutorial_state.sql",
       "sha256": "1955bf9be8624074a20b279d8ae0607283e63d7b4127e229f8fa24a3a0b5ee6b"
     }
   ],
@@ -335,7 +335,7 @@ export const manifest = {
     "sql/20260417120000_estimate_resource_line_assignee_profile.sql",
     "sql/20260418120000_estimate_resource_line_assignee_label.sql",
     "sql/20260419120000_session3c_procurement_ai_in_stock_evidence.sql",
-    "sql/20260423000000_profile_tutorial_state.sql",
+    "sql/20260425092624_profile_tutorial_state.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -11345,7 +11345,7 @@ export const functions = {
       "securityDefiner": true,
       "searchPath": null,
       "authenticatedExecute": false,
-      "sourceMigration": "supabase/migrations/20260423000000_profile_tutorial_state.sql",
+      "sourceMigration": "supabase/migrations/20260425092624_profile_tutorial_state.sql",
       "triggerUsages": []
     }
   ]
@@ -13827,7 +13827,7 @@ export const sourceTrace = {
       "schema": "public",
       "name": "append_tutorial_completed",
       "signature": "public.append_tutorial_completed(uuid, text)",
-      "sourceMigration": "supabase/migrations/20260423000000_profile_tutorial_state.sql"
+      "sourceMigration": "supabase/migrations/20260425092624_profile_tutorial_state.sql"
     }
   ],
   "policies": [
