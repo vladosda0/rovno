@@ -1642,7 +1642,7 @@
       "securityDefiner": true,
       "searchPath": null,
       "authenticatedExecute": false,
-      "sourceMigration": "supabase/migrations/20260423000000_profile_tutorial_state.sql",
+      "sourceMigration": "supabase/migrations/20260425092624_profile_tutorial_state.sql",
       "triggerUsages": []
     }
   ]
