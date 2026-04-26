@@ -1,7 +1,14 @@
 import { NavLink } from "@/components/NavLink";
-import { useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   getProjectDomainAccess,
   projectDomainAllowsView,
@@ -11,6 +18,7 @@ import {
 import {
   LayoutDashboard, Calculator, ShoppingCart,
   Image, FileText, Users, HardHat, ListTodo,
+  ChevronDown,
 } from "lucide-react";
 
 const tabs = [
@@ -32,6 +40,7 @@ interface ProjectTabsProps {
 export function ProjectTabs({ className, projectId }: ProjectTabsProps) {
   const { t } = useTranslation();
   const { id } = useParams();
+  const location = useLocation();
   const resolvedProjectId = projectId ?? id;
   const perm = usePermission(resolvedProjectId ?? "");
 
@@ -42,19 +51,60 @@ export function ProjectTabs({ className, projectId }: ProjectTabsProps) {
     return projectDomainAllowsView(getProjectDomainAccess(perm.seam, tab.domain));
   });
 
+  const projectPathPrefix = `/project/${resolvedProjectId}/`;
+  const activeTab =
+    visibleTabs.find((tab) => location.pathname.startsWith(`${projectPathPrefix}${tab.path}`))
+      ?? visibleTabs[0];
+  const ActiveIcon = activeTab?.icon;
+
   return (
-    <nav className={cn("flex items-center gap-0.5 overflow-x-auto whitespace-nowrap border-b border-border px-sp-2 py-1", className)}>
-      {visibleTabs.map((tab) => (
-        <NavLink
-          key={tab.path}
-          to={`/project/${resolvedProjectId}/${tab.path}`}
-          className="flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-body-sm text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground"
-          activeClassName="bg-accent/10 text-accent font-medium"
-        >
-          <tab.icon className="h-4 w-4" />
-          <span>{t(tab.labelKey)}</span>
-        </NavLink>
-      ))}
-    </nav>
+    <>
+      <div className={cn("md:hidden flex items-center border-b border-border px-sp-2 py-1", className)}>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              className="h-8 w-full justify-between gap-1.5 px-2 text-body-sm font-medium text-foreground"
+            >
+              <span className="flex min-w-0 items-center gap-1.5">
+                {ActiveIcon ? <ActiveIcon className="h-4 w-4 shrink-0 text-accent" /> : null}
+                <span className="truncate">{activeTab ? t(activeTab.labelKey) : ""}</span>
+              </span>
+              <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-[min(16rem,calc(100vw-1.5rem))] glass-elevated rounded-card">
+            {visibleTabs.map((tab) => {
+              const isActive = tab.path === activeTab?.path;
+              return (
+                <DropdownMenuItem asChild key={tab.path}>
+                  <Link
+                    to={`/project/${resolvedProjectId}/${tab.path}`}
+                    className={cn("flex items-center gap-2", isActive && "bg-accent/10 text-accent font-medium")}
+                  >
+                    <tab.icon className="h-4 w-4" />
+                    <span>{t(tab.labelKey)}</span>
+                  </Link>
+                </DropdownMenuItem>
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      <nav className={cn("hidden md:flex items-center gap-0.5 overflow-x-auto whitespace-nowrap border-b border-border px-sp-2 py-1", className)}>
+        {visibleTabs.map((tab) => (
+          <NavLink
+            key={tab.path}
+            to={`/project/${resolvedProjectId}/${tab.path}`}
+            className="flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-body-sm text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground"
+            activeClassName="bg-accent/10 text-accent font-medium"
+          >
+            <tab.icon className="h-4 w-4" />
+            <span>{t(tab.labelKey)}</span>
+          </NavLink>
+        ))}
+      </nav>
+    </>
   );
 }
