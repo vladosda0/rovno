@@ -1,6 +1,7 @@
 import { Outlet, useLocation } from "react-router-dom";
 import { Suspense, lazy, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { Binoculars, Crown, Handshake, HardHat, PanelLeft, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { TopBar } from "@/components/TopBar";
 import { subscribePhotoConsult } from "@/lib/photo-consult-store";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
@@ -44,8 +45,15 @@ function DevToolsRoleIcon({ role }: { readonly role: AuthRole }) {
   }
 }
 
+const MOBILE_BREAKPOINT_PX = 768;
+
 export default function AppLayout() {
-  const [aiSidebarCollapsed, setAiSidebarCollapsed] = useState(() => readAiSidebarSessionPreference() ?? false);
+  const [aiSidebarCollapsed, setAiSidebarCollapsed] = useState(() => {
+    const stored = readAiSidebarSessionPreference();
+    if (stored !== null) return stored;
+    if (typeof window !== "undefined" && window.innerWidth < MOBILE_BREAKPOINT_PX) return true;
+    return false;
+  });
   const [devToolsOpen, setDevToolsOpen] = useState(false);
   const location = useLocation();
 
@@ -106,11 +114,14 @@ export default function AppLayout() {
         onToggleAiSidebar={() => {
           if (!hideAi) setSidebarCollapsedByUser(!aiSidebarCollapsed);
         }}
+        onSetAiSidebarOpen={(open) => {
+          if (!hideAi) setSidebarCollapsedByUser(!open);
+        }}
       />
-      <div className="flex flex-1 pt-12">
+      <div className="flex flex-1 overflow-x-hidden pt-12">
         {!hideAi && (
           aiSidebarCollapsed ? (
-            <div className="sticky top-12 z-20 h-[calc(100svh-48px)] w-12 shrink-0 self-start border-r border-border/60 bg-background/80 pt-3 backdrop-blur supports-[backdrop-filter]:bg-background/70">
+            <div className="sticky top-12 z-20 hidden h-[calc(100svh-48px)] w-12 shrink-0 self-start border-r border-border/60 bg-background/80 pt-3 backdrop-blur supports-[backdrop-filter]:bg-background/70 md:block">
               <button
                 type="button"
                 onClick={() => setSidebarCollapsedByUser(false)}
@@ -129,7 +140,12 @@ export default function AppLayout() {
             </Suspense>
           )
         )}
-        <main className="flex-1 min-w-0">
+        <main
+          className={cn(
+            "flex-1 min-w-0",
+            !aiSidebarCollapsed && !hideAi && "hidden md:block",
+          )}
+        >
           <Outlet />
         </main>
       </div>

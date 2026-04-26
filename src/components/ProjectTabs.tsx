@@ -18,7 +18,7 @@ import {
 import {
   LayoutDashboard, Calculator, ShoppingCart,
   Image, FileText, Users, HardHat, ListTodo,
-  ChevronDown,
+  ChevronDown, Sparkles,
 } from "lucide-react";
 
 const tabs = [
@@ -35,9 +35,11 @@ const tabs = [
 interface ProjectTabsProps {
   className?: string;
   projectId?: string;
+  aiSidebarOpen?: boolean;
+  onSetAiSidebarOpen?: (open: boolean) => void;
 }
 
-export function ProjectTabs({ className, projectId }: ProjectTabsProps) {
+export function ProjectTabs({ className, projectId, aiSidebarOpen, onSetAiSidebarOpen }: ProjectTabsProps) {
   const { t } = useTranslation();
   const { id } = useParams();
   const location = useLocation();
@@ -52,10 +54,15 @@ export function ProjectTabs({ className, projectId }: ProjectTabsProps) {
   });
 
   const projectPathPrefix = `/project/${resolvedProjectId}/`;
-  const activeTab =
+  const routeActiveTab =
     visibleTabs.find((tab) => location.pathname.startsWith(`${projectPathPrefix}${tab.path}`))
       ?? visibleTabs[0];
-  const ActiveIcon = activeTab?.icon;
+
+  const aiAsActiveTab = Boolean(aiSidebarOpen && onSetAiSidebarOpen);
+  const mobileTriggerIcon = aiAsActiveTab ? Sparkles : routeActiveTab?.icon;
+  const mobileTriggerLabel = aiAsActiveTab
+    ? t("projectTabs.ai")
+    : (routeActiveTab ? t(routeActiveTab.labelKey) : "");
 
   return (
     <>
@@ -67,19 +74,27 @@ export function ProjectTabs({ className, projectId }: ProjectTabsProps) {
               className="h-8 w-full justify-between gap-1.5 px-2 text-body-sm font-medium text-foreground"
             >
               <span className="flex min-w-0 items-center gap-1.5">
-                {ActiveIcon ? <ActiveIcon className="h-4 w-4 shrink-0 text-accent" /> : null}
-                <span className="truncate">{activeTab ? t(activeTab.labelKey) : ""}</span>
+                {mobileTriggerIcon
+                  ? (() => {
+                      const Icon = mobileTriggerIcon;
+                      return <Icon className="h-4 w-4 shrink-0 text-accent" />;
+                    })()
+                  : null}
+                <span className="truncate">{mobileTriggerLabel}</span>
               </span>
               <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-[min(16rem,calc(100vw-1.5rem))] glass-elevated rounded-card">
             {visibleTabs.map((tab) => {
-              const isActive = tab.path === activeTab?.path;
+              const isActive = !aiAsActiveTab && tab.path === routeActiveTab?.path;
               return (
                 <DropdownMenuItem asChild key={tab.path}>
                   <Link
                     to={`/project/${resolvedProjectId}/${tab.path}`}
+                    onClick={() => {
+                      if (aiSidebarOpen && onSetAiSidebarOpen) onSetAiSidebarOpen(false);
+                    }}
                     className={cn("flex items-center gap-2", isActive && "bg-accent/10 text-accent font-medium")}
                   >
                     <tab.icon className="h-4 w-4" />
@@ -88,6 +103,15 @@ export function ProjectTabs({ className, projectId }: ProjectTabsProps) {
                 </DropdownMenuItem>
               );
             })}
+            {onSetAiSidebarOpen ? (
+              <DropdownMenuItem
+                onSelect={() => onSetAiSidebarOpen(true)}
+                className={cn("flex items-center gap-2", aiAsActiveTab && "bg-accent/10 text-accent font-medium")}
+              >
+                <Sparkles className="h-4 w-4" />
+                <span>{t("projectTabs.ai")}</span>
+              </DropdownMenuItem>
+            ) : null}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

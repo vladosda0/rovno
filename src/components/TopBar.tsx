@@ -88,9 +88,10 @@ function consumeCredit(credits: MockCredits, amount = 1): MockCredits {
 interface TopBarProps {
   aiSidebarCollapsed: boolean;
   onToggleAiSidebar: () => void;
+  onSetAiSidebarOpen?: (open: boolean) => void;
 }
 
-export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
+export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOpen }: TopBarProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
@@ -314,6 +315,8 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar }: TopBarProps) {
             <ProjectTabs
               projectId={projectId}
               className="border-0 px-0 py-0"
+              aiSidebarOpen={!aiSidebarCollapsed}
+              onSetAiSidebarOpen={onSetAiSidebarOpen}
             />
           </div>
         </div>
