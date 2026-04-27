@@ -65,10 +65,10 @@ export default function AppLayout() {
         }}
         hideAi={hideAi}
       />
-      <div className="flex flex-1 overflow-x-hidden pt-12">
+      <div className="flex flex-1 pt-12">
         {!hideAi && (
           aiSidebarCollapsed ? (
-            <div className="sticky top-12 z-20 hidden h-[calc(100svh-48px)] w-12 shrink-0 self-start border-r border-border/60 bg-background/80 pt-3 backdrop-blur supports-[backdrop-filter]:bg-background/70 md:block">
+            <div className="sticky top-12 z-20 hidden h-[calc(100svh-48px)] w-12 shrink-0 self-start border-r border-border/60 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/70 md:block">
               <button
                 type="button"
                 onClick={() => setSidebarCollapsedByUser(false)}
