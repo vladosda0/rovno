@@ -63,6 +63,7 @@ export default function AppLayout() {
         onSetAiSidebarOpen={(open) => {
           if (!hideAi) setSidebarCollapsedByUser(!open);
         }}
+        hideAi={hideAi}
       />
       <div className="flex flex-1 overflow-x-hidden pt-12">
         {!hideAi && (

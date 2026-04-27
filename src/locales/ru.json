@@ -229,6 +229,8 @@
   "projectTabs.documents": "Документы",
   "projectTabs.participants": "Участники",
   "projectTabs.ai": "ИИ-помощник",
+  "nav.menu": "Открыть меню",
+  "nav.projectsHeader": "Проекты",
   "projectLayout.notFound.title": "Проект не найден",
   "projectLayout.notFound.description": "Такого проекта не существует.",
   "projectLayout.noAccess.title": "Нет доступа",

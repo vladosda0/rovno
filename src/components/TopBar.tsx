@@ -1,5 +1,5 @@
 import { Link, useLocation, useMatch, useNavigate } from "react-router-dom";
-import { ChevronDown, LogOut, PanelLeft, Settings, User, UserCog } from "lucide-react";
+import { ChevronDown, LogOut, Menu, PanelLeft, Settings, User, UserCog } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ProjectTabs } from "@/components/ProjectTabs";
+import { MobileNavSheet } from "@/components/MobileNavSheet";
 import { AuthSimulator } from "@/components/settings/AuthSimulator";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
@@ -71,9 +72,29 @@ interface TopBarProps {
   aiSidebarCollapsed: boolean;
   onToggleAiSidebar: () => void;
   onSetAiSidebarOpen?: (open: boolean) => void;
+  hideAi?: boolean;
 }
 
-export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOpen }: TopBarProps) {
+const PROJECT_TAB_TITLE_KEYS = new Set([
+  "dashboard",
+  "estimate",
+  "tasks",
+  "procurement",
+  "hr",
+  "gallery",
+  "documents",
+  "participants",
+]);
+
+function derivePageTitle(t: (key: string) => string, pathname: string): string {
+  if (pathname === "/home" || pathname.startsWith("/home/")) return t("nav.home");
+  if (pathname.startsWith("/settings")) return t("nav.settings");
+  const m = pathname.match(/^\/project\/[^/]+\/([^/?#]+)/);
+  if (m && PROJECT_TAB_TITLE_KEYS.has(m[1])) return t(`projectTabs.${m[1]}`);
+  return "";
+}
+
+export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOpen, hideAi = false }: TopBarProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
@@ -150,11 +171,46 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOp
     }
   };
 
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const pageTitle = derivePageTitle(t, location.pathname);
+
+  const mobileBar = (
+    <div className="md:hidden flex flex-1 items-center">
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        onClick={() => setMobileNavOpen(true)}
+        className="h-9 w-9 shrink-0 rounded-full"
+        aria-label={t("nav.menu")}
+      >
+        <Menu className="h-5 w-5" />
+      </Button>
+      <span className="flex-1 truncate text-center text-body-sm font-medium text-foreground">
+        {pageTitle}
+      </span>
+      <div className="h-9 w-9 shrink-0" aria-hidden />
+    </div>
+  );
+
+  const renderMobileSheet = () => (
+    <MobileNavSheet
+      open={mobileNavOpen}
+      onOpenChange={setMobileNavOpen}
+      projectId={projectId}
+      hideAi={hideAi}
+      aiSidebarOpen={!aiSidebarCollapsed}
+      onSetAiSidebarOpen={onSetAiSidebarOpen}
+      onOpenRoleDialog={() => setRoleDialogOpen(true)}
+      onLogout={handleLogout}
+    />
+  );
+
   if (isInProject && projectId) {
     return (
       <>
       <header className="fixed top-0 left-0 right-0 z-40 flex h-12 items-center px-3 glass">
-        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+        <div className="hidden md:flex min-w-0 flex-1 items-center gap-1.5">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className={LOGO_MENU_TRIGGER_CLASS}>
@@ -275,13 +331,13 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOp
             <ProjectTabs
               projectId={projectId}
               className="border-0 px-0 py-0"
-              aiSidebarOpen={!aiSidebarCollapsed}
-              onSetAiSidebarOpen={onSetAiSidebarOpen}
             />
           </div>
         </div>
+        {mobileBar}
       </header>
       {showRoleSwitcher && renderRoleDialog()}
+      {renderMobileSheet()}
       </>
     );
   }
@@ -289,6 +345,7 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOp
   return (
     <>
     <header className="fixed top-0 left-0 right-0 z-40 flex h-12 items-center gap-2 px-3 glass">
+      <div className="hidden md:flex flex-1 items-center gap-2">
       {isHomePage ? (
         <div className="flex items-center gap-1.5">
           <DropdownMenu>
@@ -410,8 +467,11 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOp
       )}
 
       <div className="flex-1" />
+      </div>
+      {mobileBar}
     </header>
     {showRoleSwitcher && renderRoleDialog()}
+    {renderMobileSheet()}
     </>
   );
 }

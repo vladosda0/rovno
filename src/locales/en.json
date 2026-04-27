@@ -229,6 +229,8 @@
   "projectTabs.documents": "Documents",
   "projectTabs.participants": "Participants",
   "projectTabs.ai": "AI Assistant",
+  "nav.menu": "Open menu",
+  "nav.projectsHeader": "Projects",
   "projectLayout.notFound.title": "Project not found",
   "projectLayout.notFound.description": "This project does not exist.",
   "projectLayout.noAccess.title": "No access",
