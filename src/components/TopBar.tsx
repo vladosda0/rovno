@@ -5,16 +5,20 @@ import { useTranslation } from "react-i18next";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ProjectTabs } from "@/components/ProjectTabs";
+import { AuthSimulator } from "@/components/settings/AuthSimulator";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { useCurrentUser, useProjects, useWorkspaceMode } from "@/hooks/use-mock-data";
@@ -22,32 +26,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
 import { clearDemoSession, clearStoredAuthProfile, setAuthRole } from "@/lib/auth-state";
 import { clearAiSidebarSessionPreference } from "@/lib/ai-sidebar-session";
-import type { AIAccess, FinanceVisibility, MemberRole } from "@/types/entities";
-import { addMember, updateMember, type BrowserWorkspaceKind } from "@/data/store";
-import { getDefaultFinanceVisibility } from "@/lib/participant-role-policy";
 
 /** Logo lives on brand blue; ghost default uses hover:bg-accent and hides it — use muted from the same palette. */
 const LOGO_MENU_TRIGGER_CLASS =
   "h-8 gap-2 px-2 shrink-0 hover:bg-muted hover:text-foreground data-[state=open]:bg-muted data-[state=open]:text-foreground";
-
-type DemoSwitchableRole = Extract<MemberRole, "owner" | "co_owner" | "contractor" | "viewer">;
-
-function mapDemoRoleToMembership(role: DemoSwitchableRole): {
-  aiAccess: AIAccess;
-  financeVisibility: FinanceVisibility;
-  creditLimit: number;
-} {
-  switch (role) {
-    case "owner":
-      return { aiAccess: "project_pool", financeVisibility: getDefaultFinanceVisibility("owner"), creditLimit: 500 };
-    case "co_owner":
-      return { aiAccess: "project_pool", financeVisibility: getDefaultFinanceVisibility("co_owner"), creditLimit: 500 };
-    case "contractor":
-      return { aiAccess: "consult_only", financeVisibility: getDefaultFinanceVisibility("contractor"), creditLimit: 100 };
-    case "viewer":
-      return { aiAccess: "none", financeVisibility: getDefaultFinanceVisibility("viewer"), creditLimit: 0 };
-  }
-}
 
 interface MockCredits {
   dailyTotal: number;
@@ -108,6 +90,7 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOp
   const currentProject = projects.find((project) => project.id === projectId);
   const projectName = currentProject?.title ?? t("nav.projectFallback");
   const [credits, setCredits] = useState<MockCredits>(DEFAULT_CREDITS);
+  const [roleDialogOpen, setRoleDialogOpen] = useState(false);
   const displayName = user.name || user.email || (runtimeAuth.status === "authenticated" ? t("nav.displayName.workspace") : t("nav.displayName.guest"));
   const initials = displayName.split(" ").map((word) => word[0]).join("").slice(0, 2).toUpperCase();
 
@@ -121,51 +104,27 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOp
     navigate("/settings?tab=billing");
   };
 
-  const handleRoleChange = (role: DemoSwitchableRole) => {
-    if (!projectId || !user.id) {
-      setAuthRole(role);
-      toast({ title: t("demo.roleChanged") });
-      return;
-    }
-    const membership = mapDemoRoleToMembership(role);
-    const mutationMode = (workspaceMode.kind === "demo" || workspaceMode.kind === "local"
-      ? workspaceMode.kind
-      : "demo") as BrowserWorkspaceKind;
-    const updated = updateMember(
-      projectId,
-      user.id,
-      { role, ai_access: membership.aiAccess, finance_visibility: membership.financeVisibility },
-      mutationMode,
-    );
-    if (!updated) {
-      addMember({
-        project_id: projectId,
-        user_id: user.id,
-        role,
-        ai_access: membership.aiAccess,
-        finance_visibility: membership.financeVisibility,
-        credit_limit: membership.creditLimit,
-        used_credits: 0,
-      });
-    }
-    setAuthRole(role);
-    toast({ title: t("demo.roleChanged") });
-    window.location.reload();
-  };
-
   const renderRoleSwitcher = () => (
-    <DropdownMenuSub>
-      <DropdownMenuSubTrigger>
-        <UserCog className="mr-2 h-4 w-4" />
-        {t("demo.changeRole")}
-      </DropdownMenuSubTrigger>
-      <DropdownMenuSubContent className="glass-elevated rounded-card">
-        <DropdownMenuItem onClick={() => handleRoleChange("owner")}>{t("demo.roles.owner")}</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => handleRoleChange("co_owner")}>{t("demo.roles.co_owner")}</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => handleRoleChange("contractor")}>{t("demo.roles.contractor")}</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => handleRoleChange("viewer")}>{t("demo.roles.viewer")}</DropdownMenuItem>
-      </DropdownMenuSubContent>
-    </DropdownMenuSub>
+    <DropdownMenuItem
+      onSelect={(event) => {
+        event.preventDefault();
+        setRoleDialogOpen(true);
+      }}
+    >
+      <UserCog className="mr-2 h-4 w-4" />
+      {t("demo.changeRole")}
+    </DropdownMenuItem>
+  );
+
+  const renderRoleDialog = () => (
+    <Dialog open={roleDialogOpen} onOpenChange={setRoleDialogOpen}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{t("demo.changeRole")}</DialogTitle>
+        </DialogHeader>
+        <AuthSimulator />
+      </DialogContent>
+    </Dialog>
   );
 
   const handleLogout = async () => {
@@ -193,6 +152,7 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOp
 
   if (isInProject && projectId) {
     return (
+      <>
       <header className="fixed top-0 left-0 right-0 z-40 flex h-12 items-center px-3 glass">
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
           <DropdownMenu>
@@ -321,10 +281,13 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOp
           </div>
         </div>
       </header>
+      {showRoleSwitcher && renderRoleDialog()}
+      </>
     );
   }
 
   return (
+    <>
     <header className="fixed top-0 left-0 right-0 z-40 flex h-12 items-center gap-2 px-3 glass">
       {isHomePage ? (
         <div className="flex items-center gap-1.5">
@@ -448,5 +411,7 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOp
 
       <div className="flex-1" />
     </header>
+    {showRoleSwitcher && renderRoleDialog()}
+    </>
   );
 }
