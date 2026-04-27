@@ -55,6 +55,7 @@ import {
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/EmptyState";
 import { useToast } from "@/hooks/use-toast";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { AssigneeCell } from "@/components/estimate-v2/AssigneeCell";
@@ -551,6 +552,7 @@ type WorkTableColumnDef = {
   widthPx: number;
   align?: "left" | "right";
   sticky?: boolean;
+  hideOnMobile?: boolean;
 };
 
 function WorkTableFrame({
@@ -631,11 +633,18 @@ function WorkTableFrame({
   const showRightCue = showEdgeHints && scrollState.canScrollRight;
   const showLeftCue = showEdgeHints && scrollState.canScrollLeft;
 
+  const isMobile = useIsMobile();
+  const mobileVisibleWidth = useMemo(
+    () => columns.filter((col) => !col.hideOnMobile).reduce((sum, col) => sum + col.widthPx, 0),
+    [columns],
+  );
+  const effectiveMinWidth = isMobile ? mobileVisibleWidth : minWidthPx;
+
   return (
-    <div className="relative space-y-1.5 pl-4">
+    <div className="relative space-y-1.5 pl-0 md:pl-4">
       <div className="sticky top-14 z-30 flex items-stretch rounded-md bg-card/95 shadow-sm ring-1 ring-border/60 backdrop-blur">
         <div ref={mirrorScrollRef} className="min-w-0 flex-1 overflow-hidden">
-          <div className="flex items-stretch" style={{ minWidth: minWidthPx }}>
+          <div className="flex items-stretch" style={{ minWidth: effectiveMinWidth }}>
             {columns.map((col) => (
               <div
                 key={col.key}
@@ -643,6 +652,7 @@ function WorkTableFrame({
                   "flex items-center px-2 py-1.5 text-xs font-semibold text-muted-foreground shrink-0",
                   col.align === "right" ? "justify-end text-right tabular-nums" : "text-left",
                   col.sticky && "sticky left-0 z-10 border-r border-border bg-card",
+                  col.hideOnMobile && "hidden md:flex",
                 )}
                 style={{ width: col.widthPx }}
               >
@@ -652,7 +662,7 @@ function WorkTableFrame({
           </div>
         </div>
         {showEdgeHints ? (
-          <div className="flex shrink-0 items-center gap-1 border-l border-border/60 px-1">
+          <div className="hidden md:flex shrink-0 items-center gap-1 border-l border-border/60 px-1">
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
@@ -708,7 +718,6 @@ function WorkTableFrame({
           className={className}
           wrapperClassName={cn(
             "relative w-full",
-            /* Prefer a visible horizontal track (esp. Windows/Linux); still allows vertical scroll */
             "overflow-y-auto overflow-x-scroll",
             "[scrollbar-width:thin]",
             "[scrollbar-color:hsl(var(--muted-foreground)/0.4)_hsl(var(--muted)/0.35)]",
@@ -720,7 +729,11 @@ function WorkTableFrame({
         >
           <colgroup>
             {columns.map((col) => (
-              <col key={col.key} style={{ width: col.widthPx }} />
+              <col
+                key={col.key}
+                className={cn(col.hideOnMobile && "hidden md:[display:table-column]")}
+                style={{ width: col.widthPx }}
+              />
             ))}
           </colgroup>
           {children}
@@ -728,13 +741,13 @@ function WorkTableFrame({
 
         {showLeftCue ? (
           <div
-            className="pointer-events-none absolute inset-y-0 left-0 z-10 w-9 bg-gradient-to-r from-card/95 via-card/55 to-transparent"
+            className="pointer-events-none absolute inset-y-0 left-0 z-10 hidden w-9 bg-gradient-to-r from-card/95 via-card/55 to-transparent md:block"
             aria-hidden
           />
         ) : null}
         {showRightCue ? (
           <div
-            className="pointer-events-none absolute inset-y-0 right-0 z-10 w-14 bg-gradient-to-l from-card via-card/90 to-transparent shadow-[inset_-12px_0_14px_-8px_hsl(var(--foreground)/0.08)]"
+            className="pointer-events-none absolute inset-y-0 right-0 z-10 hidden w-14 bg-gradient-to-l from-card via-card/90 to-transparent shadow-[inset_-12px_0_14px_-8px_hsl(var(--foreground)/0.08)] md:block"
             aria-hidden
           />
         ) : null}
@@ -2123,7 +2136,7 @@ export default function ProjectEstimate() {
   }
 
   return (
-    <div className="space-y-sp-2 p-sp-2">
+    <div className="space-y-sp-2 p-0 md:p-sp-2">
       <TutorialModal
         tutorialKey="estimate_flow"
         steps={[
@@ -2179,7 +2192,7 @@ export default function ProjectEstimate() {
           },
         ]}
       />
-      <div className="rounded-card border border-border bg-card p-sp-2 space-y-3">
+      <div className="space-y-3 md:rounded-card md:border md:border-border md:bg-card md:p-sp-2">
         <div className="flex flex-wrap items-start justify-between gap-3 lg:flex-nowrap">
           <div className="min-w-0 flex-1 space-y-2">
             <h2 className="truncate text-xl font-semibold text-foreground">{project.title}</h2>
@@ -2703,7 +2716,7 @@ export default function ProjectEstimate() {
         </VersionBanner>}
 
         <Tabs value={activeTab} onValueChange={handleTabChange}>
-          <TabsList className="h-auto w-full justify-start gap-1 bg-transparent p-0">
+          <TabsList className="h-auto w-full justify-start gap-1 bg-transparent p-0 flex-nowrap overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <TabsTrigger value="estimate">{t("estimate.tabs.estimate")}</TabsTrigger>
             <TabsTrigger value="work_schedule" disabled={!showEstimateWorkspace}>{t("estimate.tabs.workSchedule")}</TabsTrigger>
             <Tooltip>
@@ -2756,8 +2769,8 @@ export default function ProjectEstimate() {
                   const stageTotals = stageTotalsById.get(stage.id);
 
                   return (
-                    <div key={stage.id} className="group/stage rounded-card border border-border p-2">
-                      <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div key={stage.id} className="group/stage p-0 md:rounded-card md:border md:border-border md:p-2">
+                      <div className="flex flex-col gap-1 md:flex-row md:flex-wrap md:items-start md:justify-between md:gap-2">
                         <div className="flex min-w-0 flex-1 items-center gap-1">
                           <Button
                             type="button"
@@ -2768,7 +2781,7 @@ export default function ProjectEstimate() {
                           >
                             {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                           </Button>
-                          <span className="w-7 shrink-0 text-sm font-semibold text-muted-foreground tabular-nums">
+                          <span className="w-6 shrink-0 text-sm font-semibold text-muted-foreground tabular-nums md:w-7">
                             {stageNumber}
                           </span>
                           <InlineEditableText
@@ -2776,26 +2789,15 @@ export default function ProjectEstimate() {
                             readOnly={!canEditEstimate}
                             startInEditMode={pendingStageTitleEditId === stage.id}
                             onCommit={(nextValue) => updateStage(pid, stage.id, { title: nextValue || stage.title })}
-                            className="min-w-[220px] flex-1"
+                            className="min-w-0 md:min-w-[220px] flex-1"
                             displayClassName="text-body-sm font-semibold"
                             inputClassName="text-body-sm font-semibold"
                           />
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          {estimateFinanceMode !== "none" && (
-                            <div className="flex items-center gap-1">
-                              <span className="text-caption text-muted-foreground">{t("estimate.stage.totalLabel")}</span>
-                              <span className="text-sm font-semibold tabular-nums text-foreground">
-                                {money(stageTotals?.totalCents ?? 0, estimateProject.currency)}
-                              </span>
-                            </div>
-                          )}
                           {canEditEstimate && (
                             <Button
                               size="icon"
                               variant="ghost"
-                              className="h-7 w-7"
+                              className="h-7 w-7 shrink-0"
                               aria-label={t("estimate.stage.deleteAria", { title: stage.title })}
                               title={t("estimate.stage.deleteTitle")}
                               onClick={() => openStageDelete(stage.id)}
@@ -2804,10 +2806,19 @@ export default function ProjectEstimate() {
                             </Button>
                           )}
                         </div>
+
+                        {estimateFinanceMode !== "none" && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-caption text-muted-foreground">{t("estimate.stage.totalLabel")}</span>
+                            <span className="text-sm font-semibold tabular-nums text-foreground">
+                              {money(stageTotals?.totalCents ?? 0, estimateProject.currency)}
+                            </span>
+                          </div>
+                        )}
                       </div>
 
                       {!isCollapsed && (
-                        <div className="mt-2 space-y-2 pl-6">
+                        <div className="mt-2 space-y-2 pl-0 md:pl-6">
                           {stageWorks.map((work) => {
                             const workLines = linesByWork.get(work.id) ?? [];
                             const fallbackChecklistRows = !canViewSensitiveDetail && workLines.length === 0
@@ -2844,31 +2855,32 @@ export default function ProjectEstimate() {
                                       </span>
                                     ),
                                     widthPx: 170,
+                                    hideOnMobile: true,
                                   } as WorkTableColumnDef]
                                 : []),
                               { key: "qty", title: t("estimate.table.col.qty"), widthPx: 92, align: "right" },
                               { key: "unit", title: t("estimate.table.col.unit"), widthPx: 128 },
                               ...(showEstimateInternalPricing
                                 ? [
-                                    { key: "costUnit", title: t("estimate.table.col.costUnit"), widthPx: 120, align: "right" } as WorkTableColumnDef,
+                                    { key: "costUnit", title: t("estimate.table.col.costUnit"), widthPx: 120, align: "right", hideOnMobile: true } as WorkTableColumnDef,
                                     { key: "costTotal", title: t("estimate.table.col.costTotal"), widthPx: 120, align: "right" } as WorkTableColumnDef,
-                                    { key: "vatPct", title: t("estimate.table.col.vatPct"), widthPx: 92, align: "right" } as WorkTableColumnDef,
+                                    { key: "vatPct", title: t("estimate.table.col.vatPct"), widthPx: 92, align: "right", hideOnMobile: true } as WorkTableColumnDef,
                                   ]
                                 : []),
                               ...(showEstimateMarkup
-                                ? [{ key: "markupPct", title: t("estimate.table.col.markupPct"), widthPx: 92, align: "right" } as WorkTableColumnDef]
+                                ? [{ key: "markupPct", title: t("estimate.table.col.markupPct"), widthPx: 92, align: "right", hideOnMobile: true } as WorkTableColumnDef]
                                 : []),
                               ...(showEstimateInternalPricing
-                                ? [{ key: "discountPct", title: t("estimate.table.col.discountPct"), widthPx: 92, align: "right" } as WorkTableColumnDef]
+                                ? [{ key: "discountPct", title: t("estimate.table.col.discountPct"), widthPx: 92, align: "right", hideOnMobile: true } as WorkTableColumnDef]
                                 : []),
                               ...(showClientPricingColumns
                                 ? [
-                                    { key: "clientUnit", title: t("estimate.table.col.clientUnit"), widthPx: 120, align: "right" } as WorkTableColumnDef,
+                                    { key: "clientUnit", title: t("estimate.table.col.clientUnit"), widthPx: 120, align: "right", hideOnMobile: true } as WorkTableColumnDef,
                                     { key: "clientTotal", title: t("estimate.table.col.clientTotal"), widthPx: 126, align: "right" } as WorkTableColumnDef,
                                   ]
                                 : []),
                               ...(showDiscountedClientColumn
-                                ? [{ key: "discountedClient", title: t("estimate.table.col.discountedClient"), widthPx: 140, align: "right" } as WorkTableColumnDef]
+                                ? [{ key: "discountedClient", title: t("estimate.table.col.discountedClient"), widthPx: 140, align: "right", hideOnMobile: true } as WorkTableColumnDef]
                                 : []),
                               ...(canEditEstimate
                                 ? [{ key: "actions", title: "", widthPx: 40 } as WorkTableColumnDef]
@@ -2876,8 +2888,8 @@ export default function ProjectEstimate() {
                             ];
 
                             return (
-                              <div key={work.id} className="group/work space-y-2 rounded-md border border-border/80 p-2">
-                                <div className="flex flex-wrap items-start justify-between gap-2 pl-2">
+                              <div key={work.id} className="group/work space-y-2 p-0 md:rounded-md md:border md:border-border/80 md:p-2">
+                                <div className="flex flex-wrap items-start justify-between gap-2 pl-0 md:pl-2">
                                   <div className="flex min-w-0 flex-1 items-center gap-2">
                                     <span className="w-12 shrink-0 text-xs font-medium text-muted-foreground tabular-nums">{workNumber}</span>
                                     <InlineEditableText
@@ -2885,7 +2897,7 @@ export default function ProjectEstimate() {
                                       readOnly={!canEditEstimate}
                                       startInEditMode={pendingWorkTitleEditId === work.id}
                                       onCommit={(nextValue) => updateWork(pid, work.id, { title: nextValue || work.title })}
-                                      className="min-w-[220px] flex-1"
+                                      className="min-w-0 md:min-w-[220px] flex-1"
                                       displayClassName="text-sm font-medium"
                                       inputClassName="text-sm font-medium"
                                     />
@@ -2904,7 +2916,7 @@ export default function ProjectEstimate() {
                                   )}
                                 </div>
 
-                                <WorkTableFrame className="table-fixed min-w-[980px]" columns={workTableColumns}>
+                                <WorkTableFrame className="table-fixed md:min-w-[980px]" columns={workTableColumns}>
                                     <TableBody>
                                       {workLines.map((line) => {
                                         const computed = lineTotalsById.get(line.id);
@@ -2928,7 +2940,7 @@ export default function ProjectEstimate() {
                                         const customDraft = customUnitDraftByLineId[line.id] ?? (isCustomUnit ? line.unit : "");
                                         const shouldShowCustomInput = isCustomUnit || customUnitInputLineIds.has(line.id);
                                         return (
-                                          <TableRow key={line.id} className={changedLineIds.has(line.id) ? "bg-warning/10" : ""}>
+                                          <TableRow key={line.id} className={cn("border-b border-border/40 last:border-b-0 md:border-b-0", changedLineIds.has(line.id) ? "bg-warning/10" : "")}>
                                             <TableCell className="sticky left-0 z-20 w-[180px] border-r border-border bg-card py-1.5 pr-2 align-top shadow-[6px_0_10px_-10px_hsl(var(--foreground)/0.35)]">
                                               <div className="flex min-w-0 items-start gap-2">
                                                 {canEditEstimate ? (
@@ -2964,13 +2976,13 @@ export default function ProjectEstimate() {
                                                   startInEditMode={pendingLineTitleEditId === line.id}
                                                   onCommit={(nextValue) => updateLine(pid, line.id, { title: nextValue || line.title })}
                                                   className="min-w-0 flex-1"
-                                                  displayClassName="whitespace-normal break-words leading-5 max-h-10 overflow-hidden font-medium"
+                                                  displayClassName="whitespace-normal break-words leading-5 line-clamp-2 font-medium"
                                                 />
                                               </div>
                                             </TableCell>
 
                                             {showAssignmentColumn && (
-                                              <TableCell className="w-[170px] py-1.5 pr-2 align-top">
+                                              <TableCell className="hidden md:table-cell md:w-[170px] py-1.5 pr-2 align-top">
                                                 {isAssignableResourceType(line.type) ? (
                                                   <AssigneeCell
                                                     assigneeId={line.assigneeId}
@@ -2989,7 +3001,7 @@ export default function ProjectEstimate() {
                                               </TableCell>
                                             )}
 
-                                            <TableCell className="w-[92px] py-1.5 pr-2 align-top">
+                                            <TableCell className="md:w-[92px] py-1.5 pr-2 align-top">
                                               <InlineEditableNumber
                                                 value={line.qtyMilli}
                                                 readOnly={!canEditEstimate}
@@ -3000,7 +3012,7 @@ export default function ProjectEstimate() {
                                               />
                                             </TableCell>
 
-                                            <TableCell className="w-[128px] py-1.5 pr-2 align-top">
+                                            <TableCell className="md:w-[128px] py-1.5 pr-2 align-top">
                                               {canEditEstimate ? (
                                                 shouldShowCustomInput ? (
                                                   <div className="inline-flex max-w-full items-center gap-1">
@@ -3083,7 +3095,7 @@ export default function ProjectEstimate() {
                                             </TableCell>
 
                                             {showEstimateInternalPricing && (
-                                              <TableCell className="w-[120px] py-1.5 pr-2 align-top">
+                                              <TableCell className="hidden md:table-cell md:w-[120px] py-1.5 pr-2 align-top">
                                                 <InlineEditableNumber
                                                   value={line.costUnitCents}
                                                   readOnly={!canEditEstimate}
@@ -3096,13 +3108,13 @@ export default function ProjectEstimate() {
                                             )}
 
                                             {showEstimateInternalPricing && (
-                                              <TableCell className="w-[120px] py-1.5 pr-2 text-right text-sm tabular-nums align-top">
+                                              <TableCell className="md:w-[120px] py-1.5 pr-2 text-right text-sm tabular-nums align-top">
                                                 {money(computed.costTotalCents, estimateProject.currency)}
                                               </TableCell>
                                             )}
 
                                             {showEstimateInternalPricing && (
-                                              <TableCell className="w-[92px] py-1.5 pr-2 align-top">
+                                              <TableCell className="hidden md:table-cell md:w-[92px] py-1.5 pr-2 align-top">
                                                 {canEditEstimate ? (
                                                   <InlineEditableNumber
                                                     value={effectiveTaxForDisplay(line, estimateProject.taxBps)}
@@ -3120,7 +3132,7 @@ export default function ProjectEstimate() {
                                             )}
 
                                             {showEstimateMarkup && (
-                                              <TableCell className="w-[92px] py-1.5 pr-2 align-top">
+                                              <TableCell className="hidden md:table-cell md:w-[92px] py-1.5 pr-2 align-top">
                                                 <InlineEditableNumber
                                                   value={effectiveMarkupForDisplay(line, estimateProject.markupBps)}
                                                   readOnly={!canEditEstimate}
@@ -3133,7 +3145,7 @@ export default function ProjectEstimate() {
                                             )}
 
                                             {showEstimateInternalPricing && (
-                                              <TableCell className="w-[92px] py-1.5 pr-2 align-top">
+                                              <TableCell className="hidden md:table-cell md:w-[92px] py-1.5 pr-2 align-top">
                                                 {canEditEstimate ? (
                                                   <InlineEditableNumber
                                                     value={effectiveDiscountForDisplay(line, stage, estimateProject.discountBps)}
@@ -3151,17 +3163,17 @@ export default function ProjectEstimate() {
                                             )}
 
                                             {showClientPricingColumns && (
-                                              <TableCell className="w-[120px] py-1.5 pr-2 text-right text-sm tabular-nums align-top">
+                                              <TableCell className="hidden md:table-cell md:w-[120px] py-1.5 pr-2 text-right text-sm tabular-nums align-top">
                                                 {clientMoney ? money(clientMoney.clientUnitCents, estimateProject.currency) : "—"}
                                               </TableCell>
                                             )}
                                             {showClientPricingColumns && (
-                                              <TableCell className="w-[126px] py-1.5 pr-2 text-right text-sm tabular-nums align-top">
+                                              <TableCell className="md:w-[126px] py-1.5 pr-2 text-right text-sm tabular-nums align-top">
                                                 {clientMoney ? money(clientMoney.clientTotalCents, estimateProject.currency) : "—"}
                                               </TableCell>
                                             )}
                                             {showDiscountedClientColumn && (
-                                              <TableCell className="w-[140px] py-1.5 pr-2 text-right text-sm tabular-nums align-top">
+                                              <TableCell className="hidden md:table-cell md:w-[140px] py-1.5 pr-2 text-right text-sm tabular-nums align-top">
                                                 {typeof line.summaryDiscountedClientTotalCents === "number"
                                                   ? money(line.summaryDiscountedClientTotalCents, estimateProject.currency)
                                                   : "—"}
@@ -3169,7 +3181,7 @@ export default function ProjectEstimate() {
                                             )}
 
                                             {canEditEstimate && (
-                                              <TableCell className="w-10 py-1.5 pr-0 align-top">
+                                              <TableCell className="md:w-10 py-1.5 pr-0 align-top">
                                                 <Button
                                                   size="icon"
                                                   variant="ghost"
@@ -3192,7 +3204,7 @@ export default function ProjectEstimate() {
                                           ? "overhead"
                                           : "generic";
                                         return (
-                                          <TableRow key={row.id}>
+                                          <TableRow key={row.id} className="border-b border-border/40 last:border-b-0 md:border-b-0">
                                             <TableCell className="sticky left-0 z-20 w-[180px] border-r border-border bg-card py-1.5 pr-2 align-top shadow-[6px_0_10px_-10px_hsl(var(--foreground)/0.35)]">
                                               <div className="flex min-w-0 items-start gap-2">
                                                 <span title={typeLabel}>
@@ -3210,7 +3222,7 @@ export default function ProjectEstimate() {
                                             </TableCell>
 
                                             {showAssignmentColumn && (
-                                              <TableCell className="w-[170px] py-1.5 pr-2 align-top">
+                                              <TableCell className="hidden md:table-cell md:w-[170px] py-1.5 pr-2 align-top">
                                                 {isAssignableResourceType(row.type) && (row.assigneeName || row.assigneeEmail) ? (
                                                   <div className="min-h-7 px-1 py-0.5 text-sm text-foreground">
                                                     {row.assigneeName || row.assigneeEmail}
@@ -3221,13 +3233,13 @@ export default function ProjectEstimate() {
                                               </TableCell>
                                             )}
 
-                                            <TableCell className="w-[92px] py-1.5 pr-2 align-top">
+                                            <TableCell className="md:w-[92px] py-1.5 pr-2 align-top">
                                               <div className="min-h-7 px-1 py-0.5 text-sm text-foreground">
                                                 {row.qtyMilli != null ? qtyFromMilli(row.qtyMilli) : "—"}
                                               </div>
                                             </TableCell>
 
-                                            <TableCell className="w-[128px] py-1.5 pr-2 align-top">
+                                            <TableCell className="md:w-[128px] py-1.5 pr-2 align-top">
                                               <div className="min-h-7 px-1 py-0.5 text-sm text-foreground">
                                                 {row.unit || "—"}
                                               </div>
