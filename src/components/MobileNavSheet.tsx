@@ -68,29 +68,34 @@ export function MobileNavSheet({
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto px-sp-2 py-sp-2">
-          {inProject && visibleProjectTabs.length > 0 && (
-            <nav className="flex flex-col gap-0.5">
-              {visibleProjectTabs.map((tab) => {
-                const isActive = !aiSidebarOpen && tab.path === activeProjectPath;
-                return (
-                  <Link
-                    key={tab.path}
-                    to={`/project/${projectId}/${tab.path}`}
-                    onClick={() => {
-                      if (aiSidebarOpen && onSetAiSidebarOpen) onSetAiSidebarOpen(false);
-                      close();
-                    }}
-                    className={cn(ROW_BASE, isActive && ROW_ACTIVE)}
-                  >
-                    <tab.icon className="h-4 w-4" />
-                    <span>{t(tab.labelKey)}</span>
-                  </Link>
-                );
-              })}
-            </nav>
-          )}
+          <nav className="flex flex-col gap-0.5">
+            <Link
+              to="/home"
+              onClick={close}
+              className={cn(ROW_BASE, isHome && ROW_ACTIVE)}
+            >
+              <Home className="h-4 w-4" />
+              <span>{t("nav.home")}</span>
+            </Link>
 
-          <nav className={cn("flex flex-col gap-0.5", inProject && "mt-sp-2")}>
+            {inProject && visibleProjectTabs.map((tab) => {
+              const isActive = !aiSidebarOpen && tab.path === activeProjectPath;
+              return (
+                <Link
+                  key={tab.path}
+                  to={`/project/${projectId}/${tab.path}`}
+                  onClick={() => {
+                    if (aiSidebarOpen && onSetAiSidebarOpen) onSetAiSidebarOpen(false);
+                    close();
+                  }}
+                  className={cn(ROW_BASE, isActive && ROW_ACTIVE)}
+                >
+                  <tab.icon className="h-4 w-4" />
+                  <span>{t(tab.labelKey)}</span>
+                </Link>
+              );
+            })}
+
             {inProject && !hideAi && onSetAiSidebarOpen ? (
               <button
                 type="button"
@@ -104,15 +109,6 @@ export function MobileNavSheet({
                 <span>{t("projectTabs.ai")}</span>
               </button>
             ) : null}
-
-            <Link
-              to="/home"
-              onClick={close}
-              className={cn(ROW_BASE, isHome && ROW_ACTIVE)}
-            >
-              <Home className="h-4 w-4" />
-              <span>{t("nav.home")}</span>
-            </Link>
 
             <Link
               to="/settings"

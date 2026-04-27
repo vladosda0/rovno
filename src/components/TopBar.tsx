@@ -172,7 +172,10 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOp
   };
 
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const pageTitle = derivePageTitle(t, location.pathname);
+  const aiPanelActive = isInProject && !hideAi && !aiSidebarCollapsed;
+  const pageTitle = aiPanelActive
+    ? t("projectTabs.ai")
+    : derivePageTitle(t, location.pathname);
 
   const mobileBar = (
     <div className="md:hidden flex flex-1 items-center">
