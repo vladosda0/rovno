@@ -2855,32 +2855,31 @@ export default function ProjectEstimate() {
                                       </span>
                                     ),
                                     widthPx: 170,
-                                    hideOnMobile: true,
                                   } as WorkTableColumnDef]
                                 : []),
                               { key: "qty", title: t("estimate.table.col.qty"), widthPx: 92, align: "right" },
                               { key: "unit", title: t("estimate.table.col.unit"), widthPx: 128 },
                               ...(showEstimateInternalPricing
                                 ? [
-                                    { key: "costUnit", title: t("estimate.table.col.costUnit"), widthPx: 120, align: "right", hideOnMobile: true } as WorkTableColumnDef,
+                                    { key: "costUnit", title: t("estimate.table.col.costUnit"), widthPx: 120, align: "right" } as WorkTableColumnDef,
                                     { key: "costTotal", title: t("estimate.table.col.costTotal"), widthPx: 120, align: "right" } as WorkTableColumnDef,
-                                    { key: "vatPct", title: t("estimate.table.col.vatPct"), widthPx: 92, align: "right", hideOnMobile: true } as WorkTableColumnDef,
+                                    { key: "vatPct", title: t("estimate.table.col.vatPct"), widthPx: 92, align: "right" } as WorkTableColumnDef,
                                   ]
                                 : []),
                               ...(showEstimateMarkup
-                                ? [{ key: "markupPct", title: t("estimate.table.col.markupPct"), widthPx: 92, align: "right", hideOnMobile: true } as WorkTableColumnDef]
+                                ? [{ key: "markupPct", title: t("estimate.table.col.markupPct"), widthPx: 92, align: "right" } as WorkTableColumnDef]
                                 : []),
                               ...(showEstimateInternalPricing
-                                ? [{ key: "discountPct", title: t("estimate.table.col.discountPct"), widthPx: 92, align: "right", hideOnMobile: true } as WorkTableColumnDef]
+                                ? [{ key: "discountPct", title: t("estimate.table.col.discountPct"), widthPx: 92, align: "right" } as WorkTableColumnDef]
                                 : []),
                               ...(showClientPricingColumns
                                 ? [
-                                    { key: "clientUnit", title: t("estimate.table.col.clientUnit"), widthPx: 120, align: "right", hideOnMobile: true } as WorkTableColumnDef,
+                                    { key: "clientUnit", title: t("estimate.table.col.clientUnit"), widthPx: 120, align: "right" } as WorkTableColumnDef,
                                     { key: "clientTotal", title: t("estimate.table.col.clientTotal"), widthPx: 126, align: "right" } as WorkTableColumnDef,
                                   ]
                                 : []),
                               ...(showDiscountedClientColumn
-                                ? [{ key: "discountedClient", title: t("estimate.table.col.discountedClient"), widthPx: 140, align: "right", hideOnMobile: true } as WorkTableColumnDef]
+                                ? [{ key: "discountedClient", title: t("estimate.table.col.discountedClient"), widthPx: 140, align: "right" } as WorkTableColumnDef]
                                 : []),
                               ...(canEditEstimate
                                 ? [{ key: "actions", title: "", widthPx: 40 } as WorkTableColumnDef]
@@ -2982,7 +2981,7 @@ export default function ProjectEstimate() {
                                             </TableCell>
 
                                             {showAssignmentColumn && (
-                                              <TableCell className="hidden md:table-cell md:w-[170px] py-1.5 pr-2 align-top">
+                                              <TableCell className="w-[170px] py-1.5 pr-2 align-top">
                                                 {isAssignableResourceType(line.type) ? (
                                                   <AssigneeCell
                                                     assigneeId={line.assigneeId}
@@ -3001,7 +3000,7 @@ export default function ProjectEstimate() {
                                               </TableCell>
                                             )}
 
-                                            <TableCell className="md:w-[92px] py-1.5 pr-2 align-top">
+                                            <TableCell className="w-[92px] py-1.5 pr-2 align-top">
                                               <InlineEditableNumber
                                                 value={line.qtyMilli}
                                                 readOnly={!canEditEstimate}
@@ -3012,7 +3011,7 @@ export default function ProjectEstimate() {
                                               />
                                             </TableCell>
 
-                                            <TableCell className="md:w-[128px] py-1.5 pr-2 align-top">
+                                            <TableCell className="w-[128px] py-1.5 pr-2 align-top">
                                               {canEditEstimate ? (
                                                 shouldShowCustomInput ? (
                                                   <div className="inline-flex max-w-full items-center gap-1">
@@ -3095,7 +3094,7 @@ export default function ProjectEstimate() {
                                             </TableCell>
 
                                             {showEstimateInternalPricing && (
-                                              <TableCell className="hidden md:table-cell md:w-[120px] py-1.5 pr-2 align-top">
+                                              <TableCell className="w-[120px] py-1.5 pr-2 align-top">
                                                 <InlineEditableNumber
                                                   value={line.costUnitCents}
                                                   readOnly={!canEditEstimate}
@@ -3108,13 +3107,13 @@ export default function ProjectEstimate() {
                                             )}
 
                                             {showEstimateInternalPricing && (
-                                              <TableCell className="md:w-[120px] py-1.5 pr-2 text-right text-sm tabular-nums align-top">
+                                              <TableCell className="w-[120px] py-1.5 pr-2 text-right text-sm tabular-nums align-top">
                                                 {money(computed.costTotalCents, estimateProject.currency)}
                                               </TableCell>
                                             )}
 
                                             {showEstimateInternalPricing && (
-                                              <TableCell className="hidden md:table-cell md:w-[92px] py-1.5 pr-2 align-top">
+                                              <TableCell className="w-[92px] py-1.5 pr-2 align-top">
                                                 {canEditEstimate ? (
                                                   <InlineEditableNumber
                                                     value={effectiveTaxForDisplay(line, estimateProject.taxBps)}
@@ -3132,7 +3131,7 @@ export default function ProjectEstimate() {
                                             )}
 
                                             {showEstimateMarkup && (
-                                              <TableCell className="hidden md:table-cell md:w-[92px] py-1.5 pr-2 align-top">
+                                              <TableCell className="w-[92px] py-1.5 pr-2 align-top">
                                                 <InlineEditableNumber
                                                   value={effectiveMarkupForDisplay(line, estimateProject.markupBps)}
                                                   readOnly={!canEditEstimate}
@@ -3145,7 +3144,7 @@ export default function ProjectEstimate() {
                                             )}
 
                                             {showEstimateInternalPricing && (
-                                              <TableCell className="hidden md:table-cell md:w-[92px] py-1.5 pr-2 align-top">
+                                              <TableCell className="w-[92px] py-1.5 pr-2 align-top">
                                                 {canEditEstimate ? (
                                                   <InlineEditableNumber
                                                     value={effectiveDiscountForDisplay(line, stage, estimateProject.discountBps)}
@@ -3163,17 +3162,17 @@ export default function ProjectEstimate() {
                                             )}
 
                                             {showClientPricingColumns && (
-                                              <TableCell className="hidden md:table-cell md:w-[120px] py-1.5 pr-2 text-right text-sm tabular-nums align-top">
+                                              <TableCell className="w-[120px] py-1.5 pr-2 text-right text-sm tabular-nums align-top">
                                                 {clientMoney ? money(clientMoney.clientUnitCents, estimateProject.currency) : "—"}
                                               </TableCell>
                                             )}
                                             {showClientPricingColumns && (
-                                              <TableCell className="md:w-[126px] py-1.5 pr-2 text-right text-sm tabular-nums align-top">
+                                              <TableCell className="w-[126px] py-1.5 pr-2 text-right text-sm tabular-nums align-top">
                                                 {clientMoney ? money(clientMoney.clientTotalCents, estimateProject.currency) : "—"}
                                               </TableCell>
                                             )}
                                             {showDiscountedClientColumn && (
-                                              <TableCell className="hidden md:table-cell md:w-[140px] py-1.5 pr-2 text-right text-sm tabular-nums align-top">
+                                              <TableCell className="w-[140px] py-1.5 pr-2 text-right text-sm tabular-nums align-top">
                                                 {typeof line.summaryDiscountedClientTotalCents === "number"
                                                   ? money(line.summaryDiscountedClientTotalCents, estimateProject.currency)
                                                   : "—"}
@@ -3181,7 +3180,7 @@ export default function ProjectEstimate() {
                                             )}
 
                                             {canEditEstimate && (
-                                              <TableCell className="md:w-10 py-1.5 pr-0 align-top">
+                                              <TableCell className="w-10 py-1.5 pr-0 align-top">
                                                 <Button
                                                   size="icon"
                                                   variant="ghost"
@@ -3222,7 +3221,7 @@ export default function ProjectEstimate() {
                                             </TableCell>
 
                                             {showAssignmentColumn && (
-                                              <TableCell className="hidden md:table-cell md:w-[170px] py-1.5 pr-2 align-top">
+                                              <TableCell className="w-[170px] py-1.5 pr-2 align-top">
                                                 {isAssignableResourceType(row.type) && (row.assigneeName || row.assigneeEmail) ? (
                                                   <div className="min-h-7 px-1 py-0.5 text-sm text-foreground">
                                                     {row.assigneeName || row.assigneeEmail}
@@ -3233,13 +3232,13 @@ export default function ProjectEstimate() {
                                               </TableCell>
                                             )}
 
-                                            <TableCell className="md:w-[92px] py-1.5 pr-2 align-top">
+                                            <TableCell className="w-[92px] py-1.5 pr-2 align-top">
                                               <div className="min-h-7 px-1 py-0.5 text-sm text-foreground">
                                                 {row.qtyMilli != null ? qtyFromMilli(row.qtyMilli) : "—"}
                                               </div>
                                             </TableCell>
 
-                                            <TableCell className="md:w-[128px] py-1.5 pr-2 align-top">
+                                            <TableCell className="w-[128px] py-1.5 pr-2 align-top">
                                               <div className="min-h-7 px-1 py-0.5 text-sm text-foreground">
                                                 {row.unit || "—"}
                                               </div>
