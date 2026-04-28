@@ -643,7 +643,7 @@ export type Database = {
           Row: {
           "id": string
           "estimate_work_id": string
-          "resource_type": "material" | "labor" | "subcontractor" | "equipment" | "other"
+          "resource_type": "material" | "tool" | "labor" | "subcontractor" | "overhead" | "other"
           "title": string
           "quantity": number
           "unit": string | null
@@ -661,7 +661,7 @@ export type Database = {
           Insert: {
           "id"?: string
           "estimate_work_id": string
-          "resource_type": "material" | "labor" | "subcontractor" | "equipment" | "other"
+          "resource_type": "material" | "tool" | "labor" | "subcontractor" | "overhead" | "other"
           "title": string
           "quantity": number
           "unit"?: string | null
@@ -679,7 +679,7 @@ export type Database = {
           Update: {
           "id"?: string
           "estimate_work_id"?: string
-          "resource_type"?: "material" | "labor" | "subcontractor" | "equipment" | "other"
+          "resource_type"?: "material" | "tool" | "labor" | "subcontractor" | "overhead" | "other"
           "title"?: string
           "quantity"?: number
           "unit"?: string | null

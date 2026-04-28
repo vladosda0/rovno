@@ -114,10 +114,10 @@ Constraints:
 - unnamed check (expression `total_price_cents is null or total_price_cents >= 0`)
 - unnamed check (expression `client_unit_price_cents is null or client_unit_price_cents >= 0`)
 - unnamed check (expression `client_total_price_cents is null or client_total_price_cents >= 0`)
-- `estimate_resource_lines_resource_type_check` check (expression `resource_type in ('material', 'labor', 'subcontractor', 'equipment', 'other')`)
 - unnamed check (expression `discounted_client_total_price_cents is null or discounted_client_total_price_cents >= 0`)
 - unnamed check (expression `markup_bps is null or (markup_bps >= 0 and markup_bps <= 10000)`)
 - unnamed check (expression `discount_bps_override is null or (discount_bps_override >= 0 and discount_bps_override <= 10000)`)
+- `estimate_resource_lines_resource_type_check` check (expression `resource_type in ('material', 'tool', 'labor', 'subcontractor', 'overhead', 'other')`)
 
 Indexes:
 - `idx_estimate_resource_lines_estimate_work_id` on (`estimate_work_id`)
