@@ -3020,7 +3020,7 @@
         {
           "name": "resource_type",
           "sqlType": "text",
-          "tsType": "\"material\" | \"labor\" | \"subcontractor\" | \"equipment\" | \"other\"",
+          "tsType": "\"material\" | \"tool\" | \"labor\" | \"subcontractor\" | \"overhead\" | \"other\"",
           "nullable": false,
           "defaultSql": null,
           "primaryKey": false,
@@ -3218,16 +3218,6 @@
         },
         {
           "type": "check",
-          "name": "estimate_resource_lines_resource_type_check",
-          "columns": [
-            "resource_type"
-          ],
-          "expression": "resource_type in ('material', 'labor', 'subcontractor', 'equipment', 'other')",
-          "usingIndex": null,
-          "sourceMigration": "supabase/migrations/20260403191500_phase6_operational_summary_subcontractor_and_client_amounts.sql"
-        },
-        {
-          "type": "check",
           "name": null,
           "columns": [
             "discounted_client_total_price_cents"
@@ -3255,6 +3245,16 @@
           "expression": "discount_bps_override is null or (discount_bps_override >= 0 and discount_bps_override <= 10000)",
           "usingIndex": null,
           "sourceMigration": "supabase/migrations/20260408120000_estimate_line_pricing_params.sql"
+        },
+        {
+          "type": "check",
+          "name": "estimate_resource_lines_resource_type_check",
+          "columns": [
+            "resource_type"
+          ],
+          "expression": "resource_type in ('material', 'tool', 'labor', 'subcontractor', 'overhead', 'other')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260428120000_resource_types_alignment.sql"
         }
       ],
       "indexes": [

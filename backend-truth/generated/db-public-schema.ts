@@ -251,6 +251,10 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260425092624_profile_tutorial_state.sql",
       "sha256": "1955bf9be8624074a20b279d8ae0607283e63d7b4127e229f8fa24a3a0b5ee6b"
+    },
+    {
+      "path": "supabase/migrations/20260428120000_resource_types_alignment.sql",
+      "sha256": "31a0dd11adb274f037117210e35aa9da68d1c8caed7fd5c57f99e31457aa3ad7"
     }
   ],
   "generated_artifacts": [
@@ -336,6 +340,7 @@ export const manifest = {
     "sql/20260418120000_estimate_resource_line_assignee_label.sql",
     "sql/20260419120000_session3c_procurement_ai_in_stock_evidence.sql",
     "sql/20260425092624_profile_tutorial_state.sql",
+    "sql/20260428120000_resource_types_alignment.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -3386,7 +3391,7 @@ export const tables = {
         {
           "name": "resource_type",
           "sqlType": "text",
-          "tsType": "\"material\" | \"labor\" | \"subcontractor\" | \"equipment\" | \"other\"",
+          "tsType": "\"material\" | \"tool\" | \"labor\" | \"subcontractor\" | \"overhead\" | \"other\"",
           "nullable": false,
           "defaultSql": null,
           "primaryKey": false,
@@ -3584,16 +3589,6 @@ export const tables = {
         },
         {
           "type": "check",
-          "name": "estimate_resource_lines_resource_type_check",
-          "columns": [
-            "resource_type"
-          ],
-          "expression": "resource_type in ('material', 'labor', 'subcontractor', 'equipment', 'other')",
-          "usingIndex": null,
-          "sourceMigration": "supabase/migrations/20260403191500_phase6_operational_summary_subcontractor_and_client_amounts.sql"
-        },
-        {
-          "type": "check",
           "name": null,
           "columns": [
             "discounted_client_total_price_cents"
@@ -3621,6 +3616,16 @@ export const tables = {
           "expression": "discount_bps_override is null or (discount_bps_override >= 0 and discount_bps_override <= 10000)",
           "usingIndex": null,
           "sourceMigration": "supabase/migrations/20260408120000_estimate_line_pricing_params.sql"
+        },
+        {
+          "type": "check",
+          "name": "estimate_resource_lines_resource_type_check",
+          "columns": [
+            "resource_type"
+          ],
+          "expression": "resource_type in ('material', 'tool', 'labor', 'subcontractor', 'overhead', 'other')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260428120000_resource_types_alignment.sql"
         }
       ],
       "indexes": [
@@ -9264,22 +9269,6 @@ export const checks = {
     {
       "schema": "public",
       "table": "estimate_resource_lines",
-      "column": "resource_type",
-      "constraintName": "estimate_resource_lines_resource_type_check",
-      "kind": "enum_like",
-      "allowedValues": [
-        "material",
-        "labor",
-        "subcontractor",
-        "equipment",
-        "other"
-      ],
-      "expression": "resource_type in ('material', 'labor', 'subcontractor', 'equipment', 'other')",
-      "sourceMigration": "supabase/migrations/20260403191500_phase6_operational_summary_subcontractor_and_client_amounts.sql"
-    },
-    {
-      "schema": "public",
-      "table": "estimate_resource_lines",
       "column": "discounted_client_total_price_cents",
       "constraintName": null,
       "kind": "expression",
@@ -9306,6 +9295,23 @@ export const checks = {
       "allowedValues": null,
       "expression": "discount_bps_override is null or (discount_bps_override >= 0 and discount_bps_override <= 10000)",
       "sourceMigration": "supabase/migrations/20260408120000_estimate_line_pricing_params.sql"
+    },
+    {
+      "schema": "public",
+      "table": "estimate_resource_lines",
+      "column": "resource_type",
+      "constraintName": "estimate_resource_lines_resource_type_check",
+      "kind": "enum_like",
+      "allowedValues": [
+        "material",
+        "tool",
+        "labor",
+        "subcontractor",
+        "overhead",
+        "other"
+      ],
+      "expression": "resource_type in ('material', 'tool', 'labor', 'subcontractor', 'overhead', 'other')",
+      "sourceMigration": "supabase/migrations/20260428120000_resource_types_alignment.sql"
     },
     {
       "schema": "public",

@@ -615,22 +615,6 @@
     {
       "schema": "public",
       "table": "estimate_resource_lines",
-      "column": "resource_type",
-      "constraintName": "estimate_resource_lines_resource_type_check",
-      "kind": "enum_like",
-      "allowedValues": [
-        "material",
-        "labor",
-        "subcontractor",
-        "equipment",
-        "other"
-      ],
-      "expression": "resource_type in ('material', 'labor', 'subcontractor', 'equipment', 'other')",
-      "sourceMigration": "supabase/migrations/20260403191500_phase6_operational_summary_subcontractor_and_client_amounts.sql"
-    },
-    {
-      "schema": "public",
-      "table": "estimate_resource_lines",
       "column": "discounted_client_total_price_cents",
       "constraintName": null,
       "kind": "expression",
@@ -657,6 +641,23 @@
       "allowedValues": null,
       "expression": "discount_bps_override is null or (discount_bps_override >= 0 and discount_bps_override <= 10000)",
       "sourceMigration": "supabase/migrations/20260408120000_estimate_line_pricing_params.sql"
+    },
+    {
+      "schema": "public",
+      "table": "estimate_resource_lines",
+      "column": "resource_type",
+      "constraintName": "estimate_resource_lines_resource_type_check",
+      "kind": "enum_like",
+      "allowedValues": [
+        "material",
+        "tool",
+        "labor",
+        "subcontractor",
+        "overhead",
+        "other"
+      ],
+      "expression": "resource_type in ('material', 'tool', 'labor', 'subcontractor', 'overhead', 'other')",
+      "sourceMigration": "supabase/migrations/20260428120000_resource_types_alignment.sql"
     },
     {
       "schema": "public",
