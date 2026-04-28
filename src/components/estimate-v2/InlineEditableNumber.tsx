@@ -15,6 +15,8 @@ interface InlineEditableNumberProps {
   displayClassName?: string;
   inputClassName?: string;
   startInEditMode?: boolean;
+  /** Horizontal alignment of the rendered value. Defaults to "right". */
+  align?: "left" | "right";
 }
 
 export function InlineEditableNumber({
@@ -30,8 +32,12 @@ export function InlineEditableNumber({
   displayClassName,
   inputClassName,
   startInEditMode = false,
+  align = "right",
 }: InlineEditableNumberProps) {
   const canEdit = !disabled && !readOnly;
+  const isLeft = align === "left";
+  const alignText = isLeft ? "text-left" : "text-right";
+  const alignFlex = isLeft ? "justify-start" : "justify-end";
   const toInput = useMemo(
     () => formatInput ?? ((current: number) => String(current)),
     [formatInput],
@@ -87,7 +93,7 @@ export function InlineEditableNumber({
   if (!canEdit) {
     const rendered = toDisplay(value);
     return (
-      <div className={cn("min-h-7 whitespace-nowrap px-1 py-0.5 text-right text-sm tabular-nums text-foreground", className, displayClassName)}>
+      <div className={cn("min-h-7 whitespace-nowrap px-1 py-0.5 text-sm tabular-nums text-foreground", alignText, className, displayClassName)}>
         {rendered || <span className="text-muted-foreground">{placeholder}</span>}
       </div>
     );
@@ -122,7 +128,8 @@ export function InlineEditableNumber({
             }
           }}
           className={cn(
-            "h-7 border-transparent bg-transparent px-1 py-0 text-right text-sm tabular-nums shadow-none focus-visible:ring-1 focus-visible:ring-ring/40 focus-visible:ring-offset-0",
+            "h-7 border-transparent bg-transparent px-1 py-0 text-sm tabular-nums shadow-none focus-visible:ring-1 focus-visible:ring-ring/40 focus-visible:ring-offset-0",
+            alignText,
             inputClassName,
           )}
         />
@@ -137,7 +144,9 @@ export function InlineEditableNumber({
         type="button"
         onClick={() => setIsEditing(true)}
         className={cn(
-          "flex min-h-7 whitespace-nowrap w-full items-center justify-end rounded-sm px-1 py-0.5 text-right text-sm tabular-nums text-foreground transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/40",
+          "flex min-h-7 whitespace-nowrap w-full items-center rounded-sm px-1 py-0.5 text-sm tabular-nums text-foreground transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/40",
+          alignText,
+          alignFlex,
           displayClassName,
         )}
       >
