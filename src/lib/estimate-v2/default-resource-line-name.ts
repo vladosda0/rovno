@@ -5,7 +5,8 @@ const DEFAULT_RESOURCE_LINE_PREFIX: Record<ResourceLineType, string> = {
   tool: "Tool",
   labor: "Labor",
   subcontractor: "Subcontractor",
-  other: "Overhead",
+  overhead: "Overhead",
+  other: "Other",
 };
 
 function escapeRegex(value: string): string {

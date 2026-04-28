@@ -4,11 +4,22 @@ import type { HRItemType } from "@/types/hr";
 
 /**
  * Canonical DB-persisted values for `estimate_resource_lines.resource_type`.
- * Must match the check constraint in `backend-truth`.
+ *
+ * Aligned 1:1 with `ResourceLineType` after Session 0 — the legacy 4-value
+ * DB enum (with `equipment` and English-only "Overhead" title heuristics for
+ * overheads) was replaced by the canonical 6-value set in
+ * `20260428120000_resource_types_alignment.sql`.
  */
-export type DbEstimateResourceType = "material" | "labor" | "subcontractor" | "equipment" | "other";
+export type DbEstimateResourceType = ResourceLineType;
 
-const DB_ESTIMATE_RESOURCE_TYPES = new Set<string>(["material", "labor", "subcontractor", "equipment", "other"]);
+const DB_ESTIMATE_RESOURCE_TYPES = new Set<string>([
+  "material",
+  "tool",
+  "labor",
+  "subcontractor",
+  "overhead",
+  "other",
+]);
 
 // ---------------------------------------------------------------------------
 // Parse / validate
@@ -30,12 +41,10 @@ export function parsePersistedEstimateResourceType(raw: unknown): ParseResult {
 // ---------------------------------------------------------------------------
 
 export function resourceLineTypeToPersisted(type: ResourceLineType): DbEstimateResourceType {
-  if (type === "tool") return "equipment";
   return type;
 }
 
 export function resourceLineTypeFromPersisted(db: DbEstimateResourceType): ResourceLineType {
-  if (db === "equipment") return "tool";
   return db;
 }
 
@@ -49,6 +58,7 @@ const SEMANTIC_LABELS: Record<ResourceLineType, string> = {
   tool: "estimate.resource.semantic.tool",
   labor: "estimate.resource.semantic.labor",
   subcontractor: "estimate.resource.semantic.subcontractor",
+  overhead: "estimate.resource.semantic.overhead",
   other: "estimate.resource.semantic.other",
 };
 
@@ -70,8 +80,10 @@ export function projectToProcurementItemType(
 ): ProcurementProjection {
   if (db == null) return { kind: "broken" };
   if (db === "material") return { kind: "ok", type: "material" };
-  if (db === "equipment") return { kind: "ok", type: "tool" };
-  if (db === "labor" || db === "subcontractor" || db === "other") return { kind: "non_procurement" };
+  if (db === "tool") return { kind: "ok", type: "tool" };
+  if (db === "labor" || db === "subcontractor" || db === "overhead" || db === "other") {
+    return { kind: "non_procurement" };
+  }
   return { kind: "broken" };
 }
 
@@ -86,7 +98,9 @@ export function projectToHrItemType(
   if (db == null) return { kind: "broken" };
   if (db === "labor") return { kind: "ok", type: "labor" };
   if (db === "subcontractor") return { kind: "ok", type: "subcontractor" };
-  if (db === "material" || db === "equipment" || db === "other") return { kind: "non_hr" };
+  if (db === "material" || db === "tool" || db === "overhead" || db === "other") {
+    return { kind: "non_hr" };
+  }
   return { kind: "broken" };
 }
 

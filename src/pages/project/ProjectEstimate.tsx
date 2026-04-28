@@ -232,11 +232,6 @@ function semanticLabelKeyForType(type: ResourceLineType): string {
   return `estimate.resource.semantic.${type}`;
 }
 
-/** `other` lines created as “Overheads” default to titles like “Overhead 1”; use truck badge for those vs generic “Other”. */
-function isDeliveryOverheadsOtherLine(type: ResourceLineType, title: string): boolean {
-  return type === "other" && title.toLowerCase().includes("overhead");
-}
-
 function labelForRpcResourceTypeKey(key: string, t: (k: string) => string): string {
   const parsed = parsePersistedEstimateResourceType(key);
   return parsed.ok ? t(semanticLabelKeyForType(resourceLineTypeFromPersisted(parsed.db))) : key;
@@ -406,14 +401,15 @@ const RESOURCE_TYPE_OPTIONS: Array<{ value: ResourceLineType; labelKey: string }
   { value: "tool", labelKey: "estimate.resource.type.tool" },
   { value: "labor", labelKey: "estimate.resource.type.labor" },
   { value: "subcontractor", labelKey: "estimate.resource.type.subcontractor" },
+  { value: "overhead", labelKey: "estimate.resource.type.overhead" },
   { value: "other", labelKey: "estimate.resource.type.other" },
 ];
 
-const RESOURCE_CREATE_OPTIONS: Array<{ labelKey: string; overheadLabelKey?: string; value: ResourceLineType }> = [
+const RESOURCE_CREATE_OPTIONS: Array<{ labelKey: string; value: ResourceLineType }> = [
   { labelKey: "estimate.resource.createOption.material", value: "material" },
   { labelKey: "estimate.resource.createOption.tool", value: "tool" },
   { labelKey: "estimate.resource.createOption.hr", value: "labor" },
-  { labelKey: "estimate.resource.createOption.overheads", overheadLabelKey: "estimate.resource.overheadsLabel", value: "other" },
+  { labelKey: "estimate.resource.createOption.overheads", value: "overhead" },
   { labelKey: "estimate.resource.createOption.subcontractor", value: "subcontractor" },
   { labelKey: "estimate.resource.createOption.other", value: "other" },
 ];
@@ -2925,12 +2921,7 @@ export default function ProjectEstimate() {
                                           computed,
                                           { financeMode: lineClientDisplayMode },
                                         );
-                                        const typeLabel = isDeliveryOverheadsOtherLine(line.type, line.title)
-                                          ? t("estimate.resource.overheadsLabel")
-                                          : t(semanticLabelKeyForType(line.type));
-                                        const otherPresentation = isDeliveryOverheadsOtherLine(line.type, line.title)
-                                          ? "overhead"
-                                          : "generic";
+                                        const typeLabel = t(semanticLabelKeyForType(line.type));
                                         const resolvedUnitSelectValue = resolveUnitSelectValue(line.type, line.unit);
                                         const isCustomUnit = resolvedUnitSelectValue === CUSTOM_UNIT_SENTINEL;
                                         const unitSelectValue = customUnitInputLineIds.has(line.id)
@@ -2950,7 +2941,7 @@ export default function ProjectEstimate() {
                                                         title={typeLabel}
                                                         className="rounded-full focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/40"
                                                       >
-                                                        <ResourceTypeBadge type={line.type} iconOnly otherPresentation={otherPresentation} />
+                                                        <ResourceTypeBadge type={line.type} iconOnly />
                                                       </button>
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent align="start">
@@ -2966,7 +2957,7 @@ export default function ProjectEstimate() {
                                                   </DropdownMenu>
                                                 ) : (
                                                   <span title={typeLabel}>
-                                                    <ResourceTypeBadge type={line.type} iconOnly otherPresentation={otherPresentation} />
+                                                    <ResourceTypeBadge type={line.type} iconOnly />
                                                   </span>
                                                 )}
                                                 <InlineEditableText
@@ -3199,9 +3190,6 @@ export default function ProjectEstimate() {
 
                                       {fallbackChecklistRows.map((row) => {
                                         const typeLabel = row.typeLabel ?? t(semanticLabelKeyForType(row.type));
-                                        const fallbackOtherPresentation = isDeliveryOverheadsOtherLine(row.type, row.title)
-                                          ? "overhead"
-                                          : "generic";
                                         return (
                                           <TableRow key={row.id} className="border-b border-border/40 last:border-b-0 md:border-b-0">
                                             <TableCell className="sticky left-0 z-20 w-[180px] border-r border-border bg-card py-1.5 pr-2 align-top shadow-[6px_0_10px_-10px_hsl(var(--foreground)/0.35)]">
@@ -3211,7 +3199,6 @@ export default function ProjectEstimate() {
                                                     type={row.type}
                                                     iconOnly
                                                     labelOverride={row.typeLabel ?? undefined}
-                                                    otherPresentation={fallbackOtherPresentation}
                                                   />
                                                 </span>
                                                 <div className="min-w-0 flex-1 whitespace-normal break-words leading-5 font-medium">
@@ -3282,11 +3269,6 @@ export default function ProjectEstimate() {
                                                           type={option.value}
                                                           labelOverride={optionLabel}
                                                           className="border-transparent"
-                                                          otherPresentation={
-                                                            option.overheadLabelKey
-                                                              ? "overhead"
-                                                              : "generic"
-                                                          }
                                                         />
                                                       </DropdownMenuItem>
                                                     );

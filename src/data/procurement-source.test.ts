@@ -372,7 +372,7 @@ describe("procurement-source helpers", () => {
           procurement_item_id: "pi-orphan",
           procurement_item_title: "Hammer",
           estimate_resource_line_id: "erl-1",
-          estimate_resource_line_resource_type: "equipment",
+          estimate_resource_line_resource_type: "tool",
           title: "Hammer",
           quantity: 1,
           unit: "pcs",
@@ -399,7 +399,7 @@ describe("procurement-source helpers", () => {
       orderRows: [],
       orderLineRows: [],
       movementRows: [],
-      estimateResourceLineTypeById: new Map([["erl-tool", "equipment"]]),
+      estimateResourceLineTypeById: new Map([["erl-tool", "tool"]]),
     });
     expect(items).toHaveLength(1);
     expect(items[0]?.type).toBe("tool");
