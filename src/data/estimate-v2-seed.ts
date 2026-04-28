@@ -73,6 +73,7 @@ const DEFAULT_MARKUP_BPS: Record<ResourceLineType, number> = {
   material: 1500,
   tool: 2500,
   subcontractor: 1000,
+  overhead: 0,
   other: 500,
 };
 
@@ -116,6 +117,7 @@ const projectSpecs: DemoProjectSpec[] = [
       { id: "line-v2-1-6-1", stageId: "stage-v2-1-3", workId: "work-v2-1-6", type: "material", title: "Плитка керамогранит 60×60", unit: "м²", qty: 18, costRub: 2200, discountBpsOverride: 700 },
       { id: "line-v2-1-6-2", stageId: "stage-v2-1-3", workId: "work-v2-1-6", type: "labor", title: "Укладка плитки", unit: "м²", qty: 18, costRub: 1500 },
       { id: "line-v2-1-6-3", stageId: "stage-v2-1-3", workId: "work-v2-1-6", type: "other", title: "Доставка материалов", unit: "рейс", qty: 3, costRub: 2500 },
+      { id: "line-v2-1-6-4", stageId: "stage-v2-1-3", workId: "work-v2-1-6", type: "overhead", title: "Накладные расходы по объекту", unit: "pct_of_cost", qty: 5, costRub: 0 },
     ],
   },
   {

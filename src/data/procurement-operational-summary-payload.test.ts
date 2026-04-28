@@ -66,7 +66,7 @@ describe("mapProcurementOperationalSummaryToItems", () => {
     };
     const toolPayload = {
       ordered_lines: [] as unknown[],
-      procurement_items: [{ ...baseItem, estimate_resource_line_resource_type: "equipment" }],
+      procurement_items: [{ ...baseItem, estimate_resource_line_resource_type: "tool" }],
     };
     const subPayload = {
       ordered_lines: [] as unknown[],

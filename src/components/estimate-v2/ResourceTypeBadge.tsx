@@ -5,15 +5,11 @@ import { cn } from "@/lib/utils";
 import { resourceLineSemanticLabel } from "@/lib/estimate-v2/resource-type-contract";
 import type { ResourceLineType } from "@/types/estimate-v2";
 
-export type OtherResourcePresentation = "generic" | "overhead";
-
 interface ResourceTypeBadgeProps {
   type: ResourceLineType;
   className?: string;
   labelOverride?: string;
   iconOnly?: boolean;
-  /** When `type` is `other`, distinguishes delivery/overhead-style lines (truck) from generic “other” (circle). */
-  otherPresentation?: OtherResourcePresentation;
 }
 
 const OTHER_BADGE_CLASS = "bg-muted text-muted-foreground border-border";
@@ -35,15 +31,14 @@ const typeMeta: Record<ResourceLineType, { className: string; Icon: typeof Packa
     className: "bg-amber-100 text-amber-700 border-amber-200",
     Icon: Building2,
   },
+  overhead: {
+    className: "bg-orange-100 text-orange-700 border-orange-200",
+    Icon: Truck,
+  },
   other: {
     className: OTHER_BADGE_CLASS,
     Icon: Circle,
   },
-};
-
-const otherPresentationMeta: Record<OtherResourcePresentation, { className: string; Icon: typeof Circle }> = {
-  generic: { className: OTHER_BADGE_CLASS, Icon: Circle },
-  overhead: { className: OTHER_BADGE_CLASS, Icon: Truck },
 };
 
 export function ResourceTypeBadge({
@@ -51,10 +46,9 @@ export function ResourceTypeBadge({
   className,
   labelOverride,
   iconOnly = false,
-  otherPresentation = "generic",
 }: ResourceTypeBadgeProps) {
   const { t } = useTranslation();
-  const meta = type === "other" ? otherPresentationMeta[otherPresentation] : typeMeta[type];
+  const meta = typeMeta[type];
   const Icon = meta.Icon;
   const label = labelOverride ?? t(resourceLineSemanticLabel(type));
 

@@ -748,7 +748,7 @@ describe("mergeOperationalRpcLinesOntoExistingOrderLines", () => {
       procurement_item_id: "pi-tool",
       procurement_item_title: "Hammer",
       estimate_resource_line_id: "erl-1",
-      estimate_resource_line_resource_type: "equipment",
+      estimate_resource_line_resource_type: "tool",
       title: "Hammer",
       quantity: 2,
       unit: "pcs",

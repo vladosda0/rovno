@@ -117,12 +117,12 @@ export function AssigneeCell({
         variant="ghost"
         size="sm"
         className={cn(
-          "h-7 max-w-full gap-1 px-2 text-xs",
+          "h-7 max-w-full justify-start gap-1 px-1 text-xs",
           displayName ? "text-foreground" : "text-muted-foreground",
         )}
         onClick={() => setOpen(true)}
       >
-        <User className="h-3.5 w-3.5" />
+        <User className="h-3.5 w-3.5 shrink-0" />
         <span className="truncate">{displayName || t("estimate.assignee.assignButton")}</span>
       </Button>
 

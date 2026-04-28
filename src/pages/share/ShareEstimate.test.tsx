@@ -54,7 +54,7 @@ function createSubmittedShareVersion(
     workId: work.id,
     title: lineTitle,
     type: "material",
-    unit: "job",
+    unit: "service",
     qtyMilli: 1_000,
     costUnitCents: 10_000,
     markupBps: 2_000,

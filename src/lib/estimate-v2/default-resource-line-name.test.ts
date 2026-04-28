@@ -34,7 +34,8 @@ describe("default-resource-line-name", () => {
       ["tool", "Tool"],
       ["labor", "Labor"],
       ["subcontractor", "Subcontractor"],
-      ["other", "Overhead"],
+      ["overhead", "Overhead"],
+      ["other", "Other"],
     ] satisfies [ResourceLineType, string][])("maps %s -> %s", (type, expected) => {
       expect(getDefaultResourceLinePrefix(type)).toBe(expected);
     });
@@ -50,13 +51,15 @@ describe("default-resource-line-name", () => {
         line({ title: "Material 2", type: "material" }),
         line({ title: "Tool 4", type: "tool" }),
         line({ title: "Labor 3", type: "labor" }),
-        line({ title: "Overhead 5", type: "other" }),
+        line({ title: "Overhead 5", type: "overhead" }),
+        line({ title: "Other 2", type: "other" }),
       ];
 
       expect(buildDefaultResourceLineName(lines, "material")).toBe("Material 3");
       expect(buildDefaultResourceLineName(lines, "tool")).toBe("Tool 5");
       expect(buildDefaultResourceLineName(lines, "labor")).toBe("Labor 4");
-      expect(buildDefaultResourceLineName(lines, "other")).toBe("Overhead 6");
+      expect(buildDefaultResourceLineName(lines, "overhead")).toBe("Overhead 6");
+      expect(buildDefaultResourceLineName(lines, "other")).toBe("Other 3");
     });
 
     it("ignores rows renamed away from the generated pattern", () => {

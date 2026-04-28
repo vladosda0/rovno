@@ -232,11 +232,6 @@ function semanticLabelKeyForType(type: ResourceLineType): string {
   return `estimate.resource.semantic.${type}`;
 }
 
-/** `other` lines created as “Overheads” default to titles like “Overhead 1”; use truck badge for those vs generic “Other”. */
-function isDeliveryOverheadsOtherLine(type: ResourceLineType, title: string): boolean {
-  return type === "other" && title.toLowerCase().includes("overhead");
-}
-
 function labelForRpcResourceTypeKey(key: string, t: (k: string) => string): string {
   const parsed = parsePersistedEstimateResourceType(key);
   return parsed.ok ? t(semanticLabelKeyForType(resourceLineTypeFromPersisted(parsed.db))) : key;
@@ -406,14 +401,15 @@ const RESOURCE_TYPE_OPTIONS: Array<{ value: ResourceLineType; labelKey: string }
   { value: "tool", labelKey: "estimate.resource.type.tool" },
   { value: "labor", labelKey: "estimate.resource.type.labor" },
   { value: "subcontractor", labelKey: "estimate.resource.type.subcontractor" },
+  { value: "overhead", labelKey: "estimate.resource.type.overhead" },
   { value: "other", labelKey: "estimate.resource.type.other" },
 ];
 
-const RESOURCE_CREATE_OPTIONS: Array<{ labelKey: string; overheadLabelKey?: string; value: ResourceLineType }> = [
+const RESOURCE_CREATE_OPTIONS: Array<{ labelKey: string; value: ResourceLineType }> = [
   { labelKey: "estimate.resource.createOption.material", value: "material" },
   { labelKey: "estimate.resource.createOption.tool", value: "tool" },
   { labelKey: "estimate.resource.createOption.hr", value: "labor" },
-  { labelKey: "estimate.resource.createOption.overheads", overheadLabelKey: "estimate.resource.overheadsLabel", value: "other" },
+  { labelKey: "estimate.resource.createOption.overheads", value: "overhead" },
   { labelKey: "estimate.resource.createOption.subcontractor", value: "subcontractor" },
   { labelKey: "estimate.resource.createOption.other", value: "other" },
 ];
@@ -649,7 +645,7 @@ function WorkTableFrame({
               <div
                 key={col.key}
                 className={cn(
-                  "flex items-center px-2 py-1.5 text-xs font-semibold text-muted-foreground shrink-0",
+                  "flex items-center pl-1 pr-2 py-1.5 text-xs font-semibold text-muted-foreground shrink-0",
                   col.align === "right" ? "justify-end text-right tabular-nums" : "text-left",
                   col.sticky && "sticky left-0 z-10 border-r border-border bg-card",
                   col.hideOnMobile && "hidden md:flex",
@@ -2854,11 +2850,11 @@ export default function ProjectEstimate() {
                                         <span>{t("estimate.table.col.assigned")}</span>
                                       </span>
                                     ),
-                                    widthPx: 170,
+                                    widthPx: 88,
                                   } as WorkTableColumnDef]
                                 : []),
-                              { key: "qty", title: t("estimate.table.col.qty"), widthPx: 92, align: "right" },
-                              { key: "unit", title: t("estimate.table.col.unit"), widthPx: 128 },
+                              { key: "qty", title: t("estimate.table.col.qty"), widthPx: 92 },
+                              { key: "unit", title: t("estimate.table.col.unit"), widthPx: 168 },
                               ...(showEstimateInternalPricing
                                 ? [
                                     { key: "costUnit", title: t("estimate.table.col.costUnit"), widthPx: 120, align: "right" } as WorkTableColumnDef,
@@ -2925,12 +2921,7 @@ export default function ProjectEstimate() {
                                           computed,
                                           { financeMode: lineClientDisplayMode },
                                         );
-                                        const typeLabel = isDeliveryOverheadsOtherLine(line.type, line.title)
-                                          ? t("estimate.resource.overheadsLabel")
-                                          : t(semanticLabelKeyForType(line.type));
-                                        const otherPresentation = isDeliveryOverheadsOtherLine(line.type, line.title)
-                                          ? "overhead"
-                                          : "generic";
+                                        const typeLabel = t(semanticLabelKeyForType(line.type));
                                         const resolvedUnitSelectValue = resolveUnitSelectValue(line.type, line.unit);
                                         const isCustomUnit = resolvedUnitSelectValue === CUSTOM_UNIT_SENTINEL;
                                         const unitSelectValue = customUnitInputLineIds.has(line.id)
@@ -2950,7 +2941,7 @@ export default function ProjectEstimate() {
                                                         title={typeLabel}
                                                         className="rounded-full focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/40"
                                                       >
-                                                        <ResourceTypeBadge type={line.type} iconOnly otherPresentation={otherPresentation} />
+                                                        <ResourceTypeBadge type={line.type} iconOnly />
                                                       </button>
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent align="start">
@@ -2966,7 +2957,7 @@ export default function ProjectEstimate() {
                                                   </DropdownMenu>
                                                 ) : (
                                                   <span title={typeLabel}>
-                                                    <ResourceTypeBadge type={line.type} iconOnly otherPresentation={otherPresentation} />
+                                                    <ResourceTypeBadge type={line.type} iconOnly />
                                                   </span>
                                                 )}
                                                 <InlineEditableText
@@ -2981,7 +2972,7 @@ export default function ProjectEstimate() {
                                             </TableCell>
 
                                             {showAssignmentColumn && (
-                                              <TableCell className="w-[170px] py-1.5 pr-2 align-top">
+                                              <TableCell className="w-[88px] py-1.5 pr-2 align-top">
                                                 {isAssignableResourceType(line.type) ? (
                                                   <AssigneeCell
                                                     assigneeId={line.assigneeId}
@@ -2995,7 +2986,7 @@ export default function ProjectEstimate() {
                                                     onCommit={(nextValue) => updateLine(pid, line.id, nextValue)}
                                                   />
                                                 ) : (
-                                                  <span className="text-xs text-muted-foreground">—</span>
+                                                  <div className="flex h-7 items-center px-1 text-xs text-muted-foreground">—</div>
                                                 )}
                                               </TableCell>
                                             )}
@@ -3004,6 +2995,7 @@ export default function ProjectEstimate() {
                                               <InlineEditableNumber
                                                 value={line.qtyMilli}
                                                 readOnly={!canEditEstimate}
+                                                align="left"
                                                 onCommit={(nextValue) => updateLine(pid, line.id, { qtyMilli: nextValue })}
                                                 formatDisplay={(value) => qtyFromMilli(value)}
                                                 formatInput={(value) => qtyFromMilli(value)}
@@ -3011,7 +3003,7 @@ export default function ProjectEstimate() {
                                               />
                                             </TableCell>
 
-                                            <TableCell className="w-[128px] py-1.5 pr-2 align-top">
+                                            <TableCell className="w-[168px] py-1.5 pr-2 align-top">
                                               {canEditEstimate ? (
                                                 shouldShowCustomInput ? (
                                                   <div className="inline-flex max-w-full items-center gap-1">
@@ -3074,7 +3066,7 @@ export default function ProjectEstimate() {
                                                       updateLine(pid, line.id, { unit: nextValue });
                                                     }}
                                                   >
-                                                    <SelectTrigger className="h-7 w-auto max-w-full min-w-0 border-transparent bg-transparent px-2 py-0 text-sm shadow-none focus:ring-1 focus:ring-ring/40">
+                                                    <SelectTrigger className="h-7 w-full min-w-0 border-transparent bg-transparent px-1 py-0 text-sm shadow-none focus:ring-1 focus:ring-ring/40">
                                                       <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -3199,9 +3191,6 @@ export default function ProjectEstimate() {
 
                                       {fallbackChecklistRows.map((row) => {
                                         const typeLabel = row.typeLabel ?? t(semanticLabelKeyForType(row.type));
-                                        const fallbackOtherPresentation = isDeliveryOverheadsOtherLine(row.type, row.title)
-                                          ? "overhead"
-                                          : "generic";
                                         return (
                                           <TableRow key={row.id} className="border-b border-border/40 last:border-b-0 md:border-b-0">
                                             <TableCell className="sticky left-0 z-20 w-[180px] border-r border-border bg-card py-1.5 pr-2 align-top shadow-[6px_0_10px_-10px_hsl(var(--foreground)/0.35)]">
@@ -3211,7 +3200,6 @@ export default function ProjectEstimate() {
                                                     type={row.type}
                                                     iconOnly
                                                     labelOverride={row.typeLabel ?? undefined}
-                                                    otherPresentation={fallbackOtherPresentation}
                                                   />
                                                 </span>
                                                 <div className="min-w-0 flex-1 whitespace-normal break-words leading-5 font-medium">
@@ -3221,24 +3209,24 @@ export default function ProjectEstimate() {
                                             </TableCell>
 
                                             {showAssignmentColumn && (
-                                              <TableCell className="w-[170px] py-1.5 pr-2 align-top">
+                                              <TableCell className="w-[88px] py-1.5 pr-2 align-top">
                                                 {isAssignableResourceType(row.type) && (row.assigneeName || row.assigneeEmail) ? (
-                                                  <div className="min-h-7 px-1 py-0.5 text-sm text-foreground">
+                                                  <div className="flex min-h-7 items-center px-1 py-0.5 text-sm text-foreground">
                                                     {row.assigneeName || row.assigneeEmail}
                                                   </div>
                                                 ) : (
-                                                  <span className="text-xs text-muted-foreground">—</span>
+                                                  <div className="flex min-h-7 items-center px-1 py-0.5 text-xs text-muted-foreground">—</div>
                                                 )}
                                               </TableCell>
                                             )}
 
                                             <TableCell className="w-[92px] py-1.5 pr-2 align-top">
-                                              <div className="min-h-7 px-1 py-0.5 text-sm text-foreground">
+                                              <div className="min-h-7 px-1 py-0.5 text-sm text-foreground tabular-nums">
                                                 {row.qtyMilli != null ? qtyFromMilli(row.qtyMilli) : "—"}
                                               </div>
                                             </TableCell>
 
-                                            <TableCell className="w-[128px] py-1.5 pr-2 align-top">
+                                            <TableCell className="w-[168px] py-1.5 pr-2 align-top">
                                               <div className="min-h-7 px-1 py-0.5 text-sm text-foreground">
                                                 {row.unit || "—"}
                                               </div>
@@ -3282,11 +3270,6 @@ export default function ProjectEstimate() {
                                                           type={option.value}
                                                           labelOverride={optionLabel}
                                                           className="border-transparent"
-                                                          otherPresentation={
-                                                            option.overheadLabelKey
-                                                              ? "overhead"
-                                                              : "generic"
-                                                          }
                                                         />
                                                       </DropdownMenuItem>
                                                     );

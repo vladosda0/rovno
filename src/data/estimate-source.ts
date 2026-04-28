@@ -12,8 +12,22 @@ type EstimateVersionRow = Database["public"]["Tables"]["estimate_versions"]["Row
 type EstimateVersionInsert = Database["public"]["Tables"]["estimate_versions"]["Insert"];
 type EstimateWorkRow = Database["public"]["Tables"]["estimate_works"]["Row"];
 type EstimateWorkInsert = Database["public"]["Tables"]["estimate_works"]["Insert"];
-type EstimateResourceLineRow = Database["public"]["Tables"]["estimate_resource_lines"]["Row"];
-type EstimateResourceLineInsert = Database["public"]["Tables"]["estimate_resource_lines"]["Insert"];
+/**
+ * The generated `Row` / `Insert` types still pin `resource_type` to the legacy
+ * 4-value DB enum (`material | labor | subcontractor | equipment | other`).
+ * Session 0 widened the on-disk constraint to the 6-value canonical set
+ * (`material | tool | labor | subcontractor | overhead | other`); these aliases
+ * locally re-type `resource_type` as `ResourceLineType` until the backend-truth
+ * GHA sync PR refreshes the generated mirror.
+ */
+type EstimateResourceLineRow = Omit<
+  Database["public"]["Tables"]["estimate_resource_lines"]["Row"],
+  "resource_type"
+> & { resource_type: ResourceLineType };
+type EstimateResourceLineInsert = Omit<
+  Database["public"]["Tables"]["estimate_resource_lines"]["Insert"],
+  "resource_type"
+> & { resource_type: ResourceLineType };
 /** Present after migrations assignee_profile + assignee_label; consumer types refresh via sync PR. */
 export type EstimateResourceLineRowWithAssignee = EstimateResourceLineRow & {
   assignee_profile_id?: string | null;
@@ -148,9 +162,7 @@ function totalPriceCents(costUnitCents: number, qtyMilli: number): number {
   return Math.max(0, Math.round(costUnitCents * quantityFromQtyMilli(qtyMilli)));
 }
 
-function mapLineTypeToRemote(
-  type: ResourceLineType,
-): Database["public"]["Tables"]["estimate_resource_lines"]["Insert"]["resource_type"] {
+function mapLineTypeToRemote(type: ResourceLineType): ResourceLineType {
   return resourceLineTypeToPersisted(type);
 }
 
@@ -443,7 +455,7 @@ export interface EstimateOperationalSummaryResourceLineRow {
   estimate_version_id: string;
   /** Stage title from RPC join (operational read path). */
   project_stage_title: string | null;
-  resource_type: "material" | "labor" | "subcontractor" | "equipment" | "other";
+  resource_type: ResourceLineType;
   title: string;
   quantity: number;
   unit: string | null;

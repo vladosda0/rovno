@@ -430,7 +430,7 @@ describe("persistEstimateV2HeroTransition", () => {
           localWorkId: "work-launch",
           title: "Scaffold team",
           type: "subcontractor",
-          unit: "job",
+          unit: "service",
           qtyMilli: 1000,
           costUnitCents: 18500,
         },

@@ -196,7 +196,8 @@ const RESOURCE_TYPE_ORDER: Record<ResourceLineType, number> = {
   tool: 1,
   labor: 2,
   subcontractor: 3,
-  other: 4,
+  overhead: 4,
+  other: 5,
 };
 const ESTIMATE_V2_REMOTE_SYNC_DEBOUNCE_MS = 300;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -1519,9 +1520,7 @@ function ensureMainStoreSubscription() {
   });
 }
 
-function inferLineTypeFromRemote(
-  resourceType: "material" | "labor" | "subcontractor" | "equipment" | "other",
-): ResourceLineType {
+function inferLineTypeFromRemote(resourceType: ResourceLineType): ResourceLineType {
   return resourceLineTypeFromPersisted(resourceType);
 }
 

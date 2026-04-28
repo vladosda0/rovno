@@ -1,4 +1,4 @@
-export type ResourceLineType = "material" | "tool" | "labor" | "subcontractor" | "other";
+export type ResourceLineType = "material" | "tool" | "labor" | "subcontractor" | "overhead" | "other";
 
 export type ProjectMode = "build_myself" | "contractor";
 

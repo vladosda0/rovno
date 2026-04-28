@@ -643,7 +643,7 @@ describe("estimate-v2 workspace drafts", () => {
           resource_type: "subcontractor",
           title: "Electrical",
           quantity: 1,
-          unit: "job",
+          unit: "service",
           unit_price_cents: 20000,
           total_price_cents: 20000,
           client_unit_price_cents: 21400,
@@ -1238,7 +1238,7 @@ describe("estimate-v2 workspace drafts", () => {
         {
           id: "line-1",
           estimate_work_id: "work-1",
-          resource_type: "equipment",
+          resource_type: "tool",
           title: "Laser level",
           quantity: 1,
           unit: "day",
@@ -1462,7 +1462,7 @@ describe("estimate-v2 workspace drafts", () => {
         {
           id: "line-1",
           estimate_work_id: "work-1",
-          resource_type: "equipment",
+          resource_type: "tool",
           title: "Laser level v1",
           quantity: 1,
           unit: "day",

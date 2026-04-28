@@ -12,7 +12,11 @@ import type {
   EstimateV2Work,
   ResourceLineType,
 } from "@/types/estimate-v2";
-import { checklistEstimateV2ResourceType, resourceLineTypeFromPersisted } from "@/lib/estimate-v2/resource-type-contract";
+import {
+  checklistEstimateV2ResourceType,
+  parsePersistedEstimateResourceType,
+  resourceLineTypeFromPersisted,
+} from "@/lib/estimate-v2/resource-type-contract";
 import { loadEstimateOperationalSummary } from "@/data/estimate-source";
 import type { Database as PlanningDatabase } from "../../backend-truth/generated/supabase-types";
 
@@ -20,7 +24,16 @@ type ProjectStageRow = PlanningDatabase["public"]["Tables"]["project_stages"]["R
 type TaskRow = PlanningDatabase["public"]["Tables"]["tasks"]["Row"];
 type TaskChecklistItemRow = PlanningDatabase["public"]["Tables"]["task_checklist_items"]["Row"];
 type TaskCommentRow = PlanningDatabase["public"]["Tables"]["task_comments"]["Row"];
-type EstimateResourceLineRow = PlanningDatabase["public"]["Tables"]["estimate_resource_lines"]["Row"];
+/**
+ * Local re-type that widens `resource_type` to the post-Session-0 6-value
+ * `ResourceLineType` set; the generated mirror still pins the legacy 4-value
+ * enum and is refreshed by the backend-truth GHA sync PR after the matching
+ * `rovno-db` migration lands.
+ */
+type EstimateResourceLineRow = Omit<
+  PlanningDatabase["public"]["Tables"]["estimate_resource_lines"]["Row"],
+  "resource_type"
+> & { resource_type: ResourceLineType };
 type ProjectStageInsert = PlanningDatabase["public"]["Tables"]["project_stages"]["Insert"];
 type TaskInsert = PlanningDatabase["public"]["Tables"]["tasks"]["Insert"];
 type TaskChecklistItemInsert = PlanningDatabase["public"]["Tables"]["task_checklist_items"]["Insert"];
@@ -39,7 +52,8 @@ const RESOURCE_TYPE_ORDER: Record<ResourceLineType, number> = {
   tool: 1,
   labor: 2,
   subcontractor: 3,
-  other: 4,
+  overhead: 4,
+  other: 5,
 };
 
 export interface CreateProjectStageInput {
@@ -475,10 +489,12 @@ export function overlayEstimateLinkedAssigneeFromChecklist(task: Task): Task {
 }
 
 function mapEstimateResourceTypeToChecklistType(
-  resourceType: EstimateResourceLineRow["resource_type"] | null | undefined,
+  resourceType: string | null | undefined,
 ): ChecklistItemType {
   if (resourceType == null) return "subtask";
-  const appType = resourceLineTypeFromPersisted(resourceType);
+  const parsed = parsePersistedEstimateResourceType(resourceType);
+  if (!parsed.ok) return "subtask";
+  const appType = resourceLineTypeFromPersisted(parsed.db);
   if (appType === "material") return "material";
   if (appType === "tool") return "tool";
   return "subtask";

@@ -7,11 +7,30 @@ export const CUSTOM_UNIT_SENTINEL = "__custom__";
  * labels are localized at render time via `getUnitLabel` / `buildUnitSelectOptions`.
  */
 const RESOURCE_UNITS_BY_TYPE: Record<ResourceLineType, string[]> = {
-  material: ["pcs", "m", "m²", "m³", "kg", "t", "l", "set", "pack"],
-  labor: ["hour", "day", "shift", "job", "m²", "m³"],
-  tool: ["hour", "day", "week", "month", "pcs"],
-  subcontractor: ["job", "m²", "m³", "day"],
-  other: ["item", "set", "job"],
+  material: [
+    "pcs", "pair", "m", "mm", "cm", "linear_m",
+    "m²", "m³", "l", "ml",
+    "kg", "g", "t",
+    "set", "pack", "roll", "sheet", "bag", "bucket", "tube", "cylinder",
+  ],
+  tool: ["pcs", "set", "hour", "shift", "day", "week", "month"],
+  labor: [
+    "hour", "shift", "day", "month",
+    "man_hour", "man_shift", "man_day",
+    "m²", "linear_m", "m³", "pcs",
+  ],
+  subcontractor: [
+    "hour", "shift", "day", "month",
+    "m²", "m", "linear_m", "m³", "pcs", "t", "kg",
+    "object", "stage", "service", "contract",
+  ],
+  overhead: [
+    "pct_of_cost", "service",
+    "day", "week", "month",
+    "km", "trip",
+    "m³", "t", "pcs",
+  ],
+  other: ["pcs", "set", "service", "hour", "day", "pct_of_cost"],
 };
 
 type UnitTranslator = (key: string, options?: Record<string, unknown>) => string;
