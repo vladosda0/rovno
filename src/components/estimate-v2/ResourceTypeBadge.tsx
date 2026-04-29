@@ -48,7 +48,7 @@ export function ResourceTypeBadge({
   iconOnly = false,
 }: ResourceTypeBadgeProps) {
   const { t } = useTranslation();
-  const meta = typeMeta[type];
+  const meta = typeMeta[type] ?? typeMeta.other;
   const Icon = meta.Icon;
   const label = labelOverride ?? t(resourceLineSemanticLabel(type));
 
