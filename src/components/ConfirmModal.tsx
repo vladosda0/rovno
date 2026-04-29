@@ -9,6 +9,7 @@ import {
   AlertDialogCancel,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useTranslation } from "react-i18next";
 
 interface ConfirmModalProps {
@@ -23,6 +24,8 @@ interface ConfirmModalProps {
   tertiaryLabel?: string;
   onTertiary?: () => void;
   showCancel?: boolean;
+  confirmDisabled?: boolean;
+  confirmDisabledTooltip?: string;
   children?: React.ReactNode;
 }
 
@@ -38,11 +41,22 @@ export function ConfirmModal({
   tertiaryLabel,
   onTertiary,
   showCancel = true,
+  confirmDisabled = false,
+  confirmDisabledTooltip,
   children,
 }: ConfirmModalProps) {
   const { t } = useTranslation();
   const resolvedConfirm = confirmLabel ?? t("confirmModal.defaults.confirm");
   const resolvedCancel = cancelLabel ?? t("confirmModal.defaults.cancel");
+  const confirmButton = (
+    <AlertDialogAction
+      onClick={onConfirm}
+      disabled={confirmDisabled}
+      className="bg-accent text-accent-foreground hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      {resolvedConfirm}
+    </AlertDialogAction>
+  );
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent className="bg-card border border-border shadow-xl rounded-modal">
@@ -58,9 +72,16 @@ export function ConfirmModal({
             </Button>
           )}
           {showCancel && <AlertDialogCancel onClick={onCancel}>{resolvedCancel}</AlertDialogCancel>}
-          <AlertDialogAction onClick={onConfirm} className="bg-accent text-accent-foreground hover:bg-accent/90">
-            {resolvedConfirm}
-          </AlertDialogAction>
+          {confirmDisabled && confirmDisabledTooltip ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span tabIndex={0}>{confirmButton}</span>
+              </TooltipTrigger>
+              <TooltipContent>{confirmDisabledTooltip}</TooltipContent>
+            </Tooltip>
+          ) : (
+            confirmButton
+          )}
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

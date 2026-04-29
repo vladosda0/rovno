@@ -126,8 +126,8 @@ export default function ShareEstimate() {
     );
   }, [snapshot]);
 
-  const latestProposed = projectId ? getLatestProposedVersion(projectId) : null;
-  const newerProposed = latestProposed && version && latestProposed.number > version.number ? latestProposed : null;
+  const latestProposed = SHOW_ESTIMATE_VERSION_UI && projectId ? getLatestProposedVersion(projectId) : null;
+  const newerProposed = SHOW_ESTIMATE_VERSION_UI && latestProposed && version && latestProposed.number > version.number ? latestProposed : null;
   const approvalEligible = version?.status === "proposed"
     && version.submitted
     && !version.archived
