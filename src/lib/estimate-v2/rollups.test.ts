@@ -93,6 +93,27 @@ describe("estimate-v2 rollups", () => {
     expect(planned.plannedCostByTypeCents.labor).toBe(10_000);
   });
 
+  it("populates a finite plannedCostByTypeCents bucket for every ResourceLineType (no NaN drift on overhead lines)", () => {
+    const planned = computePlannedFromEstimateV2({
+      project: project({ taxBps: 0 }),
+      stages: [stage()],
+      lines: [
+        line({ id: "line-material", type: "material", qtyMilli: 1_000, costUnitCents: 1_000 }),
+        line({ id: "line-tool", type: "tool", qtyMilli: 1_000, costUnitCents: 1_000 }),
+        line({ id: "line-labor", type: "labor", qtyMilli: 1_000, costUnitCents: 1_000 }),
+        line({ id: "line-sub", type: "subcontractor", qtyMilli: 1_000, costUnitCents: 1_000 }),
+        line({ id: "line-overhead", type: "overhead", qtyMilli: 1_000, costUnitCents: 1_000 }),
+        line({ id: "line-other", type: "other", qtyMilli: 1_000, costUnitCents: 1_000 }),
+      ],
+    });
+
+    const buckets = planned.plannedCostByTypeCents;
+    for (const type of ["material", "tool", "labor", "subcontractor", "overhead", "other"] as const) {
+      expect(Number.isFinite(buckets[type])).toBe(true);
+      expect(buckets[type]).toBe(1_000);
+    }
+  });
+
   it("computes fact rollups with orphan handling and unpaid formulas", () => {
     const projectId = `rollup-fact-${Date.now()}`;
 
@@ -202,13 +223,13 @@ describe("estimate-v2 rollups", () => {
     const combined = combinePlanFact(
       {
         plannedBudgetCents: 100,
-        plannedCostByTypeCents: { material: 10, tool: 10, labor: 10, subcontractor: 10, other: 10 },
+        plannedCostByTypeCents: { material: 10, tool: 10, labor: 10, subcontractor: 10, overhead: 10, other: 10 },
         plannedSubtotalCents: 80,
         plannedTaxCents: 20,
       },
       {
         spentCents: 50,
-        spentByTypeCents: { material: 10, tool: 10, labor: 10, subcontractor: 10, other: 10 },
+        spentByTypeCents: { material: 10, tool: 10, labor: 10, subcontractor: 10, overhead: 10, other: 10 },
         toBePaidPlannedCents: 25,
         spentAbovePlannedCents: -5,
       },

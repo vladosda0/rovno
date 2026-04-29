@@ -221,6 +221,27 @@ describe("estimate-v2 pricing", () => {
     expect(procurementSubtotalCents).toBe(18_333);
   });
 
+  it("populates a finite bucket for every ResourceLineType (no NaN drift on overhead lines)", () => {
+    const project = createProject({ discountBps: 0, markupBps: 0, taxBps: 0 });
+    const stage = createStage();
+    const lines = [
+      createLine({ id: "l-material", type: "material", costUnitCents: 1_000, qtyMilli: 1_000 }),
+      createLine({ id: "l-tool", type: "tool", costUnitCents: 1_000, qtyMilli: 1_000 }),
+      createLine({ id: "l-labor", type: "labor", costUnitCents: 1_000, qtyMilli: 1_000 }),
+      createLine({ id: "l-sub", type: "subcontractor", costUnitCents: 1_000, qtyMilli: 1_000 }),
+      createLine({ id: "l-overhead", type: "overhead", costUnitCents: 1_000, qtyMilli: 1_000 }),
+      createLine({ id: "l-other", type: "other", costUnitCents: 1_000, qtyMilli: 1_000 }),
+    ];
+
+    const totals = computeProjectTotals(project, [stage], [], lines, "contractor");
+    const buckets = totals.breakdownByType;
+    const allTypes: ResourceLineType[] = ["material", "tool", "labor", "subcontractor", "overhead", "other"];
+    for (const type of allTypes) {
+      expect(Number.isFinite(buckets[type])).toBe(true);
+      expect(buckets[type]).toBe(1_000);
+    }
+  });
+
   it("displayLineClientAmounts prefers summary RPC cents when both are finite (summary mode)", () => {
     const project = createProject();
     const stage = createStage();
