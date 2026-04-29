@@ -48,12 +48,16 @@ export function getUnitLabel(unit: string, t?: UnitTranslator): string {
   return t(key, { defaultValue: unit });
 }
 
+function unitsForType(type: ResourceLineType): string[] {
+  return RESOURCE_UNITS_BY_TYPE[type] ?? [];
+}
+
 export function getUnitOptionsForType(type: ResourceLineType): string[] {
-  return RESOURCE_UNITS_BY_TYPE[type];
+  return unitsForType(type);
 }
 
 export function isKnownUnitForType(type: ResourceLineType, unit: string): boolean {
-  return RESOURCE_UNITS_BY_TYPE[type].includes(unit);
+  return unitsForType(type).includes(unit);
 }
 
 export function resolveUnitSelectValue(type: ResourceLineType, unit: string): string {
@@ -65,7 +69,7 @@ export function buildUnitSelectOptions(
   t?: UnitTranslator,
 ): Array<{ value: string; label: string }> {
   return [
-    ...RESOURCE_UNITS_BY_TYPE[type].map((unit) => ({
+    ...unitsForType(type).map((unit) => ({
       value: unit,
       label: getUnitLabel(unit, t),
     })),
