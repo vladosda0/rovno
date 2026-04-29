@@ -217,7 +217,7 @@ function toCentsFromMajor(value: string): number {
 function toBpsFromPercent(value: string): number {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed <= 0) return 0;
-  return Math.max(0, Math.round(parsed * 100));
+  return Math.min(10_000, Math.max(0, Math.round(parsed * 100)));
 }
 
 function fromBpsToPercent(bps: number): string {

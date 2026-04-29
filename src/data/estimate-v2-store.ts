@@ -247,6 +247,19 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
+const MAX_BPS = 10_000;
+
+function clampBps(value: number | null | undefined): number {
+  if (value == null || !Number.isFinite(value)) return 0;
+  return Math.min(MAX_BPS, Math.max(0, Math.round(value)));
+}
+
+function clampBpsOrNull(value: number | null | undefined): number | null {
+  if (value == null) return null;
+  if (!Number.isFinite(value)) return null;
+  return Math.min(MAX_BPS, Math.max(0, Math.round(value)));
+}
+
 function id(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
@@ -2770,8 +2783,8 @@ export function createLine(
     unit: input.unit?.trim() || "unit",
     qtyMilli: Math.max(1, Math.round(input.qtyMilli ?? 1_000)),
     costUnitCents: Math.max(0, Math.round(input.costUnitCents ?? 0)),
-    markupBps: Math.max(0, Math.round(input.markupBps ?? 0)),
-    discountBpsOverride: input.discountBpsOverride == null ? null : Math.max(0, Math.round(input.discountBpsOverride)),
+    markupBps: clampBps(input.markupBps),
+    discountBpsOverride: clampBpsOrNull(input.discountBpsOverride),
     taxBpsOverride: null,
     assigneeId: null,
     assigneeName: null,
@@ -2798,12 +2811,19 @@ export function updateLine(projectId: string, lineId: string, partial: Partial<E
   const now = nowIso();
   const previous = state.lines.find((line) => line.id === lineId) ?? null;
   const shouldClearSummaryPricing = linePartialTouchesPricing(partial);
+  const sanitizedPartial: Partial<EstimateV2ResourceLine> = { ...partial };
+  if ("markupBps" in sanitizedPartial) {
+    sanitizedPartial.markupBps = clampBps(sanitizedPartial.markupBps);
+  }
+  if ("discountBpsOverride" in sanitizedPartial) {
+    sanitizedPartial.discountBpsOverride = clampBpsOrNull(sanitizedPartial.discountBpsOverride);
+  }
   state.lines = state.lines.map((line) => (
     line.id === lineId
       ? (() => {
         const nextLine = {
           ...line,
-          ...partial,
+          ...sanitizedPartial,
           updatedAt: now,
         };
         return shouldClearSummaryPricing ? clearLineSummaryPricing(nextLine) : nextLine;
@@ -3117,9 +3137,13 @@ export function updateEstimateV2Project(projectId: string, partial: Partial<Esti
   const prevDiscount = state.project.discountBps;
   const prevProjectMode = state.project.projectMode;
   const nextProjectMode = partial.projectMode ?? state.project.projectMode;
+  const sanitizedPartial: Partial<EstimateV2Project> = { ...partial };
+  if ("markupBps" in sanitizedPartial) {
+    sanitizedPartial.markupBps = clampBps(sanitizedPartial.markupBps);
+  }
   state.project = {
     ...state.project,
-    ...partial,
+    ...sanitizedPartial,
     projectMode: nextProjectMode,
     updatedAt: nowIso(),
   };
