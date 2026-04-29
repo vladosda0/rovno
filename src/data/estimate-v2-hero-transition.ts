@@ -51,7 +51,8 @@ const RESOURCE_TYPE_ORDER: Record<ResourceLineType, number> = {
   tool: 1,
   labor: 2,
   subcontractor: 3,
-  other: 4,
+  overhead: 4,
+  other: 5,
 };
 const PARTIAL_REMOTE_TRANSITION_MESSAGE = "Estimate changed after a partial remote transition. Reload the page before trying again.";
 const REMOTE_EVENT_MISMATCH_MESSAGE = "Remote hero-transition rows already exist for another estimate snapshot. Rovno will not create a second set.";

@@ -50,6 +50,7 @@ function emptyByType(): Record<ResourceLineType, number> {
     tool: 0,
     labor: 0,
     subcontractor: 0,
+    overhead: 0,
     other: 0,
   };
 }
