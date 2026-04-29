@@ -1508,9 +1508,6 @@ export default function Landing() {
               alt={t("landing.brand.name")}
               className="h-8 w-auto"
             />
-            <span className="hidden text-caption text-muted-foreground sm:inline leading-tight">
-              {t("landing.brand.tagline")}
-            </span>
           </Link>
 
           <nav className="hidden items-center gap-2 md:flex">
@@ -1544,7 +1541,7 @@ export default function Landing() {
                   <span className="sr-only">{t("landing.nav.openMenu")}</span>
                 </Button>
               </SheetTrigger>
-              <SheetContent side="right" className="glass-sidebar">
+              <SheetContent side="right" className="bg-background/90 backdrop-blur-2xl border-l border-border/40">
                 <SheetHeader>
                   <SheetTitle>{t("landing.nav.navigation")}</SheetTitle>
                 </SheetHeader>
@@ -1655,7 +1652,7 @@ export default function Landing() {
                   <div className="space-y-2 p-sp-3">
                     <h3 className="truncate text-body font-semibold text-foreground">{project.title}</h3>
                     <div className="flex items-center justify-between text-caption">
-                      <span className="rounded-pill bg-muted px-2 py-0.5 text-muted-foreground">{project.type}</span>
+                      <span />
                       <span className="text-muted-foreground">{getProgressLabel(t, project.progress_pct)}</span>
                     </div>
                     <Progress value={project.progress_pct} className="h-1.5" />
