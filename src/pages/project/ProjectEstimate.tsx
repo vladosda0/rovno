@@ -1189,17 +1189,19 @@ export default function ProjectEstimate() {
     locations,
   }), [pid, stages, works, lines, tasks, procurementItems, orders, hrItems, hrPayments, locations]);
 
-  const latestApproved = useMemo(() => (
-    versions
+  const latestApproved = useMemo(() => {
+    if (!SHOW_ESTIMATE_VERSION_UI) return null;
+    return versions
       .filter((version) => version.submitted && version.status === "approved")
-      .sort((a, b) => b.number - a.number)[0] ?? null
-  ), [versions]);
+      .sort((a, b) => b.number - a.number)[0] ?? null;
+  }, [versions]);
 
-  const latestProposed = useMemo(() => (
-    versions
+  const latestProposed = useMemo(() => {
+    if (!SHOW_ESTIMATE_VERSION_UI) return null;
+    return versions
       .filter((version) => version.submitted && version.status === "proposed" && !version.archived)
-      .sort((a, b) => b.number - a.number)[0] ?? null
-  ), [versions]);
+      .sort((a, b) => b.number - a.number)[0] ?? null;
+  }, [versions]);
 
   const pendingProposed = Boolean(
     latestProposed
@@ -3643,13 +3645,15 @@ export default function ProjectEstimate() {
           title={shareLinkModalState?.title ?? t("estimate.share.defaultTitle")}
           description={shareLinkModalState?.description ?? ""}
           confirmLabel={shareLinkModalState?.suggestUpgrade ? t("estimate.share.upgradePlan") : t("common.close")}
+          confirmDisabled={Boolean(shareLinkModalState?.suggestUpgrade)}
+          confirmDisabledTooltip={shareLinkModalState?.suggestUpgrade ? t("common.comingSoon") : undefined}
           showCancel={Boolean(shareLinkModalState?.suggestUpgrade)}
           cancelLabel={t("common.close")}
           tertiaryLabel={t("estimate.share.copyLink")}
           onTertiary={handleCopyShareLink}
           onConfirm={() => {
             if (shareLinkModalState?.suggestUpgrade) {
-              navigate("/pricing");
+              return;
             }
             setShareLinkModalState(null);
           }}
