@@ -151,33 +151,6 @@ describe("ProjectProcurement header redesign", () => {
     expect(screen.queryByText("1 selected")).not.toBeInTheDocument();
   });
 
-  it("hides archive action for estimate-linked requests in the detail dialog", () => {
-    const projectId = "project-1";
-    const lockedItem = seedLockedRequestedItem(projectId);
-    const escapedLockedName = lockedItem.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-
-    try {
-      renderProjectProcurement(projectId);
-
-      fireEvent.click(screen.getByRole("button", { name: /^Requested \(/i }));
-      fireEvent.click(screen.getByRole("button", { name: new RegExp(escapedLockedName) }));
-
-      const dialog = screen.getByRole("dialog", { name: "Procurement request" });
-      expect(within(dialog).getByText("Locked from estimate")).toBeInTheDocument();
-      expect(within(dialog).queryByRole("button", { name: "Archive" })).not.toBeInTheDocument();
-
-      const consoleOutput = consoleErrorSpy.mock.calls
-        .flat()
-        .map((value) => String(value))
-        .join("\n");
-      expect(consoleOutput).not.toContain("DialogContent requires a DialogTitle");
-      expect(consoleOutput).not.toContain("Missing `Description` or `aria-describedby={undefined}`");
-    } finally {
-      consoleErrorSpy.mockRestore();
-    }
-  });
-
   it("shows all three tabs for contractors including Requested", () => {
     const projectId = "project-1";
     seedRequestedItem(projectId);

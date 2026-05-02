@@ -1922,7 +1922,7 @@ export default function ProjectProcurement() {
                                     )}
                                     <td className="px-2 py-2 min-w-[220px]">
                                       {canManageProcurement ? (
-                                        <button type="button" onClick={() => openDetail(item)} className="text-left hover:underline">
+                                        <button type="button" onClick={() => openCreateOrder([item.id])} className="text-left hover:underline">
                                           <div className="flex min-w-0 items-center gap-2">
                                             <ResourceTypeBadge type={item.type} className="shrink-0 border-transparent" />
                                             <p className="font-medium text-foreground truncate">{item.name}</p>
@@ -2018,7 +2018,7 @@ export default function ProjectProcurement() {
                                 )}
                                 <td className="px-2 py-2 min-w-[220px]">
                                   {canManageProcurement ? (
-                                    <button type="button" onClick={() => openDetail(item)} className="text-left hover:underline">
+                                    <button type="button" onClick={() => openCreateOrder([item.id])} className="text-left hover:underline">
                                       <div className="flex min-w-0 items-center gap-2">
                                         <ResourceTypeBadge type={item.type} className="shrink-0 border-transparent" />
                                         <p className="font-medium text-foreground truncate">{item.name}</p>
