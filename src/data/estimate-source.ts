@@ -41,9 +41,9 @@ type ProjectStageInsert = Database["public"]["Tables"]["project_stages"]["Insert
 const PROJECT_ESTIMATE_SELECT = "id, project_id, title, description, status, created_by, created_at, updated_at";
 const ESTIMATE_VERSION_SELECT = "id, estimate_id, version_number, is_current, created_by, created_at";
 const PROJECT_STAGE_SELECT = "id, project_id, title, description, sort_order, status, discount_bps, created_at, updated_at";
-const ESTIMATE_WORK_SELECT = "id, estimate_version_id, project_stage_id, title, description, sort_order, planned_cost_cents, created_at";
+const ESTIMATE_WORK_SELECT = "id, estimate_version_id, project_stage_id, title, description, sort_order, planned_cost_cents, planned_start, planned_end, created_at";
 const ESTIMATE_RESOURCE_LINE_SELECT = "id, estimate_work_id, resource_type, title, quantity, unit, unit_price_cents, total_price_cents, client_unit_price_cents, client_total_price_cents, markup_bps, discount_bps_override, assignee_profile_id, assignee_label, created_at";
-const ESTIMATE_DEPENDENCY_SELECT = "id, estimate_version_id, from_work_id, to_work_id, dependency_type, created_at";
+const ESTIMATE_DEPENDENCY_SELECT = "id, estimate_version_id, from_work_id, to_work_id, dependency_type, lag_days, created_at";
 
 export interface EnsureProjectEstimateRootInput {
   projectId: string;
@@ -854,6 +854,8 @@ export async function saveCurrentEstimateDraft(
       (sum, line) => sum + totalPriceCents(line.costUnitCents, line.qtyMilli),
       0,
     ),
+    planned_start: work.plannedStart ?? null,
+    planned_end: work.plannedEnd ?? null,
   }));
 
   if (shouldAbortCurrentEstimateDraftSave(actor)) {
@@ -911,6 +913,7 @@ export async function saveCurrentEstimateDraft(
     from_work_id: workIdByLocalId.get(dependency.fromWorkId) ?? ensureRemoteUuid(projectId, "work", dependency.fromWorkId),
     to_work_id: workIdByLocalId.get(dependency.toWorkId) ?? ensureRemoteUuid(projectId, "work", dependency.toWorkId),
     dependency_type: "finish_to_start",
+    lag_days: dependency.lagDays ?? 0,
   }));
 
   if (dependencyRows.length > 0) {
