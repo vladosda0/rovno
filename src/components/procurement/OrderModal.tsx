@@ -424,25 +424,25 @@ export function OrderModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[96vw] max-w-5xl max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col">
-        <DialogHeader className="px-5 py-4 border-b border-border">
+      <DialogContent className="w-[96vw] max-w-5xl max-h-[92vh] p-0 gap-0 overflow-hidden flex flex-col">
+        <DialogHeader className="px-5 py-3 border-b border-border">
           <DialogTitle>{t("procurement.orderModal.createTitle")}</DialogTitle>
         </DialogHeader>
 
         {!showSensitiveDetail ? (
           <>
-            <div className="flex-1 px-5 py-4">
+            <div className="flex-1 px-5 py-3">
               <p className="text-sm text-muted-foreground">
                 {t("procurement.orderModal.noSensitive")}
               </p>
             </div>
-            <DialogFooter className="px-5 py-4 border-t border-border">
+            <DialogFooter className="px-5 py-3 border-t border-border">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>{t("common.close")}</Button>
             </DialogFooter>
           </>
         ) : (
         <>
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+        <div className="flex-1 overflow-y-auto px-5 py-3 space-y-3">
           <div className="flex items-center gap-2">
             <Button
               type="button"
@@ -458,17 +458,11 @@ export function OrderModal({
               size="sm"
               variant={kind === "stock" ? "default" : "outline"}
               onClick={() => setKind("stock")}
-              disabled={isSupabaseMode}
               className={cn(kind === "stock" && "bg-accent text-accent-foreground hover:bg-accent/90")}
             >
               {t("procurement.orderModal.kindStock")}
             </Button>
           </div>
-          {isSupabaseMode && (
-            <p className="text-xs text-muted-foreground">
-              {t("procurement.orderModal.supabaseStockNote")}
-            </p>
-          )}
 
           {kind === "supplier" ? (
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -500,44 +494,65 @@ export function OrderModal({
             </div>
           )}
 
-          <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">{t("procurement.orderModal.deliveryDate")}</label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" className="w-full justify-start h-9 text-left font-normal">
-                  <CalendarIcon className="h-4 w-4 mr-2" />
-                  {deliveryDeadline ? deliveryDeadline.toLocaleDateString() : t("procurement.orderModal.setDate")}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar mode="single" selected={deliveryDeadline} onSelect={setDeliveryDeadline} initialFocus />
-              </PopoverContent>
-            </Popover>
-          </div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">{t("procurement.orderModal.deliveryDate")}</label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full justify-start h-9 text-left font-normal">
+                    <CalendarIcon className="h-4 w-4 mr-2" />
+                    {deliveryDeadline ? deliveryDeadline.toLocaleDateString() : t("procurement.orderModal.setDate")}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar mode="single" selected={deliveryDeadline} onSelect={setDeliveryDeadline} initialFocus />
+                </PopoverContent>
+              </Popover>
+            </div>
 
-          <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">{t("procurement.orderModal.invoiceAttachment")}</label>
-            <Input
-              type="file"
-              className="h-9"
-              aria-label={t("procurement.orderModal.invoiceAria")}
-              disabled={isSupabaseMode}
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (!file) {
-                  setInvoiceAttachment(null);
-                  return;
-                }
-                setInvoiceAttachment({
-                  name: file.name,
-                  url: URL.createObjectURL(file),
-                });
-                event.currentTarget.value = "";
-              }}
-            />
-            {isSupabaseMode && (
-              <p className="text-[11px] text-muted-foreground">{t("procurement.orderModal.invoiceSupabaseHint")}</p>
-            )}
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground" htmlFor="order-invoice-input">{t("procurement.orderModal.invoiceAttachment")}</label>
+              <div className="flex items-center gap-2">
+                <input
+                  id="order-invoice-input"
+                  type="file"
+                  className="sr-only"
+                  aria-label={t("procurement.orderModal.invoiceAria")}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (!file) {
+                      setInvoiceAttachment(null);
+                      return;
+                    }
+                    setInvoiceAttachment({
+                      name: file.name,
+                      url: URL.createObjectURL(file),
+                    });
+                    event.currentTarget.value = "";
+                  }}
+                />
+                <label
+                  htmlFor="order-invoice-input"
+                  className="inline-flex h-9 flex-1 cursor-pointer items-center justify-start gap-2 rounded-md border border-input bg-background px-3 text-sm hover:bg-accent hover:text-accent-foreground"
+                >
+                  <span className="truncate text-foreground">
+                    {invoiceAttachment ? invoiceAttachment.name : t("procurement.orderModal.invoiceChoose")}
+                  </span>
+                </label>
+                {invoiceAttachment && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 px-2"
+                    onClick={() => setInvoiceAttachment(null)}
+                    aria-label={t("procurement.orderModal.invoiceClear")}
+                  >
+                    {t("common.clear")}
+                  </Button>
+                )}
+              </div>
+            </div>
           </div>
 
           <div className="space-y-1">
@@ -547,11 +562,7 @@ export function OrderModal({
               onChange={(event) => setNote(event.target.value)}
               className="h-9"
               placeholder={t("procurement.orderModal.notePlaceholder")}
-              disabled={isSupabaseMode}
             />
-            {isSupabaseMode && (
-              <p className="text-[11px] text-muted-foreground">{t("procurement.orderModal.noteSupabaseHint")}</p>
-            )}
           </div>
 
           <div className="rounded-lg border border-border overflow-x-auto">
@@ -674,7 +685,7 @@ export function OrderModal({
           </div>
         </div>
 
-        <DialogFooter className="px-5 py-4 border-t border-border">
+        <DialogFooter className="px-5 py-3 border-t border-border">
           <div className="mr-auto text-sm text-muted-foreground">{t("procurement.orderModal.total", { amount: fmtCost(totalAmount) })}</div>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>{t("common.close")}</Button>
           {SHOW_ORDER_SAVE_DRAFT_BUTTON ? (
