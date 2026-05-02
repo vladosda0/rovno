@@ -616,6 +616,8 @@ export type Database = {
           "sort_order": number
           "planned_cost_cents": number | null
           "created_at": string
+          "planned_start": string | null
+          "planned_end": string | null
           }
           Insert: {
           "id"?: string
@@ -626,6 +628,8 @@ export type Database = {
           "sort_order": number
           "planned_cost_cents"?: number | null
           "created_at"?: string
+          "planned_start"?: string | null
+          "planned_end"?: string | null
           }
           Update: {
           "id"?: string
@@ -636,6 +640,8 @@ export type Database = {
           "sort_order"?: number
           "planned_cost_cents"?: number | null
           "created_at"?: string
+          "planned_start"?: string | null
+          "planned_end"?: string | null
           }
           Relationships: []
         }
@@ -704,6 +710,7 @@ export type Database = {
           "to_work_id": string
           "dependency_type": "finish_to_start" | "start_to_start" | "finish_to_finish" | "start_to_finish"
           "created_at": string
+          "lag_days": number
           }
           Insert: {
           "id"?: string
@@ -712,6 +719,7 @@ export type Database = {
           "to_work_id": string
           "dependency_type"?: "finish_to_start" | "start_to_start" | "finish_to_finish" | "start_to_finish"
           "created_at"?: string
+          "lag_days"?: number
           }
           Update: {
           "id"?: string
@@ -720,6 +728,7 @@ export type Database = {
           "to_work_id"?: string
           "dependency_type"?: "finish_to_start" | "start_to_start" | "finish_to_finish" | "start_to_finish"
           "created_at"?: string
+          "lag_days"?: number
           }
           Relationships: []
         }

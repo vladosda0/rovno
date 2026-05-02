@@ -87,6 +87,7 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20260419120000_session3c_procurement_ai_in_stock_evidence.sql`
 - `supabase/migrations/20260425092624_profile_tutorial_state.sql`
 - `supabase/migrations/20260428120000_resource_types_alignment.sql`
+- `supabase/migrations/20260502120000_estimate_planned_dates_and_lag.sql`
 
 ## Exclusions
 
