@@ -27,9 +27,14 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { LocationPicker } from "@/components/procurement/LocationPicker";
 import type { DraftOrderLineInput } from "@/data/order-store";
-import type { OrderKind } from "@/types/entities";
+import type { OrderKind, ProcurementItemType } from "@/types/entities";
 import { useWorkspaceMode } from "@/hooks/use-workspace-source";
 import { useEstimateV2Project } from "@/hooks/use-estimate-v2-data";
+import {
+  isProcurementResourceLineType,
+  projectToProcurementItemType,
+  resourceLineTypeToPersisted,
+} from "@/lib/estimate-v2/resource-type-contract";
 
 interface OrderModalProps {
   open: boolean;
@@ -75,6 +80,7 @@ export function OrderModal({
   const estimateState = useEstimateV2Project(projectId);
 
   const items = useMemo(() => {
+    const nowIso = new Date().toISOString();
     const workById = new Map(estimateState.works.map((work) => [work.id, work]));
     const lineById = new Map(estimateState.lines.map((line) => [line.id, line]));
 
@@ -99,7 +105,7 @@ export function OrderModal({
 
     const fallbackStageId = estimateState.stages[0]?.id ?? null;
 
-    return baseItems.map((item) => {
+    const derivedItems = baseItems.map((item) => {
       const lineId = item.sourceEstimateV2LineId ?? null;
       if (!lineId) return item;
       const line = lineById.get(lineId);
@@ -125,7 +131,64 @@ export function OrderModal({
         plannedUnitPrice,
       };
     });
-  }, [baseItems, estimateState.lines, estimateState.works, estimateState.stages]);
+
+    if (isSupabaseMode) return derivedItems;
+
+    const linkedLineIds = new Set(
+      derivedItems
+        .map((it) => it.sourceEstimateV2LineId ?? null)
+        .filter((lineId): lineId is string => !!lineId),
+    );
+
+    const missingDerivedItems: typeof derivedItems = estimateState.lines
+      .filter((line) => isProcurementResourceLineType(line.type))
+      .filter((line) => !linkedLineIds.has(line.id))
+      .map((line) => {
+        const work = workById.get(line.workId) ?? null;
+        const resolvedStageId = line.stageId || work?.stageId || fallbackStageId;
+        const requiredByDate = work?.plannedStart ?? (resolvedStageId ? stageStartByStageId.get(resolvedStageId) ?? null : null);
+        const proj = projectToProcurementItemType(resourceLineTypeToPersisted(line.type));
+        const derivedType: ProcurementItemType = proj.kind === "ok" ? proj.type : "other";
+        const requiredQty = Math.max(0, line.qtyMilli / 1_000);
+        const plannedUnitPrice = Math.max(0, line.costUnitCents / 100);
+
+        return {
+          id: `estimate-line-${line.id}`,
+          projectId: line.projectId,
+          stageId: resolvedStageId ?? null,
+          categoryId: null,
+          type: derivedType,
+          name: line.title,
+          spec: null,
+          unit: line.unit,
+          requiredByDate,
+          requiredQty,
+          orderedQty: 0,
+          receivedQty: 0,
+          plannedUnitPrice,
+          actualUnitPrice: null,
+          supplier: null,
+          supplierPreferred: null,
+          locationPreferredId: null,
+          lockedFromEstimate: true,
+          sourceEstimateItemId: null,
+          sourceEstimateV2LineId: line.id,
+          orphaned: false,
+          orphanedAt: null,
+          orphanedReason: null,
+          linkUrl: null,
+          notes: null,
+          attachments: [],
+          createdFrom: "estimate",
+          linkedTaskIds: [],
+          archived: false,
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        };
+      });
+
+    return [...derivedItems, ...missingDerivedItems];
+  }, [baseItems, estimateState.lines, estimateState.works, estimateState.stages, isSupabaseMode]);
 
   const [kind, setKind] = useState<OrderKind>("supplier");
   const [supplierName, setSupplierName] = useState("");
