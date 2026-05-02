@@ -1284,6 +1284,7 @@
   "procurement.hint.missingPlannedPrice_other": "Missing planned price for {{count}} items.",
   "procurement.hint.missingOrderPrice_one": "Missing ordered price for {{count}} line.",
   "procurement.hint.missingOrderPrice_other": "Missing ordered price for {{count}} lines.",
+  "procurement.sync.refreshing": "Refreshing…",
   "procurement.sync.syncingTitle": "Procurement is syncing from Estimate",
   "procurement.sync.syncingBody": "Estimate-linked procurement requests are being refreshed now.",
   "procurement.sync.errorTitle": "Procurement sync failed",

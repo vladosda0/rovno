@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -1695,37 +1696,31 @@ export default function ProjectProcurement() {
 
   return (
     <div className={cn("space-y-sp-2", showStickySelectionBar && "pb-24")}>
-      {(isProcurementSyncing || isProcurementProjectionBehind || hasProcurementSyncError) && (
-        <div className={cn(
-          "rounded-card border px-3 py-2 text-sm flex items-start gap-2",
-          hasProcurementSyncError
-            ? "border-destructive/30 bg-destructive/10 text-destructive"
-            : isProcurementProjectionBehind
-              ? "border-warning/30 bg-warning/10 text-foreground"
-              : "border-info/30 bg-info/10 text-foreground",
-        )}>
-          {isProcurementSyncing ? <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" /> : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />}
+      {hasProcurementSyncError && (
+        <div className="rounded-card border border-destructive/30 bg-destructive/10 text-destructive px-3 py-2 text-sm flex items-start gap-2">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <div className="min-w-0">
-            <p className="font-medium">
-              {isProcurementSyncing
-                ? t("procurement.sync.syncingTitle")
-                : hasProcurementSyncError
-                  ? t("procurement.sync.errorTitle")
-                  : t("procurement.sync.behindTitle")}
-            </p>
+            <p className="font-medium">{t("procurement.sync.errorTitle")}</p>
             <p className="text-xs opacity-80">
-              {isProcurementSyncing
-                ? t("procurement.sync.syncingBody")
-                : hasProcurementSyncError
-                  ? (procurementSyncState.lastError ?? t("procurement.sync.errorFallback"))
-                  : t("procurement.sync.behindBody")}
+              {procurementSyncState.lastError ?? t("procurement.sync.errorFallback")}
             </p>
           </div>
         </div>
       )}
 
       <div className="glass-elevated rounded-card p-sp-3 space-y-sp-3">
-        <h2 className="text-h3 text-foreground">{t("procurement.title")}</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-h3 text-foreground">{t("procurement.title")}</h2>
+          <span
+            className={cn(
+              "text-xs text-muted-foreground transition-opacity",
+              isProcurementProjectionBehind && !isProcurementSyncing && !hasProcurementSyncError ? "opacity-100" : "opacity-0",
+            )}
+            aria-hidden={!isProcurementProjectionBehind || isProcurementSyncing || hasProcurementSyncError}
+          >
+            {t("procurement.sync.refreshing")}
+          </span>
+        </div>
 
         {canManageProcurement && (
           <>
@@ -1867,7 +1862,15 @@ export default function ProjectProcurement() {
       {effectiveActiveTab === "requested" && (
         <div className="glass rounded-card p-2 space-y-2">
           {requestedItems.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">{t("procurement.empty.noRequested")}</p>
+            isProcurementSyncing ? (
+              <div className="space-y-2" aria-hidden>
+                {[0, 1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="h-14 w-full" />
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-8">{t("procurement.empty.noRequested")}</p>
+            )
           ) : (
             <>
               {Array.from(requestedStageMap.map.entries())
@@ -2081,7 +2084,15 @@ export default function ProjectProcurement() {
       {effectiveActiveTab === "ordered" && (
         <div className="glass rounded-card p-2 space-y-2">
           {placedSupplierOrders.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">{t("procurement.empty.noPlaced")}</p>
+            isProcurementSyncing ? (
+              <div className="space-y-2" aria-hidden>
+                {[0, 1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="h-14 w-full" />
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-8">{t("procurement.empty.noPlaced")}</p>
+            )
           ) : (
             placedSupplierOrders.map((order) => {
               const collapsed = collapsedOrderIds.has(order.id);
@@ -2372,7 +2383,15 @@ export default function ProjectProcurement() {
       {effectiveActiveTab === "in_stock" && (
         <div className="glass rounded-card p-2 space-y-2">
           {visibleInStockRows.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">{t("procurement.empty.noInStock")}</p>
+            isProcurementSyncing ? (
+              <div className="space-y-2" aria-hidden>
+                {[0, 1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="h-14 w-full" />
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-8">{t("procurement.empty.noInStock")}</p>
+            )
           ) : (
             <div className="rounded-lg border border-border overflow-x-auto">
               <table className="w-full text-sm">

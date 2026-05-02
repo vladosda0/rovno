@@ -1288,6 +1288,7 @@
   "procurement.hint.missingOrderPrice_few": "Не указана цена заказа для {{count}} строк.",
   "procurement.hint.missingOrderPrice_many": "Не указана цена заказа для {{count}} строк.",
   "procurement.hint.missingOrderPrice_other": "Не указана цена заказа для {{count}} строк.",
+  "procurement.sync.refreshing": "Обновляется…",
   "procurement.sync.syncingTitle": "Закупки синхронизируются со сметой",
   "procurement.sync.syncingBody": "Связанные со сметой заявки на закупку сейчас обновляются.",
   "procurement.sync.errorTitle": "Не удалось синхронизировать закупки",
