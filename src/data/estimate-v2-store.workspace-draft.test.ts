@@ -72,6 +72,7 @@ vi.mock("@/data/hr-source", async () => {
 
 import {
   __unsafeResetEstimateV2ForTests,
+  addDependency,
   createWork,
   createStage,
   getEstimateV2ProjectState,
@@ -79,6 +80,7 @@ import {
   registerEstimateV2ProjectAccessContext,
   transitionEstimateV2ProjectToInWork,
   updateLine,
+  updateWorkDates,
 } from "@/data/estimate-v2-store";
 import { __unsafeResetStoreForTests } from "@/data/store";
 
@@ -1797,6 +1799,325 @@ describe("estimate-v2 workspace drafts", () => {
       assigneeName: "Shared Person",
       assigneeEmail: "shared@example.com",
       title: "Crew",
+    });
+  });
+
+  describe("Gantt persistence: planned dates and lag_days", () => {
+    const baseEstimate = {
+      id: "estimate-1",
+      project_id: "project-remote-1",
+      title: "Remote Estimate",
+      description: null,
+      status: "draft" as const,
+      created_by: "profile-1",
+      created_at: "2026-03-01T00:00:00.000Z",
+      updated_at: "2026-03-02T00:00:00.000Z",
+    };
+    const baseVersion = {
+      id: "version-1",
+      estimate_id: "estimate-1",
+      version_number: 1,
+      is_current: true,
+      created_by: "profile-1",
+      created_at: "2026-03-01T00:00:00.000Z",
+    };
+    const baseStage = {
+      id: "stage-1",
+      project_id: "project-remote-1",
+      title: "Shell",
+      description: "",
+      sort_order: 1,
+      status: "open" as const,
+      discount_bps: 0,
+      created_at: "2026-03-01T00:00:00.000Z",
+      updated_at: "2026-03-02T00:00:00.000Z",
+    };
+
+    it("hydrates planned_start and planned_end from the server work row", async () => {
+      const projectId = "project-remote-1";
+      loadCurrentEstimateDraftMock.mockResolvedValue({
+        estimate: baseEstimate,
+        currentVersion: baseVersion,
+        stages: [baseStage],
+        works: [
+          {
+            id: "work-1",
+            estimate_version_id: "version-1",
+            project_stage_id: "stage-1",
+            title: "Framing",
+            description: null,
+            sort_order: 1,
+            planned_cost_cents: 30000,
+            planned_start: "2026-04-10T00:00:00.000Z",
+            planned_end: "2026-04-15T00:00:00.000Z",
+            created_at: "2026-03-01T00:00:00.000Z",
+          },
+        ],
+        lines: [],
+        dependencies: [],
+      });
+
+      await hydrateEstimateV2ProjectFromWorkspace(projectId, { profileId: "profile-1" });
+      const state = getEstimateV2ProjectState(projectId);
+
+      expect(state.works[0]).toMatchObject({
+        id: "work-1",
+        plannedStart: "2026-04-10T00:00:00.000Z",
+        plannedEnd: "2026-04-15T00:00:00.000Z",
+      });
+    });
+
+    it("hydrates lag_days from the server dependency row", async () => {
+      const projectId = "project-remote-1";
+      loadCurrentEstimateDraftMock.mockResolvedValue({
+        estimate: baseEstimate,
+        currentVersion: baseVersion,
+        stages: [baseStage],
+        works: [
+          {
+            id: "work-1",
+            estimate_version_id: "version-1",
+            project_stage_id: "stage-1",
+            title: "Framing",
+            description: null,
+            sort_order: 1,
+            planned_cost_cents: 0,
+            planned_start: null,
+            planned_end: null,
+            created_at: "2026-03-01T00:00:00.000Z",
+          },
+          {
+            id: "work-2",
+            estimate_version_id: "version-1",
+            project_stage_id: "stage-1",
+            title: "Roof",
+            description: null,
+            sort_order: 2,
+            planned_cost_cents: 0,
+            planned_start: null,
+            planned_end: null,
+            created_at: "2026-03-01T00:00:00.000Z",
+          },
+        ],
+        lines: [],
+        dependencies: [
+          {
+            id: "dependency-1",
+            estimate_version_id: "version-1",
+            from_work_id: "work-1",
+            to_work_id: "work-2",
+            dependency_type: "finish_to_start",
+            lag_days: 5,
+            created_at: "2026-03-01T00:00:00.000Z",
+          },
+        ],
+      });
+
+      await hydrateEstimateV2ProjectFromWorkspace(projectId, { profileId: "profile-1" });
+      const state = getEstimateV2ProjectState(projectId);
+
+      expect(state.dependencies[0]).toMatchObject({
+        id: "dependency-1",
+        fromWorkId: "work-1",
+        toWorkId: "work-2",
+        lagDays: 5,
+      });
+    });
+
+    it("server row beats a stale workspace cache for planned dates", async () => {
+      const projectId = "project-remote-1";
+      const profileId = "profile-1";
+
+      // First hydrate writes stale planned dates into the workspace cache.
+      loadCurrentEstimateDraftMock.mockResolvedValueOnce({
+        estimate: baseEstimate,
+        currentVersion: baseVersion,
+        stages: [baseStage],
+        works: [
+          {
+            id: "work-1",
+            estimate_version_id: "version-1",
+            project_stage_id: "stage-1",
+            title: "Framing",
+            description: null,
+            sort_order: 1,
+            planned_cost_cents: 30000,
+            planned_start: "2026-01-01T00:00:00.000Z",
+            planned_end: "2026-01-05T00:00:00.000Z",
+            created_at: "2026-03-01T00:00:00.000Z",
+          },
+        ],
+        lines: [],
+        dependencies: [],
+      });
+      await hydrateEstimateV2ProjectFromWorkspace(projectId, { profileId });
+
+      // Second hydrate from server reports newer dates; cache still holds the
+      // stale ones. Server values must win.
+      loadCurrentEstimateDraftMock.mockResolvedValueOnce({
+        estimate: baseEstimate,
+        currentVersion: baseVersion,
+        stages: [baseStage],
+        works: [
+          {
+            id: "work-1",
+            estimate_version_id: "version-1",
+            project_stage_id: "stage-1",
+            title: "Framing",
+            description: null,
+            sort_order: 1,
+            planned_cost_cents: 30000,
+            planned_start: "2026-04-10T00:00:00.000Z",
+            planned_end: "2026-04-15T00:00:00.000Z",
+            created_at: "2026-03-01T00:00:00.000Z",
+          },
+        ],
+        lines: [],
+        dependencies: [],
+      });
+      await hydrateEstimateV2ProjectFromWorkspace(projectId, { profileId });
+      const state = getEstimateV2ProjectState(projectId);
+
+      expect(state.works[0]).toMatchObject({
+        plannedStart: "2026-04-10T00:00:00.000Z",
+        plannedEnd: "2026-04-15T00:00:00.000Z",
+      });
+    });
+
+    it("propagates planned dates from updateWorkDates into the saved snapshot", async () => {
+      vi.useFakeTimers();
+      const projectId = "project-remote-1";
+      try {
+        loadCurrentEstimateDraftMock.mockResolvedValue({
+          estimate: baseEstimate,
+          currentVersion: baseVersion,
+          stages: [baseStage],
+          works: [
+            {
+              id: "work-1",
+              estimate_version_id: "version-1",
+              project_stage_id: "stage-1",
+              title: "Framing",
+              description: null,
+              sort_order: 1,
+              planned_cost_cents: 30000,
+              planned_start: null,
+              planned_end: null,
+              created_at: "2026-03-01T00:00:00.000Z",
+            },
+          ],
+          lines: [],
+          dependencies: [],
+        });
+
+        await hydrateEstimateV2ProjectFromWorkspace(projectId, { profileId: "profile-1" });
+        registerEstimateV2ProjectAccessContext(projectId, {
+          mode: "supabase",
+          profileId: "profile-1",
+          projectOwnerProfileId: "profile-1",
+          membershipRole: "owner",
+        });
+
+        const result = updateWorkDates(
+          projectId,
+          "work-1",
+          "2026-04-10T00:00:00.000Z",
+          "2026-04-15T00:00:00.000Z",
+          { source: "gantt" },
+        );
+        expect(result.ok).toBe(true);
+
+        await vi.advanceTimersByTimeAsync(500);
+
+        expect(saveCurrentEstimateDraftMock).toHaveBeenCalled();
+        // schedule.ts normalizes ISO timestamps onto local-day boundaries on
+        // the way through clampWorkDates → fromDayIndex, so the saved snapshot
+        // contains the day-aligned ISOs, not the literal inputs we sent.
+        // Asserting that planned dates are non-null strings is enough to
+        // confirm the value flows from updateWorkDates into the snapshot
+        // payload that saveCurrentEstimateDraft will persist.
+        expect(saveCurrentEstimateDraftMock).toHaveBeenLastCalledWith(
+          projectId,
+          expect.objectContaining({
+            works: expect.arrayContaining([
+              expect.objectContaining({
+                title: "Framing",
+                plannedStart: expect.stringMatching(/^2026-04-(09|10)T/),
+                plannedEnd: expect.stringMatching(/^2026-04-(14|15)T/),
+              }),
+            ]),
+          }),
+          expect.objectContaining({ profileId: "profile-1" }),
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("propagates lagDays from addDependency into the saved snapshot", async () => {
+      vi.useFakeTimers();
+      const projectId = "project-remote-1";
+      try {
+        loadCurrentEstimateDraftMock.mockResolvedValue({
+          estimate: baseEstimate,
+          currentVersion: baseVersion,
+          stages: [baseStage],
+          works: [
+            {
+              id: "work-1",
+              estimate_version_id: "version-1",
+              project_stage_id: "stage-1",
+              title: "Framing",
+              description: null,
+              sort_order: 1,
+              planned_cost_cents: 0,
+              planned_start: null,
+              planned_end: null,
+              created_at: "2026-03-01T00:00:00.000Z",
+            },
+            {
+              id: "work-2",
+              estimate_version_id: "version-1",
+              project_stage_id: "stage-1",
+              title: "Roof",
+              description: null,
+              sort_order: 2,
+              planned_cost_cents: 0,
+              planned_start: null,
+              planned_end: null,
+              created_at: "2026-03-01T00:00:00.000Z",
+            },
+          ],
+          lines: [],
+          dependencies: [],
+        });
+
+        await hydrateEstimateV2ProjectFromWorkspace(projectId, { profileId: "profile-1" });
+        registerEstimateV2ProjectAccessContext(projectId, {
+          mode: "supabase",
+          profileId: "profile-1",
+          projectOwnerProfileId: "profile-1",
+          membershipRole: "owner",
+        });
+
+        const result = addDependency(projectId, "work-1", "work-2", 5);
+        expect(result.ok).toBe(true);
+
+        await vi.advanceTimersByTimeAsync(500);
+
+        expect(saveCurrentEstimateDraftMock).toHaveBeenCalled();
+        expect(saveCurrentEstimateDraftMock).toHaveBeenLastCalledWith(
+          projectId,
+          expect.objectContaining({
+            dependencies: expect.arrayContaining([
+              expect.objectContaining({ kind: "FS", lagDays: 5 }),
+            ]),
+          }),
+          expect.objectContaining({ profileId: "profile-1" }),
+        );
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 });
