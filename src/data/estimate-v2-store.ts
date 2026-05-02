@@ -1791,6 +1791,10 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
       ? operationalEstimatePayload.works.map((work) => {
         const cachedWork = cachedWorksById.get(work.estimate_work_id);
         const taskInfo = taskInfoByWorkId.get(work.estimate_work_id);
+        // Server row is the source of truth for planned dates. Cache/taskInfo
+        // are only consulted when the server row hasn't recorded a value yet.
+        const serverPlannedStart = (work as { planned_start?: string | null }).planned_start ?? null;
+        const serverPlannedEnd = (work as { planned_end?: string | null }).planned_end ?? null;
         return {
           id: work.estimate_work_id,
           projectId,
@@ -1798,8 +1802,8 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
           title: work.title,
           order: work.sort_order,
           discountBps: cachedWork?.discountBps ?? 0,
-          plannedStart: taskInfo?.plannedStart ?? cachedWork?.plannedStart ?? null,
-          plannedEnd: taskInfo?.plannedEnd ?? cachedWork?.plannedEnd ?? null,
+          plannedStart: serverPlannedStart ?? taskInfo?.plannedStart ?? cachedWork?.plannedStart ?? null,
+          plannedEnd: serverPlannedEnd ?? taskInfo?.plannedEnd ?? cachedWork?.plannedEnd ?? null,
           taskId: taskInfo?.taskId ?? cachedWork?.taskId ?? null,
           status: taskInfo?.status ?? cachedWork?.status ?? "not_started",
           createdAt: cachedWork?.createdAt ?? work.created_at,
@@ -1835,6 +1839,9 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
         .map((work) => {
           const cachedWork = cachedWorksById.get(work.id);
           const taskInfo = taskInfoByWorkId.get(work.id);
+          // Server row is the source of truth for planned dates (Phase 1 of
+          // Gantt persistence work). Cache/taskInfo only fill gaps when the
+          // server row hasn't recorded a value yet.
           return {
             id: work.id,
             projectId,
@@ -1842,8 +1849,8 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
             title: work.title,
             order: work.sort_order,
             discountBps: cachedWork?.discountBps ?? 0,
-            plannedStart: taskInfo?.plannedStart ?? cachedWork?.plannedStart ?? null,
-            plannedEnd: taskInfo?.plannedEnd ?? cachedWork?.plannedEnd ?? null,
+            plannedStart: work.planned_start ?? taskInfo?.plannedStart ?? cachedWork?.plannedStart ?? null,
+            plannedEnd: work.planned_end ?? taskInfo?.plannedEnd ?? cachedWork?.plannedEnd ?? null,
             taskId: taskInfo?.taskId ?? cachedWork?.taskId ?? null,
             status: taskInfo?.status ?? cachedWork?.status ?? "not_started",
             createdAt: cachedWork?.createdAt ?? work.created_at,
@@ -2008,13 +2015,15 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
 
     const dependencies = draft.dependencies.map((dependency) => {
       const cachedDependency = cachedDependenciesById.get(dependency.id);
+      // Server row is authoritative for lagDays now (Phase 1 of Gantt
+      // persistence work). Cache only fills the gap if the row has none.
       return {
         id: dependency.id,
         projectId,
         kind: "FS",
         fromWorkId: dependency.from_work_id,
         toWorkId: dependency.to_work_id,
-        lagDays: cachedDependency?.lagDays ?? 0,
+        lagDays: dependency.lag_days ?? cachedDependency?.lagDays ?? 0,
         createdAt: cachedDependency?.createdAt ?? dependency.created_at,
         updatedAt: cachedDependency?.updatedAt ?? dependency.created_at,
       } satisfies EstimateV2Dependency;
