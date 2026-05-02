@@ -237,6 +237,7 @@ export function OrderDetailModal({
             {order?.status === "draft" && isSupabaseMode && order.kind === "supplier" && (
               <Button type="button" variant="destructive" disabled>{t("procurement.orderDetail.cancelDraft")}</Button>
             )}
+            {/* TODO: allow editing deliverTo on placed orders before first receive */}
             {order?.status === "placed" && !isSupabaseMode && (
               <Button type="button" variant="destructive" onClick={onVoidOrder}>{t("procurement.orderDetail.voidOrder")}</Button>
             )}

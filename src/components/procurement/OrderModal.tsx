@@ -420,12 +420,8 @@ export function OrderModal({
                   value={deliverToLocationId}
                   onChange={setDeliverToLocationId}
                   className="h-9"
-                  placeholder={isSupabaseMode ? t("procurement.orderModal.deliverPlaceholderSupabase") : t("procurement.locationPicker.placeholder")}
-                  disabled={isSupabaseMode}
+                  placeholder={t("procurement.locationPicker.placeholder")}
                 />
-                {isSupabaseMode && (
-                  <p className="text-[11px] text-muted-foreground">{t("procurement.orderModal.deliverHintSupabase")}</p>
-                )}
               </div>
             </div>
           ) : (

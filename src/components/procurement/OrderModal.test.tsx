@@ -244,7 +244,6 @@ describe("OrderModal", () => {
     });
 
     expect(screen.getByRole("button", { name: "Stock" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Choose at receive time" })).toBeDisabled();
     expect(screen.getByLabelText("Invoice attachment")).toBeDisabled();
     expect(screen.getByPlaceholderText("Optional note")).toBeDisabled();
   });
