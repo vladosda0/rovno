@@ -2244,7 +2244,7 @@ export default function ProjectProcurement() {
                                 )}
                                 <td className="px-2 py-2 min-w-[220px]">
                                   {canManageProcurement ? (
-                                    <button type="button" className="text-left hover:underline" onClick={() => openDetail(item)}>
+                                    <button type="button" className="text-left hover:underline" onClick={() => openOrderDetail(order.id)}>
                                       <div className="flex min-w-0 items-start gap-2">
                                         <ResourceTypeBadge type={item.type} className="shrink-0 border-transparent" />
                                         <div className="min-w-0">
