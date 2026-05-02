@@ -1547,6 +1547,8 @@
   "procurement.receiveOrder.locationRequired": "Location is required",
   "procurement.receiveOrder.locationRequiredDesc": "Select a receive location",
   "procurement.receiveOrder.orderReceived": "Order received",
+  "procurement.receiveOrder.maxRemaining": "Max: {{remaining}} {{unit}}",
+  "procurement.validation.qtyExceedsRemaining": "Cannot receive more than {{remaining}} {{unit}}",
   "procurement.receivePicker.title": "Receive purchase order",
   "procurement.receivePicker.searchPlaceholder": "Search by supplier or project",
   "procurement.receivePicker.noPlaced": "No placed supplier orders found.",

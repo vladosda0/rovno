@@ -177,17 +177,22 @@ export function ReceiveOrderModal({
                         <td className="px-3 py-2 text-right">{line.qty} {line.unit}</td>
                         <td className="px-3 py-2 text-right">{line.receivedQty} {line.unit}</td>
                         <td className="px-3 py-2">
-                          <Input
-                            type="number"
-                            min="0"
-                            max={remaining}
-                            value={lineQty[line.id] ?? 0}
-                            onChange={(event) => {
-                              const nextValue = Math.min(remaining, Math.max(0, Number(event.target.value)));
-                              setLineQty((prev) => ({ ...prev, [line.id]: nextValue }));
-                            }}
-                            className="h-8 text-right"
-                          />
+                          <div className="flex flex-col items-end gap-0.5">
+                            <Input
+                              type="number"
+                              min="0"
+                              max={remaining}
+                              value={lineQty[line.id] ?? 0}
+                              onChange={(event) => {
+                                const nextValue = Math.min(remaining, Math.max(0, Number(event.target.value)));
+                                setLineQty((prev) => ({ ...prev, [line.id]: nextValue }));
+                              }}
+                              className="h-8 text-right"
+                            />
+                            <span className="text-[11px] text-muted-foreground">
+                              {t("procurement.receiveOrder.maxRemaining", { remaining, unit: line.unit })}
+                            </span>
+                          </div>
                         </td>
                       </tr>
                     );

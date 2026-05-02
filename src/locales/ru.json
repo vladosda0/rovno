@@ -1551,6 +1551,8 @@
   "procurement.receiveOrder.locationRequired": "Нужна локация",
   "procurement.receiveOrder.locationRequiredDesc": "Выбери локацию приёма",
   "procurement.receiveOrder.orderReceived": "Заказ принят",
+  "procurement.receiveOrder.maxRemaining": "Макс.: {{remaining}} {{unit}}",
+  "procurement.validation.qtyExceedsRemaining": "Нельзя получить больше {{remaining}} {{unit}}",
   "procurement.receivePicker.title": "Принять заказ",
   "procurement.receivePicker.searchPlaceholder": "Поиск по поставщику или проекту",
   "procurement.receivePicker.noPlaced": "Размещённые заказы поставщикам не найдены.",
