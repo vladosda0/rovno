@@ -187,6 +187,21 @@ export function EstimateGantt({
   // container, so the timeline-visible area is everything to the right of it.
   const timelineViewportWidth = Math.max(0, viewportWidth - LEFT_PANE_WIDTH);
 
+  // Y coordinates for each work row inside the timeline body. Computed once
+  // per render of `rows` so dependency arrows can position themselves without
+  // an extra DOM measurement pass.
+  const { rowYByWorkId, rowsTotalHeight } = useMemo(() => {
+    let y = 0;
+    const map: Record<string, { top: number; height: number }> = {};
+    for (const row of rows) {
+      if (row.kind === "work" && row.workId) {
+        map[row.workId] = { top: y, height: row.height };
+      }
+      y += row.height;
+    }
+    return { rowYByWorkId: map, rowsTotalHeight: y };
+  }, [rows]);
+
   const timelineRange = useMemo(() => {
     const draftWorks = works.map((work) => draftWorksById[work.id] ?? work);
     return computeTimelineRange(draftWorks, {
@@ -200,6 +215,15 @@ export function EstimateGantt({
   const timelineEndDay = timelineRange.end;
   const computedTimelineWidth = Math.max(pxPerDay, (timelineEndDay - timelineStartDay + 1) * pxPerDay);
   const timelineWidth = Math.max(computedTimelineWidth, timelineViewportWidth);
+
+  // Today marker — null when today is outside the timeline range.
+  const todayDay = toDayIndex(new Date());
+  const todayInRange = todayDay != null
+    && todayDay >= timelineStartDay
+    && todayDay <= timelineEndDay;
+  const todayLeftPx = todayInRange && todayDay != null
+    ? (todayDay - timelineStartDay) * pxPerDay
+    : null;
 
   useEffect(() => {
     const node = viewportRef.current;
@@ -401,9 +425,21 @@ export function EstimateGantt({
     const work = draftWorksByIdRef.current[workId];
     if (!work) return;
 
-    const originStart = toDayIndex(work.plannedStart);
-    const originEnd = toDayIndex(work.plannedEnd);
-    if (originStart == null || originEnd == null) return;
+    let originStart = toDayIndex(work.plannedStart);
+    let originEnd = toDayIndex(work.plannedEnd);
+
+    // Placeholder path: works without persisted dates seed the drag at today,
+    // clamped into the timeline so the bar is visible. After pointerup the
+    // dates are committed via updateWorkDates like any other drag.
+    if (originStart == null || originEnd == null) {
+      if (mode !== "move") return;
+      const today = toDayIndex(new Date());
+      const seed = today != null
+        ? Math.min(Math.max(today, timelineStartDay), timelineEndDay)
+        : timelineStartDay;
+      originStart = seed;
+      originEnd = seed;
+    }
 
     dragStateRef.current = {
       workId,
@@ -415,12 +451,15 @@ export function EstimateGantt({
       rafId: null,
     };
 
+    // GanttBar's onPointerDown calls setPointerCapture on the bar element;
+    // window listeners then receive the bubbled events even if the cursor
+    // exits the browser window.
     window.addEventListener("pointermove", handlePointerMove);
     window.addEventListener("pointerup", handlePointerUp);
     window.addEventListener("pointercancel", handlePointerCancel);
 
     event.preventDefault();
-  }, [clientXToDayIndex, handlePointerCancel, handlePointerMove, handlePointerUp, isOwner]);
+  }, [clientXToDayIndex, handlePointerCancel, handlePointerMove, handlePointerUp, isOwner, timelineEndDay, timelineStartDay]);
 
   const handleAddDependency = useCallback((fromWorkId: string, toWorkId: string, lagDays: number, comment?: string) => {
     const result = addDependency(projectId, fromWorkId, toWorkId, lagDays, comment);
@@ -521,7 +560,7 @@ export function EstimateGantt({
             shared container. Both sides scroll vertically together. */}
         <div
           className="flex"
-          style={{ width: LEFT_PANE_WIDTH + timelineWidth, minHeight: 360 }}
+          style={{ width: LEFT_PANE_WIDTH + timelineWidth, minHeight: Math.max(rowsTotalHeight, 360) }}
         >
           <div
             className="sticky left-0 z-20 shrink-0 border-r border-border bg-card"
@@ -538,7 +577,10 @@ export function EstimateGantt({
             ))}
           </div>
 
-          <div className="relative shrink-0" style={{ width: timelineWidth }}>
+          <div
+            className="relative shrink-0"
+            style={{ width: timelineWidth, minHeight: rowsTotalHeight }}
+          >
             {rows.map((row) => {
               const baseRowClass = row.kind === "stage"
                 ? "relative border-b border-border bg-muted/25"
@@ -559,7 +601,32 @@ export function EstimateGantt({
 
                     const start = toDayIndex(draft.plannedStart);
                     const end = toDayIndex(draft.plannedEnd);
-                    if (start == null || end == null) return null;
+
+                    // Placeholder for dateless works: a 1-day translucent bar
+                    // anchored at today (clamped to the visible timeline).
+                    // Owners can pointerdown it to start a drag-to-create.
+                    if (start == null || end == null) {
+                      if (!isOwner) return null;
+                      const today = toDayIndex(new Date());
+                      const seed = today != null
+                        ? Math.min(Math.max(today, timelineStartDay), timelineEndDay)
+                        : timelineStartDay;
+                      return (
+                        <GanttBar
+                          workId={row.workId}
+                          title={draft.title}
+                          startDay={seed}
+                          endDay={seed}
+                          timelineStartDay={timelineStartDay}
+                          pxPerDay={pxPerDay}
+                          isOwner={isOwner}
+                          placeholder
+                          placeholderHint={t("estimate.gantt.placeholderHint")}
+                          onDragStart={handleBarDragStart}
+                        />
+                      );
+                    }
+
                     if (end < visibleStartDay || start > visibleEndDay) return null;
 
                     return (
@@ -578,6 +645,70 @@ export function EstimateGantt({
                 </div>
               );
             })}
+
+            {/* Today marker — vertical line over today's column. Sits above
+                row backgrounds, below dependency arrows. */}
+            {todayLeftPx != null && (
+              <div
+                className="pointer-events-none absolute inset-y-0 w-[2px] bg-primary/70"
+                style={{ left: todayLeftPx }}
+                title={t("estimate.gantt.today")}
+              />
+            )}
+
+            {/* Dependency arrows overlay — FS-only, drawn on top of bars and
+                today marker. Skipped if either endpoint lacks dates or is
+                missing from rowYByWorkId (e.g. work hidden in current view). */}
+            <svg
+              className="pointer-events-none absolute inset-0"
+              width={timelineWidth}
+              height={rowsTotalHeight}
+              style={{ overflow: "visible" }}
+            >
+              <defs>
+                <marker
+                  id="gantt-arrow"
+                  viewBox="0 0 10 10"
+                  refX="9"
+                  refY="5"
+                  markerWidth="6"
+                  markerHeight="6"
+                  orient="auto"
+                >
+                  <path d="M 0 0 L 10 5 L 0 10 z" fill="hsl(var(--muted-foreground))" />
+                </marker>
+              </defs>
+              {dependencies.map((dependency) => {
+                const fromRow = rowYByWorkId[dependency.fromWorkId];
+                const toRow = rowYByWorkId[dependency.toWorkId];
+                if (!fromRow || !toRow) return null;
+
+                const fromDraft = draftWorksById[dependency.fromWorkId];
+                const toDraft = draftWorksById[dependency.toWorkId];
+                if (!fromDraft || !toDraft) return null;
+
+                const fromEnd = toDayIndex(fromDraft.plannedEnd);
+                const toStart = toDayIndex(toDraft.plannedStart);
+                if (fromEnd == null || toStart == null) return null;
+
+                const x1 = (fromEnd + 1 - timelineStartDay) * pxPerDay;
+                const x2 = (toStart - timelineStartDay) * pxPerDay;
+                const y1 = fromRow.top + fromRow.height / 2;
+                const y2 = toRow.top + toRow.height / 2;
+                const midX = x2 > x1 ? (x1 + x2) / 2 : x1 + 8;
+
+                return (
+                  <path
+                    key={`dep-${dependency.id}`}
+                    d={`M ${x1} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${x2} ${y2}`}
+                    fill="none"
+                    stroke="hsl(var(--muted-foreground))"
+                    strokeWidth={1.5}
+                    markerEnd="url(#gantt-arrow)"
+                  />
+                );
+              })}
+            </svg>
           </div>
         </div>
       </div>

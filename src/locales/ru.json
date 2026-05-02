@@ -1234,6 +1234,8 @@
   "estimate.gantt.scale.months": "Месяцы",
   "estimate.gantt.dependenciesButton": "Зависимости",
   "estimate.gantt.leftPaneHeading": "Этапы / Работы",
+  "estimate.gantt.today": "Сегодня",
+  "estimate.gantt.placeholderHint": "Перетащите, чтобы задать срок",
   "estimate.gantt.dep.title": "Зависимости",
   "estimate.gantt.dep.description": "Ограничения «окончание-начало» с задержкой в днях. Задержка — это время ожидания между работами, например, бетон сохнет 3 дня перед следующей работой.",
   "estimate.gantt.dep.addHeading": "Добавить зависимость",

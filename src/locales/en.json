@@ -1234,6 +1234,8 @@
   "estimate.gantt.scale.months": "Months",
   "estimate.gantt.dependenciesButton": "Dependencies",
   "estimate.gantt.leftPaneHeading": "Stages / Works",
+  "estimate.gantt.today": "Today",
+  "estimate.gantt.placeholderHint": "Drag to set dates",
   "estimate.gantt.dep.title": "Dependencies",
   "estimate.gantt.dep.description": "Finish-to-start constraints with lag days. Lag days means waiting time between tasks, e.g., concrete drying for 3 days before next work starts.",
   "estimate.gantt.dep.addHeading": "Add dependency",
