@@ -255,6 +255,10 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260428120000_resource_types_alignment.sql",
       "sha256": "31a0dd11adb274f037117210e35aa9da68d1c8caed7fd5c57f99e31457aa3ad7"
+    },
+    {
+      "path": "supabase/migrations/20260502120000_estimate_planned_dates_and_lag.sql",
+      "sha256": "2ebf475c19cf6b540ccb43d99febd0fd75ad928a8c3ba1e5928f2eae233934a5"
     }
   ],
   "generated_artifacts": [
@@ -341,6 +345,7 @@ export const manifest = {
     "sql/20260419120000_session3c_procurement_ai_in_stock_evidence.sql",
     "sql/20260425092624_profile_tutorial_state.sql",
     "sql/20260428120000_resource_types_alignment.sql",
+    "sql/20260502120000_estimate_planned_dates_and_lag.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -3299,6 +3304,26 @@ export const tables = {
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "planned_start",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "planned_end",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -3734,6 +3759,16 @@ export const tables = {
           "tsType": "string",
           "nullable": false,
           "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "lag_days",
+          "sqlType": "integer",
+          "tsType": "number",
+          "nullable": false,
+          "defaultSql": "0",
           "primaryKey": false,
           "unique": false,
           "references": null

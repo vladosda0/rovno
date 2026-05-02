@@ -75,6 +75,8 @@ Indexes:
 | `sort_order` | `integer` | no |   | no |
 | `planned_cost_cents` | `bigint` | yes |   | no |
 | `created_at` | `timestamptz` | no | `now()` | no |
+| `planned_start` | `timestamptz` | yes |   | no |
+| `planned_end` | `timestamptz` | yes |   | no |
 
 Constraints:
 - unnamed check (expression `sort_order > 0`)
@@ -133,6 +135,7 @@ Indexes:
 | `to_work_id` | `uuid` | no |   | no |
 | `dependency_type` | `text` | no | `'finish_to_start'` | no |
 | `created_at` | `timestamptz` | no | `now()` | no |
+| `lag_days` | `integer` | no | `0` | no |
 
 Constraints:
 - unnamed check (expression `dependency_type in ('finish_to_start', 'start_to_start', 'finish_to_finish', 'start_to_finish')`)
