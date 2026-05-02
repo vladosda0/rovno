@@ -49,7 +49,7 @@ export function GanttHeader({
 
   return (
     <div
-      className="sticky top-0 z-20 h-12 border-b border-border bg-background/95 backdrop-blur"
+      className="h-12 border-b border-border bg-background/95 backdrop-blur"
       style={{ width }}
     >
       <div className="relative h-full w-full">

@@ -183,6 +183,9 @@ export function EstimateGantt({
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const [scrollLeft, setScrollLeft] = useState(0);
   const [viewportWidth, setViewportWidth] = useState(800);
+  // The sticky left pane overlays the first LEFT_PANE_WIDTH of the scroll
+  // container, so the timeline-visible area is everything to the right of it.
+  const timelineViewportWidth = Math.max(0, viewportWidth - LEFT_PANE_WIDTH);
 
   const timelineRange = useMemo(() => {
     const draftWorks = works.map((work) => draftWorksById[work.id] ?? work);
@@ -196,7 +199,7 @@ export function EstimateGantt({
   const timelineStartDay = timelineRange.start;
   const timelineEndDay = timelineRange.end;
   const computedTimelineWidth = Math.max(pxPerDay, (timelineEndDay - timelineStartDay + 1) * pxPerDay);
-  const timelineWidth = Math.max(computedTimelineWidth, viewportWidth);
+  const timelineWidth = Math.max(computedTimelineWidth, timelineViewportWidth);
 
   useEffect(() => {
     const node = viewportRef.current;
@@ -216,7 +219,9 @@ export function EstimateGantt({
     const viewport = viewportRef.current;
     if (!viewport) return;
 
-    const maxScrollLeft = Math.max(0, timelineWidth - viewport.clientWidth);
+    // Total scrollable content width = LEFT_PANE_WIDTH (sticky pane) + timeline.
+    const totalContentWidth = LEFT_PANE_WIDTH + timelineWidth;
+    const maxScrollLeft = Math.max(0, totalContentWidth - viewport.clientWidth);
     const nextScrollLeft = Math.min(Math.max(viewport.scrollLeft, 0), maxScrollLeft);
     if (viewport.scrollLeft !== nextScrollLeft) {
       viewport.scrollLeft = nextScrollLeft;
@@ -229,8 +234,12 @@ export function EstimateGantt({
   const visibleWindow = computeVisibleWindow({
     timelineStartDay,
     timelineEndDay,
+    // Once the scroll container has scrolled past LEFT_PANE_WIDTH the timeline
+    // edge starts to slide under the sticky left pane; before that, the
+    // timeline simply sits to the right of the pane and visible content
+    // begins at scrollLeft = 0 in timeline coords.
     scrollLeftPx: scrollLeft,
-    viewportWidthPx: viewportWidth,
+    viewportWidthPx: timelineViewportWidth,
     pxPerDay,
     bufferDays: HORIZONTAL_BUFFER_DAYS,
   });
@@ -241,7 +250,11 @@ export function EstimateGantt({
     const viewport = viewportRef.current;
     if (!viewport) return timelineStartDay;
     const rect = viewport.getBoundingClientRect();
-    const x = clientX - rect.left + viewport.scrollLeft;
+    // The sticky left pane visually overlays the first LEFT_PANE_WIDTH of the
+    // viewport, so timeline x = (clientX - rect.left - LEFT_PANE_WIDTH +
+    // scrollLeft). When the cursor is inside the left pane the result is
+    // negative; validateAndFixOnDrag clamps it to a valid timeline range.
+    const x = clientX - rect.left - LEFT_PANE_WIDTH + viewport.scrollLeft;
     return timelineStartDay + Math.floor(x / pxPerDay);
   }, [pxPerDay, timelineStartDay]);
 
@@ -475,39 +488,57 @@ export function EstimateGantt({
         </div>
       </div>
 
-      <div className="flex min-h-[420px]">
-        <div className="shrink-0 border-r border-border" style={{ width: LEFT_PANE_WIDTH }}>
-          <div className="h-12 border-b border-border px-3 py-2">
+      <div
+        ref={viewportRef}
+        className="relative max-h-[70vh] overflow-auto"
+        onScroll={(event) => setScrollLeft(event.currentTarget.scrollLeft)}
+      >
+        {/* Sticky header row: stays at top:0 during vertical scroll. The
+            inner left-corner cell is also sticky on the left so the heading
+            stays put during horizontal scroll. */}
+        <div
+          className="sticky top-0 z-30 flex bg-background"
+          style={{ width: LEFT_PANE_WIDTH + timelineWidth }}
+        >
+          <div
+            className="sticky left-0 z-40 h-12 shrink-0 border-b border-r border-border bg-card px-3 py-2"
+            style={{ width: LEFT_PANE_WIDTH }}
+          >
             <p className="text-xs uppercase tracking-wide text-muted-foreground">{t("estimate.gantt.leftPaneHeading")}</p>
           </div>
-
-          {rows.map((row) => (
-            <GanttRow
-              key={row.key}
-              kind={row.kind}
-              title={row.title}
-              subtitle={row.subtitle}
-              height={row.height}
-            />
-          ))}
+          <GanttHeader
+            scale={scale}
+            timelineStartDay={timelineStartDay}
+            timelineEndDay={timelineEndDay}
+            visibleStartDay={visibleStartDay}
+            visibleEndDay={visibleEndDay}
+            pxPerDay={pxPerDay}
+            width={timelineWidth}
+          />
         </div>
 
+        {/* Body row: left pane is sticky-left, timeline scrolls with the
+            shared container. Both sides scroll vertically together. */}
         <div
-          ref={viewportRef}
-          className="relative flex-1 overflow-x-auto"
-          onScroll={(event) => setScrollLeft(event.currentTarget.scrollLeft)}
+          className="flex"
+          style={{ width: LEFT_PANE_WIDTH + timelineWidth, minHeight: 360 }}
         >
-          <div className="relative" style={{ width: timelineWidth }}>
-            <GanttHeader
-              scale={scale}
-              timelineStartDay={timelineStartDay}
-              timelineEndDay={timelineEndDay}
-              visibleStartDay={visibleStartDay}
-              visibleEndDay={visibleEndDay}
-              pxPerDay={pxPerDay}
-              width={timelineWidth}
-            />
+          <div
+            className="sticky left-0 z-20 shrink-0 border-r border-border bg-card"
+            style={{ width: LEFT_PANE_WIDTH }}
+          >
+            {rows.map((row) => (
+              <GanttRow
+                key={row.key}
+                kind={row.kind}
+                title={row.title}
+                subtitle={row.subtitle}
+                height={row.height}
+              />
+            ))}
+          </div>
 
+          <div className="relative shrink-0" style={{ width: timelineWidth }}>
             {rows.map((row) => {
               const baseRowClass = row.kind === "stage"
                 ? "relative border-b border-border bg-muted/25"
