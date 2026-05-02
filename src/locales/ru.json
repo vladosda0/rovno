@@ -1351,6 +1351,7 @@
   "procurement.order.partialAria": "Детали частичного приёма",
   "procurement.order.learnMore": "Подробнее",
   "procurement.order.emptyDash": "-",
+  "procurement.order.fullyReceived": "Заказ получен",
   "procurement.location.unknown": "Неизвестная локация",
   "procurement.location.to": "Куда: {{name}}",
   "procurement.location.from": "Откуда: {{name}}",

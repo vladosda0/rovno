@@ -6,6 +6,7 @@ import { trackEvent } from "@/lib/analytics";
 import {
   AlertTriangle,
   CalendarIcon,
+  CheckCircle2,
   ChevronDown,
   ChevronRight,
   Link2,
@@ -2091,18 +2092,25 @@ export default function ProjectProcurement() {
                 const openQty = Math.max(line.qty - line.receivedQty, 0);
                 return sum + unitPrice * openQty;
               }, 0);
+              const isFullyReceived =
+                order.lines.length > 0 &&
+                order.lines.every((line) => Math.max(0, line.qty - line.receivedQty) === 0);
 
               return (
                 <div key={order.id} className="rounded-lg border border-border overflow-hidden">
                   <div className="w-full flex items-center gap-2 px-3 py-2 bg-muted/40">
-                    <button
-                      type="button"
-                      className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-muted/70"
-                      onClick={() => toggleOrder(order.id)}
-                      aria-label={collapsed ? t("procurement.order.expandAria") : t("procurement.order.collapseAria")}
-                    >
-                      {collapsed ? <ChevronRight className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-                    </button>
+                    {isFullyReceived ? (
+                      <span className="inline-flex h-6 w-6 items-center justify-center" aria-hidden />
+                    ) : (
+                      <button
+                        type="button"
+                        className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-muted/70"
+                        onClick={() => toggleOrder(order.id)}
+                        aria-label={collapsed ? t("procurement.order.expandAria") : t("procurement.order.collapseAria")}
+                      >
+                        {collapsed ? <ChevronRight className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+                      </button>
+                    )}
                     {canManageProcurement ? (
                       <button
                         type="button"
@@ -2124,7 +2132,12 @@ export default function ProjectProcurement() {
                     )}
                   </div>
 
-                  {!collapsed && (
+                  {isFullyReceived ? (
+                    <div className="flex items-center gap-2 px-3 py-2 text-success">
+                      <CheckCircle2 className="h-4 w-4" />
+                      <span className="text-sm">{t("procurement.order.fullyReceived")}</span>
+                    </div>
+                  ) : !collapsed && (
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                           {renderOrderedTableHeader()}
