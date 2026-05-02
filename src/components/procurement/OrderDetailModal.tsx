@@ -3,13 +3,14 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cancelDraftOrder, voidOrder } from "@/data/order-store";
-import { useOrder } from "@/hooks/use-order-data";
+import { useOrderState } from "@/hooks/use-order-data";
 import { useProcurementV2 } from "@/hooks/use-mock-data";
 import { useLocations } from "@/hooks/use-inventory-data";
 import { useToast } from "@/hooks/use-toast";
 import { useWorkspaceMode } from "@/hooks/use-workspace-source";
 import { fmtCost } from "@/lib/procurement-utils";
 import { StatusBadge } from "@/components/StatusBadge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ReceiveOrderModal } from "@/components/procurement/ReceiveOrderModal";
 
 interface OrderDetailModalProps {
@@ -39,7 +40,7 @@ export function OrderDetailModal({
   onOpenRequest,
 }: OrderDetailModalProps) {
   const { t } = useTranslation();
-  const order = useOrder(orderId);
+  const { order, isLoading: isOrderLoading } = useOrderState(orderId);
   const items = useProcurementV2(projectId);
   const locations = useLocations(projectId);
   const workspaceMode = useWorkspaceMode();
@@ -122,7 +123,18 @@ export function OrderDetailModal({
           </DialogHeader>
 
           {!order ? (
-            <div className="flex-1 px-5 py-4 text-sm text-muted-foreground">{t("procurement.orderDetail.notFound")}</div>
+            isOrderLoading ? (
+              <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4" aria-hidden>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {[0, 1, 2, 3].map((i) => (
+                    <Skeleton key={i} className="h-20 w-full rounded-lg" />
+                  ))}
+                </div>
+                <Skeleton className="h-40 w-full rounded-lg" />
+              </div>
+            ) : (
+              <div className="flex-1 px-5 py-4 text-sm text-muted-foreground">{t("procurement.orderDetail.notFound")}</div>
+            )
           ) : (
             <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">

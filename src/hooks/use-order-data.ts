@@ -139,6 +139,10 @@ export function usePlacedSupplierOrdersAllProjects(): OrderWithLines[] {
 }
 
 export function useOrder(orderId?: string | null): OrderWithLines | null {
+  return useOrderState(orderId).order;
+}
+
+export function useOrderState(orderId?: string | null): { order: OrderWithLines | null; isLoading: boolean } {
   const mode = useWorkspaceMode();
   const supabaseMode = mode.kind === "supabase" ? mode : null;
   const getter = useCallback(() => {
@@ -167,8 +171,15 @@ export function useOrder(orderId?: string | null): OrderWithLines | null {
   });
 
   if (mode.kind === "demo" || mode.kind === "local") {
-    return browserOrder;
+    return { order: browserOrder, isLoading: false };
   }
 
-  return orderQuery.data ?? null;
+  if (!orderId) {
+    return { order: null, isLoading: false };
+  }
+
+  return {
+    order: orderQuery.data ?? null,
+    isLoading: orderQuery.isLoading || (orderQuery.isFetching && orderQuery.data === undefined),
+  };
 }
