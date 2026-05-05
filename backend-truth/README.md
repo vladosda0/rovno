@@ -88,6 +88,8 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20260425092624_profile_tutorial_state.sql`
 - `supabase/migrations/20260428120000_resource_types_alignment.sql`
 - `supabase/migrations/20260502120000_estimate_planned_dates_and_lag.sql`
+- `supabase/migrations/20260504013553_layer_a_snapshot_enrichment.sql`
+- `supabase/migrations/20260505233155_fix_layer_a_stage_status_semantics.sql`
 
 ## Exclusions
 

@@ -1352,7 +1352,7 @@
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260414120000_wave1_get_ai_project_snapshot.sql",
+      "sourceMigration": "supabase/migrations/20260505233155_fix_layer_a_stage_status_semantics.sql",
       "triggerUsages": []
     },
     {
