@@ -1413,7 +1413,6 @@
   "procurement.stockDetail.title": "Stock details",
   "procurement.stockDetail.description": "Review receipt and usage history for the selected stock item across project locations.",
   "procurement.stockDetail.noSelected": "No stock item selected.",
-  "procurement.stockDetail.currentLocation": "Current location: {{name}}",
   "procurement.stockDetail.qtyAvailable": "Qty available: {{qty}} {{unit}}",
   "procurement.stockDetail.receiptHistory": "Receipt history",
   "procurement.stockDetail.noReceipts": "No receipt events yet.",

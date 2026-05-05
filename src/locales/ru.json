@@ -1417,7 +1417,6 @@
   "procurement.stockDetail.title": "Детали складской позиции",
   "procurement.stockDetail.description": "Посмотри историю приёмов и расходов по выбранной позиции склада по локациям проекта.",
   "procurement.stockDetail.noSelected": "Складская позиция не выбрана.",
-  "procurement.stockDetail.currentLocation": "Текущая локация: {{name}}",
   "procurement.stockDetail.qtyAvailable": "Доступно: {{qty}} {{unit}}",
   "procurement.stockDetail.receiptHistory": "История приёмов",
   "procurement.stockDetail.noReceipts": "Событий приёма пока нет.",

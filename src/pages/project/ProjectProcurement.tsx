@@ -2684,8 +2684,8 @@ export default function ProjectProcurement() {
           if (!nextOpen) setInStockDetailTarget(null);
         }}
       >
-        <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] p-0 gap-0 overflow-hidden">
-          <DialogHeader className="px-5 py-4 border-b border-border">
+        <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] p-0 gap-0 flex flex-col overflow-hidden">
+          <DialogHeader className="px-5 py-4 border-b border-border flex-shrink-0">
             <DialogTitle>{t("procurement.stockDetail.title")}</DialogTitle>
             <DialogDescription className="sr-only">
               {t("procurement.stockDetail.description")}
@@ -2695,7 +2695,7 @@ export default function ProjectProcurement() {
           {!inStockDetailTarget ? (
             <div className="px-5 py-4 text-sm text-muted-foreground">{t("procurement.useModal.noStockSelected")}</div>
           ) : (
-            <div className="px-5 py-4 space-y-4 overflow-y-auto">
+            <div className="px-5 py-4 space-y-4 overflow-y-auto flex-1 min-h-0">
               <div className="rounded-lg border border-border p-3">
                 <div className="flex flex-wrap items-start gap-2">
                   <ResourceTypeBadge type={inStockDetailTarget.item.type} className="border-transparent" />
@@ -2706,8 +2706,7 @@ export default function ProjectProcurement() {
                     )}
                   </div>
                 </div>
-                <p className="mt-2 text-xs text-muted-foreground">{t("procurement.stockDetail.currentLocation", { location: inStockDetailTarget.locationName })}</p>
-                <p className="text-xs text-muted-foreground">{t("procurement.stockDetail.qtyAvailable", { qty: inStockDetailTarget.qty, unit: inStockDetailTarget.item.unit })}</p>
+                <p className="mt-2 text-xs text-muted-foreground">{t("procurement.stockDetail.qtyAvailable", { qty: inStockDetailTarget.qty, unit: inStockDetailTarget.item.unit })}</p>
               </div>
 
               <div className="rounded-lg border border-border overflow-hidden">
@@ -2784,7 +2783,7 @@ export default function ProjectProcurement() {
             </div>
           )}
 
-          <DialogFooter className="px-5 py-4 border-t border-border">
+          <DialogFooter className="px-5 py-4 border-t border-border flex-shrink-0">
             <Button type="button" variant="outline" onClick={() => setInStockDetailOpen(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
