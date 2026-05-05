@@ -494,6 +494,7 @@ export default function ProjectProcurement() {
   });
   const [collapsedStages, setCollapsedStages] = useState<Set<string>>(new Set(savedListState?.collapsedStageIds ?? []));
   const [collapsedOrderIds, setCollapsedOrderIds] = useState<Set<string>>(new Set());
+  const [expandedReceivedOrderIds, setExpandedReceivedOrderIds] = useState<Set<string>>(new Set());
   const [selectedRequestedIds, setSelectedRequestedIds] = useState<Set<string>>(new Set());
   const [selectedOrderedLineKeys, setSelectedOrderedLineKeys] = useState<Set<string>>(new Set());
   const [selectedInStockRowKeys, setSelectedInStockRowKeys] = useState<Set<string>>(new Set());
@@ -724,9 +725,12 @@ export default function ProjectProcurement() {
     });
   }, [requestedItems]);
 
-  const placedSupplierOrders = useMemo(() => (
+  const activeAndReceivedSupplierOrders = useMemo(() => (
     orders
-      .filter((order) => order.kind === "supplier" && order.status === "placed")
+      .filter((order) => (
+        order.kind === "supplier"
+        && (order.status === "placed" || order.status === "received")
+      ))
       .filter((order) => {
         if (!search.trim()) return true;
         const q = search.trim().toLowerCase();
@@ -761,7 +765,7 @@ export default function ProjectProcurement() {
   const orderedReceivableTargets = useMemo(() => {
     const targets: OrderedReceivableTarget[] = [];
 
-    placedSupplierOrders.forEach((order) => {
+    activeAndReceivedSupplierOrders.forEach((order) => {
       const orderLocationId = order.deliverToLocationId ?? defaultLocationId;
 
       order.lines.forEach((line) => {
@@ -795,7 +799,7 @@ export default function ProjectProcurement() {
     });
 
     return targets;
-  }, [placedSupplierOrders, itemById, defaultLocationId]);
+  }, [activeAndReceivedSupplierOrders, itemById, defaultLocationId]);
 
   const orderedReceivableTargetByKey = useMemo(() => (
     new Map(orderedReceivableTargets.map((target) => [target.selectionKey, target]))
@@ -963,14 +967,14 @@ export default function ProjectProcurement() {
   useEffect(() => {
     if (canManageProcurement) return;
     if (activeTab !== "ordered") return;
-    if (placedSupplierOrders.length > 0) return;
+    if (activeAndReceivedSupplierOrders.length > 0) return;
     if (visibleInStockRows.length === 0) return;
     setActiveTab("in_stock");
-  }, [activeTab, canManageProcurement, placedSupplierOrders.length, visibleInStockRows.length]);
+  }, [activeTab, canManageProcurement, activeAndReceivedSupplierOrders.length, visibleInStockRows.length]);
 
   const effectiveActiveTab: ProcurementTab = !canManageProcurement
     && activeTab === "ordered"
-    && placedSupplierOrders.length === 0
+    && activeAndReceivedSupplierOrders.length === 0
     && visibleInStockRows.length > 0
     ? "in_stock"
     : activeTab;
@@ -1010,6 +1014,15 @@ export default function ProjectProcurement() {
 
   const toggleOrder = (id: string) => {
     setCollapsedOrderIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleReceivedOrderDetails = (id: string) => {
+    setExpandedReceivedOrderIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -2083,7 +2096,7 @@ export default function ProjectProcurement() {
 
       {effectiveActiveTab === "ordered" && (
         <div className="glass rounded-card p-2 space-y-2">
-          {placedSupplierOrders.length === 0 ? (
+          {activeAndReceivedSupplierOrders.length === 0 ? (
             isProcurementSyncing ? (
               <div className="space-y-2" aria-hidden>
                 {[0, 1, 2, 3].map((i) => (
@@ -2094,7 +2107,7 @@ export default function ProjectProcurement() {
               <p className="text-sm text-muted-foreground text-center py-8">{t("procurement.empty.noPlaced")}</p>
             )
           ) : (
-            placedSupplierOrders.map((order) => {
+            activeAndReceivedSupplierOrders.map((order) => {
               const collapsed = collapsedOrderIds.has(order.id);
               const orderNumber = supplierOrderNumberById.get(order.id) ?? 0;
               const total = order.lines.reduce((sum, line) => {
@@ -2106,22 +2119,46 @@ export default function ProjectProcurement() {
               const isFullyReceived =
                 order.lines.length > 0 &&
                 order.lines.every((line) => Math.max(0, line.qty - line.receivedQty) === 0);
+              const receivedTotal = order.lines.reduce((sum, line) => {
+                const item = itemById.get(line.procurementItemId);
+                const unitPrice = line.actualUnitPrice ?? line.plannedUnitPrice ?? item?.actualUnitPrice ?? item?.plannedUnitPrice ?? 0;
+                return sum + unitPrice * line.receivedQty;
+              }, 0);
+              const receivedExpanded = expandedReceivedOrderIds.has(order.id);
+              const lastReceiveAt = (order.receiveEvents ?? []).reduce<string | null>((latest, event) => {
+                if (!event.createdAt) return latest;
+                if (!latest) return event.createdAt;
+                return new Date(event.createdAt).getTime() > new Date(latest).getTime()
+                  ? event.createdAt
+                  : latest;
+              }, null);
+              const lineLatestReceiveAt = (lineId: string): string | null => (
+                (order.receiveEvents ?? []).reduce<string | null>((latest, event) => {
+                  if (event.orderLineId !== lineId || !event.createdAt) return latest;
+                  if (!latest) return event.createdAt;
+                  return new Date(event.createdAt).getTime() > new Date(latest).getTime()
+                    ? event.createdAt
+                    : latest;
+                }, null)
+              );
 
               return (
                 <div key={order.id} className="rounded-lg border border-border overflow-hidden">
                   <div className="w-full flex items-center gap-2 px-3 py-2 bg-muted/40">
-                    {isFullyReceived ? (
-                      <span className="inline-flex h-6 w-6 items-center justify-center" aria-hidden />
-                    ) : (
-                      <button
-                        type="button"
-                        className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-muted/70"
-                        onClick={() => toggleOrder(order.id)}
-                        aria-label={collapsed ? t("procurement.order.expandAria") : t("procurement.order.collapseAria")}
-                      >
-                        {collapsed ? <ChevronRight className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-muted/70"
+                      onClick={() => (isFullyReceived ? toggleReceivedOrderDetails(order.id) : toggleOrder(order.id))}
+                      aria-label={
+                        isFullyReceived
+                          ? (receivedExpanded ? t("procurement.order.hideDetails") : t("procurement.order.showDetails"))
+                          : (collapsed ? t("procurement.order.expandAria") : t("procurement.order.collapseAria"))
+                      }
+                    >
+                      {isFullyReceived
+                        ? (receivedExpanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />)
+                        : (collapsed ? <ChevronRight className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />)}
+                    </button>
                     {canManageProcurement ? (
                       <button
                         type="button"
@@ -2139,15 +2176,70 @@ export default function ProjectProcurement() {
                       <span className="text-xs text-muted-foreground truncate">{order.supplierName}</span>
                     )}
                     {canViewSensitiveDetail && (
-                      <span className="ml-auto text-xs text-muted-foreground">{fmtCost(total)}</span>
+                      <span className="ml-auto text-xs text-muted-foreground">
+                        {fmtCost(isFullyReceived ? receivedTotal : total)}
+                      </span>
                     )}
                   </div>
 
                   {isFullyReceived ? (
-                    <div className="flex items-center gap-2 px-3 py-2 text-success">
-                      <CheckCircle2 className="h-4 w-4" />
-                      <span className="text-sm">{t("procurement.order.fullyReceived")}</span>
-                    </div>
+                    <>
+                      <div className="flex flex-wrap items-center gap-2 px-3 py-2 text-success">
+                        <CheckCircle2 className="h-4 w-4" />
+                        <span className="text-sm">{t("procurement.order.fullyReceived")}</span>
+                        {lastReceiveAt && (
+                          <span className="text-xs text-muted-foreground">{formatDate(lastReceiveAt, dash)}</span>
+                        )}
+                        <button
+                          type="button"
+                          className="ml-auto text-xs text-accent hover:underline"
+                          onClick={() => toggleReceivedOrderDetails(order.id)}
+                        >
+                          {receivedExpanded ? t("procurement.order.hideDetails") : t("procurement.order.showDetails")}
+                        </button>
+                      </div>
+                      {receivedExpanded && (
+                        <div className="overflow-x-auto border-t border-border">
+                          <table className="w-full text-sm">
+                            <thead className="bg-muted/30 border-b border-border">
+                              <tr>
+                                <th className="text-left px-3 py-2">{t("procurement.col.item")}</th>
+                                <th className="text-right px-3 py-2">{t("procurement.col.orderedQty")}</th>
+                                <th className="text-right px-3 py-2">{t("procurement.order.received")}</th>
+                                <th className="text-left px-3 py-2">{t("procurement.col.unit")}</th>
+                                <th className="text-left px-3 py-2">{t("procurement.col.receivedAt")}</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {order.lines.map((line) => {
+                                const item = itemById.get(line.procurementItemId);
+                                const lineReceivedAt = lineLatestReceiveAt(line.id);
+                                const itemName = item?.name ?? line.title ?? t("procurement.order.orderedItemFallback");
+                                const itemSpec = item?.spec ?? null;
+                                const itemType = item?.type ?? line.itemType ?? "other";
+                                return (
+                                  <tr key={line.id} className="border-b border-border/70 last:border-0">
+                                    <td className="px-3 py-2 min-w-[220px]">
+                                      <div className="flex min-w-0 items-start gap-2">
+                                        <ResourceTypeBadge type={itemType} className="shrink-0 border-transparent" />
+                                        <div className="min-w-0">
+                                          <p className="font-medium text-foreground truncate">{itemName}</p>
+                                          {itemSpec && <p className="text-xs text-muted-foreground truncate">{itemSpec}</p>}
+                                        </div>
+                                      </div>
+                                    </td>
+                                    <td className="px-3 py-2 text-right tabular-nums text-foreground">{line.qty}</td>
+                                    <td className="px-3 py-2 text-right tabular-nums text-foreground">{line.receivedQty}</td>
+                                    <td className="px-3 py-2 text-foreground">{line.unit}</td>
+                                    <td className="px-3 py-2 text-xs text-muted-foreground">{formatDate(lineReceivedAt, dash)}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </>
                   ) : !collapsed && (
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
