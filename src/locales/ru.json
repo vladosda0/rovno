@@ -1391,7 +1391,6 @@
   "procurement.disabled.orderRole": "Ты не можешь оформлять заказы с текущей ролью.",
   "procurement.disabled.receiveRole": "Ты не можешь принимать заказы с текущей ролью.",
   "procurement.disabled.useFromStockRole": "Ты не можешь использовать склад с текущей ролью.",
-  "procurement.disabled.useFromStockSupabase": "Использование со склада пока недоступно в этой версии.",
   "procurement.requestMore.title": "Дозаказать: {{name}}",
   "procurement.requestMore.lineItem": "Позиция: {{name}}",
   "procurement.requestMore.lineSpec": "Описание: {{spec}}",

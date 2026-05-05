@@ -292,14 +292,11 @@ export default function ProjectProcurement() {
   const canEdit = canManageProcurement;
   const canLaunchOrderFlows = canManageProcurement
     && (canViewSensitiveDetail || canViewOperationalFinanceSummary);
-  const canUseFromStock = canManageProcurement && !isSupabaseMode;
-  const useFromStockDisabledBySupabase = canManageProcurement && isSupabaseMode;
-  const useFromStockEffectiveDisabled = useFromStockControl.disabled || useFromStockDisabledBySupabase;
+  const canUseFromStock = canManageProcurement;
+  const useFromStockEffectiveDisabled = useFromStockControl.disabled;
   const useFromStockEffectiveReason = useFromStockControl.disabled
     ? useFromStockControl.disabledReason
-    : useFromStockDisabledBySupabase
-      ? t("procurement.disabled.useFromStockSupabase")
-      : undefined;
+    : undefined;
   const visibleTabs = TABS;
   const procurementSyncState = estimateSync.domains.procurement;
   const isProcurementSyncing = isSupabaseMode && procurementSyncState.status === "syncing";

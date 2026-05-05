@@ -1387,7 +1387,6 @@
   "procurement.disabled.orderRole": "You cannot place orders with your current role.",
   "procurement.disabled.receiveRole": "You cannot receive orders with your current role.",
   "procurement.disabled.useFromStockRole": "You cannot use stock with your current role.",
-  "procurement.disabled.useFromStockSupabase": "Use from stock is not available yet in this version.",
   "procurement.requestMore.title": "Procure more: {{name}}",
   "procurement.requestMore.lineItem": "Item: {{name}}",
   "procurement.requestMore.lineSpec": "Spec: {{spec}}",
