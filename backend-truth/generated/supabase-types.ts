@@ -79,6 +79,7 @@ export type Database = {
           "ai_data_usage_enabled": boolean
           "created_at": string
           "updated_at": string
+          "active_org_id": string | null
           }
           Insert: {
           "profile_id"?: string
@@ -95,6 +96,7 @@ export type Database = {
           "ai_data_usage_enabled"?: boolean
           "created_at"?: string
           "updated_at"?: string
+          "active_org_id"?: string | null
           }
           Update: {
           "profile_id"?: string
@@ -111,6 +113,7 @@ export type Database = {
           "ai_data_usage_enabled"?: boolean
           "created_at"?: string
           "updated_at"?: string
+          "active_org_id"?: string | null
           }
           Relationships: []
         }
@@ -251,6 +254,7 @@ export type Database = {
           "accepted_at": string | null
           "finance_visibility": "none" | "summary" | "detail"
           "internal_docs_visibility": "none" | "view" | "edit"
+          "add_to_org_id": string | null
           }
           Insert: {
           "id"?: string
@@ -268,6 +272,7 @@ export type Database = {
           "accepted_at"?: string | null
           "finance_visibility"?: "none" | "summary" | "detail"
           "internal_docs_visibility"?: "none" | "view" | "edit"
+          "add_to_org_id"?: string | null
           }
           Update: {
           "id"?: string
@@ -285,6 +290,7 @@ export type Database = {
           "accepted_at"?: string | null
           "finance_visibility"?: "none" | "summary" | "detail"
           "internal_docs_visibility"?: "none" | "view" | "edit"
+          "add_to_org_id"?: string | null
           }
           Relationships: []
         }
@@ -447,6 +453,9 @@ export type Database = {
           "created_at": string
           "updated_at": string
           "visibility_class": "shared_project" | "internal"
+          "linked_external_kind": string | null
+          "linked_workspace_document_id": string | null
+          "linked_org_document_id": string | null
           }
           Insert: {
           "id"?: string
@@ -459,6 +468,9 @@ export type Database = {
           "created_at"?: string
           "updated_at"?: string
           "visibility_class"?: "shared_project" | "internal"
+          "linked_external_kind"?: string | null
+          "linked_workspace_document_id"?: string | null
+          "linked_org_document_id"?: string | null
           }
           Update: {
           "id"?: string
@@ -471,6 +483,9 @@ export type Database = {
           "created_at"?: string
           "updated_at"?: string
           "visibility_class"?: "shared_project" | "internal"
+          "linked_external_kind"?: string | null
+          "linked_workspace_document_id"?: string | null
+          "linked_org_document_id"?: string | null
           }
           Relationships: []
         }
@@ -1476,6 +1491,180 @@ export type Database = {
           }
           Relationships: []
         }
+        "organizations": {
+          Row: {
+          "id": string
+          "name": string
+          "slug": string
+          "owner_profile_id": string
+          "description": string | null
+          "avatar_url": string | null
+          "plan": string
+          "created_at": string
+          "updated_at": string
+          }
+          Insert: {
+          "id"?: string
+          "name": string
+          "slug": string
+          "owner_profile_id": string
+          "description"?: string | null
+          "avatar_url"?: string | null
+          "plan"?: string
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Update: {
+          "id"?: string
+          "name"?: string
+          "slug"?: string
+          "owner_profile_id"?: string
+          "description"?: string | null
+          "avatar_url"?: string | null
+          "plan"?: string
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Relationships: []
+        }
+        "org_members": {
+          Row: {
+          "id": string
+          "org_id": string
+          "profile_id": string
+          "role": "owner" | "admin" | "member"
+          "created_at": string
+          }
+          Insert: {
+          "id"?: string
+          "org_id": string
+          "profile_id": string
+          "role": "owner" | "admin" | "member"
+          "created_at"?: string
+          }
+          Update: {
+          "id"?: string
+          "org_id"?: string
+          "profile_id"?: string
+          "role"?: "owner" | "admin" | "member"
+          "created_at"?: string
+          }
+          Relationships: []
+        }
+        "org_documents": {
+          Row: {
+          "id": string
+          "org_id": string
+          "title": string
+          "type": string
+          "origin": "uploaded" | "manual" | "ai_generated"
+          "description": string | null
+          "tags": unknown
+          "pinned": boolean
+          "created_by": string
+          "created_at": string
+          "updated_at": string
+          "visibility_class": "shared_project" | "internal"
+          }
+          Insert: {
+          "id"?: string
+          "org_id": string
+          "title": string
+          "type"?: string
+          "origin"?: "uploaded" | "manual" | "ai_generated"
+          "description"?: string | null
+          "tags"?: unknown
+          "pinned"?: boolean
+          "created_by": string
+          "created_at"?: string
+          "updated_at"?: string
+          "visibility_class"?: "shared_project" | "internal"
+          }
+          Update: {
+          "id"?: string
+          "org_id"?: string
+          "title"?: string
+          "type"?: string
+          "origin"?: "uploaded" | "manual" | "ai_generated"
+          "description"?: string | null
+          "tags"?: unknown
+          "pinned"?: boolean
+          "created_by"?: string
+          "created_at"?: string
+          "updated_at"?: string
+          "visibility_class"?: "shared_project" | "internal"
+          }
+          Relationships: []
+        }
+        "org_document_versions": {
+          Row: {
+          "id": string
+          "org_document_id": string
+          "storage_object_id": string | null
+          "version_number": number
+          "is_current": boolean
+          "status": "active" | "archived"
+          "created_at": string
+          }
+          Insert: {
+          "id"?: string
+          "org_document_id": string
+          "storage_object_id"?: string | null
+          "version_number"?: number
+          "is_current"?: boolean
+          "status"?: "active" | "archived"
+          "created_at"?: string
+          }
+          Update: {
+          "id"?: string
+          "org_document_id"?: string
+          "storage_object_id"?: string | null
+          "version_number"?: number
+          "is_current"?: boolean
+          "status"?: "active" | "archived"
+          "created_at"?: string
+          }
+          Relationships: []
+        }
+        "org_document_upload_intents": {
+          Row: {
+          "id": string
+          "org_id": string
+          "bucket": string
+          "object_path": string
+          "filename": string
+          "mime_type": string
+          "size_bytes": number | null
+          "created_by": string
+          "created_at": string
+          "finalized_at": string | null
+          }
+          Insert: {
+          "id"?: string
+          "org_id": string
+          "bucket": string
+          "object_path": string
+          "filename": string
+          "mime_type": string
+          "size_bytes"?: number | null
+          "created_by": string
+          "created_at"?: string
+          "finalized_at"?: string | null
+          }
+          Update: {
+          "id"?: string
+          "org_id"?: string
+          "bucket"?: string
+          "object_path"?: string
+          "filename"?: string
+          "mime_type"?: string
+          "size_bytes"?: number | null
+          "created_by"?: string
+          "created_at"?: string
+          "finalized_at"?: string | null
+          }
+          Relationships: []
+        }
     }
     Views: {
       [_ in never]: never
@@ -1524,6 +1713,12 @@ export type Database = {
         "can_access_storage_object": {
           Args: {
           "p_storage_object_id": string
+          }
+          Returns: boolean
+        }
+        "can_manage_org": {
+          Args: {
+          "p_org_id": string
           }
           Returns: boolean
         }
@@ -1698,11 +1893,25 @@ export type Database = {
           }
           Returns: boolean
         }
+        "import_documents_to_project": {
+          Args: {
+          "p_project_id": string
+          "p_source_kind": string
+          "p_source_doc_ids": unknown
+          }
+          Returns: unknown
+        }
         "internal_docs_visibility_rank": {
           Args: {
           "p_level": string
           }
           Returns: number
+        }
+        "is_org_member": {
+          Args: {
+          "p_org_id": string
+          }
+          Returns: boolean
         }
         "is_project_member": {
           Args: {
@@ -1716,6 +1925,16 @@ export type Database = {
           "p_actor": string
           }
           Returns: boolean
+        }
+        "list_user_organizations": {
+          Args: Record<PropertyKey, never>
+          Returns: unknown
+        }
+        "org_role": {
+          Args: {
+          "p_org_id": string
+          }
+          Returns: string
         }
         "prepare_document_upload": {
           Args: {
@@ -1749,6 +1968,12 @@ export type Database = {
           "p_project_id": string
           }
           Returns: string
+        }
+        "set_active_org_context": {
+          Args: {
+          "p_org_id": string
+          }
+          Returns: unknown
         }
     }
     Enums: {

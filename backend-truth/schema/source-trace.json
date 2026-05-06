@@ -227,6 +227,36 @@
       "schema": "public",
       "table": "project_ai_chat_sessions",
       "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql"
+    },
+    {
+      "key": "public.organizations",
+      "schema": "public",
+      "table": "organizations",
+      "sourceMigration": "supabase/migrations/20260506120000_organizations_and_membership.sql"
+    },
+    {
+      "key": "public.org_members",
+      "schema": "public",
+      "table": "org_members",
+      "sourceMigration": "supabase/migrations/20260506120000_organizations_and_membership.sql"
+    },
+    {
+      "key": "public.org_documents",
+      "schema": "public",
+      "table": "org_documents",
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+    },
+    {
+      "key": "public.org_document_versions",
+      "schema": "public",
+      "table": "org_document_versions",
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+    },
+    {
+      "key": "public.org_document_upload_intents",
+      "schema": "public",
+      "table": "org_document_upload_intents",
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
     }
   ],
   "functions": [
@@ -354,7 +384,7 @@
       "schema": "public",
       "name": "accept_project_invite",
       "signature": "public.accept_project_invite(text)",
-      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
+      "sourceMigration": "supabase/migrations/20260506120400_accept_project_invite_with_org.sql"
     },
     {
       "key": "public.get_shared_estimate_version",
@@ -670,6 +700,83 @@
       "name": "append_tutorial_completed",
       "signature": "public.append_tutorial_completed(uuid, text)",
       "sourceMigration": "supabase/migrations/20260425092624_profile_tutorial_state.sql"
+    },
+    {
+      "key": "public.handle_organization_owner_membership",
+      "schema": "public",
+      "name": "handle_organization_owner_membership",
+      "signature": "public.handle_organization_owner_membership()",
+      "sourceMigration": "supabase/migrations/20260506130000_fix_org_owner_membership_order.sql"
+    },
+    {
+      "key": "public.enforce_org_member_owner_role",
+      "schema": "public",
+      "name": "enforce_org_member_owner_role",
+      "signature": "public.enforce_org_member_owner_role()",
+      "sourceMigration": "supabase/migrations/20260506120000_organizations_and_membership.sql"
+    },
+    {
+      "key": "public.enforce_org_member_last_owner",
+      "schema": "public",
+      "name": "enforce_org_member_last_owner",
+      "signature": "public.enforce_org_member_last_owner()",
+      "sourceMigration": "supabase/migrations/20260506140000_fix_org_delete_cascade_through_last_owner_guard.sql"
+    },
+    {
+      "key": "public.guard_organization_owner_change",
+      "schema": "public",
+      "name": "guard_organization_owner_change",
+      "signature": "public.guard_organization_owner_change()",
+      "sourceMigration": "supabase/migrations/20260506120000_organizations_and_membership.sql"
+    },
+    {
+      "key": "public.is_org_member",
+      "schema": "public",
+      "name": "is_org_member",
+      "signature": "public.is_org_member(uuid)",
+      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+    },
+    {
+      "key": "public.org_role",
+      "schema": "public",
+      "name": "org_role",
+      "signature": "public.org_role(uuid)",
+      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+    },
+    {
+      "key": "public.can_manage_org",
+      "schema": "public",
+      "name": "can_manage_org",
+      "signature": "public.can_manage_org(uuid)",
+      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+    },
+    {
+      "key": "public.list_user_organizations",
+      "schema": "public",
+      "name": "list_user_organizations",
+      "signature": "public.list_user_organizations()",
+      "sourceMigration": "supabase/migrations/20260506120300_org_rpcs.sql"
+    },
+    {
+      "key": "public.set_active_org_context",
+      "schema": "public",
+      "name": "set_active_org_context",
+      "signature": "public.set_active_org_context(uuid)",
+      "sourceMigration": "supabase/migrations/20260506120300_org_rpcs.sql"
+    },
+    {
+      "key": "public.import_documents_to_project",
+      "schema": "public",
+      "name": "import_documents_to_project",
+      "signature": "public.import_documents_to_project(uuid, text, uuid[])",
+      "sourceMigration": "supabase/migrations/20260506120300_org_rpcs.sql"
+    },
+    {
+      "key": "public.mark_organization_deleting",
+      "schema": "public",
+      "name": "mark_organization_deleting",
+      "signature": "public.mark_organization_deleting()",
+      "sourceMigration": "supabase/migrations/20260506140000_fix_org_delete_cascade_through_last_owner_guard.sql"
     }
   ],
   "policies": [
@@ -1576,6 +1683,118 @@
       "name": "subscriptions_select",
       "command": "select",
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.organizations.organizations_select",
+      "schema": "public",
+      "table": "organizations",
+      "name": "organizations_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+    },
+    {
+      "key": "public.organizations.organizations_insert",
+      "schema": "public",
+      "table": "organizations",
+      "name": "organizations_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+    },
+    {
+      "key": "public.organizations.organizations_update",
+      "schema": "public",
+      "table": "organizations",
+      "name": "organizations_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+    },
+    {
+      "key": "public.organizations.organizations_delete",
+      "schema": "public",
+      "table": "organizations",
+      "name": "organizations_delete",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+    },
+    {
+      "key": "public.org_members.org_members_select",
+      "schema": "public",
+      "table": "org_members",
+      "name": "org_members_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+    },
+    {
+      "key": "public.org_members.org_members_insert",
+      "schema": "public",
+      "table": "org_members",
+      "name": "org_members_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+    },
+    {
+      "key": "public.org_members.org_members_update",
+      "schema": "public",
+      "table": "org_members",
+      "name": "org_members_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+    },
+    {
+      "key": "public.org_members.org_members_delete",
+      "schema": "public",
+      "table": "org_members",
+      "name": "org_members_delete",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+    },
+    {
+      "key": "public.org_documents.org_documents_member_read",
+      "schema": "public",
+      "table": "org_documents",
+      "name": "org_documents_member_read",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+    },
+    {
+      "key": "public.org_documents.org_documents_member_write",
+      "schema": "public",
+      "table": "org_documents",
+      "name": "org_documents_member_write",
+      "command": "all",
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+    },
+    {
+      "key": "public.org_document_versions.org_document_versions_member_read",
+      "schema": "public",
+      "table": "org_document_versions",
+      "name": "org_document_versions_member_read",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+    },
+    {
+      "key": "public.org_document_versions.org_document_versions_member_write",
+      "schema": "public",
+      "table": "org_document_versions",
+      "name": "org_document_versions_member_write",
+      "command": "all",
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+    },
+    {
+      "key": "public.org_document_upload_intents.org_document_intents_member_read",
+      "schema": "public",
+      "table": "org_document_upload_intents",
+      "name": "org_document_intents_member_read",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+    },
+    {
+      "key": "public.org_document_upload_intents.org_document_intents_member_write",
+      "schema": "public",
+      "table": "org_document_upload_intents",
+      "name": "org_document_intents_member_write",
+      "command": "all",
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
     }
   ],
   "slices": [
@@ -1590,6 +1809,8 @@
         "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql",
         "supabase/migrations/20260324140000_project_launch_authority.sql",
         "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql",
+        "supabase/migrations/20260506120000_organizations_and_membership.sql",
+        "supabase/migrations/20260506120400_accept_project_invite_with_org.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
         "supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql",
         "supabase/migrations/20260505233155_fix_layer_a_stage_status_semantics.sql",
@@ -1720,6 +1941,16 @@
           "from": "public.project_ai_chat_sessions",
           "to": "public.profiles",
           "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql"
+        },
+        {
+          "from": "public.profile_settings",
+          "to": "public.organizations",
+          "sourceMigration": "supabase/migrations/20260506120000_organizations_and_membership.sql"
+        },
+        {
+          "from": "public.project_invites",
+          "to": "public.organizations",
+          "sourceMigration": "supabase/migrations/20260506120400_accept_project_invite_with_org.sql"
         }
       ]
     },
@@ -1870,6 +2101,7 @@
         "supabase/migrations/20260306162000_storage_documents_and_media.sql",
         "supabase/migrations/20260317120000_storage_upload_intents.sql",
         "supabase/migrations/20260320110000_task_final_media_contract.sql",
+        "supabase/migrations/20260506120200_org_documents_and_doc_links.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
         "supabase/migrations/20260317133000_storage_bucket_config_table.sql",
         "supabase/migrations/20260317121000_storage_upload_rpcs.sql",
@@ -1998,6 +2230,21 @@
           "from": "public.project_media",
           "to": "public.tasks",
           "sourceMigration": "supabase/migrations/20260320110000_task_final_media_contract.sql"
+        },
+        {
+          "from": "public.org_document_versions",
+          "to": "public.storage_objects",
+          "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+        },
+        {
+          "from": "public.documents",
+          "to": "public.workspace_documents",
+          "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+        },
+        {
+          "from": "public.documents",
+          "to": "public.org_documents",
+          "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
         }
       ]
     },

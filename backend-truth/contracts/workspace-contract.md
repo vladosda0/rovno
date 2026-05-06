@@ -14,6 +14,8 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 - `supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql`
 - `supabase/migrations/20260324140000_project_launch_authority.sql`
 - `supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql`
+- `supabase/migrations/20260506120000_organizations_and_membership.sql`
+- `supabase/migrations/20260506120400_accept_project_invite_with_org.sql`
 - `supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql`
 - `supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql`
 - `supabase/migrations/20260505233155_fix_layer_a_stage_status_semantics.sql`
@@ -77,6 +79,7 @@ Triggers:
 | `ai_data_usage_enabled` | `boolean` | no | `true` | no |
 | `created_at` | `timestamptz` | no | `now()` | no |
 | `updated_at` | `timestamptz` | no | `now()` | no |
+| `active_org_id` | `uuid` | yes |   | no |
 
 Constraints:
 - unnamed check (expression `currency in ('RUB', 'USD', 'EUR', 'GBP')`)
@@ -194,6 +197,7 @@ Triggers:
 | `accepted_at` | `timestamptz` | yes |   | no |
 | `finance_visibility` | `text` | no | `'none'` | no |
 | `internal_docs_visibility` | `text` | no | `'none'` | no |
+| `add_to_org_id` | `uuid` | yes |   | no |
 
 Constraints:
 - unnamed check (expression `role in ('owner', 'co_owner', 'contractor', 'viewer')`)
@@ -247,6 +251,8 @@ Indexes:
 | `public.projects(current_stage_id)` | `public.project_stages(id)` | `set null` | `supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql` |
 | `public.project_ai_chat_sessions(project_id)` | `public.projects(id)` | `cascade` | `supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql` |
 | `public.project_ai_chat_sessions(profile_id)` | `public.profiles(id)` | `cascade` | `supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql` |
+| `public.profile_settings(active_org_id)` | `public.organizations(id)` | `set null` | `supabase/migrations/20260506120000_organizations_and_membership.sql` |
+| `public.project_invites(add_to_org_id)` | `public.organizations(id)` | `set null` | `supabase/migrations/20260506120400_accept_project_invite_with_org.sql` |
 
 ## Functions
 
@@ -265,7 +271,7 @@ Indexes:
 | `public.can_manage_project(uuid)` | `boolean` | yes | `rpc` | `supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql` |
 | `public.can_write_project_content(uuid)` | `boolean` | yes | `rpc` | `supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql` |
 | `public.can_see_profile(uuid)` | `boolean` | yes | `rpc` | `supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql` |
-| `public.accept_project_invite(text)` | `public.project_invites` | yes | `rpc` | `supabase/migrations/20260324140000_project_launch_authority.sql` |
+| `public.accept_project_invite(text)` | `public.project_invites` | yes | `rpc` | `supabase/migrations/20260506120400_accept_project_invite_with_org.sql` |
 | `public.effective_finance_visibility(uuid)` | `text` | yes | `rpc` | `supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql` |
 | `public.effective_internal_docs_visibility(uuid)` | `text` | yes | `rpc` | `supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql` |
 | `public.effective_ai_access_for_profile(uuid)` | `text` | yes | `rpc` | `supabase/migrations/20260324140000_project_launch_authority.sql` |

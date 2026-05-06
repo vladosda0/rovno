@@ -267,6 +267,34 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260505233155_fix_layer_a_stage_status_semantics.sql",
       "sha256": "7e5accc7c138d14aca89f1f8b957a2dc84e4d0e417b81fd28fe395d37c2d0431"
+    },
+    {
+      "path": "supabase/migrations/20260506120000_organizations_and_membership.sql",
+      "sha256": "e3e15041c870655798ec5569f77c9408c78b569e048a10e793d45dd3e2baf9dc"
+    },
+    {
+      "path": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql",
+      "sha256": "3e1569de9ed0d184f8066413bc06bc59ca001997a2b162c919e12a2275416efc"
+    },
+    {
+      "path": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql",
+      "sha256": "daee09b38113e151fe85be548b1171334729282b2af0df6d2d4c3d8c04027d15"
+    },
+    {
+      "path": "supabase/migrations/20260506120300_org_rpcs.sql",
+      "sha256": "6a1ca8dca9225d795dab38480b77500d00afc87b1342e6b83693bf5558409500"
+    },
+    {
+      "path": "supabase/migrations/20260506120400_accept_project_invite_with_org.sql",
+      "sha256": "c0a3492fb561646d860fd5f9dd10d986e1afbb098b736d8a342428d3e44d5999"
+    },
+    {
+      "path": "supabase/migrations/20260506130000_fix_org_owner_membership_order.sql",
+      "sha256": "66949c1d5a99ff562859d66ff3f98772af83935e5f515dbbb5d09799c4da1ea0"
+    },
+    {
+      "path": "supabase/migrations/20260506140000_fix_org_delete_cascade_through_last_owner_guard.sql",
+      "sha256": "ded140caf25c35de26361541f39c473fe4c2656b3c0786656039f8b6620df289"
     }
   ],
   "generated_artifacts": [
@@ -356,6 +384,13 @@ export const manifest = {
     "sql/20260502120000_estimate_planned_dates_and_lag.sql",
     "sql/20260504013553_layer_a_snapshot_enrichment.sql",
     "sql/20260505233155_fix_layer_a_stage_status_semantics.sql",
+    "sql/20260506120000_organizations_and_membership.sql",
+    "sql/20260506120100_org_rls_helpers_and_policies.sql",
+    "sql/20260506120200_org_documents_and_doc_links.sql",
+    "sql/20260506120300_org_rpcs.sql",
+    "sql/20260506120400_accept_project_invite_with_org.sql",
+    "sql/20260506130000_fix_org_owner_membership_order.sql",
+    "sql/20260506140000_fix_org_delete_cascade_through_last_owner_guard.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -759,6 +794,23 @@ export const tables = {
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "active_org_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "organizations",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
         }
       ],
       "constraints": [
@@ -1615,6 +1667,23 @@ export const tables = {
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "add_to_org_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "organizations",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
         }
       ],
       "constraints": [
@@ -2533,6 +2602,50 @@ export const tables = {
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "linked_external_kind",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "linked_workspace_document_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "workspace_documents",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
+        },
+        {
+          "name": "linked_org_document_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "org_documents",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
         }
       ],
       "constraints": [
@@ -2555,6 +2668,24 @@ export const tables = {
           "expression": "visibility_class in ('shared_project', 'internal')",
           "usingIndex": null,
           "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "linked_external_kind"
+          ],
+          "expression": "linked_external_kind is null\n           or linked_external_kind in ('workspace', 'org')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+        },
+        {
+          "type": "check",
+          "name": "documents_link_consistent",
+          "columns": [],
+          "expression": "(linked_external_kind is null\n      and linked_workspace_document_id is null\n      and linked_org_document_id is null)\n    or (linked_external_kind = 'workspace'\n      and linked_workspace_document_id is not null\n      and linked_org_document_id is null)\n    or (linked_external_kind = 'org'\n      and linked_org_document_id is not null\n      and linked_workspace_document_id is null)",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
         }
       ],
       "indexes": [
@@ -2567,6 +2698,26 @@ export const tables = {
           "where": null,
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260306162000_storage_documents_and_media.sql"
+        },
+        {
+          "name": "idx_documents_linked_workspace_document_id",
+          "unique": false,
+          "expressions": [
+            "linked_workspace_document_id"
+          ],
+          "where": "linked_workspace_document_id is not null",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+        },
+        {
+          "name": "idx_documents_linked_org_document_id",
+          "unique": false,
+          "expressions": [
+            "linked_org_document_id"
+          ],
+          "where": "linked_org_document_id is not null",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
         }
       ],
       "triggers": [
@@ -7242,6 +7393,749 @@ export const tables = {
         }
       ],
       "triggers": []
+    },
+    {
+      "schema": "public",
+      "name": "organizations",
+      "sourceMigration": "supabase/migrations/20260506120000_organizations_and_membership.sql",
+      "columns": [
+        {
+          "name": "id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "gen_random_uuid()",
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "name",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "slug",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": true,
+          "references": null
+        },
+        {
+          "name": "owner_profile_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "profiles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "restrict"
+          }
+        },
+        {
+          "name": "description",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "avatar_url",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "plan",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "'free'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "updated_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": "organizations_slug_format",
+          "columns": [],
+          "expression": "slug ~ '^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$'",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260506120000_organizations_and_membership.sql"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_organizations_owner_profile_id",
+          "unique": false,
+          "expressions": [
+            "owner_profile_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260506120000_organizations_and_membership.sql"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "set_organizations_updated_at",
+          "activation": "before update",
+          "functionSchema": "public",
+          "functionName": "set_updated_at",
+          "functionSignature": "public.set_updated_at()",
+          "sourceMigration": "supabase/migrations/20260506120000_organizations_and_membership.sql"
+        },
+        {
+          "name": "guard_organizations_owner_profile_id",
+          "activation": "before update",
+          "functionSchema": "public",
+          "functionName": "guard_organization_owner_change",
+          "functionSignature": "public.guard_organization_owner_change()",
+          "sourceMigration": "supabase/migrations/20260506120000_organizations_and_membership.sql"
+        },
+        {
+          "name": "on_organization_owner_membership",
+          "activation": "after insert or update of owner_profile_id",
+          "functionSchema": "public",
+          "functionName": "handle_organization_owner_membership",
+          "functionSignature": "public.handle_organization_owner_membership()",
+          "sourceMigration": "supabase/migrations/20260506120000_organizations_and_membership.sql"
+        },
+        {
+          "name": "guard_organizations_before_delete_mark",
+          "activation": "before delete",
+          "functionSchema": "public",
+          "functionName": "mark_organization_deleting",
+          "functionSignature": "public.mark_organization_deleting()",
+          "sourceMigration": "supabase/migrations/20260506140000_fix_org_delete_cascade_through_last_owner_guard.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "org_members",
+      "sourceMigration": "supabase/migrations/20260506120000_organizations_and_membership.sql",
+      "columns": [
+        {
+          "name": "id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "gen_random_uuid()",
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "org_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "organizations",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "cascade"
+          }
+        },
+        {
+          "name": "profile_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "profiles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "cascade"
+          }
+        },
+        {
+          "name": "role",
+          "sqlType": "text",
+          "tsType": "\"owner\" | \"admin\" | \"member\"",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "role"
+          ],
+          "expression": "role in ('owner', 'admin', 'member')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260506120000_organizations_and_membership.sql"
+        },
+        {
+          "type": "unique",
+          "name": null,
+          "columns": [
+            "org_id",
+            "profile_id"
+          ],
+          "expression": null,
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260506120000_organizations_and_membership.sql"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_org_members_org_id",
+          "unique": false,
+          "expressions": [
+            "org_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260506120000_organizations_and_membership.sql"
+        },
+        {
+          "name": "idx_org_members_profile_id",
+          "unique": false,
+          "expressions": [
+            "profile_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260506120000_organizations_and_membership.sql"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "guard_org_members_owner_role",
+          "activation": "before insert or update",
+          "functionSchema": "public",
+          "functionName": "enforce_org_member_owner_role",
+          "functionSignature": "public.enforce_org_member_owner_role()",
+          "sourceMigration": "supabase/migrations/20260506120000_organizations_and_membership.sql"
+        },
+        {
+          "name": "guard_org_members_last_owner",
+          "activation": "before update or delete",
+          "functionSchema": "public",
+          "functionName": "enforce_org_member_last_owner",
+          "functionSignature": "public.enforce_org_member_last_owner()",
+          "sourceMigration": "supabase/migrations/20260506120000_organizations_and_membership.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "org_documents",
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql",
+      "columns": [
+        {
+          "name": "id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "gen_random_uuid()",
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "org_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "organizations",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "cascade"
+          }
+        },
+        {
+          "name": "title",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "type",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "'knowledge_base'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "origin",
+          "sqlType": "text",
+          "tsType": "\"uploaded\" | \"manual\" | \"ai_generated\"",
+          "nullable": false,
+          "defaultSql": "'uploaded'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "description",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "tags",
+          "sqlType": "text[]",
+          "tsType": "unknown",
+          "nullable": false,
+          "defaultSql": "'{}'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "pinned",
+          "sqlType": "boolean",
+          "tsType": "boolean",
+          "nullable": false,
+          "defaultSql": "false",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "created_by",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "profiles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "restrict"
+          }
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "updated_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "visibility_class",
+          "sqlType": "text",
+          "tsType": "\"shared_project\" | \"internal\"",
+          "nullable": false,
+          "defaultSql": "'shared_project'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "origin"
+          ],
+          "expression": "origin in ('uploaded', 'manual', 'ai_generated')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "visibility_class"
+          ],
+          "expression": "visibility_class in ('shared_project', 'internal')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_org_documents_org_id",
+          "unique": false,
+          "expressions": [
+            "org_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "set_org_documents_updated_at",
+          "activation": "before update",
+          "functionSchema": "public",
+          "functionName": "set_updated_at",
+          "functionSignature": "public.set_updated_at()",
+          "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "org_document_versions",
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql",
+      "columns": [
+        {
+          "name": "id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "gen_random_uuid()",
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "org_document_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "org_documents",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "cascade"
+          }
+        },
+        {
+          "name": "storage_object_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "storage_objects",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
+        },
+        {
+          "name": "version_number",
+          "sqlType": "integer",
+          "tsType": "number",
+          "nullable": false,
+          "defaultSql": "1",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "is_current",
+          "sqlType": "boolean",
+          "tsType": "boolean",
+          "nullable": false,
+          "defaultSql": "true",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "status",
+          "sqlType": "text",
+          "tsType": "\"active\" | \"archived\"",
+          "nullable": false,
+          "defaultSql": "'active'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "status"
+          ],
+          "expression": "status in ('active', 'archived')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_org_document_versions_doc_id",
+          "unique": false,
+          "expressions": [
+            "org_document_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+        }
+      ],
+      "triggers": []
+    },
+    {
+      "schema": "public",
+      "name": "org_document_upload_intents",
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql",
+      "columns": [
+        {
+          "name": "id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "gen_random_uuid()",
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "org_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "organizations",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "cascade"
+          }
+        },
+        {
+          "name": "bucket",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "object_path",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "filename",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "mime_type",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "size_bytes",
+          "sqlType": "bigint",
+          "tsType": "number",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "created_by",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "profiles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "restrict"
+          }
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "finalized_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "size_bytes"
+          ],
+          "expression": "size_bytes is null or size_bytes >= 0",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_org_document_upload_intents_org",
+          "unique": false,
+          "expressions": [
+            "org_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+        }
+      ],
+      "triggers": []
     }
   ]
 } as const;
@@ -8693,6 +9587,214 @@ export const relations = {
         "id"
       ],
       "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260506120000_organizations_and_membership.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "organizations",
+      "fromColumns": [
+        "owner_profile_id"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "restrict"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260506120000_organizations_and_membership.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "org_members",
+      "fromColumns": [
+        "org_id"
+      ],
+      "toSchema": "public",
+      "toTable": "organizations",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260506120000_organizations_and_membership.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "org_members",
+      "fromColumns": [
+        "profile_id"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260506120000_organizations_and_membership.sql",
+      "sourceKind": "alter_table",
+      "fromSchema": "public",
+      "fromTable": "profile_settings",
+      "fromColumns": [
+        "active_org_id"
+      ],
+      "toSchema": "public",
+      "toTable": "organizations",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "org_documents",
+      "fromColumns": [
+        "org_id"
+      ],
+      "toSchema": "public",
+      "toTable": "organizations",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "org_documents",
+      "fromColumns": [
+        "created_by"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "restrict"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "org_document_versions",
+      "fromColumns": [
+        "org_document_id"
+      ],
+      "toSchema": "public",
+      "toTable": "org_documents",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "org_document_versions",
+      "fromColumns": [
+        "storage_object_id"
+      ],
+      "toSchema": "public",
+      "toTable": "storage_objects",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "org_document_upload_intents",
+      "fromColumns": [
+        "org_id"
+      ],
+      "toSchema": "public",
+      "toTable": "organizations",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "org_document_upload_intents",
+      "fromColumns": [
+        "created_by"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "restrict"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql",
+      "sourceKind": "alter_table",
+      "fromSchema": "public",
+      "fromTable": "documents",
+      "fromColumns": [
+        "linked_workspace_document_id"
+      ],
+      "toSchema": "public",
+      "toTable": "workspace_documents",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql",
+      "sourceKind": "alter_table",
+      "fromSchema": "public",
+      "fromTable": "documents",
+      "fromColumns": [
+        "linked_org_document_id"
+      ],
+      "toSchema": "public",
+      "toTable": "org_documents",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260506120400_accept_project_invite_with_org.sql",
+      "sourceKind": "alter_table",
+      "fromSchema": "public",
+      "fromTable": "project_invites",
+      "fromColumns": [
+        "add_to_org_id"
+      ],
+      "toSchema": "public",
+      "toTable": "organizations",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
     }
   ]
 } as const;
@@ -9183,6 +10285,26 @@ export const checks = {
       ],
       "expression": "visibility_class in ('shared_project', 'internal')",
       "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
+    },
+    {
+      "schema": "public",
+      "table": "documents",
+      "column": "linked_external_kind",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "linked_external_kind is null\n           or linked_external_kind in ('workspace', 'org')",
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+    },
+    {
+      "schema": "public",
+      "table": "documents",
+      "column": null,
+      "constraintName": "documents_link_consistent",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "(linked_external_kind is null\n      and linked_workspace_document_id is null\n      and linked_org_document_id is null)\n    or (linked_external_kind = 'workspace'\n      and linked_workspace_document_id is not null\n      and linked_org_document_id is null)\n    or (linked_external_kind = 'org'\n      and linked_org_document_id is not null\n      and linked_workspace_document_id is null)",
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
     },
     {
       "schema": "public",
@@ -9748,6 +10870,80 @@ export const checks = {
       "allowedValues": null,
       "expression": "jsonb_typeof(recent_turns) = 'array'",
       "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql"
+    },
+    {
+      "schema": "public",
+      "table": "organizations",
+      "column": null,
+      "constraintName": "organizations_slug_format",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "slug ~ '^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$'",
+      "sourceMigration": "supabase/migrations/20260506120000_organizations_and_membership.sql"
+    },
+    {
+      "schema": "public",
+      "table": "org_members",
+      "column": "role",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "owner",
+        "admin",
+        "member"
+      ],
+      "expression": "role in ('owner', 'admin', 'member')",
+      "sourceMigration": "supabase/migrations/20260506120000_organizations_and_membership.sql"
+    },
+    {
+      "schema": "public",
+      "table": "org_documents",
+      "column": "origin",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "uploaded",
+        "manual",
+        "ai_generated"
+      ],
+      "expression": "origin in ('uploaded', 'manual', 'ai_generated')",
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+    },
+    {
+      "schema": "public",
+      "table": "org_documents",
+      "column": "visibility_class",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "shared_project",
+        "internal"
+      ],
+      "expression": "visibility_class in ('shared_project', 'internal')",
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+    },
+    {
+      "schema": "public",
+      "table": "org_document_versions",
+      "column": "status",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "active",
+        "archived"
+      ],
+      "expression": "status in ('active', 'archived')",
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+    },
+    {
+      "schema": "public",
+      "table": "org_document_upload_intents",
+      "column": "size_bytes",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "size_bytes is null or size_bytes >= 0",
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
     }
   ]
 } as const;
@@ -9851,6 +11047,16 @@ export const functions = {
         {
           "table": "public.subscriptions",
           "triggerName": "set_subscriptions_updated_at",
+          "activation": "before update"
+        },
+        {
+          "table": "public.organizations",
+          "triggerName": "set_organizations_updated_at",
+          "activation": "before update"
+        },
+        {
+          "table": "public.org_documents",
+          "triggerName": "set_org_documents_updated_at",
           "activation": "before update"
         }
       ]
@@ -10206,7 +11412,7 @@ export const functions = {
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql",
+      "sourceMigration": "supabase/migrations/20260506120400_accept_project_invite_with_org.sql",
       "triggerUsages": []
     },
     {
@@ -11398,6 +12604,230 @@ export const functions = {
       "authenticatedExecute": false,
       "sourceMigration": "supabase/migrations/20260425092624_profile_tutorial_state.sql",
       "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "handle_organization_owner_membership",
+      "signature": "public.handle_organization_owner_membership()",
+      "args": [],
+      "returnType": "trigger",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260506130000_fix_org_owner_membership_order.sql",
+      "triggerUsages": [
+        {
+          "table": "public.organizations",
+          "triggerName": "on_organization_owner_membership",
+          "activation": "after insert or update of owner_profile_id"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "enforce_org_member_owner_role",
+      "signature": "public.enforce_org_member_owner_role()",
+      "args": [],
+      "returnType": "trigger",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260506120000_organizations_and_membership.sql",
+      "triggerUsages": [
+        {
+          "table": "public.org_members",
+          "triggerName": "guard_org_members_owner_role",
+          "activation": "before insert or update"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "enforce_org_member_last_owner",
+      "signature": "public.enforce_org_member_last_owner()",
+      "args": [],
+      "returnType": "trigger",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260506140000_fix_org_delete_cascade_through_last_owner_guard.sql",
+      "triggerUsages": [
+        {
+          "table": "public.org_members",
+          "triggerName": "guard_org_members_last_owner",
+          "activation": "before update or delete"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "guard_organization_owner_change",
+      "signature": "public.guard_organization_owner_change()",
+      "args": [],
+      "returnType": "trigger",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260506120000_organizations_and_membership.sql",
+      "triggerUsages": [
+        {
+          "table": "public.organizations",
+          "triggerName": "guard_organizations_owner_profile_id",
+          "activation": "before update"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "is_org_member",
+      "signature": "public.is_org_member(uuid)",
+      "args": [
+        {
+          "name": "p_org_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "boolean",
+      "language": "sql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "org_role",
+      "signature": "public.org_role(uuid)",
+      "args": [
+        {
+          "name": "p_org_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "text",
+      "language": "sql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "can_manage_org",
+      "signature": "public.can_manage_org(uuid)",
+      "args": [
+        {
+          "name": "p_org_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "boolean",
+      "language": "sql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "list_user_organizations",
+      "signature": "public.list_user_organizations()",
+      "args": [],
+      "returnType": "table ( org_id uuid, name text, slug text, role text, member_count integer, is_active_context boolean )",
+      "language": "sql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260506120300_org_rpcs.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "set_active_org_context",
+      "signature": "public.set_active_org_context(uuid)",
+      "args": [
+        {
+          "name": "p_org_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "void",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260506120300_org_rpcs.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "import_documents_to_project",
+      "signature": "public.import_documents_to_project(uuid, text, uuid[])",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_source_kind",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_source_doc_ids",
+          "type": "uuid[]",
+          "identityType": "uuid[]"
+        }
+      ],
+      "returnType": "setof public.documents",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260506120300_org_rpcs.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "mark_organization_deleting",
+      "signature": "public.mark_organization_deleting()",
+      "args": [],
+      "returnType": "trigger",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260506140000_fix_org_delete_cascade_through_last_owner_guard.sql",
+      "triggerUsages": [
+        {
+          "table": "public.organizations",
+          "triggerName": "guard_organizations_before_delete_mark",
+          "activation": "before delete"
+        }
+      ]
     }
   ]
 } as const;
@@ -13203,6 +14633,239 @@ export const rls = {
       "rlsEnabled": true,
       "authenticatedGrants": [],
       "policies": []
+    },
+    {
+      "schema": "public",
+      "table": "organizations",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "delete",
+        "insert",
+        "select",
+        "update"
+      ],
+      "policies": [
+        {
+          "name": "organizations_select",
+          "schema": "public",
+          "table": "organizations",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "owner_profile_id = auth.uid()\n  or exists (\n    select 1\n    from public.org_members om\n    where om.org_id = organizations.id\n      and om.profile_id = auth.uid()\n  )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+        },
+        {
+          "name": "organizations_insert",
+          "schema": "public",
+          "table": "organizations",
+          "command": "insert",
+          "roles": [
+            "authenticated"
+          ],
+          "using": null,
+          "withCheck": "owner_profile_id = auth.uid()",
+          "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+        },
+        {
+          "name": "organizations_update",
+          "schema": "public",
+          "table": "organizations",
+          "command": "update",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "owner_profile_id = auth.uid()\n  or exists (\n    select 1\n    from public.org_members om\n    where om.org_id = organizations.id\n      and om.profile_id = auth.uid()\n      and om.role = 'admin'\n  )",
+          "withCheck": "true",
+          "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+        },
+        {
+          "name": "organizations_delete",
+          "schema": "public",
+          "table": "organizations",
+          "command": "delete",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "owner_profile_id = auth.uid()",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "table": "org_members",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "delete",
+        "insert",
+        "select",
+        "update"
+      ],
+      "policies": [
+        {
+          "name": "org_members_select",
+          "schema": "public",
+          "table": "org_members",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "profile_id = auth.uid()\n  or exists (\n    select 1\n    from public.organizations o\n    where o.id = org_members.org_id\n      and o.owner_profile_id = auth.uid()\n  )\n  or exists (\n    select 1\n    from public.org_members self_om\n    where self_om.org_id = org_members.org_id\n      and self_om.profile_id = auth.uid()\n  )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+        },
+        {
+          "name": "org_members_insert",
+          "schema": "public",
+          "table": "org_members",
+          "command": "insert",
+          "roles": [
+            "authenticated"
+          ],
+          "using": null,
+          "withCheck": "exists (\n    select 1\n    from public.organizations o\n    where o.id = org_id\n      and o.owner_profile_id = auth.uid()\n  )\n  or exists (\n    select 1\n    from public.org_members self_om\n    where self_om.org_id = org_members.org_id\n      and self_om.profile_id = auth.uid()\n      and self_om.role = 'admin'\n  )",
+          "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+        },
+        {
+          "name": "org_members_update",
+          "schema": "public",
+          "table": "org_members",
+          "command": "update",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n    select 1\n    from public.organizations o\n    where o.id = org_id\n      and o.owner_profile_id = auth.uid()\n  )\n  or exists (\n    select 1\n    from public.org_members self_om\n    where self_om.org_id = org_members.org_id\n      and self_om.profile_id = auth.uid()\n      and self_om.role = 'admin'\n  )",
+          "withCheck": "exists (\n    select 1\n    from public.organizations o\n    where o.id = org_id\n      and o.owner_profile_id = auth.uid()\n  )\n  or exists (\n    select 1\n    from public.org_members self_om\n    where self_om.org_id = org_members.org_id\n      and self_om.profile_id = auth.uid()\n      and self_om.role = 'admin'\n  )",
+          "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+        },
+        {
+          "name": "org_members_delete",
+          "schema": "public",
+          "table": "org_members",
+          "command": "delete",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "profile_id = auth.uid()\n  or exists (\n    select 1\n    from public.organizations o\n    where o.id = org_id\n      and o.owner_profile_id = auth.uid()\n  )\n  or exists (\n    select 1\n    from public.org_members self_om\n    where self_om.org_id = org_members.org_id\n      and self_om.profile_id = auth.uid()\n      and self_om.role = 'admin'\n  )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "table": "org_documents",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "delete",
+        "insert",
+        "select",
+        "update"
+      ],
+      "policies": [
+        {
+          "name": "org_documents_member_read",
+          "schema": "public",
+          "table": "org_documents",
+          "command": "select",
+          "roles": [
+            "public"
+          ],
+          "using": "public.is_org_member(org_id)",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+        },
+        {
+          "name": "org_documents_member_write",
+          "schema": "public",
+          "table": "org_documents",
+          "command": "all",
+          "roles": [
+            "public"
+          ],
+          "using": "public.is_org_member(org_id)",
+          "withCheck": "public.is_org_member(org_id)",
+          "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "table": "org_document_versions",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "delete",
+        "insert",
+        "select",
+        "update"
+      ],
+      "policies": [
+        {
+          "name": "org_document_versions_member_read",
+          "schema": "public",
+          "table": "org_document_versions",
+          "command": "select",
+          "roles": [
+            "public"
+          ],
+          "using": "exists (\n      select 1 from public.org_documents od\n      where od.id = org_document_versions.org_document_id\n        and public.is_org_member(od.org_id)\n    )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+        },
+        {
+          "name": "org_document_versions_member_write",
+          "schema": "public",
+          "table": "org_document_versions",
+          "command": "all",
+          "roles": [
+            "public"
+          ],
+          "using": "exists (\n      select 1 from public.org_documents od\n      where od.id = org_document_versions.org_document_id\n        and public.is_org_member(od.org_id)\n    )",
+          "withCheck": "exists (\n      select 1 from public.org_documents od\n      where od.id = org_document_versions.org_document_id\n        and public.is_org_member(od.org_id)\n    )",
+          "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "table": "org_document_upload_intents",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "delete",
+        "insert",
+        "select",
+        "update"
+      ],
+      "policies": [
+        {
+          "name": "org_document_intents_member_read",
+          "schema": "public",
+          "table": "org_document_upload_intents",
+          "command": "select",
+          "roles": [
+            "public"
+          ],
+          "using": "public.is_org_member(org_id)",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+        },
+        {
+          "name": "org_document_intents_member_write",
+          "schema": "public",
+          "table": "org_document_upload_intents",
+          "command": "all",
+          "roles": [
+            "public"
+          ],
+          "using": "public.is_org_member(org_id)",
+          "withCheck": "public.is_org_member(org_id)",
+          "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+        }
+      ]
     }
   ]
 } as const;
@@ -13436,6 +15099,36 @@ export const sourceTrace = {
       "schema": "public",
       "table": "project_ai_chat_sessions",
       "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql"
+    },
+    {
+      "key": "public.organizations",
+      "schema": "public",
+      "table": "organizations",
+      "sourceMigration": "supabase/migrations/20260506120000_organizations_and_membership.sql"
+    },
+    {
+      "key": "public.org_members",
+      "schema": "public",
+      "table": "org_members",
+      "sourceMigration": "supabase/migrations/20260506120000_organizations_and_membership.sql"
+    },
+    {
+      "key": "public.org_documents",
+      "schema": "public",
+      "table": "org_documents",
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+    },
+    {
+      "key": "public.org_document_versions",
+      "schema": "public",
+      "table": "org_document_versions",
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+    },
+    {
+      "key": "public.org_document_upload_intents",
+      "schema": "public",
+      "table": "org_document_upload_intents",
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
     }
   ],
   "functions": [
@@ -13563,7 +15256,7 @@ export const sourceTrace = {
       "schema": "public",
       "name": "accept_project_invite",
       "signature": "public.accept_project_invite(text)",
-      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql"
+      "sourceMigration": "supabase/migrations/20260506120400_accept_project_invite_with_org.sql"
     },
     {
       "key": "public.get_shared_estimate_version",
@@ -13879,6 +15572,83 @@ export const sourceTrace = {
       "name": "append_tutorial_completed",
       "signature": "public.append_tutorial_completed(uuid, text)",
       "sourceMigration": "supabase/migrations/20260425092624_profile_tutorial_state.sql"
+    },
+    {
+      "key": "public.handle_organization_owner_membership",
+      "schema": "public",
+      "name": "handle_organization_owner_membership",
+      "signature": "public.handle_organization_owner_membership()",
+      "sourceMigration": "supabase/migrations/20260506130000_fix_org_owner_membership_order.sql"
+    },
+    {
+      "key": "public.enforce_org_member_owner_role",
+      "schema": "public",
+      "name": "enforce_org_member_owner_role",
+      "signature": "public.enforce_org_member_owner_role()",
+      "sourceMigration": "supabase/migrations/20260506120000_organizations_and_membership.sql"
+    },
+    {
+      "key": "public.enforce_org_member_last_owner",
+      "schema": "public",
+      "name": "enforce_org_member_last_owner",
+      "signature": "public.enforce_org_member_last_owner()",
+      "sourceMigration": "supabase/migrations/20260506140000_fix_org_delete_cascade_through_last_owner_guard.sql"
+    },
+    {
+      "key": "public.guard_organization_owner_change",
+      "schema": "public",
+      "name": "guard_organization_owner_change",
+      "signature": "public.guard_organization_owner_change()",
+      "sourceMigration": "supabase/migrations/20260506120000_organizations_and_membership.sql"
+    },
+    {
+      "key": "public.is_org_member",
+      "schema": "public",
+      "name": "is_org_member",
+      "signature": "public.is_org_member(uuid)",
+      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+    },
+    {
+      "key": "public.org_role",
+      "schema": "public",
+      "name": "org_role",
+      "signature": "public.org_role(uuid)",
+      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+    },
+    {
+      "key": "public.can_manage_org",
+      "schema": "public",
+      "name": "can_manage_org",
+      "signature": "public.can_manage_org(uuid)",
+      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+    },
+    {
+      "key": "public.list_user_organizations",
+      "schema": "public",
+      "name": "list_user_organizations",
+      "signature": "public.list_user_organizations()",
+      "sourceMigration": "supabase/migrations/20260506120300_org_rpcs.sql"
+    },
+    {
+      "key": "public.set_active_org_context",
+      "schema": "public",
+      "name": "set_active_org_context",
+      "signature": "public.set_active_org_context(uuid)",
+      "sourceMigration": "supabase/migrations/20260506120300_org_rpcs.sql"
+    },
+    {
+      "key": "public.import_documents_to_project",
+      "schema": "public",
+      "name": "import_documents_to_project",
+      "signature": "public.import_documents_to_project(uuid, text, uuid[])",
+      "sourceMigration": "supabase/migrations/20260506120300_org_rpcs.sql"
+    },
+    {
+      "key": "public.mark_organization_deleting",
+      "schema": "public",
+      "name": "mark_organization_deleting",
+      "signature": "public.mark_organization_deleting()",
+      "sourceMigration": "supabase/migrations/20260506140000_fix_org_delete_cascade_through_last_owner_guard.sql"
     }
   ],
   "policies": [
@@ -14785,6 +16555,118 @@ export const sourceTrace = {
       "name": "subscriptions_select",
       "command": "select",
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
+    },
+    {
+      "key": "public.organizations.organizations_select",
+      "schema": "public",
+      "table": "organizations",
+      "name": "organizations_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+    },
+    {
+      "key": "public.organizations.organizations_insert",
+      "schema": "public",
+      "table": "organizations",
+      "name": "organizations_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+    },
+    {
+      "key": "public.organizations.organizations_update",
+      "schema": "public",
+      "table": "organizations",
+      "name": "organizations_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+    },
+    {
+      "key": "public.organizations.organizations_delete",
+      "schema": "public",
+      "table": "organizations",
+      "name": "organizations_delete",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+    },
+    {
+      "key": "public.org_members.org_members_select",
+      "schema": "public",
+      "table": "org_members",
+      "name": "org_members_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+    },
+    {
+      "key": "public.org_members.org_members_insert",
+      "schema": "public",
+      "table": "org_members",
+      "name": "org_members_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+    },
+    {
+      "key": "public.org_members.org_members_update",
+      "schema": "public",
+      "table": "org_members",
+      "name": "org_members_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+    },
+    {
+      "key": "public.org_members.org_members_delete",
+      "schema": "public",
+      "table": "org_members",
+      "name": "org_members_delete",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+    },
+    {
+      "key": "public.org_documents.org_documents_member_read",
+      "schema": "public",
+      "table": "org_documents",
+      "name": "org_documents_member_read",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+    },
+    {
+      "key": "public.org_documents.org_documents_member_write",
+      "schema": "public",
+      "table": "org_documents",
+      "name": "org_documents_member_write",
+      "command": "all",
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+    },
+    {
+      "key": "public.org_document_versions.org_document_versions_member_read",
+      "schema": "public",
+      "table": "org_document_versions",
+      "name": "org_document_versions_member_read",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+    },
+    {
+      "key": "public.org_document_versions.org_document_versions_member_write",
+      "schema": "public",
+      "table": "org_document_versions",
+      "name": "org_document_versions_member_write",
+      "command": "all",
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+    },
+    {
+      "key": "public.org_document_upload_intents.org_document_intents_member_read",
+      "schema": "public",
+      "table": "org_document_upload_intents",
+      "name": "org_document_intents_member_read",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+    },
+    {
+      "key": "public.org_document_upload_intents.org_document_intents_member_write",
+      "schema": "public",
+      "table": "org_document_upload_intents",
+      "name": "org_document_intents_member_write",
+      "command": "all",
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
     }
   ],
   "slices": [
@@ -14799,6 +16681,8 @@ export const sourceTrace = {
         "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql",
         "supabase/migrations/20260324140000_project_launch_authority.sql",
         "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql",
+        "supabase/migrations/20260506120000_organizations_and_membership.sql",
+        "supabase/migrations/20260506120400_accept_project_invite_with_org.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
         "supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql",
         "supabase/migrations/20260505233155_fix_layer_a_stage_status_semantics.sql",
@@ -14929,6 +16813,16 @@ export const sourceTrace = {
           "from": "public.project_ai_chat_sessions",
           "to": "public.profiles",
           "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql"
+        },
+        {
+          "from": "public.profile_settings",
+          "to": "public.organizations",
+          "sourceMigration": "supabase/migrations/20260506120000_organizations_and_membership.sql"
+        },
+        {
+          "from": "public.project_invites",
+          "to": "public.organizations",
+          "sourceMigration": "supabase/migrations/20260506120400_accept_project_invite_with_org.sql"
         }
       ]
     },
@@ -15079,6 +16973,7 @@ export const sourceTrace = {
         "supabase/migrations/20260306162000_storage_documents_and_media.sql",
         "supabase/migrations/20260317120000_storage_upload_intents.sql",
         "supabase/migrations/20260320110000_task_final_media_contract.sql",
+        "supabase/migrations/20260506120200_org_documents_and_doc_links.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
         "supabase/migrations/20260317133000_storage_bucket_config_table.sql",
         "supabase/migrations/20260317121000_storage_upload_rpcs.sql",
@@ -15207,6 +17102,21 @@ export const sourceTrace = {
           "from": "public.project_media",
           "to": "public.tasks",
           "sourceMigration": "supabase/migrations/20260320110000_task_final_media_contract.sql"
+        },
+        {
+          "from": "public.org_document_versions",
+          "to": "public.storage_objects",
+          "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+        },
+        {
+          "from": "public.documents",
+          "to": "public.workspace_documents",
+          "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+        },
+        {
+          "from": "public.documents",
+          "to": "public.org_documents",
+          "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
         }
       ]
     },
@@ -15688,6 +17598,8 @@ export const slices = {
         "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql",
         "supabase/migrations/20260324140000_project_launch_authority.sql",
         "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql",
+        "supabase/migrations/20260506120000_organizations_and_membership.sql",
+        "supabase/migrations/20260506120400_accept_project_invite_with_org.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
         "supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql",
         "supabase/migrations/20260505233155_fix_layer_a_stage_status_semantics.sql",
@@ -15730,6 +17642,7 @@ export const slices = {
         "supabase/migrations/20260306162000_storage_documents_and_media.sql",
         "supabase/migrations/20260317120000_storage_upload_intents.sql",
         "supabase/migrations/20260320110000_task_final_media_contract.sql",
+        "supabase/migrations/20260506120200_org_documents_and_doc_links.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
         "supabase/migrations/20260317133000_storage_bucket_config_table.sql",
         "supabase/migrations/20260317121000_storage_upload_rpcs.sql",

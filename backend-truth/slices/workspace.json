@@ -15,6 +15,8 @@
     "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql",
     "supabase/migrations/20260324140000_project_launch_authority.sql",
     "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql",
+    "supabase/migrations/20260506120000_organizations_and_membership.sql",
+    "supabase/migrations/20260506120400_accept_project_invite_with_org.sql",
     "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
     "supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql",
     "supabase/migrations/20260505233155_fix_layer_a_stage_status_semantics.sql",
@@ -395,6 +397,23 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "active_org_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "organizations",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
         }
       ],
       "constraints": [
@@ -1251,6 +1270,23 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "add_to_org_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "organizations",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
         }
       ],
       "constraints": [
@@ -1688,6 +1724,38 @@
         "id"
       ],
       "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260506120000_organizations_and_membership.sql",
+      "sourceKind": "alter_table",
+      "fromSchema": "public",
+      "fromTable": "profile_settings",
+      "fromColumns": [
+        "active_org_id"
+      ],
+      "toSchema": "public",
+      "toTable": "organizations",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260506120400_accept_project_invite_with_org.sql",
+      "sourceKind": "alter_table",
+      "fromSchema": "public",
+      "fromTable": "project_invites",
+      "fromColumns": [
+        "add_to_org_id"
+      ],
+      "toSchema": "public",
+      "toTable": "organizations",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
     }
   ],
   "functions": [
@@ -1980,7 +2048,7 @@
       "volatility": "volatile",
       "securityDefiner": true,
       "searchPath": "public",
-      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql",
+      "sourceMigration": "supabase/migrations/20260506120400_accept_project_invite_with_org.sql",
       "authenticatedExecute": true,
       "triggerUsages": []
     },

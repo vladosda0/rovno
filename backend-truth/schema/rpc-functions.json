@@ -98,6 +98,16 @@
           "table": "public.subscriptions",
           "triggerName": "set_subscriptions_updated_at",
           "activation": "before update"
+        },
+        {
+          "table": "public.organizations",
+          "triggerName": "set_organizations_updated_at",
+          "activation": "before update"
+        },
+        {
+          "table": "public.org_documents",
+          "triggerName": "set_org_documents_updated_at",
+          "activation": "before update"
         }
       ]
     },
@@ -452,7 +462,7 @@
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260324140000_project_launch_authority.sql",
+      "sourceMigration": "supabase/migrations/20260506120400_accept_project_invite_with_org.sql",
       "triggerUsages": []
     },
     {
@@ -1644,6 +1654,230 @@
       "authenticatedExecute": false,
       "sourceMigration": "supabase/migrations/20260425092624_profile_tutorial_state.sql",
       "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "handle_organization_owner_membership",
+      "signature": "public.handle_organization_owner_membership()",
+      "args": [],
+      "returnType": "trigger",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260506130000_fix_org_owner_membership_order.sql",
+      "triggerUsages": [
+        {
+          "table": "public.organizations",
+          "triggerName": "on_organization_owner_membership",
+          "activation": "after insert or update of owner_profile_id"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "enforce_org_member_owner_role",
+      "signature": "public.enforce_org_member_owner_role()",
+      "args": [],
+      "returnType": "trigger",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260506120000_organizations_and_membership.sql",
+      "triggerUsages": [
+        {
+          "table": "public.org_members",
+          "triggerName": "guard_org_members_owner_role",
+          "activation": "before insert or update"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "enforce_org_member_last_owner",
+      "signature": "public.enforce_org_member_last_owner()",
+      "args": [],
+      "returnType": "trigger",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260506140000_fix_org_delete_cascade_through_last_owner_guard.sql",
+      "triggerUsages": [
+        {
+          "table": "public.org_members",
+          "triggerName": "guard_org_members_last_owner",
+          "activation": "before update or delete"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "guard_organization_owner_change",
+      "signature": "public.guard_organization_owner_change()",
+      "args": [],
+      "returnType": "trigger",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260506120000_organizations_and_membership.sql",
+      "triggerUsages": [
+        {
+          "table": "public.organizations",
+          "triggerName": "guard_organizations_owner_profile_id",
+          "activation": "before update"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "is_org_member",
+      "signature": "public.is_org_member(uuid)",
+      "args": [
+        {
+          "name": "p_org_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "boolean",
+      "language": "sql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "org_role",
+      "signature": "public.org_role(uuid)",
+      "args": [
+        {
+          "name": "p_org_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "text",
+      "language": "sql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "can_manage_org",
+      "signature": "public.can_manage_org(uuid)",
+      "args": [
+        {
+          "name": "p_org_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "boolean",
+      "language": "sql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "list_user_organizations",
+      "signature": "public.list_user_organizations()",
+      "args": [],
+      "returnType": "table ( org_id uuid, name text, slug text, role text, member_count integer, is_active_context boolean )",
+      "language": "sql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260506120300_org_rpcs.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "set_active_org_context",
+      "signature": "public.set_active_org_context(uuid)",
+      "args": [
+        {
+          "name": "p_org_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "void",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260506120300_org_rpcs.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "import_documents_to_project",
+      "signature": "public.import_documents_to_project(uuid, text, uuid[])",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_source_kind",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_source_doc_ids",
+          "type": "uuid[]",
+          "identityType": "uuid[]"
+        }
+      ],
+      "returnType": "setof public.documents",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260506120300_org_rpcs.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "mark_organization_deleting",
+      "signature": "public.mark_organization_deleting()",
+      "args": [],
+      "returnType": "trigger",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260506140000_fix_org_delete_cascade_through_last_owner_guard.sql",
+      "triggerUsages": [
+        {
+          "table": "public.organizations",
+          "triggerName": "guard_organizations_before_delete_mark",
+          "activation": "before delete"
+        }
+      ]
     }
   ]
 }
