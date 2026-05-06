@@ -295,6 +295,14 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260506140000_fix_org_delete_cascade_through_last_owner_guard.sql",
       "sha256": "ded140caf25c35de26361541f39c473fe4c2656b3c0786656039f8b6620df289"
+    },
+    {
+      "path": "supabase/migrations/20260506150000_fix_org_rls_recursion.sql",
+      "sha256": "5bdf73ea9141a0f235dac94c048450e0c7008579d3ae65d06722eadf7361d729"
+    },
+    {
+      "path": "supabase/migrations/20260506160000_import_documents_creates_versions.sql",
+      "sha256": "ef2257529e1ea832c1df57b7ad052a423659d0a8628e1648409c611131437e40"
     }
   ],
   "generated_artifacts": [
@@ -391,6 +399,8 @@ export const manifest = {
     "sql/20260506120400_accept_project_invite_with_org.sql",
     "sql/20260506130000_fix_org_owner_membership_order.sql",
     "sql/20260506140000_fix_org_delete_cascade_through_last_owner_guard.sql",
+    "sql/20260506150000_fix_org_rls_recursion.sql",
+    "sql/20260506160000_import_documents_creates_versions.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -12806,7 +12816,7 @@ export const functions = {
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260506120300_org_rpcs.sql",
+      "sourceMigration": "supabase/migrations/20260506160000_import_documents_creates_versions.sql",
       "triggerUsages": []
     },
     {
@@ -14646,18 +14656,6 @@ export const rls = {
       ],
       "policies": [
         {
-          "name": "organizations_select",
-          "schema": "public",
-          "table": "organizations",
-          "command": "select",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "owner_profile_id = auth.uid()\n  or exists (\n    select 1\n    from public.org_members om\n    where om.org_id = organizations.id\n      and om.profile_id = auth.uid()\n  )",
-          "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
-        },
-        {
           "name": "organizations_insert",
           "schema": "public",
           "table": "organizations",
@@ -14667,18 +14665,6 @@ export const rls = {
           ],
           "using": null,
           "withCheck": "owner_profile_id = auth.uid()",
-          "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
-        },
-        {
-          "name": "organizations_update",
-          "schema": "public",
-          "table": "organizations",
-          "command": "update",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "owner_profile_id = auth.uid()\n  or exists (\n    select 1\n    from public.org_members om\n    where om.org_id = organizations.id\n      and om.profile_id = auth.uid()\n      and om.role = 'admin'\n  )",
-          "withCheck": "true",
           "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
         },
         {
@@ -14692,6 +14678,30 @@ export const rls = {
           "using": "owner_profile_id = auth.uid()",
           "withCheck": null,
           "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+        },
+        {
+          "name": "organizations_select",
+          "schema": "public",
+          "table": "organizations",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "public.is_org_member(id)",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260506150000_fix_org_rls_recursion.sql"
+        },
+        {
+          "name": "organizations_update",
+          "schema": "public",
+          "table": "organizations",
+          "command": "update",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "public.can_manage_org(id)",
+          "withCheck": "true",
+          "sourceMigration": "supabase/migrations/20260506150000_fix_org_rls_recursion.sql"
         }
       ]
     },
@@ -14714,9 +14724,9 @@ export const rls = {
           "roles": [
             "authenticated"
           ],
-          "using": "profile_id = auth.uid()\n  or exists (\n    select 1\n    from public.organizations o\n    where o.id = org_members.org_id\n      and o.owner_profile_id = auth.uid()\n  )\n  or exists (\n    select 1\n    from public.org_members self_om\n    where self_om.org_id = org_members.org_id\n      and self_om.profile_id = auth.uid()\n  )",
+          "using": "profile_id = auth.uid()\n  or public.is_org_member(org_id)",
           "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+          "sourceMigration": "supabase/migrations/20260506150000_fix_org_rls_recursion.sql"
         },
         {
           "name": "org_members_insert",
@@ -14727,8 +14737,8 @@ export const rls = {
             "authenticated"
           ],
           "using": null,
-          "withCheck": "exists (\n    select 1\n    from public.organizations o\n    where o.id = org_id\n      and o.owner_profile_id = auth.uid()\n  )\n  or exists (\n    select 1\n    from public.org_members self_om\n    where self_om.org_id = org_members.org_id\n      and self_om.profile_id = auth.uid()\n      and self_om.role = 'admin'\n  )",
-          "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+          "withCheck": "public.can_manage_org(org_id)",
+          "sourceMigration": "supabase/migrations/20260506150000_fix_org_rls_recursion.sql"
         },
         {
           "name": "org_members_update",
@@ -14738,9 +14748,9 @@ export const rls = {
           "roles": [
             "authenticated"
           ],
-          "using": "exists (\n    select 1\n    from public.organizations o\n    where o.id = org_id\n      and o.owner_profile_id = auth.uid()\n  )\n  or exists (\n    select 1\n    from public.org_members self_om\n    where self_om.org_id = org_members.org_id\n      and self_om.profile_id = auth.uid()\n      and self_om.role = 'admin'\n  )",
-          "withCheck": "exists (\n    select 1\n    from public.organizations o\n    where o.id = org_id\n      and o.owner_profile_id = auth.uid()\n  )\n  or exists (\n    select 1\n    from public.org_members self_om\n    where self_om.org_id = org_members.org_id\n      and self_om.profile_id = auth.uid()\n      and self_om.role = 'admin'\n  )",
-          "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+          "using": "public.can_manage_org(org_id)",
+          "withCheck": "public.can_manage_org(org_id)",
+          "sourceMigration": "supabase/migrations/20260506150000_fix_org_rls_recursion.sql"
         },
         {
           "name": "org_members_delete",
@@ -14750,9 +14760,9 @@ export const rls = {
           "roles": [
             "authenticated"
           ],
-          "using": "profile_id = auth.uid()\n  or exists (\n    select 1\n    from public.organizations o\n    where o.id = org_id\n      and o.owner_profile_id = auth.uid()\n  )\n  or exists (\n    select 1\n    from public.org_members self_om\n    where self_om.org_id = org_members.org_id\n      and self_om.profile_id = auth.uid()\n      and self_om.role = 'admin'\n  )",
+          "using": "profile_id = auth.uid()\n  or public.can_manage_org(org_id)",
           "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+          "sourceMigration": "supabase/migrations/20260506150000_fix_org_rls_recursion.sql"
         }
       ]
     },
@@ -15641,7 +15651,7 @@ export const sourceTrace = {
       "schema": "public",
       "name": "import_documents_to_project",
       "signature": "public.import_documents_to_project(uuid, text, uuid[])",
-      "sourceMigration": "supabase/migrations/20260506120300_org_rpcs.sql"
+      "sourceMigration": "supabase/migrations/20260506160000_import_documents_creates_versions.sql"
     },
     {
       "key": "public.mark_organization_deleting",
@@ -16557,27 +16567,11 @@ export const sourceTrace = {
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
     },
     {
-      "key": "public.organizations.organizations_select",
-      "schema": "public",
-      "table": "organizations",
-      "name": "organizations_select",
-      "command": "select",
-      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
-    },
-    {
       "key": "public.organizations.organizations_insert",
       "schema": "public",
       "table": "organizations",
       "name": "organizations_insert",
       "command": "insert",
-      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
-    },
-    {
-      "key": "public.organizations.organizations_update",
-      "schema": "public",
-      "table": "organizations",
-      "name": "organizations_update",
-      "command": "update",
       "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
     },
     {
@@ -16589,12 +16583,28 @@ export const sourceTrace = {
       "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
     },
     {
+      "key": "public.organizations.organizations_select",
+      "schema": "public",
+      "table": "organizations",
+      "name": "organizations_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260506150000_fix_org_rls_recursion.sql"
+    },
+    {
+      "key": "public.organizations.organizations_update",
+      "schema": "public",
+      "table": "organizations",
+      "name": "organizations_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260506150000_fix_org_rls_recursion.sql"
+    },
+    {
       "key": "public.org_members.org_members_select",
       "schema": "public",
       "table": "org_members",
       "name": "org_members_select",
       "command": "select",
-      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260506150000_fix_org_rls_recursion.sql"
     },
     {
       "key": "public.org_members.org_members_insert",
@@ -16602,7 +16612,7 @@ export const sourceTrace = {
       "table": "org_members",
       "name": "org_members_insert",
       "command": "insert",
-      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260506150000_fix_org_rls_recursion.sql"
     },
     {
       "key": "public.org_members.org_members_update",
@@ -16610,7 +16620,7 @@ export const sourceTrace = {
       "table": "org_members",
       "name": "org_members_update",
       "command": "update",
-      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260506150000_fix_org_rls_recursion.sql"
     },
     {
       "key": "public.org_members.org_members_delete",
@@ -16618,7 +16628,7 @@ export const sourceTrace = {
       "table": "org_members",
       "name": "org_members_delete",
       "command": "delete",
-      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260506150000_fix_org_rls_recursion.sql"
     },
     {
       "key": "public.org_documents.org_documents_member_read",
