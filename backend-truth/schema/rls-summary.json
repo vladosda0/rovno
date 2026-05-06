@@ -1799,6 +1799,239 @@
       "rlsEnabled": true,
       "authenticatedGrants": [],
       "policies": []
+    },
+    {
+      "schema": "public",
+      "table": "organizations",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "delete",
+        "insert",
+        "select",
+        "update"
+      ],
+      "policies": [
+        {
+          "name": "organizations_select",
+          "schema": "public",
+          "table": "organizations",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "owner_profile_id = auth.uid()\n  or exists (\n    select 1\n    from public.org_members om\n    where om.org_id = organizations.id\n      and om.profile_id = auth.uid()\n  )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+        },
+        {
+          "name": "organizations_insert",
+          "schema": "public",
+          "table": "organizations",
+          "command": "insert",
+          "roles": [
+            "authenticated"
+          ],
+          "using": null,
+          "withCheck": "owner_profile_id = auth.uid()",
+          "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+        },
+        {
+          "name": "organizations_update",
+          "schema": "public",
+          "table": "organizations",
+          "command": "update",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "owner_profile_id = auth.uid()\n  or exists (\n    select 1\n    from public.org_members om\n    where om.org_id = organizations.id\n      and om.profile_id = auth.uid()\n      and om.role = 'admin'\n  )",
+          "withCheck": "true",
+          "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+        },
+        {
+          "name": "organizations_delete",
+          "schema": "public",
+          "table": "organizations",
+          "command": "delete",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "owner_profile_id = auth.uid()",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "table": "org_members",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "delete",
+        "insert",
+        "select",
+        "update"
+      ],
+      "policies": [
+        {
+          "name": "org_members_select",
+          "schema": "public",
+          "table": "org_members",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "profile_id = auth.uid()\n  or exists (\n    select 1\n    from public.organizations o\n    where o.id = org_members.org_id\n      and o.owner_profile_id = auth.uid()\n  )\n  or exists (\n    select 1\n    from public.org_members self_om\n    where self_om.org_id = org_members.org_id\n      and self_om.profile_id = auth.uid()\n  )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+        },
+        {
+          "name": "org_members_insert",
+          "schema": "public",
+          "table": "org_members",
+          "command": "insert",
+          "roles": [
+            "authenticated"
+          ],
+          "using": null,
+          "withCheck": "exists (\n    select 1\n    from public.organizations o\n    where o.id = org_id\n      and o.owner_profile_id = auth.uid()\n  )\n  or exists (\n    select 1\n    from public.org_members self_om\n    where self_om.org_id = org_members.org_id\n      and self_om.profile_id = auth.uid()\n      and self_om.role = 'admin'\n  )",
+          "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+        },
+        {
+          "name": "org_members_update",
+          "schema": "public",
+          "table": "org_members",
+          "command": "update",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n    select 1\n    from public.organizations o\n    where o.id = org_id\n      and o.owner_profile_id = auth.uid()\n  )\n  or exists (\n    select 1\n    from public.org_members self_om\n    where self_om.org_id = org_members.org_id\n      and self_om.profile_id = auth.uid()\n      and self_om.role = 'admin'\n  )",
+          "withCheck": "exists (\n    select 1\n    from public.organizations o\n    where o.id = org_id\n      and o.owner_profile_id = auth.uid()\n  )\n  or exists (\n    select 1\n    from public.org_members self_om\n    where self_om.org_id = org_members.org_id\n      and self_om.profile_id = auth.uid()\n      and self_om.role = 'admin'\n  )",
+          "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+        },
+        {
+          "name": "org_members_delete",
+          "schema": "public",
+          "table": "org_members",
+          "command": "delete",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "profile_id = auth.uid()\n  or exists (\n    select 1\n    from public.organizations o\n    where o.id = org_id\n      and o.owner_profile_id = auth.uid()\n  )\n  or exists (\n    select 1\n    from public.org_members self_om\n    where self_om.org_id = org_members.org_id\n      and self_om.profile_id = auth.uid()\n      and self_om.role = 'admin'\n  )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "table": "org_documents",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "delete",
+        "insert",
+        "select",
+        "update"
+      ],
+      "policies": [
+        {
+          "name": "org_documents_member_read",
+          "schema": "public",
+          "table": "org_documents",
+          "command": "select",
+          "roles": [
+            "public"
+          ],
+          "using": "public.is_org_member(org_id)",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+        },
+        {
+          "name": "org_documents_member_write",
+          "schema": "public",
+          "table": "org_documents",
+          "command": "all",
+          "roles": [
+            "public"
+          ],
+          "using": "public.is_org_member(org_id)",
+          "withCheck": "public.is_org_member(org_id)",
+          "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "table": "org_document_versions",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "delete",
+        "insert",
+        "select",
+        "update"
+      ],
+      "policies": [
+        {
+          "name": "org_document_versions_member_read",
+          "schema": "public",
+          "table": "org_document_versions",
+          "command": "select",
+          "roles": [
+            "public"
+          ],
+          "using": "exists (\n      select 1 from public.org_documents od\n      where od.id = org_document_versions.org_document_id\n        and public.is_org_member(od.org_id)\n    )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+        },
+        {
+          "name": "org_document_versions_member_write",
+          "schema": "public",
+          "table": "org_document_versions",
+          "command": "all",
+          "roles": [
+            "public"
+          ],
+          "using": "exists (\n      select 1 from public.org_documents od\n      where od.id = org_document_versions.org_document_id\n        and public.is_org_member(od.org_id)\n    )",
+          "withCheck": "exists (\n      select 1 from public.org_documents od\n      where od.id = org_document_versions.org_document_id\n        and public.is_org_member(od.org_id)\n    )",
+          "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "table": "org_document_upload_intents",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "delete",
+        "insert",
+        "select",
+        "update"
+      ],
+      "policies": [
+        {
+          "name": "org_document_intents_member_read",
+          "schema": "public",
+          "table": "org_document_upload_intents",
+          "command": "select",
+          "roles": [
+            "public"
+          ],
+          "using": "public.is_org_member(org_id)",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+        },
+        {
+          "name": "org_document_intents_member_write",
+          "schema": "public",
+          "table": "org_document_upload_intents",
+          "command": "all",
+          "roles": [
+            "public"
+          ],
+          "using": "public.is_org_member(org_id)",
+          "withCheck": "public.is_org_member(org_id)",
+          "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+        }
+      ]
     }
   ]
 }

@@ -90,6 +90,13 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20260502120000_estimate_planned_dates_and_lag.sql`
 - `supabase/migrations/20260504013553_layer_a_snapshot_enrichment.sql`
 - `supabase/migrations/20260505233155_fix_layer_a_stage_status_semantics.sql`
+- `supabase/migrations/20260506120000_organizations_and_membership.sql`
+- `supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql`
+- `supabase/migrations/20260506120200_org_documents_and_doc_links.sql`
+- `supabase/migrations/20260506120300_org_rpcs.sql`
+- `supabase/migrations/20260506120400_accept_project_invite_with_org.sql`
+- `supabase/migrations/20260506130000_fix_org_owner_membership_order.sql`
+- `supabase/migrations/20260506140000_fix_org_delete_cascade_through_last_owner_guard.sql`
 
 ## Exclusions
 

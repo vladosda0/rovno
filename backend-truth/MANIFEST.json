@@ -263,6 +263,34 @@
     {
       "path": "supabase/migrations/20260505233155_fix_layer_a_stage_status_semantics.sql",
       "sha256": "7e5accc7c138d14aca89f1f8b957a2dc84e4d0e417b81fd28fe395d37c2d0431"
+    },
+    {
+      "path": "supabase/migrations/20260506120000_organizations_and_membership.sql",
+      "sha256": "e3e15041c870655798ec5569f77c9408c78b569e048a10e793d45dd3e2baf9dc"
+    },
+    {
+      "path": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql",
+      "sha256": "3e1569de9ed0d184f8066413bc06bc59ca001997a2b162c919e12a2275416efc"
+    },
+    {
+      "path": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql",
+      "sha256": "daee09b38113e151fe85be548b1171334729282b2af0df6d2d4c3d8c04027d15"
+    },
+    {
+      "path": "supabase/migrations/20260506120300_org_rpcs.sql",
+      "sha256": "6a1ca8dca9225d795dab38480b77500d00afc87b1342e6b83693bf5558409500"
+    },
+    {
+      "path": "supabase/migrations/20260506120400_accept_project_invite_with_org.sql",
+      "sha256": "c0a3492fb561646d860fd5f9dd10d986e1afbb098b736d8a342428d3e44d5999"
+    },
+    {
+      "path": "supabase/migrations/20260506130000_fix_org_owner_membership_order.sql",
+      "sha256": "66949c1d5a99ff562859d66ff3f98772af83935e5f515dbbb5d09799c4da1ea0"
+    },
+    {
+      "path": "supabase/migrations/20260506140000_fix_org_delete_cascade_through_last_owner_guard.sql",
+      "sha256": "ded140caf25c35de26361541f39c473fe4c2656b3c0786656039f8b6620df289"
     }
   ],
   "generated_artifacts": [
@@ -352,6 +380,13 @@
     "sql/20260502120000_estimate_planned_dates_and_lag.sql",
     "sql/20260504013553_layer_a_snapshot_enrichment.sql",
     "sql/20260505233155_fix_layer_a_stage_status_semantics.sql",
+    "sql/20260506120000_organizations_and_membership.sql",
+    "sql/20260506120100_org_rls_helpers_and_policies.sql",
+    "sql/20260506120200_org_documents_and_doc_links.sql",
+    "sql/20260506120300_org_rpcs.sql",
+    "sql/20260506120400_accept_project_invite_with_org.sql",
+    "sql/20260506130000_fix_org_owner_membership_order.sql",
+    "sql/20260506140000_fix_org_delete_cascade_through_last_owner_guard.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],

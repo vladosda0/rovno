@@ -12,6 +12,7 @@
     "supabase/migrations/20260306162000_storage_documents_and_media.sql",
     "supabase/migrations/20260317120000_storage_upload_intents.sql",
     "supabase/migrations/20260320110000_task_final_media_contract.sql",
+    "supabase/migrations/20260506120200_org_documents_and_doc_links.sql",
     "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
     "supabase/migrations/20260317133000_storage_bucket_config_table.sql",
     "supabase/migrations/20260317121000_storage_upload_rpcs.sql",
@@ -281,6 +282,50 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "linked_external_kind",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "linked_workspace_document_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "workspace_documents",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
+        },
+        {
+          "name": "linked_org_document_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "org_documents",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
         }
       ],
       "constraints": [
@@ -303,6 +348,24 @@
           "expression": "visibility_class in ('shared_project', 'internal')",
           "usingIndex": null,
           "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "linked_external_kind"
+          ],
+          "expression": "linked_external_kind is null\n           or linked_external_kind in ('workspace', 'org')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+        },
+        {
+          "type": "check",
+          "name": "documents_link_consistent",
+          "columns": [],
+          "expression": "(linked_external_kind is null\n      and linked_workspace_document_id is null\n      and linked_org_document_id is null)\n    or (linked_external_kind = 'workspace'\n      and linked_workspace_document_id is not null\n      and linked_org_document_id is null)\n    or (linked_external_kind = 'org'\n      and linked_org_document_id is not null\n      and linked_workspace_document_id is null)",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
         }
       ],
       "indexes": [
@@ -315,6 +378,26 @@
           "where": null,
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260306162000_storage_documents_and_media.sql"
+        },
+        {
+          "name": "idx_documents_linked_workspace_document_id",
+          "unique": false,
+          "expressions": [
+            "linked_workspace_document_id"
+          ],
+          "where": "linked_workspace_document_id is not null",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+        },
+        {
+          "name": "idx_documents_linked_org_document_id",
+          "unique": false,
+          "expressions": [
+            "linked_org_document_id"
+          ],
+          "where": "linked_org_document_id is not null",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
         }
       ],
       "triggers": [
@@ -1433,6 +1516,54 @@
       ],
       "toSchema": "public",
       "toTable": "tasks",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "org_document_versions",
+      "fromColumns": [
+        "storage_object_id"
+      ],
+      "toSchema": "public",
+      "toTable": "storage_objects",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql",
+      "sourceKind": "alter_table",
+      "fromSchema": "public",
+      "fromTable": "documents",
+      "fromColumns": [
+        "linked_workspace_document_id"
+      ],
+      "toSchema": "public",
+      "toTable": "workspace_documents",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql",
+      "sourceKind": "alter_table",
+      "fromSchema": "public",
+      "fromTable": "documents",
+      "fromColumns": [
+        "linked_org_document_id"
+      ],
+      "toSchema": "public",
+      "toTable": "org_documents",
       "toColumns": [
         "id"
       ],

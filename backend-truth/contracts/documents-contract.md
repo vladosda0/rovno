@@ -11,6 +11,7 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 - `supabase/migrations/20260306162000_storage_documents_and_media.sql`
 - `supabase/migrations/20260317120000_storage_upload_intents.sql`
 - `supabase/migrations/20260320110000_task_final_media_contract.sql`
+- `supabase/migrations/20260506120200_org_documents_and_doc_links.sql`
 - `supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql`
 - `supabase/migrations/20260317133000_storage_bucket_config_table.sql`
 - `supabase/migrations/20260317121000_storage_upload_rpcs.sql`
@@ -57,13 +58,20 @@ Indexes:
 | `created_at` | `timestamptz` | no | `now()` | no |
 | `updated_at` | `timestamptz` | no | `now()` | no |
 | `visibility_class` | `text` | no | `'shared_project'` | no |
+| `linked_external_kind` | `text` | yes |   | no |
+| `linked_workspace_document_id` | `uuid` | yes |   | no |
+| `linked_org_document_id` | `uuid` | yes |   | no |
 
 Constraints:
 - unnamed check (expression `origin in ('project_creation', 'uploaded', 'manual', 'ai_generated')`)
 - unnamed check (expression `visibility_class in ('shared_project', 'internal')`)
+- unnamed check (expression `linked_external_kind is null or linked_external_kind in ('workspace', 'org')`)
+- `documents_link_consistent` check (expression `(linked_external_kind is null and linked_workspace_document_id is null and linked_org_document_id is null) or (linked_external_kind = 'workspace' and linked_workspace_document_id is not null and linked_org_document_id is null) or (linked_external_kind = 'org' and linked_org_document_id is not null and linked_workspace_document_id is null)`)
 
 Indexes:
 - `idx_documents_project_id` on (`project_id`)
+- `idx_documents_linked_workspace_document_id` on (`linked_workspace_document_id`), where `linked_workspace_document_id is not null`
+- `idx_documents_linked_org_document_id` on (`linked_org_document_id`), where `linked_org_document_id is not null`
 
 Triggers:
 - `set_documents_updated_at`: before update, executes `public.set_updated_at()`
@@ -194,6 +202,9 @@ Constraints:
 | `public.document_upload_intents(document_id)` | `public.documents(id)` | `set null` | `supabase/migrations/20260317120000_storage_upload_intents.sql` |
 | `public.project_media_upload_intents(task_id)` | `public.tasks(id)` | `set null` | `supabase/migrations/20260320110000_task_final_media_contract.sql` |
 | `public.project_media(task_id)` | `public.tasks(id)` | `set null` | `supabase/migrations/20260320110000_task_final_media_contract.sql` |
+| `public.org_document_versions(storage_object_id)` | `public.storage_objects(id)` | `set null` | `supabase/migrations/20260506120200_org_documents_and_doc_links.sql` |
+| `public.documents(linked_workspace_document_id)` | `public.workspace_documents(id)` | `set null` | `supabase/migrations/20260506120200_org_documents_and_doc_links.sql` |
+| `public.documents(linked_org_document_id)` | `public.org_documents(id)` | `set null` | `supabase/migrations/20260506120200_org_documents_and_doc_links.sql` |
 
 ## Functions
 

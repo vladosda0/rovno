@@ -487,6 +487,26 @@
     },
     {
       "schema": "public",
+      "table": "documents",
+      "column": "linked_external_kind",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "linked_external_kind is null\n           or linked_external_kind in ('workspace', 'org')",
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+    },
+    {
+      "schema": "public",
+      "table": "documents",
+      "column": null,
+      "constraintName": "documents_link_consistent",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "(linked_external_kind is null\n      and linked_workspace_document_id is null\n      and linked_org_document_id is null)\n    or (linked_external_kind = 'workspace'\n      and linked_workspace_document_id is not null\n      and linked_org_document_id is null)\n    or (linked_external_kind = 'org'\n      and linked_org_document_id is not null\n      and linked_workspace_document_id is null)",
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+    },
+    {
+      "schema": "public",
       "table": "document_versions",
       "column": "version_number",
       "constraintName": null,
@@ -1049,6 +1069,80 @@
       "allowedValues": null,
       "expression": "jsonb_typeof(recent_turns) = 'array'",
       "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql"
+    },
+    {
+      "schema": "public",
+      "table": "organizations",
+      "column": null,
+      "constraintName": "organizations_slug_format",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "slug ~ '^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$'",
+      "sourceMigration": "supabase/migrations/20260506120000_organizations_and_membership.sql"
+    },
+    {
+      "schema": "public",
+      "table": "org_members",
+      "column": "role",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "owner",
+        "admin",
+        "member"
+      ],
+      "expression": "role in ('owner', 'admin', 'member')",
+      "sourceMigration": "supabase/migrations/20260506120000_organizations_and_membership.sql"
+    },
+    {
+      "schema": "public",
+      "table": "org_documents",
+      "column": "origin",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "uploaded",
+        "manual",
+        "ai_generated"
+      ],
+      "expression": "origin in ('uploaded', 'manual', 'ai_generated')",
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+    },
+    {
+      "schema": "public",
+      "table": "org_documents",
+      "column": "visibility_class",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "shared_project",
+        "internal"
+      ],
+      "expression": "visibility_class in ('shared_project', 'internal')",
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+    },
+    {
+      "schema": "public",
+      "table": "org_document_versions",
+      "column": "status",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "active",
+        "archived"
+      ],
+      "expression": "status in ('active', 'archived')",
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+    },
+    {
+      "schema": "public",
+      "table": "org_document_upload_intents",
+      "column": "size_bytes",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "size_bytes is null or size_bytes >= 0",
+      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
     }
   ]
 }
