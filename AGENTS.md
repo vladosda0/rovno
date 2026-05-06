@@ -1,156 +1,266 @@
-# AGENTS.md
+# AGENTS.md — `rovno` (application)
 
-Инструкции для AI-агентов (Claude Code, Codex, Cursor, Claude Cowork и т.п.) при работе над проектом Rovno AI. Эти правила применяются всегда. Если задача от пользователя противоречит этим правилам — остановитесь и явно подтвердите с пользователем перед действием.
+How AI agents (Claude Code, Codex, Cursor, Claude Cowork, etc.) work in this repository, **in addition to** Cursor project rules. These rules apply always. If a user request conflicts with them, **stop and confirm with the user before acting**.
 
 ---
 
-## Branch model
+## Instruction layering (read this first)
 
-| Ветка | Назначение | Деплоится на |
+Apply guidance in this order when they conflict:
+
+1. **`.cursor/rules/*.mdc`** — especially `alwaysApply: true` rules (source of truth, sensitive zones, preflight, subagent orchestration). These win.
+2. **`.cursor/skills/**`** — invoke the matching `SKILL.md` when the task fits the skill description.
+3. **`.cursor/agents/**`** — delegate via the **Task** tool when `subagent-orchestration` says to. Do not skip verification on non-trivial work.
+4. **This `AGENTS.md`** — repo context, branch model, environments, file pointers, and habits the rules do not repeat.
+
+**Semantic search** is for exploration; **exact search** prefers `rg` with narrow scope first (see `.cursor/rules/07-search-prefer-ripgrep.mdc`).
+
+---
+
+## 1. Repo purpose
+
+Frontend / app workspace for Rovno:
+
+- UI, routes, app state (including mock/demo paths where they still exist)
+- Hooks, stores, domain screens
+- Supabase client integration and **read-only** contract snapshot under `backend-truth/`
+
+**Not authoritative:** database schema, SQL migrations, RLS, RPC definitions. Those live in **`rovno-db`**.
+
+---
+
+## 2. Branch model & deployment
+
+| Branch | Purpose | Deploys to |
 |---|---|---|
-| `main` | Production. Защищена от прямого push. Содержит только проверенный код. | `rovno.ai`, `стройагент.рф` (через Timeweb Cloud Apps app `rovno`). |
-| `dev` | Staging / интеграция. Сюда стекаются feature-ветки. | `*.twc1.net` staging URL (через отдельное Timeweb Cloud Apps приложение `rovno-staging`). |
-| `feature/*`, `fix/*`, `chore/*`, `codex/*`, `claude/*`, `session-*/*` | Рабочие ветки. Создаются от `dev`, мерджатся в `dev` через PR. | Не деплоятся (билд только локально). |
+| `main` | **Production**. Protected from direct push. Only proven code. | `rovno.ai`, `стройагент.рф` (Timeweb Cloud Apps app `rovno`) |
+| `dev` | **Staging / integration**. Feature branches converge here. | `*.twc1.net` staging URL (Timeweb app `rovno-staging`) |
+| `feature/*`, `fix/*`, `chore/*`, `codex/*`, `claude/*`, `session-*/*` | Working branches. Created from `dev`, merged back via PR. | Not deployed (local build only). |
 
-### Правильный workflow
+### Correct workflow
 
-1. Создайте feature-branch **от dev**:
+1. Branch from `dev`:
    ```bash
    git checkout dev && git pull --ff-only
    git checkout -b feature/short-name
    ```
-2. Работайте, коммитьте, пушьте `feature/short-name` в origin.
-3. Откройте Pull Request **в `dev`** (не в `main`).
-4. После проверки на staging URL → пользователь (Влад) сам делает merge `dev → main`.
-5. Push в `main` триггерит prod-деплой автоматически.
+2. Work, commit, push `feature/short-name` to origin.
+3. Open PR **into `dev`** (never into `main`).
+4. After staging URL passes review → human merges `dev → main` (via `npm run deploy` or PR through GitHub UI).
+5. Push to `main` triggers prod deploy automatically.
 
-### Что **запрещено** делать без явного подтверждения пользователя
+### Hard prohibitions on git operations
 
-- ❌ **Прямой push в `main`.** Защищено GitHub branch protection, но даже не пытайтесь.
-- ❌ **Force-push** в любую публичную ветку (`main`, `dev`).
-- ❌ **Удалять / переименовывать** `main`, `dev`.
-- ❌ **Менять `supabase/config.toml`**, `supabase/migrations/` или `supabase/functions/` без согласования (это может сломать prod БД).
-- ❌ **Добавлять новые npm-зависимости** без явного запроса (это раздувает bundle и создаёт security surface).
-- ❌ **Трогать `.env`**, env-переменные в Timeweb / Supabase / Resend dashboards.
+- ❌ **Direct push to `main`.** Branch protection enforces this; do not attempt to circumvent.
+- ❌ **Force-push** to any public branch (`main`, `dev`).
+- ❌ **Delete or rename** `main`, `dev`.
+- ❌ **Modify `supabase/config.toml`**, `supabase/migrations/`, or `supabase/functions/` without prior agreement (would break prod DB).
 
 ---
 
-## Environments
+## 3. Environments
 
 ### Production — `https://rovno.ai`, `https://стройагент.рф`
 
-- **Frontend**: Timeweb Cloud Apps, приложение `rovno`, ветка `main`, Node 20.
-- **Database / Auth / Storage**: **self-hosted Supabase** на Timeweb VPS (URL в env). Это БД с реальными пользователями.
-- **Email**: Resend (smtp.resend.com), отправитель `noreply@rovno.ai`.
-- **DNS**: GoDaddy для `rovno.ai`, Reg.ru для `стройагент.рф`.
-- ⚠️ Любые ваши действия здесь видны живым пользователям. Ошибки могут стоить лидов и доверия.
+- **Frontend**: Timeweb Cloud Apps app `rovno`, branch `main`, Node 20.
+- **Database / Auth / Storage**: **self-hosted Supabase** on Timeweb VPS (URL in env). Real user data lives here.
+- **Email**: Resend (`smtp.resend.com`), sender `noreply@rovno.ai`.
+- **DNS**: GoDaddy for `rovno.ai`, Reg.ru for `стройагент.рф`.
+- ⚠️ Any change here is visible to live users. Mistakes cost leads and trust.
 
-### Staging — `*.twc1.net` (URL приложения `rovno-staging`)
+### Staging — `*.twc1.net` (app `rovno-staging`)
 
-- **Frontend**: Timeweb Cloud Apps, приложение `rovno-staging`, ветка `dev`, Node 20.
-- **Database / Auth**: **Supabase Cloud** (project ref `aaycwobhdkrrgfxwcfxg`, eu-west-1). Это **отдельная БД**, в ней моки и тестовые данные.
-- **Email**: тот же Resend, но писем мало.
-- ✅ Здесь можно ломать. Данные могут быть очищены без предупреждения.
+- **Frontend**: Timeweb Cloud Apps app `rovno-staging`, branch `dev`, Node 20.
+- **Database / Auth**: **Supabase Cloud** (project ref `aaycwobhdkrrgfxwcfxg`, eu-west-1). Separate DB with mocks/test data.
+- **Email**: same Resend, low volume.
+- ✅ Safe to break. Data may be wiped without notice.
 
 ### Local — `http://localhost:8080`
 
-- `npm run dev` в репо `~/projects/rovno`.
-- По умолчанию ходит в Cloud Supabase (через `VITE_SUPABASE_URL` в `.env`).
-- Можно переключить на локальный Supabase docker stack из `~/projects/rovno-db` (`supabase start`), тогда поправить `.env`.
+- `npm run dev` in `~/projects/rovno`.
+- Default: Cloud Supabase (via `VITE_SUPABASE_URL` in `.env`).
+- Optional: local Supabase Docker stack from `~/projects/rovno-db` (`supabase start`); update `.env` accordingly.
+
+### How to know which environment you're in
+
+1. **Env**: check `VITE_SUPABASE_URL`. `aaycwobhdkrrgfxwcfxg.supabase.co` = Cloud (staging/local). Timeweb VPS URL = self-hosted prod.
+2. **UI**: staging shows yellow banner «STAGING — данные могут быть очищены». Prod has no banner.
+3. **Browser console**: Supabase client logs `Connected to: <URL>` on init.
+
+If unsure — **stop and ask the user**.
 
 ---
 
-## Как понять, на каком окружении вы работаете
+## 4. Source-of-truth hierarchy
 
-1. **Через env**: смотрите `VITE_SUPABASE_URL`.
-   - `aaycwobhdkrrgfxwcfxg.supabase.co` → Cloud (staging / local default).
-   - URL Timeweb VPS (например `api.rovno.ai` или прямой IP) → self-hosted prod.
-2. **В UI приложения**: на staging должен быть жёлтый banner «STAGING — данные могут быть очищены». Если banner есть — это staging. На проде banner-а нет.
-3. **Через консоль браузера**: при загрузке клиент Supabase логирует `Connected to: <URL>`.
+1. SQL migrations in **`rovno-db`**
+2. Generated mirror: **`backend-truth/`** in this repo (read-only; do not hand-edit)
+3. Adapters / mappers
+4. Frontend types and UI models
+5. Mock / demo store shapes
 
-Если не уверены, на каком окружении находитесь — **остановитесь и спросите пользователя**.
-
----
-
-## Database & migrations
-
-- Миграции живут в **`~/projects/rovno-db/supabase/migrations/`** (это отдельный репозиторий).
-- Каждая миграция — SQL-файл с timestamp в имени. Только **append-only** изменения; уже применённые миграции редактировать **запрещено**.
-
-### Workflow миграции
-
-1. Создаёте новую миграцию: `supabase migration new <name>`.
-2. Пишете SQL.
-3. Применяете на **staging Cloud** первым: `supabase db push --linked` (с привязкой к Cloud project).
-4. Проверяете, что schema на staging работает с фронтом.
-5. Если ок — применяете на **prod self-hosted**: `psql $PROD_DATABASE_URL -f supabase/migrations/<file>.sql` (или через self-hosted CLI).
-6. Коммитите файл миграции в репо `rovno-db`.
-
-### Категорически запрещено
-
-- ❌ Редактировать схему через **Supabase Studio UI** напрямую (на staging или prod). Все изменения только через файлы миграций.
-- ❌ `pg_dump prod | psql staging` или наоборот — не лить данные между окружениями.
-- ❌ `DROP TABLE`, `TRUNCATE`, `DELETE FROM ... WHERE true` без явного подтверждения пользователя на каждый раз. Даже на staging.
+Never treat UI or mock types as DB truth. If the contract is missing a field or RPC, stop and fix **`rovno-db`** first, then consume the updated mirror via the **automated GitHub sync PR** after `rovno-db` is on `dev`.
 
 ---
 
-## Edge Functions
+## 5. Required reading before edits
 
-- Исходники в **`~/projects/rovno-db/supabase/functions/`**.
-- Сейчас активны: `ai-inference`, `send-project-invite`.
+**Backend-shaped or data work**
 
-### Деплой
+- `backend-truth/schema/tables.json`, `relations.json`, `rpc-functions.json`, `rls-summary.json`
+- `backend-truth/generated/supabase-types.ts`
+- Relevant `backend-truth/slices/*.json` and `backend-truth/contracts/*.md`
 
-Всегда указывайте **explicit `--project-ref`** или используйте обёртку:
+**App architecture**
+
+- `src/hooks/use-mock-data.ts`, `src/data/store.ts`, `src/lib/permissions.ts`
+- Relevant `src/data/*`, hooks, pages, components
+- `src/integrations/supabase/client.ts` and `types.ts` when touching real seams
+
+---
+
+## 6. Database & migrations
+
+- Migrations live in **`~/projects/rovno-db/supabase/migrations/`** (separate repo).
+- Each migration is a SQL file with timestamp; **append-only**, applied migrations cannot be edited.
+
+### Migration workflow
+
+1. New migration: `supabase migration new <name>`
+2. Write SQL.
+3. Apply on **Cloud (staging) first**: `supabase db push --linked` (linked to Cloud).
+4. Verify schema works with frontend on staging URL.
+5. If OK — apply on **prod self-hosted**: `psql $PROD_DATABASE_URL -f supabase/migrations/<file>.sql`.
+6. Commit migration file in `rovno-db` repo.
+
+### Categorically forbidden
+
+- ❌ Edit schema via **Supabase Studio UI directly** (staging or prod). Migrations only.
+- ❌ `pg_dump prod | psql staging` or vice versa — never copy data between environments.
+- ❌ `DROP TABLE`, `TRUNCATE`, `DELETE FROM ... WHERE true` without explicit user approval each time. Even on staging.
+
+---
+
+## 7. Edge Functions
+
+- Sources in **`~/projects/rovno-db/supabase/functions/`**.
+- Active: `ai-inference`, `send-project-invite`.
+
+### Deployment
+
+Always specify **explicit `--project-ref`**:
 
 ```bash
-# В staging (Cloud)
+# Staging (Cloud)
 supabase functions deploy <name> --project-ref aaycwobhdkrrgfxwcfxg
 
-# В prod (self-hosted) — через скрипт-обёртку
+# Prod (self-hosted) — via wrapper
 ./scripts/deploy-prod-function.sh <name>
 ```
 
-- ❌ Не деплойте функцию без явного `--project-ref` — supabase CLI может задеплоить в «последний linked» проект, и это может оказаться prod.
-- Сначала всегда staging, потом prod.
+- ❌ Never deploy without explicit `--project-ref` — the CLI may target the last linked project, which could be prod.
+- Always staging first, prod second.
 
 ---
 
-## Email & Auth
+## 8. Email & Auth
 
-- **Email шаблоны**: Supabase Dashboard → Authentication → Email Templates. Меняются вручную в UI обоих окружений (Cloud для staging, self-hosted для prod). Текущий шаблон Confirm signup использует `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=signup` (branded link).
-- **SMTP**: Resend, API key в Supabase SMTP settings. Не показывайте API key в логах, чате, коммитах.
-- **Redirect URLs**: список разрешённых редиректов в `Authentication → URL Configuration`. При добавлении нового домена — добавьте `https://newdomain/**` в whitelist обоих Supabase инстансов.
-
----
-
-## Безопасные паттерны
-
-- **Любые изменения** в код prod — только через PR в `dev`, потом merge `dev → main`.
-- **Деструктивные операции** (миграции, удаление данных, force-push) — сначала `pg_dump` / git tag, потом операция.
-- **Если запрос пользователя двусмысленный** — задайте уточняющий вопрос, не угадывайте.
-- **Если видите подозрительные данные** (PII в логах, пароли в коммитах, странные SQL) — остановитесь и сообщите.
-- **Не выходите за scope задачи**. Если вас просят добавить роут, не правьте Landing.tsx «заодно».
+- **Email templates**: Supabase Dashboard → Authentication → Email Templates. Edited manually in UI for both environments. Current Confirm signup uses `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=signup` (branded link).
+- **SMTP**: Resend, API key in Supabase SMTP settings. Never log or commit the key.
+- **Redirect URLs**: `Authentication → URL Configuration` whitelist. Adding a new domain → add `https://newdomain/**` to both Supabase instances.
 
 ---
 
-## Если поймали себя в опасной ситуации
+## 9. Planning and execution
 
-- Сломали prod / unsure → **немедленно сообщите пользователю** с описанием что произошло и какие команды вы выполнили.
-- Не пытайтесь чинить prod самостоятельно через `git revert`/force-push, если не уверены.
-- В сложных случаях используйте `rovno-demo-playbook.md` (в `~/projects/`) — там сценарии rollback.
-
----
-
-## Запрещённые команды без явного подтверждения
-
-- `git push --force` (включая `--force-with-lease`) — кроме `feature/*`, `claude/*`, `codex/*` веток (свои собственные).
-- `git push origin <локальная-ветка>:main` — никогда.
-- `rm -rf` где угодно в репо.
-- `DROP DATABASE`, `DROP SCHEMA`, `TRUNCATE`, `DELETE FROM` без `WHERE` — никогда.
-- `supabase db reset` на привязанном к Cloud/prod проекте — никогда.
-- Изменения в `package.json` `dependencies` / `devDependencies` без обсуждения.
+- Plan first: files to touch, why, minimal surface (see `.cursor/rules/20-minimal-scope-change-and-reuse.mdc`).
+- Non-trivial work: **inspect repo reality before edits**; separate product intent from implementation (`.cursor/rules/00-core-operating-boundary.mdc`).
+- Use **slash commands** in `.cursor/commands/` when they match the moment (`/preflight`, `/ship-check`, `/rovno-contract-check`, etc.).
+- Ambiguous requests: state assumptions explicitly; do not invent hidden behavior.
+- **Stay in scope.** If asked to add a route, do not "also clean up" Landing.tsx.
 
 ---
 
-**TL;DR**: feature-branch → PR в `dev` → проверка на staging → пользователь сам мерджит `dev → main` → автодеплой prod. Если сомневаетесь — спрашивайте.
+## 10. Mock vs real
+
+This repo mixes **real** integration and **mock/demo** paths. Classify before changing behavior (`.cursor/rules/40-mock-vs-real-boundary.mdc`, skill `mock-vs-real-boundary-check`). Do not silently turn mocks into production paths or remove fallbacks without an explicit request.
+
+---
+
+## 11. Verification before "done"
+
+- Smallest relevant checks: `git diff` / `git diff --name-only`, `npm run build`, targeted `npm test` when appropriate.
+- Use Cursor skill **`verification-and-regression-pass`** and/or **`rollback-aware-diff-review`** for non-trivial closeout.
+- Optional Codex closeout: if available, `~/.codex/skills/finish-gate/SKILL.md` for structured handoff.
+
+State what was verified and what was not.
+
+---
+
+## 12. Forbidden unless explicitly requested
+
+- Dependency upgrades, broad refactors, mass renames
+- Wiring Supabase through many pages at once
+- **Manual edits to `backend-truth/`** or ad-hoc local regeneration of the mirror
+- Inventing columns, tables, RPCs, or policies in app code
+- Adding new npm dependencies (bundle bloat + security surface)
+- Touching `.env` or env vars in Timeweb / Supabase / Resend dashboards
+
+Mirror updates: **GitHub Actions sync PR** to `rovno` after `rovno-db` changes land on `dev`, not ad-hoc agent regeneration.
+
+If `backend-truth/` was hand-edited as a rare unblock, **before closing** follow `.cursor/rules/11-backend-truth-emergency-closeout.mdc`: fix `rovno-db` (migrations, allowlist, verify + generator tests), **revert** all `backend-truth/` hand-edits here, then hand off noting the **sync PR** step.
+
+---
+
+## 13. Forbidden git/shell commands without explicit confirmation
+
+- `git push --force` / `--force-with-lease` — except for own `feature/*`, `claude/*`, `codex/*` branches
+- `git push origin <local>:main` — never
+- `rm -rf` anywhere in repo
+- `DROP DATABASE`, `DROP SCHEMA`, `TRUNCATE`, `DELETE FROM` without `WHERE` — never
+- `supabase db reset` on a Cloud/prod-linked project — never
+- Modifications to `package.json` `dependencies` / `devDependencies` without discussion
+
+---
+
+## 14. Git habits
+
+- Human controls commits, merges, resets, reverts, branch deletes unless explicitly asked (see `.cursor/rules/00-core-operating-boundary.mdc`).
+- Prefer small, single-intent commits; separate app logic from incidental noise per `.cursor/rules/06-generated-artifacts-and-local-noise.mdc`.
+
+---
+
+## 15. When to stop and escalate
+
+Stop and summarize blockers if:
+
+- Required contract pieces are missing from `backend-truth/`
+- Demo vs real boundaries are unclear
+- Multiple stores/models compete for ownership
+- Change needs **`rovno-db`** work but that work is not done
+- You broke prod or are unsure if you broke prod
+- You see suspicious data (PII in logs, secrets in commits, strange SQL)
+
+Use **subagents** rather than guessing (contract inspector, planner, sensitive-zone reviewer as appropriate).
+
+If prod is broken / unsure → **immediately notify the user** describing what happened and which commands you ran. Do not attempt prod fix via `git revert`/force-push without confirmation. See `~/projects/rovno-demo-playbook.md` for rollback scenarios.
+
+---
+
+## 16. Quick reference
+
+| Area        | Location |
+|------------|----------|
+| Contract   | `backend-truth/README.md`, `schema/`, `slices/`, `contracts/`, `generated/` |
+| Permissions| `src/lib/permissions.ts` |
+| Data entry | `src/data/store.ts`, `src/hooks/use-mock-data.ts` |
+| Supabase   | `src/integrations/supabase/` |
+| Cursor     | `.cursor/rules/`, `.cursor/skills/`, `.cursor/agents/`, `.cursor/commands/` |
+| Deploy     | `scripts/deploy-to-prod.sh` (or `npm run deploy`) |
+| Rollback   | `~/projects/rovno-demo-playbook.md` |
+
+This repo **consumes** backend truth produced from `rovno-db/scripts/generate-backend-truth.mjs`.
+
+---
+
+**TL;DR**: feature-branch → PR into `dev` → check on staging → human merges `dev → main` → prod auto-deploys. When in doubt, ask.
