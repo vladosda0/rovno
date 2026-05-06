@@ -5,8 +5,11 @@ import { useTranslation } from "react-i18next";
 import { trackEvent } from "@/lib/analytics";
 import {
   Archive,
+  Building2,
   Download,
   Eye,
+  Home as HomeIcon,
+  Link2,
   Lock,
   MessageSquare,
   Plus,
@@ -49,6 +52,8 @@ import { PreviewCard } from "@/components/ai/PreviewCard";
 import { ActionBar } from "@/components/ai/ActionBar";
 import { ProjectWorkflowEmptyState } from "@/components/ProjectWorkflowEmptyState";
 import { TutorialModal } from "@/components/onboarding/TutorialModal";
+import { ImportDocumentsDialog, type ImportSourceKind } from "@/components/documents/ImportDocumentsDialog";
+import { useActiveOrg } from "@/hooks/use-orgs";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser, useProject, useWorkspaceMode } from "@/hooks/use-mock-data";
@@ -133,6 +138,8 @@ export default function ProjectDocuments() {
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [pendingFinalizeIntentId, setPendingFinalizeIntentId] = useState<string | null>(null);
+  const [importDialog, setImportDialog] = useState<ImportSourceKind | null>(null);
+  const activeOrg = useActiveOrg();
   const [generateOpen, setGenerateOpen] = useState(false);
   const [generateTitle, setGenerateTitle] = useState("");
   const [generateContent, setGenerateContent] = useState("");
@@ -665,10 +672,22 @@ export default function ProjectDocuments() {
               <DocumentsViewModeToggle value={viewMode} onValueChange={setViewMode} />
             )}
             {canUploadDocuments && (
-              <div className="flex gap-1.5">
+              <div className="flex gap-1.5 flex-wrap">
                 <Button size="sm" variant="outline" onClick={() => setUploadOpen(true)}>
                   <Upload className="h-4 w-4 mr-1.5" /> {t("documents.action.upload")}
                 </Button>
+                {isSupabaseMode && (
+                  <>
+                    <Button size="sm" variant="outline" onClick={() => setImportDialog("workspace")}>
+                      <HomeIcon className="h-4 w-4 mr-1.5" /> {t("documents.import.fromHome")}
+                    </Button>
+                    {activeOrg && (
+                      <Button size="sm" variant="outline" onClick={() => setImportDialog("org")}>
+                        <Building2 className="h-4 w-4 mr-1.5" /> {t("documents.import.fromOrg", { name: activeOrg.name })}
+                      </Button>
+                    )}
+                  </>
+                )}
                 {!isSupabaseMode && canManageDocuments && (
                   <Button size="sm" className="bg-accent text-accent-foreground hover:bg-accent/90" onClick={() => setGenerateOpen(true)}>
                     <Plus className="h-4 w-4 mr-1.5" /> {t("documents.action.generate")}
@@ -990,6 +1009,17 @@ export default function ProjectDocuments() {
         onConfirm={handleDelete}
         onCancel={() => setDeleteDocId(null)}
       />
+
+      {importDialog && (
+        <ImportDocumentsDialog
+          open={importDialog !== null}
+          onOpenChange={(open) => { if (!open) setImportDialog(null); }}
+          projectId={pid}
+          source={importDialog}
+          orgId={activeOrg?.id ?? null}
+          orgName={activeOrg?.name ?? null}
+        />
+      )}
     </div>
   );
 }
