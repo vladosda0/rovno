@@ -1856,7 +1856,7 @@
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260506120300_org_rpcs.sql",
+      "sourceMigration": "supabase/migrations/20260506160000_import_documents_creates_versions.sql",
       "triggerUsages": []
     },
     {

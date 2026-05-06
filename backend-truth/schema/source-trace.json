@@ -769,7 +769,7 @@
       "schema": "public",
       "name": "import_documents_to_project",
       "signature": "public.import_documents_to_project(uuid, text, uuid[])",
-      "sourceMigration": "supabase/migrations/20260506120300_org_rpcs.sql"
+      "sourceMigration": "supabase/migrations/20260506160000_import_documents_creates_versions.sql"
     },
     {
       "key": "public.mark_organization_deleting",
@@ -1685,27 +1685,11 @@
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
     },
     {
-      "key": "public.organizations.organizations_select",
-      "schema": "public",
-      "table": "organizations",
-      "name": "organizations_select",
-      "command": "select",
-      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
-    },
-    {
       "key": "public.organizations.organizations_insert",
       "schema": "public",
       "table": "organizations",
       "name": "organizations_insert",
       "command": "insert",
-      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
-    },
-    {
-      "key": "public.organizations.organizations_update",
-      "schema": "public",
-      "table": "organizations",
-      "name": "organizations_update",
-      "command": "update",
       "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
     },
     {
@@ -1717,12 +1701,28 @@
       "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
     },
     {
+      "key": "public.organizations.organizations_select",
+      "schema": "public",
+      "table": "organizations",
+      "name": "organizations_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260506150000_fix_org_rls_recursion.sql"
+    },
+    {
+      "key": "public.organizations.organizations_update",
+      "schema": "public",
+      "table": "organizations",
+      "name": "organizations_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260506150000_fix_org_rls_recursion.sql"
+    },
+    {
       "key": "public.org_members.org_members_select",
       "schema": "public",
       "table": "org_members",
       "name": "org_members_select",
       "command": "select",
-      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260506150000_fix_org_rls_recursion.sql"
     },
     {
       "key": "public.org_members.org_members_insert",
@@ -1730,7 +1730,7 @@
       "table": "org_members",
       "name": "org_members_insert",
       "command": "insert",
-      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260506150000_fix_org_rls_recursion.sql"
     },
     {
       "key": "public.org_members.org_members_update",
@@ -1738,7 +1738,7 @@
       "table": "org_members",
       "name": "org_members_update",
       "command": "update",
-      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260506150000_fix_org_rls_recursion.sql"
     },
     {
       "key": "public.org_members.org_members_delete",
@@ -1746,7 +1746,7 @@
       "table": "org_members",
       "name": "org_members_delete",
       "command": "delete",
-      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260506150000_fix_org_rls_recursion.sql"
     },
     {
       "key": "public.org_documents.org_documents_member_read",

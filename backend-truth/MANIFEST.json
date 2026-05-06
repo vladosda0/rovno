@@ -291,6 +291,14 @@
     {
       "path": "supabase/migrations/20260506140000_fix_org_delete_cascade_through_last_owner_guard.sql",
       "sha256": "ded140caf25c35de26361541f39c473fe4c2656b3c0786656039f8b6620df289"
+    },
+    {
+      "path": "supabase/migrations/20260506150000_fix_org_rls_recursion.sql",
+      "sha256": "5bdf73ea9141a0f235dac94c048450e0c7008579d3ae65d06722eadf7361d729"
+    },
+    {
+      "path": "supabase/migrations/20260506160000_import_documents_creates_versions.sql",
+      "sha256": "ef2257529e1ea832c1df57b7ad052a423659d0a8628e1648409c611131437e40"
     }
   ],
   "generated_artifacts": [
@@ -387,6 +395,8 @@
     "sql/20260506120400_accept_project_invite_with_org.sql",
     "sql/20260506130000_fix_org_owner_membership_order.sql",
     "sql/20260506140000_fix_org_delete_cascade_through_last_owner_guard.sql",
+    "sql/20260506150000_fix_org_rls_recursion.sql",
+    "sql/20260506160000_import_documents_creates_versions.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],

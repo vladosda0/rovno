@@ -97,6 +97,8 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20260506120400_accept_project_invite_with_org.sql`
 - `supabase/migrations/20260506130000_fix_org_owner_membership_order.sql`
 - `supabase/migrations/20260506140000_fix_org_delete_cascade_through_last_owner_guard.sql`
+- `supabase/migrations/20260506150000_fix_org_rls_recursion.sql`
+- `supabase/migrations/20260506160000_import_documents_creates_versions.sql`
 
 ## Exclusions
 
