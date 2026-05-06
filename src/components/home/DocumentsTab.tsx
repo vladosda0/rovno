@@ -13,12 +13,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Search, Upload, Pin } from "lucide-react";
+import { Search, Upload, Pin, Building2 } from "lucide-react";
 import { DocumentGridCard } from "@/components/documents/DocumentGridCard";
 import { DocumentListItem } from "@/components/documents/DocumentListItem";
 import { DocumentsViewModeToggle, type DocumentViewMode } from "@/components/documents/DocumentsViewModeToggle";
 import { useCurrentUser, useWorkspaceMode } from "@/hooks/use-mock-data";
 import { useWorkspaceDocuments, type WorkspaceDoc } from "@/hooks/use-workspace-documents-source";
+import { useActiveOrg, useOrgDocuments } from "@/hooks/use-orgs";
 
 const CATEGORIES = [
   { id: "All", labelKey: "documentsTab.categories.all" },
@@ -48,6 +49,8 @@ const MOCK_DOCS: MockDoc[] = [
   { id: "lib-5", titleKey: "documentsTab.mock.kitchenHowTo", category: "How-tos", categoryKey: "documentsTab.categories.howTos", pinned: false, tags: ["estimation", "kitchen"], updatedAt: "2024-12-20" },
 ];
 
+type DocScope = "all" | "personal" | "org";
+
 interface DisplayDoc {
   id: string;
   title: string;
@@ -57,6 +60,7 @@ interface DisplayDoc {
   tags: string[];
   updatedAt: string;
   description?: string;
+  scope: "personal" | "org";
 }
 
 function categoryFromType(type: string): { id: string; labelKey: string } {
@@ -74,6 +78,7 @@ export function DocumentsTab() {
   const { t } = useTranslation();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<string>("All");
+  const [scope, setScope] = useState<DocScope>("all");
   const [viewMode, setViewMode] = useState<DocumentViewMode>("list");
   const [pinOverrides, setPinOverrides] = useState<Record<string, boolean>>({});
   const [viewDoc, setViewDoc] = useState<DisplayDoc | null>(null);
@@ -83,22 +88,42 @@ export function DocumentsTab() {
   const isSupabaseMode = mode.kind === "supabase";
   const profileId = isSupabaseMode ? currentUser.id : undefined;
   const { data: workspaceDocs, isPending: isWorkspaceDocsLoading } = useWorkspaceDocuments(profileId);
+  const activeOrg = useActiveOrg();
+  const { data: orgDocs, isPending: isOrgDocsLoading } = useOrgDocuments(activeOrg?.id);
 
   const supabaseDisplayDocs = useMemo<DisplayDoc[]>(() => {
-    return (workspaceDocs ?? []).map((doc: WorkspaceDoc) => {
+    const personal: DisplayDoc[] = (workspaceDocs ?? []).map((doc: WorkspaceDoc) => {
       const categoryMeta = categoryFromType(doc.type);
+      const id = `ws-${doc.id}`;
       return {
-        id: doc.id,
+        id,
         title: doc.title,
         category: categoryMeta.id,
         categoryLabel: t(categoryMeta.labelKey),
-        pinned: pinOverrides[doc.id] ?? doc.pinned,
+        pinned: pinOverrides[id] ?? doc.pinned,
         tags: doc.tags ?? [],
         updatedAt: doc.updatedAt.slice(0, 10),
         description: doc.description,
+        scope: "personal",
       };
     });
-  }, [workspaceDocs, pinOverrides, t]);
+    const orgScoped: DisplayDoc[] = (orgDocs ?? []).map((doc) => {
+      const categoryMeta = categoryFromType(doc.type);
+      const id = `org-${doc.id}`;
+      return {
+        id,
+        title: doc.title,
+        category: categoryMeta.id,
+        categoryLabel: t(categoryMeta.labelKey),
+        pinned: pinOverrides[id] ?? doc.pinned,
+        tags: doc.tags ?? [],
+        updatedAt: doc.updatedAt.slice(0, 10),
+        description: doc.description,
+        scope: "org",
+      };
+    });
+    return [...personal, ...orgScoped];
+  }, [workspaceDocs, orgDocs, pinOverrides, t]);
 
   const mockDisplayDocs = useMemo<DisplayDoc[]>(() => {
     return MOCK_DOCS.map((doc) => ({
@@ -109,13 +134,16 @@ export function DocumentsTab() {
       pinned: pinOverrides[doc.id] ?? doc.pinned,
       tags: doc.tags,
       updatedAt: doc.updatedAt,
+      scope: "personal" as const,
     }));
   }, [pinOverrides, t]);
 
   const displayDocs = isSupabaseMode ? supabaseDisplayDocs : mockDisplayDocs;
-  const isLoading = isSupabaseMode && isWorkspaceDocsLoading;
+  const isLoading = isSupabaseMode && (isWorkspaceDocsLoading || (Boolean(activeOrg) && isOrgDocsLoading));
 
   const filtered = displayDocs.filter((d) => {
+    if (scope === "personal" && d.scope !== "personal") return false;
+    if (scope === "org" && d.scope !== "org") return false;
     if (search && !d.title.toLowerCase().includes(search.toLowerCase()) && !d.tags.some((tag) => tag.includes(search.toLowerCase()))) return false;
     if (category !== "All" && d.category !== category) return false;
     return true;
@@ -133,6 +161,26 @@ export function DocumentsTab() {
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder={t("documentsTab.search")} value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-9" />
         </div>
+        {isSupabaseMode && activeOrg && (
+          <div className="flex gap-1">
+            {(["all", "personal", "org"] as const).map((value) => (
+              <Button
+                key={value}
+                size="sm"
+                variant="outline"
+                aria-pressed={scope === value}
+                className={`text-caption h-7 ${
+                  scope === value
+                    ? "bg-accent text-accent-foreground border-accent hover:bg-accent/90 hover:text-accent-foreground"
+                    : ""
+                }`}
+                onClick={() => setScope(value)}
+              >
+                {t(`home.org.scope.${value}`)}
+              </Button>
+            ))}
+          </div>
+        )}
         <Button variant="outline" size="sm" disabled>
           <Upload className="h-3.5 w-3.5 mr-1.5" /> {t("documentsTab.upload")}
         </Button>
@@ -188,6 +236,12 @@ export function DocumentsTab() {
                   details={(
                     <>
                       <Badge variant="secondary" className="text-[10px]">{doc.categoryLabel}</Badge>
+                      {doc.scope === "org" && (
+                        <Badge className="text-[10px] bg-accent/15 text-accent border border-accent/30 hover:bg-accent/15">
+                          <Building2 className="h-2.5 w-2.5 mr-0.5" />
+                          {t("home.org.tag")}
+                        </Badge>
+                      )}
                       {doc.tags.map((tag) => (
                         <span key={tag} className="text-[10px] text-muted-foreground">#{tag}</span>
                       ))}
@@ -231,6 +285,12 @@ export function DocumentsTab() {
               meta={(
                 <>
                   <Badge variant="secondary" className="text-[10px]">{doc.categoryLabel}</Badge>
+                  {doc.scope === "org" && (
+                    <Badge className="text-[10px] bg-accent/15 text-accent border border-accent/30 hover:bg-accent/15">
+                      <Building2 className="h-2.5 w-2.5 mr-0.5" />
+                      {t("home.org.tag")}
+                    </Badge>
+                  )}
                   {doc.tags.map((tag) => (
                     <span key={tag} className="text-[10px] text-muted-foreground">#{tag}</span>
                   ))}
