@@ -1,16 +1,18 @@
-import { useState, type MouseEvent } from "react";
+import { useEffect, useState, type MouseEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Zap, Bot, Wrench, Eye, Plus, Trash2 } from "lucide-react";
+import { Zap, Bot, Wrench, Eye, Plus, Trash2, Building2 } from "lucide-react";
 import { MVP_SHOW_AI_AUTOMATION_MODE_UI } from "@/lib/mvp-ai-automation-ui";
 import { getPlanningSource } from "@/data/planning-source";
 import { getWorkspaceSource, resolveWorkspaceMode } from "@/data/workspace-source";
 import { useWorkspaceMode } from "@/hooks/use-mock-data";
 import { workspaceQueryKeys } from "@/hooks/use-workspace-source";
 import { planningQueryKeys } from "@/hooks/use-planning-source";
+import { useCreateOrganization, useSetActiveOrg } from "@/hooks/use-orgs";
+import { isValidOrgSlug, suggestOrgSlug } from "@/data/org-source";
 import { toast } from "@/hooks/use-toast";
 
 const MAX_ONBOARDING_STAGES = 5;
@@ -47,7 +49,25 @@ export function OnboardingStepper({ onComplete, onProjectCreated }: OnboardingSt
   ]);
   const [savingStages, setSavingStages] = useState(false);
 
-  const progressIndices = showAutomationStep ? [0, 1, 2, 3] : [1, 2, 3];
+  const showOrgStep = workspaceMode.kind === "supabase" || workspaceMode.kind === "pending-supabase";
+  const [orgSectionExpanded, setOrgSectionExpanded] = useState(false);
+  const [orgName, setOrgName] = useState("");
+  const [orgSlug, setOrgSlug] = useState("");
+  const [orgSlugTouched, setOrgSlugTouched] = useState(false);
+  const createOrgMutation = useCreateOrganization();
+  const setActiveOrgMutation = useSetActiveOrg();
+
+  useEffect(() => {
+    if (orgSlugTouched) return;
+    setOrgSlug(orgName ? suggestOrgSlug(orgName) : "");
+  }, [orgName, orgSlugTouched]);
+
+  const orgSlugIsValid = orgSlug.length === 0 || isValidOrgSlug(orgSlug);
+
+  const progressIndices = (() => {
+    const base = showAutomationStep ? [0, 1, 2, 3] : [1, 2, 3];
+    return showOrgStep ? [...base, 4] : base;
+  })();
 
   async function handleCreateProject(event: MouseEvent<HTMLButtonElement>) {
     event.preventDefault();
@@ -120,6 +140,14 @@ export function OnboardingStepper({ onComplete, onProjectCreated }: OnboardingSt
     }
   }
 
+  function finishOrAdvanceToOrgStep() {
+    if (showOrgStep) {
+      setStep(4);
+    } else {
+      onComplete();
+    }
+  }
+
   async function handleSaveStages() {
     if (!createdProjectId || savingStages) return;
     setSavingStages(true);
@@ -129,7 +157,7 @@ export function OnboardingStepper({ onComplete, onProjectCreated }: OnboardingSt
         return trimmed || t("onboarding.estimate.defaultStageLabel", { n: i + 1 });
       });
       await persistProjectStages(resolvedTitles);
-      onComplete();
+      finishOrAdvanceToOrgStep();
     } catch (error) {
       toast({
         title: t("projectsTab.projectCreationFailed"),
@@ -146,7 +174,7 @@ export function OnboardingStepper({ onComplete, onProjectCreated }: OnboardingSt
     setSavingStages(true);
     try {
       await persistProjectStages([t("projectsTab.stage1")]);
-      onComplete();
+      finishOrAdvanceToOrgStep();
     } catch (error) {
       toast({
         title: t("projectsTab.projectCreationFailed"),
@@ -155,6 +183,32 @@ export function OnboardingStepper({ onComplete, onProjectCreated }: OnboardingSt
       });
     } finally {
       setSavingStages(false);
+    }
+  }
+
+  async function handleCreateOrg() {
+    if (createOrgMutation.isPending) return;
+    const trimmedName = orgName.trim();
+    const trimmedSlug = orgSlug.trim().toLowerCase();
+    if (!trimmedName || !isValidOrgSlug(trimmedSlug)) return;
+    try {
+      const created = await createOrgMutation.mutateAsync({
+        name: trimmedName,
+        slug: trimmedSlug,
+      });
+      try {
+        await setActiveOrgMutation.mutateAsync(created.id);
+      } catch {
+        // Active context is a soft-failure: the org exists either way.
+      }
+      toast({ title: t("onboarding.org.createSuccess") });
+      onComplete();
+    } catch (error) {
+      toast({
+        title: t("onboarding.org.createError"),
+        description: error instanceof Error ? error.message : undefined,
+        variant: "destructive",
+      });
     }
   }
 
@@ -326,7 +380,7 @@ export function OnboardingStepper({ onComplete, onProjectCreated }: OnboardingSt
           <h2 className="text-h3 text-foreground">{t("onboarding.done.title")}</h2>
           <p className="text-body-sm text-muted-foreground">{t("onboarding.done.subtitle")}</p>
           <Button
-            onClick={onComplete}
+            onClick={finishOrAdvanceToOrgStep}
             className="w-full bg-accent text-accent-foreground hover:bg-accent/90"
           >
             {t("onboarding.done.goToApp")}
@@ -398,6 +452,100 @@ export function OnboardingStepper({ onComplete, onProjectCreated }: OnboardingSt
           >
             {t("onboarding.estimate.skip")}
           </button>
+        </div>
+      )}
+
+      {step === 4 && showOrgStep && (
+        <div className="glass-elevated rounded-panel p-sp-4 space-y-sp-3">
+          <div className="text-center space-y-sp-1">
+            <Building2 className="mx-auto h-7 w-7 text-accent" />
+            <h2 className="text-h3 text-foreground">{t("onboarding.org.title")}</h2>
+            <p className="text-body-sm text-muted-foreground">{t("onboarding.org.subtitle")}</p>
+          </div>
+
+          {!orgSectionExpanded ? (
+            <div className="flex flex-col gap-sp-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setOrgSectionExpanded(true)}
+                className="w-full"
+              >
+                {t("onboarding.org.expand")}
+              </Button>
+              <Button
+                type="button"
+                onClick={onComplete}
+                className="w-full bg-accent text-accent-foreground hover:bg-accent/90"
+              >
+                {t("onboarding.org.skip")}
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-sp-2">
+              <div className="space-y-1.5">
+                <label className="text-body-sm font-medium text-foreground">
+                  {t("onboarding.org.nameLabel")}
+                </label>
+                <Input
+                  value={orgName}
+                  onChange={(e) => setOrgName(e.target.value)}
+                  placeholder={t("onboarding.org.namePlaceholder")}
+                  autoFocus
+                  disabled={createOrgMutation.isPending}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-body-sm font-medium text-foreground">
+                  {t("onboarding.org.slugLabel")}
+                </label>
+                <Input
+                  value={orgSlug}
+                  onChange={(e) => {
+                    setOrgSlugTouched(true);
+                    setOrgSlug(e.target.value.toLowerCase());
+                  }}
+                  disabled={createOrgMutation.isPending}
+                />
+                <p className="text-caption text-muted-foreground">{t("onboarding.org.slugHint")}</p>
+                {!orgSlugIsValid && (
+                  <p className="text-caption text-destructive">{t("onboarding.org.slugInvalid")}</p>
+                )}
+              </div>
+              <div className="flex gap-sp-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setOrgSectionExpanded(false)}
+                  disabled={createOrgMutation.isPending}
+                  className="flex-1"
+                >
+                  {t("onboarding.org.collapse")}
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleCreateOrg}
+                  disabled={
+                    createOrgMutation.isPending
+                    || orgName.trim().length === 0
+                    || !orgSlugIsValid
+                    || orgSlug.length === 0
+                  }
+                  className="flex-1 bg-accent text-accent-foreground hover:bg-accent/90"
+                >
+                  {createOrgMutation.isPending ? t("onboarding.org.creating") : t("onboarding.org.create")}
+                </Button>
+              </div>
+              <button
+                type="button"
+                onClick={onComplete}
+                disabled={createOrgMutation.isPending}
+                className="w-full text-center text-body-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+              >
+                {t("onboarding.org.skip")}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
