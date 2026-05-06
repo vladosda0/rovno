@@ -21,6 +21,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { useCurrentUser, useProject, useProjectInvites, useWorkspaceMode } from "@/hooks/use-mock-data";
+import { useActiveOrg, useOrgMemberProfileIds } from "@/hooks/use-orgs";
 import { usePermission } from "@/lib/permissions";
 import { addEvent, getUserById } from "@/data/store";
 import {
@@ -35,6 +36,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { SettingsSection } from "@/components/settings/SettingsSection";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -539,6 +541,10 @@ export default function ProjectParticipants() {
     viewerRegime: defaultViewerRegime,
     creditLimit: 50,
   }, projectMode));
+  const [inviteAddToOrg, setInviteAddToOrg] = useState(false);
+  const activeOrg = useActiveOrg();
+  const { data: orgMemberIds } = useOrgMemberProfileIds(activeOrg?.id);
+  const orgMemberIdSet = useMemo(() => new Set(orgMemberIds ?? []), [orgMemberIds]);
   const [permissionDialogOpen, setPermissionDialogOpen] = useState(false);
   const [permissionTarget, setPermissionTarget] = useState<RoleTarget | null>(null);
   const [permissionForm, setPermissionForm] = useState<PermissionFormState>(() => buildPermissionForm({
@@ -687,6 +693,7 @@ export default function ProjectParticipants() {
       viewerRegime: defaultViewerRegime,
       creditLimit: 50,
     }, projectMode));
+    setInviteAddToOrg(false);
   }
 
   function openPermissionEditor(record: ParticipantPermissionRecord) {
@@ -724,6 +731,7 @@ export default function ProjectParticipants() {
         invitedBy: currentUser.id,
         financeVisibility: inviteForm.financeVisibility,
         internalDocsVisibility: inviteForm.internalDocsVisibility,
+        addToOrgId: inviteAddToOrg && activeOrg ? activeOrg.id : null,
       });
 
       if (workspaceMode.kind !== "supabase") {
@@ -1046,6 +1054,14 @@ export default function ProjectParticipants() {
                               <p className="text-body-sm font-medium text-foreground">
                                 {memberUser?.name ?? member.user_id}
                                 {isSelf && <span className="ml-1 text-caption text-muted-foreground">{t("participants.you")}</span>}
+                                {activeOrg && orgMemberIdSet.has(member.user_id) && (
+                                  <span
+                                    className="ml-2 inline-flex items-center rounded-pill border border-accent/30 bg-accent/10 px-1.5 py-0 text-[10px] font-medium text-accent"
+                                    title={activeOrg.name}
+                                  >
+                                    {t("participants.orgTag")}
+                                  </span>
+                                )}
                               </p>
                               <p className="text-caption text-muted-foreground">{memberUser?.email || t("participants.noEmail")}</p>
                             </div>
@@ -1426,6 +1442,16 @@ export default function ProjectParticipants() {
             availableViewerRegimes={availableViewerRegimes}
             projectMode={projectMode}
           />
+
+          {activeOrg && (
+            <label className="flex items-center gap-2 px-1 text-body-sm text-foreground cursor-pointer">
+              <Checkbox
+                checked={inviteAddToOrg}
+                onCheckedChange={(checked) => setInviteAddToOrg(checked === true)}
+              />
+              <span>{t("participants.invite.addToOrgLabel", { name: activeOrg.name })}</span>
+            </label>
+          )}
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setInviteOpen(false)}>{t("participants.inviteDialog.cancel")}</Button>

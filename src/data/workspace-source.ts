@@ -819,6 +819,8 @@ export async function createWorkspaceProjectInvite(
     invitedBy: string;
     financeVisibility?: FinanceVisibility;
     internalDocsVisibility?: InternalDocsVisibility;
+    /** When set, the invitee is also added to this org on accept. */
+    addToOrgId?: string | null;
   },
 ): Promise<WorkspaceProjectInvite> {
   if (mode.kind === "guest") {
@@ -853,19 +855,27 @@ export async function createWorkspaceProjectInvite(
   }
 
   const supabase = await loadSupabaseClient();
+  // `add_to_org_id` is added by the Session 2 migration; the generated
+  // Insert type catches up on the next backend-truth sync. Until then,
+  // build the payload as a record and cast through unknown for the
+  // narrow window where the column exists in the DB but not in types.
+  const basePayload = {
+    project_id: input.projectId,
+    email: input.email.trim(),
+    role: input.role,
+    ai_access: input.aiAccess,
+    viewer_regime: input.viewerRegime ?? null,
+    credit_limit: input.creditLimit,
+    invited_by: input.invitedBy,
+    finance_visibility: resolvedFinanceVisibility,
+    internal_docs_visibility: resolvedInternalDocsVisibility,
+  };
+  const insertPayload = input.addToOrgId
+    ? ({ ...basePayload, add_to_org_id: input.addToOrgId } as unknown as typeof basePayload)
+    : basePayload;
   const { data, error } = await supabase
     .from("project_invites")
-    .insert({
-      project_id: input.projectId,
-      email: input.email.trim(),
-      role: input.role,
-      ai_access: input.aiAccess,
-      viewer_regime: input.viewerRegime ?? null,
-      credit_limit: input.creditLimit,
-      invited_by: input.invitedBy,
-      finance_visibility: resolvedFinanceVisibility,
-      internal_docs_visibility: resolvedInternalDocsVisibility,
-    })
+    .insert(insertPayload)
     .select("*")
     .single();
 

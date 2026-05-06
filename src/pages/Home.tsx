@@ -6,6 +6,7 @@ import {
   LayoutDashboard, FolderOpen, CheckSquare, FileText,
   Package, Warehouse, TrendingUp, Users,
 } from "lucide-react";
+import { OrgBlock } from "@/components/home/OrgBlock";
 
 const OverviewTab = lazy(() =>
   import("@/components/home/OverviewTab").then((module) => ({ default: module.OverviewTab })),
@@ -84,6 +85,8 @@ export default function Home() {
           {t("home.subtitle")}
         </p>
       </div>
+
+      <OrgBlock />
 
       <Tabs value={activeTab} onValueChange={handleTabChange}>
         <TabsList className="mb-4 h-auto w-full flex-wrap justify-start gap-0.5 bg-transparent p-0 sm:mb-6">

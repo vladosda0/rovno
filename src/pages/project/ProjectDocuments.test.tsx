@@ -32,6 +32,27 @@ vi.mock("@/hooks/use-documents-media-source", () => ({
   useProjectDocumentsState: (projectId: string) => mockUseProjectDocumentsState(projectId),
   useProjectDocumentMutations: (projectId: string) => mockUseProjectDocumentMutations(projectId),
   useDocumentUploadMutations: (projectId: string) => mockUseDocumentUploadMutations(projectId),
+  documentsMediaQueryKeys: {
+    projectDocuments: (profileId: string, projectId: string) =>
+      ["documents-media", "project-documents", profileId, projectId] as const,
+    projectMedia: (profileId: string, projectId: string) =>
+      ["documents-media", "project-media", profileId, projectId] as const,
+  },
+}));
+
+vi.mock("@/hooks/use-orgs", () => ({
+  useActiveOrg: () => null,
+  useUserOrganizations: () => ({ data: [], isPending: false }),
+  useOrgDocuments: () => ({ data: [], isPending: false }),
+  useOrgMemberProfileIds: () => ({ data: [], isPending: false }),
+  useImportDocumentsToProject: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useSetActiveOrg: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useCreateOrganization: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  orgQueryKeys: {
+    list: (id: string) => ["orgs", "list", id] as const,
+    documents: (id: string | null) => ["orgs", "documents", id] as const,
+    members: (id: string | null) => ["orgs", "members", id] as const,
+  },
 }));
 
 vi.mock("@/lib/permissions", async () => {
