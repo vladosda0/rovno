@@ -103,6 +103,7 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20260507130000_debug_org_rls_state.sql`
 - `supabase/migrations/20260507140000_debug_org_insert_rpc.sql`
 - `supabase/migrations/20260507150000_drop_org_debug_rpcs.sql`
+- `supabase/migrations/20260507160000_org_policy_resilience.sql`
 
 ## Exclusions
 

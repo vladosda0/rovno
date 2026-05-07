@@ -779,18 +779,11 @@
       "sourceMigration": "supabase/migrations/20260506140000_fix_org_delete_cascade_through_last_owner_guard.sql"
     },
     {
-      "key": "public.__debug_org_rls_state",
+      "key": "public.__debug_org_rls_state2",
       "schema": "public",
-      "name": "__debug_org_rls_state",
-      "signature": "public.__debug_org_rls_state()",
-      "sourceMigration": "supabase/migrations/20260507130000_debug_org_rls_state.sql"
-    },
-    {
-      "key": "public.__debug_try_insert_org",
-      "schema": "public",
-      "name": "__debug_try_insert_org",
-      "signature": "public.__debug_try_insert_org(text)",
-      "sourceMigration": "supabase/migrations/20260507140000_debug_org_insert_rpc.sql"
+      "name": "__debug_org_rls_state2",
+      "signature": "public.__debug_org_rls_state2()",
+      "sourceMigration": "supabase/migrations/20260507160000_org_policy_resilience.sql"
     }
   ],
   "policies": [
@@ -1704,15 +1697,7 @@
       "table": "organizations",
       "name": "organizations_select",
       "command": "select",
-      "sourceMigration": "supabase/migrations/20260506150000_fix_org_rls_recursion.sql"
-    },
-    {
-      "key": "public.organizations.organizations_update",
-      "schema": "public",
-      "table": "organizations",
-      "name": "organizations_update",
-      "command": "update",
-      "sourceMigration": "supabase/migrations/20260506150000_fix_org_rls_recursion.sql"
+      "sourceMigration": "supabase/migrations/20260507160000_org_policy_resilience.sql"
     },
     {
       "key": "public.organizations.organizations_insert",
@@ -1720,7 +1705,15 @@
       "table": "organizations",
       "name": "organizations_insert",
       "command": "insert",
-      "sourceMigration": "supabase/migrations/20260507120000_rebuild_org_insert_delete_policies.sql"
+      "sourceMigration": "supabase/migrations/20260507160000_org_policy_resilience.sql"
+    },
+    {
+      "key": "public.organizations.organizations_update",
+      "schema": "public",
+      "table": "organizations",
+      "name": "organizations_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260507160000_org_policy_resilience.sql"
     },
     {
       "key": "public.organizations.organizations_delete",
@@ -1728,7 +1721,7 @@
       "table": "organizations",
       "name": "organizations_delete",
       "command": "delete",
-      "sourceMigration": "supabase/migrations/20260507120000_rebuild_org_insert_delete_policies.sql"
+      "sourceMigration": "supabase/migrations/20260507160000_org_policy_resilience.sql"
     },
     {
       "key": "public.org_members.org_members_select",
