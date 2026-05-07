@@ -315,6 +315,10 @@
     {
       "path": "supabase/migrations/20260507150000_drop_org_debug_rpcs.sql",
       "sha256": "f561d4796f7572f0aaaefa84110ab4dc16271af1716d6bbdaced03fcc8c940b5"
+    },
+    {
+      "path": "supabase/migrations/20260507160000_org_policy_resilience.sql",
+      "sha256": "a47130e076fa6c22ad09aecf846006c0bcd5166fb102c75778e7095ff9df12ac"
     }
   ],
   "generated_artifacts": [
@@ -417,6 +421,7 @@
     "sql/20260507130000_debug_org_rls_state.sql",
     "sql/20260507140000_debug_org_insert_rpc.sql",
     "sql/20260507150000_drop_org_debug_rpcs.sql",
+    "sql/20260507160000_org_policy_resilience.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],

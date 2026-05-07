@@ -1881,8 +1881,8 @@
     },
     {
       "schema": "public",
-      "name": "__debug_org_rls_state",
-      "signature": "public.__debug_org_rls_state()",
+      "name": "__debug_org_rls_state2",
+      "signature": "public.__debug_org_rls_state2()",
       "args": [],
       "returnType": "jsonb",
       "language": "sql",
@@ -1890,27 +1890,7 @@
       "securityDefiner": true,
       "searchPath": "public, pg_catalog",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260507130000_debug_org_rls_state.sql",
-      "triggerUsages": []
-    },
-    {
-      "schema": "public",
-      "name": "__debug_try_insert_org",
-      "signature": "public.__debug_try_insert_org(text)",
-      "args": [
-        {
-          "name": "p_name",
-          "type": "text",
-          "identityType": "text"
-        }
-      ],
-      "returnType": "jsonb",
-      "language": "plpgsql",
-      "volatility": "volatile",
-      "securityDefiner": false,
-      "searchPath": null,
-      "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260507140000_debug_org_insert_rpc.sql",
+      "sourceMigration": "supabase/migrations/20260507160000_org_policy_resilience.sql",
       "triggerUsages": []
     }
   ]

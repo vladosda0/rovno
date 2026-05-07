@@ -1670,14 +1670,8 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-        "__debug_org_rls_state": {
+        "__debug_org_rls_state2": {
           Args: Record<PropertyKey, never>
-          Returns: Json
-        }
-        "__debug_try_insert_org": {
-          Args: {
-          "p_name": string
-          }
           Returns: Json
         }
         "accept_project_invite": {
