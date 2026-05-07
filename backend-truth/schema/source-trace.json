@@ -784,6 +784,13 @@
       "name": "__debug_org_rls_state",
       "signature": "public.__debug_org_rls_state()",
       "sourceMigration": "supabase/migrations/20260507130000_debug_org_rls_state.sql"
+    },
+    {
+      "key": "public.__debug_try_insert_org",
+      "schema": "public",
+      "name": "__debug_try_insert_org",
+      "signature": "public.__debug_try_insert_org(text)",
+      "sourceMigration": "supabase/migrations/20260507140000_debug_org_insert_rpc.sql"
     }
   ],
   "policies": [

@@ -311,6 +311,10 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260507130000_debug_org_rls_state.sql",
       "sha256": "d4fc11f3159c7f00f5af8d8d31f92d9ee2add3779bfa7a93046f6de18256bf6c"
+    },
+    {
+      "path": "supabase/migrations/20260507140000_debug_org_insert_rpc.sql",
+      "sha256": "87d1564adab7ca387c68cb8db3e448b8b3a54fc400bdc4e4317e3b06d9d242ef"
     }
   ],
   "generated_artifacts": [
@@ -411,6 +415,7 @@ export const manifest = {
     "sql/20260506160000_import_documents_creates_versions.sql",
     "sql/20260507120000_rebuild_org_insert_delete_policies.sql",
     "sql/20260507130000_debug_org_rls_state.sql",
+    "sql/20260507140000_debug_org_insert_rpc.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -12862,6 +12867,26 @@ export const functions = {
       "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260507130000_debug_org_rls_state.sql",
       "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "__debug_try_insert_org",
+      "signature": "public.__debug_try_insert_org(text)",
+      "args": [
+        {
+          "name": "p_name",
+          "type": "text",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": false,
+      "searchPath": null,
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260507140000_debug_org_insert_rpc.sql",
+      "triggerUsages": []
     }
   ]
 } as const;
@@ -15690,6 +15715,13 @@ export const sourceTrace = {
       "name": "__debug_org_rls_state",
       "signature": "public.__debug_org_rls_state()",
       "sourceMigration": "supabase/migrations/20260507130000_debug_org_rls_state.sql"
+    },
+    {
+      "key": "public.__debug_try_insert_org",
+      "schema": "public",
+      "name": "__debug_try_insert_org",
+      "signature": "public.__debug_try_insert_org(text)",
+      "sourceMigration": "supabase/migrations/20260507140000_debug_org_insert_rpc.sql"
     }
   ],
   "policies": [
