@@ -1878,6 +1878,20 @@
           "activation": "before delete"
         }
       ]
+    },
+    {
+      "schema": "public",
+      "name": "__debug_org_rls_state",
+      "signature": "public.__debug_org_rls_state()",
+      "args": [],
+      "returnType": "jsonb",
+      "language": "sql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public, pg_catalog",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260507130000_debug_org_rls_state.sql",
+      "triggerUsages": []
     }
   ]
 }

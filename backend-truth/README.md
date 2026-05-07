@@ -100,6 +100,7 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20260506150000_fix_org_rls_recursion.sql`
 - `supabase/migrations/20260506160000_import_documents_creates_versions.sql`
 - `supabase/migrations/20260507120000_rebuild_org_insert_delete_policies.sql`
+- `supabase/migrations/20260507130000_debug_org_rls_state.sql`
 
 ## Exclusions
 

@@ -307,6 +307,10 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260507120000_rebuild_org_insert_delete_policies.sql",
       "sha256": "4d0ab2764eb7f78a8dd29ac2654384533ea402f436000f25b37fe3d43a7e219a"
+    },
+    {
+      "path": "supabase/migrations/20260507130000_debug_org_rls_state.sql",
+      "sha256": "d4fc11f3159c7f00f5af8d8d31f92d9ee2add3779bfa7a93046f6de18256bf6c"
     }
   ],
   "generated_artifacts": [
@@ -406,6 +410,7 @@ export const manifest = {
     "sql/20260506150000_fix_org_rls_recursion.sql",
     "sql/20260506160000_import_documents_creates_versions.sql",
     "sql/20260507120000_rebuild_org_insert_delete_policies.sql",
+    "sql/20260507130000_debug_org_rls_state.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -12843,6 +12848,20 @@ export const functions = {
           "activation": "before delete"
         }
       ]
+    },
+    {
+      "schema": "public",
+      "name": "__debug_org_rls_state",
+      "signature": "public.__debug_org_rls_state()",
+      "args": [],
+      "returnType": "jsonb",
+      "language": "sql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public, pg_catalog",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260507130000_debug_org_rls_state.sql",
+      "triggerUsages": []
     }
   ]
 } as const;
@@ -15664,6 +15683,13 @@ export const sourceTrace = {
       "name": "mark_organization_deleting",
       "signature": "public.mark_organization_deleting()",
       "sourceMigration": "supabase/migrations/20260506140000_fix_org_delete_cascade_through_last_owner_guard.sql"
+    },
+    {
+      "key": "public.__debug_org_rls_state",
+      "schema": "public",
+      "name": "__debug_org_rls_state",
+      "signature": "public.__debug_org_rls_state()",
+      "sourceMigration": "supabase/migrations/20260507130000_debug_org_rls_state.sql"
     }
   ],
   "policies": [
@@ -16602,22 +16628,6 @@ export const sourceTrace = {
       "name": "organizations_delete",
       "command": "delete",
       "sourceMigration": "supabase/migrations/20260507120000_rebuild_org_insert_delete_policies.sql"
-    },
-    {
-      "key": "public.organizations.organizations_select",
-      "schema": "public",
-      "table": "organizations",
-      "name": "organizations_select",
-      "command": "select",
-      "sourceMigration": "supabase/migrations/20260506150000_fix_org_rls_recursion.sql"
-    },
-    {
-      "key": "public.organizations.organizations_update",
-      "schema": "public",
-      "table": "organizations",
-      "name": "organizations_update",
-      "command": "update",
-      "sourceMigration": "supabase/migrations/20260506150000_fix_org_rls_recursion.sql"
     },
     {
       "key": "public.org_members.org_members_select",
