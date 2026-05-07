@@ -315,6 +315,10 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260507140000_debug_org_insert_rpc.sql",
       "sha256": "87d1564adab7ca387c68cb8db3e448b8b3a54fc400bdc4e4317e3b06d9d242ef"
+    },
+    {
+      "path": "supabase/migrations/20260507150000_drop_org_debug_rpcs.sql",
+      "sha256": "f561d4796f7572f0aaaefa84110ab4dc16271af1716d6bbdaced03fcc8c940b5"
     }
   ],
   "generated_artifacts": [
@@ -416,6 +420,7 @@ export const manifest = {
     "sql/20260507120000_rebuild_org_insert_delete_policies.sql",
     "sql/20260507130000_debug_org_rls_state.sql",
     "sql/20260507140000_debug_org_insert_rpc.sql",
+    "sql/20260507150000_drop_org_debug_rpcs.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
