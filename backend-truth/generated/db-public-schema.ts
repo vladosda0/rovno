@@ -303,6 +303,10 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260506160000_import_documents_creates_versions.sql",
       "sha256": "ef2257529e1ea832c1df57b7ad052a423659d0a8628e1648409c611131437e40"
+    },
+    {
+      "path": "supabase/migrations/20260507120000_rebuild_org_insert_delete_policies.sql",
+      "sha256": "4d0ab2764eb7f78a8dd29ac2654384533ea402f436000f25b37fe3d43a7e219a"
     }
   ],
   "generated_artifacts": [
@@ -401,6 +405,7 @@ export const manifest = {
     "sql/20260506140000_fix_org_delete_cascade_through_last_owner_guard.sql",
     "sql/20260506150000_fix_org_rls_recursion.sql",
     "sql/20260506160000_import_documents_creates_versions.sql",
+    "sql/20260507120000_rebuild_org_insert_delete_policies.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -14656,30 +14661,6 @@ export const rls = {
       ],
       "policies": [
         {
-          "name": "organizations_insert",
-          "schema": "public",
-          "table": "organizations",
-          "command": "insert",
-          "roles": [
-            "authenticated"
-          ],
-          "using": null,
-          "withCheck": "owner_profile_id = auth.uid()",
-          "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
-        },
-        {
-          "name": "organizations_delete",
-          "schema": "public",
-          "table": "organizations",
-          "command": "delete",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "owner_profile_id = auth.uid()",
-          "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
-        },
-        {
           "name": "organizations_select",
           "schema": "public",
           "table": "organizations",
@@ -14702,6 +14683,30 @@ export const rls = {
           "using": "public.can_manage_org(id)",
           "withCheck": "true",
           "sourceMigration": "supabase/migrations/20260506150000_fix_org_rls_recursion.sql"
+        },
+        {
+          "name": "organizations_insert",
+          "schema": "public",
+          "table": "organizations",
+          "command": "insert",
+          "roles": [
+            "authenticated"
+          ],
+          "using": null,
+          "withCheck": "owner_profile_id = auth.uid()",
+          "sourceMigration": "supabase/migrations/20260507120000_rebuild_org_insert_delete_policies.sql"
+        },
+        {
+          "name": "organizations_delete",
+          "schema": "public",
+          "table": "organizations",
+          "command": "delete",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "owner_profile_id = auth.uid()",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260507120000_rebuild_org_insert_delete_policies.sql"
         }
       ]
     },
@@ -16567,12 +16572,28 @@ export const sourceTrace = {
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
     },
     {
+      "key": "public.organizations.organizations_select",
+      "schema": "public",
+      "table": "organizations",
+      "name": "organizations_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260506150000_fix_org_rls_recursion.sql"
+    },
+    {
+      "key": "public.organizations.organizations_update",
+      "schema": "public",
+      "table": "organizations",
+      "name": "organizations_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260506150000_fix_org_rls_recursion.sql"
+    },
+    {
       "key": "public.organizations.organizations_insert",
       "schema": "public",
       "table": "organizations",
       "name": "organizations_insert",
       "command": "insert",
-      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260507120000_rebuild_org_insert_delete_policies.sql"
     },
     {
       "key": "public.organizations.organizations_delete",
@@ -16580,7 +16601,7 @@ export const sourceTrace = {
       "table": "organizations",
       "name": "organizations_delete",
       "command": "delete",
-      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260507120000_rebuild_org_insert_delete_policies.sql"
     },
     {
       "key": "public.organizations.organizations_select",

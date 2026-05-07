@@ -1685,12 +1685,28 @@
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
     },
     {
+      "key": "public.organizations.organizations_select",
+      "schema": "public",
+      "table": "organizations",
+      "name": "organizations_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260506150000_fix_org_rls_recursion.sql"
+    },
+    {
+      "key": "public.organizations.organizations_update",
+      "schema": "public",
+      "table": "organizations",
+      "name": "organizations_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260506150000_fix_org_rls_recursion.sql"
+    },
+    {
       "key": "public.organizations.organizations_insert",
       "schema": "public",
       "table": "organizations",
       "name": "organizations_insert",
       "command": "insert",
-      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260507120000_rebuild_org_insert_delete_policies.sql"
     },
     {
       "key": "public.organizations.organizations_delete",
@@ -1698,7 +1714,7 @@
       "table": "organizations",
       "name": "organizations_delete",
       "command": "delete",
-      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260507120000_rebuild_org_insert_delete_policies.sql"
     },
     {
       "key": "public.organizations.organizations_select",

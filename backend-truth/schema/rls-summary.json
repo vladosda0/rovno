@@ -1812,30 +1812,6 @@
       ],
       "policies": [
         {
-          "name": "organizations_insert",
-          "schema": "public",
-          "table": "organizations",
-          "command": "insert",
-          "roles": [
-            "authenticated"
-          ],
-          "using": null,
-          "withCheck": "owner_profile_id = auth.uid()",
-          "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
-        },
-        {
-          "name": "organizations_delete",
-          "schema": "public",
-          "table": "organizations",
-          "command": "delete",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "owner_profile_id = auth.uid()",
-          "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
-        },
-        {
           "name": "organizations_select",
           "schema": "public",
           "table": "organizations",
@@ -1858,6 +1834,30 @@
           "using": "public.can_manage_org(id)",
           "withCheck": "true",
           "sourceMigration": "supabase/migrations/20260506150000_fix_org_rls_recursion.sql"
+        },
+        {
+          "name": "organizations_insert",
+          "schema": "public",
+          "table": "organizations",
+          "command": "insert",
+          "roles": [
+            "authenticated"
+          ],
+          "using": null,
+          "withCheck": "owner_profile_id = auth.uid()",
+          "sourceMigration": "supabase/migrations/20260507120000_rebuild_org_insert_delete_policies.sql"
+        },
+        {
+          "name": "organizations_delete",
+          "schema": "public",
+          "table": "organizations",
+          "command": "delete",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "owner_profile_id = auth.uid()",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260507120000_rebuild_org_insert_delete_policies.sql"
         }
       ]
     },
