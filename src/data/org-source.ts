@@ -234,3 +234,53 @@ export async function listOrgMemberProfileIds(orgId: string): Promise<string[]> 
   return rows.map((row) => row.profile_id);
 }
 
+export interface AddOrgMembersByEmailResult {
+  added: string[];
+  notFound: string[];
+}
+
+/**
+ * Resolve emails to profiles and add each as a role='member' org_member.
+ * Profiles must exist in the system; unmatched emails are returned in
+ * notFound so the caller can surface a warning. Existing memberships are
+ * preserved (insert is idempotent via on conflict do nothing).
+ */
+export async function addOrgMembersByEmail(
+  orgId: string,
+  emails: string[],
+): Promise<AddOrgMembersByEmailResult> {
+  const cleaned = Array.from(
+    new Set(emails.map((email) => email.trim().toLowerCase()).filter(Boolean)),
+  );
+  if (cleaned.length === 0) return { added: [], notFound: [] };
+
+  const { data, error } = await rawSupabase
+    .from("profiles")
+    .select("id, email")
+    .in("email", cleaned);
+  if (error) throw error;
+
+  const rows = (data ?? []) as Array<{ id: string; email: string }>;
+  const foundByEmail = new Map(
+    rows.map((row) => [row.email.toLowerCase(), row.id] as const),
+  );
+  const notFound = cleaned.filter((email) => !foundByEmail.has(email));
+
+  if (foundByEmail.size > 0) {
+    const inserts = Array.from(foundByEmail.values()).map((profileId) => ({
+      org_id: orgId,
+      profile_id: profileId,
+      role: "member" as const,
+    }));
+    const { error: insertError } = await rawSupabase
+      .from("org_members")
+      .upsert(inserts, { onConflict: "org_id,profile_id", ignoreDuplicates: true });
+    if (insertError) throw insertError;
+  }
+
+  return {
+    added: Array.from(foundByEmail.keys()),
+    notFound,
+  };
+}
+

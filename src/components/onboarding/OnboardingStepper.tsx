@@ -1,4 +1,4 @@
-import { useEffect, useState, type MouseEvent } from "react";
+import { useState, type MouseEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ import { useWorkspaceMode } from "@/hooks/use-mock-data";
 import { workspaceQueryKeys } from "@/hooks/use-workspace-source";
 import { planningQueryKeys } from "@/hooks/use-planning-source";
 import { useCreateOrganization, useSetActiveOrg } from "@/hooks/use-orgs";
-import { isValidOrgSlug, suggestOrgSlug } from "@/data/org-source";
+import { suggestOrgSlug } from "@/data/org-source";
 import { toast } from "@/hooks/use-toast";
 
 const MAX_ONBOARDING_STAGES = 5;
@@ -52,17 +52,8 @@ export function OnboardingStepper({ onComplete, onProjectCreated }: OnboardingSt
   const showOrgStep = workspaceMode.kind === "supabase" || workspaceMode.kind === "pending-supabase";
   const [orgSectionExpanded, setOrgSectionExpanded] = useState(false);
   const [orgName, setOrgName] = useState("");
-  const [orgSlug, setOrgSlug] = useState("");
-  const [orgSlugTouched, setOrgSlugTouched] = useState(false);
   const createOrgMutation = useCreateOrganization();
   const setActiveOrgMutation = useSetActiveOrg();
-
-  useEffect(() => {
-    if (orgSlugTouched) return;
-    setOrgSlug(orgName ? suggestOrgSlug(orgName) : "");
-  }, [orgName, orgSlugTouched]);
-
-  const orgSlugIsValid = orgSlug.length === 0 || isValidOrgSlug(orgSlug);
 
   const progressIndices = (() => {
     const base = showAutomationStep ? [0, 1, 2, 3] : [1, 2, 3];
@@ -189,12 +180,11 @@ export function OnboardingStepper({ onComplete, onProjectCreated }: OnboardingSt
   async function handleCreateOrg() {
     if (createOrgMutation.isPending) return;
     const trimmedName = orgName.trim();
-    const trimmedSlug = orgSlug.trim().toLowerCase();
-    if (!trimmedName || !isValidOrgSlug(trimmedSlug)) return;
+    if (!trimmedName) return;
     try {
       const created = await createOrgMutation.mutateAsync({
         name: trimmedName,
-        slug: trimmedSlug,
+        slug: suggestOrgSlug(trimmedName),
       });
       try {
         await setActiveOrgMutation.mutateAsync(created.id);
@@ -495,23 +485,6 @@ export function OnboardingStepper({ onComplete, onProjectCreated }: OnboardingSt
                   disabled={createOrgMutation.isPending}
                 />
               </div>
-              <div className="space-y-1.5">
-                <label className="text-body-sm font-medium text-foreground">
-                  {t("onboarding.org.slugLabel")}
-                </label>
-                <Input
-                  value={orgSlug}
-                  onChange={(e) => {
-                    setOrgSlugTouched(true);
-                    setOrgSlug(e.target.value.toLowerCase());
-                  }}
-                  disabled={createOrgMutation.isPending}
-                />
-                <p className="text-caption text-muted-foreground">{t("onboarding.org.slugHint")}</p>
-                {!orgSlugIsValid && (
-                  <p className="text-caption text-destructive">{t("onboarding.org.slugInvalid")}</p>
-                )}
-              </div>
               <div className="flex gap-sp-2">
                 <Button
                   type="button"
@@ -528,8 +501,6 @@ export function OnboardingStepper({ onComplete, onProjectCreated }: OnboardingSt
                   disabled={
                     createOrgMutation.isPending
                     || orgName.trim().length === 0
-                    || !orgSlugIsValid
-                    || orgSlug.length === 0
                   }
                   className="flex-1 bg-accent text-accent-foreground hover:bg-accent/90"
                 >

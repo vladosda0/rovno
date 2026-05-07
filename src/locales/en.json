@@ -2755,5 +2755,16 @@
   "documents.import.success": "Imported {{count}} document(s)",
   "documents.import.error": "Couldn't import documents",
   "documents.linkedBadge": "Linked",
-  "documents.linkedOrphan": "Source removed"
+  "documents.linkedOrphan": "Source removed",
+  "createOrgDialog.invite.label": "Invite teammates",
+  "createOrgDialog.invite.placeholder": "anna@example.com, ivan@example.com",
+  "createOrgDialog.invite.hint": "Comma-separated emails. Already-registered users will be added immediately; others will receive a sign-up invite later.",
+  "createOrgDialog.docs.label": "Organization documents",
+  "createOrgDialog.docs.hint": "After creating the organization, upload files from the Documents tab in its card. They become shared with the whole team.",
+  "createOrgDialog.inviteSummary": "Added: {{added}}, not found: {{notFound}}",
+  "createOrgDialog.inviteFailed": "Couldn't add teammates",
+  "documents.upload.tabs.computer": "From computer",
+  "documents.upload.tabs.personal": "Personal docs",
+  "documents.upload.tabs.personalEmpty": "No personal documents yet. Upload some from the Documents tab on the home screen.",
+  "documents.upload.tabs.personalSubmit": "Attach selected"
 }

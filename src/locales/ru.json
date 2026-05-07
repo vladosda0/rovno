@@ -2777,5 +2777,16 @@
   "documents.import.success": "Импортировано документов: {{count}}",
   "documents.import.error": "Не удалось импортировать документы",
   "documents.linkedBadge": "Ссылка",
-  "documents.linkedOrphan": "Исходник удалён"
+  "documents.linkedOrphan": "Исходник удалён",
+  "createOrgDialog.invite.label": "Пригласить участников",
+  "createOrgDialog.invite.placeholder": "anna@example.com, ivan@example.com",
+  "createOrgDialog.invite.hint": "Перечислите email через запятую. Уже зарегистрированных добавим в организацию сразу — остальным приглашения отправим отдельно.",
+  "createOrgDialog.docs.label": "Документы организации",
+  "createOrgDialog.docs.hint": "Загрузить файлы можно сразу после создания во вкладке «Документы» в карточке организации. Они станут общими для всей команды.",
+  "createOrgDialog.inviteSummary": "Добавлено: {{added}}, не найдено: {{notFound}}",
+  "createOrgDialog.inviteFailed": "Не удалось добавить участников",
+  "documents.upload.tabs.computer": "С компьютера",
+  "documents.upload.tabs.personal": "Личные документы",
+  "documents.upload.tabs.personalEmpty": "Пока нет личных документов. Загрузите файлы во вкладке «Документы» главного экрана.",
+  "documents.upload.tabs.personalSubmit": "Прикрепить выбранные"
 }

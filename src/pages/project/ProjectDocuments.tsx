@@ -8,8 +8,6 @@ import {
   Building2,
   Download,
   Eye,
-  Home as HomeIcon,
-  Link2,
   Lock,
   MessageSquare,
   Plus,
@@ -53,7 +51,12 @@ import { ActionBar } from "@/components/ai/ActionBar";
 import { ProjectWorkflowEmptyState } from "@/components/ProjectWorkflowEmptyState";
 import { TutorialModal } from "@/components/onboarding/TutorialModal";
 import { ImportDocumentsDialog, type ImportSourceKind } from "@/components/documents/ImportDocumentsDialog";
-import { useActiveOrg } from "@/hooks/use-orgs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
+import { useActiveOrg, useImportDocumentsToProject } from "@/hooks/use-orgs";
+import { useWorkspaceDocuments } from "@/hooks/use-workspace-documents-source";
+import { documentsMediaQueryKeys } from "@/hooks/use-documents-media-source";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser, useProject, useWorkspaceMode } from "@/hooks/use-mock-data";
@@ -140,6 +143,11 @@ export default function ProjectDocuments() {
   const [pendingFinalizeIntentId, setPendingFinalizeIntentId] = useState<string | null>(null);
   const [importDialog, setImportDialog] = useState<ImportSourceKind | null>(null);
   const activeOrg = useActiveOrg();
+  const [uploadTab, setUploadTab] = useState<"computer" | "personal">("computer");
+  const [personalSelected, setPersonalSelected] = useState<Set<string>>(new Set());
+  const personalDocsQuery = useWorkspaceDocuments(isSupabaseMode ? user.id : undefined);
+  const importToProjectMutation = useImportDocumentsToProject(pid);
+  const projectDocsQueryClient = useQueryClient();
   const [generateOpen, setGenerateOpen] = useState(false);
   const [generateTitle, setGenerateTitle] = useState("");
   const [generateContent, setGenerateContent] = useState("");
@@ -182,6 +190,40 @@ export default function ProjectDocuments() {
     setUploadFile(null);
     setUploading(false);
     setPendingFinalizeIntentId(null);
+    setUploadTab("computer");
+    setPersonalSelected(new Set());
+  }
+
+  function togglePersonalSelected(id: string) {
+    setPersonalSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function handleAttachPersonal() {
+    if (personalSelected.size === 0 || importToProjectMutation.isPending) return;
+    try {
+      const result = await importToProjectMutation.mutateAsync({
+        kind: "workspace",
+        documentIds: Array.from(personalSelected),
+      });
+      if (isSupabaseMode) {
+        await projectDocsQueryClient.invalidateQueries({
+          queryKey: documentsMediaQueryKeys.projectDocuments(user.id, pid),
+        });
+      }
+      toast({ title: t("documents.import.success", { count: result.count }) });
+      closeUploadDialog();
+    } catch (error) {
+      toast({
+        title: t("documents.import.error"),
+        description: error instanceof Error ? error.message : undefined,
+        variant: "destructive",
+      });
+    }
   }
 
   async function handleUpload() {
@@ -676,17 +718,10 @@ export default function ProjectDocuments() {
                 <Button size="sm" variant="outline" onClick={() => setUploadOpen(true)}>
                   <Upload className="h-4 w-4 mr-1.5" /> {t("documents.action.upload")}
                 </Button>
-                {isSupabaseMode && (
-                  <>
-                    <Button size="sm" variant="outline" onClick={() => setImportDialog("workspace")}>
-                      <HomeIcon className="h-4 w-4 mr-1.5" /> {t("documents.import.fromHome")}
-                    </Button>
-                    {activeOrg && (
-                      <Button size="sm" variant="outline" onClick={() => setImportDialog("org")}>
-                        <Building2 className="h-4 w-4 mr-1.5" /> {t("documents.import.fromOrg", { name: activeOrg.name })}
-                      </Button>
-                    )}
-                  </>
+                {isSupabaseMode && activeOrg && (
+                  <Button size="sm" variant="outline" onClick={() => setImportDialog("org")}>
+                    <Building2 className="h-4 w-4 mr-1.5" /> {t("documents.import.fromOrg", { name: activeOrg.name })}
+                  </Button>
                 )}
                 {!isSupabaseMode && canManageDocuments && (
                   <Button size="sm" className="bg-accent text-accent-foreground hover:bg-accent/90" onClick={() => setGenerateOpen(true)}>
@@ -741,98 +776,164 @@ export default function ProjectDocuments() {
             <DialogTitle>{t("documents.upload.title")}</DialogTitle>
             <DialogDescription>{t("documents.upload.description")}</DialogDescription>
           </DialogHeader>
-          <div className="px-5 py-4 space-y-4">
-            <div className="rounded-panel bg-warning/10 p-3 text-caption text-warning">
-              {t("documents.upload.piiWarning")}
+          <Tabs value={uploadTab} onValueChange={(v) => setUploadTab(v as "computer" | "personal")}>
+            <div className="px-5 pt-4">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="computer">{t("documents.upload.tabs.computer")}</TabsTrigger>
+                <TabsTrigger value="personal" disabled={!isSupabaseMode}>
+                  {t("documents.upload.tabs.personal")}
+                </TabsTrigger>
+              </TabsList>
             </div>
-            {pendingFinalizeIntentId && (
-              <div className="rounded-panel bg-destructive/10 p-3 text-caption text-destructive">
-                {t("documents.upload.finalizeRetryNotice")}
-              </div>
-            )}
-            <div className="space-y-1">
-              <label className="text-body-sm font-medium text-foreground">{t("documents.upload.titleLabel")}</label>
-              <Input
-                value={uploadTitle}
-                onChange={(event) => setUploadTitle(event.target.value)}
-                placeholder={t("documents.upload.titlePlaceholder")}
-                autoFocus
-                disabled={uploading}
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-body-sm font-medium text-foreground">{t("documents.upload.fileLabel")}</label>
-              <Input
-                type="file"
-                disabled={uploading}
-                onChange={(event) => {
-                  const file = event.target.files?.[0] ?? null;
-                  setUploadFile(file);
-                  if (file && !uploadTitle.trim()) {
-                    setUploadTitle(file.name);
-                  }
-                }}
-              />
-              <p className="text-caption text-muted-foreground">
-                {isSupabaseMode
-                  ? t("documents.upload.fileHintSupabase")
-                  : t("documents.upload.fileHintLocal")}
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-body-sm font-medium text-foreground">{t("documents.upload.visibilityLabel")}</Label>
-              <RadioGroup
-                value={uploadVisibilityClass}
-                onValueChange={(v) => setUploadVisibilityClass(v as DocMediaVisibilityClass)}
-                className="flex flex-col gap-2"
-                disabled={uploading}
-              >
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="shared_project" id="doc-vis-shared" />
-                  <Label htmlFor="doc-vis-shared" className="font-normal cursor-pointer">
-                    {t("documents.upload.sharedLabel")}
-                  </Label>
+
+            <TabsContent value="computer" className="m-0">
+              <div className="px-5 py-4 space-y-4">
+                <div className="rounded-panel bg-warning/10 p-3 text-caption text-warning">
+                  {t("documents.upload.piiWarning")}
                 </div>
-                <div className="flex items-start space-x-2">
-                  <RadioGroupItem
-                    value="internal"
-                    id="doc-vis-internal"
-                    disabled={!canSelectInternalUpload}
-                  />
-                  <div className="grid gap-0.5">
-                    <Label
-                      htmlFor="doc-vis-internal"
-                      className={`font-normal ${canSelectInternalUpload ? "cursor-pointer" : "text-muted-foreground"}`}
-                    >
-                      {t("documents.upload.internalLabel")}
-                    </Label>
-                    {!canSelectInternalUpload && (
-                      <p className="text-caption text-muted-foreground pl-0">
-                        {t("documents.upload.internalDisabledHint")}
-                      </p>
-                    )}
+                {pendingFinalizeIntentId && (
+                  <div className="rounded-panel bg-destructive/10 p-3 text-caption text-destructive">
+                    {t("documents.upload.finalizeRetryNotice")}
                   </div>
+                )}
+                <div className="space-y-1">
+                  <label className="text-body-sm font-medium text-foreground">{t("documents.upload.titleLabel")}</label>
+                  <Input
+                    value={uploadTitle}
+                    onChange={(event) => setUploadTitle(event.target.value)}
+                    placeholder={t("documents.upload.titlePlaceholder")}
+                    autoFocus
+                    disabled={uploading}
+                  />
                 </div>
-              </RadioGroup>
-            </div>
-          </div>
+                <div className="space-y-1">
+                  <label className="text-body-sm font-medium text-foreground">{t("documents.upload.fileLabel")}</label>
+                  <Input
+                    type="file"
+                    disabled={uploading}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] ?? null;
+                      setUploadFile(file);
+                      if (file && !uploadTitle.trim()) {
+                        setUploadTitle(file.name);
+                      }
+                    }}
+                  />
+                  <p className="text-caption text-muted-foreground">
+                    {isSupabaseMode
+                      ? t("documents.upload.fileHintSupabase")
+                      : t("documents.upload.fileHintLocal")}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-body-sm font-medium text-foreground">{t("documents.upload.visibilityLabel")}</Label>
+                  <RadioGroup
+                    value={uploadVisibilityClass}
+                    onValueChange={(v) => setUploadVisibilityClass(v as DocMediaVisibilityClass)}
+                    className="flex flex-col gap-2"
+                    disabled={uploading}
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="shared_project" id="doc-vis-shared" />
+                      <Label htmlFor="doc-vis-shared" className="font-normal cursor-pointer">
+                        {t("documents.upload.sharedLabel")}
+                      </Label>
+                    </div>
+                    <div className="flex items-start space-x-2">
+                      <RadioGroupItem
+                        value="internal"
+                        id="doc-vis-internal"
+                        disabled={!canSelectInternalUpload}
+                      />
+                      <div className="grid gap-0.5">
+                        <Label
+                          htmlFor="doc-vis-internal"
+                          className={`font-normal ${canSelectInternalUpload ? "cursor-pointer" : "text-muted-foreground"}`}
+                        >
+                          {t("documents.upload.internalLabel")}
+                        </Label>
+                        {!canSelectInternalUpload && (
+                          <p className="text-caption text-muted-foreground pl-0">
+                            {t("documents.upload.internalDisabledHint")}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </RadioGroup>
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="personal" className="m-0">
+              <div className="px-5 py-4 space-y-3">
+                {personalDocsQuery.isPending ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                  </div>
+                ) : (personalDocsQuery.data ?? []).length === 0 ? (
+                  <p className="py-6 text-center text-body-sm text-muted-foreground">
+                    {t("documents.upload.tabs.personalEmpty")}
+                  </p>
+                ) : (
+                  <ul className="divide-y divide-border max-h-[40vh] overflow-y-auto">
+                    {(personalDocsQuery.data ?? []).map((doc) => {
+                      const isSelected = personalSelected.has(doc.id);
+                      return (
+                        <li key={doc.id}>
+                          <label className="flex items-start gap-3 py-2 cursor-pointer">
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={() => togglePersonalSelected(doc.id)}
+                              className="mt-1"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-body-sm font-medium text-foreground truncate">{doc.title}</p>
+                              {doc.description && (
+                                <p className="text-caption text-muted-foreground line-clamp-2">{doc.description}</p>
+                              )}
+                              <p className="text-[10px] text-muted-foreground mt-0.5">{doc.updatedAt.slice(0, 10)}</p>
+                            </div>
+                          </label>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            </TabsContent>
+          </Tabs>
+
           <DialogFooter className="border-t border-border px-5 py-4">
-            <Button variant="outline" onClick={closeUploadDialog} disabled={uploading}>{t("common.cancel")}</Button>
-            {pendingFinalizeIntentId ? (
-              <Button
-                className="bg-accent text-accent-foreground hover:bg-accent/90"
-                onClick={handleRetryFinalize}
-                disabled={uploading}
-              >
-                {uploading ? t("documents.upload.finalizing") : t("documents.upload.retryFinalize")}
-              </Button>
+            <Button variant="outline" onClick={closeUploadDialog} disabled={uploading || importToProjectMutation.isPending}>{t("common.cancel")}</Button>
+            {uploadTab === "computer" ? (
+              pendingFinalizeIntentId ? (
+                <Button
+                  className="bg-accent text-accent-foreground hover:bg-accent/90"
+                  onClick={handleRetryFinalize}
+                  disabled={uploading}
+                >
+                  {uploading ? t("documents.upload.finalizing") : t("documents.upload.retryFinalize")}
+                </Button>
+              ) : (
+                <Button
+                  className="bg-accent text-accent-foreground hover:bg-accent/90"
+                  onClick={handleUpload}
+                  disabled={uploading || (isSupabaseMode ? !uploadFile : (!uploadTitle.trim() && !uploadFile))}
+                >
+                  {uploading ? t("documents.upload.uploading") : t("documents.upload.submit")}
+                </Button>
+              )
             ) : (
               <Button
                 className="bg-accent text-accent-foreground hover:bg-accent/90"
-                onClick={handleUpload}
-                disabled={uploading || (isSupabaseMode ? !uploadFile : (!uploadTitle.trim() && !uploadFile))}
+                onClick={handleAttachPersonal}
+                disabled={personalSelected.size === 0 || importToProjectMutation.isPending}
               >
-                {uploading ? t("documents.upload.uploading") : t("documents.upload.submit")}
+                {importToProjectMutation.isPending
+                  ? t("documents.import.submitting")
+                  : t("documents.upload.tabs.personalSubmit")}
               </Button>
             )}
           </DialogFooter>
