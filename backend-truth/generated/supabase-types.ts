@@ -1674,6 +1674,12 @@ export type Database = {
           Args: Record<PropertyKey, never>
           Returns: Json
         }
+        "__debug_try_insert_org": {
+          Args: {
+          "p_name": string
+          }
+          Returns: Json
+        }
         "accept_project_invite": {
           Args: {
           "p_invite_token": string
