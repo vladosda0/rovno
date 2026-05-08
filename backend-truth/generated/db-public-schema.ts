@@ -323,6 +323,18 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260507160000_org_policy_resilience.sql",
       "sha256": "a47130e076fa6c22ad09aecf846006c0bcd5166fb102c75778e7095ff9df12ac"
+    },
+    {
+      "path": "supabase/migrations/20260508120000_fix_orgs_select_policy_returning_and_guc_name.sql",
+      "sha256": "2cfb9b1dfc4a5c01b234f1f586f32c7195e256e621c7fc93b994d3e022afae01"
+    },
+    {
+      "path": "supabase/migrations/20260509120000_import_documents_to_project_visibility.sql",
+      "sha256": "63f31e616056abaedb382bca02aade77bd31f99826af547f124cd69e0725bd4a"
+    },
+    {
+      "path": "supabase/migrations/20260509130000_workspace_org_doc_uploads_and_orphan_safe_links.sql",
+      "sha256": "3514aac8f21fbdc65624e0d8e079d0fef4a71e71af63344f4d7866462d809e76"
     }
   ],
   "generated_artifacts": [
@@ -426,6 +438,9 @@ export const manifest = {
     "sql/20260507140000_debug_org_insert_rpc.sql",
     "sql/20260507150000_drop_org_debug_rpcs.sql",
     "sql/20260507160000_org_policy_resilience.sql",
+    "sql/20260508120000_fix_orgs_select_policy_returning_and_guc_name.sql",
+    "sql/20260509120000_import_documents_to_project_visibility.sql",
+    "sql/20260509130000_workspace_org_doc_uploads_and_orphan_safe_links.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -2718,9 +2733,9 @@ export const tables = {
           "type": "check",
           "name": "documents_link_consistent",
           "columns": [],
-          "expression": "(linked_external_kind is null\n      and linked_workspace_document_id is null\n      and linked_org_document_id is null)\n    or (linked_external_kind = 'workspace'\n      and linked_workspace_document_id is not null\n      and linked_org_document_id is null)\n    or (linked_external_kind = 'org'\n      and linked_org_document_id is not null\n      and linked_workspace_document_id is null)",
+          "expression": "(linked_external_kind is null\n      and linked_workspace_document_id is null\n      and linked_org_document_id is null)\n    or (linked_external_kind = 'workspace'\n      and linked_org_document_id is null)\n    or (linked_external_kind = 'org'\n      and linked_workspace_document_id is null)",
           "usingIndex": null,
-          "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+          "sourceMigration": "supabase/migrations/20260509130000_workspace_org_doc_uploads_and_orphan_safe_links.sql"
         }
       ],
       "indexes": [
@@ -10338,8 +10353,8 @@ export const checks = {
       "constraintName": "documents_link_consistent",
       "kind": "expression",
       "allowedValues": null,
-      "expression": "(linked_external_kind is null\n      and linked_workspace_document_id is null\n      and linked_org_document_id is null)\n    or (linked_external_kind = 'workspace'\n      and linked_workspace_document_id is not null\n      and linked_org_document_id is null)\n    or (linked_external_kind = 'org'\n      and linked_org_document_id is not null\n      and linked_workspace_document_id is null)",
-      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+      "expression": "(linked_external_kind is null\n      and linked_workspace_document_id is null\n      and linked_org_document_id is null)\n    or (linked_external_kind = 'workspace'\n      and linked_org_document_id is null)\n    or (linked_external_kind = 'org'\n      and linked_workspace_document_id is null)",
+      "sourceMigration": "supabase/migrations/20260509130000_workspace_org_doc_uploads_and_orphan_safe_links.sql"
     },
     {
       "schema": "public",
@@ -12691,7 +12706,7 @@ export const functions = {
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": false,
-      "sourceMigration": "supabase/migrations/20260506140000_fix_org_delete_cascade_through_last_owner_guard.sql",
+      "sourceMigration": "supabase/migrations/20260508120000_fix_orgs_select_policy_returning_and_guc_name.sql",
       "triggerUsages": [
         {
           "table": "public.org_members",
@@ -12855,7 +12870,7 @@ export const functions = {
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": false,
-      "sourceMigration": "supabase/migrations/20260506140000_fix_org_delete_cascade_through_last_owner_guard.sql",
+      "sourceMigration": "supabase/migrations/20260508120000_fix_orgs_select_policy_returning_and_guc_name.sql",
       "triggerUsages": [
         {
           "table": "public.organizations",
@@ -12876,6 +12891,206 @@ export const functions = {
       "searchPath": "public, pg_catalog",
       "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260507160000_org_policy_resilience.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "import_documents_to_project",
+      "signature": "public.import_documents_to_project(uuid, text, uuid[], text)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_source_kind",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_source_doc_ids",
+          "type": "uuid[]",
+          "identityType": "uuid[]"
+        },
+        {
+          "name": "p_visibility_class",
+          "type": "text default 'shared_project'",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "setof public.documents",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260509120000_import_documents_to_project_visibility.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "prepare_workspace_document_upload",
+      "signature": "public.prepare_workspace_document_upload(text, text, text, text, bigint, text)",
+      "args": [
+        {
+          "name": "p_type",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_title",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_client_filename",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_mime_type",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_size_bytes",
+          "type": "bigint",
+          "identityType": "bigint"
+        },
+        {
+          "name": "p_description",
+          "type": "text default null",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "table ( upload_intent_id uuid, bucket text, object_path text, filename text, mime_type text, size_bytes bigint )",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260509130000_workspace_org_doc_uploads_and_orphan_safe_links.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "finalize_workspace_document_upload",
+      "signature": "public.finalize_workspace_document_upload(uuid, text, text, text)",
+      "args": [
+        {
+          "name": "p_upload_intent_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_type",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_title",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_description",
+          "type": "text default null",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "table ( workspace_document_id uuid, workspace_document_version_id uuid, storage_object_id uuid, bucket text, object_path text, filename text )",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260509130000_workspace_org_doc_uploads_and_orphan_safe_links.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "prepare_org_document_upload",
+      "signature": "public.prepare_org_document_upload(uuid, text, text, text, text, bigint, text)",
+      "args": [
+        {
+          "name": "p_org_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_type",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_title",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_client_filename",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_mime_type",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_size_bytes",
+          "type": "bigint",
+          "identityType": "bigint"
+        },
+        {
+          "name": "p_description",
+          "type": "text default null",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "table ( upload_intent_id uuid, bucket text, object_path text, filename text, mime_type text, size_bytes bigint )",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260509130000_workspace_org_doc_uploads_and_orphan_safe_links.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "finalize_org_document_upload",
+      "signature": "public.finalize_org_document_upload(uuid, text, text, text)",
+      "args": [
+        {
+          "name": "p_upload_intent_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_type",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_title",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_description",
+          "type": "text default null",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "table ( org_document_id uuid, org_document_version_id uuid, storage_object_id uuid, bucket text, object_path text, filename text )",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260509130000_workspace_org_doc_uploads_and_orphan_safe_links.sql",
       "triggerUsages": []
     }
   ]
@@ -14695,18 +14910,6 @@ export const rls = {
       ],
       "policies": [
         {
-          "name": "organizations_select",
-          "schema": "public",
-          "table": "organizations",
-          "command": "select",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "public.is_org_member(id)",
-          "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260507160000_org_policy_resilience.sql"
-        },
-        {
           "name": "organizations_insert",
           "schema": "public",
           "table": "organizations",
@@ -14741,6 +14944,18 @@ export const rls = {
           "using": "owner_profile_id = auth.uid()",
           "withCheck": null,
           "sourceMigration": "supabase/migrations/20260507160000_org_policy_resilience.sql"
+        },
+        {
+          "name": "organizations_select",
+          "schema": "public",
+          "table": "organizations",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "owner_profile_id = auth.uid()\n    or public.is_org_member(id)",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260508120000_fix_orgs_select_policy_returning_and_guc_name.sql"
         }
       ]
     },
@@ -15641,7 +15856,7 @@ export const sourceTrace = {
       "schema": "public",
       "name": "enforce_org_member_last_owner",
       "signature": "public.enforce_org_member_last_owner()",
-      "sourceMigration": "supabase/migrations/20260506140000_fix_org_delete_cascade_through_last_owner_guard.sql"
+      "sourceMigration": "supabase/migrations/20260508120000_fix_orgs_select_policy_returning_and_guc_name.sql"
     },
     {
       "key": "public.guard_organization_owner_change",
@@ -15697,7 +15912,7 @@ export const sourceTrace = {
       "schema": "public",
       "name": "mark_organization_deleting",
       "signature": "public.mark_organization_deleting()",
-      "sourceMigration": "supabase/migrations/20260506140000_fix_org_delete_cascade_through_last_owner_guard.sql"
+      "sourceMigration": "supabase/migrations/20260508120000_fix_orgs_select_policy_returning_and_guc_name.sql"
     },
     {
       "key": "public.__debug_org_rls_state2",
@@ -15705,6 +15920,41 @@ export const sourceTrace = {
       "name": "__debug_org_rls_state2",
       "signature": "public.__debug_org_rls_state2()",
       "sourceMigration": "supabase/migrations/20260507160000_org_policy_resilience.sql"
+    },
+    {
+      "key": "public.import_documents_to_project",
+      "schema": "public",
+      "name": "import_documents_to_project",
+      "signature": "public.import_documents_to_project(uuid, text, uuid[], text)",
+      "sourceMigration": "supabase/migrations/20260509120000_import_documents_to_project_visibility.sql"
+    },
+    {
+      "key": "public.prepare_workspace_document_upload",
+      "schema": "public",
+      "name": "prepare_workspace_document_upload",
+      "signature": "public.prepare_workspace_document_upload(text, text, text, text, bigint, text)",
+      "sourceMigration": "supabase/migrations/20260509130000_workspace_org_doc_uploads_and_orphan_safe_links.sql"
+    },
+    {
+      "key": "public.finalize_workspace_document_upload",
+      "schema": "public",
+      "name": "finalize_workspace_document_upload",
+      "signature": "public.finalize_workspace_document_upload(uuid, text, text, text)",
+      "sourceMigration": "supabase/migrations/20260509130000_workspace_org_doc_uploads_and_orphan_safe_links.sql"
+    },
+    {
+      "key": "public.prepare_org_document_upload",
+      "schema": "public",
+      "name": "prepare_org_document_upload",
+      "signature": "public.prepare_org_document_upload(uuid, text, text, text, text, bigint, text)",
+      "sourceMigration": "supabase/migrations/20260509130000_workspace_org_doc_uploads_and_orphan_safe_links.sql"
+    },
+    {
+      "key": "public.finalize_org_document_upload",
+      "schema": "public",
+      "name": "finalize_org_document_upload",
+      "signature": "public.finalize_org_document_upload(uuid, text, text, text)",
+      "sourceMigration": "supabase/migrations/20260509130000_workspace_org_doc_uploads_and_orphan_safe_links.sql"
     }
   ],
   "policies": [
@@ -16613,14 +16863,6 @@ export const sourceTrace = {
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
     },
     {
-      "key": "public.organizations.organizations_select",
-      "schema": "public",
-      "table": "organizations",
-      "name": "organizations_select",
-      "command": "select",
-      "sourceMigration": "supabase/migrations/20260507160000_org_policy_resilience.sql"
-    },
-    {
       "key": "public.organizations.organizations_insert",
       "schema": "public",
       "table": "organizations",
@@ -16643,6 +16885,14 @@ export const sourceTrace = {
       "name": "organizations_delete",
       "command": "delete",
       "sourceMigration": "supabase/migrations/20260507160000_org_policy_resilience.sql"
+    },
+    {
+      "key": "public.organizations.organizations_select",
+      "schema": "public",
+      "table": "organizations",
+      "name": "organizations_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260508120000_fix_orgs_select_policy_returning_and_guc_name.sql"
     },
     {
       "key": "public.org_members.org_members_select",

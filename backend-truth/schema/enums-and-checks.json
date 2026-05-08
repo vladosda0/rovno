@@ -502,8 +502,8 @@
       "constraintName": "documents_link_consistent",
       "kind": "expression",
       "allowedValues": null,
-      "expression": "(linked_external_kind is null\n      and linked_workspace_document_id is null\n      and linked_org_document_id is null)\n    or (linked_external_kind = 'workspace'\n      and linked_workspace_document_id is not null\n      and linked_org_document_id is null)\n    or (linked_external_kind = 'org'\n      and linked_org_document_id is not null\n      and linked_workspace_document_id is null)",
-      "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+      "expression": "(linked_external_kind is null\n      and linked_workspace_document_id is null\n      and linked_org_document_id is null)\n    or (linked_external_kind = 'workspace'\n      and linked_org_document_id is null)\n    or (linked_external_kind = 'org'\n      and linked_workspace_document_id is null)",
+      "sourceMigration": "supabase/migrations/20260509130000_workspace_org_doc_uploads_and_orphan_safe_links.sql"
     },
     {
       "schema": "public",
