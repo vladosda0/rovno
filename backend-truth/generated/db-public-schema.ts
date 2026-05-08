@@ -335,6 +335,10 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260509130000_workspace_org_doc_uploads_and_orphan_safe_links.sql",
       "sha256": "3514aac8f21fbdc65624e0d8e079d0fef4a71e71af63344f4d7866462d809e76"
+    },
+    {
+      "path": "supabase/migrations/20260509140000_addresses_pr71_codex_findings.sql",
+      "sha256": "2f30d9d1dc5641c1ab4c1f0eee04f9d291f690022ffc84919af6fe9cb0201e80"
     }
   ],
   "generated_artifacts": [
@@ -441,6 +445,7 @@ export const manifest = {
     "sql/20260508120000_fix_orgs_select_policy_returning_and_guc_name.sql",
     "sql/20260509120000_import_documents_to_project_visibility.sql",
     "sql/20260509130000_workspace_org_doc_uploads_and_orphan_safe_links.sql",
+    "sql/20260509140000_addresses_pr71_codex_findings.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -12831,36 +12836,6 @@ export const functions = {
     },
     {
       "schema": "public",
-      "name": "import_documents_to_project",
-      "signature": "public.import_documents_to_project(uuid, text, uuid[])",
-      "args": [
-        {
-          "name": "p_project_id",
-          "type": "uuid",
-          "identityType": "uuid"
-        },
-        {
-          "name": "p_source_kind",
-          "type": "text",
-          "identityType": "text"
-        },
-        {
-          "name": "p_source_doc_ids",
-          "type": "uuid[]",
-          "identityType": "uuid[]"
-        }
-      ],
-      "returnType": "setof public.documents",
-      "language": "plpgsql",
-      "volatility": "volatile",
-      "securityDefiner": true,
-      "searchPath": "public",
-      "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260506160000_import_documents_creates_versions.sql",
-      "triggerUsages": []
-    },
-    {
-      "schema": "public",
       "name": "mark_organization_deleting",
       "signature": "public.mark_organization_deleting()",
       "args": [],
@@ -12924,7 +12899,7 @@ export const functions = {
       "volatility": "volatile",
       "securityDefiner": true,
       "searchPath": "public",
-      "authenticatedExecute": false,
+      "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260509120000_import_documents_to_project_visibility.sql",
       "triggerUsages": []
     },
@@ -13005,7 +12980,7 @@ export const functions = {
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260509130000_workspace_org_doc_uploads_and_orphan_safe_links.sql",
+      "sourceMigration": "supabase/migrations/20260509140000_addresses_pr71_codex_findings.sql",
       "triggerUsages": []
     },
     {
@@ -13090,7 +13065,7 @@ export const functions = {
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260509130000_workspace_org_doc_uploads_and_orphan_safe_links.sql",
+      "sourceMigration": "supabase/migrations/20260509140000_addresses_pr71_codex_findings.sql",
       "triggerUsages": []
     }
   ]
@@ -15901,13 +15876,6 @@ export const sourceTrace = {
       "sourceMigration": "supabase/migrations/20260506120300_org_rpcs.sql"
     },
     {
-      "key": "public.import_documents_to_project",
-      "schema": "public",
-      "name": "import_documents_to_project",
-      "signature": "public.import_documents_to_project(uuid, text, uuid[])",
-      "sourceMigration": "supabase/migrations/20260506160000_import_documents_creates_versions.sql"
-    },
-    {
       "key": "public.mark_organization_deleting",
       "schema": "public",
       "name": "mark_organization_deleting",
@@ -15940,7 +15908,7 @@ export const sourceTrace = {
       "schema": "public",
       "name": "finalize_workspace_document_upload",
       "signature": "public.finalize_workspace_document_upload(uuid, text, text, text)",
-      "sourceMigration": "supabase/migrations/20260509130000_workspace_org_doc_uploads_and_orphan_safe_links.sql"
+      "sourceMigration": "supabase/migrations/20260509140000_addresses_pr71_codex_findings.sql"
     },
     {
       "key": "public.prepare_org_document_upload",
@@ -15954,7 +15922,7 @@ export const sourceTrace = {
       "schema": "public",
       "name": "finalize_org_document_upload",
       "signature": "public.finalize_org_document_upload(uuid, text, text, text)",
-      "sourceMigration": "supabase/migrations/20260509130000_workspace_org_doc_uploads_and_orphan_safe_links.sql"
+      "sourceMigration": "supabase/migrations/20260509140000_addresses_pr71_codex_findings.sql"
     }
   ],
   "policies": [

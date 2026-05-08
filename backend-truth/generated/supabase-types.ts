@@ -1920,6 +1920,7 @@ export type Database = {
           "p_project_id": string
           "p_source_kind": string
           "p_source_doc_ids": unknown
+          "p_visibility_class": unknown
           }
           Returns: unknown
         }

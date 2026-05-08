@@ -765,13 +765,6 @@
       "sourceMigration": "supabase/migrations/20260506120300_org_rpcs.sql"
     },
     {
-      "key": "public.import_documents_to_project",
-      "schema": "public",
-      "name": "import_documents_to_project",
-      "signature": "public.import_documents_to_project(uuid, text, uuid[])",
-      "sourceMigration": "supabase/migrations/20260506160000_import_documents_creates_versions.sql"
-    },
-    {
       "key": "public.mark_organization_deleting",
       "schema": "public",
       "name": "mark_organization_deleting",
@@ -804,7 +797,7 @@
       "schema": "public",
       "name": "finalize_workspace_document_upload",
       "signature": "public.finalize_workspace_document_upload(uuid, text, text, text)",
-      "sourceMigration": "supabase/migrations/20260509130000_workspace_org_doc_uploads_and_orphan_safe_links.sql"
+      "sourceMigration": "supabase/migrations/20260509140000_addresses_pr71_codex_findings.sql"
     },
     {
       "key": "public.prepare_org_document_upload",
@@ -818,7 +811,7 @@
       "schema": "public",
       "name": "finalize_org_document_upload",
       "signature": "public.finalize_org_document_upload(uuid, text, text, text)",
-      "sourceMigration": "supabase/migrations/20260509130000_workspace_org_doc_uploads_and_orphan_safe_links.sql"
+      "sourceMigration": "supabase/migrations/20260509140000_addresses_pr71_codex_findings.sql"
     }
   ],
   "policies": [
