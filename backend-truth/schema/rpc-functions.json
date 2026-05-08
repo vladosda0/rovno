@@ -1831,36 +1831,6 @@
     },
     {
       "schema": "public",
-      "name": "import_documents_to_project",
-      "signature": "public.import_documents_to_project(uuid, text, uuid[])",
-      "args": [
-        {
-          "name": "p_project_id",
-          "type": "uuid",
-          "identityType": "uuid"
-        },
-        {
-          "name": "p_source_kind",
-          "type": "text",
-          "identityType": "text"
-        },
-        {
-          "name": "p_source_doc_ids",
-          "type": "uuid[]",
-          "identityType": "uuid[]"
-        }
-      ],
-      "returnType": "setof public.documents",
-      "language": "plpgsql",
-      "volatility": "volatile",
-      "securityDefiner": true,
-      "searchPath": "public",
-      "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260506160000_import_documents_creates_versions.sql",
-      "triggerUsages": []
-    },
-    {
-      "schema": "public",
       "name": "mark_organization_deleting",
       "signature": "public.mark_organization_deleting()",
       "args": [],
@@ -1924,7 +1894,7 @@
       "volatility": "volatile",
       "securityDefiner": true,
       "searchPath": "public",
-      "authenticatedExecute": false,
+      "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260509120000_import_documents_to_project_visibility.sql",
       "triggerUsages": []
     },
@@ -2005,7 +1975,7 @@
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260509130000_workspace_org_doc_uploads_and_orphan_safe_links.sql",
+      "sourceMigration": "supabase/migrations/20260509140000_addresses_pr71_codex_findings.sql",
       "triggerUsages": []
     },
     {
@@ -2090,7 +2060,7 @@
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260509130000_workspace_org_doc_uploads_and_orphan_safe_links.sql",
+      "sourceMigration": "supabase/migrations/20260509140000_addresses_pr71_codex_findings.sql",
       "triggerUsages": []
     }
   ]

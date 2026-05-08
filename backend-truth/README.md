@@ -107,6 +107,7 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20260508120000_fix_orgs_select_policy_returning_and_guc_name.sql`
 - `supabase/migrations/20260509120000_import_documents_to_project_visibility.sql`
 - `supabase/migrations/20260509130000_workspace_org_doc_uploads_and_orphan_safe_links.sql`
+- `supabase/migrations/20260509140000_addresses_pr71_codex_findings.sql`
 
 ## Exclusions
 
