@@ -1812,18 +1812,6 @@
       ],
       "policies": [
         {
-          "name": "organizations_select",
-          "schema": "public",
-          "table": "organizations",
-          "command": "select",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "public.is_org_member(id)",
-          "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260507160000_org_policy_resilience.sql"
-        },
-        {
           "name": "organizations_insert",
           "schema": "public",
           "table": "organizations",
@@ -1858,6 +1846,18 @@
           "using": "owner_profile_id = auth.uid()",
           "withCheck": null,
           "sourceMigration": "supabase/migrations/20260507160000_org_policy_resilience.sql"
+        },
+        {
+          "name": "organizations_select",
+          "schema": "public",
+          "table": "organizations",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "owner_profile_id = auth.uid()\n    or public.is_org_member(id)",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260508120000_fix_orgs_select_policy_returning_and_guc_name.sql"
         }
       ]
     },

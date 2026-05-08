@@ -66,7 +66,7 @@ Constraints:
 - unnamed check (expression `origin in ('project_creation', 'uploaded', 'manual', 'ai_generated')`)
 - unnamed check (expression `visibility_class in ('shared_project', 'internal')`)
 - unnamed check (expression `linked_external_kind is null or linked_external_kind in ('workspace', 'org')`)
-- `documents_link_consistent` check (expression `(linked_external_kind is null and linked_workspace_document_id is null and linked_org_document_id is null) or (linked_external_kind = 'workspace' and linked_workspace_document_id is not null and linked_org_document_id is null) or (linked_external_kind = 'org' and linked_org_document_id is not null and linked_workspace_document_id is null)`)
+- `documents_link_consistent` check (expression `(linked_external_kind is null and linked_workspace_document_id is null and linked_org_document_id is null) or (linked_external_kind = 'workspace' and linked_org_document_id is null) or (linked_external_kind = 'org' and linked_workspace_document_id is null)`)
 
 Indexes:
 - `idx_documents_project_id` on (`project_id`)
