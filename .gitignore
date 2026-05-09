@@ -12,9 +12,13 @@ dist
 dist-ssr
 *.local
 
-# Local env overrides (README: copy from `.env.example` to `.env.local`).
-# Track `.env` only in exceptional cases; prefer untracked `.env` / `.env.local`.
-.env
+# Local env overrides — never tracked. Use .env.example as the template.
+# Active `.env` is selected via `cp .env.<target> .env`:
+#   .env.cloud     — Cloud Supabase staging (DEFAULT for local dev)
+#   .env.selfhost  — self-host prod (emergency debug only)
+#   .env.docker    — local Docker stack via `supabase start`
+.env*
+!.env.example
 
 # Editor directories and files
 .vscode/*
