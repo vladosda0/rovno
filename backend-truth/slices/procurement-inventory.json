@@ -11,6 +11,7 @@
   "sourceMigrations": [
     "supabase/migrations/20260306163000_inventory_foundation.sql",
     "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
+    "supabase/migrations/20260509082719_fix_inventory_balances_trigger_on_project_cascade.sql",
     "supabase/migrations/20260406183000_procurement_operational_summary_requested_and_ordered_line_types.sql",
     "supabase/migrations/20260419120000_session3c_procurement_ai_in_stock_evidence.sql",
     "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
@@ -1571,7 +1572,7 @@
       "volatility": "volatile",
       "securityDefiner": true,
       "searchPath": "public",
-      "sourceMigration": "supabase/migrations/20260306163000_inventory_foundation.sql",
+      "sourceMigration": "supabase/migrations/20260509082719_fix_inventory_balances_trigger_on_project_cascade.sql",
       "authenticatedExecute": false,
       "triggerUsages": [
         {

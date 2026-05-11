@@ -329,6 +329,10 @@ export const manifest = {
       "sha256": "2cfb9b1dfc4a5c01b234f1f586f32c7195e256e621c7fc93b994d3e022afae01"
     },
     {
+      "path": "supabase/migrations/20260509082719_fix_inventory_balances_trigger_on_project_cascade.sql",
+      "sha256": "001805b9745f263b51f73d029d129625e7d5e06cb0daee61c7ee463688a84ebf"
+    },
+    {
       "path": "supabase/migrations/20260509120000_import_documents_to_project_visibility.sql",
       "sha256": "63f31e616056abaedb382bca02aade77bd31f99826af547f124cd69e0725bd4a"
     },
@@ -443,6 +447,7 @@ export const manifest = {
     "sql/20260507150000_drop_org_debug_rpcs.sql",
     "sql/20260507160000_org_policy_resilience.sql",
     "sql/20260508120000_fix_orgs_select_policy_returning_and_guc_name.sql",
+    "sql/20260509082719_fix_inventory_balances_trigger_on_project_cascade.sql",
     "sql/20260509120000_import_documents_to_project_visibility.sql",
     "sql/20260509130000_workspace_org_doc_uploads_and_orphan_safe_links.sql",
     "sql/20260509140000_addresses_pr71_codex_findings.sql",
@@ -11222,7 +11227,7 @@ export const functions = {
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": false,
-      "sourceMigration": "supabase/migrations/20260306163000_inventory_foundation.sql",
+      "sourceMigration": "supabase/migrations/20260509082719_fix_inventory_balances_trigger_on_project_cascade.sql",
       "triggerUsages": [
         {
           "table": "public.inventory_movements",
@@ -15411,7 +15416,7 @@ export const sourceTrace = {
       "schema": "public",
       "name": "sync_inventory_balances",
       "signature": "public.sync_inventory_balances()",
-      "sourceMigration": "supabase/migrations/20260306163000_inventory_foundation.sql"
+      "sourceMigration": "supabase/migrations/20260509082719_fix_inventory_balances_trigger_on_project_cascade.sql"
     },
     {
       "key": "public.handle_profile_defaults",
@@ -17539,6 +17544,7 @@ export const sourceTrace = {
       "sourceMigrations": [
         "supabase/migrations/20260306163000_inventory_foundation.sql",
         "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
+        "supabase/migrations/20260509082719_fix_inventory_balances_trigger_on_project_cascade.sql",
         "supabase/migrations/20260406183000_procurement_operational_summary_requested_and_ordered_line_types.sql",
         "supabase/migrations/20260419120000_session3c_procurement_ai_in_stock_evidence.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
@@ -17957,6 +17963,7 @@ export const slices = {
       "sourceMigrations": [
         "supabase/migrations/20260306163000_inventory_foundation.sql",
         "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
+        "supabase/migrations/20260509082719_fix_inventory_balances_trigger_on_project_cascade.sql",
         "supabase/migrations/20260406183000_procurement_operational_summary_requested_and_ordered_line_types.sql",
         "supabase/migrations/20260419120000_session3c_procurement_ai_in_stock_evidence.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
