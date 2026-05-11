@@ -348,6 +348,7 @@
   "projectsTab.deleteSuccess": "Проект удалён",
   "projectsTab.deleteFailed": "Не удалось удалить проект",
   "projectsTab.deleteFailedGeneric": "Не удалось удалить проект.",
+  "projectsTab.deleteNotPermitted": "У вас нет прав на удаление этого проекта. Удалять может только владелец.",
   "tasksTab.search": "Поиск задач…",
   "tasksTab.allStatuses": "Все статусы",
   "tasksTab.allProjects": "Все проекты",

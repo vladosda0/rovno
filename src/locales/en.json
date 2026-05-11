@@ -348,6 +348,7 @@
   "projectsTab.deleteSuccess": "Project deleted",
   "projectsTab.deleteFailed": "Failed to delete project",
   "projectsTab.deleteFailedGeneric": "Unable to delete project.",
+  "projectsTab.deleteNotPermitted": "You don't have permission to delete this project. Only the owner can delete it.",
   "tasksTab.search": "Search tasks…",
   "tasksTab.allStatuses": "All statuses",
   "tasksTab.allProjects": "All projects",

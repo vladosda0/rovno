@@ -16,9 +16,9 @@ import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
   AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel,
 } from "@/components/ui/alert-dialog";
-import { useProjects, useWorkspaceMode } from "@/hooks/use-mock-data";
+import { useCurrentUser, useProjects, useWorkspaceMode } from "@/hooks/use-mock-data";
 import { getPlanningSource } from "@/data/planning-source";
-import { getWorkspaceSource, resolveWorkspaceMode } from "@/data/workspace-source";
+import { getWorkspaceSource, ProjectDeleteNotPermittedError, resolveWorkspaceMode } from "@/data/workspace-source";
 import { planningQueryKeys } from "@/hooks/use-planning-source";
 import { toast } from "@/hooks/use-toast";
 import { workspaceQueryKeys } from "@/hooks/use-workspace-source";
@@ -44,6 +44,7 @@ interface FolderItem {
 export function ProjectsTab() {
   const { t } = useTranslation();
   const projects = useProjects();
+  const currentUser = useCurrentUser();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const workspaceMode = useWorkspaceMode();
@@ -178,9 +179,14 @@ export function ProjectsTab() {
       setDeleteTarget(null);
       setDeleteConfirmInput("");
     } catch (error) {
+      const description = error instanceof ProjectDeleteNotPermittedError
+        ? t("projectsTab.deleteNotPermitted")
+        : error instanceof Error
+          ? error.message
+          : t("projectsTab.deleteFailedGeneric");
       toast({
         title: t("projectsTab.deleteFailed"),
-        description: error instanceof Error ? error.message : t("projectsTab.deleteFailedGeneric"),
+        description,
         variant: "destructive",
       });
     } finally {
@@ -333,15 +339,17 @@ export function ProjectsTab() {
       <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
           {filteredProjects.map((p) => (
             <div key={p.id} className="glass group relative space-y-2 rounded-card p-4 sm:p-6">
-              <button
-                type="button"
-                onClick={(event) => requestDeleteProject(event, { id: p.id, title: p.title })}
-                className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
-                aria-label={t("projectsTab.deleteProjectAria", { title: p.title })}
-                title={t("projectsTab.deleteProject")}
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
+              {p.owner_id === currentUser.id && (
+                <button
+                  type="button"
+                  onClick={(event) => requestDeleteProject(event, { id: p.id, title: p.title })}
+                  className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
+                  aria-label={t("projectsTab.deleteProjectAria", { title: p.title })}
+                  title={t("projectsTab.deleteProject")}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
               <Link to={`/project/${p.id}/dashboard`} className="space-y-2">
                 <div className="flex items-start justify-between gap-2 pr-8">
                   <h3 className="text-body font-semibold text-foreground truncate">{p.title}</h3>
