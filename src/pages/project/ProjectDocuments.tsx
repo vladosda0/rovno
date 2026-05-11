@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FileInput } from "@/components/ui/file-input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   AlertDialog,
@@ -52,8 +53,15 @@ import { ProjectWorkflowEmptyState } from "@/components/ProjectWorkflowEmptyStat
 import { TutorialModal } from "@/components/onboarding/TutorialModal";
 import { ImportDocumentsDialog, type ImportSourceKind } from "@/components/documents/ImportDocumentsDialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useActiveOrg, useImportDocumentsToProject } from "@/hooks/use-orgs";
+import { useActiveOrg, useImportDocumentsToProject, useOrgDocuments } from "@/hooks/use-orgs";
 import { useWorkspaceDocuments } from "@/hooks/use-workspace-documents-source";
 import { documentsMediaQueryKeys } from "@/hooks/use-documents-media-source";
 import { useQueryClient } from "@tanstack/react-query";
@@ -85,6 +93,63 @@ import {
 import type { ProposalChange } from "@/types/ai";
 
 const DOCUMENT_DEFAULT_TYPE = "specification";
+
+interface ImportVisibilitySelectorProps {
+  value: DocMediaVisibilityClass;
+  onChange: (value: DocMediaVisibilityClass) => void;
+  canSelectInternal: boolean;
+  disabled?: boolean;
+  t: (key: string) => string;
+}
+
+function ImportVisibilitySelector({
+  value,
+  onChange,
+  canSelectInternal,
+  disabled,
+  t,
+}: ImportVisibilitySelectorProps) {
+  return (
+    <div className="space-y-2 pt-2 border-t border-border">
+      <Label className="text-body-sm font-medium text-foreground">
+        {t("documents.upload.visibilityLabel")}
+      </Label>
+      <RadioGroup
+        value={value}
+        onValueChange={(v) => onChange(v as DocMediaVisibilityClass)}
+        className="flex flex-col gap-2"
+        disabled={disabled}
+      >
+        <div className="flex items-center space-x-2">
+          <RadioGroupItem value="shared_project" id="import-vis-shared" />
+          <Label htmlFor="import-vis-shared" className="font-normal cursor-pointer">
+            {t("documents.upload.sharedLabel")}
+          </Label>
+        </div>
+        <div className="flex items-start space-x-2">
+          <RadioGroupItem
+            value="internal"
+            id="import-vis-internal"
+            disabled={!canSelectInternal}
+          />
+          <div className="grid gap-0.5">
+            <Label
+              htmlFor="import-vis-internal"
+              className={`font-normal ${canSelectInternal ? "cursor-pointer" : "text-muted-foreground"}`}
+            >
+              {t("documents.upload.internalLabel")}
+            </Label>
+            {!canSelectInternal && (
+              <p className="text-caption text-muted-foreground pl-0">
+                {t("documents.upload.internalDisabledHint")}
+              </p>
+            )}
+          </div>
+        </div>
+      </RadioGroup>
+    </div>
+  );
+}
 
 function ProjectDocumentsSkeleton() {
   return (
@@ -143,9 +208,12 @@ export default function ProjectDocuments() {
   const [pendingFinalizeIntentId, setPendingFinalizeIntentId] = useState<string | null>(null);
   const [importDialog, setImportDialog] = useState<ImportSourceKind | null>(null);
   const activeOrg = useActiveOrg();
-  const [uploadTab, setUploadTab] = useState<"computer" | "personal">("computer");
+  const [uploadTab, setUploadTab] = useState<"computer" | "personal" | "org">("computer");
   const [personalSelected, setPersonalSelected] = useState<Set<string>>(new Set());
+  const [orgSelected, setOrgSelected] = useState<Set<string>>(new Set());
+  const [importVisibilityClass, setImportVisibilityClass] = useState<DocMediaVisibilityClass>("shared_project");
   const personalDocsQuery = useWorkspaceDocuments(isSupabaseMode ? user.id : undefined);
+  const orgDocsQuery = useOrgDocuments(activeOrg?.id);
   const importToProjectMutation = useImportDocumentsToProject(pid);
   const projectDocsQueryClient = useQueryClient();
   const [generateOpen, setGenerateOpen] = useState(false);
@@ -192,10 +260,21 @@ export default function ProjectDocuments() {
     setPendingFinalizeIntentId(null);
     setUploadTab("computer");
     setPersonalSelected(new Set());
+    setOrgSelected(new Set());
+    setImportVisibilityClass("shared_project");
   }
 
   function togglePersonalSelected(id: string) {
     setPersonalSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleOrgSelected(id: string) {
+    setOrgSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -209,6 +288,31 @@ export default function ProjectDocuments() {
       const result = await importToProjectMutation.mutateAsync({
         kind: "workspace",
         documentIds: Array.from(personalSelected),
+        visibilityClass: importVisibilityClass,
+      });
+      if (isSupabaseMode) {
+        await projectDocsQueryClient.invalidateQueries({
+          queryKey: documentsMediaQueryKeys.projectDocuments(user.id, pid),
+        });
+      }
+      toast({ title: t("documents.import.success", { count: result.count }) });
+      closeUploadDialog();
+    } catch (error) {
+      toast({
+        title: t("documents.import.error"),
+        description: error instanceof Error ? error.message : undefined,
+        variant: "destructive",
+      });
+    }
+  }
+
+  async function handleAttachOrg() {
+    if (orgSelected.size === 0 || importToProjectMutation.isPending) return;
+    try {
+      const result = await importToProjectMutation.mutateAsync({
+        kind: "org",
+        documentIds: Array.from(orgSelected),
+        visibilityClass: importVisibilityClass,
       });
       if (isSupabaseMode) {
         await projectDocsQueryClient.invalidateQueries({
@@ -718,11 +822,6 @@ export default function ProjectDocuments() {
                 <Button size="sm" variant="outline" onClick={() => setUploadOpen(true)}>
                   <Upload className="h-4 w-4 mr-1.5" /> {t("documents.action.upload")}
                 </Button>
-                {isSupabaseMode && activeOrg && (
-                  <Button size="sm" variant="outline" onClick={() => setImportDialog("org")}>
-                    <Building2 className="h-4 w-4 mr-1.5" /> {t("documents.import.fromOrg", { name: activeOrg.name })}
-                  </Button>
-                )}
                 {!isSupabaseMode && canManageDocuments && (
                   <Button size="sm" className="bg-accent text-accent-foreground hover:bg-accent/90" onClick={() => setGenerateOpen(true)}>
                     <Plus className="h-4 w-4 mr-1.5" /> {t("documents.action.generate")}
@@ -771,23 +870,34 @@ export default function ProjectDocuments() {
           closeUploadDialog();
         }}
       >
-        <DialogContent className="bg-card border border-border rounded-modal max-w-lg shadow-xl p-0 gap-0 [&>button.absolute]:hidden">
-          <DialogHeader className="border-b border-border px-5 py-4">
+        <DialogContent className="bg-card border border-border rounded-modal max-w-lg shadow-xl p-0 gap-0 max-h-[85vh] flex flex-col [&>button.absolute]:hidden">
+          <DialogHeader className="border-b border-border px-4 sm:px-5 py-3 sm:py-4 shrink-0">
             <DialogTitle>{t("documents.upload.title")}</DialogTitle>
             <DialogDescription>{t("documents.upload.description")}</DialogDescription>
           </DialogHeader>
-          <Tabs value={uploadTab} onValueChange={(v) => setUploadTab(v as "computer" | "personal")}>
-            <div className="px-5 pt-4">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="computer">{t("documents.upload.tabs.computer")}</TabsTrigger>
-                <TabsTrigger value="personal" disabled={!isSupabaseMode}>
-                  {t("documents.upload.tabs.personal")}
-                </TabsTrigger>
-              </TabsList>
+          <Tabs value={uploadTab} onValueChange={(v) => setUploadTab(v as "computer" | "personal" | "org")} className="flex-1 flex flex-col min-h-0">
+            <div className="px-4 sm:px-5 pt-3 sm:pt-4 shrink-0">
+              <Select
+                value={uploadTab}
+                onValueChange={(v) => setUploadTab(v as "computer" | "personal" | "org")}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="computer">{t("documents.upload.tabs.computer")}</SelectItem>
+                  <SelectItem value="personal" disabled={!isSupabaseMode}>
+                    {t("documents.upload.tabs.personal")}
+                  </SelectItem>
+                  <SelectItem value="org" disabled={!isSupabaseMode || !activeOrg}>
+                    {t("documents.upload.tabs.org")}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
-            <TabsContent value="computer" className="m-0">
-              <div className="px-5 py-4 space-y-4">
+            <TabsContent value="computer" className="m-0 flex-1 overflow-y-auto min-h-0">
+              <div className="px-4 sm:px-5 py-3 sm:py-4 space-y-4">
                 <div className="rounded-panel bg-warning/10 p-3 text-caption text-warning">
                   {t("documents.upload.piiWarning")}
                 </div>
@@ -808,8 +918,7 @@ export default function ProjectDocuments() {
                 </div>
                 <div className="space-y-1">
                   <label className="text-body-sm font-medium text-foreground">{t("documents.upload.fileLabel")}</label>
-                  <Input
-                    type="file"
+                  <FileInput
                     disabled={uploading}
                     onChange={(event) => {
                       const file = event.target.files?.[0] ?? null;
@@ -864,8 +973,8 @@ export default function ProjectDocuments() {
               </div>
             </TabsContent>
 
-            <TabsContent value="personal" className="m-0">
-              <div className="px-5 py-4 space-y-3">
+            <TabsContent value="personal" className="m-0 flex-1 overflow-y-auto min-h-0">
+              <div className="px-4 sm:px-5 py-3 sm:py-4 space-y-3">
                 {personalDocsQuery.isPending ? (
                   <div className="space-y-2">
                     <Skeleton className="h-10 w-full" />
@@ -877,7 +986,7 @@ export default function ProjectDocuments() {
                     {t("documents.upload.tabs.personalEmpty")}
                   </p>
                 ) : (
-                  <ul className="divide-y divide-border max-h-[40vh] overflow-y-auto">
+                  <ul className="divide-y divide-border">
                     {(personalDocsQuery.data ?? []).map((doc) => {
                       const isSelected = personalSelected.has(doc.id);
                       return (
@@ -901,11 +1010,69 @@ export default function ProjectDocuments() {
                     })}
                   </ul>
                 )}
+                <ImportVisibilitySelector
+                  value={importVisibilityClass}
+                  onChange={setImportVisibilityClass}
+                  canSelectInternal={canSelectInternalUpload}
+                  disabled={importToProjectMutation.isPending}
+                  t={t}
+                />
+              </div>
+            </TabsContent>
+
+            <TabsContent value="org" className="m-0 flex-1 overflow-y-auto min-h-0">
+              <div className="px-4 sm:px-5 py-3 sm:py-4 space-y-3">
+                {!activeOrg ? (
+                  <p className="py-6 text-center text-body-sm text-muted-foreground">
+                    {t("documents.upload.tabs.orgUnavailable")}
+                  </p>
+                ) : orgDocsQuery.isPending ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                  </div>
+                ) : (orgDocsQuery.data ?? []).length === 0 ? (
+                  <p className="py-6 text-center text-body-sm text-muted-foreground">
+                    {t("documents.upload.tabs.orgEmpty")}
+                  </p>
+                ) : (
+                  <ul className="divide-y divide-border">
+                    {(orgDocsQuery.data ?? []).map((doc) => {
+                      const isSelected = orgSelected.has(doc.id);
+                      return (
+                        <li key={doc.id}>
+                          <label className="flex items-start gap-3 py-2 cursor-pointer">
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={() => toggleOrgSelected(doc.id)}
+                              className="mt-1"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-body-sm font-medium text-foreground truncate">{doc.title}</p>
+                              {doc.description && (
+                                <p className="text-caption text-muted-foreground line-clamp-2">{doc.description}</p>
+                              )}
+                              <p className="text-[10px] text-muted-foreground mt-0.5">{doc.updatedAt.slice(0, 10)}</p>
+                            </div>
+                          </label>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+                <ImportVisibilitySelector
+                  value={importVisibilityClass}
+                  onChange={setImportVisibilityClass}
+                  canSelectInternal={canSelectInternalUpload}
+                  disabled={importToProjectMutation.isPending}
+                  t={t}
+                />
               </div>
             </TabsContent>
           </Tabs>
 
-          <DialogFooter className="border-t border-border px-5 py-4">
+          <DialogFooter className="border-t border-border px-4 sm:px-5 py-3 sm:py-4 shrink-0">
             <Button variant="outline" onClick={closeUploadDialog} disabled={uploading || importToProjectMutation.isPending}>{t("common.cancel")}</Button>
             {uploadTab === "computer" ? (
               pendingFinalizeIntentId ? (
@@ -925,7 +1092,7 @@ export default function ProjectDocuments() {
                   {uploading ? t("documents.upload.uploading") : t("documents.upload.submit")}
                 </Button>
               )
-            ) : (
+            ) : uploadTab === "personal" ? (
               <Button
                 className="bg-accent text-accent-foreground hover:bg-accent/90"
                 onClick={handleAttachPersonal}
@@ -934,6 +1101,16 @@ export default function ProjectDocuments() {
                 {importToProjectMutation.isPending
                   ? t("documents.import.submitting")
                   : t("documents.upload.tabs.personalSubmit")}
+              </Button>
+            ) : (
+              <Button
+                className="bg-accent text-accent-foreground hover:bg-accent/90"
+                onClick={handleAttachOrg}
+                disabled={orgSelected.size === 0 || importToProjectMutation.isPending || !activeOrg}
+              >
+                {importToProjectMutation.isPending
+                  ? t("documents.import.submitting")
+                  : t("documents.upload.tabs.orgSubmit")}
               </Button>
             )}
           </DialogFooter>

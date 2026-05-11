@@ -106,6 +106,7 @@ import {
 } from "@/lib/commit-proposal";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { SaveLearnTargetDialog } from "@/components/ai/SaveLearnTargetDialog";
 import type { AIMessage, AIProposal, ProposalChange } from "@/types/ai";
 import type { Event } from "@/types/entities";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -803,6 +804,8 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const [visibleDayBucketCount, setVisibleDayBucketCount] = useState(INITIAL_VISIBLE_DAY_BUCKETS);
   const [messageRatings, setMessageRatings] = useState<Record<string, "good" | "bad" | undefined>>({});
   const [savedMessageIds, setSavedMessageIds] = useState<Set<string>>(new Set());
+  const [pendingSaveMessage, setPendingSaveMessage] = useState<AIMessage | null>(null);
+  const [savingLearnMessage, setSavingLearnMessage] = useState(false);
   const [regeneratingMessageId, setRegeneratingMessageId] = useState<string | null>(null);
   const [chatArchives, setChatArchives] = useState<AiChatArchiveEntryV1[]>([]);
   const [expandedArchiveChatId, setExpandedArchiveChatId] = useState<string | null>(null);
@@ -2475,38 +2478,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     }
 
     if (workspaceMode.kind === "supabase") {
-      const profileId = workspaceMode.profileId;
-      const rawSupabase = supabase as unknown as SupabaseClient;
-      const title = message.content.slice(0, 120).replace(/\n/g, " ").trim()
-        || t("ai.sidebar.learnNote.defaultTitle");
-      try {
-        const { error } = await rawSupabase
-          .from("workspace_documents")
-          .insert({
-            owner_profile_id: profileId,
-            title,
-            type: "knowledge_base",
-            origin: "ai_generated",
-            description: message.content,
-            created_by: profileId,
-          });
-        if (error) throw error;
-        setSavedMessageIds((prev) => {
-          const next = new Set(prev);
-          next.add(message.id);
-          return next;
-        });
-        toast({
-          title: t("ai.sidebar.toast.saved.title"),
-          description: t("ai.sidebar.toast.saved.description"),
-        });
-      } catch {
-        toast({
-          title: t("ai.sidebar.toast.saveError.title"),
-          description: t("ai.sidebar.toast.saveError.description"),
-          variant: "destructive",
-        });
-      }
+      setPendingSaveMessage(message);
       return;
     }
 
@@ -2592,6 +2564,89 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
       return next;
     });
     toast({ title: t("ai.sidebar.toast.savedToDocuments.title"), description: t("ai.sidebar.toast.savedToDocuments.description") });
+  }
+
+  async function performSaveLearnMessage(target: { kind: "personal" } | { kind: "project"; projectId: string }) {
+    if (!pendingSaveMessage || workspaceMode.kind !== "supabase") {
+      setPendingSaveMessage(null);
+      return;
+    }
+    const message = pendingSaveMessage;
+    const profileId = workspaceMode.profileId;
+    const rawSupabase = supabase as unknown as SupabaseClient;
+    const title = message.content.slice(0, 120).replace(/\n/g, " ").trim()
+      || t("ai.sidebar.learnNote.defaultTitle");
+
+    setSavingLearnMessage(true);
+    try {
+      if (target.kind === "personal") {
+        const { error } = await rawSupabase
+          .from("workspace_documents")
+          .insert({
+            owner_profile_id: profileId,
+            title,
+            type: "knowledge_base",
+            origin: "ai_generated",
+            description: message.content,
+            created_by: profileId,
+          });
+        if (error) throw error;
+        toast({
+          title: t("ai.sidebar.toast.saved.title"),
+          description: t("ai.sidebar.toast.saved.description"),
+        });
+      } else {
+        const { data: docRows, error: docErr } = await rawSupabase
+          .from("documents")
+          .insert({
+            project_id: target.projectId,
+            type: "knowledge_base",
+            title,
+            origin: "ai_generated",
+            description: message.content,
+            created_by: profileId,
+          })
+          .select("id")
+          .single();
+        if (docErr) throw docErr;
+        const newDocId = (docRows as { id: string }).id;
+        const { error: verErr } = await rawSupabase
+          .from("document_versions")
+          .insert({
+            document_id: newDocId,
+            version_number: 1,
+            is_current: true,
+            created_by: profileId,
+          });
+        if (verErr) {
+          // Best-effort cleanup: drop the orphan documents row so a retry
+          // does not duplicate it. PostgREST does not give us a real
+          // transaction across two .insert() calls; the proper fix is a
+          // SECURITY DEFINER RPC that wraps both inserts in one tx
+          // (tracked as a follow-up).
+          await rawSupabase.from("documents").delete().eq("id", newDocId);
+          throw verErr;
+        }
+        toast({
+          title: t("ai.sidebar.toast.savedToProject.title"),
+          description: t("ai.sidebar.toast.savedToProject.description"),
+        });
+      }
+      setSavedMessageIds((prev) => {
+        const next = new Set(prev);
+        next.add(message.id);
+        return next;
+      });
+      setPendingSaveMessage(null);
+    } catch (error) {
+      toast({
+        title: t("ai.sidebar.toast.saveError.title"),
+        description: error instanceof Error ? error.message : t("ai.sidebar.toast.saveError.description"),
+        variant: "destructive",
+      });
+    } finally {
+      setSavingLearnMessage(false);
+    }
   }
 
   function handleRegenerateLearnMessage(message: AIMessage) {
@@ -3582,6 +3637,15 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
           navigate("/pricing");
         }}
         onCancel={() => setLimitModalOpen(false)}
+      />
+
+      <SaveLearnTargetDialog
+        open={pendingSaveMessage !== null}
+        onOpenChange={(o) => { if (!o) setPendingSaveMessage(null); }}
+        projects={projects.map((p) => ({ id: p.id, title: p.title }))}
+        defaultProjectId={resolveActiveProjectForLearnDocument() || undefined}
+        onConfirm={performSaveLearnMessage}
+        saving={savingLearnMessage}
       />
     </>
   );

@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FileInput } from "@/components/ui/file-input";
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
   AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel,
@@ -302,8 +303,7 @@ export default function ProjectGallery() {
             )}
             <div className="space-y-1">
               <label className="text-body-sm font-medium text-foreground">{t("gallery.upload.photoLabel")}</label>
-              <Input
-                type="file"
+              <FileInput
                 accept="image/*"
                 disabled={uploading}
                 onChange={(e) => {

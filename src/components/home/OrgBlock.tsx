@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Building2, Check, Plus } from "lucide-react";
+import { Building2, Check, Plus, Trash2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useUserOrganizations, useSetActiveOrg } from "@/hooks/use-orgs";
 import { useWorkspaceMode } from "@/hooks/use-workspace-source";
 import { CreateOrgDialog } from "@/components/orgs/CreateOrgDialog";
+import { DeleteOrgDialog } from "@/components/orgs/DeleteOrgDialog";
 import { toast } from "@/hooks/use-toast";
 import type { OrgSummary } from "@/data/org-source";
 
@@ -26,6 +27,7 @@ export function OrgBlock() {
   const { data: orgs, isPending } = useUserOrganizations();
   const setActiveMutation = useSetActiveOrg();
   const [createOpen, setCreateOpen] = useState(false);
+  const [orgToDelete, setOrgToDelete] = useState<OrgSummary | null>(null);
 
   if (!isSupabaseMode) {
     return null;
@@ -91,6 +93,8 @@ export function OrgBlock() {
     }
   }
 
+  const isSingleOrg = orgList.length === 1;
+
   return (
     <>
       <Card className="mb-4 sm:mb-6">
@@ -98,38 +102,38 @@ export function OrgBlock() {
           <div className="flex items-center justify-between">
             <h3 className="text-body-sm font-semibold text-foreground flex items-center gap-1.5">
               <Building2 className="h-4 w-4 text-muted-foreground" />
-              {t("home.org.heading")}
+              {t(isSingleOrg ? "home.org.headingSingle" : "home.org.heading")}
             </h3>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => setCreateOpen(true)}
-              className="h-7"
-            >
-              <Plus className="h-3.5 w-3.5 mr-1" />
-              {t("home.org.cta.action")}
-            </Button>
           </div>
           <ul className="divide-y divide-border">
             {visible.map((org) => (
               <li key={org.id} className="flex items-center gap-3 py-2 first:pt-0 last:pb-0">
-                <button
-                  type="button"
-                  aria-label={t("home.org.makeActive")}
-                  onClick={() => handleActivate(org)}
-                  disabled={org.isActiveContext || setActiveMutation.isPending}
-                  className={`flex h-6 w-6 items-center justify-center rounded-full border transition ${
-                    org.isActiveContext
-                      ? "bg-accent border-accent text-accent-foreground"
-                      : "border-border text-transparent hover:text-muted-foreground"
-                  }`}
-                >
-                  <Check className="h-3.5 w-3.5" />
-                </button>
+                {isSingleOrg && org.isActiveContext ? (
+                  <div
+                    aria-hidden="true"
+                    className="flex h-6 w-6 items-center justify-center rounded-full border border-border text-muted-foreground"
+                  >
+                    <Building2 className="h-3.5 w-3.5" />
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    aria-label={t("home.org.makeActive")}
+                    onClick={() => handleActivate(org)}
+                    disabled={org.isActiveContext || setActiveMutation.isPending}
+                    className={`flex h-6 w-6 items-center justify-center rounded-full border transition ${
+                      org.isActiveContext
+                        ? "bg-accent border-accent text-accent-foreground"
+                        : "border-border text-transparent hover:text-muted-foreground"
+                    }`}
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                  </button>
+                )}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-body-sm font-medium text-foreground truncate">{org.name}</span>
-                    {org.isActiveContext && (
+                    {!isSingleOrg && org.isActiveContext && (
                       <Badge variant="secondary" className="text-[10px]">
                         {t("home.org.activeBadge")}
                       </Badge>
@@ -141,6 +145,19 @@ export function OrgBlock() {
                     <span>{t("home.org.memberCount", { count: org.memberCount })}</span>
                   </div>
                 </div>
+                {org.role === "owner" && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                    onClick={() => setOrgToDelete(org)}
+                    title={t("home.org.deleteTooltip")}
+                    aria-label={t("home.org.deleteTooltip")}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                )}
               </li>
             ))}
             {overflow > 0 && (
@@ -152,6 +169,14 @@ export function OrgBlock() {
         </CardContent>
       </Card>
       <CreateOrgDialog open={createOpen} onOpenChange={setCreateOpen} />
+      {orgToDelete && (
+        <DeleteOrgDialog
+          open={true}
+          onOpenChange={(o) => { if (!o) setOrgToDelete(null); }}
+          orgId={orgToDelete.id}
+          orgName={orgToDelete.name}
+        />
+      )}
     </>
   );
 }

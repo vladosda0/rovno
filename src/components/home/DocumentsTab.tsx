@@ -20,9 +20,9 @@ import { DocumentsViewModeToggle, type DocumentViewMode } from "@/components/doc
 import { useCurrentUser, useWorkspaceMode } from "@/hooks/use-mock-data";
 import { useWorkspaceDocuments, type WorkspaceDoc } from "@/hooks/use-workspace-documents-source";
 import { useActiveOrg, useOrgDocuments } from "@/hooks/use-orgs";
+import { UploadDocumentDialog } from "@/components/home/UploadDocumentDialog";
 
 const CATEGORIES = [
-  { id: "All", labelKey: "documentsTab.categories.all" },
   { id: "How-tos", labelKey: "documentsTab.categories.howTos" },
   { id: "Instructions", labelKey: "documentsTab.categories.instructions" },
   { id: "Catalogs", labelKey: "documentsTab.categories.catalogs" },
@@ -65,13 +65,13 @@ interface DisplayDoc {
 
 function categoryFromType(type: string): { id: string; labelKey: string } {
   const t = type?.toLowerCase() ?? "";
-  if (t.includes("how")) return CATEGORIES[1];
-  if (t.includes("instruction")) return CATEGORIES[2];
-  if (t.includes("catalog")) return CATEGORIES[3];
-  if (t.includes("price")) return CATEGORIES[4];
-  if (t.includes("warrant")) return CATEGORIES[5];
-  if (t.includes("template")) return CATEGORIES[6];
-  return CATEGORIES[2];
+  if (t.includes("how")) return CATEGORIES[0];
+  if (t.includes("instruction")) return CATEGORIES[1];
+  if (t.includes("catalog")) return CATEGORIES[2];
+  if (t.includes("price")) return CATEGORIES[3];
+  if (t.includes("warrant")) return CATEGORIES[4];
+  if (t.includes("template")) return CATEGORIES[5];
+  return CATEGORIES[1];
 }
 
 export function DocumentsTab() {
@@ -82,6 +82,7 @@ export function DocumentsTab() {
   const [viewMode, setViewMode] = useState<DocumentViewMode>("list");
   const [pinOverrides, setPinOverrides] = useState<Record<string, boolean>>({});
   const [viewDoc, setViewDoc] = useState<DisplayDoc | null>(null);
+  const [uploadOpen, setUploadOpen] = useState(false);
 
   const mode = useWorkspaceMode();
   const currentUser = useCurrentUser();
@@ -161,9 +162,23 @@ export function DocumentsTab() {
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder={t("documentsTab.search")} value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-9" />
         </div>
-        {isSupabaseMode && activeOrg && (
-          <div className="flex gap-1">
-            {(["all", "personal", "org"] as const).map((value) => (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setUploadOpen(true)}
+          disabled={!isSupabaseMode}
+        >
+          <Upload className="h-3.5 w-3.5 mr-1.5" /> {t("documentsTab.upload")}
+        </Button>
+        <DocumentsViewModeToggle value={viewMode} onValueChange={setViewMode} />
+      </div>
+
+      {/* Filters: scope + categories */}
+      <div className="flex gap-1.5 flex-wrap items-center">
+        {isSupabaseMode && (
+          (["all", "personal", "org"] as const)
+            .filter((value) => value !== "org" || activeOrg)
+            .map((value) => (
               <Button
                 key={value}
                 size="sm"
@@ -178,17 +193,8 @@ export function DocumentsTab() {
               >
                 {t(`home.org.scope.${value}`)}
               </Button>
-            ))}
-          </div>
+            ))
         )}
-        <Button variant="outline" size="sm" disabled>
-          <Upload className="h-3.5 w-3.5 mr-1.5" /> {t("documentsTab.upload")}
-        </Button>
-        <DocumentsViewModeToggle value={viewMode} onValueChange={setViewMode} />
-      </div>
-
-      {/* Categories */}
-      <div className="flex gap-1.5 flex-wrap">
         {CATEGORIES.map((cat) => {
           const isSelected = category === cat.id;
           return (
@@ -202,7 +208,7 @@ export function DocumentsTab() {
                   ? "bg-accent text-accent-foreground border-accent hover:bg-accent/90 hover:text-accent-foreground"
                   : ""
               }`}
-              onClick={() => setCategory(cat.id)}
+              onClick={() => setCategory((cur) => (cur === cat.id ? "All" : cat.id))}
             >
               {t(cat.labelKey)}
             </Button>
@@ -308,6 +314,8 @@ export function DocumentsTab() {
           )}
         </div>
       )}
+
+      <UploadDocumentDialog open={uploadOpen} onOpenChange={setUploadOpen} />
 
       <Dialog open={!!viewDoc} onOpenChange={(open) => { if (!open) setViewDoc(null); }}>
         <DialogContent className="bg-card border border-border rounded-modal max-w-lg shadow-xl p-0 gap-0 [&>button.absolute]:hidden">
