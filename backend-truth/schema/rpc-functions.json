@@ -217,7 +217,7 @@
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": false,
-      "sourceMigration": "supabase/migrations/20260306163000_inventory_foundation.sql",
+      "sourceMigration": "supabase/migrations/20260509082719_fix_inventory_balances_trigger_on_project_cascade.sql",
       "triggerUsages": [
         {
           "table": "public.inventory_movements",
