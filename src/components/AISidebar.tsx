@@ -2618,7 +2618,15 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
             is_current: true,
             created_by: profileId,
           });
-        if (verErr) throw verErr;
+        if (verErr) {
+          // Best-effort cleanup: drop the orphan documents row so a retry
+          // does not duplicate it. PostgREST does not give us a real
+          // transaction across two .insert() calls; the proper fix is a
+          // SECURITY DEFINER RPC that wraps both inserts in one tx
+          // (tracked as a follow-up).
+          await rawSupabase.from("documents").delete().eq("id", newDocId);
+          throw verErr;
+        }
         toast({
           title: t("ai.sidebar.toast.savedToProject.title"),
           description: t("ai.sidebar.toast.savedToProject.description"),

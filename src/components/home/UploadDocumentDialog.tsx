@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { useProjects } from "@/hooks/use-mock-data";
-import { useActiveOrg } from "@/hooks/use-orgs";
+import { useActiveOrg, orgQueryKeys } from "@/hooks/use-orgs";
 import {
   prepareDocumentUpload,
   uploadBytes,
@@ -141,7 +141,7 @@ export function UploadDocumentDialog({
           effectiveTitle,
           description.trim() || undefined,
         );
-        await queryClient.invalidateQueries({ queryKey: ["org_documents", activeOrg.id] });
+        await queryClient.invalidateQueries({ queryKey: orgQueryKeys.documents(activeOrg.id) });
         toast({ title: t("home.upload.toast.savedOrg") });
       } else {
         if (!projectId) throw new Error("No project selected");

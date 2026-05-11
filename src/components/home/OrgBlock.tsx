@@ -108,7 +108,7 @@ export function OrgBlock() {
           <ul className="divide-y divide-border">
             {visible.map((org) => (
               <li key={org.id} className="flex items-center gap-3 py-2 first:pt-0 last:pb-0">
-                {isSingleOrg ? (
+                {isSingleOrg && org.isActiveContext ? (
                   <div
                     aria-hidden="true"
                     className="flex h-6 w-6 items-center justify-center rounded-full border border-border text-muted-foreground"
