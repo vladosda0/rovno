@@ -55,6 +55,23 @@ vi.mock("@/hooks/use-orgs", () => ({
   },
 }));
 
+vi.mock("@/hooks/use-workspace-documents-source", () => ({
+  useWorkspaceDocuments: () => ({ data: [], isPending: false }),
+}));
+
+vi.mock("@tanstack/react-query", async () => {
+  const actual = await vi.importActual<typeof import("@tanstack/react-query")>("@tanstack/react-query");
+  return {
+    ...actual,
+    useQueryClient: () => ({
+      invalidateQueries: vi.fn().mockResolvedValue(undefined),
+      cancelQueries: vi.fn().mockResolvedValue(undefined),
+      setQueryData: vi.fn(),
+      getQueryData: vi.fn(),
+    }),
+  };
+});
+
 vi.mock("@/lib/permissions", async () => {
   const actual = await vi.importActual<typeof import("@/lib/permissions")>("@/lib/permissions");
   return {

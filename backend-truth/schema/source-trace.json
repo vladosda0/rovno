@@ -300,7 +300,7 @@
       "schema": "public",
       "name": "sync_inventory_balances",
       "signature": "public.sync_inventory_balances()",
-      "sourceMigration": "supabase/migrations/20260306163000_inventory_foundation.sql"
+      "sourceMigration": "supabase/migrations/20260509082719_fix_inventory_balances_trigger_on_project_cascade.sql"
     },
     {
       "key": "public.handle_profile_defaults",
@@ -720,7 +720,7 @@
       "schema": "public",
       "name": "enforce_org_member_last_owner",
       "signature": "public.enforce_org_member_last_owner()",
-      "sourceMigration": "supabase/migrations/20260506140000_fix_org_delete_cascade_through_last_owner_guard.sql"
+      "sourceMigration": "supabase/migrations/20260508120000_fix_orgs_select_policy_returning_and_guc_name.sql"
     },
     {
       "key": "public.guard_organization_owner_change",
@@ -765,18 +765,53 @@
       "sourceMigration": "supabase/migrations/20260506120300_org_rpcs.sql"
     },
     {
-      "key": "public.import_documents_to_project",
-      "schema": "public",
-      "name": "import_documents_to_project",
-      "signature": "public.import_documents_to_project(uuid, text, uuid[])",
-      "sourceMigration": "supabase/migrations/20260506120300_org_rpcs.sql"
-    },
-    {
       "key": "public.mark_organization_deleting",
       "schema": "public",
       "name": "mark_organization_deleting",
       "signature": "public.mark_organization_deleting()",
-      "sourceMigration": "supabase/migrations/20260506140000_fix_org_delete_cascade_through_last_owner_guard.sql"
+      "sourceMigration": "supabase/migrations/20260508120000_fix_orgs_select_policy_returning_and_guc_name.sql"
+    },
+    {
+      "key": "public.__debug_org_rls_state2",
+      "schema": "public",
+      "name": "__debug_org_rls_state2",
+      "signature": "public.__debug_org_rls_state2()",
+      "sourceMigration": "supabase/migrations/20260507160000_org_policy_resilience.sql"
+    },
+    {
+      "key": "public.import_documents_to_project",
+      "schema": "public",
+      "name": "import_documents_to_project",
+      "signature": "public.import_documents_to_project(uuid, text, uuid[], text)",
+      "sourceMigration": "supabase/migrations/20260509120000_import_documents_to_project_visibility.sql"
+    },
+    {
+      "key": "public.prepare_workspace_document_upload",
+      "schema": "public",
+      "name": "prepare_workspace_document_upload",
+      "signature": "public.prepare_workspace_document_upload(text, text, text, text, bigint, text)",
+      "sourceMigration": "supabase/migrations/20260509130000_workspace_org_doc_uploads_and_orphan_safe_links.sql"
+    },
+    {
+      "key": "public.finalize_workspace_document_upload",
+      "schema": "public",
+      "name": "finalize_workspace_document_upload",
+      "signature": "public.finalize_workspace_document_upload(uuid, text, text, text)",
+      "sourceMigration": "supabase/migrations/20260509140000_addresses_pr71_codex_findings.sql"
+    },
+    {
+      "key": "public.prepare_org_document_upload",
+      "schema": "public",
+      "name": "prepare_org_document_upload",
+      "signature": "public.prepare_org_document_upload(uuid, text, text, text, text, bigint, text)",
+      "sourceMigration": "supabase/migrations/20260509130000_workspace_org_doc_uploads_and_orphan_safe_links.sql"
+    },
+    {
+      "key": "public.finalize_org_document_upload",
+      "schema": "public",
+      "name": "finalize_org_document_upload",
+      "signature": "public.finalize_org_document_upload(uuid, text, text, text)",
+      "sourceMigration": "supabase/migrations/20260509140000_addresses_pr71_codex_findings.sql"
     }
   ],
   "policies": [
@@ -1685,20 +1720,12 @@
       "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
     },
     {
-      "key": "public.organizations.organizations_select",
-      "schema": "public",
-      "table": "organizations",
-      "name": "organizations_select",
-      "command": "select",
-      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
-    },
-    {
       "key": "public.organizations.organizations_insert",
       "schema": "public",
       "table": "organizations",
       "name": "organizations_insert",
       "command": "insert",
-      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260507160000_org_policy_resilience.sql"
     },
     {
       "key": "public.organizations.organizations_update",
@@ -1706,7 +1733,7 @@
       "table": "organizations",
       "name": "organizations_update",
       "command": "update",
-      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260507160000_org_policy_resilience.sql"
     },
     {
       "key": "public.organizations.organizations_delete",
@@ -1714,7 +1741,15 @@
       "table": "organizations",
       "name": "organizations_delete",
       "command": "delete",
-      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260507160000_org_policy_resilience.sql"
+    },
+    {
+      "key": "public.organizations.organizations_select",
+      "schema": "public",
+      "table": "organizations",
+      "name": "organizations_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260508120000_fix_orgs_select_policy_returning_and_guc_name.sql"
     },
     {
       "key": "public.org_members.org_members_select",
@@ -1722,7 +1757,7 @@
       "table": "org_members",
       "name": "org_members_select",
       "command": "select",
-      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260506150000_fix_org_rls_recursion.sql"
     },
     {
       "key": "public.org_members.org_members_insert",
@@ -1730,7 +1765,7 @@
       "table": "org_members",
       "name": "org_members_insert",
       "command": "insert",
-      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260506150000_fix_org_rls_recursion.sql"
     },
     {
       "key": "public.org_members.org_members_update",
@@ -1738,7 +1773,7 @@
       "table": "org_members",
       "name": "org_members_update",
       "command": "update",
-      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260506150000_fix_org_rls_recursion.sql"
     },
     {
       "key": "public.org_members.org_members_delete",
@@ -1746,7 +1781,7 @@
       "table": "org_members",
       "name": "org_members_delete",
       "command": "delete",
-      "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+      "sourceMigration": "supabase/migrations/20260506150000_fix_org_rls_recursion.sql"
     },
     {
       "key": "public.org_documents.org_documents_member_read",
@@ -2393,6 +2428,7 @@
       "sourceMigrations": [
         "supabase/migrations/20260306163000_inventory_foundation.sql",
         "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
+        "supabase/migrations/20260509082719_fix_inventory_balances_trigger_on_project_cascade.sql",
         "supabase/migrations/20260406183000_procurement_operational_summary_requested_and_ordered_line_types.sql",
         "supabase/migrations/20260419120000_session3c_procurement_ai_in_stock_evidence.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",

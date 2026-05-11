@@ -1812,18 +1812,6 @@
       ],
       "policies": [
         {
-          "name": "organizations_select",
-          "schema": "public",
-          "table": "organizations",
-          "command": "select",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "owner_profile_id = auth.uid()\n  or exists (\n    select 1\n    from public.org_members om\n    where om.org_id = organizations.id\n      and om.profile_id = auth.uid()\n  )",
-          "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
-        },
-        {
           "name": "organizations_insert",
           "schema": "public",
           "table": "organizations",
@@ -1833,7 +1821,7 @@
           ],
           "using": null,
           "withCheck": "owner_profile_id = auth.uid()",
-          "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+          "sourceMigration": "supabase/migrations/20260507160000_org_policy_resilience.sql"
         },
         {
           "name": "organizations_update",
@@ -1843,9 +1831,9 @@
           "roles": [
             "authenticated"
           ],
-          "using": "owner_profile_id = auth.uid()\n  or exists (\n    select 1\n    from public.org_members om\n    where om.org_id = organizations.id\n      and om.profile_id = auth.uid()\n      and om.role = 'admin'\n  )",
+          "using": "public.can_manage_org(id)",
           "withCheck": "true",
-          "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+          "sourceMigration": "supabase/migrations/20260507160000_org_policy_resilience.sql"
         },
         {
           "name": "organizations_delete",
@@ -1857,7 +1845,19 @@
           ],
           "using": "owner_profile_id = auth.uid()",
           "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+          "sourceMigration": "supabase/migrations/20260507160000_org_policy_resilience.sql"
+        },
+        {
+          "name": "organizations_select",
+          "schema": "public",
+          "table": "organizations",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "owner_profile_id = auth.uid()\n    or public.is_org_member(id)",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260508120000_fix_orgs_select_policy_returning_and_guc_name.sql"
         }
       ]
     },
@@ -1880,9 +1880,9 @@
           "roles": [
             "authenticated"
           ],
-          "using": "profile_id = auth.uid()\n  or exists (\n    select 1\n    from public.organizations o\n    where o.id = org_members.org_id\n      and o.owner_profile_id = auth.uid()\n  )\n  or exists (\n    select 1\n    from public.org_members self_om\n    where self_om.org_id = org_members.org_id\n      and self_om.profile_id = auth.uid()\n  )",
+          "using": "profile_id = auth.uid()\n  or public.is_org_member(org_id)",
           "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+          "sourceMigration": "supabase/migrations/20260506150000_fix_org_rls_recursion.sql"
         },
         {
           "name": "org_members_insert",
@@ -1893,8 +1893,8 @@
             "authenticated"
           ],
           "using": null,
-          "withCheck": "exists (\n    select 1\n    from public.organizations o\n    where o.id = org_id\n      and o.owner_profile_id = auth.uid()\n  )\n  or exists (\n    select 1\n    from public.org_members self_om\n    where self_om.org_id = org_members.org_id\n      and self_om.profile_id = auth.uid()\n      and self_om.role = 'admin'\n  )",
-          "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+          "withCheck": "public.can_manage_org(org_id)",
+          "sourceMigration": "supabase/migrations/20260506150000_fix_org_rls_recursion.sql"
         },
         {
           "name": "org_members_update",
@@ -1904,9 +1904,9 @@
           "roles": [
             "authenticated"
           ],
-          "using": "exists (\n    select 1\n    from public.organizations o\n    where o.id = org_id\n      and o.owner_profile_id = auth.uid()\n  )\n  or exists (\n    select 1\n    from public.org_members self_om\n    where self_om.org_id = org_members.org_id\n      and self_om.profile_id = auth.uid()\n      and self_om.role = 'admin'\n  )",
-          "withCheck": "exists (\n    select 1\n    from public.organizations o\n    where o.id = org_id\n      and o.owner_profile_id = auth.uid()\n  )\n  or exists (\n    select 1\n    from public.org_members self_om\n    where self_om.org_id = org_members.org_id\n      and self_om.profile_id = auth.uid()\n      and self_om.role = 'admin'\n  )",
-          "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+          "using": "public.can_manage_org(org_id)",
+          "withCheck": "public.can_manage_org(org_id)",
+          "sourceMigration": "supabase/migrations/20260506150000_fix_org_rls_recursion.sql"
         },
         {
           "name": "org_members_delete",
@@ -1916,9 +1916,9 @@
           "roles": [
             "authenticated"
           ],
-          "using": "profile_id = auth.uid()\n  or exists (\n    select 1\n    from public.organizations o\n    where o.id = org_id\n      and o.owner_profile_id = auth.uid()\n  )\n  or exists (\n    select 1\n    from public.org_members self_om\n    where self_om.org_id = org_members.org_id\n      and self_om.profile_id = auth.uid()\n      and self_om.role = 'admin'\n  )",
+          "using": "profile_id = auth.uid()\n  or public.can_manage_org(org_id)",
           "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260506120100_org_rls_helpers_and_policies.sql"
+          "sourceMigration": "supabase/migrations/20260506150000_fix_org_rls_recursion.sql"
         }
       ]
     },

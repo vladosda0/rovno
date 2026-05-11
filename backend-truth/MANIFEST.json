@@ -291,6 +291,54 @@
     {
       "path": "supabase/migrations/20260506140000_fix_org_delete_cascade_through_last_owner_guard.sql",
       "sha256": "ded140caf25c35de26361541f39c473fe4c2656b3c0786656039f8b6620df289"
+    },
+    {
+      "path": "supabase/migrations/20260506150000_fix_org_rls_recursion.sql",
+      "sha256": "5bdf73ea9141a0f235dac94c048450e0c7008579d3ae65d06722eadf7361d729"
+    },
+    {
+      "path": "supabase/migrations/20260506160000_import_documents_creates_versions.sql",
+      "sha256": "ef2257529e1ea832c1df57b7ad052a423659d0a8628e1648409c611131437e40"
+    },
+    {
+      "path": "supabase/migrations/20260507120000_rebuild_org_insert_delete_policies.sql",
+      "sha256": "4d0ab2764eb7f78a8dd29ac2654384533ea402f436000f25b37fe3d43a7e219a"
+    },
+    {
+      "path": "supabase/migrations/20260507130000_debug_org_rls_state.sql",
+      "sha256": "d4fc11f3159c7f00f5af8d8d31f92d9ee2add3779bfa7a93046f6de18256bf6c"
+    },
+    {
+      "path": "supabase/migrations/20260507140000_debug_org_insert_rpc.sql",
+      "sha256": "87d1564adab7ca387c68cb8db3e448b8b3a54fc400bdc4e4317e3b06d9d242ef"
+    },
+    {
+      "path": "supabase/migrations/20260507150000_drop_org_debug_rpcs.sql",
+      "sha256": "f561d4796f7572f0aaaefa84110ab4dc16271af1716d6bbdaced03fcc8c940b5"
+    },
+    {
+      "path": "supabase/migrations/20260507160000_org_policy_resilience.sql",
+      "sha256": "a47130e076fa6c22ad09aecf846006c0bcd5166fb102c75778e7095ff9df12ac"
+    },
+    {
+      "path": "supabase/migrations/20260508120000_fix_orgs_select_policy_returning_and_guc_name.sql",
+      "sha256": "2cfb9b1dfc4a5c01b234f1f586f32c7195e256e621c7fc93b994d3e022afae01"
+    },
+    {
+      "path": "supabase/migrations/20260509082719_fix_inventory_balances_trigger_on_project_cascade.sql",
+      "sha256": "001805b9745f263b51f73d029d129625e7d5e06cb0daee61c7ee463688a84ebf"
+    },
+    {
+      "path": "supabase/migrations/20260509120000_import_documents_to_project_visibility.sql",
+      "sha256": "63f31e616056abaedb382bca02aade77bd31f99826af547f124cd69e0725bd4a"
+    },
+    {
+      "path": "supabase/migrations/20260509130000_workspace_org_doc_uploads_and_orphan_safe_links.sql",
+      "sha256": "3514aac8f21fbdc65624e0d8e079d0fef4a71e71af63344f4d7866462d809e76"
+    },
+    {
+      "path": "supabase/migrations/20260509140000_addresses_pr71_codex_findings.sql",
+      "sha256": "2f30d9d1dc5641c1ab4c1f0eee04f9d291f690022ffc84919af6fe9cb0201e80"
     }
   ],
   "generated_artifacts": [
@@ -387,6 +435,18 @@
     "sql/20260506120400_accept_project_invite_with_org.sql",
     "sql/20260506130000_fix_org_owner_membership_order.sql",
     "sql/20260506140000_fix_org_delete_cascade_through_last_owner_guard.sql",
+    "sql/20260506150000_fix_org_rls_recursion.sql",
+    "sql/20260506160000_import_documents_creates_versions.sql",
+    "sql/20260507120000_rebuild_org_insert_delete_policies.sql",
+    "sql/20260507130000_debug_org_rls_state.sql",
+    "sql/20260507140000_debug_org_insert_rpc.sql",
+    "sql/20260507150000_drop_org_debug_rpcs.sql",
+    "sql/20260507160000_org_policy_resilience.sql",
+    "sql/20260508120000_fix_orgs_select_policy_returning_and_guc_name.sql",
+    "sql/20260509082719_fix_inventory_balances_trigger_on_project_cascade.sql",
+    "sql/20260509120000_import_documents_to_project_visibility.sql",
+    "sql/20260509130000_workspace_org_doc_uploads_and_orphan_safe_links.sql",
+    "sql/20260509140000_addresses_pr71_codex_findings.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],

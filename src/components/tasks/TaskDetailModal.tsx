@@ -6,6 +6,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FileInput } from "@/components/ui/file-input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ConfirmModal } from "@/components/ConfirmModal";
@@ -655,8 +656,7 @@ export function TaskDetailModal({
           <div className="space-y-3 py-2">
             <div className="border-2 border-dashed border-border rounded-lg p-4 text-center hover:border-accent/40 transition-colors space-y-2">
               <Upload className="mx-auto h-8 w-8 text-muted-foreground/30" />
-              <Input
-                type="file"
+              <FileInput
                 multiple
                 accept="image/*"
                 onChange={(e) => setUploadFiles(Array.from(e.target.files ?? []))}

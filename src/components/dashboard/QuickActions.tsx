@@ -29,6 +29,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { FileInput } from "@/components/ui/file-input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
@@ -727,8 +728,7 @@ export function QuickActions({
               <div className="space-y-2">
                 <div className="space-y-1">
                   <label className="text-body-sm font-medium text-foreground">{t("quickActions.document.fileLabel")}</label>
-                  <Input
-                    type="file"
+                  <FileInput
                     onChange={(event) => setDocumentFile(event.target.files?.[0] ?? null)}
                   />
                 </div>
@@ -862,8 +862,7 @@ export function QuickActions({
           <div className="space-y-3 py-1">
             <div className="space-y-1">
               <label className="text-body-sm font-medium text-foreground">{t("quickActions.photo.uploadLabel")}</label>
-              <Input
-                type="file"
+              <FileInput
                 accept="image/*"
                 onChange={(event) => setPhotoFile(event.target.files?.[0] ?? null)}
               />

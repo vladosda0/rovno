@@ -5,6 +5,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
+import { EnvBanner } from "@/components/system/EnvBanner";
 
 const AppLayout = lazy(() => import("@/layouts/AppLayout"));
 const AuthLayout = lazy(() => import("@/layouts/AuthLayout"));
@@ -56,6 +57,7 @@ function routeElement(element: ReactElement): ReactElement {
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
+      <EnvBanner />
       <Toaster />
       <Sonner />
       <BrowserRouter>

@@ -88,6 +88,13 @@ export interface CreateWorkspaceProjectInput {
   projectMode: NonNullable<Project["project_mode"]>;
 }
 
+export class ProjectDeleteNotPermittedError extends Error {
+  constructor(public readonly projectId: string) {
+    super(`Delete affected 0 rows for project ${projectId}; the current user is likely not the owner.`);
+    this.name = "ProjectDeleteNotPermittedError";
+  }
+}
+
 function requireNonEmptyProjectTitle(input: CreateWorkspaceProjectInput): string {
   const title = input.title?.trim() ?? "";
   if (!title) {
@@ -715,14 +722,18 @@ function createSupabaseWorkspaceSource(
       return mapProjectRowToProject(data);
     },
     async deleteProject(projectId: string) {
-      const { error } = await supabase
+      const { error, count } = await supabase
         .from("projects")
-        .delete()
+        .delete({ count: "exact" })
         .eq("id", projectId)
         .eq("owner_profile_id", profileId);
 
       if (error) {
         throw error;
+      }
+
+      if (!count) {
+        throw new ProjectDeleteNotPermittedError(projectId);
       }
     },
   };

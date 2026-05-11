@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createOrganization,
+  deleteOrganization,
   importDocumentsToProject,
   listOrgDocuments,
   listOrgMemberProfileIds,
@@ -86,6 +87,20 @@ export function useOrgMemberProfileIds(orgId: string | null | undefined) {
     queryKey: orgQueryKeys.members(orgId ?? null),
     enabled,
     queryFn: () => (orgId ? listOrgMemberProfileIds(orgId) : Promise.resolve([])),
+  });
+}
+
+export function useDeleteOrganization() {
+  const queryClient = useQueryClient();
+  const mode = useWorkspaceMode();
+  const profileId = mode.kind === "supabase" ? mode.profileId : undefined;
+
+  return useMutation({
+    mutationFn: (orgId: string) => deleteOrganization(orgId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: orgQueryKeys.list(profileId ?? "anonymous") });
+      void queryClient.invalidateQueries({ queryKey: ["documents-media"] });
+    },
   });
 }
 

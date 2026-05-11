@@ -13,6 +13,7 @@ import { ConfirmModal } from "@/components/ConfirmModal";
 import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FileInput } from "@/components/ui/file-input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -1054,8 +1055,7 @@ export default function ProjectTasks() {
             <p className="text-sm text-muted-foreground">{t("tasks.donePrompt.description")}</p>
 
             <div className="space-y-2">
-              <Input
-                type="file"
+              <FileInput
                 accept="image/*"
                 multiple
                 disabled={doneUploading}

@@ -1670,6 +1670,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+        "__debug_org_rls_state2": {
+          Args: Record<PropertyKey, never>
+          Returns: Json
+        }
         "accept_project_invite": {
           Args: {
           "p_invite_token": string
@@ -1780,11 +1784,29 @@ export type Database = {
           }
           Returns: unknown
         }
+        "finalize_org_document_upload": {
+          Args: {
+          "p_upload_intent_id": string
+          "p_type": string
+          "p_title": string
+          "p_description": unknown
+          }
+          Returns: unknown
+        }
         "finalize_project_media_upload": {
           Args: {
           "p_upload_intent_id": string
           "p_task_id": unknown
           "p_is_final": unknown
+          }
+          Returns: unknown
+        }
+        "finalize_workspace_document_upload": {
+          Args: {
+          "p_upload_intent_id": string
+          "p_type": string
+          "p_title": string
+          "p_description": unknown
           }
           Returns: unknown
         }
@@ -1898,6 +1920,7 @@ export type Database = {
           "p_project_id": string
           "p_source_kind": string
           "p_source_doc_ids": unknown
+          "p_visibility_class": unknown
           }
           Returns: unknown
         }
@@ -1949,6 +1972,18 @@ export type Database = {
           }
           Returns: unknown
         }
+        "prepare_org_document_upload": {
+          Args: {
+          "p_org_id": string
+          "p_type": string
+          "p_title": string
+          "p_client_filename": string
+          "p_mime_type": string
+          "p_size_bytes": number
+          "p_description": unknown
+          }
+          Returns: unknown
+        }
         "prepare_project_media_upload": {
           Args: {
           "p_project_id": string
@@ -1960,6 +1995,17 @@ export type Database = {
           "p_task_id": unknown
           "p_is_final": unknown
           "p_visibility_class": unknown
+          }
+          Returns: unknown
+        }
+        "prepare_workspace_document_upload": {
+          Args: {
+          "p_type": string
+          "p_title": string
+          "p_client_filename": string
+          "p_mime_type": string
+          "p_size_bytes": number
+          "p_description": unknown
           }
           Returns: unknown
         }
