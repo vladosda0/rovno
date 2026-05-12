@@ -26,7 +26,12 @@ export function printHtmlDocument(htmlDocument: string, options?: { titleForDown
     }
   };
 
+  // Guard against double invocation when both iframe.onload and the
+  // readyState === "complete" branch fire (varies by browser).
+  let printed = false;
   const triggerPrint = () => {
+    if (printed) return;
+    printed = true;
     try {
       const win = iframe.contentWindow;
       if (!win) {

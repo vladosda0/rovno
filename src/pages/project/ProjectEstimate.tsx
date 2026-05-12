@@ -1754,17 +1754,12 @@ export default function ProjectEstimate() {
   }, [t, toast]);
 
   const ensureShareLinkForExport = useCallback(async (): Promise<{ url: string } | { error: string }> => {
-    const existingShareId = latestApproved?.shareId ?? latestProposed?.shareId;
-    if (existingShareId) {
-      return { url: buildShareLink(existingShareId) };
-    }
-    if (!canSubmitToClient) {
-      return { error: t("estimate.export.share.cannotSubmit") };
-    }
-    try {
-      const snapshot = createVersionSnapshot(pid, currentUser.id);
+    const submitOptionsFor = (): {
+      shareApprovalPolicy: "disabled" | "registered";
+      shareApprovalDisabledReason?: "no_participant_slot";
+    } => {
       const previewOnly = availableParticipantSlots === 0;
-      const submitOptions = previewOnly
+      return previewOnly
         ? {
           shareApprovalPolicy: "disabled" as const,
           shareApprovalDisabledReason: "no_participant_slot" as const,
@@ -1772,7 +1767,43 @@ export default function ProjectEstimate() {
         : {
           shareApprovalPolicy: "registered" as const,
         };
-      const ok = submitVersion(pid, snapshot.versionId, submitOptions);
+    };
+
+    // Approved versions are immutable — always return their existing shareId.
+    if (latestApproved?.shareId) {
+      return { url: buildShareLink(latestApproved.shareId) };
+    }
+
+    // Proposed and submitted: if there are unsent edits, refresh the snapshot
+    // under the same shareId so the client sees the latest revision when they
+    // re-open the link. Mirrors the prior submit-to-client resubmission flow.
+    if (latestProposed?.submitted) {
+      if (!hasPendingChangesSinceSubmission) {
+        return { url: buildShareLink(latestProposed.shareId) };
+      }
+      if (!canSubmitToClient) {
+        return { error: t("estimate.export.share.cannotSubmit") };
+      }
+      try {
+        const ok = refreshVersionSnapshot(pid, latestProposed.id, currentUser.id, submitOptionsFor());
+        if (!ok) {
+          return { error: t("estimate.export.share.submitFailed") };
+        }
+        return { url: buildShareLink(latestProposed.shareId) };
+      } catch (error) {
+        return {
+          error: error instanceof Error ? error.message : t("estimate.export.share.submitFailed"),
+        };
+      }
+    }
+
+    // No submitted version yet — create a fresh proposed one.
+    if (!canSubmitToClient) {
+      return { error: t("estimate.export.share.cannotSubmit") };
+    }
+    try {
+      const snapshot = createVersionSnapshot(pid, currentUser.id);
+      const ok = submitVersion(pid, snapshot.versionId, submitOptionsFor());
       if (!ok) {
         return { error: t("estimate.export.share.submitFailed") };
       }
@@ -1787,6 +1818,7 @@ export default function ProjectEstimate() {
     buildShareLink,
     canSubmitToClient,
     currentUser.id,
+    hasPendingChangesSinceSubmission,
     latestApproved,
     latestProposed,
     pid,
