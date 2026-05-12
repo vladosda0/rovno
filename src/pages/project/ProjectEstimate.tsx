@@ -114,7 +114,6 @@ import {
 } from "@/lib/estimate-v2/pricing";
 import { SHOW_ESTIMATE_VERSION_UI } from "@/lib/estimate-v2/show-estimate-version-ui";
 import { resolveProjectEstimateCtaState } from "@/lib/estimate-v2/project-estimate-cta";
-import { resolveSubmitToClientState } from "@/lib/estimate-v2/project-estimate-submit-state";
 import { getDefaultFinanceVisibility } from "@/lib/participant-role-policy";
 import {
   combinePlanFact,
@@ -140,6 +139,13 @@ import {
 import { cn } from "@/lib/utils";
 import { ApprovalStampCard } from "@/components/estimate-v2/ApprovalStampCard";
 import { ApprovalStampFormModal } from "@/components/estimate-v2/ApprovalStampFormModal";
+import { EstimateExportModal } from "@/components/estimate-v2/EstimateExportModal";
+import type {
+  ExportLineRow,
+  ExportPayload,
+  ExportStageGroup,
+  ExportWorkGroup,
+} from "@/lib/estimate-export-data";
 import { VersionBanner } from "@/components/estimate-v2/VersionBanner";
 import { VersionDiffList } from "@/components/estimate-v2/VersionDiffList";
 import { EstimateGantt } from "@/components/estimate-v2/gantt/EstimateGantt";
@@ -174,7 +180,6 @@ import type {
   ResourceLineType,
 } from "@/types/estimate-v2";
 import type { Task, UserPlan } from "@/types/entities";
-import { Checkbox } from "@/components/ui/checkbox";
 
 type ChecklistFallbackEstimateRow = {
   id: string;
@@ -419,12 +424,6 @@ const PLAN_PARTICIPANT_CAP: Record<UserPlan, number> = {
   pro: 5,
   business: 15,
 };
-
-interface ClientRecipient {
-  userId: string;
-  name: string;
-  email: string;
-}
 
 interface PendingDeleteState {
   assessment: DeleteAssessment;
@@ -844,14 +843,7 @@ export default function ProjectEstimate() {
 
   const [activeTab, setActiveTab] = useState("estimate");
   const [approvalModalOpen, setApprovalModalOpen] = useState(false);
-  const [recipientPickerOpen, setRecipientPickerOpen] = useState(false);
-  const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>([]);
-  const [shareLinkModalState, setShareLinkModalState] = useState<{
-    title: string;
-    description: string;
-    link: string;
-    suggestUpgrade: boolean;
-  } | null>(null);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
   const [missingDatesWorkIds, setMissingDatesWorkIds] = useState<string[]>([]);
   const [isTransitioningToInWork, setIsTransitioningToInWork] = useState(false);
   const [incompleteTaskBlocks, setIncompleteTaskBlocks] = useState<Array<{ taskId: string | null; title: string }>>([]);
@@ -1152,21 +1144,6 @@ export default function ProjectEstimate() {
     }
   }, [canEditEstimate, currentUser.id, memberEmailSet, pendingInviteEmailSet, pid, projectMode, t, toast, workspaceMode]);
 
-  const clientRecipients = useMemo<ClientRecipient[]>(() => (
-    members
-      .filter((member) => member.role === "viewer" && member.viewer_regime === "client")
-      .map((member) => {
-        const user = getUserById(member.user_id);
-        if (!user?.email) return null;
-        return {
-          userId: member.user_id,
-          name: user.name,
-          email: user.email,
-        };
-      })
-      .filter((entry): entry is ClientRecipient => Boolean(entry))
-  ), [members]);
-
   const ownerPlan = useMemo<UserPlan>(() => {
     if (!project?.owner_id) return currentUser.plan;
     const owner = getUserById(project.owner_id);
@@ -1224,14 +1201,6 @@ export default function ProjectEstimate() {
     };
     return computeVersionDiff(latestProposed, nextVersionLike).changes.length > 0;
   }, [currentVersionSnapshot, latestProposed, pendingProposed]);
-
-  const submitState = useMemo(
-    () => resolveSubmitToClientState({
-      hasPendingSubmittedVersion: pendingProposed,
-      hasChangesSincePendingSubmission: hasPendingChangesSinceSubmission,
-    }),
-    [hasPendingChangesSinceSubmission, pendingProposed],
-  );
 
   const diff = useMemo(
     () => (latestProposed ? computeVersionDiff(latestApproved, latestProposed) : {
@@ -1312,6 +1281,125 @@ export default function ProjectEstimate() {
     ),
     [estimateProject, stages, lines, projectMode, lineTotalsComputeOptions],
   );
+
+  const exportPayload = useMemo<ExportPayload | null>(() => {
+    if (!estimateProject || sortedStages.length === 0) {
+      return {
+        projectId: pid ?? "",
+        projectTitle: estimateProject?.title ?? "",
+        currency: estimateProject?.currency ?? "RUB",
+        projectMode,
+        hasSensitiveDetail: canViewSensitiveDetail,
+        hasSummaryClientPricing: hasSummaryClientPricingOnAnyLine,
+        hasDiscountedClientTotal: false,
+        stages: [],
+        totals: {
+          subtotalBeforeDiscountCents: totals.subtotalBeforeDiscountCents,
+          discountTotalCents: totals.discountTotalCents,
+          taxableBaseCents: uiTaxableBaseCents,
+          vatBps: operationalUpperBlock?.vatBps ?? estimateProject?.taxBps ?? 0,
+          taxAmountCents: uiTaxAmountCents,
+          totalIncVatCents: uiTotalIncVatCents,
+        },
+        versionShareId: latestApproved?.shareId ?? latestProposed?.shareId ?? null,
+        generatedAt: new Date().toISOString(),
+      };
+    }
+
+    const summaryMode = canViewOperationalFinanceSummary && !canViewSensitiveDetail;
+    let hasDiscounted = false;
+
+    const stagesPayload: ExportStageGroup[] = sortedStages.map((stage, stageIdx) => {
+      const stageWorks = worksByStage.get(stage.id) ?? [];
+      const works: ExportWorkGroup[] = stageWorks.map((work, workIdx) => {
+        const workLines = linesByWork.get(work.id) ?? [];
+        const exportLines: ExportLineRow[] = workLines
+          .map<ExportLineRow | null>((line) => {
+            const lineTotals = lineTotalsById.get(line.id);
+            if (!lineTotals) return null;
+            const clientAmounts = displayLineClientAmounts(line, lineTotals, {
+              financeMode: summaryMode ? "summary" : "detail",
+            }) ?? {
+              clientUnitCents: lineTotals.clientUnitCents,
+              clientTotalCents: lineTotals.clientTotalCents,
+            };
+            const discountedClientTotalCents = typeof line.summaryDiscountedClientTotalCents === "number"
+              ? line.summaryDiscountedClientTotalCents
+              : null;
+            if (discountedClientTotalCents != null) hasDiscounted = true;
+            return {
+              id: line.id,
+              title: line.title,
+              type: line.type,
+              typeLabel: t(semanticLabelKeyForType(line.type)),
+              qtyMilli: line.qtyMilli,
+              unit: line.unit,
+              costUnitCents: line.costUnitCents,
+              costTotalCents: lineTotals.costTotalCents,
+              markupBps: line.markupBps > 0 ? line.markupBps : estimateProject.markupBps,
+              discountBps: effectiveDiscountForDisplay(line, stage, estimateProject.discountBps),
+              clientUnitCents: clientAmounts.clientUnitCents,
+              clientTotalCents: clientAmounts.clientTotalCents,
+              discountedClientTotalCents,
+            };
+          })
+          .filter((row): row is ExportLineRow => row !== null);
+        return {
+          id: work.id,
+          title: work.title,
+          number: `${stageIdx + 1}.${workIdx + 1}`,
+          lines: exportLines,
+        };
+      });
+      return {
+        id: stage.id,
+        title: stage.title,
+        number: stageIdx + 1,
+        works,
+      };
+    });
+
+    return {
+      projectId: pid ?? "",
+      projectTitle: estimateProject.title,
+      currency: estimateProject.currency,
+      projectMode,
+      hasSensitiveDetail: canViewSensitiveDetail,
+      hasSummaryClientPricing: hasSummaryClientPricingOnAnyLine,
+      hasDiscountedClientTotal: hasDiscounted,
+      stages: stagesPayload,
+      totals: {
+        subtotalBeforeDiscountCents: totals.subtotalBeforeDiscountCents,
+        discountTotalCents: totals.discountTotalCents,
+        taxableBaseCents: uiTaxableBaseCents,
+        vatBps: operationalUpperBlock?.vatBps ?? estimateProject.taxBps,
+        taxAmountCents: uiTaxAmountCents,
+        totalIncVatCents: uiTotalIncVatCents,
+      },
+      versionShareId: latestApproved?.shareId ?? latestProposed?.shareId ?? null,
+      generatedAt: new Date().toISOString(),
+    };
+  }, [
+    canViewOperationalFinanceSummary,
+    canViewSensitiveDetail,
+    estimateProject,
+    hasSummaryClientPricingOnAnyLine,
+    latestApproved,
+    latestProposed,
+    lineTotalsById,
+    linesByWork,
+    operationalUpperBlock?.vatBps,
+    pid,
+    projectMode,
+    sortedStages,
+    t,
+    totals.discountTotalCents,
+    totals.subtotalBeforeDiscountCents,
+    uiTaxAmountCents,
+    uiTaxableBaseCents,
+    uiTotalIncVatCents,
+    worksByStage,
+  ]);
 
   const plannedRollups = useMemo(
     () => computePlannedFromEstimateV2({
@@ -1665,106 +1753,77 @@ export default function ProjectEstimate() {
     }
   }, [t, toast]);
 
-  const submitToClientRecipients = useCallback((recipients: ClientRecipient[]) => {
-    if (!canSubmitToClient) return;
-    if (submitState.submitDisabled) {
-      toast({ title: submitState.submitDisabledReason ?? t("estimate.toast.noChangesFallback"), variant: "destructive" });
-      return;
+  const ensureShareLinkForExport = useCallback(async (): Promise<{ url: string } | { error: string }> => {
+    const submitOptionsFor = (): {
+      shareApprovalPolicy: "disabled" | "registered";
+      shareApprovalDisabledReason?: "no_participant_slot";
+    } => {
+      const previewOnly = availableParticipantSlots === 0;
+      return previewOnly
+        ? {
+          shareApprovalPolicy: "disabled" as const,
+          shareApprovalDisabledReason: "no_participant_slot" as const,
+        }
+        : {
+          shareApprovalPolicy: "registered" as const,
+        };
+    };
+
+    // Approved versions are immutable — always return their existing shareId.
+    if (latestApproved?.shareId) {
+      return { url: buildShareLink(latestApproved.shareId) };
     }
 
-    const hasDirectRecipients = recipients.length > 0;
-    const previewOnly = !hasDirectRecipients && availableParticipantSlots === 0;
-    const submitOptions = previewOnly
-      ? {
-        shareApprovalPolicy: "disabled" as const,
-        shareApprovalDisabledReason: "no_participant_slot" as const,
+    // Proposed and submitted: if there are unsent edits, refresh the snapshot
+    // under the same shareId so the client sees the latest revision when they
+    // re-open the link. Mirrors the prior submit-to-client resubmission flow.
+    if (latestProposed?.submitted) {
+      if (!hasPendingChangesSinceSubmission) {
+        return { url: buildShareLink(latestProposed.shareId) };
       }
-      : {
-        shareApprovalPolicy: "registered" as const,
-      };
+      if (!canSubmitToClient) {
+        return { error: t("estimate.export.share.cannotSubmit") };
+      }
+      try {
+        const ok = refreshVersionSnapshot(pid, latestProposed.id, currentUser.id, submitOptionsFor());
+        if (!ok) {
+          return { error: t("estimate.export.share.submitFailed") };
+        }
+        return { url: buildShareLink(latestProposed.shareId) };
+      } catch (error) {
+        return {
+          error: error instanceof Error ? error.message : t("estimate.export.share.submitFailed"),
+        };
+      }
+    }
 
-    let ok = false;
-    let shareId = "";
-
-    if (pendingProposed && latestProposed) {
-      ok = refreshVersionSnapshot(pid, latestProposed.id, currentUser.id, submitOptions);
-      shareId = latestProposed.shareId;
-    } else {
+    // No submitted version yet — create a fresh proposed one.
+    if (!canSubmitToClient) {
+      return { error: t("estimate.export.share.cannotSubmit") };
+    }
+    try {
       const snapshot = createVersionSnapshot(pid, currentUser.id);
-      ok = submitVersion(pid, snapshot.versionId, submitOptions);
-      shareId = snapshot.shareId;
+      const ok = submitVersion(pid, snapshot.versionId, submitOptionsFor());
+      if (!ok) {
+        return { error: t("estimate.export.share.submitFailed") };
+      }
+      return { url: buildShareLink(snapshot.shareId) };
+    } catch (error) {
+      return {
+        error: error instanceof Error ? error.message : t("estimate.export.share.submitFailed"),
+      };
     }
-
-    if (!ok) {
-      toast({ title: t("estimate.toast.submitRoleRequired"), variant: "destructive" });
-      return;
-    }
-
-    if (hasDirectRecipients) {
-      const recipientEmails = recipients.map((recipient) => recipient.email).join(", ");
-      toast({
-        title: pendingProposed && latestProposed ? t("estimate.toast.resubmitted") : t("estimate.toast.submitted"),
-        description: recipientEmails,
-      });
-      return;
-    }
-
-    const shareLink = buildShareLink(shareId);
-    void copyShareLink(shareLink);
-    if (previewOnly) {
-      setShareLinkModalState({
-        title: t("estimate.share.noSlotsTitle"),
-        description: t("estimate.share.noSlotsDesc"),
-        link: shareLink,
-        suggestUpgrade: true,
-      });
-      return;
-    }
-    setShareLinkModalState({
-      title: t("estimate.share.noClientTitle"),
-      description: t("estimate.share.noClientDesc"),
-      link: shareLink,
-      suggestUpgrade: false,
-    });
   }, [
     availableParticipantSlots,
     buildShareLink,
     canSubmitToClient,
-    copyShareLink,
     currentUser.id,
+    hasPendingChangesSinceSubmission,
+    latestApproved,
     latestProposed,
-    pendingProposed,
     pid,
-    submitState.submitDisabled,
-    submitState.submitDisabledReason,
     t,
-    toast,
   ]);
-
-  const handleSubmitToClient = () => {
-    if (!canSubmitToClient) return;
-    if (clientRecipients.length > 1) {
-      setSelectedRecipientIds([]);
-      setRecipientPickerOpen(true);
-      return;
-    }
-    submitToClientRecipients(clientRecipients);
-  };
-
-  const handleSubmitToSelectedRecipients = () => {
-    const selectedRecipients = clientRecipients.filter((recipient) => selectedRecipientIds.includes(recipient.userId));
-    if (selectedRecipients.length === 0) {
-      toast({ title: t("estimate.toast.selectRecipient"), variant: "destructive" });
-      return;
-    }
-    setRecipientPickerOpen(false);
-    submitToClientRecipients(selectedRecipients);
-  };
-
-  const handleCopyShareLink = () => {
-    if (!shareLinkModalState?.link) return;
-    void copyShareLink(shareLinkModalState.link);
-  };
 
   const handleProjectApprove = (stamp: ApprovalStamp) => {
     if (!latestProposed) return;
@@ -2241,21 +2300,8 @@ export default function ProjectEstimate() {
             <div className="flex w-full min-w-0 flex-col items-start gap-1 lg:w-auto lg:items-end">
               <div className="flex w-full flex-wrap items-center gap-2 lg:justify-end">
                 {canExportEstimateCsv && (
-                  <Button variant="outline" size="sm" onClick={handleExportCsv}>
-                    <Download className="mr-1 h-4 w-4" /> {t("estimate.header.exportCsv")}
-                  </Button>
-                )}
-
-                {ctaState.showSubmit && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="border-accent/30 text-accent hover:bg-accent/10"
-                    onClick={handleSubmitToClient}
-                    disabled={submitState.submitDisabled}
-                    title={submitState.submitDisabledReason ?? undefined}
-                  >
-                    {t("estimate.header.submitToClient")}
+                  <Button variant="outline" size="sm" onClick={() => setExportModalOpen(true)}>
+                    <Download className="mr-1 h-4 w-4" /> {t("estimate.header.export")}
                   </Button>
                 )}
 
@@ -2273,11 +2319,10 @@ export default function ProjectEstimate() {
                 )}
               </div>
 
-              {(!canEditEstimate || (ctaState.showApprove && ctaState.approveDisabledReason) || (ctaState.showSubmit && submitState.submitDisabledReason)) && (
+              {(!canEditEstimate || (ctaState.showApprove && ctaState.approveDisabledReason)) && (
                 <div className="flex flex-wrap gap-x-3 gap-y-1 text-caption text-muted-foreground lg:justify-end">
                   {!canEditEstimate && <span>{t("estimate.header.ownerOnly")}</span>}
                   {ctaState.showApprove && ctaState.approveDisabledReason && <span>{ctaState.approveDisabledReason}</span>}
-                  {ctaState.showSubmit && submitState.submitDisabledReason && <span>{submitState.submitDisabledReason}</span>}
                 </div>
               )}
             </div>
@@ -3592,79 +3637,6 @@ export default function ProjectEstimate() {
           onCancel={() => setBulkFinishedTasks(null)}
         />
 
-        <ConfirmModal
-          open={recipientPickerOpen}
-          onOpenChange={(open) => {
-            setRecipientPickerOpen(open);
-            if (!open) setSelectedRecipientIds([]);
-          }}
-          title={t("estimate.recipients.title")}
-          description={t("estimate.recipients.description")}
-          confirmLabel={t("estimate.recipients.submitSelected")}
-          cancelLabel={t("common.cancel")}
-          onConfirm={handleSubmitToSelectedRecipients}
-          onCancel={() => {
-            setRecipientPickerOpen(false);
-            setSelectedRecipientIds([]);
-          }}
-        >
-          <div className="max-h-56 overflow-auto rounded-md border border-border p-2 space-y-2">
-            {clientRecipients.map((recipient) => {
-              const checked = selectedRecipientIds.includes(recipient.userId);
-              return (
-                <label
-                  key={recipient.userId}
-                  className="flex items-center gap-2 rounded-md border border-border/70 px-2 py-1.5 text-sm text-foreground"
-                >
-                  <Checkbox
-                    checked={checked}
-                    onCheckedChange={(nextChecked) => {
-                      const isChecked = Boolean(nextChecked);
-                      setSelectedRecipientIds((current) => {
-                        if (isChecked) {
-                          if (current.includes(recipient.userId)) return current;
-                          return [...current, recipient.userId];
-                        }
-                        return current.filter((id) => id !== recipient.userId);
-                      });
-                    }}
-                  />
-                  <span>{recipient.name}</span>
-                  <span className="text-caption text-muted-foreground">{recipient.email}</span>
-                </label>
-              );
-            })}
-          </div>
-        </ConfirmModal>
-
-        <ConfirmModal
-          open={Boolean(shareLinkModalState)}
-          onOpenChange={(open) => {
-            if (!open) setShareLinkModalState(null);
-          }}
-          title={shareLinkModalState?.title ?? t("estimate.share.defaultTitle")}
-          description={shareLinkModalState?.description ?? ""}
-          confirmLabel={shareLinkModalState?.suggestUpgrade ? t("estimate.share.upgradePlan") : t("common.close")}
-          confirmDisabled={Boolean(shareLinkModalState?.suggestUpgrade)}
-          confirmDisabledTooltip={shareLinkModalState?.suggestUpgrade ? t("common.comingSoon") : undefined}
-          showCancel={Boolean(shareLinkModalState?.suggestUpgrade)}
-          cancelLabel={t("common.close")}
-          tertiaryLabel={t("estimate.share.copyLink")}
-          onTertiary={handleCopyShareLink}
-          onConfirm={() => {
-            if (shareLinkModalState?.suggestUpgrade) {
-              return;
-            }
-            setShareLinkModalState(null);
-          }}
-          onCancel={() => setShareLinkModalState(null)}
-        >
-          <div className="space-y-2 py-1">
-            <p className="text-caption text-muted-foreground">{t("estimate.share.linkLabel")}</p>
-            <Input readOnly value={shareLinkModalState?.link ?? ""} />
-          </div>
-        </ConfirmModal>
-
         <ApprovalStampFormModal
           open={approvalModalOpen}
           onOpenChange={setApprovalModalOpen}
@@ -3675,6 +3647,15 @@ export default function ProjectEstimate() {
             email: currentUser.email,
           }}
           onSubmit={handleProjectApprove}
+        />
+
+        <EstimateExportModal
+          open={exportModalOpen}
+          onOpenChange={setExportModalOpen}
+          payload={exportPayload}
+          canShowInternal={canViewSensitiveDetail}
+          onDownloadCsv={handleExportCsv}
+          onEnsureShareLink={ensureShareLinkForExport}
         />
       </div>
     </div>
