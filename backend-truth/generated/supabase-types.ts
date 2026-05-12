@@ -1731,6 +1731,228 @@ export type Database = {
           }
           Relationships: []
         }
+        "estimate_templates": {
+          Row: {
+          "id": string
+          "owner_kind": "system" | "org" | "profile"
+          "owner_id": string | null
+          "title": string
+          "description": string
+          "scope": "ИЖС" | "ремонт" | "ландшафт" | "баня" | "гараж" | "инженерка" | "коммерческое" | "general"
+          "cover_image_url": string | null
+          "published_to_public": boolean
+          "contact_block": Json | null
+          "source": "system" | "user" | "imported_xlsx"
+          "source_version": string | null
+          "created_by": string | null
+          "created_at": string
+          "updated_at": string
+          }
+          Insert: {
+          "id"?: string
+          "owner_kind": "system" | "org" | "profile"
+          "owner_id"?: string | null
+          "title": string
+          "description"?: string
+          "scope"?: "ИЖС" | "ремонт" | "ландшафт" | "баня" | "гараж" | "инженерка" | "коммерческое" | "general"
+          "cover_image_url"?: string | null
+          "published_to_public"?: boolean
+          "contact_block"?: Json | null
+          "source"?: "system" | "user" | "imported_xlsx"
+          "source_version"?: string | null
+          "created_by"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Update: {
+          "id"?: string
+          "owner_kind"?: "system" | "org" | "profile"
+          "owner_id"?: string | null
+          "title"?: string
+          "description"?: string
+          "scope"?: "ИЖС" | "ремонт" | "ландшафт" | "баня" | "гараж" | "инженерка" | "коммерческое" | "general"
+          "cover_image_url"?: string | null
+          "published_to_public"?: boolean
+          "contact_block"?: Json | null
+          "source"?: "system" | "user" | "imported_xlsx"
+          "source_version"?: string | null
+          "created_by"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Relationships: []
+        }
+        "template_stages": {
+          Row: {
+          "id": string
+          "estimate_template_id": string
+          "title": string
+          "description": string
+          "scope_tag": "ИЖС" | "ремонт" | "ландшафт" | "баня" | "гараж" | "инженерка" | "коммерческое" | "general"
+          "sort_hint": number
+          "parameter_definitions": Json
+          "created_at": string
+          "updated_at": string
+          }
+          Insert: {
+          "id"?: string
+          "estimate_template_id": string
+          "title": string
+          "description"?: string
+          "scope_tag"?: "ИЖС" | "ремонт" | "ландшафт" | "баня" | "гараж" | "инженерка" | "коммерческое" | "general"
+          "sort_hint"?: number
+          "parameter_definitions"?: Json
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Update: {
+          "id"?: string
+          "estimate_template_id"?: string
+          "title"?: string
+          "description"?: string
+          "scope_tag"?: "ИЖС" | "ремонт" | "ландшафт" | "баня" | "гараж" | "инженерка" | "коммерческое" | "general"
+          "sort_hint"?: number
+          "parameter_definitions"?: Json
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Relationships: []
+        }
+        "template_works": {
+          Row: {
+          "id": string
+          "template_stage_id": string
+          "title": string
+          "description": string
+          "sort_hint": number
+          "parameter_definitions": Json
+          "created_at": string
+          "updated_at": string
+          }
+          Insert: {
+          "id"?: string
+          "template_stage_id": string
+          "title": string
+          "description"?: string
+          "sort_hint"?: number
+          "parameter_definitions"?: Json
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Update: {
+          "id"?: string
+          "template_stage_id"?: string
+          "title"?: string
+          "description"?: string
+          "sort_hint"?: number
+          "parameter_definitions"?: Json
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Relationships: []
+        }
+        "template_resource_lines": {
+          Row: {
+          "id": string
+          "template_work_id": string
+          "system_resource_article_id": string | null
+          "title": string
+          "resource_type": "material" | "tool" | "labor" | "subcontractor" | "overhead" | "other"
+          "unit_display": string
+          "qty_default": number
+          "default_cost_unit_cents": number | null
+          "default_markup_bps": number | null
+          "default_discount_bps": number | null
+          "sort_hint": number
+          "created_at": string
+          "updated_at": string
+          }
+          Insert: {
+          "id"?: string
+          "template_work_id": string
+          "system_resource_article_id"?: string | null
+          "title": string
+          "resource_type": "material" | "tool" | "labor" | "subcontractor" | "overhead" | "other"
+          "unit_display": string
+          "qty_default"?: number
+          "default_cost_unit_cents"?: number | null
+          "default_markup_bps"?: number | null
+          "default_discount_bps"?: number | null
+          "sort_hint"?: number
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Update: {
+          "id"?: string
+          "template_work_id"?: string
+          "system_resource_article_id"?: string | null
+          "title"?: string
+          "resource_type"?: "material" | "tool" | "labor" | "subcontractor" | "overhead" | "other"
+          "unit_display"?: string
+          "qty_default"?: number
+          "default_cost_unit_cents"?: number | null
+          "default_markup_bps"?: number | null
+          "default_discount_bps"?: number | null
+          "sort_hint"?: number
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Relationships: []
+        }
+        "contractor_profiles": {
+          Row: {
+          "id": string
+          "org_id": string
+          "display_name": string
+          "contacts": Json
+          "region": string | null
+          "specializations": unknown
+          "experience_years": number | null
+          "avatar_url": string | null
+          "description": string | null
+          "status": "draft" | "pending_moderation" | "published" | "archived"
+          "moderated_at": string | null
+          "moderated_by": string | null
+          "created_by": string | null
+          "created_at": string
+          "updated_at": string
+          }
+          Insert: {
+          "id"?: string
+          "org_id": string
+          "display_name": string
+          "contacts"?: Json
+          "region"?: string | null
+          "specializations"?: unknown
+          "experience_years"?: number | null
+          "avatar_url"?: string | null
+          "description"?: string | null
+          "status"?: "draft" | "pending_moderation" | "published" | "archived"
+          "moderated_at"?: string | null
+          "moderated_by"?: string | null
+          "created_by"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Update: {
+          "id"?: string
+          "org_id"?: string
+          "display_name"?: string
+          "contacts"?: Json
+          "region"?: string | null
+          "specializations"?: unknown
+          "experience_years"?: number | null
+          "avatar_url"?: string | null
+          "description"?: string | null
+          "status"?: "draft" | "pending_moderation" | "published" | "archived"
+          "moderated_at"?: string | null
+          "moderated_by"?: string | null
+          "created_by"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Relationships: []
+        }
     }
     Views: {
       [_ in never]: never
@@ -1760,6 +1982,14 @@ export type Database = {
           "p_assistant_text": string
           }
           Returns: unknown
+        }
+        "apply_template_stage_to_estimate": {
+          Args: {
+          "p_estimate_version_id": string
+          "p_template_stage_id": string
+          "p_sort_position": unknown
+          }
+          Returns: Json
         }
         "approve_estimate_version_by_share_token": {
           Args: {
@@ -1795,6 +2025,20 @@ export type Database = {
         "can_manage_project": {
           Args: {
           "p_project_id": string
+          }
+          Returns: boolean
+        }
+        "can_manage_template": {
+          Args: {
+          "p_owner_kind": string
+          "p_owner_id": string
+          }
+          Returns: boolean
+        }
+        "can_read_template": {
+          Args: {
+          "p_owner_kind": string
+          "p_owner_id": string
           }
           Returns: boolean
         }
@@ -1920,6 +2164,12 @@ export type Database = {
           }
           Returns: Json
         }
+        "get_estimate_template_detail": {
+          Args: {
+          "p_template_id": string
+          }
+          Returns: Json
+        }
         "get_hr_operational_summary": {
           Args: {
           "p_project_id": string
@@ -2014,6 +2264,12 @@ export type Database = {
           "p_actor": string
           }
           Returns: boolean
+        }
+        "list_estimate_templates": {
+          Args: {
+          "p_scope_filter": unknown
+          }
+          Returns: unknown
         }
         "list_user_organizations": {
           Args: Record<PropertyKey, never>
