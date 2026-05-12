@@ -347,6 +347,26 @@
     {
       "path": "supabase/migrations/20260511120100_seed_unit_conversions.sql",
       "sha256": "65e0c8959f7dffdf1e0cb6eff0894fcad581d3ba9a252e91e2657f27e44db0eb"
+    },
+    {
+      "path": "supabase/migrations/20260512132310_estimate_templates_schema.sql",
+      "sha256": "0c82982a2a2d53280a708b97e5b532f0c2b6baeaa5f6c1521788947e33b79bf5"
+    },
+    {
+      "path": "supabase/migrations/20260512132320_template_rls.sql",
+      "sha256": "04168799bcdbbd663fee7ff1192f5b650d309a0262ffe91a360c5f7a06adc308"
+    },
+    {
+      "path": "supabase/migrations/20260512132330_contractor_profiles_schema.sql",
+      "sha256": "add8d163ef615dfab6fc1ca0231e8bb78b3f5d6cd86f940d4c35c770446786ad"
+    },
+    {
+      "path": "supabase/migrations/20260512132340_template_rpcs.sql",
+      "sha256": "9882337afb0fae4c91c3c8890a99adeb11bae98ae72dab691724cb67d65b23cc"
+    },
+    {
+      "path": "supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql",
+      "sha256": "391e18658823efccb1789c91e6e3ed81d1de6b30d242b6819b0f758678020b37"
     }
   ],
   "generated_artifacts": [
@@ -362,6 +382,7 @@
     "slices/planning.json",
     "slices/documents-media.json",
     "slices/estimates.json",
+    "slices/templates.json",
     "slices/procurement-inventory.json",
     "slices/hr.json",
     "slices/activity-billing.json",
@@ -369,6 +390,7 @@
     "contracts/planning-contract.md",
     "contracts/documents-contract.md",
     "contracts/estimates-contract.md",
+    "contracts/templates-contract.md",
     "contracts/procurement-contract.md",
     "contracts/hr-contract.md",
     "contracts/activity-billing-contract.md",
@@ -457,6 +479,11 @@
     "sql/20260509140000_addresses_pr71_codex_findings.sql",
     "sql/20260511120000_system_resource_articles_and_unit_conversions.sql",
     "sql/20260511120100_seed_unit_conversions.sql",
+    "sql/20260512132310_estimate_templates_schema.sql",
+    "sql/20260512132320_template_rls.sql",
+    "sql/20260512132330_contractor_profiles_schema.sql",
+    "sql/20260512132340_template_rpcs.sql",
+    "sql/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],

@@ -2076,6 +2076,311 @@
           "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
         }
       ]
+    },
+    {
+      "schema": "public",
+      "table": "estimate_templates",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "delete",
+        "insert",
+        "select",
+        "update"
+      ],
+      "policies": [
+        {
+          "name": "estimate_templates_select",
+          "schema": "public",
+          "table": "estimate_templates",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "public.can_read_template(owner_kind, owner_id)",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+        },
+        {
+          "name": "estimate_templates_insert",
+          "schema": "public",
+          "table": "estimate_templates",
+          "command": "insert",
+          "roles": [
+            "authenticated"
+          ],
+          "using": null,
+          "withCheck": "public.can_manage_template(owner_kind, owner_id)",
+          "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+        },
+        {
+          "name": "estimate_templates_update",
+          "schema": "public",
+          "table": "estimate_templates",
+          "command": "update",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "public.can_manage_template(owner_kind, owner_id)",
+          "withCheck": "public.can_manage_template(owner_kind, owner_id)",
+          "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+        },
+        {
+          "name": "estimate_templates_delete",
+          "schema": "public",
+          "table": "estimate_templates",
+          "command": "delete",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "public.can_manage_template(owner_kind, owner_id)",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "table": "template_stages",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "delete",
+        "insert",
+        "select",
+        "update"
+      ],
+      "policies": [
+        {
+          "name": "template_stages_select",
+          "schema": "public",
+          "table": "template_stages",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n      select 1\n      from public.estimate_templates et\n      where et.id = template_stages.estimate_template_id\n        and public.can_read_template(et.owner_kind, et.owner_id)\n    )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+        },
+        {
+          "name": "template_stages_insert",
+          "schema": "public",
+          "table": "template_stages",
+          "command": "insert",
+          "roles": [
+            "authenticated"
+          ],
+          "using": null,
+          "withCheck": "exists (\n      select 1\n      from public.estimate_templates et\n      where et.id = template_stages.estimate_template_id\n        and public.can_manage_template(et.owner_kind, et.owner_id)\n    )",
+          "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+        },
+        {
+          "name": "template_stages_update",
+          "schema": "public",
+          "table": "template_stages",
+          "command": "update",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n      select 1\n      from public.estimate_templates et\n      where et.id = template_stages.estimate_template_id\n        and public.can_manage_template(et.owner_kind, et.owner_id)\n    )",
+          "withCheck": "exists (\n      select 1\n      from public.estimate_templates et\n      where et.id = template_stages.estimate_template_id\n        and public.can_manage_template(et.owner_kind, et.owner_id)\n    )",
+          "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+        },
+        {
+          "name": "template_stages_delete",
+          "schema": "public",
+          "table": "template_stages",
+          "command": "delete",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n      select 1\n      from public.estimate_templates et\n      where et.id = template_stages.estimate_template_id\n        and public.can_manage_template(et.owner_kind, et.owner_id)\n    )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "table": "template_works",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "delete",
+        "insert",
+        "select",
+        "update"
+      ],
+      "policies": [
+        {
+          "name": "template_works_select",
+          "schema": "public",
+          "table": "template_works",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n      select 1\n      from public.template_stages ts\n      join public.estimate_templates et on et.id = ts.estimate_template_id\n      where ts.id = template_works.template_stage_id\n        and public.can_read_template(et.owner_kind, et.owner_id)\n    )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+        },
+        {
+          "name": "template_works_insert",
+          "schema": "public",
+          "table": "template_works",
+          "command": "insert",
+          "roles": [
+            "authenticated"
+          ],
+          "using": null,
+          "withCheck": "exists (\n      select 1\n      from public.template_stages ts\n      join public.estimate_templates et on et.id = ts.estimate_template_id\n      where ts.id = template_works.template_stage_id\n        and public.can_manage_template(et.owner_kind, et.owner_id)\n    )",
+          "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+        },
+        {
+          "name": "template_works_update",
+          "schema": "public",
+          "table": "template_works",
+          "command": "update",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n      select 1\n      from public.template_stages ts\n      join public.estimate_templates et on et.id = ts.estimate_template_id\n      where ts.id = template_works.template_stage_id\n        and public.can_manage_template(et.owner_kind, et.owner_id)\n    )",
+          "withCheck": "exists (\n      select 1\n      from public.template_stages ts\n      join public.estimate_templates et on et.id = ts.estimate_template_id\n      where ts.id = template_works.template_stage_id\n        and public.can_manage_template(et.owner_kind, et.owner_id)\n    )",
+          "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+        },
+        {
+          "name": "template_works_delete",
+          "schema": "public",
+          "table": "template_works",
+          "command": "delete",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n      select 1\n      from public.template_stages ts\n      join public.estimate_templates et on et.id = ts.estimate_template_id\n      where ts.id = template_works.template_stage_id\n        and public.can_manage_template(et.owner_kind, et.owner_id)\n    )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "table": "template_resource_lines",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "delete",
+        "insert",
+        "select",
+        "update"
+      ],
+      "policies": [
+        {
+          "name": "template_resource_lines_select",
+          "schema": "public",
+          "table": "template_resource_lines",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n      select 1\n      from public.template_works tw\n      join public.template_stages ts on ts.id = tw.template_stage_id\n      join public.estimate_templates et on et.id = ts.estimate_template_id\n      where tw.id = template_resource_lines.template_work_id\n        and public.can_read_template(et.owner_kind, et.owner_id)\n    )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+        },
+        {
+          "name": "template_resource_lines_insert",
+          "schema": "public",
+          "table": "template_resource_lines",
+          "command": "insert",
+          "roles": [
+            "authenticated"
+          ],
+          "using": null,
+          "withCheck": "exists (\n      select 1\n      from public.template_works tw\n      join public.template_stages ts on ts.id = tw.template_stage_id\n      join public.estimate_templates et on et.id = ts.estimate_template_id\n      where tw.id = template_resource_lines.template_work_id\n        and public.can_manage_template(et.owner_kind, et.owner_id)\n    )",
+          "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+        },
+        {
+          "name": "template_resource_lines_update",
+          "schema": "public",
+          "table": "template_resource_lines",
+          "command": "update",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n      select 1\n      from public.template_works tw\n      join public.template_stages ts on ts.id = tw.template_stage_id\n      join public.estimate_templates et on et.id = ts.estimate_template_id\n      where tw.id = template_resource_lines.template_work_id\n        and public.can_manage_template(et.owner_kind, et.owner_id)\n    )",
+          "withCheck": "exists (\n      select 1\n      from public.template_works tw\n      join public.template_stages ts on ts.id = tw.template_stage_id\n      join public.estimate_templates et on et.id = ts.estimate_template_id\n      where tw.id = template_resource_lines.template_work_id\n        and public.can_manage_template(et.owner_kind, et.owner_id)\n    )",
+          "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+        },
+        {
+          "name": "template_resource_lines_delete",
+          "schema": "public",
+          "table": "template_resource_lines",
+          "command": "delete",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n      select 1\n      from public.template_works tw\n      join public.template_stages ts on ts.id = tw.template_stage_id\n      join public.estimate_templates et on et.id = ts.estimate_template_id\n      where tw.id = template_resource_lines.template_work_id\n        and public.can_manage_template(et.owner_kind, et.owner_id)\n    )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "table": "contractor_profiles",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "delete",
+        "insert",
+        "select",
+        "update"
+      ],
+      "policies": [
+        {
+          "name": "contractor_profiles_select",
+          "schema": "public",
+          "table": "contractor_profiles",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "status = 'published'\n    or public.is_org_member(org_id)",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
+        },
+        {
+          "name": "contractor_profiles_insert",
+          "schema": "public",
+          "table": "contractor_profiles",
+          "command": "insert",
+          "roles": [
+            "authenticated"
+          ],
+          "using": null,
+          "withCheck": "public.can_manage_org(org_id)",
+          "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
+        },
+        {
+          "name": "contractor_profiles_update",
+          "schema": "public",
+          "table": "contractor_profiles",
+          "command": "update",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "public.can_manage_org(org_id)",
+          "withCheck": "public.can_manage_org(org_id)",
+          "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
+        },
+        {
+          "name": "contractor_profiles_delete",
+          "schema": "public",
+          "table": "contractor_profiles",
+          "command": "delete",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "public.can_manage_org(org_id)",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
+        }
+      ]
     }
   ]
 }

@@ -111,6 +111,11 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20260509140000_addresses_pr71_codex_findings.sql`
 - `supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql`
 - `supabase/migrations/20260511120100_seed_unit_conversions.sql`
+- `supabase/migrations/20260512132310_estimate_templates_schema.sql`
+- `supabase/migrations/20260512132320_template_rls.sql`
+- `supabase/migrations/20260512132330_contractor_profiles_schema.sql`
+- `supabase/migrations/20260512132340_template_rpcs.sql`
+- `supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql`
 
 ## Exclusions
 
