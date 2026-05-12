@@ -257,6 +257,18 @@
       "schema": "public",
       "table": "org_document_upload_intents",
       "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+    },
+    {
+      "key": "public.system_resource_articles",
+      "schema": "public",
+      "table": "system_resource_articles",
+      "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+    },
+    {
+      "key": "public.unit_conversions",
+      "schema": "public",
+      "table": "unit_conversions",
+      "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
     }
   ],
   "functions": [
@@ -1830,6 +1842,22 @@
       "name": "org_document_intents_member_write",
       "command": "all",
       "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+    },
+    {
+      "key": "public.system_resource_articles.system_resource_articles_select",
+      "schema": "public",
+      "table": "system_resource_articles",
+      "name": "system_resource_articles_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+    },
+    {
+      "key": "public.unit_conversions.unit_conversions_select",
+      "schema": "public",
+      "table": "unit_conversions",
+      "name": "unit_conversions_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
     }
   ],
   "slices": [

@@ -343,6 +343,14 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260509140000_addresses_pr71_codex_findings.sql",
       "sha256": "2f30d9d1dc5641c1ab4c1f0eee04f9d291f690022ffc84919af6fe9cb0201e80"
+    },
+    {
+      "path": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql",
+      "sha256": "9eaf035d7ae737b40608cdc4535eed5abe9b166c7f5f8b9cc7d146a7bb67ff2f"
+    },
+    {
+      "path": "supabase/migrations/20260511120100_seed_unit_conversions.sql",
+      "sha256": "65e0c8959f7dffdf1e0cb6eff0894fcad581d3ba9a252e91e2657f27e44db0eb"
     }
   ],
   "generated_artifacts": [
@@ -451,6 +459,8 @@ export const manifest = {
     "sql/20260509120000_import_documents_to_project_visibility.sql",
     "sql/20260509130000_workspace_org_doc_uploads_and_orphan_safe_links.sql",
     "sql/20260509140000_addresses_pr71_codex_findings.sql",
+    "sql/20260511120000_system_resource_articles_and_unit_conversions.sql",
+    "sql/20260511120100_seed_unit_conversions.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -8196,6 +8206,302 @@ export const tables = {
         }
       ],
       "triggers": []
+    },
+    {
+      "schema": "public",
+      "name": "system_resource_articles",
+      "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql",
+      "columns": [
+        {
+          "name": "id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "gen_random_uuid()",
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "rovno_sku",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": true,
+          "references": null
+        },
+        {
+          "name": "name",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "category_path",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "unit_display",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "unit_original",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "conversion_factor",
+          "sqlType": "numeric(14,4)",
+          "tsType": "number",
+          "nullable": false,
+          "defaultSql": "1",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "okpd2_code",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "source",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "'fgis_ksr'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "source_version",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "archived",
+          "sqlType": "boolean",
+          "tsType": "boolean",
+          "nullable": false,
+          "defaultSql": "false",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "updated_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": "system_resource_articles_rovno_sku_nonempty",
+          "columns": [],
+          "expression": "length(trim(rovno_sku)) > 0",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+        },
+        {
+          "type": "check",
+          "name": "system_resource_articles_name_nonempty",
+          "columns": [],
+          "expression": "length(trim(name)) > 0",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+        },
+        {
+          "type": "check",
+          "name": "system_resource_articles_category_path_nonempty",
+          "columns": [],
+          "expression": "length(trim(category_path)) > 0",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+        },
+        {
+          "type": "check",
+          "name": "system_resource_articles_unit_factor_positive",
+          "columns": [],
+          "expression": "conversion_factor > 0",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_system_resource_articles_rovno_sku",
+          "unique": false,
+          "expressions": [
+            "rovno_sku"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+        },
+        {
+          "name": "idx_system_resource_articles_name",
+          "unique": false,
+          "expressions": [
+            "name"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+        },
+        {
+          "name": "idx_system_resource_articles_category_path",
+          "unique": false,
+          "expressions": [
+            "category_path text_pattern_ops"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+        },
+        {
+          "name": "idx_system_resource_articles_source_version",
+          "unique": false,
+          "expressions": [
+            "source_version"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+        },
+        {
+          "name": "idx_system_resource_articles_archived",
+          "unique": false,
+          "expressions": [
+            "archived"
+          ],
+          "where": "archived = false",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "set_system_resource_articles_updated_at",
+          "activation": "before update",
+          "functionSchema": "public",
+          "functionName": "set_updated_at",
+          "functionSignature": "public.set_updated_at()",
+          "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "unit_conversions",
+      "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql",
+      "columns": [
+        {
+          "name": "unit_original",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "unit_display",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "factor",
+          "sqlType": "numeric(14,4)",
+          "tsType": "number",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": "unit_conversions_unit_display_nonempty",
+          "columns": [],
+          "expression": "length(trim(unit_display)) > 0",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+        },
+        {
+          "type": "check",
+          "name": "unit_conversions_factor_positive",
+          "columns": [],
+          "expression": "factor > 0",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+        }
+      ],
+      "indexes": [],
+      "triggers": []
     }
   ]
 } as const;
@@ -11004,6 +11310,66 @@ export const checks = {
       "allowedValues": null,
       "expression": "size_bytes is null or size_bytes >= 0",
       "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+    },
+    {
+      "schema": "public",
+      "table": "system_resource_articles",
+      "column": null,
+      "constraintName": "system_resource_articles_rovno_sku_nonempty",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "length(trim(rovno_sku)) > 0",
+      "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+    },
+    {
+      "schema": "public",
+      "table": "system_resource_articles",
+      "column": null,
+      "constraintName": "system_resource_articles_name_nonempty",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "length(trim(name)) > 0",
+      "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+    },
+    {
+      "schema": "public",
+      "table": "system_resource_articles",
+      "column": null,
+      "constraintName": "system_resource_articles_category_path_nonempty",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "length(trim(category_path)) > 0",
+      "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+    },
+    {
+      "schema": "public",
+      "table": "system_resource_articles",
+      "column": null,
+      "constraintName": "system_resource_articles_unit_factor_positive",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "conversion_factor > 0",
+      "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+    },
+    {
+      "schema": "public",
+      "table": "unit_conversions",
+      "column": null,
+      "constraintName": "unit_conversions_unit_display_nonempty",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "length(trim(unit_display)) > 0",
+      "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+    },
+    {
+      "schema": "public",
+      "table": "unit_conversions",
+      "column": null,
+      "constraintName": "unit_conversions_factor_positive",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "factor > 0",
+      "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
     }
   ]
 } as const;
@@ -11117,6 +11483,11 @@ export const functions = {
         {
           "table": "public.org_documents",
           "triggerName": "set_org_documents_updated_at",
+          "activation": "before update"
+        },
+        {
+          "table": "public.system_resource_articles",
+          "triggerName": "set_system_resource_articles_updated_at",
           "activation": "before update"
         }
       ]
@@ -15110,6 +15481,50 @@ export const rls = {
           "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
         }
       ]
+    },
+    {
+      "schema": "public",
+      "table": "system_resource_articles",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "select"
+      ],
+      "policies": [
+        {
+          "name": "system_resource_articles_select",
+          "schema": "public",
+          "table": "system_resource_articles",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "true",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "table": "unit_conversions",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "select"
+      ],
+      "policies": [
+        {
+          "name": "unit_conversions_select",
+          "schema": "public",
+          "table": "unit_conversions",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "true",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+        }
+      ]
     }
   ]
 } as const;
@@ -15373,6 +15788,18 @@ export const sourceTrace = {
       "schema": "public",
       "table": "org_document_upload_intents",
       "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+    },
+    {
+      "key": "public.system_resource_articles",
+      "schema": "public",
+      "table": "system_resource_articles",
+      "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+    },
+    {
+      "key": "public.unit_conversions",
+      "schema": "public",
+      "table": "unit_conversions",
+      "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
     }
   ],
   "functions": [
@@ -16946,6 +17373,22 @@ export const sourceTrace = {
       "name": "org_document_intents_member_write",
       "command": "all",
       "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+    },
+    {
+      "key": "public.system_resource_articles.system_resource_articles_select",
+      "schema": "public",
+      "table": "system_resource_articles",
+      "name": "system_resource_articles_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+    },
+    {
+      "key": "public.unit_conversions.unit_conversions_select",
+      "schema": "public",
+      "table": "unit_conversions",
+      "name": "unit_conversions_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
     }
   ],
   "slices": [

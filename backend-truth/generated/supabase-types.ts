@@ -1665,6 +1665,72 @@ export type Database = {
           }
           Relationships: []
         }
+        "system_resource_articles": {
+          Row: {
+          "id": string
+          "rovno_sku": string
+          "name": string
+          "category_path": string
+          "unit_display": string
+          "unit_original": string
+          "conversion_factor": number
+          "okpd2_code": string | null
+          "source": string
+          "source_version": string | null
+          "archived": boolean
+          "created_at": string
+          "updated_at": string
+          }
+          Insert: {
+          "id"?: string
+          "rovno_sku": string
+          "name": string
+          "category_path": string
+          "unit_display": string
+          "unit_original": string
+          "conversion_factor"?: number
+          "okpd2_code"?: string | null
+          "source"?: string
+          "source_version"?: string | null
+          "archived"?: boolean
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Update: {
+          "id"?: string
+          "rovno_sku"?: string
+          "name"?: string
+          "category_path"?: string
+          "unit_display"?: string
+          "unit_original"?: string
+          "conversion_factor"?: number
+          "okpd2_code"?: string | null
+          "source"?: string
+          "source_version"?: string | null
+          "archived"?: boolean
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Relationships: []
+        }
+        "unit_conversions": {
+          Row: {
+          "unit_original": string
+          "unit_display": string
+          "factor": number
+          }
+          Insert: {
+          "unit_original"?: string
+          "unit_display": string
+          "factor": number
+          }
+          Update: {
+          "unit_original"?: string
+          "unit_display"?: string
+          "factor"?: number
+          }
+          Relationships: []
+        }
     }
     Views: {
       [_ in never]: never

@@ -2032,6 +2032,50 @@
           "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
         }
       ]
+    },
+    {
+      "schema": "public",
+      "table": "system_resource_articles",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "select"
+      ],
+      "policies": [
+        {
+          "name": "system_resource_articles_select",
+          "schema": "public",
+          "table": "system_resource_articles",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "true",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "table": "unit_conversions",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "select"
+      ],
+      "policies": [
+        {
+          "name": "unit_conversions_select",
+          "schema": "public",
+          "table": "unit_conversions",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "true",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+        }
+      ]
     }
   ]
 }

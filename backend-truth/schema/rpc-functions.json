@@ -108,6 +108,11 @@
           "table": "public.org_documents",
           "triggerName": "set_org_documents_updated_at",
           "activation": "before update"
+        },
+        {
+          "table": "public.system_resource_articles",
+          "triggerName": "set_system_resource_articles_updated_at",
+          "activation": "before update"
         }
       ]
     },
