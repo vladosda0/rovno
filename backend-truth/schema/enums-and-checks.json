@@ -1143,6 +1143,66 @@
       "allowedValues": null,
       "expression": "size_bytes is null or size_bytes >= 0",
       "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+    },
+    {
+      "schema": "public",
+      "table": "system_resource_articles",
+      "column": null,
+      "constraintName": "system_resource_articles_rovno_sku_nonempty",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "length(trim(rovno_sku)) > 0",
+      "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+    },
+    {
+      "schema": "public",
+      "table": "system_resource_articles",
+      "column": null,
+      "constraintName": "system_resource_articles_name_nonempty",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "length(trim(name)) > 0",
+      "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+    },
+    {
+      "schema": "public",
+      "table": "system_resource_articles",
+      "column": null,
+      "constraintName": "system_resource_articles_category_path_nonempty",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "length(trim(category_path)) > 0",
+      "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+    },
+    {
+      "schema": "public",
+      "table": "system_resource_articles",
+      "column": null,
+      "constraintName": "system_resource_articles_unit_factor_positive",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "conversion_factor > 0",
+      "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+    },
+    {
+      "schema": "public",
+      "table": "unit_conversions",
+      "column": null,
+      "constraintName": "unit_conversions_unit_display_nonempty",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "length(trim(unit_display)) > 0",
+      "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+    },
+    {
+      "schema": "public",
+      "table": "unit_conversions",
+      "column": null,
+      "constraintName": "unit_conversions_factor_positive",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "factor > 0",
+      "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
     }
   ]
 }
