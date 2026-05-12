@@ -3069,12 +3069,12 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
             setAiSidebarClickedInside(true);
           }
         }}
-        className="glass-sidebar flex flex-col h-[calc(100svh-48px)] shrink-0 relative box-border"
+        className="glass-sidebar flex flex-col h-[calc(100svh-48px-var(--env-banner-h,0px))] shrink-0 relative box-border"
         style={{
           width: panelWidth,
           minWidth: collapsed ? COLLAPSED_WIDTH : (isMobile ? "100%" : MIN_WIDTH),
           maxWidth: collapsed ? COLLAPSED_WIDTH : (isMobile ? "100%" : MAX_WIDTH),
-          top: 48,
+          top: `calc(48px + var(--env-banner-h, 0px))`,
           position: "sticky",
           zIndex: 10,
           overflow: "hidden",

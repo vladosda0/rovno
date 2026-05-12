@@ -33,6 +33,16 @@ export function EnvBanner() {
     );
   }, [env, supabaseUrl]);
 
+  // Expose banner height to layout (fixed TopBar / sticky sidebar offset themselves
+  // via `var(--env-banner-h, 0px)`). Removed when the banner is hidden.
+  useEffect(() => {
+    if (env === "production") return;
+    document.documentElement.style.setProperty("--env-banner-h", "28px");
+    return () => {
+      document.documentElement.style.removeProperty("--env-banner-h");
+    };
+  }, [env]);
+
   if (env === "production") return null;
 
   const label =
@@ -49,7 +59,7 @@ export function EnvBanner() {
     <div
       role="status"
       aria-live="polite"
-      className="fixed inset-x-0 top-0 z-[9999] flex items-center justify-center gap-3 bg-amber-400/95 px-3 py-1 text-xs font-medium text-amber-950 backdrop-blur-sm select-none pointer-events-none"
+      className="relative z-[60] flex h-7 w-full shrink-0 items-center justify-center gap-3 bg-amber-400/95 px-3 text-xs font-medium text-amber-950 select-none"
     >
       <span aria-hidden>⚠</span>
       <span>{label}</span>
