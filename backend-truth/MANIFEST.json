@@ -374,7 +374,7 @@
     },
     {
       "path": "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql",
-      "sha256": "f2c4d92bfcea3d05307186c6ec5feff3975d1f134db9b309ba6cc8c62b7cc091"
+      "sha256": "fc933ee37f8aeecdc349669b774a077b81a97aeb84d6980c2e3e37b45b3b42fc"
     }
   ],
   "generated_artifacts": [

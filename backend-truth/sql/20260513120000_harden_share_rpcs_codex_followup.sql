@@ -155,19 +155,13 @@ begin
       using errcode = '42501';
   end if;
 
-  -- Reject share_token hijack: refuse the call when the token already
-  -- belongs to a different project. Without this guard the ON CONFLICT
-  -- path rewrote project_id silently, letting any owner of any project
-  -- take over a public token from another project's share link.
-  if exists (
-    select 1 from public.estimate_share_snapshots
-    where share_token = p_share_token
-      and project_id <> p_project_id
-  ) then
-    raise exception 'share_token already belongs to a different project'
-      using errcode = '42501';
-  end if;
-
+  -- Reject share_token hijack: the ON CONFLICT clause below only updates
+  -- when the existing row's project_id matches the caller's. A separate
+  -- pre-check has a TOCTOU race under concurrency: another transaction
+  -- could insert the token between the check and the upsert. Folding the
+  -- match into the conflict predicate makes the guard atomic with the
+  -- write. When the predicate fails the upsert is a no-op and RETURNING
+  -- yields zero rows; we raise below.
   insert into public.estimate_share_snapshots as ess (
     share_token,
     project_id,
@@ -194,7 +188,6 @@ begin
     now()
   )
   on conflict (share_token) do update set
-    project_id = excluded.project_id,
     version_number = excluded.version_number,
     status = 'proposed',
     share_approval_policy = excluded.share_approval_policy,
@@ -204,6 +197,7 @@ begin
     submitted = true,
     archived = false,
     updated_at = now()
+  where ess.project_id = excluded.project_id
   returning share_token,
             project_id,
             version_number,
@@ -218,6 +212,11 @@ begin
             created_at,
             updated_at
   into v_row;
+
+  if not found then
+    raise exception 'share_token already belongs to a different project'
+      using errcode = '42501';
+  end if;
 
   return to_jsonb(v_row);
 end;
