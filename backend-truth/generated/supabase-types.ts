@@ -1953,6 +1953,54 @@ export type Database = {
           }
           Relationships: []
         }
+        "estimate_share_snapshots": {
+          Row: {
+          "share_token": string
+          "project_id": string
+          "version_number": number
+          "status": "proposed" | "approved"
+          "share_approval_policy": "registered" | "disabled"
+          "share_approval_disabled_reason": string | null
+          "snapshot": Json
+          "approval_stamp": Json | null
+          "submitted": boolean
+          "archived": boolean
+          "created_by": string
+          "created_at": string
+          "updated_at": string
+          }
+          Insert: {
+          "share_token"?: string
+          "project_id": string
+          "version_number": number
+          "status"?: "proposed" | "approved"
+          "share_approval_policy"?: "registered" | "disabled"
+          "share_approval_disabled_reason"?: string | null
+          "snapshot": Json
+          "approval_stamp"?: Json | null
+          "submitted"?: boolean
+          "archived"?: boolean
+          "created_by": string
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Update: {
+          "share_token"?: string
+          "project_id"?: string
+          "version_number"?: number
+          "status"?: "proposed" | "approved"
+          "share_approval_policy"?: "registered" | "disabled"
+          "share_approval_disabled_reason"?: string | null
+          "snapshot"?: Json
+          "approval_stamp"?: Json | null
+          "submitted"?: boolean
+          "archived"?: boolean
+          "created_by"?: string
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Relationships: []
+        }
     }
     Views: {
       [_ in never]: never
@@ -1996,7 +2044,7 @@ export type Database = {
           "p_share_token": string
           "p_payload": Json
           }
-          Returns: string
+          Returns: Json
         }
         "can_access_hr_domain": {
           Args: {
@@ -2214,7 +2262,7 @@ export type Database = {
           Args: {
           "p_share_token": string
           }
-          Returns: Database['public']['Tables']["estimate_versions"]['Row']
+          Returns: Json
         }
         "get_tasks_ai_operational_evidence": {
           Args: {
@@ -2336,6 +2384,17 @@ export type Database = {
           "p_project_id": string
           }
           Returns: string
+        }
+        "publish_estimate_share_snapshot": {
+          Args: {
+          "p_project_id": string
+          "p_share_token": string
+          "p_version_number": number
+          "p_snapshot": Json
+          "p_share_approval_policy": unknown
+          "p_share_approval_disabled_reason": unknown
+          }
+          Returns: Json
         }
         "set_active_org_context": {
           Args: {

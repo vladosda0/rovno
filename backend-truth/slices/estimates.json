@@ -10,13 +10,14 @@
   "kind": "derived_contract_bundle",
   "sourceMigrations": [
     "supabase/migrations/20260306162500_estimates_core.sql",
+    "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql",
     "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
     "supabase/migrations/20260306164000_hr_domain.sql",
     "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
     "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql",
     "supabase/migrations/20260417120000_estimate_resource_line_assignee_profile.sql",
-    "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
     "supabase/migrations/20260418120000_estimate_resource_line_assignee_label.sql",
+    "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql",
     "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
     "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
   ],
@@ -907,6 +908,232 @@
         }
       ],
       "triggers": []
+    },
+    {
+      "schema": "public",
+      "name": "estimate_share_snapshots",
+      "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql",
+      "columns": [
+        {
+          "name": "share_token",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "project_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "projects",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "cascade"
+          }
+        },
+        {
+          "name": "version_number",
+          "sqlType": "integer",
+          "tsType": "number",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "status",
+          "sqlType": "text",
+          "tsType": "\"proposed\" | \"approved\"",
+          "nullable": false,
+          "defaultSql": "'proposed'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "share_approval_policy",
+          "sqlType": "text",
+          "tsType": "\"registered\" | \"disabled\"",
+          "nullable": false,
+          "defaultSql": "'registered'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "share_approval_disabled_reason",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "snapshot",
+          "sqlType": "jsonb",
+          "tsType": "Json",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "approval_stamp",
+          "sqlType": "jsonb",
+          "tsType": "Json",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "submitted",
+          "sqlType": "boolean",
+          "tsType": "boolean",
+          "nullable": false,
+          "defaultSql": "true",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "archived",
+          "sqlType": "boolean",
+          "tsType": "boolean",
+          "nullable": false,
+          "defaultSql": "false",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "created_by",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "profiles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "restrict"
+          }
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "updated_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "version_number"
+          ],
+          "expression": "version_number >= 1",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "status"
+          ],
+          "expression": "status in ('proposed', 'approved')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "share_approval_policy"
+          ],
+          "expression": "share_approval_policy in ('registered', 'disabled')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "share_approval_disabled_reason"
+          ],
+          "expression": "share_approval_disabled_reason is null\n      or share_approval_disabled_reason = 'no_participant_slot'",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "estimate_share_snapshots_project_id_idx",
+          "unique": false,
+          "expressions": [
+            "project_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+        },
+        {
+          "name": "estimate_share_snapshots_active_project_idx",
+          "unique": false,
+          "expressions": [
+            "project_id",
+            "version_number desc"
+          ],
+          "where": "archived = false and submitted = true",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "estimate_share_snapshots_set_updated_at",
+          "activation": "before update",
+          "functionSchema": "public",
+          "functionName": "set_updated_at",
+          "functionSignature": "public.set_updated_at()",
+          "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+        }
+      ]
     }
   ],
   "relations": [
@@ -1181,56 +1408,41 @@
         "id"
       ],
       "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "estimate_share_snapshots",
+      "fromColumns": [
+        "project_id"
+      ],
+      "toSchema": "public",
+      "toTable": "projects",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "estimate_share_snapshots",
+      "fromColumns": [
+        "created_by"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "restrict"
     }
   ],
   "functions": [
-    {
-      "schema": "public",
-      "name": "get_shared_estimate_version",
-      "key": "public.get_shared_estimate_version",
-      "signature": "public.get_shared_estimate_version(text)",
-      "args": [
-        {
-          "name": "p_share_token",
-          "type": "text",
-          "identityType": "text"
-        }
-      ],
-      "returnType": "public.estimate_versions",
-      "language": "plpgsql",
-      "volatility": "volatile",
-      "securityDefiner": false,
-      "searchPath": null,
-      "sourceMigration": "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
-      "authenticatedExecute": true,
-      "triggerUsages": []
-    },
-    {
-      "schema": "public",
-      "name": "approve_estimate_version_by_share_token",
-      "key": "public.approve_estimate_version_by_share_token",
-      "signature": "public.approve_estimate_version_by_share_token(text, jsonb)",
-      "args": [
-        {
-          "name": "p_share_token",
-          "type": "text",
-          "identityType": "text"
-        },
-        {
-          "name": "p_payload",
-          "type": "jsonb",
-          "identityType": "jsonb"
-        }
-      ],
-      "returnType": "uuid",
-      "language": "plpgsql",
-      "volatility": "volatile",
-      "securityDefiner": false,
-      "searchPath": null,
-      "sourceMigration": "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
-      "authenticatedExecute": true,
-      "triggerUsages": []
-    },
     {
       "schema": "public",
       "name": "get_estimate_operational_summary",
@@ -1264,6 +1476,99 @@
       "securityDefiner": true,
       "searchPath": "public",
       "sourceMigration": "supabase/migrations/20260418120000_estimate_resource_line_assignee_label.sql",
+      "authenticatedExecute": true,
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "get_shared_estimate_version",
+      "key": "public.get_shared_estimate_version",
+      "signature": "public.get_shared_estimate_version(text)",
+      "args": [
+        {
+          "name": "p_share_token",
+          "type": "text",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql",
+      "authenticatedExecute": true,
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "approve_estimate_version_by_share_token",
+      "key": "public.approve_estimate_version_by_share_token",
+      "signature": "public.approve_estimate_version_by_share_token(text, jsonb)",
+      "args": [
+        {
+          "name": "p_share_token",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_payload",
+          "type": "jsonb",
+          "identityType": "jsonb"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "immutable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "sourceMigration": "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql",
+      "authenticatedExecute": true,
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "publish_estimate_share_snapshot",
+      "key": "public.publish_estimate_share_snapshot",
+      "signature": "public.publish_estimate_share_snapshot(uuid, text, integer, jsonb, text, text)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_share_token",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_version_number",
+          "type": "integer",
+          "identityType": "integer"
+        },
+        {
+          "name": "p_snapshot",
+          "type": "jsonb",
+          "identityType": "jsonb"
+        },
+        {
+          "name": "p_share_approval_policy",
+          "type": "text default 'registered'",
+          "identityType": "text"
+        },
+        {
+          "name": "p_share_approval_disabled_reason",
+          "type": "text default null",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "sourceMigration": "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql",
       "authenticatedExecute": true,
       "triggerUsages": []
     }
@@ -1573,6 +1878,13 @@
           "sourceMigration": "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
         }
       ]
+    },
+    {
+      "schema": "public",
+      "table": "estimate_share_snapshots",
+      "rlsEnabled": true,
+      "authenticatedGrants": [],
+      "policies": []
     }
   ]
 }
