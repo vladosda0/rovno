@@ -1769,9 +1769,18 @@ export default function ProjectEstimate() {
         };
     };
 
-    // Approved versions are immutable — always return their existing shareId.
+    // Approved versions are immutable. If the estimate has not changed since
+    // approval, reuse the approved shareId. If there are new edits, fall
+    // through to the "create a fresh proposed" branch below — clients should
+    // not be sent stale data behind the same link.
     if (latestApproved?.shareId) {
-      return { url: buildShareLink(latestApproved.shareId) };
+      const approvedMatchesCurrent = computeVersionDiff(
+        latestApproved,
+        { ...latestApproved, snapshot: currentVersionSnapshot },
+      ).changes.length === 0;
+      if (approvedMatchesCurrent) {
+        return { url: buildShareLink(latestApproved.shareId) };
+      }
     }
 
     // Proposed and submitted: if there are unsent edits, refresh the snapshot
@@ -1818,6 +1827,7 @@ export default function ProjectEstimate() {
     buildShareLink,
     canSubmitToClient,
     currentUser.id,
+    currentVersionSnapshot,
     hasPendingChangesSinceSubmission,
     latestApproved,
     latestProposed,

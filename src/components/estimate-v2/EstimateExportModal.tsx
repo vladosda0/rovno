@@ -138,8 +138,12 @@ export function EstimateExportModal({
   const activeOrg = useActiveOrg();
   const orgId = activeOrg?.id ?? null;
   const projectId = payload?.projectId ?? null;
+  // When the user has no active org, fall back to a project-scoped local key
+  // so signing details still persist on this device. The banner in the modal
+  // tells the user this is what will happen.
+  const effectiveOrgKey = orgId ?? (projectId ? `local:${projectId}` : null);
 
-  const orgCardQuery = useOrgCard(orgId);
+  const orgCardQuery = useOrgCard(effectiveOrgKey);
   const clientInfoQuery = useClientInfo(projectId);
   const setOrgCardMutation = useSetOrgCard();
   const setClientInfoMutation = useSetClientInfo();
@@ -207,8 +211,8 @@ export function EstimateExportModal({
   const persistSigningDraft = async () => {
     if (variant !== "client_signing") return;
     const tasks: Promise<unknown>[] = [];
-    if (orgId) {
-      tasks.push(setOrgCardMutation.mutateAsync({ orgId, card: orgCardDraft }));
+    if (effectiveOrgKey) {
+      tasks.push(setOrgCardMutation.mutateAsync({ orgId: effectiveOrgKey, card: orgCardDraft }));
     }
     if (projectId) {
       tasks.push(setClientInfoMutation.mutateAsync({ projectId, info: clientInfoDraft }));
