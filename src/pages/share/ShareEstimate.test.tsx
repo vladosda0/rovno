@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import ShareEstimate from "@/pages/share/ShareEstimate";
 import {
   createLine,
@@ -14,12 +15,20 @@ import { clearDemoSession, enterDemoSession, setAuthRole } from "@/lib/auth-stat
 let shareScenarioCounter = 0;
 
 function renderSharePage(shareId: string) {
+  // ShareEstimate now consumes React Query (useEstimateV2Share + manual
+  // invalidation after approve). Each test gets a fresh client with retries
+  // disabled so the Supabase RPC failure path in jsdom does not flake.
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0 } },
+  });
   return render(
-    <MemoryRouter initialEntries={[`/share/estimate/${shareId}`]}>
-      <Routes>
-        <Route path="/share/estimate/:shareId" element={<ShareEstimate />} />
-      </Routes>
-    </MemoryRouter>,
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={[`/share/estimate/${shareId}`]}>
+        <Routes>
+          <Route path="/share/estimate/:shareId" element={<ShareEstimate />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 

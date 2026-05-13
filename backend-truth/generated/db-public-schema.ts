@@ -343,6 +343,42 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260509140000_addresses_pr71_codex_findings.sql",
       "sha256": "2f30d9d1dc5641c1ab4c1f0eee04f9d291f690022ffc84919af6fe9cb0201e80"
+    },
+    {
+      "path": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql",
+      "sha256": "9eaf035d7ae737b40608cdc4535eed5abe9b166c7f5f8b9cc7d146a7bb67ff2f"
+    },
+    {
+      "path": "supabase/migrations/20260511120100_seed_unit_conversions.sql",
+      "sha256": "65e0c8959f7dffdf1e0cb6eff0894fcad581d3ba9a252e91e2657f27e44db0eb"
+    },
+    {
+      "path": "supabase/migrations/20260512132310_estimate_templates_schema.sql",
+      "sha256": "0c82982a2a2d53280a708b97e5b532f0c2b6baeaa5f6c1521788947e33b79bf5"
+    },
+    {
+      "path": "supabase/migrations/20260512132320_template_rls.sql",
+      "sha256": "04168799bcdbbd663fee7ff1192f5b650d309a0262ffe91a360c5f7a06adc308"
+    },
+    {
+      "path": "supabase/migrations/20260512132330_contractor_profiles_schema.sql",
+      "sha256": "add8d163ef615dfab6fc1ca0231e8bb78b3f5d6cd86f940d4c35c770446786ad"
+    },
+    {
+      "path": "supabase/migrations/20260512132340_template_rpcs.sql",
+      "sha256": "9882337afb0fae4c91c3c8890a99adeb11bae98ae72dab691724cb67d65b23cc"
+    },
+    {
+      "path": "supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql",
+      "sha256": "391e18658823efccb1789c91e6e3ed81d1de6b30d242b6819b0f758678020b37"
+    },
+    {
+      "path": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql",
+      "sha256": "f744aa26e8a86f2b86fb511a746c82537aefbdbacd716b28b0b6c9695f62ebf2"
+    },
+    {
+      "path": "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql",
+      "sha256": "f2c4d92bfcea3d05307186c6ec5feff3975d1f134db9b309ba6cc8c62b7cc091"
     }
   ],
   "generated_artifacts": [
@@ -358,6 +394,7 @@ export const manifest = {
     "slices/planning.json",
     "slices/documents-media.json",
     "slices/estimates.json",
+    "slices/templates.json",
     "slices/procurement-inventory.json",
     "slices/hr.json",
     "slices/activity-billing.json",
@@ -365,6 +402,7 @@ export const manifest = {
     "contracts/planning-contract.md",
     "contracts/documents-contract.md",
     "contracts/estimates-contract.md",
+    "contracts/templates-contract.md",
     "contracts/procurement-contract.md",
     "contracts/hr-contract.md",
     "contracts/activity-billing-contract.md",
@@ -451,6 +489,15 @@ export const manifest = {
     "sql/20260509120000_import_documents_to_project_visibility.sql",
     "sql/20260509130000_workspace_org_doc_uploads_and_orphan_safe_links.sql",
     "sql/20260509140000_addresses_pr71_codex_findings.sql",
+    "sql/20260511120000_system_resource_articles_and_unit_conversions.sql",
+    "sql/20260511120100_seed_unit_conversions.sql",
+    "sql/20260512132310_estimate_templates_schema.sql",
+    "sql/20260512132320_template_rls.sql",
+    "sql/20260512132330_contractor_profiles_schema.sql",
+    "sql/20260512132340_template_rpcs.sql",
+    "sql/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql",
+    "sql/20260513110100_estimate_share_snapshots_and_rpcs.sql",
+    "sql/20260513120000_harden_share_rpcs_codex_followup.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -8196,6 +8243,1575 @@ export const tables = {
         }
       ],
       "triggers": []
+    },
+    {
+      "schema": "public",
+      "name": "system_resource_articles",
+      "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql",
+      "columns": [
+        {
+          "name": "id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "gen_random_uuid()",
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "rovno_sku",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": true,
+          "references": null
+        },
+        {
+          "name": "name",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "category_path",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "unit_display",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "unit_original",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "conversion_factor",
+          "sqlType": "numeric(14,4)",
+          "tsType": "number",
+          "nullable": false,
+          "defaultSql": "1",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "okpd2_code",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "source",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "'fgis_ksr'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "source_version",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "archived",
+          "sqlType": "boolean",
+          "tsType": "boolean",
+          "nullable": false,
+          "defaultSql": "false",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "updated_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": "system_resource_articles_rovno_sku_nonempty",
+          "columns": [],
+          "expression": "length(trim(rovno_sku)) > 0",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+        },
+        {
+          "type": "check",
+          "name": "system_resource_articles_name_nonempty",
+          "columns": [],
+          "expression": "length(trim(name)) > 0",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+        },
+        {
+          "type": "check",
+          "name": "system_resource_articles_category_path_nonempty",
+          "columns": [],
+          "expression": "length(trim(category_path)) > 0",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+        },
+        {
+          "type": "check",
+          "name": "system_resource_articles_unit_factor_positive",
+          "columns": [],
+          "expression": "conversion_factor > 0",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_system_resource_articles_rovno_sku",
+          "unique": false,
+          "expressions": [
+            "rovno_sku"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+        },
+        {
+          "name": "idx_system_resource_articles_name",
+          "unique": false,
+          "expressions": [
+            "name"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+        },
+        {
+          "name": "idx_system_resource_articles_category_path",
+          "unique": false,
+          "expressions": [
+            "category_path text_pattern_ops"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+        },
+        {
+          "name": "idx_system_resource_articles_source_version",
+          "unique": false,
+          "expressions": [
+            "source_version"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+        },
+        {
+          "name": "idx_system_resource_articles_archived",
+          "unique": false,
+          "expressions": [
+            "archived"
+          ],
+          "where": "archived = false",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "set_system_resource_articles_updated_at",
+          "activation": "before update",
+          "functionSchema": "public",
+          "functionName": "set_updated_at",
+          "functionSignature": "public.set_updated_at()",
+          "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "unit_conversions",
+      "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql",
+      "columns": [
+        {
+          "name": "unit_original",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "unit_display",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "factor",
+          "sqlType": "numeric(14,4)",
+          "tsType": "number",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": "unit_conversions_unit_display_nonempty",
+          "columns": [],
+          "expression": "length(trim(unit_display)) > 0",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+        },
+        {
+          "type": "check",
+          "name": "unit_conversions_factor_positive",
+          "columns": [],
+          "expression": "factor > 0",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+        }
+      ],
+      "indexes": [],
+      "triggers": []
+    },
+    {
+      "schema": "public",
+      "name": "estimate_templates",
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql",
+      "columns": [
+        {
+          "name": "id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "gen_random_uuid()",
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "owner_kind",
+          "sqlType": "text",
+          "tsType": "\"system\" | \"org\" | \"profile\"",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "owner_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "title",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "description",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "''",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "scope",
+          "sqlType": "text",
+          "tsType": "\"ИЖС\" | \"ремонт\" | \"ландшафт\" | \"баня\" | \"гараж\" | \"инженерка\" | \"коммерческое\" | \"general\"",
+          "nullable": false,
+          "defaultSql": "'general'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "cover_image_url",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "published_to_public",
+          "sqlType": "boolean",
+          "tsType": "boolean",
+          "nullable": false,
+          "defaultSql": "false",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "contact_block",
+          "sqlType": "jsonb",
+          "tsType": "Json",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "source",
+          "sqlType": "text",
+          "tsType": "\"system\" | \"user\" | \"imported_xlsx\"",
+          "nullable": false,
+          "defaultSql": "'user'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "source_version",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "created_by",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "profiles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "updated_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "owner_kind"
+          ],
+          "expression": "owner_kind in ('system','org','profile')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "scope"
+          ],
+          "expression": "scope in ('ИЖС','ремонт','ландшафт','баня','гараж','инженерка','коммерческое','general')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "source"
+          ],
+          "expression": "source in ('system','user','imported_xlsx')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        },
+        {
+          "type": "check",
+          "name": "estimate_templates_owner_id_consistency",
+          "columns": [],
+          "expression": "(owner_kind = 'system' and owner_id is null)\n      or (owner_kind = 'org' and owner_id is not null)\n      or (owner_kind = 'profile' and owner_id is not null)",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        },
+        {
+          "type": "check",
+          "name": "estimate_templates_title_nonempty",
+          "columns": [],
+          "expression": "length(trim(title)) > 0",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_estimate_templates_owner",
+          "unique": false,
+          "expressions": [
+            "owner_kind",
+            "owner_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        },
+        {
+          "name": "idx_estimate_templates_scope",
+          "unique": false,
+          "expressions": [
+            "scope"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        },
+        {
+          "name": "idx_estimate_templates_published",
+          "unique": false,
+          "expressions": [
+            "published_to_public"
+          ],
+          "where": "published_to_public = true",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        },
+        {
+          "name": "estimate_templates_system_singleton",
+          "unique": true,
+          "expressions": [
+            "owner_kind"
+          ],
+          "where": "owner_kind = 'system'",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "set_estimate_templates_updated_at",
+          "activation": "before update",
+          "functionSchema": "public",
+          "functionName": "set_updated_at",
+          "functionSignature": "public.set_updated_at()",
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "template_stages",
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql",
+      "columns": [
+        {
+          "name": "id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "gen_random_uuid()",
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "estimate_template_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "estimate_templates",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "cascade"
+          }
+        },
+        {
+          "name": "title",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "description",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "''",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "scope_tag",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "'general'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "sort_hint",
+          "sqlType": "integer",
+          "tsType": "number",
+          "nullable": false,
+          "defaultSql": "100",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "parameter_definitions",
+          "sqlType": "jsonb",
+          "tsType": "Json",
+          "nullable": false,
+          "defaultSql": "'[]'::jsonb",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "updated_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": "template_stages_title_nonempty",
+          "columns": [],
+          "expression": "length(trim(title)) > 0",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        },
+        {
+          "type": "check",
+          "name": "template_stages_sort_hint_positive",
+          "columns": [],
+          "expression": "sort_hint > 0",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql"
+        },
+        {
+          "type": "check",
+          "name": "template_stages_scope_tag_enum",
+          "columns": [],
+          "expression": "scope_tag in ('ИЖС','ремонт','ландшафт','баня','гараж','инженерка','коммерческое','general')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_template_stages_template",
+          "unique": false,
+          "expressions": [
+            "estimate_template_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "set_template_stages_updated_at",
+          "activation": "before update",
+          "functionSchema": "public",
+          "functionName": "set_updated_at",
+          "functionSignature": "public.set_updated_at()",
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "template_works",
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql",
+      "columns": [
+        {
+          "name": "id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "gen_random_uuid()",
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "template_stage_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "template_stages",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "cascade"
+          }
+        },
+        {
+          "name": "title",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "description",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "''",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "sort_hint",
+          "sqlType": "integer",
+          "tsType": "number",
+          "nullable": false,
+          "defaultSql": "100",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "parameter_definitions",
+          "sqlType": "jsonb",
+          "tsType": "Json",
+          "nullable": false,
+          "defaultSql": "'[]'::jsonb",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "updated_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": "template_works_title_nonempty",
+          "columns": [],
+          "expression": "length(trim(title)) > 0",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        },
+        {
+          "type": "check",
+          "name": "template_works_sort_hint_positive",
+          "columns": [],
+          "expression": "sort_hint > 0",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_template_works_stage",
+          "unique": false,
+          "expressions": [
+            "template_stage_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "set_template_works_updated_at",
+          "activation": "before update",
+          "functionSchema": "public",
+          "functionName": "set_updated_at",
+          "functionSignature": "public.set_updated_at()",
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "template_resource_lines",
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql",
+      "columns": [
+        {
+          "name": "id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "gen_random_uuid()",
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "template_work_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "template_works",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "cascade"
+          }
+        },
+        {
+          "name": "system_resource_article_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "system_resource_articles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
+        },
+        {
+          "name": "title",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "resource_type",
+          "sqlType": "text",
+          "tsType": "\"material\" | \"tool\" | \"labor\" | \"subcontractor\" | \"overhead\" | \"other\"",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "unit_display",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "qty_default",
+          "sqlType": "numeric(14,3)",
+          "tsType": "number",
+          "nullable": false,
+          "defaultSql": "1",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "default_cost_unit_cents",
+          "sqlType": "bigint",
+          "tsType": "number",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "default_markup_bps",
+          "sqlType": "integer",
+          "tsType": "number",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "default_discount_bps",
+          "sqlType": "integer",
+          "tsType": "number",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "sort_hint",
+          "sqlType": "integer",
+          "tsType": "number",
+          "nullable": false,
+          "defaultSql": "100",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "updated_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "resource_type"
+          ],
+          "expression": "resource_type in ('material','tool','labor','subcontractor','overhead','other')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "qty_default"
+          ],
+          "expression": "qty_default >= 0",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "default_cost_unit_cents"
+          ],
+          "expression": "default_cost_unit_cents is null or default_cost_unit_cents >= 0",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "default_markup_bps"
+          ],
+          "expression": "default_markup_bps is null or (default_markup_bps >= 0 and default_markup_bps <= 10000)",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "default_discount_bps"
+          ],
+          "expression": "default_discount_bps is null or (default_discount_bps >= 0 and default_discount_bps <= 10000)",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        },
+        {
+          "type": "check",
+          "name": "template_resource_lines_title_nonempty",
+          "columns": [],
+          "expression": "length(trim(title)) > 0",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        },
+        {
+          "type": "check",
+          "name": "template_resource_lines_sort_hint_positive",
+          "columns": [],
+          "expression": "sort_hint > 0",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_template_resource_lines_work",
+          "unique": false,
+          "expressions": [
+            "template_work_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        },
+        {
+          "name": "idx_template_resource_lines_article",
+          "unique": false,
+          "expressions": [
+            "system_resource_article_id"
+          ],
+          "where": "system_resource_article_id is not null",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "set_template_resource_lines_updated_at",
+          "activation": "before update",
+          "functionSchema": "public",
+          "functionName": "set_updated_at",
+          "functionSignature": "public.set_updated_at()",
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "contractor_profiles",
+      "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql",
+      "columns": [
+        {
+          "name": "id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "gen_random_uuid()",
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "org_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "organizations",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "cascade"
+          }
+        },
+        {
+          "name": "display_name",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "contacts",
+          "sqlType": "jsonb",
+          "tsType": "Json",
+          "nullable": false,
+          "defaultSql": "'{}'::jsonb",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "region",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "specializations",
+          "sqlType": "text[]",
+          "tsType": "unknown",
+          "nullable": false,
+          "defaultSql": "'{}'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "experience_years",
+          "sqlType": "integer",
+          "tsType": "number",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "avatar_url",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "description",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "status",
+          "sqlType": "text",
+          "tsType": "\"draft\" | \"pending_moderation\" | \"published\" | \"archived\"",
+          "nullable": false,
+          "defaultSql": "'draft'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "moderated_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "moderated_by",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "profiles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
+        },
+        {
+          "name": "created_by",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "profiles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "updated_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "status"
+          ],
+          "expression": "status in ('draft','pending_moderation','published','archived')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
+        },
+        {
+          "type": "check",
+          "name": "contractor_profiles_display_name_nonempty",
+          "columns": [],
+          "expression": "length(trim(display_name)) > 0",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
+        },
+        {
+          "type": "check",
+          "name": "contractor_profiles_experience_years_nonnegative",
+          "columns": [],
+          "expression": "experience_years is null or experience_years >= 0",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_contractor_profiles_one_per_org",
+          "unique": true,
+          "expressions": [
+            "org_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
+        },
+        {
+          "name": "idx_contractor_profiles_status",
+          "unique": false,
+          "expressions": [
+            "status"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
+        },
+        {
+          "name": "idx_contractor_profiles_published",
+          "unique": false,
+          "expressions": [
+            "status"
+          ],
+          "where": "status = 'published'",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "set_contractor_profiles_updated_at",
+          "activation": "before update",
+          "functionSchema": "public",
+          "functionName": "set_updated_at",
+          "functionSignature": "public.set_updated_at()",
+          "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "estimate_share_snapshots",
+      "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql",
+      "columns": [
+        {
+          "name": "share_token",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "project_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "projects",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "cascade"
+          }
+        },
+        {
+          "name": "version_number",
+          "sqlType": "integer",
+          "tsType": "number",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "status",
+          "sqlType": "text",
+          "tsType": "\"proposed\" | \"approved\"",
+          "nullable": false,
+          "defaultSql": "'proposed'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "share_approval_policy",
+          "sqlType": "text",
+          "tsType": "\"registered\" | \"disabled\"",
+          "nullable": false,
+          "defaultSql": "'registered'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "share_approval_disabled_reason",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "snapshot",
+          "sqlType": "jsonb",
+          "tsType": "Json",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "approval_stamp",
+          "sqlType": "jsonb",
+          "tsType": "Json",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "submitted",
+          "sqlType": "boolean",
+          "tsType": "boolean",
+          "nullable": false,
+          "defaultSql": "true",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "archived",
+          "sqlType": "boolean",
+          "tsType": "boolean",
+          "nullable": false,
+          "defaultSql": "false",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "created_by",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "profiles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "restrict"
+          }
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "updated_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "version_number"
+          ],
+          "expression": "version_number >= 1",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "status"
+          ],
+          "expression": "status in ('proposed', 'approved')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "share_approval_policy"
+          ],
+          "expression": "share_approval_policy in ('registered', 'disabled')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "share_approval_disabled_reason"
+          ],
+          "expression": "share_approval_disabled_reason is null\n      or share_approval_disabled_reason = 'no_participant_slot'",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "estimate_share_snapshots_project_id_idx",
+          "unique": false,
+          "expressions": [
+            "project_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+        },
+        {
+          "name": "estimate_share_snapshots_active_project_idx",
+          "unique": false,
+          "expressions": [
+            "project_id",
+            "version_number desc"
+          ],
+          "where": "archived = false and submitted = true",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "estimate_share_snapshots_set_updated_at",
+          "activation": "before update",
+          "functionSchema": "public",
+          "functionName": "set_updated_at",
+          "functionSignature": "public.set_updated_at()",
+          "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+        }
+      ]
     }
   ]
 } as const;
@@ -9855,6 +11471,166 @@ export const relations = {
         "id"
       ],
       "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "estimate_templates",
+      "fromColumns": [
+        "created_by"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "template_stages",
+      "fromColumns": [
+        "estimate_template_id"
+      ],
+      "toSchema": "public",
+      "toTable": "estimate_templates",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "template_works",
+      "fromColumns": [
+        "template_stage_id"
+      ],
+      "toSchema": "public",
+      "toTable": "template_stages",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "template_resource_lines",
+      "fromColumns": [
+        "template_work_id"
+      ],
+      "toSchema": "public",
+      "toTable": "template_works",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "template_resource_lines",
+      "fromColumns": [
+        "system_resource_article_id"
+      ],
+      "toSchema": "public",
+      "toTable": "system_resource_articles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "contractor_profiles",
+      "fromColumns": [
+        "org_id"
+      ],
+      "toSchema": "public",
+      "toTable": "organizations",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "contractor_profiles",
+      "fromColumns": [
+        "moderated_by"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "contractor_profiles",
+      "fromColumns": [
+        "created_by"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "estimate_share_snapshots",
+      "fromColumns": [
+        "project_id"
+      ],
+      "toSchema": "public",
+      "toTable": "projects",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "estimate_share_snapshots",
+      "fromColumns": [
+        "created_by"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "restrict"
     }
   ]
 } as const;
@@ -11004,6 +12780,350 @@ export const checks = {
       "allowedValues": null,
       "expression": "size_bytes is null or size_bytes >= 0",
       "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+    },
+    {
+      "schema": "public",
+      "table": "system_resource_articles",
+      "column": null,
+      "constraintName": "system_resource_articles_rovno_sku_nonempty",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "length(trim(rovno_sku)) > 0",
+      "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+    },
+    {
+      "schema": "public",
+      "table": "system_resource_articles",
+      "column": null,
+      "constraintName": "system_resource_articles_name_nonempty",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "length(trim(name)) > 0",
+      "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+    },
+    {
+      "schema": "public",
+      "table": "system_resource_articles",
+      "column": null,
+      "constraintName": "system_resource_articles_category_path_nonempty",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "length(trim(category_path)) > 0",
+      "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+    },
+    {
+      "schema": "public",
+      "table": "system_resource_articles",
+      "column": null,
+      "constraintName": "system_resource_articles_unit_factor_positive",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "conversion_factor > 0",
+      "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+    },
+    {
+      "schema": "public",
+      "table": "unit_conversions",
+      "column": null,
+      "constraintName": "unit_conversions_unit_display_nonempty",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "length(trim(unit_display)) > 0",
+      "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+    },
+    {
+      "schema": "public",
+      "table": "unit_conversions",
+      "column": null,
+      "constraintName": "unit_conversions_factor_positive",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "factor > 0",
+      "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+    },
+    {
+      "schema": "public",
+      "table": "estimate_templates",
+      "column": "owner_kind",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "system",
+        "org",
+        "profile"
+      ],
+      "expression": "owner_kind in ('system','org','profile')",
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "estimate_templates",
+      "column": "scope",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "ИЖС",
+        "ремонт",
+        "ландшафт",
+        "баня",
+        "гараж",
+        "инженерка",
+        "коммерческое",
+        "general"
+      ],
+      "expression": "scope in ('ИЖС','ремонт','ландшафт','баня','гараж','инженерка','коммерческое','general')",
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "estimate_templates",
+      "column": "source",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "system",
+        "user",
+        "imported_xlsx"
+      ],
+      "expression": "source in ('system','user','imported_xlsx')",
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "estimate_templates",
+      "column": null,
+      "constraintName": "estimate_templates_owner_id_consistency",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "(owner_kind = 'system' and owner_id is null)\n      or (owner_kind = 'org' and owner_id is not null)\n      or (owner_kind = 'profile' and owner_id is not null)",
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "estimate_templates",
+      "column": null,
+      "constraintName": "estimate_templates_title_nonempty",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "length(trim(title)) > 0",
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "template_stages",
+      "column": null,
+      "constraintName": "template_stages_title_nonempty",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "length(trim(title)) > 0",
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "template_stages",
+      "column": null,
+      "constraintName": "template_stages_sort_hint_positive",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "sort_hint > 0",
+      "sourceMigration": "supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql"
+    },
+    {
+      "schema": "public",
+      "table": "template_stages",
+      "column": "scope_tag",
+      "constraintName": "template_stages_scope_tag_enum",
+      "kind": "enum_like",
+      "allowedValues": [
+        "ИЖС",
+        "ремонт",
+        "ландшафт",
+        "баня",
+        "гараж",
+        "инженерка",
+        "коммерческое",
+        "general"
+      ],
+      "expression": "scope_tag in ('ИЖС','ремонт','ландшафт','баня','гараж','инженерка','коммерческое','general')",
+      "sourceMigration": "supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql"
+    },
+    {
+      "schema": "public",
+      "table": "template_works",
+      "column": null,
+      "constraintName": "template_works_title_nonempty",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "length(trim(title)) > 0",
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "template_works",
+      "column": null,
+      "constraintName": "template_works_sort_hint_positive",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "sort_hint > 0",
+      "sourceMigration": "supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql"
+    },
+    {
+      "schema": "public",
+      "table": "template_resource_lines",
+      "column": "resource_type",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "material",
+        "tool",
+        "labor",
+        "subcontractor",
+        "overhead",
+        "other"
+      ],
+      "expression": "resource_type in ('material','tool','labor','subcontractor','overhead','other')",
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "template_resource_lines",
+      "column": "qty_default",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "qty_default >= 0",
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "template_resource_lines",
+      "column": "default_cost_unit_cents",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "default_cost_unit_cents is null or default_cost_unit_cents >= 0",
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "template_resource_lines",
+      "column": "default_markup_bps",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "default_markup_bps is null or (default_markup_bps >= 0 and default_markup_bps <= 10000)",
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "template_resource_lines",
+      "column": "default_discount_bps",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "default_discount_bps is null or (default_discount_bps >= 0 and default_discount_bps <= 10000)",
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "template_resource_lines",
+      "column": null,
+      "constraintName": "template_resource_lines_title_nonempty",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "length(trim(title)) > 0",
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "template_resource_lines",
+      "column": null,
+      "constraintName": "template_resource_lines_sort_hint_positive",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "sort_hint > 0",
+      "sourceMigration": "supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql"
+    },
+    {
+      "schema": "public",
+      "table": "contractor_profiles",
+      "column": "status",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "draft",
+        "pending_moderation",
+        "published",
+        "archived"
+      ],
+      "expression": "status in ('draft','pending_moderation','published','archived')",
+      "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "contractor_profiles",
+      "column": null,
+      "constraintName": "contractor_profiles_display_name_nonempty",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "length(trim(display_name)) > 0",
+      "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "contractor_profiles",
+      "column": null,
+      "constraintName": "contractor_profiles_experience_years_nonnegative",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "experience_years is null or experience_years >= 0",
+      "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "estimate_share_snapshots",
+      "column": "version_number",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "version_number >= 1",
+      "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+    },
+    {
+      "schema": "public",
+      "table": "estimate_share_snapshots",
+      "column": "status",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "proposed",
+        "approved"
+      ],
+      "expression": "status in ('proposed', 'approved')",
+      "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+    },
+    {
+      "schema": "public",
+      "table": "estimate_share_snapshots",
+      "column": "share_approval_policy",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "registered",
+        "disabled"
+      ],
+      "expression": "share_approval_policy in ('registered', 'disabled')",
+      "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+    },
+    {
+      "schema": "public",
+      "table": "estimate_share_snapshots",
+      "column": "share_approval_disabled_reason",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "share_approval_disabled_reason is null\n      or share_approval_disabled_reason = 'no_participant_slot'",
+      "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
     }
   ]
 } as const;
@@ -11117,6 +13237,41 @@ export const functions = {
         {
           "table": "public.org_documents",
           "triggerName": "set_org_documents_updated_at",
+          "activation": "before update"
+        },
+        {
+          "table": "public.system_resource_articles",
+          "triggerName": "set_system_resource_articles_updated_at",
+          "activation": "before update"
+        },
+        {
+          "table": "public.estimate_templates",
+          "triggerName": "set_estimate_templates_updated_at",
+          "activation": "before update"
+        },
+        {
+          "table": "public.template_stages",
+          "triggerName": "set_template_stages_updated_at",
+          "activation": "before update"
+        },
+        {
+          "table": "public.template_works",
+          "triggerName": "set_template_works_updated_at",
+          "activation": "before update"
+        },
+        {
+          "table": "public.template_resource_lines",
+          "triggerName": "set_template_resource_lines_updated_at",
+          "activation": "before update"
+        },
+        {
+          "table": "public.contractor_profiles",
+          "triggerName": "set_contractor_profiles_updated_at",
+          "activation": "before update"
+        },
+        {
+          "table": "public.estimate_share_snapshots",
+          "triggerName": "estimate_share_snapshots_set_updated_at",
           "activation": "before update"
         }
       ]
@@ -11473,51 +13628,6 @@ export const functions = {
       "searchPath": "public",
       "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260506120400_accept_project_invite_with_org.sql",
-      "triggerUsages": []
-    },
-    {
-      "schema": "public",
-      "name": "get_shared_estimate_version",
-      "signature": "public.get_shared_estimate_version(text)",
-      "args": [
-        {
-          "name": "p_share_token",
-          "type": "text",
-          "identityType": "text"
-        }
-      ],
-      "returnType": "public.estimate_versions",
-      "language": "plpgsql",
-      "volatility": "volatile",
-      "securityDefiner": false,
-      "searchPath": null,
-      "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
-      "triggerUsages": []
-    },
-    {
-      "schema": "public",
-      "name": "approve_estimate_version_by_share_token",
-      "signature": "public.approve_estimate_version_by_share_token(text, jsonb)",
-      "args": [
-        {
-          "name": "p_share_token",
-          "type": "text",
-          "identityType": "text"
-        },
-        {
-          "name": "p_payload",
-          "type": "jsonb",
-          "identityType": "jsonb"
-        }
-      ],
-      "returnType": "uuid",
-      "language": "plpgsql",
-      "volatility": "volatile",
-      "securityDefiner": false,
-      "searchPath": null,
-      "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
       "triggerUsages": []
     },
     {
@@ -13071,6 +15181,216 @@ export const functions = {
       "searchPath": "public",
       "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260509140000_addresses_pr71_codex_findings.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "can_read_template",
+      "signature": "public.can_read_template(text, uuid)",
+      "args": [
+        {
+          "name": "p_owner_kind",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_owner_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "boolean",
+      "language": "sql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "can_manage_template",
+      "signature": "public.can_manage_template(text, uuid)",
+      "args": [
+        {
+          "name": "p_owner_kind",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_owner_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "boolean",
+      "language": "sql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "list_estimate_templates",
+      "signature": "public.list_estimate_templates(text)",
+      "args": [
+        {
+          "name": "p_scope_filter",
+          "type": "text default null",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "table ( id uuid, owner_kind text, owner_label text, title text, description text, scope text, published_to_public boolean, cover_image_url text, stage_count integer, is_manageable boolean, updated_at timestamptz )",
+      "language": "sql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260512132340_template_rpcs.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "get_estimate_template_detail",
+      "signature": "public.get_estimate_template_detail(uuid)",
+      "args": [
+        {
+          "name": "p_template_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260512132340_template_rpcs.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "apply_template_stage_to_estimate",
+      "signature": "public.apply_template_stage_to_estimate(uuid, uuid, integer)",
+      "args": [
+        {
+          "name": "p_estimate_version_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_template_stage_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_sort_position",
+          "type": "integer default null",
+          "identityType": "integer"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "get_shared_estimate_version",
+      "signature": "public.get_shared_estimate_version(text)",
+      "args": [
+        {
+          "name": "p_share_token",
+          "type": "text",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "approve_estimate_version_by_share_token",
+      "signature": "public.approve_estimate_version_by_share_token(text, jsonb)",
+      "args": [
+        {
+          "name": "p_share_token",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_payload",
+          "type": "jsonb",
+          "identityType": "jsonb"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "immutable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "publish_estimate_share_snapshot",
+      "signature": "public.publish_estimate_share_snapshot(uuid, text, integer, jsonb, text, text)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_share_token",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_version_number",
+          "type": "integer",
+          "identityType": "integer"
+        },
+        {
+          "name": "p_snapshot",
+          "type": "jsonb",
+          "identityType": "jsonb"
+        },
+        {
+          "name": "p_share_approval_policy",
+          "type": "text default 'registered'",
+          "identityType": "text"
+        },
+        {
+          "name": "p_share_approval_disabled_reason",
+          "type": "text default null",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql",
       "triggerUsages": []
     }
   ]
@@ -15110,6 +17430,362 @@ export const rls = {
           "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
         }
       ]
+    },
+    {
+      "schema": "public",
+      "table": "system_resource_articles",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "select"
+      ],
+      "policies": [
+        {
+          "name": "system_resource_articles_select",
+          "schema": "public",
+          "table": "system_resource_articles",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "true",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "table": "unit_conversions",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "select"
+      ],
+      "policies": [
+        {
+          "name": "unit_conversions_select",
+          "schema": "public",
+          "table": "unit_conversions",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "true",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "table": "estimate_templates",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "delete",
+        "insert",
+        "select",
+        "update"
+      ],
+      "policies": [
+        {
+          "name": "estimate_templates_select",
+          "schema": "public",
+          "table": "estimate_templates",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "public.can_read_template(owner_kind, owner_id)",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+        },
+        {
+          "name": "estimate_templates_insert",
+          "schema": "public",
+          "table": "estimate_templates",
+          "command": "insert",
+          "roles": [
+            "authenticated"
+          ],
+          "using": null,
+          "withCheck": "public.can_manage_template(owner_kind, owner_id)",
+          "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+        },
+        {
+          "name": "estimate_templates_update",
+          "schema": "public",
+          "table": "estimate_templates",
+          "command": "update",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "public.can_manage_template(owner_kind, owner_id)",
+          "withCheck": "public.can_manage_template(owner_kind, owner_id)",
+          "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+        },
+        {
+          "name": "estimate_templates_delete",
+          "schema": "public",
+          "table": "estimate_templates",
+          "command": "delete",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "public.can_manage_template(owner_kind, owner_id)",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "table": "template_stages",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "delete",
+        "insert",
+        "select",
+        "update"
+      ],
+      "policies": [
+        {
+          "name": "template_stages_select",
+          "schema": "public",
+          "table": "template_stages",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n      select 1\n      from public.estimate_templates et\n      where et.id = template_stages.estimate_template_id\n        and public.can_read_template(et.owner_kind, et.owner_id)\n    )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+        },
+        {
+          "name": "template_stages_insert",
+          "schema": "public",
+          "table": "template_stages",
+          "command": "insert",
+          "roles": [
+            "authenticated"
+          ],
+          "using": null,
+          "withCheck": "exists (\n      select 1\n      from public.estimate_templates et\n      where et.id = template_stages.estimate_template_id\n        and public.can_manage_template(et.owner_kind, et.owner_id)\n    )",
+          "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+        },
+        {
+          "name": "template_stages_update",
+          "schema": "public",
+          "table": "template_stages",
+          "command": "update",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n      select 1\n      from public.estimate_templates et\n      where et.id = template_stages.estimate_template_id\n        and public.can_manage_template(et.owner_kind, et.owner_id)\n    )",
+          "withCheck": "exists (\n      select 1\n      from public.estimate_templates et\n      where et.id = template_stages.estimate_template_id\n        and public.can_manage_template(et.owner_kind, et.owner_id)\n    )",
+          "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+        },
+        {
+          "name": "template_stages_delete",
+          "schema": "public",
+          "table": "template_stages",
+          "command": "delete",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n      select 1\n      from public.estimate_templates et\n      where et.id = template_stages.estimate_template_id\n        and public.can_manage_template(et.owner_kind, et.owner_id)\n    )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "table": "template_works",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "delete",
+        "insert",
+        "select",
+        "update"
+      ],
+      "policies": [
+        {
+          "name": "template_works_select",
+          "schema": "public",
+          "table": "template_works",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n      select 1\n      from public.template_stages ts\n      join public.estimate_templates et on et.id = ts.estimate_template_id\n      where ts.id = template_works.template_stage_id\n        and public.can_read_template(et.owner_kind, et.owner_id)\n    )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+        },
+        {
+          "name": "template_works_insert",
+          "schema": "public",
+          "table": "template_works",
+          "command": "insert",
+          "roles": [
+            "authenticated"
+          ],
+          "using": null,
+          "withCheck": "exists (\n      select 1\n      from public.template_stages ts\n      join public.estimate_templates et on et.id = ts.estimate_template_id\n      where ts.id = template_works.template_stage_id\n        and public.can_manage_template(et.owner_kind, et.owner_id)\n    )",
+          "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+        },
+        {
+          "name": "template_works_update",
+          "schema": "public",
+          "table": "template_works",
+          "command": "update",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n      select 1\n      from public.template_stages ts\n      join public.estimate_templates et on et.id = ts.estimate_template_id\n      where ts.id = template_works.template_stage_id\n        and public.can_manage_template(et.owner_kind, et.owner_id)\n    )",
+          "withCheck": "exists (\n      select 1\n      from public.template_stages ts\n      join public.estimate_templates et on et.id = ts.estimate_template_id\n      where ts.id = template_works.template_stage_id\n        and public.can_manage_template(et.owner_kind, et.owner_id)\n    )",
+          "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+        },
+        {
+          "name": "template_works_delete",
+          "schema": "public",
+          "table": "template_works",
+          "command": "delete",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n      select 1\n      from public.template_stages ts\n      join public.estimate_templates et on et.id = ts.estimate_template_id\n      where ts.id = template_works.template_stage_id\n        and public.can_manage_template(et.owner_kind, et.owner_id)\n    )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "table": "template_resource_lines",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "delete",
+        "insert",
+        "select",
+        "update"
+      ],
+      "policies": [
+        {
+          "name": "template_resource_lines_select",
+          "schema": "public",
+          "table": "template_resource_lines",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n      select 1\n      from public.template_works tw\n      join public.template_stages ts on ts.id = tw.template_stage_id\n      join public.estimate_templates et on et.id = ts.estimate_template_id\n      where tw.id = template_resource_lines.template_work_id\n        and public.can_read_template(et.owner_kind, et.owner_id)\n    )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+        },
+        {
+          "name": "template_resource_lines_insert",
+          "schema": "public",
+          "table": "template_resource_lines",
+          "command": "insert",
+          "roles": [
+            "authenticated"
+          ],
+          "using": null,
+          "withCheck": "exists (\n      select 1\n      from public.template_works tw\n      join public.template_stages ts on ts.id = tw.template_stage_id\n      join public.estimate_templates et on et.id = ts.estimate_template_id\n      where tw.id = template_resource_lines.template_work_id\n        and public.can_manage_template(et.owner_kind, et.owner_id)\n    )",
+          "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+        },
+        {
+          "name": "template_resource_lines_update",
+          "schema": "public",
+          "table": "template_resource_lines",
+          "command": "update",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n      select 1\n      from public.template_works tw\n      join public.template_stages ts on ts.id = tw.template_stage_id\n      join public.estimate_templates et on et.id = ts.estimate_template_id\n      where tw.id = template_resource_lines.template_work_id\n        and public.can_manage_template(et.owner_kind, et.owner_id)\n    )",
+          "withCheck": "exists (\n      select 1\n      from public.template_works tw\n      join public.template_stages ts on ts.id = tw.template_stage_id\n      join public.estimate_templates et on et.id = ts.estimate_template_id\n      where tw.id = template_resource_lines.template_work_id\n        and public.can_manage_template(et.owner_kind, et.owner_id)\n    )",
+          "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+        },
+        {
+          "name": "template_resource_lines_delete",
+          "schema": "public",
+          "table": "template_resource_lines",
+          "command": "delete",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n      select 1\n      from public.template_works tw\n      join public.template_stages ts on ts.id = tw.template_stage_id\n      join public.estimate_templates et on et.id = ts.estimate_template_id\n      where tw.id = template_resource_lines.template_work_id\n        and public.can_manage_template(et.owner_kind, et.owner_id)\n    )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "table": "contractor_profiles",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "delete",
+        "insert",
+        "select",
+        "update"
+      ],
+      "policies": [
+        {
+          "name": "contractor_profiles_select",
+          "schema": "public",
+          "table": "contractor_profiles",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "status = 'published'\n    or public.is_org_member(org_id)",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
+        },
+        {
+          "name": "contractor_profiles_insert",
+          "schema": "public",
+          "table": "contractor_profiles",
+          "command": "insert",
+          "roles": [
+            "authenticated"
+          ],
+          "using": null,
+          "withCheck": "public.can_manage_org(org_id)",
+          "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
+        },
+        {
+          "name": "contractor_profiles_update",
+          "schema": "public",
+          "table": "contractor_profiles",
+          "command": "update",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "public.can_manage_org(org_id)",
+          "withCheck": "public.can_manage_org(org_id)",
+          "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
+        },
+        {
+          "name": "contractor_profiles_delete",
+          "schema": "public",
+          "table": "contractor_profiles",
+          "command": "delete",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "public.can_manage_org(org_id)",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "table": "estimate_share_snapshots",
+      "rlsEnabled": true,
+      "authenticatedGrants": [],
+      "policies": []
     }
   ]
 } as const;
@@ -15373,6 +18049,54 @@ export const sourceTrace = {
       "schema": "public",
       "table": "org_document_upload_intents",
       "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+    },
+    {
+      "key": "public.system_resource_articles",
+      "schema": "public",
+      "table": "system_resource_articles",
+      "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+    },
+    {
+      "key": "public.unit_conversions",
+      "schema": "public",
+      "table": "unit_conversions",
+      "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+    },
+    {
+      "key": "public.estimate_templates",
+      "schema": "public",
+      "table": "estimate_templates",
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+    },
+    {
+      "key": "public.template_stages",
+      "schema": "public",
+      "table": "template_stages",
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+    },
+    {
+      "key": "public.template_works",
+      "schema": "public",
+      "table": "template_works",
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+    },
+    {
+      "key": "public.template_resource_lines",
+      "schema": "public",
+      "table": "template_resource_lines",
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+    },
+    {
+      "key": "public.contractor_profiles",
+      "schema": "public",
+      "table": "contractor_profiles",
+      "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
+    },
+    {
+      "key": "public.estimate_share_snapshots",
+      "schema": "public",
+      "table": "estimate_share_snapshots",
+      "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
     }
   ],
   "functions": [
@@ -15501,20 +18225,6 @@ export const sourceTrace = {
       "name": "accept_project_invite",
       "signature": "public.accept_project_invite(text)",
       "sourceMigration": "supabase/migrations/20260506120400_accept_project_invite_with_org.sql"
-    },
-    {
-      "key": "public.get_shared_estimate_version",
-      "schema": "public",
-      "name": "get_shared_estimate_version",
-      "signature": "public.get_shared_estimate_version(text)",
-      "sourceMigration": "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql"
-    },
-    {
-      "key": "public.approve_estimate_version_by_share_token",
-      "schema": "public",
-      "name": "approve_estimate_version_by_share_token",
-      "signature": "public.approve_estimate_version_by_share_token(text, jsonb)",
-      "sourceMigration": "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql"
     },
     {
       "key": "public.prepare_project_media_upload",
@@ -15928,6 +18638,62 @@ export const sourceTrace = {
       "name": "finalize_org_document_upload",
       "signature": "public.finalize_org_document_upload(uuid, text, text, text)",
       "sourceMigration": "supabase/migrations/20260509140000_addresses_pr71_codex_findings.sql"
+    },
+    {
+      "key": "public.can_read_template",
+      "schema": "public",
+      "name": "can_read_template",
+      "signature": "public.can_read_template(text, uuid)",
+      "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+    },
+    {
+      "key": "public.can_manage_template",
+      "schema": "public",
+      "name": "can_manage_template",
+      "signature": "public.can_manage_template(text, uuid)",
+      "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+    },
+    {
+      "key": "public.list_estimate_templates",
+      "schema": "public",
+      "name": "list_estimate_templates",
+      "signature": "public.list_estimate_templates(text)",
+      "sourceMigration": "supabase/migrations/20260512132340_template_rpcs.sql"
+    },
+    {
+      "key": "public.get_estimate_template_detail",
+      "schema": "public",
+      "name": "get_estimate_template_detail",
+      "signature": "public.get_estimate_template_detail(uuid)",
+      "sourceMigration": "supabase/migrations/20260512132340_template_rpcs.sql"
+    },
+    {
+      "key": "public.apply_template_stage_to_estimate",
+      "schema": "public",
+      "name": "apply_template_stage_to_estimate",
+      "signature": "public.apply_template_stage_to_estimate(uuid, uuid, integer)",
+      "sourceMigration": "supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql"
+    },
+    {
+      "key": "public.get_shared_estimate_version",
+      "schema": "public",
+      "name": "get_shared_estimate_version",
+      "signature": "public.get_shared_estimate_version(text)",
+      "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+    },
+    {
+      "key": "public.approve_estimate_version_by_share_token",
+      "schema": "public",
+      "name": "approve_estimate_version_by_share_token",
+      "signature": "public.approve_estimate_version_by_share_token(text, jsonb)",
+      "sourceMigration": "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql"
+    },
+    {
+      "key": "public.publish_estimate_share_snapshot",
+      "schema": "public",
+      "name": "publish_estimate_share_snapshot",
+      "signature": "public.publish_estimate_share_snapshot(uuid, text, integer, jsonb, text, text)",
+      "sourceMigration": "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql"
     }
   ],
   "policies": [
@@ -16946,6 +19712,182 @@ export const sourceTrace = {
       "name": "org_document_intents_member_write",
       "command": "all",
       "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+    },
+    {
+      "key": "public.system_resource_articles.system_resource_articles_select",
+      "schema": "public",
+      "table": "system_resource_articles",
+      "name": "system_resource_articles_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+    },
+    {
+      "key": "public.unit_conversions.unit_conversions_select",
+      "schema": "public",
+      "table": "unit_conversions",
+      "name": "unit_conversions_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+    },
+    {
+      "key": "public.estimate_templates.estimate_templates_select",
+      "schema": "public",
+      "table": "estimate_templates",
+      "name": "estimate_templates_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+    },
+    {
+      "key": "public.estimate_templates.estimate_templates_insert",
+      "schema": "public",
+      "table": "estimate_templates",
+      "name": "estimate_templates_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+    },
+    {
+      "key": "public.estimate_templates.estimate_templates_update",
+      "schema": "public",
+      "table": "estimate_templates",
+      "name": "estimate_templates_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+    },
+    {
+      "key": "public.estimate_templates.estimate_templates_delete",
+      "schema": "public",
+      "table": "estimate_templates",
+      "name": "estimate_templates_delete",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+    },
+    {
+      "key": "public.template_stages.template_stages_select",
+      "schema": "public",
+      "table": "template_stages",
+      "name": "template_stages_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+    },
+    {
+      "key": "public.template_stages.template_stages_insert",
+      "schema": "public",
+      "table": "template_stages",
+      "name": "template_stages_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+    },
+    {
+      "key": "public.template_stages.template_stages_update",
+      "schema": "public",
+      "table": "template_stages",
+      "name": "template_stages_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+    },
+    {
+      "key": "public.template_stages.template_stages_delete",
+      "schema": "public",
+      "table": "template_stages",
+      "name": "template_stages_delete",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+    },
+    {
+      "key": "public.template_works.template_works_select",
+      "schema": "public",
+      "table": "template_works",
+      "name": "template_works_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+    },
+    {
+      "key": "public.template_works.template_works_insert",
+      "schema": "public",
+      "table": "template_works",
+      "name": "template_works_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+    },
+    {
+      "key": "public.template_works.template_works_update",
+      "schema": "public",
+      "table": "template_works",
+      "name": "template_works_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+    },
+    {
+      "key": "public.template_works.template_works_delete",
+      "schema": "public",
+      "table": "template_works",
+      "name": "template_works_delete",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+    },
+    {
+      "key": "public.template_resource_lines.template_resource_lines_select",
+      "schema": "public",
+      "table": "template_resource_lines",
+      "name": "template_resource_lines_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+    },
+    {
+      "key": "public.template_resource_lines.template_resource_lines_insert",
+      "schema": "public",
+      "table": "template_resource_lines",
+      "name": "template_resource_lines_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+    },
+    {
+      "key": "public.template_resource_lines.template_resource_lines_update",
+      "schema": "public",
+      "table": "template_resource_lines",
+      "name": "template_resource_lines_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+    },
+    {
+      "key": "public.template_resource_lines.template_resource_lines_delete",
+      "schema": "public",
+      "table": "template_resource_lines",
+      "name": "template_resource_lines_delete",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260512132320_template_rls.sql"
+    },
+    {
+      "key": "public.contractor_profiles.contractor_profiles_select",
+      "schema": "public",
+      "table": "contractor_profiles",
+      "name": "contractor_profiles_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
+    },
+    {
+      "key": "public.contractor_profiles.contractor_profiles_insert",
+      "schema": "public",
+      "table": "contractor_profiles",
+      "name": "contractor_profiles_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
+    },
+    {
+      "key": "public.contractor_profiles.contractor_profiles_update",
+      "schema": "public",
+      "table": "contractor_profiles",
+      "name": "contractor_profiles_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
+    },
+    {
+      "key": "public.contractor_profiles.contractor_profiles_delete",
+      "schema": "public",
+      "table": "contractor_profiles",
+      "name": "contractor_profiles_delete",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
     }
   ],
   "slices": [
@@ -17405,13 +20347,14 @@ export const sourceTrace = {
       "kind": "derived_contract_bundle",
       "sourceMigrations": [
         "supabase/migrations/20260306162500_estimates_core.sql",
+        "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql",
         "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
         "supabase/migrations/20260306164000_hr_domain.sql",
         "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
         "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql",
         "supabase/migrations/20260417120000_estimate_resource_line_assignee_profile.sql",
-        "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
         "supabase/migrations/20260418120000_estimate_resource_line_assignee_label.sql",
+        "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
@@ -17420,12 +20363,14 @@ export const sourceTrace = {
         "public.estimate_versions",
         "public.estimate_works",
         "public.estimate_resource_lines",
-        "public.estimate_dependencies"
+        "public.estimate_dependencies",
+        "public.estimate_share_snapshots"
       ],
       "functions": [
+        "public.get_estimate_operational_summary",
         "public.get_shared_estimate_version",
         "public.approve_estimate_version_by_share_token",
-        "public.get_estimate_operational_summary"
+        "public.publish_estimate_share_snapshot"
       ],
       "policies": [
         "public.project_estimates.project_estimates_select",
@@ -17534,6 +20479,206 @@ export const sourceTrace = {
           "from": "public.estimate_resource_lines",
           "to": "public.profiles",
           "sourceMigration": "supabase/migrations/20260417120000_estimate_resource_line_assignee_profile.sql"
+        },
+        {
+          "from": "public.estimate_share_snapshots",
+          "to": "public.projects",
+          "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+        },
+        {
+          "from": "public.estimate_share_snapshots",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+        }
+      ]
+    },
+    {
+      "name": "templates",
+      "title": "Templates Contract",
+      "kind": "derived_contract_bundle",
+      "sourceMigrations": [
+        "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql",
+        "supabase/migrations/20260512132310_estimate_templates_schema.sql",
+        "supabase/migrations/20260512132330_contractor_profiles_schema.sql",
+        "supabase/migrations/20260512132320_template_rls.sql",
+        "supabase/migrations/20260512132340_template_rpcs.sql",
+        "supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql"
+      ],
+      "tables": [
+        "public.system_resource_articles",
+        "public.unit_conversions",
+        "public.estimate_templates",
+        "public.template_stages",
+        "public.template_works",
+        "public.template_resource_lines",
+        "public.contractor_profiles"
+      ],
+      "functions": [
+        "public.can_read_template",
+        "public.can_manage_template",
+        "public.list_estimate_templates",
+        "public.get_estimate_template_detail",
+        "public.apply_template_stage_to_estimate"
+      ],
+      "policies": [
+        "public.system_resource_articles.system_resource_articles_select",
+        "public.unit_conversions.unit_conversions_select",
+        "public.estimate_templates.estimate_templates_select",
+        "public.estimate_templates.estimate_templates_insert",
+        "public.estimate_templates.estimate_templates_update",
+        "public.estimate_templates.estimate_templates_delete",
+        "public.template_stages.template_stages_select",
+        "public.template_stages.template_stages_insert",
+        "public.template_stages.template_stages_update",
+        "public.template_stages.template_stages_delete",
+        "public.template_works.template_works_select",
+        "public.template_works.template_works_insert",
+        "public.template_works.template_works_update",
+        "public.template_works.template_works_delete",
+        "public.template_resource_lines.template_resource_lines_select",
+        "public.template_resource_lines.template_resource_lines_insert",
+        "public.template_resource_lines.template_resource_lines_update",
+        "public.template_resource_lines.template_resource_lines_delete",
+        "public.contractor_profiles.contractor_profiles_select",
+        "public.contractor_profiles.contractor_profiles_insert",
+        "public.contractor_profiles.contractor_profiles_update",
+        "public.contractor_profiles.contractor_profiles_delete"
+      ],
+      "relations": [
+        {
+          "from": "public.estimate_templates",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        },
+        {
+          "from": "public.template_stages",
+          "to": "public.estimate_templates",
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        },
+        {
+          "from": "public.template_works",
+          "to": "public.template_stages",
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        },
+        {
+          "from": "public.template_resource_lines",
+          "to": "public.template_works",
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        },
+        {
+          "from": "public.template_resource_lines",
+          "to": "public.system_resource_articles",
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        },
+        {
+          "from": "public.contractor_profiles",
+          "to": "public.organizations",
+          "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
+        },
+        {
+          "from": "public.contractor_profiles",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
+        },
+        {
+          "from": "public.contractor_profiles",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
+        }
+      ]
+    },
+    {
+      "name": "templates",
+      "title": "Templates Contract",
+      "kind": "derived_contract_bundle",
+      "sourceMigrations": [
+        "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql",
+        "supabase/migrations/20260512132310_estimate_templates_schema.sql",
+        "supabase/migrations/20260512132330_contractor_profiles_schema.sql",
+        "supabase/migrations/20260512132320_template_rls.sql",
+        "supabase/migrations/20260512132340_template_rpcs.sql",
+        "supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql"
+      ],
+      "tables": [
+        "public.system_resource_articles",
+        "public.unit_conversions",
+        "public.estimate_templates",
+        "public.template_stages",
+        "public.template_works",
+        "public.template_resource_lines",
+        "public.contractor_profiles"
+      ],
+      "functions": [
+        "public.can_read_template",
+        "public.can_manage_template",
+        "public.list_estimate_templates",
+        "public.get_estimate_template_detail",
+        "public.apply_template_stage_to_estimate"
+      ],
+      "policies": [
+        "public.system_resource_articles.system_resource_articles_select",
+        "public.unit_conversions.unit_conversions_select",
+        "public.estimate_templates.estimate_templates_select",
+        "public.estimate_templates.estimate_templates_insert",
+        "public.estimate_templates.estimate_templates_update",
+        "public.estimate_templates.estimate_templates_delete",
+        "public.template_stages.template_stages_select",
+        "public.template_stages.template_stages_insert",
+        "public.template_stages.template_stages_update",
+        "public.template_stages.template_stages_delete",
+        "public.template_works.template_works_select",
+        "public.template_works.template_works_insert",
+        "public.template_works.template_works_update",
+        "public.template_works.template_works_delete",
+        "public.template_resource_lines.template_resource_lines_select",
+        "public.template_resource_lines.template_resource_lines_insert",
+        "public.template_resource_lines.template_resource_lines_update",
+        "public.template_resource_lines.template_resource_lines_delete",
+        "public.contractor_profiles.contractor_profiles_select",
+        "public.contractor_profiles.contractor_profiles_insert",
+        "public.contractor_profiles.contractor_profiles_update",
+        "public.contractor_profiles.contractor_profiles_delete"
+      ],
+      "relations": [
+        {
+          "from": "public.estimate_templates",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        },
+        {
+          "from": "public.template_stages",
+          "to": "public.estimate_templates",
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        },
+        {
+          "from": "public.template_works",
+          "to": "public.template_stages",
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        },
+        {
+          "from": "public.template_resource_lines",
+          "to": "public.template_works",
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        },
+        {
+          "from": "public.template_resource_lines",
+          "to": "public.system_resource_articles",
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        },
+        {
+          "from": "public.contractor_profiles",
+          "to": "public.organizations",
+          "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
+        },
+        {
+          "from": "public.contractor_profiles",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
+        },
+        {
+          "from": "public.contractor_profiles",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
         }
       ]
     },
@@ -17942,19 +21087,52 @@ export const slices = {
       "kind": "derived_contract_bundle",
       "sourceMigrations": [
         "supabase/migrations/20260306162500_estimates_core.sql",
+        "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql",
         "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
         "supabase/migrations/20260306164000_hr_domain.sql",
         "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
         "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql",
         "supabase/migrations/20260417120000_estimate_resource_line_assignee_profile.sql",
-        "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
         "supabase/migrations/20260418120000_estimate_resource_line_assignee_label.sql",
+        "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
-      "tableCount": 5,
-      "functionCount": 3,
-      "rlsTableCount": 5
+      "tableCount": 6,
+      "functionCount": 4,
+      "rlsTableCount": 6
+    },
+    {
+      "name": "templates",
+      "title": "Templates Contract",
+      "kind": "derived_contract_bundle",
+      "sourceMigrations": [
+        "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql",
+        "supabase/migrations/20260512132310_estimate_templates_schema.sql",
+        "supabase/migrations/20260512132330_contractor_profiles_schema.sql",
+        "supabase/migrations/20260512132320_template_rls.sql",
+        "supabase/migrations/20260512132340_template_rpcs.sql",
+        "supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql"
+      ],
+      "tableCount": 7,
+      "functionCount": 5,
+      "rlsTableCount": 7
+    },
+    {
+      "name": "templates",
+      "title": "Templates Contract",
+      "kind": "derived_contract_bundle",
+      "sourceMigrations": [
+        "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql",
+        "supabase/migrations/20260512132310_estimate_templates_schema.sql",
+        "supabase/migrations/20260512132330_contractor_profiles_schema.sql",
+        "supabase/migrations/20260512132320_template_rls.sql",
+        "supabase/migrations/20260512132340_template_rpcs.sql",
+        "supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql"
+      ],
+      "tableCount": 7,
+      "functionCount": 5,
+      "rlsTableCount": 7
     },
     {
       "name": "procurement-inventory",

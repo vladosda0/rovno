@@ -212,7 +212,10 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOp
   if (isInProject && projectId) {
     return (
       <>
-      <header className="fixed top-0 left-0 right-0 z-40 flex h-12 items-center px-3 glass">
+      <header
+        className="fixed left-0 right-0 z-40 flex h-12 items-center px-3 glass"
+        style={{ top: "var(--env-banner-h, 0px)" }}
+      >
         <div className="hidden md:flex min-w-0 flex-1 items-center gap-1.5">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -347,7 +350,10 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOp
 
   return (
     <>
-    <header className="fixed top-0 left-0 right-0 z-40 flex h-12 items-center gap-2 px-3 glass">
+    <header
+      className="fixed left-0 right-0 z-40 flex h-12 items-center gap-2 px-3 glass"
+      style={{ top: "var(--env-banner-h, 0px)" }}
+    >
       <div className="hidden md:flex flex-1 items-center gap-2">
       {isHomePage ? (
         <div className="flex items-center gap-1.5">

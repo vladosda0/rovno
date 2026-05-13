@@ -1143,6 +1143,350 @@
       "allowedValues": null,
       "expression": "size_bytes is null or size_bytes >= 0",
       "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+    },
+    {
+      "schema": "public",
+      "table": "system_resource_articles",
+      "column": null,
+      "constraintName": "system_resource_articles_rovno_sku_nonempty",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "length(trim(rovno_sku)) > 0",
+      "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+    },
+    {
+      "schema": "public",
+      "table": "system_resource_articles",
+      "column": null,
+      "constraintName": "system_resource_articles_name_nonempty",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "length(trim(name)) > 0",
+      "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+    },
+    {
+      "schema": "public",
+      "table": "system_resource_articles",
+      "column": null,
+      "constraintName": "system_resource_articles_category_path_nonempty",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "length(trim(category_path)) > 0",
+      "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+    },
+    {
+      "schema": "public",
+      "table": "system_resource_articles",
+      "column": null,
+      "constraintName": "system_resource_articles_unit_factor_positive",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "conversion_factor > 0",
+      "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+    },
+    {
+      "schema": "public",
+      "table": "unit_conversions",
+      "column": null,
+      "constraintName": "unit_conversions_unit_display_nonempty",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "length(trim(unit_display)) > 0",
+      "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+    },
+    {
+      "schema": "public",
+      "table": "unit_conversions",
+      "column": null,
+      "constraintName": "unit_conversions_factor_positive",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "factor > 0",
+      "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+    },
+    {
+      "schema": "public",
+      "table": "estimate_templates",
+      "column": "owner_kind",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "system",
+        "org",
+        "profile"
+      ],
+      "expression": "owner_kind in ('system','org','profile')",
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "estimate_templates",
+      "column": "scope",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "ИЖС",
+        "ремонт",
+        "ландшафт",
+        "баня",
+        "гараж",
+        "инженерка",
+        "коммерческое",
+        "general"
+      ],
+      "expression": "scope in ('ИЖС','ремонт','ландшафт','баня','гараж','инженерка','коммерческое','general')",
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "estimate_templates",
+      "column": "source",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "system",
+        "user",
+        "imported_xlsx"
+      ],
+      "expression": "source in ('system','user','imported_xlsx')",
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "estimate_templates",
+      "column": null,
+      "constraintName": "estimate_templates_owner_id_consistency",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "(owner_kind = 'system' and owner_id is null)\n      or (owner_kind = 'org' and owner_id is not null)\n      or (owner_kind = 'profile' and owner_id is not null)",
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "estimate_templates",
+      "column": null,
+      "constraintName": "estimate_templates_title_nonempty",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "length(trim(title)) > 0",
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "template_stages",
+      "column": null,
+      "constraintName": "template_stages_title_nonempty",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "length(trim(title)) > 0",
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "template_stages",
+      "column": null,
+      "constraintName": "template_stages_sort_hint_positive",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "sort_hint > 0",
+      "sourceMigration": "supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql"
+    },
+    {
+      "schema": "public",
+      "table": "template_stages",
+      "column": "scope_tag",
+      "constraintName": "template_stages_scope_tag_enum",
+      "kind": "enum_like",
+      "allowedValues": [
+        "ИЖС",
+        "ремонт",
+        "ландшафт",
+        "баня",
+        "гараж",
+        "инженерка",
+        "коммерческое",
+        "general"
+      ],
+      "expression": "scope_tag in ('ИЖС','ремонт','ландшафт','баня','гараж','инженерка','коммерческое','general')",
+      "sourceMigration": "supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql"
+    },
+    {
+      "schema": "public",
+      "table": "template_works",
+      "column": null,
+      "constraintName": "template_works_title_nonempty",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "length(trim(title)) > 0",
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "template_works",
+      "column": null,
+      "constraintName": "template_works_sort_hint_positive",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "sort_hint > 0",
+      "sourceMigration": "supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql"
+    },
+    {
+      "schema": "public",
+      "table": "template_resource_lines",
+      "column": "resource_type",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "material",
+        "tool",
+        "labor",
+        "subcontractor",
+        "overhead",
+        "other"
+      ],
+      "expression": "resource_type in ('material','tool','labor','subcontractor','overhead','other')",
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "template_resource_lines",
+      "column": "qty_default",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "qty_default >= 0",
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "template_resource_lines",
+      "column": "default_cost_unit_cents",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "default_cost_unit_cents is null or default_cost_unit_cents >= 0",
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "template_resource_lines",
+      "column": "default_markup_bps",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "default_markup_bps is null or (default_markup_bps >= 0 and default_markup_bps <= 10000)",
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "template_resource_lines",
+      "column": "default_discount_bps",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "default_discount_bps is null or (default_discount_bps >= 0 and default_discount_bps <= 10000)",
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "template_resource_lines",
+      "column": null,
+      "constraintName": "template_resource_lines_title_nonempty",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "length(trim(title)) > 0",
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "template_resource_lines",
+      "column": null,
+      "constraintName": "template_resource_lines_sort_hint_positive",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "sort_hint > 0",
+      "sourceMigration": "supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql"
+    },
+    {
+      "schema": "public",
+      "table": "contractor_profiles",
+      "column": "status",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "draft",
+        "pending_moderation",
+        "published",
+        "archived"
+      ],
+      "expression": "status in ('draft','pending_moderation','published','archived')",
+      "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "contractor_profiles",
+      "column": null,
+      "constraintName": "contractor_profiles_display_name_nonempty",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "length(trim(display_name)) > 0",
+      "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "contractor_profiles",
+      "column": null,
+      "constraintName": "contractor_profiles_experience_years_nonnegative",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "experience_years is null or experience_years >= 0",
+      "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "estimate_share_snapshots",
+      "column": "version_number",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "version_number >= 1",
+      "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+    },
+    {
+      "schema": "public",
+      "table": "estimate_share_snapshots",
+      "column": "status",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "proposed",
+        "approved"
+      ],
+      "expression": "status in ('proposed', 'approved')",
+      "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+    },
+    {
+      "schema": "public",
+      "table": "estimate_share_snapshots",
+      "column": "share_approval_policy",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "registered",
+        "disabled"
+      ],
+      "expression": "share_approval_policy in ('registered', 'disabled')",
+      "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+    },
+    {
+      "schema": "public",
+      "table": "estimate_share_snapshots",
+      "column": "share_approval_disabled_reason",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "share_approval_disabled_reason is null\n      or share_approval_disabled_reason = 'no_participant_slot'",
+      "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
     }
   ]
 }

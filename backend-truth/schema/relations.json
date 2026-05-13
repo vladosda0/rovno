@@ -1653,6 +1653,166 @@
         "id"
       ],
       "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "estimate_templates",
+      "fromColumns": [
+        "created_by"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "template_stages",
+      "fromColumns": [
+        "estimate_template_id"
+      ],
+      "toSchema": "public",
+      "toTable": "estimate_templates",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "template_works",
+      "fromColumns": [
+        "template_stage_id"
+      ],
+      "toSchema": "public",
+      "toTable": "template_stages",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "template_resource_lines",
+      "fromColumns": [
+        "template_work_id"
+      ],
+      "toSchema": "public",
+      "toTable": "template_works",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "template_resource_lines",
+      "fromColumns": [
+        "system_resource_article_id"
+      ],
+      "toSchema": "public",
+      "toTable": "system_resource_articles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "contractor_profiles",
+      "fromColumns": [
+        "org_id"
+      ],
+      "toSchema": "public",
+      "toTable": "organizations",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "contractor_profiles",
+      "fromColumns": [
+        "moderated_by"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "contractor_profiles",
+      "fromColumns": [
+        "created_by"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "estimate_share_snapshots",
+      "fromColumns": [
+        "project_id"
+      ],
+      "toSchema": "public",
+      "toTable": "projects",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "estimate_share_snapshots",
+      "fromColumns": [
+        "created_by"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "restrict"
     }
   ]
 }
