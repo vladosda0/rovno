@@ -12,9 +12,15 @@ import {
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/EmptyState";
 import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
 import { addEvent } from "@/data/store";
 import { useEstimateV2Share } from "@/hooks/use-estimate-v2-data";
-import { approveVersion, getLatestProposedVersion } from "@/data/estimate-v2-store";
+import {
+  approveVersion,
+  findVersionByShareId,
+  getLatestProposedVersion,
+} from "@/data/estimate-v2-store";
+import { approveSharedEstimateVersion } from "@/data/estimate-share-source";
 import { computeLineTotals, computeProjectTotals } from "@/lib/estimate-v2/pricing";
 import { ApprovalStampCard } from "@/components/estimate-v2/ApprovalStampCard";
 import { ApprovalStampFormModal } from "@/components/estimate-v2/ApprovalStampFormModal";
@@ -41,7 +47,8 @@ export default function ShareEstimate() {
   const { toast } = useToast();
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const shared = useEstimateV2Share(shareId);
+  const queryClient = useQueryClient();
+  const { shared, status: shareStatus } = useEstimateV2Share(shareId);
 
   const [approvalModalOpen, setApprovalModalOpen] = useState(false);
 
@@ -137,6 +144,14 @@ export default function ShareEstimate() {
   const canApprove = Boolean(approvalEligible && !isGuest && !approvalBlockedByPolicy);
   const requiresRegistrationToApprove = Boolean(approvalEligible && isGuest && !approvalBlockedByPolicy);
 
+  if (shareStatus === "loading") {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center p-sp-3 text-sm text-muted-foreground">
+        {t("app.loading")}
+      </div>
+    );
+  }
+
   if (!shared || !snapshot || !version) {
     return (
       <div className="p-sp-3">
@@ -145,19 +160,39 @@ export default function ShareEstimate() {
     );
   }
 
-  const handleApprove = (stamp: ApprovalStamp) => {
+  const handleApprove = async (stamp: ApprovalStamp) => {
     if (!canApprove) {
       toast({ title: t("share.estimate.toast.noLonger"), variant: "destructive" });
       return;
     }
 
-    const ok = approveVersion(projectId, version.id, stamp, { actorId: "client" });
+    let approvedRemotely = false;
+    try {
+      await approveSharedEstimateVersion(shareId, stamp);
+      approvedRemotely = true;
+    } catch (error) {
+      // Persisted approval failed (e.g. share token vanished). Fall back to
+      // the local store path so same-session flows still behave; surface a
+      // toast so the user can retry.
+      const message = error instanceof Error ? error.message : String(error);
+      toast({ title: t("share.estimate.toast.unableToApprove"), description: message, variant: "destructive" });
+    }
 
-    if (!ok) {
+    // The `version.id` we see here is the synthetic `share-${token}` ID
+    // when the data came from Supabase (rowToVersion shape). Look the
+    // matching local-store version up by shareId so approveVersion finds
+    // the real row in the same-session creator's store.
+    const localShared = findVersionByShareId(shareId);
+    const localOk = localShared
+      ? approveVersion(localShared.projectId, localShared.version.id, stamp, { actorId: "client" })
+      : false;
+
+    if (!localOk && !approvedRemotely) {
       toast({ title: t("share.estimate.toast.unableToApprove"), variant: "destructive" });
       return;
     }
 
+    void queryClient.invalidateQueries({ queryKey: ["estimate-share", shareId] });
     setApprovalModalOpen(false);
     toast({ title: t("share.estimate.toast.approved") });
   };

@@ -137,6 +137,7 @@ import {
   usePermission,
 } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
+import { publishEstimateShareSnapshot } from "@/data/estimate-share-source";
 import { ApprovalStampCard } from "@/components/estimate-v2/ApprovalStampCard";
 import { ApprovalStampFormModal } from "@/components/estimate-v2/ApprovalStampFormModal";
 import { EstimateExportModal } from "@/components/estimate-v2/EstimateExportModal";
@@ -1769,6 +1770,30 @@ export default function ProjectEstimate() {
         };
     };
 
+    const publishToBackend = async (
+      shareToken: string,
+      versionNumber: number,
+      snapshotPayload: typeof currentVersionSnapshot,
+    ): Promise<{ ok: true } | { ok: false; error: string }> => {
+      const options = submitOptionsFor();
+      try {
+        await publishEstimateShareSnapshot({
+          projectId: pid,
+          shareToken,
+          versionNumber,
+          snapshot: snapshotPayload,
+          shareApprovalPolicy: options.shareApprovalPolicy,
+          shareApprovalDisabledReason: options.shareApprovalDisabledReason ?? null,
+        });
+        return { ok: true };
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : t("estimate.export.share.submitFailed"),
+        };
+      }
+    };
+
     // Approved versions are immutable. If the estimate has not changed since
     // approval, reuse the approved shareId. If there are new edits, fall
     // through to the "create a fresh proposed" branch below — clients should
@@ -1779,6 +1804,11 @@ export default function ProjectEstimate() {
         { ...latestApproved, snapshot: currentVersionSnapshot },
       ).changes.length === 0;
       if (approvedMatchesCurrent) {
+        // Make sure the persisted backend row exists for this share token
+        // (it is idempotent — re-publishing the same approved snapshot is a
+        // no-op). If the network call fails we still hand out the link so
+        // same-session readers continue to work.
+        await publishToBackend(latestApproved.shareId, latestApproved.number, latestApproved.snapshot);
         return { url: buildShareLink(latestApproved.shareId) };
       }
     }
@@ -1788,6 +1818,7 @@ export default function ProjectEstimate() {
     // re-open the link. Mirrors the prior submit-to-client resubmission flow.
     if (latestProposed?.submitted) {
       if (!hasPendingChangesSinceSubmission) {
+        await publishToBackend(latestProposed.shareId, latestProposed.number, latestProposed.snapshot);
         return { url: buildShareLink(latestProposed.shareId) };
       }
       if (!canSubmitToClient) {
@@ -1797,6 +1828,14 @@ export default function ProjectEstimate() {
         const ok = refreshVersionSnapshot(pid, latestProposed.id, currentUser.id, submitOptionsFor());
         if (!ok) {
           return { error: t("estimate.export.share.submitFailed") };
+        }
+        const publish = await publishToBackend(
+          latestProposed.shareId,
+          latestProposed.number,
+          currentVersionSnapshot,
+        );
+        if (!publish.ok) {
+          return { error: publish.error };
         }
         return { url: buildShareLink(latestProposed.shareId) };
       } catch (error) {
@@ -1816,6 +1855,12 @@ export default function ProjectEstimate() {
       if (!ok) {
         return { error: t("estimate.export.share.submitFailed") };
       }
+      // The fresh version's number is one more than the previous highest.
+      const newVersionNumber = latestVersionNumber + 1;
+      const publish = await publishToBackend(snapshot.shareId, newVersionNumber, snapshot.snapshot);
+      if (!publish.ok) {
+        return { error: publish.error };
+      }
       return { url: buildShareLink(snapshot.shareId) };
     } catch (error) {
       return {
@@ -1831,6 +1876,7 @@ export default function ProjectEstimate() {
     hasPendingChangesSinceSubmission,
     latestApproved,
     latestProposed,
+    latestVersionNumber,
     pid,
     t,
   ]);
