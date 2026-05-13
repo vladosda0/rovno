@@ -5,6 +5,7 @@ import { useOrders } from "@/hooks/use-order-data";
 import { subscribeHR } from "@/data/hr-store";
 import { subscribeOrders } from "@/data/order-store";
 import { subscribeProcurement } from "@/data/procurement-store";
+import { useQuery } from "@tanstack/react-query";
 import {
   findVersionByShareId,
   getEstimateV2ProjectState,
@@ -13,6 +14,7 @@ import {
   type EstimateV2ProjectSyncState,
   type EstimateV2ProjectView,
 } from "@/data/estimate-v2-store";
+import { fetchSharedEstimateVersion } from "@/data/estimate-share-source";
 import {
   buildEstimateV2FinanceProjectSummary,
   getEstimateV2FinanceProjectSummary,
@@ -123,16 +125,64 @@ export function useEstimateV2ProjectSync(projectId: string): EstimateV2ProjectSy
   return useEstimateV2Project(projectId).sync ?? EMPTY_ESTIMATE_V2_PROJECT_SYNC_STATE;
 }
 
-export function useEstimateV2Share(shareId: string): { projectId: string; version: EstimateV2Version } | null {
-  const getter = useCallback(() => findVersionByShareId(shareId), [shareId]);
-  const [value, setValue] = useState(getter);
+export interface EstimateV2ShareState {
+  shared: { projectId: string; version: EstimateV2Version } | null;
+  status: "loading" | "ready" | "not_found" | "error";
+  error: string | null;
+}
+
+const EMPTY_SHARE_STATE: EstimateV2ShareState = {
+  shared: null,
+  status: "loading",
+  error: null,
+};
+
+export function useEstimateV2Share(shareId: string): EstimateV2ShareState {
+  const localGetter = useCallback(() => findVersionByShareId(shareId), [shareId]);
+  const [localValue, setLocalValue] = useState(localGetter);
 
   useEffect(() => {
-    const update = () => setValue(getter());
+    setLocalValue(localGetter());
+    const update = () => setLocalValue(localGetter());
     return subscribeEstimateV2(update);
-  }, [getter]);
+  }, [localGetter]);
 
-  return value;
+  const remoteQuery = useQuery({
+    queryKey: ["estimate-share", shareId],
+    queryFn: () => fetchSharedEstimateVersion(shareId),
+    enabled: Boolean(shareId),
+    staleTime: 30_000,
+    retry: 1,
+  });
+
+  if (!shareId) {
+    return { ...EMPTY_SHARE_STATE, status: "not_found" };
+  }
+
+  // Prefer the Supabase row (cross-browser truth) when it has loaded.
+  if (remoteQuery.data) {
+    return { shared: remoteQuery.data, status: "ready", error: null };
+  }
+
+  // Local store fallback covers the same-session case before the persisted
+  // snapshot lands, and works in workspace=local mode where the Supabase
+  // call is not authoritative.
+  if (localValue) {
+    return { shared: localValue, status: "ready", error: null };
+  }
+
+  if (remoteQuery.isLoading) {
+    return { ...EMPTY_SHARE_STATE, status: "loading" };
+  }
+
+  if (remoteQuery.isError) {
+    const message = remoteQuery.error instanceof Error
+      ? remoteQuery.error.message
+      : String(remoteQuery.error);
+    return { shared: null, status: "error", error: message };
+  }
+
+  return { shared: null, status: "not_found", error: null };
 }
 
 export function useEstimateV2FinanceProjectSummary(
