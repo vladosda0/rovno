@@ -15,7 +15,11 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { addEvent } from "@/data/store";
 import { useEstimateV2Share } from "@/hooks/use-estimate-v2-data";
-import { approveVersion, getLatestProposedVersion } from "@/data/estimate-v2-store";
+import {
+  approveVersion,
+  findVersionByShareId,
+  getLatestProposedVersion,
+} from "@/data/estimate-v2-store";
 import { approveSharedEstimateVersion } from "@/data/estimate-share-source";
 import { computeLineTotals, computeProjectTotals } from "@/lib/estimate-v2/pricing";
 import { ApprovalStampCard } from "@/components/estimate-v2/ApprovalStampCard";
@@ -174,9 +178,16 @@ export default function ShareEstimate() {
       toast({ title: t("share.estimate.toast.unableToApprove"), description: message, variant: "destructive" });
     }
 
-    const ok = approveVersion(projectId, version.id, stamp, { actorId: "client" });
+    // The `version.id` we see here is the synthetic `share-${token}` ID
+    // when the data came from Supabase (rowToVersion shape). Look the
+    // matching local-store version up by shareId so approveVersion finds
+    // the real row in the same-session creator's store.
+    const localShared = findVersionByShareId(shareId);
+    const localOk = localShared
+      ? approveVersion(localShared.projectId, localShared.version.id, stamp, { actorId: "client" })
+      : false;
 
-    if (!ok && !approvedRemotely) {
+    if (!localOk && !approvedRemotely) {
       toast({ title: t("share.estimate.toast.unableToApprove"), variant: "destructive" });
       return;
     }
