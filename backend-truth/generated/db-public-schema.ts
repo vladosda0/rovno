@@ -371,6 +371,14 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql",
       "sha256": "391e18658823efccb1789c91e6e3ed81d1de6b30d242b6819b0f758678020b37"
+    },
+    {
+      "path": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql",
+      "sha256": "f744aa26e8a86f2b86fb511a746c82537aefbdbacd716b28b0b6c9695f62ebf2"
+    },
+    {
+      "path": "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql",
+      "sha256": "f2c4d92bfcea3d05307186c6ec5feff3975d1f134db9b309ba6cc8c62b7cc091"
     }
   ],
   "generated_artifacts": [
@@ -488,6 +496,8 @@ export const manifest = {
     "sql/20260512132330_contractor_profiles_schema.sql",
     "sql/20260512132340_template_rpcs.sql",
     "sql/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql",
+    "sql/20260513110100_estimate_share_snapshots_and_rpcs.sql",
+    "sql/20260513120000_harden_share_rpcs_codex_followup.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -9576,6 +9586,232 @@ export const tables = {
           "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
         }
       ]
+    },
+    {
+      "schema": "public",
+      "name": "estimate_share_snapshots",
+      "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql",
+      "columns": [
+        {
+          "name": "share_token",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "project_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "projects",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "cascade"
+          }
+        },
+        {
+          "name": "version_number",
+          "sqlType": "integer",
+          "tsType": "number",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "status",
+          "sqlType": "text",
+          "tsType": "\"proposed\" | \"approved\"",
+          "nullable": false,
+          "defaultSql": "'proposed'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "share_approval_policy",
+          "sqlType": "text",
+          "tsType": "\"registered\" | \"disabled\"",
+          "nullable": false,
+          "defaultSql": "'registered'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "share_approval_disabled_reason",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "snapshot",
+          "sqlType": "jsonb",
+          "tsType": "Json",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "approval_stamp",
+          "sqlType": "jsonb",
+          "tsType": "Json",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "submitted",
+          "sqlType": "boolean",
+          "tsType": "boolean",
+          "nullable": false,
+          "defaultSql": "true",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "archived",
+          "sqlType": "boolean",
+          "tsType": "boolean",
+          "nullable": false,
+          "defaultSql": "false",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "created_by",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "profiles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "restrict"
+          }
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "updated_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "version_number"
+          ],
+          "expression": "version_number >= 1",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "status"
+          ],
+          "expression": "status in ('proposed', 'approved')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "share_approval_policy"
+          ],
+          "expression": "share_approval_policy in ('registered', 'disabled')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "share_approval_disabled_reason"
+          ],
+          "expression": "share_approval_disabled_reason is null\n      or share_approval_disabled_reason = 'no_participant_slot'",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "estimate_share_snapshots_project_id_idx",
+          "unique": false,
+          "expressions": [
+            "project_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+        },
+        {
+          "name": "estimate_share_snapshots_active_project_idx",
+          "unique": false,
+          "expressions": [
+            "project_id",
+            "version_number desc"
+          ],
+          "where": "archived = false and submitted = true",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "estimate_share_snapshots_set_updated_at",
+          "activation": "before update",
+          "functionSchema": "public",
+          "functionName": "set_updated_at",
+          "functionSignature": "public.set_updated_at()",
+          "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+        }
+      ]
     }
   ]
 } as const;
@@ -11363,6 +11599,38 @@ export const relations = {
         "id"
       ],
       "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "estimate_share_snapshots",
+      "fromColumns": [
+        "project_id"
+      ],
+      "toSchema": "public",
+      "toTable": "projects",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "estimate_share_snapshots",
+      "fromColumns": [
+        "created_by"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "restrict"
     }
   ]
 } as const;
@@ -12810,6 +13078,52 @@ export const checks = {
       "allowedValues": null,
       "expression": "experience_years is null or experience_years >= 0",
       "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "estimate_share_snapshots",
+      "column": "version_number",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "version_number >= 1",
+      "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+    },
+    {
+      "schema": "public",
+      "table": "estimate_share_snapshots",
+      "column": "status",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "proposed",
+        "approved"
+      ],
+      "expression": "status in ('proposed', 'approved')",
+      "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+    },
+    {
+      "schema": "public",
+      "table": "estimate_share_snapshots",
+      "column": "share_approval_policy",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "registered",
+        "disabled"
+      ],
+      "expression": "share_approval_policy in ('registered', 'disabled')",
+      "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+    },
+    {
+      "schema": "public",
+      "table": "estimate_share_snapshots",
+      "column": "share_approval_disabled_reason",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "share_approval_disabled_reason is null\n      or share_approval_disabled_reason = 'no_participant_slot'",
+      "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
     }
   ]
 } as const;
@@ -12953,6 +13267,11 @@ export const functions = {
         {
           "table": "public.contractor_profiles",
           "triggerName": "set_contractor_profiles_updated_at",
+          "activation": "before update"
+        },
+        {
+          "table": "public.estimate_share_snapshots",
+          "triggerName": "estimate_share_snapshots_set_updated_at",
           "activation": "before update"
         }
       ]
@@ -13309,51 +13628,6 @@ export const functions = {
       "searchPath": "public",
       "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260506120400_accept_project_invite_with_org.sql",
-      "triggerUsages": []
-    },
-    {
-      "schema": "public",
-      "name": "get_shared_estimate_version",
-      "signature": "public.get_shared_estimate_version(text)",
-      "args": [
-        {
-          "name": "p_share_token",
-          "type": "text",
-          "identityType": "text"
-        }
-      ],
-      "returnType": "public.estimate_versions",
-      "language": "plpgsql",
-      "volatility": "volatile",
-      "securityDefiner": false,
-      "searchPath": null,
-      "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
-      "triggerUsages": []
-    },
-    {
-      "schema": "public",
-      "name": "approve_estimate_version_by_share_token",
-      "signature": "public.approve_estimate_version_by_share_token(text, jsonb)",
-      "args": [
-        {
-          "name": "p_share_token",
-          "type": "text",
-          "identityType": "text"
-        },
-        {
-          "name": "p_payload",
-          "type": "jsonb",
-          "identityType": "jsonb"
-        }
-      ],
-      "returnType": "uuid",
-      "language": "plpgsql",
-      "volatility": "volatile",
-      "securityDefiner": false,
-      "searchPath": null,
-      "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
       "triggerUsages": []
     },
     {
@@ -15027,6 +15301,96 @@ export const functions = {
       "searchPath": "public",
       "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "get_shared_estimate_version",
+      "signature": "public.get_shared_estimate_version(text)",
+      "args": [
+        {
+          "name": "p_share_token",
+          "type": "text",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "approve_estimate_version_by_share_token",
+      "signature": "public.approve_estimate_version_by_share_token(text, jsonb)",
+      "args": [
+        {
+          "name": "p_share_token",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_payload",
+          "type": "jsonb",
+          "identityType": "jsonb"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "immutable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "publish_estimate_share_snapshot",
+      "signature": "public.publish_estimate_share_snapshot(uuid, text, integer, jsonb, text, text)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_share_token",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_version_number",
+          "type": "integer",
+          "identityType": "integer"
+        },
+        {
+          "name": "p_snapshot",
+          "type": "jsonb",
+          "identityType": "jsonb"
+        },
+        {
+          "name": "p_share_approval_policy",
+          "type": "text default 'registered'",
+          "identityType": "text"
+        },
+        {
+          "name": "p_share_approval_disabled_reason",
+          "type": "text default null",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql",
       "triggerUsages": []
     }
   ]
@@ -17415,6 +17779,13 @@ export const rls = {
           "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
         }
       ]
+    },
+    {
+      "schema": "public",
+      "table": "estimate_share_snapshots",
+      "rlsEnabled": true,
+      "authenticatedGrants": [],
+      "policies": []
     }
   ]
 } as const;
@@ -17720,6 +18091,12 @@ export const sourceTrace = {
       "schema": "public",
       "table": "contractor_profiles",
       "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
+    },
+    {
+      "key": "public.estimate_share_snapshots",
+      "schema": "public",
+      "table": "estimate_share_snapshots",
+      "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
     }
   ],
   "functions": [
@@ -17848,20 +18225,6 @@ export const sourceTrace = {
       "name": "accept_project_invite",
       "signature": "public.accept_project_invite(text)",
       "sourceMigration": "supabase/migrations/20260506120400_accept_project_invite_with_org.sql"
-    },
-    {
-      "key": "public.get_shared_estimate_version",
-      "schema": "public",
-      "name": "get_shared_estimate_version",
-      "signature": "public.get_shared_estimate_version(text)",
-      "sourceMigration": "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql"
-    },
-    {
-      "key": "public.approve_estimate_version_by_share_token",
-      "schema": "public",
-      "name": "approve_estimate_version_by_share_token",
-      "signature": "public.approve_estimate_version_by_share_token(text, jsonb)",
-      "sourceMigration": "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql"
     },
     {
       "key": "public.prepare_project_media_upload",
@@ -18310,6 +18673,27 @@ export const sourceTrace = {
       "name": "apply_template_stage_to_estimate",
       "signature": "public.apply_template_stage_to_estimate(uuid, uuid, integer)",
       "sourceMigration": "supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql"
+    },
+    {
+      "key": "public.get_shared_estimate_version",
+      "schema": "public",
+      "name": "get_shared_estimate_version",
+      "signature": "public.get_shared_estimate_version(text)",
+      "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+    },
+    {
+      "key": "public.approve_estimate_version_by_share_token",
+      "schema": "public",
+      "name": "approve_estimate_version_by_share_token",
+      "signature": "public.approve_estimate_version_by_share_token(text, jsonb)",
+      "sourceMigration": "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql"
+    },
+    {
+      "key": "public.publish_estimate_share_snapshot",
+      "schema": "public",
+      "name": "publish_estimate_share_snapshot",
+      "signature": "public.publish_estimate_share_snapshot(uuid, text, integer, jsonb, text, text)",
+      "sourceMigration": "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql"
     }
   ],
   "policies": [
@@ -19963,13 +20347,14 @@ export const sourceTrace = {
       "kind": "derived_contract_bundle",
       "sourceMigrations": [
         "supabase/migrations/20260306162500_estimates_core.sql",
+        "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql",
         "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
         "supabase/migrations/20260306164000_hr_domain.sql",
         "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
         "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql",
         "supabase/migrations/20260417120000_estimate_resource_line_assignee_profile.sql",
-        "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
         "supabase/migrations/20260418120000_estimate_resource_line_assignee_label.sql",
+        "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
@@ -19978,12 +20363,14 @@ export const sourceTrace = {
         "public.estimate_versions",
         "public.estimate_works",
         "public.estimate_resource_lines",
-        "public.estimate_dependencies"
+        "public.estimate_dependencies",
+        "public.estimate_share_snapshots"
       ],
       "functions": [
+        "public.get_estimate_operational_summary",
         "public.get_shared_estimate_version",
         "public.approve_estimate_version_by_share_token",
-        "public.get_estimate_operational_summary"
+        "public.publish_estimate_share_snapshot"
       ],
       "policies": [
         "public.project_estimates.project_estimates_select",
@@ -20092,6 +20479,111 @@ export const sourceTrace = {
           "from": "public.estimate_resource_lines",
           "to": "public.profiles",
           "sourceMigration": "supabase/migrations/20260417120000_estimate_resource_line_assignee_profile.sql"
+        },
+        {
+          "from": "public.estimate_share_snapshots",
+          "to": "public.projects",
+          "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+        },
+        {
+          "from": "public.estimate_share_snapshots",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+        }
+      ]
+    },
+    {
+      "name": "templates",
+      "title": "Templates Contract",
+      "kind": "derived_contract_bundle",
+      "sourceMigrations": [
+        "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql",
+        "supabase/migrations/20260512132310_estimate_templates_schema.sql",
+        "supabase/migrations/20260512132330_contractor_profiles_schema.sql",
+        "supabase/migrations/20260512132320_template_rls.sql",
+        "supabase/migrations/20260512132340_template_rpcs.sql",
+        "supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql"
+      ],
+      "tables": [
+        "public.system_resource_articles",
+        "public.unit_conversions",
+        "public.estimate_templates",
+        "public.template_stages",
+        "public.template_works",
+        "public.template_resource_lines",
+        "public.contractor_profiles"
+      ],
+      "functions": [
+        "public.can_read_template",
+        "public.can_manage_template",
+        "public.list_estimate_templates",
+        "public.get_estimate_template_detail",
+        "public.apply_template_stage_to_estimate"
+      ],
+      "policies": [
+        "public.system_resource_articles.system_resource_articles_select",
+        "public.unit_conversions.unit_conversions_select",
+        "public.estimate_templates.estimate_templates_select",
+        "public.estimate_templates.estimate_templates_insert",
+        "public.estimate_templates.estimate_templates_update",
+        "public.estimate_templates.estimate_templates_delete",
+        "public.template_stages.template_stages_select",
+        "public.template_stages.template_stages_insert",
+        "public.template_stages.template_stages_update",
+        "public.template_stages.template_stages_delete",
+        "public.template_works.template_works_select",
+        "public.template_works.template_works_insert",
+        "public.template_works.template_works_update",
+        "public.template_works.template_works_delete",
+        "public.template_resource_lines.template_resource_lines_select",
+        "public.template_resource_lines.template_resource_lines_insert",
+        "public.template_resource_lines.template_resource_lines_update",
+        "public.template_resource_lines.template_resource_lines_delete",
+        "public.contractor_profiles.contractor_profiles_select",
+        "public.contractor_profiles.contractor_profiles_insert",
+        "public.contractor_profiles.contractor_profiles_update",
+        "public.contractor_profiles.contractor_profiles_delete"
+      ],
+      "relations": [
+        {
+          "from": "public.estimate_templates",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        },
+        {
+          "from": "public.template_stages",
+          "to": "public.estimate_templates",
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        },
+        {
+          "from": "public.template_works",
+          "to": "public.template_stages",
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        },
+        {
+          "from": "public.template_resource_lines",
+          "to": "public.template_works",
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        },
+        {
+          "from": "public.template_resource_lines",
+          "to": "public.system_resource_articles",
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        },
+        {
+          "from": "public.contractor_profiles",
+          "to": "public.organizations",
+          "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
+        },
+        {
+          "from": "public.contractor_profiles",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
+        },
+        {
+          "from": "public.contractor_profiles",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
         }
       ]
     },
@@ -20595,19 +21087,36 @@ export const slices = {
       "kind": "derived_contract_bundle",
       "sourceMigrations": [
         "supabase/migrations/20260306162500_estimates_core.sql",
+        "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql",
         "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
         "supabase/migrations/20260306164000_hr_domain.sql",
         "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
         "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql",
         "supabase/migrations/20260417120000_estimate_resource_line_assignee_profile.sql",
-        "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
         "supabase/migrations/20260418120000_estimate_resource_line_assignee_label.sql",
+        "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
-      "tableCount": 5,
-      "functionCount": 3,
-      "rlsTableCount": 5
+      "tableCount": 6,
+      "functionCount": 4,
+      "rlsTableCount": 6
+    },
+    {
+      "name": "templates",
+      "title": "Templates Contract",
+      "kind": "derived_contract_bundle",
+      "sourceMigrations": [
+        "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql",
+        "supabase/migrations/20260512132310_estimate_templates_schema.sql",
+        "supabase/migrations/20260512132330_contractor_profiles_schema.sql",
+        "supabase/migrations/20260512132320_template_rls.sql",
+        "supabase/migrations/20260512132340_template_rpcs.sql",
+        "supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql"
+      ],
+      "tableCount": 7,
+      "functionCount": 5,
+      "rlsTableCount": 7
     },
     {
       "name": "templates",

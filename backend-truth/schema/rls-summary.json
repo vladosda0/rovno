@@ -2381,6 +2381,13 @@
           "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
         }
       ]
+    },
+    {
+      "schema": "public",
+      "table": "estimate_share_snapshots",
+      "rlsEnabled": true,
+      "authenticatedGrants": [],
+      "policies": []
     }
   ]
 }

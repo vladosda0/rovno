@@ -299,6 +299,12 @@
       "schema": "public",
       "table": "contractor_profiles",
       "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
+    },
+    {
+      "key": "public.estimate_share_snapshots",
+      "schema": "public",
+      "table": "estimate_share_snapshots",
+      "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
     }
   ],
   "functions": [
@@ -427,20 +433,6 @@
       "name": "accept_project_invite",
       "signature": "public.accept_project_invite(text)",
       "sourceMigration": "supabase/migrations/20260506120400_accept_project_invite_with_org.sql"
-    },
-    {
-      "key": "public.get_shared_estimate_version",
-      "schema": "public",
-      "name": "get_shared_estimate_version",
-      "signature": "public.get_shared_estimate_version(text)",
-      "sourceMigration": "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql"
-    },
-    {
-      "key": "public.approve_estimate_version_by_share_token",
-      "schema": "public",
-      "name": "approve_estimate_version_by_share_token",
-      "signature": "public.approve_estimate_version_by_share_token(text, jsonb)",
-      "sourceMigration": "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql"
     },
     {
       "key": "public.prepare_project_media_upload",
@@ -889,6 +881,27 @@
       "name": "apply_template_stage_to_estimate",
       "signature": "public.apply_template_stage_to_estimate(uuid, uuid, integer)",
       "sourceMigration": "supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql"
+    },
+    {
+      "key": "public.get_shared_estimate_version",
+      "schema": "public",
+      "name": "get_shared_estimate_version",
+      "signature": "public.get_shared_estimate_version(text)",
+      "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+    },
+    {
+      "key": "public.approve_estimate_version_by_share_token",
+      "schema": "public",
+      "name": "approve_estimate_version_by_share_token",
+      "signature": "public.approve_estimate_version_by_share_token(text, jsonb)",
+      "sourceMigration": "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql"
+    },
+    {
+      "key": "public.publish_estimate_share_snapshot",
+      "schema": "public",
+      "name": "publish_estimate_share_snapshot",
+      "signature": "public.publish_estimate_share_snapshot(uuid, text, integer, jsonb, text, text)",
+      "sourceMigration": "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql"
     }
   ],
   "policies": [
@@ -2542,13 +2555,14 @@
       "kind": "derived_contract_bundle",
       "sourceMigrations": [
         "supabase/migrations/20260306162500_estimates_core.sql",
+        "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql",
         "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
         "supabase/migrations/20260306164000_hr_domain.sql",
         "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
         "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql",
         "supabase/migrations/20260417120000_estimate_resource_line_assignee_profile.sql",
-        "supabase/migrations/20260306165500_auth_bootstrap_and_domain_rpc.sql",
         "supabase/migrations/20260418120000_estimate_resource_line_assignee_label.sql",
+        "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
@@ -2557,12 +2571,14 @@
         "public.estimate_versions",
         "public.estimate_works",
         "public.estimate_resource_lines",
-        "public.estimate_dependencies"
+        "public.estimate_dependencies",
+        "public.estimate_share_snapshots"
       ],
       "functions": [
+        "public.get_estimate_operational_summary",
         "public.get_shared_estimate_version",
         "public.approve_estimate_version_by_share_token",
-        "public.get_estimate_operational_summary"
+        "public.publish_estimate_share_snapshot"
       ],
       "policies": [
         "public.project_estimates.project_estimates_select",
@@ -2671,6 +2687,111 @@
           "from": "public.estimate_resource_lines",
           "to": "public.profiles",
           "sourceMigration": "supabase/migrations/20260417120000_estimate_resource_line_assignee_profile.sql"
+        },
+        {
+          "from": "public.estimate_share_snapshots",
+          "to": "public.projects",
+          "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+        },
+        {
+          "from": "public.estimate_share_snapshots",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+        }
+      ]
+    },
+    {
+      "name": "templates",
+      "title": "Templates Contract",
+      "kind": "derived_contract_bundle",
+      "sourceMigrations": [
+        "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql",
+        "supabase/migrations/20260512132310_estimate_templates_schema.sql",
+        "supabase/migrations/20260512132330_contractor_profiles_schema.sql",
+        "supabase/migrations/20260512132320_template_rls.sql",
+        "supabase/migrations/20260512132340_template_rpcs.sql",
+        "supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql"
+      ],
+      "tables": [
+        "public.system_resource_articles",
+        "public.unit_conversions",
+        "public.estimate_templates",
+        "public.template_stages",
+        "public.template_works",
+        "public.template_resource_lines",
+        "public.contractor_profiles"
+      ],
+      "functions": [
+        "public.can_read_template",
+        "public.can_manage_template",
+        "public.list_estimate_templates",
+        "public.get_estimate_template_detail",
+        "public.apply_template_stage_to_estimate"
+      ],
+      "policies": [
+        "public.system_resource_articles.system_resource_articles_select",
+        "public.unit_conversions.unit_conversions_select",
+        "public.estimate_templates.estimate_templates_select",
+        "public.estimate_templates.estimate_templates_insert",
+        "public.estimate_templates.estimate_templates_update",
+        "public.estimate_templates.estimate_templates_delete",
+        "public.template_stages.template_stages_select",
+        "public.template_stages.template_stages_insert",
+        "public.template_stages.template_stages_update",
+        "public.template_stages.template_stages_delete",
+        "public.template_works.template_works_select",
+        "public.template_works.template_works_insert",
+        "public.template_works.template_works_update",
+        "public.template_works.template_works_delete",
+        "public.template_resource_lines.template_resource_lines_select",
+        "public.template_resource_lines.template_resource_lines_insert",
+        "public.template_resource_lines.template_resource_lines_update",
+        "public.template_resource_lines.template_resource_lines_delete",
+        "public.contractor_profiles.contractor_profiles_select",
+        "public.contractor_profiles.contractor_profiles_insert",
+        "public.contractor_profiles.contractor_profiles_update",
+        "public.contractor_profiles.contractor_profiles_delete"
+      ],
+      "relations": [
+        {
+          "from": "public.estimate_templates",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        },
+        {
+          "from": "public.template_stages",
+          "to": "public.estimate_templates",
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        },
+        {
+          "from": "public.template_works",
+          "to": "public.template_stages",
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        },
+        {
+          "from": "public.template_resource_lines",
+          "to": "public.template_works",
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        },
+        {
+          "from": "public.template_resource_lines",
+          "to": "public.system_resource_articles",
+          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        },
+        {
+          "from": "public.contractor_profiles",
+          "to": "public.organizations",
+          "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
+        },
+        {
+          "from": "public.contractor_profiles",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
+        },
+        {
+          "from": "public.contractor_profiles",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
         }
       ]
     },

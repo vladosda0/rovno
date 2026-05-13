@@ -116,6 +116,8 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20260512132330_contractor_profiles_schema.sql`
 - `supabase/migrations/20260512132340_template_rpcs.sql`
 - `supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql`
+- `supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql`
+- `supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql`
 
 ## Exclusions
 
