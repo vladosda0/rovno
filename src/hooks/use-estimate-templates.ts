@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { useCurrentUser } from "@/hooks/use-mock-data";
 
 const rawSupabase = supabase as unknown as SupabaseClient;
 
@@ -40,8 +41,9 @@ function normalizeOwnerKind(value: string): EstimateTemplateOwnerKind {
 }
 
 export function useEstimateTemplates(scopeFilter?: string | null) {
+  const currentUser = useCurrentUser();
   return useQuery({
-    queryKey: ["estimate_templates", "list", scopeFilter ?? null],
+    queryKey: ["estimate_templates", "list", currentUser?.id ?? null, scopeFilter ?? null],
     queryFn: async (): Promise<EstimateTemplateSummary[]> => {
       const { data, error } = await rawSupabase.rpc("list_estimate_templates", {
         p_scope_filter: scopeFilter ?? null,
@@ -163,8 +165,9 @@ interface RawTemplateDetail {
 }
 
 export function useEstimateTemplateDetail(templateId: string | null | undefined) {
+  const currentUser = useCurrentUser();
   return useQuery({
-    queryKey: ["estimate_templates", "detail", templateId ?? null],
+    queryKey: ["estimate_templates", "detail", currentUser?.id ?? null, templateId ?? null],
     enabled: Boolean(templateId),
     queryFn: async (): Promise<EstimateTemplateDetail | null> => {
       if (!templateId) return null;

@@ -62,18 +62,18 @@ export function DocumentsHubTab() {
   const handleSubTabChange = useCallback(
     (value: string) => {
       setActiveSubTab(value as SubTabValue);
-      setSearchParams(
-        (current) => {
-          const next = new URLSearchParams(current);
-          if (value === DEFAULT_SUB_TAB) {
-            next.delete(SUB_TAB_PARAM);
-          } else {
-            next.set(SUB_TAB_PARAM, value);
-          }
-          return next;
-        },
-        { replace: true },
-      );
+      // Push (not replace) so browser Back/Forward navigates between sub-tabs.
+      // Canonicalization of invalid values in the effect above keeps `replace`
+      // because it is a URL repair, not user-initiated navigation.
+      setSearchParams((current) => {
+        const next = new URLSearchParams(current);
+        if (value === DEFAULT_SUB_TAB) {
+          next.delete(SUB_TAB_PARAM);
+        } else {
+          next.set(SUB_TAB_PARAM, value);
+        }
+        return next;
+      });
     },
     [setSearchParams],
   );
