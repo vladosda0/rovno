@@ -7407,6 +7407,23 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "folder_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "org_document_folders",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
         }
       ],
       "constraints": [
@@ -7441,6 +7458,16 @@
           "where": null,
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+        },
+        {
+          "name": "idx_org_documents_folder",
+          "unique": false,
+          "expressions": [
+            "folder_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
         }
       ],
       "triggers": [
@@ -7451,6 +7478,14 @@
           "functionName": "set_updated_at",
           "functionSignature": "public.set_updated_at()",
           "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+        },
+        {
+          "name": "trg_guard_org_document_folder_change",
+          "activation": "before insert or update",
+          "functionSchema": "public",
+          "functionName": "guard_org_document_folder_change",
+          "functionSignature": "public.guard_org_document_folder_change()",
+          "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
         }
       ]
     },
@@ -9282,6 +9317,140 @@
           "functionName": "set_updated_at",
           "functionSignature": "public.set_updated_at()",
           "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "org_document_folders",
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql",
+      "columns": [
+        {
+          "name": "id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "gen_random_uuid()",
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "org_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "organizations",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "cascade"
+          }
+        },
+        {
+          "name": "name",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "created_by",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "profiles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "updated_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "name"
+          ],
+          "expression": "char_length(trim(name)) between 1 and 80",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_org_document_folders_org",
+          "unique": false,
+          "expressions": [
+            "org_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+        },
+        {
+          "name": "idx_org_document_folders_org_lower_name",
+          "unique": true,
+          "expressions": [
+            "org_id",
+            "lower(name)"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "trg_normalize_org_document_folder_name",
+          "activation": "before insert or update of name",
+          "functionSchema": "public",
+          "functionName": "normalize_org_document_folder_name",
+          "functionSignature": "public.normalize_org_document_folder_name()",
+          "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+        },
+        {
+          "name": "set_org_document_folders_updated_at",
+          "activation": "before update",
+          "functionSchema": "public",
+          "functionName": "set_updated_at",
+          "functionSignature": "public.set_updated_at()",
+          "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
         }
       ]
     }

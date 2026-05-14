@@ -2388,6 +2388,67 @@
       "rlsEnabled": true,
       "authenticatedGrants": [],
       "policies": []
+    },
+    {
+      "schema": "public",
+      "table": "org_document_folders",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "delete",
+        "insert",
+        "select",
+        "update"
+      ],
+      "policies": [
+        {
+          "name": "org_document_folders_member_read",
+          "schema": "public",
+          "table": "org_document_folders",
+          "command": "select",
+          "roles": [
+            "public"
+          ],
+          "using": "public.is_org_member(org_id)",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+        },
+        {
+          "name": "org_document_folders_manager_insert",
+          "schema": "public",
+          "table": "org_document_folders",
+          "command": "insert",
+          "roles": [
+            "public"
+          ],
+          "using": null,
+          "withCheck": "public.can_manage_org(org_id)",
+          "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+        },
+        {
+          "name": "org_document_folders_manager_update",
+          "schema": "public",
+          "table": "org_document_folders",
+          "command": "update",
+          "roles": [
+            "public"
+          ],
+          "using": "public.can_manage_org(org_id)",
+          "withCheck": "public.can_manage_org(org_id)",
+          "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+        },
+        {
+          "name": "org_document_folders_manager_delete",
+          "schema": "public",
+          "table": "org_document_folders",
+          "command": "delete",
+          "roles": [
+            "public"
+          ],
+          "using": "public.can_manage_org(org_id)",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+        }
+      ]
     }
   ]
 }
