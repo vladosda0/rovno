@@ -1565,6 +1565,7 @@ export type Database = {
           "created_at": string
           "updated_at": string
           "visibility_class": "shared_project" | "internal"
+          "folder_id": string | null
           }
           Insert: {
           "id"?: string
@@ -1579,6 +1580,7 @@ export type Database = {
           "created_at"?: string
           "updated_at"?: string
           "visibility_class"?: "shared_project" | "internal"
+          "folder_id"?: string | null
           }
           Update: {
           "id"?: string
@@ -1593,6 +1595,7 @@ export type Database = {
           "created_at"?: string
           "updated_at"?: string
           "visibility_class"?: "shared_project" | "internal"
+          "folder_id"?: string | null
           }
           Relationships: []
         }
@@ -2001,6 +2004,33 @@ export type Database = {
           }
           Relationships: []
         }
+        "org_document_folders": {
+          Row: {
+          "id": string
+          "org_id": string
+          "name": string
+          "created_by": string | null
+          "created_at": string
+          "updated_at": string
+          }
+          Insert: {
+          "id"?: string
+          "org_id": string
+          "name": string
+          "created_by"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Update: {
+          "id"?: string
+          "org_id"?: string
+          "name"?: string
+          "created_by"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Relationships: []
+        }
     }
     Views: {
       [_ in never]: never
@@ -2114,9 +2144,22 @@ export type Database = {
           }
           Returns: boolean
         }
+        "create_org_document_folder": {
+          Args: {
+          "p_org_id": string
+          "p_name": string
+          }
+          Returns: Json
+        }
         "current_profile_id": {
           Args: Record<PropertyKey, never>
           Returns: string
+        }
+        "delete_org_document_folder": {
+          Args: {
+          "p_folder_id": string
+          }
+          Returns: unknown
         }
         "effective_ai_access_for_profile": {
           Args: {
@@ -2323,6 +2366,13 @@ export type Database = {
           Args: Record<PropertyKey, never>
           Returns: unknown
         }
+        "move_org_document_to_folder": {
+          Args: {
+          "p_document_id": string
+          "p_folder_id": string
+          }
+          Returns: unknown
+        }
         "org_role": {
           Args: {
           "p_org_id": string
@@ -2393,6 +2443,13 @@ export type Database = {
           "p_snapshot": Json
           "p_share_approval_policy": unknown
           "p_share_approval_disabled_reason": unknown
+          }
+          Returns: Json
+        }
+        "rename_org_document_folder": {
+          Args: {
+          "p_folder_id": string
+          "p_new_name": string
           }
           Returns: Json
         }

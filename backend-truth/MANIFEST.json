@@ -375,6 +375,10 @@
     {
       "path": "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql",
       "sha256": "fc933ee37f8aeecdc349669b774a077b81a97aeb84d6980c2e3e37b45b3b42fc"
+    },
+    {
+      "path": "supabase/migrations/20260514120000_org_document_folders.sql",
+      "sha256": "13fdd3ff194ea028f650b17bc75d9a0463919775deb8eb0f9100758345d9e0df"
     }
   ],
   "generated_artifacts": [
@@ -494,6 +498,7 @@
     "sql/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql",
     "sql/20260513110100_estimate_share_snapshots_and_rpcs.sql",
     "sql/20260513120000_harden_share_rpcs_codex_followup.sql",
+    "sql/20260514120000_org_document_folders.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
