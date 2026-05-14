@@ -17,8 +17,8 @@ const ProjectsTab = lazy(() =>
 const TasksTab = lazy(() =>
   import("@/components/home/TasksTab").then((module) => ({ default: module.TasksTab })),
 );
-const DocumentsTab = lazy(() =>
-  import("@/components/home/DocumentsTab").then((module) => ({ default: module.DocumentsTab })),
+const DocumentsHubTab = lazy(() =>
+  import("@/components/home/DocumentsHubTab").then((module) => ({ default: module.DocumentsHubTab })),
 );
 const ProcurementTab = lazy(() =>
   import("@/components/home/ProcurementTab").then((module) => ({ default: module.ProcurementTab })),
@@ -126,7 +126,7 @@ export default function Home() {
         <TabsContent value="documents" className="mt-0">
           {activeTab === "documents" && (
             <Suspense fallback={tabFallback}>
-              <DocumentsTab />
+              <DocumentsHubTab />
             </Suspense>
           )}
         </TabsContent>
