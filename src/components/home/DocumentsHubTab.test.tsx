@@ -4,20 +4,52 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
-vi.mock("@/components/home/MyDocumentsTab", () => ({
-  MyDocumentsTab: () => <div data-testid="stub-my-documents">my documents</div>,
+// Stub every leaf with a simple data-testid div so we can assert which view renders.
+vi.mock("@/components/home/documents-hub/leaves/MyAllDocsLeaf", () => ({
+  MyAllDocsLeaf: () => <div data-testid="stub-my-all">my all</div>,
+}));
+vi.mock("@/components/home/documents-hub/leaves/MyNotesView", () => ({
+  MyNotesView: () => <div data-testid="stub-my-notes">my notes</div>,
+}));
+vi.mock("@/components/home/documents-hub/leaves/MyMediaView", () => ({
+  MyMediaView: () => <div data-testid="stub-my-media">my media</div>,
+}));
+vi.mock("@/components/home/documents-hub/leaves/OrgAllDocsView", () => ({
+  OrgAllDocsView: () => <div data-testid="stub-org-all">org all</div>,
+}));
+vi.mock("@/components/home/documents-hub/leaves/OrgProjectsView", () => ({
+  OrgProjectsView: () => <div data-testid="stub-org-projects">org projects</div>,
+}));
+vi.mock("@/components/home/documents-hub/leaves/OrgMediaView", () => ({
+  OrgMediaView: () => <div data-testid="stub-org-media">org media</div>,
+}));
+vi.mock("@/components/home/documents-hub/leaves/OrgEstimatesView", () => ({
+  OrgEstimatesView: () => <div data-testid="stub-org-estimates">org estimates</div>,
+}));
+vi.mock("@/components/home/documents-hub/leaves/OrgCatalogsView", () => ({
+  OrgCatalogsView: () => <div data-testid="stub-org-catalogs">org catalogs</div>,
+}));
+vi.mock("@/components/home/documents-hub/leaves/OrgContractorCardView", () => ({
+  OrgContractorCardView: () => <div data-testid="stub-org-contractor-card">org card</div>,
 }));
 vi.mock("@/components/home/CatalogsTab", () => ({
   CatalogsTab: () => <div data-testid="stub-catalogs">catalogs</div>,
 }));
 vi.mock("@/components/home/EstimateTemplatesTab", () => ({
-  EstimateTemplatesTab: () => <div data-testid="stub-estimate-templates">templates</div>,
+  EstimateTemplatesTab: () => <div data-testid="stub-estimates">estimates</div>,
 }));
 vi.mock("@/components/home/KnowledgeBaseTab", () => ({
   KnowledgeBaseTab: () => <div data-testid="stub-knowledge-base">kb</div>,
 }));
 vi.mock("@/components/home/DocumentTemplatesTab", () => ({
   DocumentTemplatesTab: () => <div data-testid="stub-document-templates">doc templates</div>,
+}));
+vi.mock("@/hooks/use-orgs", () => ({
+  useActiveOrg: () => null,
+  useUserOrganizations: () => ({ data: [] }),
+}));
+vi.mock("@/components/home/UploadDocumentDialog", () => ({
+  UploadDocumentDialog: () => null,
 }));
 
 import { DocumentsHubTab } from "@/components/home/DocumentsHubTab";
@@ -53,46 +85,44 @@ function renderHub(initialPath = "/home") {
 }
 
 describe("DocumentsHubTab", () => {
-  it("defaults to My documents and clears docTab from the URL", async () => {
+  it("defaults to my-all and clears docTab from the URL", async () => {
     renderHub("/home");
     await waitFor(() => {
-      expect(screen.getByTestId("stub-my-documents")).toBeInTheDocument();
+      expect(screen.getByTestId("stub-my-all")).toBeInTheDocument();
     });
     expect(screen.getByTestId("location-search").textContent).toBe("");
   });
 
   it("reads docTab from the URL on mount", async () => {
-    renderHub("/home?docTab=estimate-templates");
+    renderHub("/home?docTab=estimates");
     await waitFor(() => {
-      expect(screen.getByTestId("stub-estimate-templates")).toBeInTheDocument();
+      expect(screen.getByTestId("stub-estimates")).toBeInTheDocument();
     });
   });
 
   it("strips an unknown docTab value from the URL and falls back to default", async () => {
     renderHub("/home?docTab=bogus&keepMe=1");
     await waitFor(() => {
-      expect(screen.getByTestId("stub-my-documents")).toBeInTheDocument();
+      expect(screen.getByTestId("stub-my-all")).toBeInTheDocument();
     });
     await waitFor(() => {
       expect(screen.getByTestId("location-search").textContent).toBe("?keepMe=1");
     });
   });
 
-  it("updates the URL search param when switching tabs", async () => {
+  it("updates the URL search param when switching nav items", async () => {
     renderHub("/home");
-    const estimateTab = screen.getByRole("tab", { name: /Estimate templates/i });
-    fireEvent.pointerDown(estimateTab, { button: 0 });
-    fireEvent.mouseDown(estimateTab, { button: 0 });
-    fireEvent.click(estimateTab, { button: 0 });
+    // Wait for default leaf to render so the left nav is settled.
     await waitFor(() => {
-      expect(screen.getByTestId("location-search").textContent).toBe("?docTab=estimate-templates");
+      expect(screen.getByTestId("stub-my-all")).toBeInTheDocument();
     });
-    const myDocsTab = screen.getByRole("tab", { name: /My documents/i });
-    fireEvent.pointerDown(myDocsTab, { button: 0 });
-    fireEvent.mouseDown(myDocsTab, { button: 0 });
-    fireEvent.click(myDocsTab, { button: 0 });
+    const docTemplatesButton = screen.getByRole("button", { name: /Document templates/i });
+    fireEvent.click(docTemplatesButton);
     await waitFor(() => {
-      expect(screen.getByTestId("location-search").textContent).toBe("");
+      expect(screen.getByTestId("location-search").textContent).toBe("?docTab=document-templates");
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("stub-document-templates")).toBeInTheDocument();
     });
   });
 });
