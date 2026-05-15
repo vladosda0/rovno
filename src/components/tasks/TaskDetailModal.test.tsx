@@ -17,6 +17,7 @@ vi.mock("@/hooks/use-documents-media-source", () => ({
     uploadBytes: vi.fn(),
     finalizeUpload: vi.fn(),
   }),
+  useProjectMediaMutations: () => ({ deleteMedia: vi.fn() }),
 }));
 
 vi.mock("@/lib/permissions", async () => {

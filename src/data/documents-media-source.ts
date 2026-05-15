@@ -114,7 +114,13 @@ export interface DocumentsMediaSource {
   finalizeDocumentUpload: (uploadIntentId: string) => Promise<FinalizeDocumentUploadResult>;
   prepareMediaUpload: (input: PrepareMediaUploadInput) => Promise<PrepareUploadResult>;
   finalizeMediaUpload: (uploadIntentId: string, options?: { taskId?: string; isFinal?: boolean }) => Promise<FinalizeMediaUploadResult>;
+  deleteProjectMedia: (input: DeleteProjectMediaInput) => Promise<void>;
   uploadBytes: (bucket: string, objectPath: string, file: File) => Promise<void>;
+}
+
+export interface DeleteProjectMediaInput {
+  projectId: string;
+  mediaId: string;
 }
 
 function createDocumentMutationId(): string {
@@ -266,6 +272,9 @@ function createBrowserDocumentsMediaSource(mode: WorkspaceMode["kind"]): Documen
     },
     async uploadBytes() {
       // no-op in browser/demo mode
+    },
+    async deleteProjectMedia(input) {
+      store.deleteMedia(input.mediaId);
     },
   };
 }
@@ -773,6 +782,20 @@ export async function prepareSupabaseMediaUpload(
   };
 }
 
+export async function deleteSupabaseProjectMedia(
+  supabase: TypedSupabaseClient,
+  input: DeleteProjectMediaInput,
+): Promise<void> {
+  const { error } = await supabase
+    .from("project_media")
+    .delete()
+    .eq("id", input.mediaId);
+
+  if (error) {
+    throw error;
+  }
+}
+
 export async function finalizeSupabaseMediaUpload(
   supabase: TypedSupabaseClient,
   uploadIntentId: string,
@@ -881,6 +904,21 @@ export function createSupabaseDocumentsMediaSource(
         .filter((id): id is string => id != null && id !== "");
       const storageObjectsById = await fetchStorageObjectsByIds(supabase, storageObjectIds);
 
+      // Diagnostic: when a media row references a storage_object_id but the
+      // storage_objects SELECT returned no matching row, the gallery silently
+      // renders a placeholder. Surface that case so RLS or replica-lag bugs
+      // are visible in the console.
+      const missing = storageObjectIds.filter((id) => !storageObjectsById.has(id));
+      if (missing.length > 0) {
+        // eslint-disable-next-line no-console
+        console.warn("[project-media] storage_objects rows missing for media", {
+          projectId,
+          missingStorageObjectIds: missing,
+          expected: storageObjectIds.length,
+          received: storageObjectsById.size,
+        });
+      }
+
       return mediaRows.map((row) =>
         mapProjectMediaRowToMedia(row, storageObjectsById.get(row.storage_object_id)),
       );
@@ -920,6 +958,9 @@ export function createSupabaseDocumentsMediaSource(
       if (error) {
         throw error;
       }
+    },
+    async deleteProjectMedia(input) {
+      return deleteSupabaseProjectMedia(supabase, input);
     },
   };
 }
@@ -1009,4 +1050,12 @@ export async function uploadBytes(
 ): Promise<void> {
   const source = await getDocumentsMediaSource(mode);
   return source.uploadBytes(bucket, objectPath, file);
+}
+
+export async function deleteProjectMedia(
+  mode: WorkspaceMode,
+  input: DeleteProjectMediaInput,
+): Promise<void> {
+  const source = await getDocumentsMediaSource(mode);
+  return source.deleteProjectMedia(input);
 }

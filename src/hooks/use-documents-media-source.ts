@@ -10,6 +10,7 @@ import {
   finalizeDocumentUpload as finalizeDocumentUploadSource,
   prepareMediaUpload as prepareMediaUploadSource,
   finalizeMediaUpload as finalizeMediaUploadSource,
+  deleteProjectMedia as deleteProjectMediaSource,
   uploadBytes as uploadBytesSource,
   getDocumentsMediaSource,
   type ArchiveProjectDocumentInput,
@@ -319,4 +320,28 @@ export function useMediaUploadMutations(projectId: string) {
     uploadBytes,
     finalizeUpload,
   };
+}
+
+export function useProjectMediaMutations(projectId: string) {
+  const mode = useWorkspaceMode();
+  const queryClient = useQueryClient();
+
+  const invalidateProjectMedia = useCallback(async (resolvedMode: Extract<typeof mode, { kind: "supabase" }>) => {
+    await queryClient.invalidateQueries({
+      queryKey: documentsMediaQueryKeys.projectMedia(resolvedMode.profileId, projectId),
+    });
+  }, [projectId, queryClient]);
+
+  const deleteMedia = useCallback(async (mediaId: string): Promise<void> => {
+    const resolvedMode = assertDocumentsMutationWorkspaceMode(mode);
+    await deleteProjectMediaSource(resolvedMode, { projectId, mediaId });
+
+    if (resolvedMode.kind === "supabase") {
+      await invalidateProjectMedia(resolvedMode);
+    }
+    // Browser modes mutate the in-memory store; useProjectMedia reads via
+    // useStoreValue so the change re-renders automatically.
+  }, [invalidateProjectMedia, mode, projectId]);
+
+  return { deleteMedia };
 }

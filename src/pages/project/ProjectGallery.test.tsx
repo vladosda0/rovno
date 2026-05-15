@@ -31,6 +31,7 @@ vi.mock("@/hooks/use-mock-data", () => ({
 
 vi.mock("@/hooks/use-documents-media-source", () => ({
   useMediaUploadMutations: (projectId: string) => mockUseMediaUploadMutations(projectId),
+  useProjectMediaMutations: () => ({ deleteMedia: vi.fn() }),
 }));
 
 vi.mock("@/lib/permissions", async () => {

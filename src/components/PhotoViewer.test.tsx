@@ -28,6 +28,10 @@ vi.mock("@/lib/photo-consult-store", () => ({
   openPhotoConsult: (ctx: unknown) => mockOpenPhotoConsult(ctx),
 }));
 
+vi.mock("@/hooks/use-documents-media-source", () => ({
+  useProjectMediaMutations: () => ({ deleteMedia: vi.fn() }),
+}));
+
 vi.mock("@/data/store", () => ({
   getCurrentUser: () => ({
     id: "user-1",
