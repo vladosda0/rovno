@@ -8,19 +8,23 @@ import {
 import { Button } from "@/components/ui/button";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import {
-  ArrowLeft, Star, Trash2, X, Camera, ExternalLink, Sparkles,
+  ArrowLeft, Trash2, X, Camera, ExternalLink, Sparkles,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import {
-  updateMedia, deleteMedia, addEvent, getCurrentUser, getTask, getStage,
+  deleteMedia, addEvent, getCurrentUser, getTask, getStage,
   getMedia,
 } from "@/data/store";
+import {
+  Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { openPhotoConsult } from "@/lib/photo-consult-store";
 import { format } from "date-fns";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Media as MediaType } from "@/types/entities";
 import { VisibilityClassBadge } from "@/components/documents/VisibilityClassBadge";
+import { MediaImage } from "@/components/MediaImage";
 
 const placeholderColors = [
   "bg-accent/10", "bg-info/10", "bg-warning/10", "bg-muted",
@@ -55,7 +59,6 @@ export function PhotoViewer({ photo, open, onOpenChange, source, allPhotos = [] 
     perm.can("ai.generate");
 
   const deleteMediaControl = actionStateToControlProps(perm.actionState("documents_media", "delete"));
-  const markFinalControl = actionStateToControlProps(perm.actionState("documents_media", "rename_or_archive"));
 
   if (!photo) return null;
 
@@ -64,13 +67,6 @@ export function PhotoViewer({ photo, open, onOpenChange, source, allPhotos = [] 
   const stage = task?.stage_id ? getStage(task.stage_id) : undefined;
   const colorIdx = allPhotos.indexOf(photo);
   const bgColor = placeholderColors[Math.max(0, colorIdx) % placeholderColors.length];
-
-  function handleToggleFinal() {
-    if (!photo) return;
-    if (perm.actionState("documents_media", "rename_or_archive") !== "enabled") return;
-    updateMedia(photo.id, { is_final: !photo.is_final });
-    toast({ title: photo.is_final ? t("photoViewer.toast.unmarkedFinal") : t("photoViewer.toast.markedFinal") });
-  }
 
   function handleDelete() {
     if (!photo) return;
@@ -139,29 +135,6 @@ export function PhotoViewer({ photo, open, onOpenChange, source, allPhotos = [] 
             </div>
 
             <div className="flex items-center gap-1">
-              {markFinalControl.visible ? (
-                <button
-                  type="button"
-                  onClick={handleToggleFinal}
-                  disabled={markFinalControl.disabled}
-                  className={`p-1.5 rounded-md transition-colors ${
-                    markFinalControl.disabled ? "opacity-50 cursor-not-allowed" : ""
-                  } ${
-                    photo.is_final
-                      ? "text-accent bg-accent/10 hover:bg-accent/20"
-                      : "text-muted-foreground hover:text-accent hover:bg-accent/10"
-                  }`}
-                  title={
-                    markFinalControl.disabled
-                      ? (markFinalControl.disabledReason ?? t("photoViewer.notAvailable"))
-                      : photo.is_final
-                        ? t("photoViewer.unmarkAsFinal")
-                        : t("photoViewer.markAsFinal")
-                  }
-                >
-                  <Star className="h-4 w-4" fill={photo.is_final ? "currentColor" : "none"} />
-                </button>
-              ) : null}
               {deleteMediaControl.visible ? (
                 <button
                   type="button"
@@ -188,14 +161,13 @@ export function PhotoViewer({ photo, open, onOpenChange, source, allPhotos = [] 
 
           {/* Photo preview */}
           <div className="px-4 pt-3">
-            <div className={`w-full aspect-video rounded-lg ${bgColor} flex items-center justify-center relative`}>
-              <Camera className="h-16 w-16 text-muted-foreground/20" />
-              {photo.is_final && (
-                <div className="absolute top-3 right-3 bg-accent rounded-full px-2.5 py-0.5 flex items-center gap-1">
-                  <Star className="h-3 w-3 text-accent-foreground" fill="currentColor" />
-                  <span className="text-caption text-accent-foreground font-medium">{t("photoViewer.final")}</span>
-                </div>
-              )}
+            <div className={`w-full aspect-video rounded-lg ${bgColor} flex items-center justify-center relative overflow-hidden`}>
+              <MediaImage
+                storage={photo.storage}
+                alt={photo.caption}
+                imgClassName="absolute inset-0 h-full w-full object-contain"
+                fallback={<Camera className="h-16 w-16 text-muted-foreground/20" />}
+              />
             </div>
           </div>
 
@@ -206,53 +178,46 @@ export function PhotoViewer({ photo, open, onOpenChange, source, allPhotos = [] 
               <span>{format(new Date(photo.created_at), "MMM d, yyyy · HH:mm")}</span>
             </div>
 
-            {/* Task link */}
-            {photo.task_id && (
+            {/* Task link (only when task is available) */}
+            {photo.task_id && task && (
               <div className="pt-1">
-                {task ? (
-                  <button
-                    onClick={handleTaskClick}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-muted/60 hover:bg-accent/10 hover:text-accent px-3 py-1 text-caption font-medium text-foreground transition-colors"
-                  >
-                    <ExternalLink className="h-3 w-3" />
-                    <span className="truncate max-w-[200px]">{task.title}</span>
-                    {stage && (
-                      <span className="text-muted-foreground">· {stage.title}</span>
-                    )}
-                  </button>
-                ) : (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-muted/40 px-3 py-1 text-caption text-muted-foreground">
-                    {t("photoViewer.taskUnavailable")}
-                  </span>
-                )}
+                <button
+                  onClick={handleTaskClick}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-muted/60 hover:bg-accent/10 hover:text-accent px-3 py-1 text-caption font-medium text-foreground transition-colors"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  <span className="truncate max-w-[200px]">{task.title}</span>
+                  {stage && (
+                    <span className="text-muted-foreground">· {stage.title}</span>
+                  )}
+                </button>
               </div>
             )}
           </div>
 
           {/* Bottom action row */}
           <div className="px-4 pb-4 flex items-center gap-2">
-            {canUseAiConsult && (
-              <Button
-                onClick={handleAiConsult}
-                className="bg-accent text-accent-foreground hover:bg-accent/90"
-                size="sm"
-              >
-                <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-                {t("photoViewer.aiConsult")}
-              </Button>
-            )}
-            {markFinalControl.visible ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleToggleFinal}
-                disabled={markFinalControl.disabled}
-                title={markFinalControl.disabled ? markFinalControl.disabledReason : undefined}
-              >
-                <Star className="h-3.5 w-3.5 mr-1.5" />
-                {photo.is_final ? t("photoViewer.unmarkFinal") : t("photoViewer.markAsFinal")}
-              </Button>
-            ) : null}
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span tabIndex={0}>
+                    <Button
+                      onClick={canUseAiConsult ? handleAiConsult : undefined}
+                      className="bg-accent text-accent-foreground hover:bg-accent/90 disabled:opacity-60 disabled:cursor-not-allowed"
+                      size="sm"
+                      disabled
+                      aria-disabled="true"
+                    >
+                      <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                      {t("photoViewer.aiConsult")}
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  {t("photoViewer.aiConsultComingSoon")}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </DialogContent>
       </Dialog>

@@ -143,6 +143,11 @@
           "table": "public.estimate_share_snapshots",
           "triggerName": "estimate_share_snapshots_set_updated_at",
           "activation": "before update"
+        },
+        {
+          "table": "public.org_document_folders",
+          "triggerName": "set_org_document_folders_updated_at",
+          "activation": "before update"
         }
       ]
     },
@@ -2261,6 +2266,141 @@
       "searchPath": "public",
       "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "normalize_org_document_folder_name",
+      "signature": "public.normalize_org_document_folder_name()",
+      "args": [],
+      "returnType": "trigger",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": false,
+      "searchPath": null,
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql",
+      "triggerUsages": [
+        {
+          "table": "public.org_document_folders",
+          "triggerName": "trg_normalize_org_document_folder_name",
+          "activation": "before insert or update of name"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "guard_org_document_folder_change",
+      "signature": "public.guard_org_document_folder_change()",
+      "args": [],
+      "returnType": "trigger",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql",
+      "triggerUsages": [
+        {
+          "table": "public.org_documents",
+          "triggerName": "trg_guard_org_document_folder_change",
+          "activation": "before insert or update"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "create_org_document_folder",
+      "signature": "public.create_org_document_folder(uuid, text)",
+      "args": [
+        {
+          "name": "p_org_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_name",
+          "type": "text",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "rename_org_document_folder",
+      "signature": "public.rename_org_document_folder(uuid, text)",
+      "args": [
+        {
+          "name": "p_folder_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_new_name",
+          "type": "text",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "delete_org_document_folder",
+      "signature": "public.delete_org_document_folder(uuid)",
+      "args": [
+        {
+          "name": "p_folder_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "void",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "move_org_document_to_folder",
+      "signature": "public.move_org_document_to_folder(uuid, uuid)",
+      "args": [
+        {
+          "name": "p_document_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_folder_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "void",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql",
       "triggerUsages": []
     }
   ]

@@ -1813,6 +1813,54 @@
         "id"
       ],
       "onDelete": "restrict"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "org_document_folders",
+      "fromColumns": [
+        "org_id"
+      ],
+      "toSchema": "public",
+      "toTable": "organizations",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "org_document_folders",
+      "fromColumns": [
+        "created_by"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql",
+      "sourceKind": "alter_table",
+      "fromSchema": "public",
+      "fromTable": "org_documents",
+      "fromColumns": [
+        "folder_id"
+      ],
+      "toSchema": "public",
+      "toTable": "org_document_folders",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
     }
   ]
 }

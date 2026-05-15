@@ -1,4 +1,4 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Home, LogOut, Settings, Sparkles, UserCog } from "lucide-react";
 import {
@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/sheet";
 import { useProjects, useWorkspaceMode } from "@/hooks/use-mock-data";
 import { useVisibleProjectTabs } from "@/components/ProjectTabs";
+import { HOME_TABS, VALID_HOME_TABS } from "@/components/HomeTabs";
 import { cn } from "@/lib/utils";
 
 interface MobileNavSheetProps {
@@ -40,6 +41,7 @@ export function MobileNavSheet({
 }: MobileNavSheetProps) {
   const { t } = useTranslation();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const projects = useProjects();
   const workspaceMode = useWorkspaceMode();
   const showRoleSwitcher = workspaceMode.kind === "demo" || workspaceMode.kind === "local";
@@ -50,6 +52,8 @@ export function MobileNavSheet({
   const close = () => onOpenChange(false);
 
   const isHome = location.pathname === "/home" || location.pathname.startsWith("/home/");
+  const homeTabParam = searchParams.get("tab");
+  const activeHomeTab = homeTabParam && VALID_HOME_TABS.has(homeTabParam) ? homeTabParam : "overview";
   const isSettings = location.pathname.startsWith("/settings");
   const projectPathPrefix = projectId ? `/project/${projectId}/` : "";
   const activeProjectPath = projectId
@@ -72,11 +76,26 @@ export function MobileNavSheet({
             <Link
               to="/home"
               onClick={close}
-              className={cn(ROW_BASE, isHome && ROW_ACTIVE)}
+              className={cn(ROW_BASE, isHome && activeHomeTab === "overview" && ROW_ACTIVE)}
             >
               <Home className="h-4 w-4" />
               <span>{t("nav.home")}</span>
             </Link>
+
+            {isHome && HOME_TABS.filter((tab) => tab.value !== "overview").map((tab) => {
+              const isActive = activeHomeTab === tab.value;
+              return (
+                <Link
+                  key={tab.value}
+                  to={`/home?tab=${tab.value}`}
+                  onClick={close}
+                  className={cn(ROW_BASE, isActive && ROW_ACTIVE)}
+                >
+                  <tab.icon className="h-4 w-4" />
+                  <span>{t(tab.labelKey)}</span>
+                </Link>
+              );
+            })}
 
             {inProject && visibleProjectTabs.map((tab) => {
               const isActive = !aiSidebarOpen && tab.path === activeProjectPath;

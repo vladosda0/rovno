@@ -35,6 +35,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ConfirmModal } from "@/components/ConfirmModal";
+import { MediaImage } from "@/components/MediaImage";
 import { WorkLog } from "@/components/ai/WorkLog";
 import { SuggestionChips } from "@/components/ai/SuggestionChips";
 import { EventFeedItem } from "@/components/ai/EventFeedItem";
@@ -3482,8 +3483,13 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                   {showPhotoConsultCard && photoConsult && (
                     <div className="glass rounded-card p-2.5 space-y-2">
                       <div className="flex items-start gap-2">
-                        <div className={`h-10 w-10 rounded-lg shrink-0 ${placeholderColors[0]} flex items-center justify-center`}>
-                          <Camera className="h-4 w-4 text-muted-foreground/30" />
+                        <div className={`h-10 w-10 rounded-lg shrink-0 ${placeholderColors[0]} flex items-center justify-center overflow-hidden relative`}>
+                          <MediaImage
+                            storage={photoConsult.photo.storage}
+                            alt={photoConsult.photo.caption}
+                            imgClassName="absolute inset-0 h-full w-full object-cover"
+                            fallback={<Camera className="h-4 w-4 text-muted-foreground/30" />}
+                          />
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-body-sm font-semibold text-foreground truncate">{photoConsult.photo.caption}</p>

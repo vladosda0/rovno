@@ -32,6 +32,7 @@ export interface OrgDoc {
   bucket?: string;
   objectPath?: string;
   mimeType?: string;
+  folderId: string | null;
 }
 
 interface ListUserOrganizationsRow {
@@ -55,6 +56,7 @@ interface OrgDocumentRow {
   created_at: string;
   updated_at: string;
   visibility_class: string;
+  folder_id: string | null;
   org_document_versions: Array<{
     id: string;
     storage_object_id: string | null;
@@ -170,7 +172,7 @@ export async function listOrgDocuments(orgId: string): Promise<OrgDoc[]> {
   const { data, error } = await rawSupabase
     .from("org_documents")
     .select(`
-      id, org_id, title, type, origin, description, tags, pinned, created_at, updated_at, visibility_class,
+      id, org_id, title, type, origin, description, tags, pinned, created_at, updated_at, visibility_class, folder_id,
       org_document_versions (
         id, storage_object_id, version_number, is_current, status,
         storage_objects ( bucket, object_path, mime_type )
@@ -204,6 +206,7 @@ export async function listOrgDocuments(orgId: string): Promise<OrgDoc[]> {
       bucket: storageObj?.bucket,
       objectPath: storageObj?.object_path,
       mimeType: storageObj?.mime_type ?? undefined,
+      folderId: row.folder_id,
     };
   });
 }

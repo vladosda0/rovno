@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { PhotoViewer } from "@/components/PhotoViewer";
+import { MediaImage } from "@/components/MediaImage";
 import { getUserById } from "@/data/store";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -571,9 +572,16 @@ export function TaskDetailModal({
                       onClick={() => setViewerPhoto(photo)}
                       className="aspect-square rounded-lg overflow-hidden hover:ring-2 hover:ring-accent/40 transition-all relative"
                     >
-                      <div className={`absolute inset-0 ${placeholderColors[idx % placeholderColors.length]} flex items-center justify-center`}>
-                        <Camera className="h-5 w-5 text-muted-foreground/30" />
-                      </div>
+                      <MediaImage
+                        storage={photo.storage}
+                        alt={photo.caption}
+                        imgClassName="absolute inset-0 h-full w-full object-cover"
+                        fallback={
+                          <div className={`absolute inset-0 ${placeholderColors[idx % placeholderColors.length]} flex items-center justify-center`}>
+                            <Camera className="h-5 w-5 text-muted-foreground/30" />
+                          </div>
+                        }
+                      />
                     </button>
                   ))}
                 </div>

@@ -1487,6 +1487,16 @@
       "allowedValues": null,
       "expression": "share_approval_disabled_reason is null\n      or share_approval_disabled_reason = 'no_participant_slot'",
       "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+    },
+    {
+      "schema": "public",
+      "table": "org_document_folders",
+      "column": "name",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "char_length(trim(name)) between 1 and 80",
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
     }
   ]
 }

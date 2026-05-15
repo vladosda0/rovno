@@ -378,7 +378,11 @@ export const manifest = {
     },
     {
       "path": "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql",
-      "sha256": "f2c4d92bfcea3d05307186c6ec5feff3975d1f134db9b309ba6cc8c62b7cc091"
+      "sha256": "fc933ee37f8aeecdc349669b774a077b81a97aeb84d6980c2e3e37b45b3b42fc"
+    },
+    {
+      "path": "supabase/migrations/20260514120000_org_document_folders.sql",
+      "sha256": "13fdd3ff194ea028f650b17bc75d9a0463919775deb8eb0f9100758345d9e0df"
     }
   ],
   "generated_artifacts": [
@@ -498,6 +502,7 @@ export const manifest = {
     "sql/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql",
     "sql/20260513110100_estimate_share_snapshots_and_rpcs.sql",
     "sql/20260513120000_harden_share_rpcs_codex_followup.sql",
+    "sql/20260514120000_org_document_folders.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -7935,6 +7940,23 @@ export const tables = {
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "folder_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "org_document_folders",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
         }
       ],
       "constraints": [
@@ -7969,6 +7991,16 @@ export const tables = {
           "where": null,
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+        },
+        {
+          "name": "idx_org_documents_folder",
+          "unique": false,
+          "expressions": [
+            "folder_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
         }
       ],
       "triggers": [
@@ -7979,6 +8011,14 @@ export const tables = {
           "functionName": "set_updated_at",
           "functionSignature": "public.set_updated_at()",
           "sourceMigration": "supabase/migrations/20260506120200_org_documents_and_doc_links.sql"
+        },
+        {
+          "name": "trg_guard_org_document_folder_change",
+          "activation": "before insert or update",
+          "functionSchema": "public",
+          "functionName": "guard_org_document_folder_change",
+          "functionSignature": "public.guard_org_document_folder_change()",
+          "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
         }
       ]
     },
@@ -9812,6 +9852,140 @@ export const tables = {
           "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
         }
       ]
+    },
+    {
+      "schema": "public",
+      "name": "org_document_folders",
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql",
+      "columns": [
+        {
+          "name": "id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "gen_random_uuid()",
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "org_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "organizations",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "cascade"
+          }
+        },
+        {
+          "name": "name",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "created_by",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "profiles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "updated_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "name"
+          ],
+          "expression": "char_length(trim(name)) between 1 and 80",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_org_document_folders_org",
+          "unique": false,
+          "expressions": [
+            "org_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+        },
+        {
+          "name": "idx_org_document_folders_org_lower_name",
+          "unique": true,
+          "expressions": [
+            "org_id",
+            "lower(name)"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "trg_normalize_org_document_folder_name",
+          "activation": "before insert or update of name",
+          "functionSchema": "public",
+          "functionName": "normalize_org_document_folder_name",
+          "functionSignature": "public.normalize_org_document_folder_name()",
+          "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+        },
+        {
+          "name": "set_org_document_folders_updated_at",
+          "activation": "before update",
+          "functionSchema": "public",
+          "functionName": "set_updated_at",
+          "functionSignature": "public.set_updated_at()",
+          "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+        }
+      ]
     }
   ]
 } as const;
@@ -11631,6 +11805,54 @@ export const relations = {
         "id"
       ],
       "onDelete": "restrict"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "org_document_folders",
+      "fromColumns": [
+        "org_id"
+      ],
+      "toSchema": "public",
+      "toTable": "organizations",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "org_document_folders",
+      "fromColumns": [
+        "created_by"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql",
+      "sourceKind": "alter_table",
+      "fromSchema": "public",
+      "fromTable": "org_documents",
+      "fromColumns": [
+        "folder_id"
+      ],
+      "toSchema": "public",
+      "toTable": "org_document_folders",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
     }
   ]
 } as const;
@@ -13124,6 +13346,16 @@ export const checks = {
       "allowedValues": null,
       "expression": "share_approval_disabled_reason is null\n      or share_approval_disabled_reason = 'no_participant_slot'",
       "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+    },
+    {
+      "schema": "public",
+      "table": "org_document_folders",
+      "column": "name",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "char_length(trim(name)) between 1 and 80",
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
     }
   ]
 } as const;
@@ -13272,6 +13504,11 @@ export const functions = {
         {
           "table": "public.estimate_share_snapshots",
           "triggerName": "estimate_share_snapshots_set_updated_at",
+          "activation": "before update"
+        },
+        {
+          "table": "public.org_document_folders",
+          "triggerName": "set_org_document_folders_updated_at",
           "activation": "before update"
         }
       ]
@@ -15391,6 +15628,141 @@ export const functions = {
       "searchPath": "public",
       "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "normalize_org_document_folder_name",
+      "signature": "public.normalize_org_document_folder_name()",
+      "args": [],
+      "returnType": "trigger",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": false,
+      "searchPath": null,
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql",
+      "triggerUsages": [
+        {
+          "table": "public.org_document_folders",
+          "triggerName": "trg_normalize_org_document_folder_name",
+          "activation": "before insert or update of name"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "guard_org_document_folder_change",
+      "signature": "public.guard_org_document_folder_change()",
+      "args": [],
+      "returnType": "trigger",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql",
+      "triggerUsages": [
+        {
+          "table": "public.org_documents",
+          "triggerName": "trg_guard_org_document_folder_change",
+          "activation": "before insert or update"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "create_org_document_folder",
+      "signature": "public.create_org_document_folder(uuid, text)",
+      "args": [
+        {
+          "name": "p_org_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_name",
+          "type": "text",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "rename_org_document_folder",
+      "signature": "public.rename_org_document_folder(uuid, text)",
+      "args": [
+        {
+          "name": "p_folder_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_new_name",
+          "type": "text",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "delete_org_document_folder",
+      "signature": "public.delete_org_document_folder(uuid)",
+      "args": [
+        {
+          "name": "p_folder_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "void",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "move_org_document_to_folder",
+      "signature": "public.move_org_document_to_folder(uuid, uuid)",
+      "args": [
+        {
+          "name": "p_document_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_folder_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "void",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql",
       "triggerUsages": []
     }
   ]
@@ -17786,6 +18158,67 @@ export const rls = {
       "rlsEnabled": true,
       "authenticatedGrants": [],
       "policies": []
+    },
+    {
+      "schema": "public",
+      "table": "org_document_folders",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "delete",
+        "insert",
+        "select",
+        "update"
+      ],
+      "policies": [
+        {
+          "name": "org_document_folders_member_read",
+          "schema": "public",
+          "table": "org_document_folders",
+          "command": "select",
+          "roles": [
+            "public"
+          ],
+          "using": "public.is_org_member(org_id)",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+        },
+        {
+          "name": "org_document_folders_manager_insert",
+          "schema": "public",
+          "table": "org_document_folders",
+          "command": "insert",
+          "roles": [
+            "public"
+          ],
+          "using": null,
+          "withCheck": "public.can_manage_org(org_id)",
+          "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+        },
+        {
+          "name": "org_document_folders_manager_update",
+          "schema": "public",
+          "table": "org_document_folders",
+          "command": "update",
+          "roles": [
+            "public"
+          ],
+          "using": "public.can_manage_org(org_id)",
+          "withCheck": "public.can_manage_org(org_id)",
+          "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+        },
+        {
+          "name": "org_document_folders_manager_delete",
+          "schema": "public",
+          "table": "org_document_folders",
+          "command": "delete",
+          "roles": [
+            "public"
+          ],
+          "using": "public.can_manage_org(org_id)",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+        }
+      ]
     }
   ]
 } as const;
@@ -18097,6 +18530,12 @@ export const sourceTrace = {
       "schema": "public",
       "table": "estimate_share_snapshots",
       "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+    },
+    {
+      "key": "public.org_document_folders",
+      "schema": "public",
+      "table": "org_document_folders",
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
     }
   ],
   "functions": [
@@ -18694,6 +19133,48 @@ export const sourceTrace = {
       "name": "publish_estimate_share_snapshot",
       "signature": "public.publish_estimate_share_snapshot(uuid, text, integer, jsonb, text, text)",
       "sourceMigration": "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql"
+    },
+    {
+      "key": "public.normalize_org_document_folder_name",
+      "schema": "public",
+      "name": "normalize_org_document_folder_name",
+      "signature": "public.normalize_org_document_folder_name()",
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+    },
+    {
+      "key": "public.guard_org_document_folder_change",
+      "schema": "public",
+      "name": "guard_org_document_folder_change",
+      "signature": "public.guard_org_document_folder_change()",
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+    },
+    {
+      "key": "public.create_org_document_folder",
+      "schema": "public",
+      "name": "create_org_document_folder",
+      "signature": "public.create_org_document_folder(uuid, text)",
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+    },
+    {
+      "key": "public.rename_org_document_folder",
+      "schema": "public",
+      "name": "rename_org_document_folder",
+      "signature": "public.rename_org_document_folder(uuid, text)",
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+    },
+    {
+      "key": "public.delete_org_document_folder",
+      "schema": "public",
+      "name": "delete_org_document_folder",
+      "signature": "public.delete_org_document_folder(uuid)",
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+    },
+    {
+      "key": "public.move_org_document_to_folder",
+      "schema": "public",
+      "name": "move_org_document_to_folder",
+      "signature": "public.move_org_document_to_folder(uuid, uuid)",
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
     }
   ],
   "policies": [
@@ -19888,6 +20369,38 @@ export const sourceTrace = {
       "name": "contractor_profiles_delete",
       "command": "delete",
       "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
+    },
+    {
+      "key": "public.org_document_folders.org_document_folders_member_read",
+      "schema": "public",
+      "table": "org_document_folders",
+      "name": "org_document_folders_member_read",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+    },
+    {
+      "key": "public.org_document_folders.org_document_folders_manager_insert",
+      "schema": "public",
+      "table": "org_document_folders",
+      "name": "org_document_folders_manager_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+    },
+    {
+      "key": "public.org_document_folders.org_document_folders_manager_update",
+      "schema": "public",
+      "table": "org_document_folders",
+      "name": "org_document_folders_manager_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+    },
+    {
+      "key": "public.org_document_folders.org_document_folders_manager_delete",
+      "schema": "public",
+      "table": "org_document_folders",
+      "name": "org_document_folders_manager_delete",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
     }
   ],
   "slices": [
@@ -20588,101 +21101,6 @@ export const sourceTrace = {
       ]
     },
     {
-      "name": "templates",
-      "title": "Templates Contract",
-      "kind": "derived_contract_bundle",
-      "sourceMigrations": [
-        "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql",
-        "supabase/migrations/20260512132310_estimate_templates_schema.sql",
-        "supabase/migrations/20260512132330_contractor_profiles_schema.sql",
-        "supabase/migrations/20260512132320_template_rls.sql",
-        "supabase/migrations/20260512132340_template_rpcs.sql",
-        "supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql"
-      ],
-      "tables": [
-        "public.system_resource_articles",
-        "public.unit_conversions",
-        "public.estimate_templates",
-        "public.template_stages",
-        "public.template_works",
-        "public.template_resource_lines",
-        "public.contractor_profiles"
-      ],
-      "functions": [
-        "public.can_read_template",
-        "public.can_manage_template",
-        "public.list_estimate_templates",
-        "public.get_estimate_template_detail",
-        "public.apply_template_stage_to_estimate"
-      ],
-      "policies": [
-        "public.system_resource_articles.system_resource_articles_select",
-        "public.unit_conversions.unit_conversions_select",
-        "public.estimate_templates.estimate_templates_select",
-        "public.estimate_templates.estimate_templates_insert",
-        "public.estimate_templates.estimate_templates_update",
-        "public.estimate_templates.estimate_templates_delete",
-        "public.template_stages.template_stages_select",
-        "public.template_stages.template_stages_insert",
-        "public.template_stages.template_stages_update",
-        "public.template_stages.template_stages_delete",
-        "public.template_works.template_works_select",
-        "public.template_works.template_works_insert",
-        "public.template_works.template_works_update",
-        "public.template_works.template_works_delete",
-        "public.template_resource_lines.template_resource_lines_select",
-        "public.template_resource_lines.template_resource_lines_insert",
-        "public.template_resource_lines.template_resource_lines_update",
-        "public.template_resource_lines.template_resource_lines_delete",
-        "public.contractor_profiles.contractor_profiles_select",
-        "public.contractor_profiles.contractor_profiles_insert",
-        "public.contractor_profiles.contractor_profiles_update",
-        "public.contractor_profiles.contractor_profiles_delete"
-      ],
-      "relations": [
-        {
-          "from": "public.estimate_templates",
-          "to": "public.profiles",
-          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
-        },
-        {
-          "from": "public.template_stages",
-          "to": "public.estimate_templates",
-          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
-        },
-        {
-          "from": "public.template_works",
-          "to": "public.template_stages",
-          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
-        },
-        {
-          "from": "public.template_resource_lines",
-          "to": "public.template_works",
-          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
-        },
-        {
-          "from": "public.template_resource_lines",
-          "to": "public.system_resource_articles",
-          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
-        },
-        {
-          "from": "public.contractor_profiles",
-          "to": "public.organizations",
-          "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
-        },
-        {
-          "from": "public.contractor_profiles",
-          "to": "public.profiles",
-          "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
-        },
-        {
-          "from": "public.contractor_profiles",
-          "to": "public.profiles",
-          "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
-        }
-      ]
-    },
-    {
       "name": "procurement-inventory",
       "title": "Procurement Inventory Contract",
       "kind": "derived_contract_bundle",
@@ -21101,22 +21519,6 @@ export const slices = {
       "tableCount": 6,
       "functionCount": 4,
       "rlsTableCount": 6
-    },
-    {
-      "name": "templates",
-      "title": "Templates Contract",
-      "kind": "derived_contract_bundle",
-      "sourceMigrations": [
-        "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql",
-        "supabase/migrations/20260512132310_estimate_templates_schema.sql",
-        "supabase/migrations/20260512132330_contractor_profiles_schema.sql",
-        "supabase/migrations/20260512132320_template_rls.sql",
-        "supabase/migrations/20260512132340_template_rpcs.sql",
-        "supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql"
-      ],
-      "tableCount": 7,
-      "functionCount": 5,
-      "rlsTableCount": 7
     },
     {
       "name": "templates",

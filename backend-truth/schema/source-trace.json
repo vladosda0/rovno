@@ -305,6 +305,12 @@
       "schema": "public",
       "table": "estimate_share_snapshots",
       "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
+    },
+    {
+      "key": "public.org_document_folders",
+      "schema": "public",
+      "table": "org_document_folders",
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
     }
   ],
   "functions": [
@@ -902,6 +908,48 @@
       "name": "publish_estimate_share_snapshot",
       "signature": "public.publish_estimate_share_snapshot(uuid, text, integer, jsonb, text, text)",
       "sourceMigration": "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql"
+    },
+    {
+      "key": "public.normalize_org_document_folder_name",
+      "schema": "public",
+      "name": "normalize_org_document_folder_name",
+      "signature": "public.normalize_org_document_folder_name()",
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+    },
+    {
+      "key": "public.guard_org_document_folder_change",
+      "schema": "public",
+      "name": "guard_org_document_folder_change",
+      "signature": "public.guard_org_document_folder_change()",
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+    },
+    {
+      "key": "public.create_org_document_folder",
+      "schema": "public",
+      "name": "create_org_document_folder",
+      "signature": "public.create_org_document_folder(uuid, text)",
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+    },
+    {
+      "key": "public.rename_org_document_folder",
+      "schema": "public",
+      "name": "rename_org_document_folder",
+      "signature": "public.rename_org_document_folder(uuid, text)",
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+    },
+    {
+      "key": "public.delete_org_document_folder",
+      "schema": "public",
+      "name": "delete_org_document_folder",
+      "signature": "public.delete_org_document_folder(uuid)",
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+    },
+    {
+      "key": "public.move_org_document_to_folder",
+      "schema": "public",
+      "name": "move_org_document_to_folder",
+      "signature": "public.move_org_document_to_folder(uuid, uuid)",
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
     }
   ],
   "policies": [
@@ -2096,6 +2144,38 @@
       "name": "contractor_profiles_delete",
       "command": "delete",
       "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
+    },
+    {
+      "key": "public.org_document_folders.org_document_folders_member_read",
+      "schema": "public",
+      "table": "org_document_folders",
+      "name": "org_document_folders_member_read",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+    },
+    {
+      "key": "public.org_document_folders.org_document_folders_manager_insert",
+      "schema": "public",
+      "table": "org_document_folders",
+      "name": "org_document_folders_manager_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+    },
+    {
+      "key": "public.org_document_folders.org_document_folders_manager_update",
+      "schema": "public",
+      "table": "org_document_folders",
+      "name": "org_document_folders_manager_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+    },
+    {
+      "key": "public.org_document_folders.org_document_folders_manager_delete",
+      "schema": "public",
+      "table": "org_document_folders",
+      "name": "org_document_folders_manager_delete",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
     }
   ],
   "slices": [
@@ -2697,101 +2777,6 @@
           "from": "public.estimate_share_snapshots",
           "to": "public.profiles",
           "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
-        }
-      ]
-    },
-    {
-      "name": "templates",
-      "title": "Templates Contract",
-      "kind": "derived_contract_bundle",
-      "sourceMigrations": [
-        "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql",
-        "supabase/migrations/20260512132310_estimate_templates_schema.sql",
-        "supabase/migrations/20260512132330_contractor_profiles_schema.sql",
-        "supabase/migrations/20260512132320_template_rls.sql",
-        "supabase/migrations/20260512132340_template_rpcs.sql",
-        "supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql"
-      ],
-      "tables": [
-        "public.system_resource_articles",
-        "public.unit_conversions",
-        "public.estimate_templates",
-        "public.template_stages",
-        "public.template_works",
-        "public.template_resource_lines",
-        "public.contractor_profiles"
-      ],
-      "functions": [
-        "public.can_read_template",
-        "public.can_manage_template",
-        "public.list_estimate_templates",
-        "public.get_estimate_template_detail",
-        "public.apply_template_stage_to_estimate"
-      ],
-      "policies": [
-        "public.system_resource_articles.system_resource_articles_select",
-        "public.unit_conversions.unit_conversions_select",
-        "public.estimate_templates.estimate_templates_select",
-        "public.estimate_templates.estimate_templates_insert",
-        "public.estimate_templates.estimate_templates_update",
-        "public.estimate_templates.estimate_templates_delete",
-        "public.template_stages.template_stages_select",
-        "public.template_stages.template_stages_insert",
-        "public.template_stages.template_stages_update",
-        "public.template_stages.template_stages_delete",
-        "public.template_works.template_works_select",
-        "public.template_works.template_works_insert",
-        "public.template_works.template_works_update",
-        "public.template_works.template_works_delete",
-        "public.template_resource_lines.template_resource_lines_select",
-        "public.template_resource_lines.template_resource_lines_insert",
-        "public.template_resource_lines.template_resource_lines_update",
-        "public.template_resource_lines.template_resource_lines_delete",
-        "public.contractor_profiles.contractor_profiles_select",
-        "public.contractor_profiles.contractor_profiles_insert",
-        "public.contractor_profiles.contractor_profiles_update",
-        "public.contractor_profiles.contractor_profiles_delete"
-      ],
-      "relations": [
-        {
-          "from": "public.estimate_templates",
-          "to": "public.profiles",
-          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
-        },
-        {
-          "from": "public.template_stages",
-          "to": "public.estimate_templates",
-          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
-        },
-        {
-          "from": "public.template_works",
-          "to": "public.template_stages",
-          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
-        },
-        {
-          "from": "public.template_resource_lines",
-          "to": "public.template_works",
-          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
-        },
-        {
-          "from": "public.template_resource_lines",
-          "to": "public.system_resource_articles",
-          "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
-        },
-        {
-          "from": "public.contractor_profiles",
-          "to": "public.organizations",
-          "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
-        },
-        {
-          "from": "public.contractor_profiles",
-          "to": "public.profiles",
-          "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
-        },
-        {
-          "from": "public.contractor_profiles",
-          "to": "public.profiles",
-          "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
         }
       ]
     },

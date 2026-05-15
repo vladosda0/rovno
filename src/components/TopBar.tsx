@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ProjectTabs } from "@/components/ProjectTabs";
+import { HomeTabs } from "@/components/HomeTabs";
 import { MobileNavSheet } from "@/components/MobileNavSheet";
 import { AuthSimulator } from "@/components/settings/AuthSimulator";
 import { cn } from "@/lib/utils";
@@ -356,7 +357,7 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOp
     >
       <div className="hidden md:flex flex-1 items-center gap-2">
       {isHomePage ? (
-        <div className="flex items-center gap-1.5">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className={LOGO_MENU_TRIGGER_CLASS}>
@@ -437,6 +438,12 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOp
               <span className="sr-only">{t("nav.toggleSidebar")}</span>
             </Button>
           )}
+
+          <div className="mx-1 h-5 w-px shrink-0 bg-border" />
+
+          {/* HomeTabs grow to fill all remaining width so the 8 nav items stretch
+              across the bar instead of clustering on the left. */}
+          <HomeTabs className="min-w-0 flex-1 border-0 px-0 py-0" />
         </div>
       ) : (
         <>
@@ -475,7 +482,9 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOp
         </>
       )}
 
-      <div className="flex-1" />
+      {/* Spacer pushes the right side empty only for non-home top bars; the home
+          branch lets HomeTabs absorb the remaining width itself. */}
+      {!isHomePage && <div className="flex-1" />}
       </div>
       {mobileBar}
     </header>
