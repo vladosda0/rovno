@@ -1,52 +1,126 @@
 import { Suspense, lazy, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FileText, Package, FileStack, BookOpen, FileType2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Plus } from "lucide-react";
+import {
+  DocumentsLeftNav,
+  VALID_LEAVES,
+  DEFAULT_LEAF,
+  type LeafSlug,
+} from "@/components/home/documents-hub/DocumentsLeftNav";
+import { MobileSectionNav } from "@/components/home/documents-hub/MobileSectionNav";
+import { useActiveOrg, useUserOrganizations } from "@/hooks/use-orgs";
+import { UploadDocumentDialog } from "@/components/home/UploadDocumentDialog";
 
-const MyDocumentsTab = lazy(() =>
-  import("@/components/home/MyDocumentsTab").then((module) => ({ default: module.MyDocumentsTab })),
+const MyAllDocsLeaf = lazy(() =>
+  import("@/components/home/documents-hub/leaves/MyAllDocsLeaf").then((m) => ({ default: m.MyAllDocsLeaf })),
+);
+const MyNotesView = lazy(() =>
+  import("@/components/home/documents-hub/leaves/MyNotesView").then((m) => ({ default: m.MyNotesView })),
+);
+const MyMediaView = lazy(() =>
+  import("@/components/home/documents-hub/leaves/MyMediaView").then((m) => ({ default: m.MyMediaView })),
+);
+const OrgAllDocsView = lazy(() =>
+  import("@/components/home/documents-hub/leaves/OrgAllDocsView").then((m) => ({ default: m.OrgAllDocsView })),
+);
+const OrgProjectsView = lazy(() =>
+  import("@/components/home/documents-hub/leaves/OrgProjectsView").then((m) => ({ default: m.OrgProjectsView })),
+);
+const OrgMediaView = lazy(() =>
+  import("@/components/home/documents-hub/leaves/OrgMediaView").then((m) => ({ default: m.OrgMediaView })),
+);
+const OrgEstimatesView = lazy(() =>
+  import("@/components/home/documents-hub/leaves/OrgEstimatesView").then((m) => ({ default: m.OrgEstimatesView })),
+);
+const OrgCatalogsView = lazy(() =>
+  import("@/components/home/documents-hub/leaves/OrgCatalogsView").then((m) => ({ default: m.OrgCatalogsView })),
+);
+const OrgContractorCardView = lazy(() =>
+  import("@/components/home/documents-hub/leaves/OrgContractorCardView").then((m) => ({ default: m.OrgContractorCardView })),
 );
 const CatalogsTab = lazy(() =>
-  import("@/components/home/CatalogsTab").then((module) => ({ default: module.CatalogsTab })),
+  import("@/components/home/CatalogsTab").then((m) => ({ default: m.CatalogsTab })),
 );
 const EstimateTemplatesTab = lazy(() =>
-  import("@/components/home/EstimateTemplatesTab").then((module) => ({ default: module.EstimateTemplatesTab })),
+  import("@/components/home/EstimateTemplatesTab").then((m) => ({ default: m.EstimateTemplatesTab })),
 );
 const KnowledgeBaseTab = lazy(() =>
-  import("@/components/home/KnowledgeBaseTab").then((module) => ({ default: module.KnowledgeBaseTab })),
+  import("@/components/home/KnowledgeBaseTab").then((m) => ({ default: m.KnowledgeBaseTab })),
 );
 const DocumentTemplatesTab = lazy(() =>
-  import("@/components/home/DocumentTemplatesTab").then((module) => ({ default: module.DocumentTemplatesTab })),
+  import("@/components/home/DocumentTemplatesTab").then((m) => ({ default: m.DocumentTemplatesTab })),
 );
 
-const SUB_TABS = [
-  { value: "my-documents", labelKey: "home.tabs.myDocuments", icon: FileText },
-  { value: "catalogs", labelKey: "home.tabs.catalogs", icon: Package },
-  { value: "estimate-templates", labelKey: "home.tabs.estimateTemplates", icon: FileStack },
-  { value: "knowledge-base", labelKey: "home.tabs.knowledgeBase", icon: BookOpen },
-  { value: "document-templates", labelKey: "home.tabs.documentTemplates", icon: FileType2 },
-] as const;
+const LEAF_RENDERERS: Record<LeafSlug, React.ComponentType> = {
+  "my-all": MyAllDocsLeaf,
+  "my-notes": MyNotesView,
+  "my-media": MyMediaView,
+  "org-all": OrgAllDocsView,
+  "org-projects": OrgProjectsView,
+  "org-media": OrgMediaView,
+  "org-estimates": OrgEstimatesView,
+  "org-catalogs": OrgCatalogsView,
+  "org-contractor-card": OrgContractorCardView,
+  catalogs: CatalogsTab,
+  estimates: EstimateTemplatesTab,
+  "knowledge-base": KnowledgeBaseTab,
+  "document-templates": DocumentTemplatesTab,
+};
 
-type SubTabValue = (typeof SUB_TABS)[number]["value"];
-const VALID_SUB_TABS = new Set<string>(SUB_TABS.map((t) => t.value));
-const DEFAULT_SUB_TAB: SubTabValue = "my-documents";
 const SUB_TAB_PARAM = "docTab";
+
+function isMyOrOrgAll(slug: string): boolean {
+  return slug === "my-all" || slug === "org-all";
+}
+
+function ctaForLeaf(slug: string): { labelKey: string; tooltipKey?: string; mode: "upload" | "disabled" } {
+  if (isMyOrOrgAll(slug) || slug === "my-notes" || slug === "my-media" || slug === "org-media") {
+    return { labelKey: "home.documentsHub.cta.addDocument", mode: "upload" };
+  }
+  if (slug === "org-estimates" || slug === "estimates") {
+    return {
+      labelKey: "home.documentsHub.cta.createTemplate",
+      tooltipKey: "home.documentsHub.cta.createTemplateDisabled",
+      mode: "disabled",
+    };
+  }
+  if (slug === "catalogs" || slug === "org-catalogs") {
+    return {
+      labelKey: "home.documentsHub.cta.addCatalog",
+      tooltipKey: "home.documentsHub.cta.addCatalogDisabled",
+      mode: "disabled",
+    };
+  }
+  if (slug === "org-contractor-card") {
+    return {
+      labelKey: "home.documentsHub.cta.createVisitka",
+      tooltipKey: "home.documentsHub.cta.createVisitkaDisabled",
+      mode: "disabled",
+    };
+  }
+  return { labelKey: "home.documentsHub.cta.addDocument", mode: "upload" };
+}
 
 export function DocumentsHubTab() {
   const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
+  const activeOrg = useActiveOrg();
+  const { data: orgs } = useUserOrganizations();
+  const userCanManageAnyOrg = (orgs ?? []).some((o) => o.role === "owner" || o.role === "admin");
 
-  const [activeSubTab, setActiveSubTab] = useState<SubTabValue>(() => {
+  const [activeLeaf, setActiveLeaf] = useState<LeafSlug>(() => {
     const param = searchParams.get(SUB_TAB_PARAM);
-    return param && VALID_SUB_TABS.has(param) ? (param as SubTabValue) : DEFAULT_SUB_TAB;
+    return param && VALID_LEAVES.has(param) ? (param as LeafSlug) : DEFAULT_LEAF;
   });
+  const [uploadOpen, setUploadOpen] = useState(false);
 
   useEffect(() => {
     const param = searchParams.get(SUB_TAB_PARAM);
-    const valid = param && VALID_SUB_TABS.has(param);
-    const next = valid ? (param as SubTabValue) : DEFAULT_SUB_TAB;
-    if (next !== activeSubTab) setActiveSubTab(next);
+    const valid = param && VALID_LEAVES.has(param);
+    const next = valid ? (param as LeafSlug) : DEFAULT_LEAF;
+    if (next !== activeLeaf) setActiveLeaf(next);
     if (param && !valid) {
       setSearchParams(
         (current) => {
@@ -57,26 +131,62 @@ export function DocumentsHubTab() {
         { replace: true },
       );
     }
-  }, [searchParams, activeSubTab, setSearchParams]);
+  }, [searchParams, activeLeaf, setSearchParams]);
 
-  const handleSubTabChange = useCallback(
-    (value: string) => {
-      setActiveSubTab(value as SubTabValue);
-      // Push (not replace) so browser Back/Forward navigates between sub-tabs.
-      // Canonicalization of invalid values in the effect above keeps `replace`
-      // because it is a URL repair, not user-initiated navigation.
+  const handleSelect = useCallback(
+    (slug: LeafSlug) => {
+      setActiveLeaf(slug);
       setSearchParams((current) => {
         const next = new URLSearchParams(current);
-        if (value === DEFAULT_SUB_TAB) {
-          next.delete(SUB_TAB_PARAM);
-        } else {
-          next.set(SUB_TAB_PARAM, value);
-        }
+        if (slug === DEFAULT_LEAF) next.delete(SUB_TAB_PARAM);
+        else next.set(SUB_TAB_PARAM, slug);
         return next;
       });
     },
     [setSearchParams],
   );
+
+  const ActiveSection = LEAF_RENDERERS[activeLeaf] ?? MyAllDocsLeaf;
+  const cta = ctaForLeaf(activeLeaf);
+
+  // Hide org-only create-template CTA from users who cannot manage any org.
+  const showCta = (() => {
+    if (cta.mode === "upload") return true;
+    if (cta.labelKey === "home.documentsHub.cta.createTemplate") {
+      return userCanManageAnyOrg;
+    }
+    return true;
+  })();
+
+  const handleCtaClick = () => {
+    if (cta.mode === "upload") setUploadOpen(true);
+  };
+
+  const ctaButtonDesktop = showCta ? (
+    <Button
+      className="w-full justify-start gap-2"
+      size="default"
+      onClick={handleCtaClick}
+      disabled={cta.mode === "disabled"}
+      title={cta.tooltipKey ? t(cta.tooltipKey) : undefined}
+    >
+      <Plus className="h-4 w-4" />
+      {t(cta.labelKey)}
+    </Button>
+  ) : null;
+
+  // Mobile FAB: round button fixed at the bottom-right of the viewport. Hidden
+  // on desktop where the inline left-nav CTA covers the same action.
+  const ctaFabMobile = showCta && cta.mode !== "disabled" ? (
+    <Button
+      className="md:hidden fixed bottom-4 right-4 z-30 h-14 w-14 rounded-full shadow-lg"
+      size="icon"
+      onClick={handleCtaClick}
+      aria-label={t(cta.labelKey)}
+    >
+      <Plus className="h-6 w-6" />
+    </Button>
+  ) : null;
 
   const fallback = (
     <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
@@ -84,56 +194,30 @@ export function DocumentsHubTab() {
     </div>
   );
 
-  return (
-    <Tabs value={activeSubTab} onValueChange={handleSubTabChange} className="space-y-4">
-      <TabsList className="h-auto w-full flex-wrap justify-start gap-0.5 bg-transparent p-0">
-        {SUB_TABS.map((tab) => (
-          <TabsTrigger
-            key={tab.value}
-            value={tab.value}
-            className="flex items-center gap-1.5 px-3 py-2 text-caption data-[state=active]:bg-accent/10 data-[state=active]:text-accent data-[state=active]:shadow-none rounded-lg"
-          >
-            <tab.icon className="h-3.5 w-3.5" />
-            {t(tab.labelKey)}
-          </TabsTrigger>
-        ))}
-      </TabsList>
+  const stickyTop = "calc(3rem + var(--env-banner-h, 0px))";
 
-      <TabsContent value="my-documents" className="mt-0">
-        {activeSubTab === "my-documents" && (
-          <Suspense fallback={fallback}>
-            <MyDocumentsTab />
-          </Suspense>
-        )}
-      </TabsContent>
-      <TabsContent value="catalogs" className="mt-0">
-        {activeSubTab === "catalogs" && (
-          <Suspense fallback={fallback}>
-            <CatalogsTab />
-          </Suspense>
-        )}
-      </TabsContent>
-      <TabsContent value="estimate-templates" className="mt-0">
-        {activeSubTab === "estimate-templates" && (
-          <Suspense fallback={fallback}>
-            <EstimateTemplatesTab />
-          </Suspense>
-        )}
-      </TabsContent>
-      <TabsContent value="knowledge-base" className="mt-0">
-        {activeSubTab === "knowledge-base" && (
-          <Suspense fallback={fallback}>
-            <KnowledgeBaseTab />
-          </Suspense>
-        )}
-      </TabsContent>
-      <TabsContent value="document-templates" className="mt-0">
-        {activeSubTab === "document-templates" && (
-          <Suspense fallback={fallback}>
-            <DocumentTemplatesTab />
-          </Suspense>
-        )}
-      </TabsContent>
-    </Tabs>
+  return (
+    <div className="flex flex-col md:flex-row md:gap-0">
+      {/* Desktop left nav. Hidden on mobile in favor of MobileSectionNav. */}
+      <aside
+        className="hidden md:block bg-card/40 md:sticky md:w-64 md:shrink-0 md:self-start md:h-[calc(100svh-3rem-var(--env-banner-h,0px))] md:border-r md:border-border md:overflow-y-auto px-3 pt-3 pb-4 sm:px-4"
+        style={{ top: stickyTop }}
+      >
+        <DocumentsLeftNav
+          activeSlug={activeLeaf}
+          onSelect={handleSelect}
+          cta={ctaButtonDesktop ?? undefined}
+        />
+      </aside>
+      <main className="min-w-0 flex-1 px-4 pt-3 pb-20 sm:px-6 md:pb-6 space-y-3">
+        <MobileSectionNav activeLeaf={activeLeaf} onSelect={handleSelect} />
+        <Suspense fallback={fallback}>
+          <ActiveSection />
+        </Suspense>
+      </main>
+
+      <UploadDocumentDialog open={uploadOpen} onOpenChange={setUploadOpen} />
+      {ctaFabMobile}
+    </div>
   );
 }

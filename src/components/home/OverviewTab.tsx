@@ -12,6 +12,7 @@ import {
 import { useProjects, useCurrentUser } from "@/hooks/use-mock-data";
 import { useProjectsRecentEventsMap } from "@/hooks/use-activity-source";
 import * as store from "@/data/store";
+import { OrgBlock } from "@/components/home/OrgBlock";
 import { PendingInvitationsBlock } from "@/components/home/PendingInvitationsBlock";
 import { useWorkspaceProjectsSensitiveDetailMap } from "@/hooks/use-home-sensitive-detail-map";
 import { getActivityDisplayDetailForHome } from "@/lib/activity-display";
@@ -62,6 +63,16 @@ export function OverviewTab() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      {/* Hero + org block live only on the Overview section per the Session 3.2.1b layout. */}
+      <div>
+        <h1 className="text-h2 text-foreground">{t("home.title")}</h1>
+        <p className="text-body-sm text-muted-foreground mt-1">
+          {t("home.subtitle")}
+        </p>
+      </div>
+
+      <OrgBlock />
+
       {/* Quick actions */}
       <div className="flex items-center gap-2 flex-wrap">
         <Button size="sm" onClick={() => navigate("/home?tab=projects")}>
