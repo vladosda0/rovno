@@ -11,6 +11,7 @@ import {
   prepareMediaUpload as prepareMediaUploadSource,
   finalizeMediaUpload as finalizeMediaUploadSource,
   deleteProjectMedia as deleteProjectMediaSource,
+  updateProjectMediaCaption as updateProjectMediaCaptionSource,
   uploadBytes as uploadBytesSource,
   getDocumentsMediaSource,
   type ArchiveProjectDocumentInput,
@@ -343,5 +344,21 @@ export function useProjectMediaMutations(projectId: string) {
     // useStoreValue so the change re-renders automatically.
   }, [invalidateProjectMedia, mode, projectId]);
 
-  return { deleteMedia };
+  const updateMediaCaption = useCallback(
+    async (mediaId: string, caption: string): Promise<void> => {
+      const resolvedMode = assertDocumentsMutationWorkspaceMode(mode);
+      const normalized = caption.trim().length === 0 ? null : caption.trim();
+      await updateProjectMediaCaptionSource(resolvedMode, {
+        projectId,
+        mediaId,
+        caption: normalized,
+      });
+      if (resolvedMode.kind === "supabase") {
+        await invalidateProjectMedia(resolvedMode);
+      }
+    },
+    [invalidateProjectMedia, mode, projectId],
+  );
+
+  return { deleteMedia, updateMediaCaption };
 }

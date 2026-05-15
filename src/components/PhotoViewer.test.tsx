@@ -29,7 +29,7 @@ vi.mock("@/lib/photo-consult-store", () => ({
 }));
 
 vi.mock("@/hooks/use-documents-media-source", () => ({
-  useProjectMediaMutations: () => ({ deleteMedia: vi.fn() }),
+  useProjectMediaMutations: () => ({ deleteMedia: vi.fn(), updateMediaCaption: vi.fn() }),
 }));
 
 vi.mock("@/data/store", () => ({

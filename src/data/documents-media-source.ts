@@ -115,12 +115,19 @@ export interface DocumentsMediaSource {
   prepareMediaUpload: (input: PrepareMediaUploadInput) => Promise<PrepareUploadResult>;
   finalizeMediaUpload: (uploadIntentId: string, options?: { taskId?: string; isFinal?: boolean }) => Promise<FinalizeMediaUploadResult>;
   deleteProjectMedia: (input: DeleteProjectMediaInput) => Promise<void>;
+  updateProjectMediaCaption: (input: UpdateProjectMediaCaptionInput) => Promise<void>;
   uploadBytes: (bucket: string, objectPath: string, file: File) => Promise<void>;
 }
 
 export interface DeleteProjectMediaInput {
   projectId: string;
   mediaId: string;
+}
+
+export interface UpdateProjectMediaCaptionInput {
+  projectId: string;
+  mediaId: string;
+  caption: string | null;
 }
 
 function createDocumentMutationId(): string {
@@ -275,6 +282,9 @@ function createBrowserDocumentsMediaSource(mode: WorkspaceMode["kind"]): Documen
     },
     async deleteProjectMedia(input) {
       store.deleteMedia(input.mediaId);
+    },
+    async updateProjectMediaCaption(input) {
+      store.updateMedia(input.mediaId, { caption: input.caption ?? "" });
     },
   };
 }
@@ -796,6 +806,20 @@ export async function deleteSupabaseProjectMedia(
   }
 }
 
+export async function updateSupabaseProjectMediaCaption(
+  supabase: TypedSupabaseClient,
+  input: UpdateProjectMediaCaptionInput,
+): Promise<void> {
+  const { error } = await supabase
+    .from("project_media")
+    .update({ caption: input.caption })
+    .eq("id", input.mediaId);
+
+  if (error) {
+    throw error;
+  }
+}
+
 export async function finalizeSupabaseMediaUpload(
   supabase: TypedSupabaseClient,
   uploadIntentId: string,
@@ -962,6 +986,9 @@ export function createSupabaseDocumentsMediaSource(
     async deleteProjectMedia(input) {
       return deleteSupabaseProjectMedia(supabase, input);
     },
+    async updateProjectMediaCaption(input) {
+      return updateSupabaseProjectMediaCaption(supabase, input);
+    },
   };
 }
 
@@ -1058,4 +1085,12 @@ export async function deleteProjectMedia(
 ): Promise<void> {
   const source = await getDocumentsMediaSource(mode);
   return source.deleteProjectMedia(input);
+}
+
+export async function updateProjectMediaCaption(
+  mode: WorkspaceMode,
+  input: UpdateProjectMediaCaptionInput,
+): Promise<void> {
+  const source = await getDocumentsMediaSource(mode);
+  return source.updateProjectMediaCaption(input);
 }
