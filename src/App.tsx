@@ -37,6 +37,10 @@ const ProjectParticipants = lazy(() => import("@/pages/project/ProjectParticipan
 const ShareEstimate = lazy(() => import("@/pages/share/ShareEstimate"));
 const InviteAccept = lazy(() => import("@/pages/invite/InviteAccept"));
 const ThemeDemo = lazy(() => import("@/pages/ThemeDemo"));
+const Offer = lazy(() => import("@/pages/legal/Offer"));
+const Privacy = lazy(() => import("@/pages/legal/Privacy"));
+const Refund = lazy(() => import("@/pages/legal/Refund"));
+const Contacts = lazy(() => import("@/pages/legal/Contacts"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
 const queryClient = new QueryClient();
@@ -69,6 +73,12 @@ const App = () => (
           <Route path="/theme" element={routeElement(<ThemeDemo />)} />
           <Route path="/share/estimate/:shareId" element={routeElement(<ShareEstimate />)} />
           <Route path="/invite/accept/:inviteToken" element={routeElement(<InviteAccept />)} />
+
+          {/* Legal / compliance pages (required by T-Bank acquirer) */}
+          <Route path="/offer" element={routeElement(<Offer />)} />
+          <Route path="/privacy" element={routeElement(<Privacy />)} />
+          <Route path="/refund" element={routeElement(<Refund />)} />
+          <Route path="/contacts" element={routeElement(<Contacts />)} />
 
           {/* Auth layout */}
           <Route element={routeElement(<AuthLayout />)}>

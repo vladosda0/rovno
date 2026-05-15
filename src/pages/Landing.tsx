@@ -21,6 +21,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { BetaBar } from "@/components/BetaBar";
+import { PaymentLogos, TBankAttribution } from "@/components/PaymentLogos";
 import { seedProjects } from "@/data/seed";
 import { enterDemoSession } from "@/lib/auth-state";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
@@ -2719,18 +2720,35 @@ export default function Landing() {
         </section>
       </main>
 
-      <footer className="mt-sp-6 border-t border-border px-sp-3 py-sp-3">
-        <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-2 text-caption text-muted-foreground sm:flex-row">
-          <span>{t("landing.footer.copyright", { year: 2026 })}</span>
-          <div className="flex items-center gap-3">
-            <a
-              href={`mailto:${t("landing.footer.contactEmail")}`}
-              className="hover:text-foreground"
-            >
-              {t("landing.footer.contactEmail")}
-            </a>
-            <span>{t("landing.footer.privacyPolicy")}</span>
-            <span>{t("landing.footer.terms")}</span>
+      <footer className="mt-sp-6 border-t border-border">
+        <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-sp-3 py-sp-3 text-caption text-muted-foreground">
+          <div className="flex flex-col items-center justify-between gap-3 sm:flex-row">
+            <PaymentLogos />
+            <TBankAttribution />
+          </div>
+          <div className="border-t border-border" />
+          <div className="flex flex-col items-center justify-between gap-2 sm:flex-row">
+            <span>{t("landing.footer.copyright", { year: 2026 })}</span>
+            <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 sm:justify-end">
+              <a
+                href={`mailto:${t("landing.footer.contactEmail")}`}
+                className="hover:text-foreground"
+              >
+                {t("landing.footer.contactEmail")}
+              </a>
+              <Link to="/offer" className="hover:text-foreground">
+                {t("landing.footer.terms")}
+              </Link>
+              <Link to="/privacy" className="hover:text-foreground">
+                {t("landing.footer.privacyPolicy")}
+              </Link>
+              <Link to="/refund" className="hover:text-foreground">
+                {t("landing.footer.refund")}
+              </Link>
+              <Link to="/contacts" className="hover:text-foreground">
+                {t("landing.footer.contacts")}
+              </Link>
+            </div>
           </div>
         </div>
       </footer>

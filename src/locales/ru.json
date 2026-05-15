@@ -2784,6 +2784,8 @@
   "landing.footer.contactEmail": "vlad@rovno.ai",
   "landing.footer.privacyPolicy": "Политика конфиденциальности",
   "landing.footer.terms": "Публичная оферта",
+  "landing.footer.refund": "Возврат средств",
+  "landing.footer.contacts": "Контакты",
   "pricing.title": "Тарифы",
   "pricing.subtitle": "Сейчас идёт бета-тестирование. Платные тарифы появятся позже, пока можно пользоваться бесплатно.",
   "pricing.header.login": "Войти",

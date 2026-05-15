@@ -2756,6 +2756,8 @@
   "landing.footer.contactEmail": "vlad@rovno.ai",
   "landing.footer.privacyPolicy": "Privacy policy",
   "landing.footer.terms": "Terms of service",
+  "landing.footer.refund": "Refunds",
+  "landing.footer.contacts": "Contacts",
   "pricing.title": "Pricing",
   "pricing.subtitle": "Open beta is in progress. Paid tiers will come later — for now, it's free.",
   "pricing.header.login": "Login",
