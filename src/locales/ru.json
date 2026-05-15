@@ -3024,6 +3024,8 @@
   "gallery.upload.dialogTitle": "Загрузить фото",
   "gallery.upload.dialogDescription": "Добавь фото проекта с подписью (по желанию).",
   "gallery.upload.maxHint": "Можно загрузить до {{max}} фото за раз.",
+  "gallery.upload.formatsHint": "Поддерживаем JPEG, PNG и HEIC (с iPhone). Фото большого размера автоматически уменьшаем для быстрой загрузки.",
+  "gallery.upload.preparing": "Готовим…",
   "gallery.upload.retryBanner": "Файл загружен, но финализация не прошла. Можешь повторить ниже.",
   "gallery.upload.photoLabel": "Фото",
   "gallery.upload.dropHint": "Или перетащи фото сюда",

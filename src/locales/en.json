@@ -2990,6 +2990,8 @@
   "gallery.upload.dialogTitle": "Upload photos",
   "gallery.upload.dialogDescription": "Add project photos with an optional caption.",
   "gallery.upload.maxHint": "You can upload up to {{max}} photos at a time.",
+  "gallery.upload.formatsHint": "We support JPEG, PNG and HEIC (from iPhone). Large photos are automatically resized for faster upload.",
+  "gallery.upload.preparing": "Preparing…",
   "gallery.upload.retryBanner": "File was uploaded but finalize failed. You can retry finalization below.",
   "gallery.upload.photoLabel": "Photo",
   "gallery.upload.dropHint": "Or drag photos here",

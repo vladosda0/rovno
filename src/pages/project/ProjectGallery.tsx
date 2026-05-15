@@ -19,6 +19,7 @@ import { toast } from "@/hooks/use-toast";
 import { useMedia, useTasks, useWorkspaceMode } from "@/hooks/use-mock-data";
 import { useMediaUploadMutations } from "@/hooks/use-documents-media-source";
 import { trackEvent } from "@/lib/analytics";
+import { optimizeImageForUpload } from "@/lib/image-optimization";
 import { usePermission } from "@/lib/permissions";
 import { resolveActionState } from "@/lib/permission-contract-actions";
 import { addMedia, addEvent, getCurrentUser } from "@/data/store";
@@ -118,7 +119,24 @@ export default function ProjectGallery() {
 
     setUploading(true);
     try {
-      for (const file of uploadFiles) {
+      for (const rawFile of uploadFiles) {
+        // Decode HEIC, downscale to a viewer- and AI-friendly resolution,
+        // and re-encode to JPEG q90 before uploading. Small natively
+        // renderable images (screenshots, small JPEGs) pass through.
+        let file = rawFile;
+        try {
+          const optimized = await optimizeImageForUpload(rawFile);
+          file = optimized.file;
+        } catch (optError) {
+          // eslint-disable-next-line no-console
+          console.warn("[gallery] image optimization failed; uploading original", {
+            filename: rawFile.name,
+            type: rawFile.type,
+            size: rawFile.size,
+            message: optError instanceof Error ? optError.message : String(optError),
+          });
+        }
+
         const intent = await prepareUpload({
           mediaType: "photo",
           clientFilename: file.name,
@@ -293,7 +311,7 @@ export default function ProjectGallery() {
             <div className="space-y-1">
               <label className="text-body-sm font-medium text-foreground">{t("gallery.upload.photoLabel")}</label>
               <FileInput
-                accept="image/*"
+                accept="image/*,image/heic,image/heif,.heic,.heif"
                 multiple
                 disabled={uploading}
                 onChange={(e) => {
@@ -310,6 +328,9 @@ export default function ProjectGallery() {
               />
               <p className="text-caption text-muted-foreground">
                 {t("gallery.upload.maxHint", { max: MAX_UPLOAD_FILES })}
+              </p>
+              <p className="text-caption text-muted-foreground">
+                {t("gallery.upload.formatsHint")}
               </p>
               {!isSupabaseMode && (
                 <div className="border-2 border-dashed border-border rounded-lg p-8 text-center mt-2">
@@ -383,7 +404,7 @@ export default function ProjectGallery() {
                 className="bg-accent text-accent-foreground hover:bg-accent/90"
                 disabled={uploading || (isSupabaseMode && uploadFiles.length === 0)}
               >
-                {uploading ? t("gallery.upload.submitting") : t("gallery.upload.submit")}
+                {uploading ? t("gallery.upload.preparing") : t("gallery.upload.submit")}
               </AlertDialogAction>
             )}
           </AlertDialogFooter>
