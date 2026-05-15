@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PhotoViewer } from "@/components/PhotoViewer";
 import type { ContractAction, ContractDomain } from "@/lib/permission-contract-actions";
 import { seamResolveActionState } from "@/lib/permissions";
@@ -89,22 +90,27 @@ function permStub(role: MemberRole, aiAccess: "none" | "consult_only" | "project
 }
 
 function renderViewer(photo: Media | null) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return render(
-    <MemoryRouter initialEntries={["/project/project-1/gallery"]}>
-      <Routes>
-        <Route
-          path="/project/:id/gallery"
-          element={(
-            <PhotoViewer
-              photo={photo}
-              open
-              onOpenChange={vi.fn()}
-              source="gallery"
-            />
-          )}
-        />
-      </Routes>
-    </MemoryRouter>,
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={["/project/project-1/gallery"]}>
+        <Routes>
+          <Route
+            path="/project/:id/gallery"
+            element={(
+              <PhotoViewer
+                photo={photo}
+                open
+                onOpenChange={vi.fn()}
+                source="gallery"
+              />
+            )}
+          />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 
@@ -117,24 +123,18 @@ describe("PhotoViewer — AI Consult entry", () => {
     mockUsePermission.mockReturnValue(permStub("owner"));
   });
 
-  it("hides AI Consult when user cannot ai.generate", () => {
-    mockUsePermission.mockReturnValue(permStub("contractor", "consult_only"));
-    renderViewer(buildMedia());
-    expect(screen.queryByRole("button", { name: /AI Consult/i })).not.toBeInTheDocument();
-  });
-
-  it("hides AI Consult when not authenticated", () => {
-    mockIsAuthenticated.mockReturnValue(false);
-    renderViewer(buildMedia());
-    expect(screen.queryByRole("button", { name: /AI Consult/i })).not.toBeInTheDocument();
-  });
-
-  it("shows AI Consult for owner and opens consult on click", () => {
+  it("renders AI Consult button as disabled (coming-soon)", () => {
     renderViewer(buildMedia());
     const btn = screen.getByRole("button", { name: /AI Consult/i });
     expect(btn).toBeInTheDocument();
+    expect(btn).toBeDisabled();
+  });
+
+  it("does not open consult when AI Consult button is clicked (coming-soon)", () => {
+    renderViewer(buildMedia());
+    const btn = screen.getByRole("button", { name: /AI Consult/i });
     fireEvent.click(btn);
-    expect(mockOpenPhotoConsult).toHaveBeenCalledTimes(1);
+    expect(mockOpenPhotoConsult).not.toHaveBeenCalled();
   });
 });
 
@@ -144,19 +144,22 @@ describe("PhotoViewer — documents/media contract actions", () => {
     mockIsAuthenticated.mockReturnValue(true);
   });
 
-  it("hides delete and mark-final for contractor (documents_media preset)", () => {
+  it("hides delete for contractor (documents_media preset)", () => {
     mockUsePermission.mockReturnValue(permStub("contractor"));
     renderViewer(buildMedia());
     expect(screen.queryByRole("button", { name: /Delete photo/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Mark as final/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Unmark as final/i })).not.toBeInTheDocument();
   });
 
-  it("shows mark final and delete for owner", () => {
+  it("shows delete for owner", () => {
     mockUsePermission.mockReturnValue(permStub("owner"));
     renderViewer(buildMedia());
     expect(screen.getByRole("button", { name: /Delete photo/i })).toBeInTheDocument();
-    const markFinalButtons = screen.getAllByRole("button", { name: /Mark as final/i });
-    expect(markFinalButtons.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("does not render any mark-final UI", () => {
+    mockUsePermission.mockReturnValue(permStub("owner"));
+    renderViewer(buildMedia());
+    expect(screen.queryByRole("button", { name: /Mark as final/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Unmark as final/i })).not.toBeInTheDocument();
   });
 });

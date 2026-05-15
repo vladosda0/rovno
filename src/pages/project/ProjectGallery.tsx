@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
-  Upload, Camera, Star, X, ImageIcon, Sparkles,
+  Upload, Camera, X, ImageIcon, Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel,
 } from "@/components/ui/alert-dialog";
 import { PhotoViewer } from "@/components/PhotoViewer";
+import { MediaImage } from "@/components/MediaImage";
 import { ProjectWorkflowEmptyState } from "@/components/ProjectWorkflowEmptyState";
 import { TutorialModal } from "@/components/onboarding/TutorialModal";
 import { toast } from "@/hooks/use-toast";
@@ -47,11 +48,11 @@ export default function ProjectGallery() {
     finalizeUpload,
   } = useMediaUploadMutations(pid);
 
-  const [filter, setFilter] = useState<"all" | "final" | "progress">("all");
+  const MAX_UPLOAD_FILES = 3;
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadCaption, setUploadCaption] = useState("");
   const [uploadTaskId, setUploadTaskId] = useState("");
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [uploadVisibilityClass, setUploadVisibilityClass] = useState<DocMediaVisibilityClass>("shared_project");
   const [uploading, setUploading] = useState(false);
   const [pendingFinalizeIntentId, setPendingFinalizeIntentId] = useState<string | null>(null);
@@ -69,17 +70,13 @@ export default function ProjectGallery() {
     }
   }, [canSelectInternalUpload, uploadVisibilityClass]);
 
-  const filtered = photos.filter((p) => {
-    if (filter === "final") return p.is_final;
-    if (filter === "progress") return !p.is_final;
-    return true;
-  });
+  const filtered = photos;
 
   function closeUploadDialog() {
     setUploadOpen(false);
     setUploadCaption("");
     setUploadTaskId("");
-    setUploadFile(null);
+    setUploadFiles([]);
     setUploadVisibilityClass("shared_project");
     setUploading(false);
     setPendingFinalizeIntentId(null);
@@ -114,30 +111,37 @@ export default function ProjectGallery() {
       return;
     }
 
-    if (!uploadFile) {
+    if (uploadFiles.length === 0) {
       toast({ title: t("gallery.toast.selectFile"), variant: "destructive" });
       return;
     }
 
     setUploading(true);
     try {
-      const intent = await prepareUpload({
-        mediaType: "photo",
-        clientFilename: uploadFile.name,
-        mimeType: uploadFile.type || "image/jpeg",
-        sizeBytes: uploadFile.size,
-        caption: uploadCaption || undefined,
-        visibilityClass: uploadVisibilityClass,
-      });
+      for (const file of uploadFiles) {
+        const intent = await prepareUpload({
+          mediaType: "photo",
+          clientFilename: file.name,
+          mimeType: file.type || "image/jpeg",
+          sizeBytes: file.size,
+          caption: uploadCaption || undefined,
+          visibilityClass: uploadVisibilityClass,
+        });
 
-      await uploadBytes(intent.bucket, intent.objectPath, uploadFile);
+        await uploadBytes(intent.bucket, intent.objectPath, file);
 
-      setPendingFinalizeIntentId(intent.uploadIntentId);
-      await finalizeUpload(intent.uploadIntentId);
+        setPendingFinalizeIntentId(intent.uploadIntentId);
+        await finalizeUpload(intent.uploadIntentId);
+        setPendingFinalizeIntentId(null);
 
-      trackEvent("media_uploaded", { project_id: pid });
+        trackEvent("media_uploaded", { project_id: pid });
+      }
       closeUploadDialog();
-      toast({ title: t("gallery.toast.photoUploaded") });
+      toast({
+        title: uploadFiles.length > 1
+          ? t("gallery.toast.photosUploaded", { count: uploadFiles.length })
+          : t("gallery.toast.photoUploaded"),
+      });
     } catch (error) {
       setUploading(false);
       toast({
@@ -219,7 +223,7 @@ export default function ProjectGallery() {
             <div>
               <h2 className="text-h3 text-foreground">{t("gallery.heading")}</h2>
               <p className="text-caption text-muted-foreground">
-                {t("gallery.summary", { total: photos.length, final: photos.filter((p) => p.is_final).length })}
+                {t("gallery.summaryTotal", { count: photos.length })}
               </p>
             </div>
             {canUploadPhotos && (
@@ -227,23 +231,6 @@ export default function ProjectGallery() {
                 <Upload className="h-4 w-4 mr-1.5" /> {t("gallery.upload")}
               </Button>
             )}
-          </div>
-
-          {/* Filters */}
-          <div className="flex gap-1.5">
-            {(["all", "progress", "final"] as const).map((f) => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={`rounded-pill px-3 py-1 text-caption font-medium transition-colors border ${
-                  filter === f
-                    ? "bg-accent/10 text-accent border-accent/20"
-                    : "bg-transparent text-muted-foreground border-border hover:bg-muted/50"
-                }`}
-              >
-                {f === "all" ? t("gallery.filters.all") : f === "final" ? t("gallery.filters.final") : t("gallery.filters.progress")}
-              </button>
-            ))}
           </div>
 
           {/* Grid */}
@@ -257,9 +244,16 @@ export default function ProjectGallery() {
                     onClick={() => setViewPhoto(photo)}
                     className="group relative aspect-square rounded-lg overflow-hidden hover:ring-2 hover:ring-accent/40 transition-all"
                   >
-                    <div className={`absolute inset-0 ${placeholderColors[idx % placeholderColors.length]} flex items-center justify-center`}>
-                      <Camera className="h-8 w-8 text-muted-foreground/30" />
-                    </div>
+                    <MediaImage
+                      storage={photo.storage}
+                      alt={photo.caption}
+                      imgClassName="absolute inset-0 h-full w-full object-cover"
+                      fallback={
+                        <div className={`absolute inset-0 ${placeholderColors[idx % placeholderColors.length]} flex items-center justify-center`}>
+                          <Camera className="h-8 w-8 text-muted-foreground/30" />
+                        </div>
+                      }
+                    />
                     <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-background/80 to-transparent p-2 opacity-0 group-hover:opacity-100 transition-opacity">
                       <p className="text-caption text-foreground truncate">{photo.caption}</p>
                       {task && <p className="text-[10px] text-muted-foreground truncate">{task.title}</p>}
@@ -267,11 +261,6 @@ export default function ProjectGallery() {
                     <div className="absolute top-1.5 left-1.5 max-w-[calc(100%-2.5rem)]">
                       <VisibilityClassBadge visibilityClass={photo.visibility_class} className="text-[10px] px-1.5 py-0" />
                     </div>
-                    {photo.is_final && (
-                      <div className="absolute top-1.5 right-1.5 bg-accent rounded-full p-0.5">
-                        <Star className="h-3 w-3 text-accent-foreground" fill="currentColor" />
-                      </div>
-                    )}
                   </button>
                 );
               })}
@@ -305,11 +294,23 @@ export default function ProjectGallery() {
               <label className="text-body-sm font-medium text-foreground">{t("gallery.upload.photoLabel")}</label>
               <FileInput
                 accept="image/*"
+                multiple
                 disabled={uploading}
                 onChange={(e) => {
-                  setUploadFile(e.target.files?.[0] ?? null);
+                  const all = Array.from(e.target.files ?? []);
+                  const limited = all.slice(0, MAX_UPLOAD_FILES);
+                  setUploadFiles(limited);
+                  if (all.length > MAX_UPLOAD_FILES) {
+                    toast({
+                      title: t("gallery.upload.maxHint", { max: MAX_UPLOAD_FILES }),
+                      variant: "destructive",
+                    });
+                  }
                 }}
               />
+              <p className="text-caption text-muted-foreground">
+                {t("gallery.upload.maxHint", { max: MAX_UPLOAD_FILES })}
+              </p>
               {!isSupabaseMode && (
                 <div className="border-2 border-dashed border-border rounded-lg p-8 text-center mt-2">
                   <Camera className="mx-auto h-10 w-10 text-muted-foreground/30 mb-2" />
@@ -380,7 +381,7 @@ export default function ProjectGallery() {
               <AlertDialogAction
                 onClick={(e) => { e.preventDefault(); handleUpload(); }}
                 className="bg-accent text-accent-foreground hover:bg-accent/90"
-                disabled={uploading || (isSupabaseMode && !uploadFile)}
+                disabled={uploading || (isSupabaseMode && uploadFiles.length === 0)}
               >
                 {uploading ? t("gallery.upload.submitting") : t("gallery.upload.submit")}
               </AlertDialogAction>

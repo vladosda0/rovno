@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Image, ChevronRight, Camera } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Media } from "@/types/entities";
+import { MediaImage } from "@/components/MediaImage";
 
 interface Props {
   media: Media[];
@@ -31,8 +32,13 @@ export function GalleryWidget({ media, projectId, className }: Props) {
           <div className="grid grid-cols-2 gap-2">
             {media.slice(0, 4).map((m) => (
               <div key={m.id} className="space-y-1">
-                <div className="rounded-panel bg-muted/40 aspect-square flex items-center justify-center p-1">
-                  <Camera className="h-5 w-5 text-muted-foreground" />
+                <div className="rounded-panel bg-muted/40 aspect-square flex items-center justify-center p-1 overflow-hidden relative">
+                  <MediaImage
+                    storage={m.storage}
+                    alt={m.caption}
+                    imgClassName="absolute inset-0 h-full w-full object-cover"
+                    fallback={<Camera className="h-5 w-5 text-muted-foreground" />}
+                  />
                 </div>
                 <p className="text-[10px] text-muted-foreground line-clamp-2">
                   {m.description || m.caption}

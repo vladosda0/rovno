@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import ProjectGallery from "@/pages/project/ProjectGallery";
 import type { ContractAction, ContractDomain } from "@/lib/permission-contract-actions";
 import { seamResolveActionState } from "@/lib/permissions";
@@ -59,12 +60,17 @@ function createMedia(partial: Partial<Media> = {}): Media {
 }
 
 function renderProjectGallery() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return render(
-    <MemoryRouter initialEntries={["/project/project-1/gallery"]}>
-      <Routes>
-        <Route path="/project/:id/gallery" element={<ProjectGallery />} />
-      </Routes>
-    </MemoryRouter>,
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={["/project/project-1/gallery"]}>
+        <Routes>
+          <Route path="/project/:id/gallery" element={<ProjectGallery />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 
@@ -131,7 +137,7 @@ describe("ProjectGallery", () => {
     renderProjectGallery();
 
     expect(screen.getByText("Gallery")).toBeInTheDocument();
-    expect(screen.getByText("2 photos · 1 final")).toBeInTheDocument();
+    expect(screen.getByText("2 photos")).toBeInTheDocument();
   });
 
   it("opens the upload dialog", () => {
