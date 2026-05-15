@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { orgQueryKeys } from "@/hooks/use-orgs";
 
 const rawSupabase = supabase as unknown as SupabaseClient;
 
@@ -98,7 +99,7 @@ export function useDeleteOrgDocumentFolder() {
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: [...FOLDERS_QUERY_KEY, variables.orgId] });
-      queryClient.invalidateQueries({ queryKey: ["org_documents"] });
+      queryClient.invalidateQueries({ queryKey: orgQueryKeys.documents(variables.orgId) });
     },
   });
 }
@@ -115,7 +116,7 @@ export function useMoveOrgDocumentToFolder() {
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: [...FOLDERS_QUERY_KEY, variables.orgId] });
-      queryClient.invalidateQueries({ queryKey: ["org_documents"] });
+      queryClient.invalidateQueries({ queryKey: orgQueryKeys.documents(variables.orgId) });
     },
   });
 }
