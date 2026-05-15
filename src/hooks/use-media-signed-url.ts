@@ -24,7 +24,26 @@ export function useMediaSignedUrl(
       const { data, error } = await supabase.storage
         .from(bucket)
         .createSignedUrl(objectPath, SIGNED_URL_TTL_SECONDS);
-      if (error || !data?.signedUrl) return null;
+      if (error) {
+        // Surface RLS / storage failures so cross-device or cross-account
+        // visibility bugs are diagnosable from the console instead of silently
+        // showing a placeholder.
+        // eslint-disable-next-line no-console
+        console.warn("[media-signed-url] createSignedUrl error", {
+          bucket,
+          objectPath,
+          message: error.message,
+        });
+        return null;
+      }
+      if (!data?.signedUrl) {
+        // eslint-disable-next-line no-console
+        console.warn("[media-signed-url] createSignedUrl returned no url", {
+          bucket,
+          objectPath,
+        });
+        return null;
+      }
       return data.signedUrl;
     },
     enabled: Boolean(bucket && objectPath),

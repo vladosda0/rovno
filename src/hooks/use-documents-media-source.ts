@@ -10,6 +10,8 @@ import {
   finalizeDocumentUpload as finalizeDocumentUploadSource,
   prepareMediaUpload as prepareMediaUploadSource,
   finalizeMediaUpload as finalizeMediaUploadSource,
+  deleteProjectMedia as deleteProjectMediaSource,
+  updateProjectMediaCaption as updateProjectMediaCaptionSource,
   uploadBytes as uploadBytesSource,
   getDocumentsMediaSource,
   type ArchiveProjectDocumentInput,
@@ -319,4 +321,44 @@ export function useMediaUploadMutations(projectId: string) {
     uploadBytes,
     finalizeUpload,
   };
+}
+
+export function useProjectMediaMutations(projectId: string) {
+  const mode = useWorkspaceMode();
+  const queryClient = useQueryClient();
+
+  const invalidateProjectMedia = useCallback(async (resolvedMode: Extract<typeof mode, { kind: "supabase" }>) => {
+    await queryClient.invalidateQueries({
+      queryKey: documentsMediaQueryKeys.projectMedia(resolvedMode.profileId, projectId),
+    });
+  }, [projectId, queryClient]);
+
+  const deleteMedia = useCallback(async (mediaId: string): Promise<void> => {
+    const resolvedMode = assertDocumentsMutationWorkspaceMode(mode);
+    await deleteProjectMediaSource(resolvedMode, { projectId, mediaId });
+
+    if (resolvedMode.kind === "supabase") {
+      await invalidateProjectMedia(resolvedMode);
+    }
+    // Browser modes mutate the in-memory store; useProjectMedia reads via
+    // useStoreValue so the change re-renders automatically.
+  }, [invalidateProjectMedia, mode, projectId]);
+
+  const updateMediaCaption = useCallback(
+    async (mediaId: string, caption: string): Promise<void> => {
+      const resolvedMode = assertDocumentsMutationWorkspaceMode(mode);
+      const normalized = caption.trim().length === 0 ? null : caption.trim();
+      await updateProjectMediaCaptionSource(resolvedMode, {
+        projectId,
+        mediaId,
+        caption: normalized,
+      });
+      if (resolvedMode.kind === "supabase") {
+        await invalidateProjectMedia(resolvedMode);
+      }
+    },
+    [invalidateProjectMedia, mode, projectId],
+  );
+
+  return { deleteMedia, updateMediaCaption };
 }

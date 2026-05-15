@@ -1,6 +1,5 @@
 import { useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { isAuthenticated } from "@/lib/auth-state";
 import { actionStateToControlProps, usePermission } from "@/lib/permissions";
 import {
   Dialog, DialogContent,
@@ -12,24 +11,18 @@ import {
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import {
-  deleteMedia, addEvent, getCurrentUser, getTask, getStage,
-  getMedia,
+  addEvent, getCurrentUser, getTask, getStage,
 } from "@/data/store";
+import { useProjectMediaMutations } from "@/hooks/use-documents-media-source";
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { openPhotoConsult } from "@/lib/photo-consult-store";
 import { format } from "date-fns";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Media as MediaType } from "@/types/entities";
 import { VisibilityClassBadge } from "@/components/documents/VisibilityClassBadge";
 import { MediaImage } from "@/components/MediaImage";
-
-const placeholderColors = [
-  "bg-accent/10", "bg-info/10", "bg-warning/10", "bg-muted",
-  "bg-success/10", "bg-destructive/10",
-];
 
 interface PhotoViewerProps {
   photo: MediaType | null;
@@ -41,7 +34,7 @@ interface PhotoViewerProps {
   allPhotos?: MediaType[];
 }
 
-export function PhotoViewer({ photo, open, onOpenChange, source, allPhotos = [] }: PhotoViewerProps) {
+export function PhotoViewer({ photo, open, onOpenChange, source: _source, allPhotos: _allPhotos = [] }: PhotoViewerProps) {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { id: routeProjectId } = useParams<{ id: string }>();
@@ -49,14 +42,10 @@ export function PhotoViewer({ photo, open, onOpenChange, source, allPhotos = [] 
 
   const permissionProjectId = photo?.project_id ?? routeProjectId ?? "";
   const perm = usePermission(permissionProjectId);
+  const { deleteMedia: deleteMediaMutation } = useProjectMediaMutations(permissionProjectId);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const close = useCallback(() => onOpenChange(false), [onOpenChange]);
-
-  const canUseAiConsult =
-    Boolean(photo) &&
-    isAuthenticated() &&
-    !perm.isLoading &&
-    perm.can("ai.generate");
 
   const deleteMediaControl = actionStateToControlProps(perm.actionState("documents_media", "delete"));
 
@@ -65,26 +54,35 @@ export function PhotoViewer({ photo, open, onOpenChange, source, allPhotos = [] 
   const user = getCurrentUser();
   const task = photo.task_id ? getTask(photo.task_id) : undefined;
   const stage = task?.stage_id ? getStage(task.stage_id) : undefined;
-  const colorIdx = allPhotos.indexOf(photo);
-  const bgColor = placeholderColors[Math.max(0, colorIdx) % placeholderColors.length];
 
-  function handleDelete() {
+  async function handleDelete() {
     if (!photo) return;
     if (perm.actionState("documents_media", "delete") !== "enabled") return;
-    deleteMedia(photo.id);
-    addEvent({
-      id: `evt-${Date.now()}`,
-      project_id: photo.project_id,
-      actor_id: user.id,
-      type: "photo_deleted",
-      object_type: "media",
-      object_id: photo.id,
-      timestamp: new Date().toISOString(),
-      payload: { caption: photo.caption },
-    });
-    setDeleteOpen(false);
-    close();
-    toast({ title: t("photoViewer.toast.deleted") });
+    setIsDeleting(true);
+    try {
+      await deleteMediaMutation(photo.id);
+      addEvent({
+        id: `evt-${Date.now()}`,
+        project_id: photo.project_id,
+        actor_id: user.id,
+        type: "photo_deleted",
+        object_type: "media",
+        object_id: photo.id,
+        timestamp: new Date().toISOString(),
+        payload: { caption: photo.caption },
+      });
+      setDeleteOpen(false);
+      close();
+      toast({ title: t("photoViewer.toast.deleted") });
+    } catch (error) {
+      toast({
+        title: t("photoViewer.toast.deleteFailed.title"),
+        description: error instanceof Error ? error.message : t("photoViewer.toast.deleteFailed.description"),
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
   }
 
   function handleTaskClick() {
@@ -93,22 +91,6 @@ export function PhotoViewer({ photo, open, onOpenChange, source, allPhotos = [] 
     if (!navProjectId) return;
     navigate(`/project/${navProjectId}/tasks`, {
       state: { openTaskId: task.id },
-    });
-    close();
-  }
-
-  function handleAiConsult() {
-    if (!photo) return;
-    // Build context and open sidebar
-    const siblingPhotos = photo.task_id
-      ? getMedia(photo.project_id).filter((m) => m.task_id === photo.task_id && m.id !== photo.id)
-      : [];
-
-    openPhotoConsult({
-      photo,
-      task: task ?? undefined,
-      stage: stage ?? undefined,
-      siblingPhotos,
     });
     close();
   }
@@ -161,7 +143,7 @@ export function PhotoViewer({ photo, open, onOpenChange, source, allPhotos = [] 
 
           {/* Photo preview */}
           <div className="px-4 pt-3">
-            <div className={`w-full aspect-video rounded-lg ${bgColor} flex items-center justify-center relative overflow-hidden`}>
+            <div className="w-full aspect-video rounded-lg bg-muted flex items-center justify-center relative overflow-hidden">
               <MediaImage
                 storage={photo.storage}
                 alt={photo.caption}
@@ -202,7 +184,6 @@ export function PhotoViewer({ photo, open, onOpenChange, source, allPhotos = [] 
                 <TooltipTrigger asChild>
                   <span tabIndex={0}>
                     <Button
-                      onClick={canUseAiConsult ? handleAiConsult : undefined}
                       className="bg-accent text-accent-foreground hover:bg-accent/90 disabled:opacity-60 disabled:cursor-not-allowed"
                       size="sm"
                       disabled
@@ -225,12 +206,13 @@ export function PhotoViewer({ photo, open, onOpenChange, source, allPhotos = [] 
       {/* Delete confirm */}
       <ConfirmModal
         open={deleteOpen}
-        onOpenChange={setDeleteOpen}
+        onOpenChange={(o) => { if (!isDeleting) setDeleteOpen(o); }}
         title={t("photoViewer.confirmDelete.title")}
         description={t("photoViewer.confirmDelete.description")}
-        confirmLabel={t("photoViewer.confirmDelete.confirm")}
-        onConfirm={handleDelete}
-        onCancel={() => setDeleteOpen(false)}
+        confirmLabel={isDeleting ? t("photoViewer.confirmDelete.deleting") : t("photoViewer.confirmDelete.confirm")}
+        confirmDisabled={isDeleting}
+        onConfirm={() => { void handleDelete(); }}
+        onCancel={() => { if (!isDeleting) setDeleteOpen(false); }}
       />
     </>
   );

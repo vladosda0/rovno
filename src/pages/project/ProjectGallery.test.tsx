@@ -31,6 +31,7 @@ vi.mock("@/hooks/use-mock-data", () => ({
 
 vi.mock("@/hooks/use-documents-media-source", () => ({
   useMediaUploadMutations: (projectId: string) => mockUseMediaUploadMutations(projectId),
+  useProjectMediaMutations: () => ({ deleteMedia: vi.fn(), updateMediaCaption: vi.fn() }),
 }));
 
 vi.mock("@/lib/permissions", async () => {
@@ -151,7 +152,7 @@ describe("ProjectGallery", () => {
     expect(screen.getByText("Upload photos")).toBeInTheDocument();
   });
 
-  it("disables the upload button in Supabase mode until a file is selected", () => {
+  it("shows the per-slot upload form in Supabase mode", () => {
     mockUseWorkspaceMode.mockReturnValue({ kind: "supabase", profileId: "user-1" });
     mockUseMedia.mockReturnValue([createMedia()]);
 
@@ -160,10 +161,16 @@ describe("ProjectGallery", () => {
     fireEvent.click(screen.getByRole("button", { name: /Upload/i }));
 
     expect(screen.getByText("Upload photos")).toBeInTheDocument();
-    const uploadButton = screen.getAllByRole("button", { name: "Upload" }).find(
+    // First slot renders a "Choose a photo" file picker trigger
+    const chooseButton = screen.getAllByRole("button", { name: /Choose a photo/i }).find(
       (btn) => btn.closest("[role='alertdialog']"),
     );
-    expect(uploadButton).toBeDisabled();
+    expect(chooseButton).toBeInTheDocument();
+    // The footer "Done" button is initially labelled Cancel because nothing has uploaded yet
+    const footerAction = screen.getAllByRole("button").find(
+      (btn) => btn.closest("[role='alertdialog']") && /Cancel/i.test(btn.textContent ?? ""),
+    );
+    expect(footerAction).toBeInTheDocument();
   });
 
   it("opens the upload dialog from the empty state action button", () => {
