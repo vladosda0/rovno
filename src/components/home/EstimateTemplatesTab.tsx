@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { SyntheticEvent } from "react";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -21,20 +22,28 @@ import {
   type EstimateTemplateSummary,
 } from "@/hooks/use-estimate-templates";
 
-function ownerBadgeClasses(ownerKind: EstimateTemplateSummary["ownerKind"]): string {
-  switch (ownerKind) {
-    case "system":
-      return "bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30";
-    case "org":
-      return "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30";
-    case "profile":
-      return "bg-muted text-muted-foreground border border-border";
-  }
-}
-
 interface TemplateCardProps {
   template: EstimateTemplateSummary;
   onOpen: () => void;
+}
+
+/** System-canonical templates get a friendlier display title and short tagline
+ * regardless of what the DB seed currently stores. Once the seed migration is
+ * updated upstream, this override becomes a no-op. */
+function applySystemRename(template: EstimateTemplateSummary, t: TFunction): {
+  displayTitle: string;
+  displayDescription: string | null;
+} {
+  if (template.ownerKind === "system") {
+    return {
+      displayTitle: t("home.estimateTemplates.systemCanonical.title"),
+      displayDescription: t("home.estimateTemplates.systemCanonical.description"),
+    };
+  }
+  return {
+    displayTitle: template.title,
+    displayDescription: template.description ?? null,
+  };
 }
 
 function TemplateCard({ template, onOpen }: TemplateCardProps) {
@@ -45,6 +54,8 @@ function TemplateCard({ template, onOpen }: TemplateCardProps) {
     event.currentTarget.style.display = "none";
     setCoverFailed(true);
   }
+  const { displayTitle, displayDescription } = applySystemRename(template, t);
+  const isSystem = template.ownerKind === "system";
   return (
     <Card
       className="flex flex-col overflow-hidden transition hover:border-accent/50 hover:shadow-md cursor-pointer"
@@ -59,7 +70,7 @@ function TemplateCard({ template, onOpen }: TemplateCardProps) {
       }}
     >
       <div
-        className="h-24 w-full bg-gradient-to-br from-accent/15 via-accent/5 to-transparent flex items-center justify-center"
+        className="h-40 w-full bg-gradient-to-br from-accent/25 via-accent/10 to-accent/5 flex items-center justify-center"
         aria-hidden="true"
       >
         {showCoverImage ? (
@@ -69,28 +80,22 @@ function TemplateCard({ template, onOpen }: TemplateCardProps) {
             className="h-full w-full object-cover"
             onError={handleCoverError}
           />
+        ) : isSystem ? (
+          <img src="/logo.svg" alt="" className="h-16 w-auto opacity-90" />
         ) : (
-          <FileStack className="h-8 w-8 text-accent/60" />
+          <FileStack className="h-10 w-10 text-accent" strokeWidth={1.5} />
         )}
       </div>
-      <CardContent className="flex flex-1 flex-col gap-2 p-4">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Badge className={`text-[10px] ${ownerBadgeClasses(template.ownerKind)}`}>
-            {template.ownerLabel}
-          </Badge>
-          {template.scope && (
-            <Badge variant="secondary" className="text-[10px]">
-              {template.scope}
-            </Badge>
-          )}
-          <span className="ml-auto text-[10px] text-muted-foreground">
+      <CardContent className="flex flex-1 flex-col gap-1.5 p-4">
+        <div className="flex items-start justify-between gap-2">
+          <h3 className="line-clamp-2 text-body font-semibold text-foreground">{displayTitle}</h3>
+          <span className="text-caption text-muted-foreground shrink-0">
             {t("home.estimateTemplates.card.stageCount", { count: template.stageCount })}
           </span>
         </div>
-        <h3 className="text-body font-medium text-foreground line-clamp-2">{template.title}</h3>
-        {template.description && (
-          <p className="text-caption text-muted-foreground line-clamp-3">
-            {template.description}
+        {displayDescription && (
+          <p className="text-caption text-muted-foreground whitespace-pre-line">
+            {displayDescription}
           </p>
         )}
       </CardContent>
@@ -107,31 +112,22 @@ interface TemplateDetailDialogProps {
 function TemplateDetailDialog({ templateId, open, onOpenChange }: TemplateDetailDialogProps) {
   const { t } = useTranslation();
   const { data, isPending, isError } = useEstimateTemplateDetail(open ? templateId : null);
+  const displayedTitle = data
+    ? (data.ownerKind === "system" ? t("home.estimateTemplates.systemCanonical.title") : data.title)
+    : null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0">
         <DialogHeader className="border-b border-border px-5 py-4">
           <DialogTitle>
-            {data?.title ?? (isPending ? t("home.estimateTemplates.detail.loading") : t("home.estimateTemplates.detail.title"))}
+            {displayedTitle ?? (isPending ? t("home.estimateTemplates.detail.loading") : t("home.estimateTemplates.detail.title"))}
           </DialogTitle>
           <DialogDescription className="sr-only">
             {data?.description ?? t("home.estimateTemplates.detail.descriptionFallback")}
           </DialogDescription>
           {data && (
             <div className="flex flex-wrap items-center gap-1.5">
-              <Badge className={`text-[10px] ${ownerBadgeClasses(data.ownerKind)}`}>
-                {data.ownerKind === "system"
-                  ? "rovno.ai"
-                  : data.ownerKind === "org"
-                  ? t("home.estimateTemplates.owner.org")
-                  : t("home.estimateTemplates.owner.profile")}
-              </Badge>
-              {data.scope && (
-                <Badge variant="secondary" className="text-[10px]">
-                  {data.scope}
-                </Badge>
-              )}
               <span className="text-caption text-muted-foreground">
                 {t("home.estimateTemplates.card.stageCount", { count: data.stages.length })}
               </span>

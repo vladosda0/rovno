@@ -79,7 +79,8 @@ describe("EstimateTemplatesTab", () => {
     listMock.mockReturnValue({ data: [CANONICAL_SUMMARY], isPending: false, isError: false });
     renderTab();
     expect(screen.getByRole("heading", { name: "Estimate templates" })).toBeInTheDocument();
-    expect(screen.getByText("rovno.ai канонический ИЖС")).toBeInTheDocument();
+    // System-canonical templates are renamed in the UI regardless of the DB title.
+    expect(screen.getByText("Rovno estimate builder")).toBeInTheDocument();
     expect(screen.getByText("21 stages")).toBeInTheDocument();
   });
 
@@ -90,7 +91,7 @@ describe("EstimateTemplatesTab", () => {
     );
 
     renderTab();
-    fireEvent.click(screen.getByText("rovno.ai канонический ИЖС"));
+    fireEvent.click(screen.getByText("Rovno estimate builder"));
 
     const dialog = await screen.findByRole("dialog");
     const stages = within(dialog).getAllByRole("listitem");
