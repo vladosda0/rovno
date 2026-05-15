@@ -65,7 +65,11 @@ export default function AppLayout() {
         }}
         hideAi={hideAi}
       />
-      <div className="flex flex-1 pt-[calc(3rem+var(--env-banner-h,0px))]">
+      {/* TopBar is position:fixed at top: var(--env-banner-h, 0px); the env
+          banner is itself in flow above this wrapper, so we only need to
+          reserve the TopBar height (3rem) here. The previous pt-calc summed
+          both heights and produced a visible empty band. */}
+      <div className="flex flex-1 pt-12">
         {!hideAi && (
           aiSidebarCollapsed ? (
             <div
