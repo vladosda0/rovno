@@ -381,8 +381,32 @@ export const manifest = {
       "sha256": "fc933ee37f8aeecdc349669b774a077b81a97aeb84d6980c2e3e37b45b3b42fc"
     },
     {
+      "path": "supabase/migrations/20260513140000_p0_derived_chat_key_for_ai_sessions.sql",
+      "sha256": "a1cc9ddd18c639ea84bf44ff9e72bbafe3a0d1baa72edd29c21691d4b13a636e"
+    },
+    {
+      "path": "supabase/migrations/20260513150000_p0_chat_session_handlers_use_derived_key.sql",
+      "sha256": "df8fda5591b966427b258b5c65aa5028ca7c68a554e23d6d65829ca4e673a35e"
+    },
+    {
       "path": "supabase/migrations/20260514120000_org_document_folders.sql",
       "sha256": "13fdd3ff194ea028f650b17bc75d9a0463919775deb8eb0f9100758345d9e0df"
+    },
+    {
+      "path": "supabase/migrations/20260514150000_p0_fix_uuid_v5_search_path_for_pgcrypto_digest.sql",
+      "sha256": "e4def10b5e1fcee6f90685d270aaed9334e015fc8f73f224984e6239788a888c"
+    },
+    {
+      "path": "supabase/migrations/20260516120000_extend_billing_provider_to_tbank.sql",
+      "sha256": "071c12fd634cc9e225aeaca710f22699dfd53dd6701613a6b88158a47afccb8f"
+    },
+    {
+      "path": "supabase/migrations/20260516120100_create_payment_intents.sql",
+      "sha256": "fb9ad2c600b33c337bb7108c5ad1cb785d5345c6a3e034e439876132ad2e80e2"
+    },
+    {
+      "path": "supabase/migrations/20260516120200_alter_subscriptions_recurrent.sql",
+      "sha256": "fe112ff1f5963913c2bdb2fbb5603262dbffd70d06e3d11d121f160343b5b211"
     }
   ],
   "generated_artifacts": [
@@ -502,7 +526,13 @@ export const manifest = {
     "sql/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql",
     "sql/20260513110100_estimate_share_snapshots_and_rpcs.sql",
     "sql/20260513120000_harden_share_rpcs_codex_followup.sql",
+    "sql/20260513140000_p0_derived_chat_key_for_ai_sessions.sql",
+    "sql/20260513150000_p0_chat_session_handlers_use_derived_key.sql",
     "sql/20260514120000_org_document_folders.sql",
+    "sql/20260514150000_p0_fix_uuid_v5_search_path_for_pgcrypto_digest.sql",
+    "sql/20260516120000_extend_billing_provider_to_tbank.sql",
+    "sql/20260516120100_create_payment_intents.sql",
+    "sql/20260516120200_alter_subscriptions_recurrent.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -6536,6 +6566,14 @@ export const tables = {
           "usingIndex": null,
           "nullsNotDistinct": false,
           "sourceMigration": "supabase/migrations/20260306165000_billing_launch_tables.sql"
+        },
+        {
+          "type": "check",
+          "name": "billing_customers_provider_check",
+          "columns": [],
+          "expression": "provider in ('stripe', 'tbank')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260516120000_extend_billing_provider_to_tbank.sql"
         }
       ],
       "indexes": [
@@ -6759,6 +6797,36 @@ export const tables = {
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "auto_renew",
+          "sqlType": "boolean",
+          "tsType": "boolean",
+          "nullable": false,
+          "defaultSql": "false",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "rebill_id",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "grace_until",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -6813,6 +6881,14 @@ export const tables = {
           "usingIndex": null,
           "nullsNotDistinct": false,
           "sourceMigration": "supabase/migrations/20260306165000_billing_launch_tables.sql"
+        },
+        {
+          "type": "check",
+          "name": "subscriptions_provider_check",
+          "columns": [],
+          "expression": "provider in ('stripe', 'tbank')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260516120000_extend_billing_provider_to_tbank.sql"
         }
       ],
       "indexes": [
@@ -6845,6 +6921,26 @@ export const tables = {
           "where": "is_current = true",
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260306165000_billing_launch_tables.sql"
+        },
+        {
+          "name": "idx_subscriptions_rebill_id",
+          "unique": false,
+          "expressions": [
+            "rebill_id"
+          ],
+          "where": "rebill_id is not null",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260516120200_alter_subscriptions_recurrent.sql"
+        },
+        {
+          "name": "idx_subscriptions_grace_until",
+          "unique": false,
+          "expressions": [
+            "grace_until"
+          ],
+          "where": "grace_until is not null",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260516120200_alter_subscriptions_recurrent.sql"
         }
       ],
       "triggers": [
@@ -7478,6 +7574,16 @@ export const tables = {
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "derived_chat_key",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -7502,6 +7608,16 @@ export const tables = {
           "where": null,
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql"
+        },
+        {
+          "name": "uq_project_ai_chat_sessions_derived_chat_key",
+          "unique": true,
+          "expressions": [
+            "derived_chat_key"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260513140000_p0_derived_chat_key_for_ai_sessions.sql"
         }
       ],
       "triggers": []
@@ -9986,6 +10102,400 @@ export const tables = {
           "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
         }
       ]
+    },
+    {
+      "schema": "public",
+      "name": "payment_intents",
+      "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql",
+      "columns": [
+        {
+          "name": "id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "gen_random_uuid()",
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "profile_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "profiles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "cascade"
+          }
+        },
+        {
+          "name": "provider",
+          "sqlType": "text",
+          "tsType": "\"tbank\"",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "external_payment_id",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "order_id",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "plan_code",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "amount_kopecks",
+          "sqlType": "bigint",
+          "tsType": "number",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "currency",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "'RUB'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "status",
+          "sqlType": "text",
+          "tsType": "\"pending\" | \"new\" | \"authorized\" | \"confirmed\" | \"rejected\" | \"cancelled\" | \"refunded\" | \"partial_refund\"",
+          "nullable": false,
+          "defaultSql": "'pending'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "amount_refunded_kopecks",
+          "sqlType": "bigint",
+          "tsType": "number",
+          "nullable": false,
+          "defaultSql": "0",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "rebill_id",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "is_recurrent_setup",
+          "sqlType": "boolean",
+          "tsType": "boolean",
+          "nullable": false,
+          "defaultSql": "false",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "is_recurrent_charge",
+          "sqlType": "boolean",
+          "tsType": "boolean",
+          "nullable": false,
+          "defaultSql": "false",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "parent_intent_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "payment_intents",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
+        },
+        {
+          "name": "receipt",
+          "sqlType": "jsonb",
+          "tsType": "Json",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "last_notification",
+          "sqlType": "jsonb",
+          "tsType": "Json",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "idempotency_key",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": true,
+          "references": null
+        },
+        {
+          "name": "error_code",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "error_message",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "authorized_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "confirmed_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "cancelled_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "updated_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "provider"
+          ],
+          "expression": "provider in ('tbank')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "amount_kopecks"
+          ],
+          "expression": "amount_kopecks > 0",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "currency"
+          ],
+          "expression": "currency = 'RUB'",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "status"
+          ],
+          "expression": "status in (\n    'pending',\n    'new',\n    'authorized',\n    'confirmed',\n    'rejected',\n    'cancelled',\n    'refunded',\n    'partial_refund'\n  )",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "amount_refunded_kopecks"
+          ],
+          "expression": "amount_refunded_kopecks >= 0",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+        },
+        {
+          "type": "check",
+          "name": "payment_intents_recurrent_kind_check",
+          "columns": [],
+          "expression": "not (is_recurrent_setup and is_recurrent_charge)",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+        },
+        {
+          "type": "check",
+          "name": "payment_intents_parent_intent_consistency_check",
+          "columns": [],
+          "expression": "case\n      when is_recurrent_charge then parent_intent_id is not null\n      else parent_intent_id is null\n    end",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_payment_intents_profile",
+          "unique": false,
+          "expressions": [
+            "profile_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+        },
+        {
+          "name": "uq_payment_intents_external_payment_id",
+          "unique": true,
+          "expressions": [
+            "external_payment_id"
+          ],
+          "where": "external_payment_id is not null",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+        },
+        {
+          "name": "uq_payment_intents_order_per_provider",
+          "unique": true,
+          "expressions": [
+            "provider",
+            "order_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+        },
+        {
+          "name": "idx_payment_intents_status",
+          "unique": false,
+          "expressions": [
+            "status"
+          ],
+          "where": "status in ('pending', 'new', 'authorized')",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+        },
+        {
+          "name": "idx_payment_intents_parent",
+          "unique": false,
+          "expressions": [
+            "parent_intent_id"
+          ],
+          "where": "parent_intent_id is not null",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "set_payment_intents_updated_at",
+          "activation": "before update",
+          "functionSchema": "public",
+          "functionName": "set_updated_at",
+          "functionSignature": "public.set_updated_at()",
+          "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+        }
+      ]
     }
   ]
 } as const;
@@ -11853,6 +12363,38 @@ export const relations = {
         "id"
       ],
       "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "payment_intents",
+      "fromColumns": [
+        "profile_id"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "payment_intents",
+      "fromColumns": [
+        "parent_intent_id"
+      ],
+      "toSchema": "public",
+      "toTable": "payment_intents",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
     }
   ]
 } as const;
@@ -12767,6 +13309,19 @@ export const checks = {
     },
     {
       "schema": "public",
+      "table": "billing_customers",
+      "column": "provider",
+      "constraintName": "billing_customers_provider_check",
+      "kind": "enum_like",
+      "allowedValues": [
+        "stripe",
+        "tbank"
+      ],
+      "expression": "provider in ('stripe', 'tbank')",
+      "sourceMigration": "supabase/migrations/20260516120000_extend_billing_provider_to_tbank.sql"
+    },
+    {
+      "schema": "public",
       "table": "subscriptions",
       "column": "provider",
       "constraintName": null,
@@ -12819,6 +13374,19 @@ export const checks = {
       "allowedValues": null,
       "expression": "amount_cents is null or amount_cents >= 0",
       "sourceMigration": "supabase/migrations/20260306165000_billing_launch_tables.sql"
+    },
+    {
+      "schema": "public",
+      "table": "subscriptions",
+      "column": "provider",
+      "constraintName": "subscriptions_provider_check",
+      "kind": "enum_like",
+      "allowedValues": [
+        "stripe",
+        "tbank"
+      ],
+      "expression": "provider in ('stripe', 'tbank')",
+      "sourceMigration": "supabase/migrations/20260516120000_extend_billing_provider_to_tbank.sql"
     },
     {
       "schema": "public",
@@ -13356,6 +13924,87 @@ export const checks = {
       "allowedValues": null,
       "expression": "char_length(trim(name)) between 1 and 80",
       "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+    },
+    {
+      "schema": "public",
+      "table": "payment_intents",
+      "column": "provider",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "tbank"
+      ],
+      "expression": "provider in ('tbank')",
+      "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+    },
+    {
+      "schema": "public",
+      "table": "payment_intents",
+      "column": "amount_kopecks",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "amount_kopecks > 0",
+      "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+    },
+    {
+      "schema": "public",
+      "table": "payment_intents",
+      "column": "currency",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "currency = 'RUB'",
+      "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+    },
+    {
+      "schema": "public",
+      "table": "payment_intents",
+      "column": "status",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "pending",
+        "new",
+        "authorized",
+        "confirmed",
+        "rejected",
+        "cancelled",
+        "refunded",
+        "partial_refund"
+      ],
+      "expression": "status in (\n    'pending',\n    'new',\n    'authorized',\n    'confirmed',\n    'rejected',\n    'cancelled',\n    'refunded',\n    'partial_refund'\n  )",
+      "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+    },
+    {
+      "schema": "public",
+      "table": "payment_intents",
+      "column": "amount_refunded_kopecks",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "amount_refunded_kopecks >= 0",
+      "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+    },
+    {
+      "schema": "public",
+      "table": "payment_intents",
+      "column": null,
+      "constraintName": "payment_intents_recurrent_kind_check",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "not (is_recurrent_setup and is_recurrent_charge)",
+      "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+    },
+    {
+      "schema": "public",
+      "table": "payment_intents",
+      "column": null,
+      "constraintName": "payment_intents_parent_intent_consistency_check",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "case\n      when is_recurrent_charge then parent_intent_id is not null\n      else parent_intent_id is null\n    end",
+      "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
     }
   ]
 } as const;
@@ -13509,6 +14158,11 @@ export const functions = {
         {
           "table": "public.org_document_folders",
           "triggerName": "set_org_document_folders_updated_at",
+          "activation": "before update"
+        },
+        {
+          "table": "public.payment_intents",
+          "triggerName": "set_payment_intents_updated_at",
           "activation": "before update"
         }
       ]
@@ -14829,7 +15483,7 @@ export const functions = {
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql",
+      "sourceMigration": "supabase/migrations/20260513150000_p0_chat_session_handlers_use_derived_key.sql",
       "triggerUsages": []
     },
     {
@@ -14864,7 +15518,7 @@ export const functions = {
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260416100000_wave9_closeout_hardening.sql",
+      "sourceMigration": "supabase/migrations/20260513150000_p0_chat_session_handlers_use_derived_key.sql",
       "triggerUsages": []
     },
     {
@@ -15628,6 +16282,70 @@ export const functions = {
       "searchPath": "public",
       "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "_ai_chat_key_namespace",
+      "signature": "public._ai_chat_key_namespace()",
+      "args": [],
+      "returnType": "uuid",
+      "language": "sql",
+      "volatility": "immutable",
+      "securityDefiner": false,
+      "searchPath": null,
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260513140000_p0_derived_chat_key_for_ai_sessions.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "_ai_chat_key_uuid_v5",
+      "signature": "public._ai_chat_key_uuid_v5(uuid, text)",
+      "args": [
+        {
+          "name": "p_namespace",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_name",
+          "type": "text",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "uuid",
+      "language": "plpgsql",
+      "volatility": "immutable",
+      "securityDefiner": false,
+      "searchPath": "public, extensions, pg_catalog",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260514150000_p0_fix_uuid_v5_search_path_for_pgcrypto_digest.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "resolve_ai_chat_key",
+      "signature": "public.resolve_ai_chat_key(uuid, uuid)",
+      "args": [
+        {
+          "name": "p_profile_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "uuid",
+      "language": "sql",
+      "volatility": "immutable",
+      "securityDefiner": false,
+      "searchPath": "public, extensions, pg_catalog",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260514150000_p0_fix_uuid_v5_search_path_for_pgcrypto_digest.sql",
       "triggerUsages": []
     },
     {
@@ -18219,6 +18937,28 @@ export const rls = {
           "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
         }
       ]
+    },
+    {
+      "schema": "public",
+      "table": "payment_intents",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "select"
+      ],
+      "policies": [
+        {
+          "name": "payment_intents_self_select",
+          "schema": "public",
+          "table": "payment_intents",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "auth.uid() = profile_id",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+        }
+      ]
     }
   ]
 } as const;
@@ -18536,6 +19276,12 @@ export const sourceTrace = {
       "schema": "public",
       "table": "org_document_folders",
       "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+    },
+    {
+      "key": "public.payment_intents",
+      "schema": "public",
+      "table": "payment_intents",
+      "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
     }
   ],
   "functions": [
@@ -18922,14 +19668,14 @@ export const sourceTrace = {
       "schema": "public",
       "name": "get_ai_chat_session_continuity",
       "signature": "public.get_ai_chat_session_continuity(uuid, uuid)",
-      "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql"
+      "sourceMigration": "supabase/migrations/20260513150000_p0_chat_session_handlers_use_derived_key.sql"
     },
     {
       "key": "public.append_ai_chat_session_turns",
       "schema": "public",
       "name": "append_ai_chat_session_turns",
       "signature": "public.append_ai_chat_session_turns(uuid, uuid, text, text)",
-      "sourceMigration": "supabase/migrations/20260416100000_wave9_closeout_hardening.sql"
+      "sourceMigration": "supabase/migrations/20260513150000_p0_chat_session_handlers_use_derived_key.sql"
     },
     {
       "key": "public.get_project_participants_ai_evidence",
@@ -19133,6 +19879,27 @@ export const sourceTrace = {
       "name": "publish_estimate_share_snapshot",
       "signature": "public.publish_estimate_share_snapshot(uuid, text, integer, jsonb, text, text)",
       "sourceMigration": "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql"
+    },
+    {
+      "key": "public._ai_chat_key_namespace",
+      "schema": "public",
+      "name": "_ai_chat_key_namespace",
+      "signature": "public._ai_chat_key_namespace()",
+      "sourceMigration": "supabase/migrations/20260513140000_p0_derived_chat_key_for_ai_sessions.sql"
+    },
+    {
+      "key": "public._ai_chat_key_uuid_v5",
+      "schema": "public",
+      "name": "_ai_chat_key_uuid_v5",
+      "signature": "public._ai_chat_key_uuid_v5(uuid, text)",
+      "sourceMigration": "supabase/migrations/20260514150000_p0_fix_uuid_v5_search_path_for_pgcrypto_digest.sql"
+    },
+    {
+      "key": "public.resolve_ai_chat_key",
+      "schema": "public",
+      "name": "resolve_ai_chat_key",
+      "signature": "public.resolve_ai_chat_key(uuid, uuid)",
+      "sourceMigration": "supabase/migrations/20260514150000_p0_fix_uuid_v5_search_path_for_pgcrypto_digest.sql"
     },
     {
       "key": "public.normalize_org_document_folder_name",
@@ -20401,6 +21168,14 @@ export const sourceTrace = {
       "name": "org_document_folders_manager_delete",
       "command": "delete",
       "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+    },
+    {
+      "key": "public.payment_intents.payment_intents_self_select",
+      "schema": "public",
+      "table": "payment_intents",
+      "name": "payment_intents_self_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
     }
   ],
   "slices": [
@@ -20415,13 +21190,15 @@ export const sourceTrace = {
         "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql",
         "supabase/migrations/20260324140000_project_launch_authority.sql",
         "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql",
+        "supabase/migrations/20260513140000_p0_derived_chat_key_for_ai_sessions.sql",
         "supabase/migrations/20260506120000_organizations_and_membership.sql",
         "supabase/migrations/20260506120400_accept_project_invite_with_org.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
         "supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql",
         "supabase/migrations/20260505233155_fix_layer_a_stage_status_semantics.sql",
-        "supabase/migrations/20260416100000_wave9_closeout_hardening.sql",
+        "supabase/migrations/20260513150000_p0_chat_session_handlers_use_derived_key.sql",
         "supabase/migrations/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql",
+        "supabase/migrations/20260514150000_p0_fix_uuid_v5_search_path_for_pgcrypto_digest.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql",
         "supabase/migrations/20260320130000_codex_review_findings_fixes.sql",
@@ -20462,7 +21239,8 @@ export const sourceTrace = {
         "public.get_ai_project_snapshot",
         "public.get_ai_chat_session_continuity",
         "public.append_ai_chat_session_turns",
-        "public.get_project_participants_ai_evidence"
+        "public.get_project_participants_ai_evidence",
+        "public.resolve_ai_chat_key"
       ],
       "policies": [
         "public.profiles.profiles_select",
@@ -20860,13 +21638,13 @@ export const sourceTrace = {
       "kind": "derived_contract_bundle",
       "sourceMigrations": [
         "supabase/migrations/20260306162500_estimates_core.sql",
-        "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql",
         "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
         "supabase/migrations/20260306164000_hr_domain.sql",
         "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
         "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql",
         "supabase/migrations/20260417120000_estimate_resource_line_assignee_profile.sql",
         "supabase/migrations/20260418120000_estimate_resource_line_assignee_label.sql",
+        "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql",
         "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
@@ -20876,14 +21654,12 @@ export const sourceTrace = {
         "public.estimate_versions",
         "public.estimate_works",
         "public.estimate_resource_lines",
-        "public.estimate_dependencies",
-        "public.estimate_share_snapshots"
+        "public.estimate_dependencies"
       ],
       "functions": [
         "public.get_estimate_operational_summary",
         "public.get_shared_estimate_version",
-        "public.approve_estimate_version_by_share_token",
-        "public.publish_estimate_share_snapshot"
+        "public.approve_estimate_version_by_share_token"
       ],
       "policies": [
         "public.project_estimates.project_estimates_select",
@@ -20992,16 +21768,6 @@ export const sourceTrace = {
           "from": "public.estimate_resource_lines",
           "to": "public.profiles",
           "sourceMigration": "supabase/migrations/20260417120000_estimate_resource_line_assignee_profile.sql"
-        },
-        {
-          "from": "public.estimate_share_snapshots",
-          "to": "public.projects",
-          "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
-        },
-        {
-          "from": "public.estimate_share_snapshots",
-          "to": "public.profiles",
-          "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
         }
       ]
     },
@@ -21441,13 +22207,15 @@ export const slices = {
         "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql",
         "supabase/migrations/20260324140000_project_launch_authority.sql",
         "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql",
+        "supabase/migrations/20260513140000_p0_derived_chat_key_for_ai_sessions.sql",
         "supabase/migrations/20260506120000_organizations_and_membership.sql",
         "supabase/migrations/20260506120400_accept_project_invite_with_org.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
         "supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql",
         "supabase/migrations/20260505233155_fix_layer_a_stage_status_semantics.sql",
-        "supabase/migrations/20260416100000_wave9_closeout_hardening.sql",
+        "supabase/migrations/20260513150000_p0_chat_session_handlers_use_derived_key.sql",
         "supabase/migrations/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql",
+        "supabase/migrations/20260514150000_p0_fix_uuid_v5_search_path_for_pgcrypto_digest.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql",
         "supabase/migrations/20260320130000_codex_review_findings_fixes.sql",
@@ -21456,7 +22224,7 @@ export const slices = {
         "supabase/migrations/20260326190000_restore_co_owner_project_members_rls_subset.sql"
       ],
       "tableCount": 7,
-      "functionCount": 24,
+      "functionCount": 25,
       "rlsTableCount": 7
     },
     {
@@ -21505,20 +22273,20 @@ export const slices = {
       "kind": "derived_contract_bundle",
       "sourceMigrations": [
         "supabase/migrations/20260306162500_estimates_core.sql",
-        "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql",
         "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
         "supabase/migrations/20260306164000_hr_domain.sql",
         "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
         "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql",
         "supabase/migrations/20260417120000_estimate_resource_line_assignee_profile.sql",
         "supabase/migrations/20260418120000_estimate_resource_line_assignee_label.sql",
+        "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql",
         "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
-      "tableCount": 6,
-      "functionCount": 4,
-      "rlsTableCount": 6
+      "tableCount": 5,
+      "functionCount": 3,
+      "rlsTableCount": 5
     },
     {
       "name": "templates",

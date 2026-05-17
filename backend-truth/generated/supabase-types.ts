@@ -1240,7 +1240,7 @@ export type Database = {
           Row: {
           "id": string
           "profile_id": string
-          "provider": "stripe"
+          "provider": "stripe" | "tbank"
           "external_customer_id": string
           "email": string | null
           "full_name": string | null
@@ -1250,7 +1250,7 @@ export type Database = {
           Insert: {
           "id"?: string
           "profile_id": string
-          "provider": "stripe"
+          "provider": "stripe" | "tbank"
           "external_customer_id": string
           "email"?: string | null
           "full_name"?: string | null
@@ -1260,7 +1260,7 @@ export type Database = {
           Update: {
           "id"?: string
           "profile_id"?: string
-          "provider"?: "stripe"
+          "provider"?: "stripe" | "tbank"
           "external_customer_id"?: string
           "email"?: string | null
           "full_name"?: string | null
@@ -1274,7 +1274,7 @@ export type Database = {
           "id": string
           "profile_id": string
           "billing_customer_id": string
-          "provider": "stripe"
+          "provider": "stripe" | "tbank"
           "external_subscription_id": string
           "plan_code": string
           "status": "trialing" | "active" | "past_due" | "paused" | "canceled" | "incomplete" | "incomplete_expired"
@@ -1289,12 +1289,15 @@ export type Database = {
           "provider_synced_at": string | null
           "created_at": string
           "updated_at": string
+          "auto_renew": boolean
+          "rebill_id": string | null
+          "grace_until": string | null
           }
           Insert: {
           "id"?: string
           "profile_id": string
           "billing_customer_id": string
-          "provider": "stripe"
+          "provider": "stripe" | "tbank"
           "external_subscription_id": string
           "plan_code": string
           "status": "trialing" | "active" | "past_due" | "paused" | "canceled" | "incomplete" | "incomplete_expired"
@@ -1309,12 +1312,15 @@ export type Database = {
           "provider_synced_at"?: string | null
           "created_at"?: string
           "updated_at"?: string
+          "auto_renew"?: boolean
+          "rebill_id"?: string | null
+          "grace_until"?: string | null
           }
           Update: {
           "id"?: string
           "profile_id"?: string
           "billing_customer_id"?: string
-          "provider"?: "stripe"
+          "provider"?: "stripe" | "tbank"
           "external_subscription_id"?: string
           "plan_code"?: string
           "status"?: "trialing" | "active" | "past_due" | "paused" | "canceled" | "incomplete" | "incomplete_expired"
@@ -1329,6 +1335,9 @@ export type Database = {
           "provider_synced_at"?: string | null
           "created_at"?: string
           "updated_at"?: string
+          "auto_renew"?: boolean
+          "rebill_id"?: string | null
+          "grace_until"?: string | null
           }
           Relationships: []
         }
@@ -1472,6 +1481,7 @@ export type Database = {
           "recent_turns": Json
           "rolling_summary": string | null
           "updated_at": string
+          "derived_chat_key": string
           }
           Insert: {
           "chat_id"?: string
@@ -1480,6 +1490,7 @@ export type Database = {
           "recent_turns"?: Json
           "rolling_summary"?: string | null
           "updated_at"?: string
+          "derived_chat_key": string
           }
           Update: {
           "chat_id"?: string
@@ -1488,6 +1499,7 @@ export type Database = {
           "recent_turns"?: Json
           "rolling_summary"?: string | null
           "updated_at"?: string
+          "derived_chat_key"?: string
           }
           Relationships: []
         }
@@ -2031,6 +2043,87 @@ export type Database = {
           }
           Relationships: []
         }
+        "payment_intents": {
+          Row: {
+          "id": string
+          "profile_id": string
+          "provider": "tbank"
+          "external_payment_id": string | null
+          "order_id": string
+          "plan_code": string
+          "amount_kopecks": number
+          "currency": string
+          "status": "pending" | "new" | "authorized" | "confirmed" | "rejected" | "cancelled" | "refunded" | "partial_refund"
+          "amount_refunded_kopecks": number
+          "rebill_id": string | null
+          "is_recurrent_setup": boolean
+          "is_recurrent_charge": boolean
+          "parent_intent_id": string | null
+          "receipt": Json | null
+          "last_notification": Json | null
+          "idempotency_key": string | null
+          "error_code": string | null
+          "error_message": string | null
+          "authorized_at": string | null
+          "confirmed_at": string | null
+          "cancelled_at": string | null
+          "created_at": string
+          "updated_at": string
+          }
+          Insert: {
+          "id"?: string
+          "profile_id": string
+          "provider": "tbank"
+          "external_payment_id"?: string | null
+          "order_id": string
+          "plan_code": string
+          "amount_kopecks": number
+          "currency"?: string
+          "status"?: "pending" | "new" | "authorized" | "confirmed" | "rejected" | "cancelled" | "refunded" | "partial_refund"
+          "amount_refunded_kopecks"?: number
+          "rebill_id"?: string | null
+          "is_recurrent_setup"?: boolean
+          "is_recurrent_charge"?: boolean
+          "parent_intent_id"?: string | null
+          "receipt"?: Json | null
+          "last_notification"?: Json | null
+          "idempotency_key"?: string | null
+          "error_code"?: string | null
+          "error_message"?: string | null
+          "authorized_at"?: string | null
+          "confirmed_at"?: string | null
+          "cancelled_at"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Update: {
+          "id"?: string
+          "profile_id"?: string
+          "provider"?: "tbank"
+          "external_payment_id"?: string | null
+          "order_id"?: string
+          "plan_code"?: string
+          "amount_kopecks"?: number
+          "currency"?: string
+          "status"?: "pending" | "new" | "authorized" | "confirmed" | "rejected" | "cancelled" | "refunded" | "partial_refund"
+          "amount_refunded_kopecks"?: number
+          "rebill_id"?: string | null
+          "is_recurrent_setup"?: boolean
+          "is_recurrent_charge"?: boolean
+          "parent_intent_id"?: string | null
+          "receipt"?: Json | null
+          "last_notification"?: Json | null
+          "idempotency_key"?: string | null
+          "error_code"?: string | null
+          "error_message"?: string | null
+          "authorized_at"?: string | null
+          "confirmed_at"?: string | null
+          "cancelled_at"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Relationships: []
+        }
     }
     Views: {
       [_ in never]: never
@@ -2039,6 +2132,17 @@ export type Database = {
         "__debug_org_rls_state2": {
           Args: Record<PropertyKey, never>
           Returns: Json
+        }
+        "_ai_chat_key_namespace": {
+          Args: Record<PropertyKey, never>
+          Returns: string
+        }
+        "_ai_chat_key_uuid_v5": {
+          Args: {
+          "p_namespace": string
+          "p_name": string
+          }
+          Returns: string
         }
         "accept_project_invite": {
           Args: {
@@ -2452,6 +2556,13 @@ export type Database = {
           "p_new_name": string
           }
           Returns: Json
+        }
+        "resolve_ai_chat_key": {
+          Args: {
+          "p_profile_id": string
+          "p_project_id": string
+          }
+          Returns: string
         }
         "set_active_org_context": {
           Args: {

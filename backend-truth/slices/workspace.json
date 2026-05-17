@@ -15,13 +15,15 @@
     "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql",
     "supabase/migrations/20260324140000_project_launch_authority.sql",
     "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql",
+    "supabase/migrations/20260513140000_p0_derived_chat_key_for_ai_sessions.sql",
     "supabase/migrations/20260506120000_organizations_and_membership.sql",
     "supabase/migrations/20260506120400_accept_project_invite_with_org.sql",
     "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
     "supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql",
     "supabase/migrations/20260505233155_fix_layer_a_stage_status_semantics.sql",
-    "supabase/migrations/20260416100000_wave9_closeout_hardening.sql",
+    "supabase/migrations/20260513150000_p0_chat_session_handlers_use_derived_key.sql",
     "supabase/migrations/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql",
+    "supabase/migrations/20260514150000_p0_fix_uuid_v5_search_path_for_pgcrypto_digest.sql",
     "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
     "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql",
     "supabase/migrations/20260320130000_codex_review_findings_fixes.sql",
@@ -1503,6 +1505,16 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "derived_chat_key",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -1527,6 +1539,16 @@
           "where": null,
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql"
+        },
+        {
+          "name": "uq_project_ai_chat_sessions_derived_chat_key",
+          "unique": true,
+          "expressions": [
+            "derived_chat_key"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260513140000_p0_derived_chat_key_for_ai_sessions.sql"
         }
       ],
       "triggers": []
@@ -2221,7 +2243,7 @@
       "volatility": "stable",
       "securityDefiner": true,
       "searchPath": "public",
-      "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql",
+      "sourceMigration": "supabase/migrations/20260513150000_p0_chat_session_handlers_use_derived_key.sql",
       "authenticatedExecute": true,
       "triggerUsages": []
     },
@@ -2257,7 +2279,7 @@
       "volatility": "volatile",
       "securityDefiner": true,
       "searchPath": "public",
-      "sourceMigration": "supabase/migrations/20260416100000_wave9_closeout_hardening.sql",
+      "sourceMigration": "supabase/migrations/20260513150000_p0_chat_session_handlers_use_derived_key.sql",
       "authenticatedExecute": true,
       "triggerUsages": []
     },
@@ -2289,6 +2311,32 @@
       "securityDefiner": true,
       "searchPath": "public",
       "sourceMigration": "supabase/migrations/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql",
+      "authenticatedExecute": true,
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "resolve_ai_chat_key",
+      "key": "public.resolve_ai_chat_key",
+      "signature": "public.resolve_ai_chat_key(uuid, uuid)",
+      "args": [
+        {
+          "name": "p_profile_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "uuid",
+      "language": "sql",
+      "volatility": "immutable",
+      "securityDefiner": false,
+      "searchPath": "public, extensions, pg_catalog",
+      "sourceMigration": "supabase/migrations/20260514150000_p0_fix_uuid_v5_search_path_for_pgcrypto_digest.sql",
       "authenticatedExecute": true,
       "triggerUsages": []
     }

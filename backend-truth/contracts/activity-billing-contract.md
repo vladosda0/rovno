@@ -70,6 +70,7 @@ Constraints:
 - unnamed check (expression `provider in ('stripe')`)
 - unnamed unique (columns `provider`, `external_customer_id`)
 - unnamed unique (columns `profile_id`, `provider`)
+- `billing_customers_provider_check` check (expression `provider in ('stripe', 'tbank')`)
 
 Indexes:
 - `idx_billing_customers_profile_id` on (`profile_id`)
@@ -99,6 +100,9 @@ Triggers:
 | `provider_synced_at` | `timestamptz` | yes |   | no |
 | `created_at` | `timestamptz` | no | `now()` | no |
 | `updated_at` | `timestamptz` | no | `now()` | no |
+| `auto_renew` | `boolean` | no | `false` | no |
+| `rebill_id` | `text` | yes |   | no |
+| `grace_until` | `timestamptz` | yes |   | no |
 
 Constraints:
 - unnamed check (expression `provider in ('stripe')`)
@@ -106,11 +110,14 @@ Constraints:
 - unnamed check (expression `currency in ('RUB', 'USD', 'EUR', 'GBP')`)
 - unnamed check (expression `amount_cents is null or amount_cents >= 0`)
 - unnamed unique (columns `provider`, `external_subscription_id`)
+- `subscriptions_provider_check` check (expression `provider in ('stripe', 'tbank')`)
 
 Indexes:
 - `idx_subscriptions_profile_id` on (`profile_id`)
 - `idx_subscriptions_billing_customer_id` on (`billing_customer_id`)
 - `idx_subscriptions_current_per_profile` on (`profile_id`), unique, where `is_current = true`
+- `idx_subscriptions_rebill_id` on (`rebill_id`), where `rebill_id is not null`
+- `idx_subscriptions_grace_until` on (`grace_until`), where `grace_until is not null`
 
 Triggers:
 - `set_subscriptions_updated_at`: before update, executes `public.set_updated_at()`

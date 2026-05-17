@@ -435,6 +435,14 @@
           "usingIndex": null,
           "nullsNotDistinct": false,
           "sourceMigration": "supabase/migrations/20260306165000_billing_launch_tables.sql"
+        },
+        {
+          "type": "check",
+          "name": "billing_customers_provider_check",
+          "columns": [],
+          "expression": "provider in ('stripe', 'tbank')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260516120000_extend_billing_provider_to_tbank.sql"
         }
       ],
       "indexes": [
@@ -658,6 +666,36 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "auto_renew",
+          "sqlType": "boolean",
+          "tsType": "boolean",
+          "nullable": false,
+          "defaultSql": "false",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "rebill_id",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "grace_until",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -712,6 +750,14 @@
           "usingIndex": null,
           "nullsNotDistinct": false,
           "sourceMigration": "supabase/migrations/20260306165000_billing_launch_tables.sql"
+        },
+        {
+          "type": "check",
+          "name": "subscriptions_provider_check",
+          "columns": [],
+          "expression": "provider in ('stripe', 'tbank')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260516120000_extend_billing_provider_to_tbank.sql"
         }
       ],
       "indexes": [
@@ -744,6 +790,26 @@
           "where": "is_current = true",
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260306165000_billing_launch_tables.sql"
+        },
+        {
+          "name": "idx_subscriptions_rebill_id",
+          "unique": false,
+          "expressions": [
+            "rebill_id"
+          ],
+          "where": "rebill_id is not null",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260516120200_alter_subscriptions_recurrent.sql"
+        },
+        {
+          "name": "idx_subscriptions_grace_until",
+          "unique": false,
+          "expressions": [
+            "grace_until"
+          ],
+          "where": "grace_until is not null",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260516120200_alter_subscriptions_recurrent.sql"
         }
       ],
       "triggers": [
