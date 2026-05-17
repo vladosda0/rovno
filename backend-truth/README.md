@@ -118,7 +118,13 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql`
 - `supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql`
 - `supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql`
+- `supabase/migrations/20260513140000_p0_derived_chat_key_for_ai_sessions.sql`
+- `supabase/migrations/20260513150000_p0_chat_session_handlers_use_derived_key.sql`
 - `supabase/migrations/20260514120000_org_document_folders.sql`
+- `supabase/migrations/20260514150000_p0_fix_uuid_v5_search_path_for_pgcrypto_digest.sql`
+- `supabase/migrations/20260516120000_extend_billing_provider_to_tbank.sql`
+- `supabase/migrations/20260516120100_create_payment_intents.sql`
+- `supabase/migrations/20260516120200_alter_subscriptions_recurrent.sql`
 
 ## Exclusions
 

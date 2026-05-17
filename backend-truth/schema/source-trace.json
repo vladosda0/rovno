@@ -311,6 +311,12 @@
       "schema": "public",
       "table": "org_document_folders",
       "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+    },
+    {
+      "key": "public.payment_intents",
+      "schema": "public",
+      "table": "payment_intents",
+      "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
     }
   ],
   "functions": [
@@ -697,14 +703,14 @@
       "schema": "public",
       "name": "get_ai_chat_session_continuity",
       "signature": "public.get_ai_chat_session_continuity(uuid, uuid)",
-      "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql"
+      "sourceMigration": "supabase/migrations/20260513150000_p0_chat_session_handlers_use_derived_key.sql"
     },
     {
       "key": "public.append_ai_chat_session_turns",
       "schema": "public",
       "name": "append_ai_chat_session_turns",
       "signature": "public.append_ai_chat_session_turns(uuid, uuid, text, text)",
-      "sourceMigration": "supabase/migrations/20260416100000_wave9_closeout_hardening.sql"
+      "sourceMigration": "supabase/migrations/20260513150000_p0_chat_session_handlers_use_derived_key.sql"
     },
     {
       "key": "public.get_project_participants_ai_evidence",
@@ -908,6 +914,27 @@
       "name": "publish_estimate_share_snapshot",
       "signature": "public.publish_estimate_share_snapshot(uuid, text, integer, jsonb, text, text)",
       "sourceMigration": "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql"
+    },
+    {
+      "key": "public._ai_chat_key_namespace",
+      "schema": "public",
+      "name": "_ai_chat_key_namespace",
+      "signature": "public._ai_chat_key_namespace()",
+      "sourceMigration": "supabase/migrations/20260513140000_p0_derived_chat_key_for_ai_sessions.sql"
+    },
+    {
+      "key": "public._ai_chat_key_uuid_v5",
+      "schema": "public",
+      "name": "_ai_chat_key_uuid_v5",
+      "signature": "public._ai_chat_key_uuid_v5(uuid, text)",
+      "sourceMigration": "supabase/migrations/20260514150000_p0_fix_uuid_v5_search_path_for_pgcrypto_digest.sql"
+    },
+    {
+      "key": "public.resolve_ai_chat_key",
+      "schema": "public",
+      "name": "resolve_ai_chat_key",
+      "signature": "public.resolve_ai_chat_key(uuid, uuid)",
+      "sourceMigration": "supabase/migrations/20260514150000_p0_fix_uuid_v5_search_path_for_pgcrypto_digest.sql"
     },
     {
       "key": "public.normalize_org_document_folder_name",
@@ -2176,6 +2203,14 @@
       "name": "org_document_folders_manager_delete",
       "command": "delete",
       "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+    },
+    {
+      "key": "public.payment_intents.payment_intents_self_select",
+      "schema": "public",
+      "table": "payment_intents",
+      "name": "payment_intents_self_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
     }
   ],
   "slices": [
@@ -2190,13 +2225,15 @@
         "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql",
         "supabase/migrations/20260324140000_project_launch_authority.sql",
         "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql",
+        "supabase/migrations/20260513140000_p0_derived_chat_key_for_ai_sessions.sql",
         "supabase/migrations/20260506120000_organizations_and_membership.sql",
         "supabase/migrations/20260506120400_accept_project_invite_with_org.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
         "supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql",
         "supabase/migrations/20260505233155_fix_layer_a_stage_status_semantics.sql",
-        "supabase/migrations/20260416100000_wave9_closeout_hardening.sql",
+        "supabase/migrations/20260513150000_p0_chat_session_handlers_use_derived_key.sql",
         "supabase/migrations/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql",
+        "supabase/migrations/20260514150000_p0_fix_uuid_v5_search_path_for_pgcrypto_digest.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql",
         "supabase/migrations/20260320130000_codex_review_findings_fixes.sql",
@@ -2237,7 +2274,8 @@
         "public.get_ai_project_snapshot",
         "public.get_ai_chat_session_continuity",
         "public.append_ai_chat_session_turns",
-        "public.get_project_participants_ai_evidence"
+        "public.get_project_participants_ai_evidence",
+        "public.resolve_ai_chat_key"
       ],
       "policies": [
         "public.profiles.profiles_select",
@@ -2635,13 +2673,13 @@
       "kind": "derived_contract_bundle",
       "sourceMigrations": [
         "supabase/migrations/20260306162500_estimates_core.sql",
-        "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql",
         "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
         "supabase/migrations/20260306164000_hr_domain.sql",
         "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
         "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql",
         "supabase/migrations/20260417120000_estimate_resource_line_assignee_profile.sql",
         "supabase/migrations/20260418120000_estimate_resource_line_assignee_label.sql",
+        "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql",
         "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
@@ -2651,14 +2689,12 @@
         "public.estimate_versions",
         "public.estimate_works",
         "public.estimate_resource_lines",
-        "public.estimate_dependencies",
-        "public.estimate_share_snapshots"
+        "public.estimate_dependencies"
       ],
       "functions": [
         "public.get_estimate_operational_summary",
         "public.get_shared_estimate_version",
-        "public.approve_estimate_version_by_share_token",
-        "public.publish_estimate_share_snapshot"
+        "public.approve_estimate_version_by_share_token"
       ],
       "policies": [
         "public.project_estimates.project_estimates_select",
@@ -2767,16 +2803,6 @@
           "from": "public.estimate_resource_lines",
           "to": "public.profiles",
           "sourceMigration": "supabase/migrations/20260417120000_estimate_resource_line_assignee_profile.sql"
-        },
-        {
-          "from": "public.estimate_share_snapshots",
-          "to": "public.projects",
-          "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
-        },
-        {
-          "from": "public.estimate_share_snapshots",
-          "to": "public.profiles",
-          "sourceMigration": "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql"
         }
       ]
     },

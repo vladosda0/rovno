@@ -377,8 +377,32 @@
       "sha256": "fc933ee37f8aeecdc349669b774a077b81a97aeb84d6980c2e3e37b45b3b42fc"
     },
     {
+      "path": "supabase/migrations/20260513140000_p0_derived_chat_key_for_ai_sessions.sql",
+      "sha256": "a1cc9ddd18c639ea84bf44ff9e72bbafe3a0d1baa72edd29c21691d4b13a636e"
+    },
+    {
+      "path": "supabase/migrations/20260513150000_p0_chat_session_handlers_use_derived_key.sql",
+      "sha256": "df8fda5591b966427b258b5c65aa5028ca7c68a554e23d6d65829ca4e673a35e"
+    },
+    {
       "path": "supabase/migrations/20260514120000_org_document_folders.sql",
       "sha256": "13fdd3ff194ea028f650b17bc75d9a0463919775deb8eb0f9100758345d9e0df"
+    },
+    {
+      "path": "supabase/migrations/20260514150000_p0_fix_uuid_v5_search_path_for_pgcrypto_digest.sql",
+      "sha256": "e4def10b5e1fcee6f90685d270aaed9334e015fc8f73f224984e6239788a888c"
+    },
+    {
+      "path": "supabase/migrations/20260516120000_extend_billing_provider_to_tbank.sql",
+      "sha256": "071c12fd634cc9e225aeaca710f22699dfd53dd6701613a6b88158a47afccb8f"
+    },
+    {
+      "path": "supabase/migrations/20260516120100_create_payment_intents.sql",
+      "sha256": "fb9ad2c600b33c337bb7108c5ad1cb785d5345c6a3e034e439876132ad2e80e2"
+    },
+    {
+      "path": "supabase/migrations/20260516120200_alter_subscriptions_recurrent.sql",
+      "sha256": "fe112ff1f5963913c2bdb2fbb5603262dbffd70d06e3d11d121f160343b5b211"
     }
   ],
   "generated_artifacts": [
@@ -498,7 +522,13 @@
     "sql/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql",
     "sql/20260513110100_estimate_share_snapshots_and_rpcs.sql",
     "sql/20260513120000_harden_share_rpcs_codex_followup.sql",
+    "sql/20260513140000_p0_derived_chat_key_for_ai_sessions.sql",
+    "sql/20260513150000_p0_chat_session_handlers_use_derived_key.sql",
     "sql/20260514120000_org_document_folders.sql",
+    "sql/20260514150000_p0_fix_uuid_v5_search_path_for_pgcrypto_digest.sql",
+    "sql/20260516120000_extend_billing_provider_to_tbank.sql",
+    "sql/20260516120100_create_payment_intents.sql",
+    "sql/20260516120200_alter_subscriptions_recurrent.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],

@@ -9,13 +9,13 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 ## Source Migrations
 
 - `supabase/migrations/20260306162500_estimates_core.sql`
-- `supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql`
 - `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql`
 - `supabase/migrations/20260306164000_hr_domain.sql`
 - `supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql`
 - `supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql`
 - `supabase/migrations/20260417120000_estimate_resource_line_assignee_profile.sql`
 - `supabase/migrations/20260418120000_estimate_resource_line_assignee_label.sql`
+- `supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql`
 - `supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql`
 - `supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql`
 - `supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql`
@@ -146,37 +146,6 @@ Indexes:
 - `idx_estimate_dependencies_from_work_id` on (`from_work_id`)
 - `idx_estimate_dependencies_to_work_id` on (`to_work_id`)
 
-### public.estimate_share_snapshots
-
-| Column | Type | Nullable | Default | Primary Key |
-| --- | --- | --- | --- | --- |
-| `share_token` | `text` | no |   | yes |
-| `project_id` | `uuid` | no |   | no |
-| `version_number` | `integer` | no |   | no |
-| `status` | `text` | no | `'proposed'` | no |
-| `share_approval_policy` | `text` | no | `'registered'` | no |
-| `share_approval_disabled_reason` | `text` | yes |   | no |
-| `snapshot` | `jsonb` | no |   | no |
-| `approval_stamp` | `jsonb` | yes |   | no |
-| `submitted` | `boolean` | no | `true` | no |
-| `archived` | `boolean` | no | `false` | no |
-| `created_by` | `uuid` | no |   | no |
-| `created_at` | `timestamptz` | no | `now()` | no |
-| `updated_at` | `timestamptz` | no | `now()` | no |
-
-Constraints:
-- unnamed check (expression `version_number >= 1`)
-- unnamed check (expression `status in ('proposed', 'approved')`)
-- unnamed check (expression `share_approval_policy in ('registered', 'disabled')`)
-- unnamed check (expression `share_approval_disabled_reason is null or share_approval_disabled_reason = 'no_participant_slot'`)
-
-Indexes:
-- `estimate_share_snapshots_project_id_idx` on (`project_id`)
-- `estimate_share_snapshots_active_project_idx` on (`project_id`, `version_number desc`), where `archived = false and submitted = true`
-
-Triggers:
-- `estimate_share_snapshots_set_updated_at`: before update, executes `public.set_updated_at()`
-
 ## Relations
 
 | From | To | On Delete | Source |
@@ -198,8 +167,6 @@ Triggers:
 | `public.tasks(estimate_work_id)` | `public.estimate_works(id)` | `set null` | `supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql` |
 | `public.hr_items(estimate_resource_line_id)` | `public.estimate_resource_lines(id)` | `set null` | `supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql` |
 | `public.estimate_resource_lines(assignee_profile_id)` | `public.profiles(id)` | `set null` | `supabase/migrations/20260417120000_estimate_resource_line_assignee_profile.sql` |
-| `public.estimate_share_snapshots(project_id)` | `public.projects(id)` | `cascade` | `supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql` |
-| `public.estimate_share_snapshots(created_by)` | `public.profiles(id)` | `restrict` | `supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql` |
 
 ## Functions
 
@@ -208,7 +175,6 @@ Triggers:
 | `public.get_estimate_operational_summary(uuid, uuid, integer, integer)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260418120000_estimate_resource_line_assignee_label.sql` |
 | `public.get_shared_estimate_version(text)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql` |
 | `public.approve_estimate_version_by_share_token(text, jsonb)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql` |
-| `public.publish_estimate_share_snapshot(uuid, text, integer, jsonb, text, text)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql` |
 
 ## RLS and Grants
 
@@ -286,10 +252,4 @@ Triggers:
     with check: `exists ( select 1 from public.estimate_versions ev join public.project_estimates pe on pe.id = ev.estimate_id where ev.id = estimate_version_id and public.can_write_project_content(pe.project_id) )`
   - `estimate_dependencies_delete` for `delete` to `authenticated`
     using: `exists ( select 1 from public.estimate_versions ev join public.project_estimates pe on pe.id = ev.estimate_id where ev.id = estimate_version_id and public.can_write_project_content(pe.project_id) )`
-
-### public.estimate_share_snapshots
-
-- RLS enabled: yes
-- Authenticated grants: none
-- Policies: none
 

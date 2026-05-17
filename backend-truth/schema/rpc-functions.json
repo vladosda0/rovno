@@ -148,6 +148,11 @@
           "table": "public.org_document_folders",
           "triggerName": "set_org_document_folders_updated_at",
           "activation": "before update"
+        },
+        {
+          "table": "public.payment_intents",
+          "triggerName": "set_payment_intents_updated_at",
+          "activation": "before update"
         }
       ]
     },
@@ -1467,7 +1472,7 @@
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql",
+      "sourceMigration": "supabase/migrations/20260513150000_p0_chat_session_handlers_use_derived_key.sql",
       "triggerUsages": []
     },
     {
@@ -1502,7 +1507,7 @@
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260416100000_wave9_closeout_hardening.sql",
+      "sourceMigration": "supabase/migrations/20260513150000_p0_chat_session_handlers_use_derived_key.sql",
       "triggerUsages": []
     },
     {
@@ -2266,6 +2271,70 @@
       "searchPath": "public",
       "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "_ai_chat_key_namespace",
+      "signature": "public._ai_chat_key_namespace()",
+      "args": [],
+      "returnType": "uuid",
+      "language": "sql",
+      "volatility": "immutable",
+      "securityDefiner": false,
+      "searchPath": null,
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260513140000_p0_derived_chat_key_for_ai_sessions.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "_ai_chat_key_uuid_v5",
+      "signature": "public._ai_chat_key_uuid_v5(uuid, text)",
+      "args": [
+        {
+          "name": "p_namespace",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_name",
+          "type": "text",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "uuid",
+      "language": "plpgsql",
+      "volatility": "immutable",
+      "securityDefiner": false,
+      "searchPath": "public, extensions, pg_catalog",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260514150000_p0_fix_uuid_v5_search_path_for_pgcrypto_digest.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "resolve_ai_chat_key",
+      "signature": "public.resolve_ai_chat_key(uuid, uuid)",
+      "args": [
+        {
+          "name": "p_profile_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "uuid",
+      "language": "sql",
+      "volatility": "immutable",
+      "securityDefiner": false,
+      "searchPath": "public, extensions, pg_catalog",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260514150000_p0_fix_uuid_v5_search_path_for_pgcrypto_digest.sql",
       "triggerUsages": []
     },
     {

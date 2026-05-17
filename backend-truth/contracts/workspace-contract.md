@@ -14,13 +14,15 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 - `supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql`
 - `supabase/migrations/20260324140000_project_launch_authority.sql`
 - `supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql`
+- `supabase/migrations/20260513140000_p0_derived_chat_key_for_ai_sessions.sql`
 - `supabase/migrations/20260506120000_organizations_and_membership.sql`
 - `supabase/migrations/20260506120400_accept_project_invite_with_org.sql`
 - `supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql`
 - `supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql`
 - `supabase/migrations/20260505233155_fix_layer_a_stage_status_semantics.sql`
-- `supabase/migrations/20260416100000_wave9_closeout_hardening.sql`
+- `supabase/migrations/20260513150000_p0_chat_session_handlers_use_derived_key.sql`
 - `supabase/migrations/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql`
+- `supabase/migrations/20260514150000_p0_fix_uuid_v5_search_path_for_pgcrypto_digest.sql`
 - `supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql`
 - `supabase/migrations/20260313180000_projects_owner_only_rls_hotfix.sql`
 - `supabase/migrations/20260320130000_codex_review_findings_fixes.sql`
@@ -228,12 +230,14 @@ Triggers:
 | `recent_turns` | `jsonb` | no | `'[]'::jsonb` | no |
 | `rolling_summary` | `text` | yes |   | no |
 | `updated_at` | `timestamptz` | no | `now()` | no |
+| `derived_chat_key` | `uuid` | no |   | no |
 
 Constraints:
 - `project_ai_chat_sessions_recent_turns_is_array` check (expression `jsonb_typeof(recent_turns) = 'array'`)
 
 Indexes:
 - `idx_project_ai_chat_sessions_project_profile` on (`project_id`, `profile_id`)
+- `uq_project_ai_chat_sessions_derived_chat_key` on (`derived_chat_key`), unique
 
 ## Relations
 
@@ -279,9 +283,10 @@ Indexes:
 | `public.can_view_sensitive_detail(uuid)` | `boolean` | yes | `rpc` | `supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql` |
 | `public.can_access_hr_domain(uuid)` | `boolean` | yes | `rpc` | `supabase/migrations/20260406184500_track1_hr_operational_summary_role_gate.sql` |
 | `public.get_ai_project_snapshot(uuid)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260505233155_fix_layer_a_stage_status_semantics.sql` |
-| `public.get_ai_chat_session_continuity(uuid, uuid)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql` |
-| `public.append_ai_chat_session_turns(uuid, uuid, text, text)` | `void` | yes | `rpc` | `supabase/migrations/20260416100000_wave9_closeout_hardening.sql` |
+| `public.get_ai_chat_session_continuity(uuid, uuid)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260513150000_p0_chat_session_handlers_use_derived_key.sql` |
+| `public.append_ai_chat_session_turns(uuid, uuid, text, text)` | `void` | yes | `rpc` | `supabase/migrations/20260513150000_p0_chat_session_handlers_use_derived_key.sql` |
 | `public.get_project_participants_ai_evidence(uuid, integer, integer)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260415120000_wave6_participants_activity_ai_evidence_rpcs.sql` |
+| `public.resolve_ai_chat_key(uuid, uuid)` | `uuid` | yes | `rpc` | `supabase/migrations/20260514150000_p0_fix_uuid_v5_search_path_for_pgcrypto_digest.sql` |
 
 ## RLS and Grants
 
