@@ -40,3 +40,8 @@ dist-ssr
 
 # Supabase CLI local cache (do not commit)
 supabase/.temp/
+
+# Per-session scratch / handoff notes — never tracked
+HANDOFF.md
+STATUS.md
+handoff-*.md
