@@ -87,6 +87,7 @@ import {
   getOrCreateProjectChatSessionId,
   rotateProjectChatSessionId,
 } from "@/lib/ai-project-chat-session";
+import { resolveAiChatKey } from "@/lib/ai-chat-key";
 import {
   buildArchivePreviewLines,
   clearProjectTranscript,
@@ -1532,7 +1533,23 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
           userCredits: user.credits_free + user.credits_paid,
         };
         const contextPack = buildAIProjectContext(seam, contextInputs);
-        const chatId = getOrCreateProjectChatSessionId(targetProjectId);
+        // Canonical chat key, byte-for-byte equivalent to public.resolve_ai_chat_key
+        // in rovno-db and packages/core/src/memoryKey.ts in rovno-bots. Using the
+        // same UUID v5 over (profile_id, project_id) means web, Telegram, and the
+        // Mini App all hit the same project_ai_chat_sessions row and share
+        // conversational memory. Fallback to the legacy per-project localStorage
+        // value when profileId is unavailable (guest / demo mode) or in the
+        // exotic case of a Web Crypto failure; server append/get RPCs ignore
+        // chat_id and resolve via derived_chat_key after P0 migration
+        // 20260513150000, so the fallback chat_id is harmless metadata.
+        let chatId: string | undefined;
+        try {
+          chatId = workspaceMode.profileId
+            ? await resolveAiChatKey(workspaceMode.profileId, targetProjectId)
+            : getOrCreateProjectChatSessionId(targetProjectId);
+        } catch {
+          chatId = getOrCreateProjectChatSessionId(targetProjectId);
+        }
         const priorTurns = buildPriorTurnsForInference(messages, userMessageId);
 
         try {

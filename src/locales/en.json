@@ -2143,6 +2143,8 @@
   "ai.workLog.working": "Working…",
   "ai.workLog.done": "Done",
   "ai.workProposal.openEstimateCta": "Open estimate to apply manually",
+  "ai.workProposal.confirmCta": "Confirm",
+  "ai.workProposal.confirmComingSoon": "Coming soon",
   "ai.sidebar.suggestion.addTasks": "Add tasks",
   "ai.sidebar.suggestion.updateEstimate": "Update estimate",
   "ai.sidebar.suggestion.generateContract": "Generate contract",

@@ -2157,6 +2157,8 @@
   "ai.workLog.working": "Работаю…",
   "ai.workLog.done": "Готово",
   "ai.workProposal.openEstimateCta": "Открыть смету для ручного применения",
+  "ai.workProposal.confirmCta": "Подтвердить",
+  "ai.workProposal.confirmComingSoon": "Скоро",
   "ai.sidebar.suggestion.addTasks": "Добавить задачи",
   "ai.sidebar.suggestion.updateEstimate": "Обновить смету",
   "ai.sidebar.suggestion.generateContract": "Сгенерировать договор",
