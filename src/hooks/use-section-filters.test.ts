@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useSectionFilters, rangeFromPreset } from "@/hooks/use-section-filters";
 
@@ -32,6 +32,17 @@ function setup(items: SampleItem[]) {
 }
 
 describe("useSectionFilters", () => {
+  // Pin the clock so the "week" preset window is relative to NOW, not the real
+  // wall-clock date (the hook derives the range from the current time). Faking
+  // only Date keeps renderHook/act timers intact.
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("returns all items when no filter is active", () => {
     const { result } = setup(ITEMS);
     expect(result.current.paged).toHaveLength(3);
