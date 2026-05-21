@@ -125,6 +125,8 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20260516120000_extend_billing_provider_to_tbank.sql`
 - `supabase/migrations/20260516120100_create_payment_intents.sql`
 - `supabase/migrations/20260516120200_alter_subscriptions_recurrent.sql`
+- `supabase/migrations/20260521140100_create_org_with_contractor_profile.sql`
+- `supabase/migrations/20260521140200_upsert_contractor_profile_preserve_fields.sql`
 
 ## Exclusions
 

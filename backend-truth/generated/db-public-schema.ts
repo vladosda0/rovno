@@ -407,6 +407,14 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260516120200_alter_subscriptions_recurrent.sql",
       "sha256": "fe112ff1f5963913c2bdb2fbb5603262dbffd70d06e3d11d121f160343b5b211"
+    },
+    {
+      "path": "supabase/migrations/20260521140100_create_org_with_contractor_profile.sql",
+      "sha256": "0a48436994931906af66530202568034808246fe41f0a91274ddf27c253d8416"
+    },
+    {
+      "path": "supabase/migrations/20260521140200_upsert_contractor_profile_preserve_fields.sql",
+      "sha256": "9e56cea474507ee72f3396f9a979fad7aa7851ba1dfb74a17f57a4e1270143fb"
     }
   ],
   "generated_artifacts": [
@@ -533,6 +541,8 @@ export const manifest = {
     "sql/20260516120000_extend_billing_provider_to_tbank.sql",
     "sql/20260516120100_create_payment_intents.sql",
     "sql/20260516120200_alter_subscriptions_recurrent.sql",
+    "sql/20260521140100_create_org_with_contractor_profile.sql",
+    "sql/20260521140200_upsert_contractor_profile_preserve_fields.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -9668,6 +9678,16 @@ export const tables = {
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "inn",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -16482,6 +16502,81 @@ export const functions = {
       "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql",
       "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "create_org_with_contractor_profile",
+      "signature": "public.create_org_with_contractor_profile(text, text, jsonb)",
+      "args": [
+        {
+          "name": "p_org_name",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_org_slug",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_profile_data",
+          "type": "jsonb",
+          "identityType": "jsonb"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260521140100_create_org_with_contractor_profile.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "upsert_contractor_profile_for_org",
+      "signature": "public.upsert_contractor_profile_for_org(uuid, jsonb)",
+      "args": [
+        {
+          "name": "p_org_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_profile_data",
+          "type": "jsonb",
+          "identityType": "jsonb"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260521140200_upsert_contractor_profile_preserve_fields.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "submit_contractor_profile_for_moderation",
+      "signature": "public.submit_contractor_profile_for_moderation(uuid)",
+      "args": [
+        {
+          "name": "p_org_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260521140100_create_org_with_contractor_profile.sql",
+      "triggerUsages": []
     }
   ]
 } as const;
@@ -19942,6 +20037,27 @@ export const sourceTrace = {
       "name": "move_org_document_to_folder",
       "signature": "public.move_org_document_to_folder(uuid, uuid)",
       "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+    },
+    {
+      "key": "public.create_org_with_contractor_profile",
+      "schema": "public",
+      "name": "create_org_with_contractor_profile",
+      "signature": "public.create_org_with_contractor_profile(text, text, jsonb)",
+      "sourceMigration": "supabase/migrations/20260521140100_create_org_with_contractor_profile.sql"
+    },
+    {
+      "key": "public.upsert_contractor_profile_for_org",
+      "schema": "public",
+      "name": "upsert_contractor_profile_for_org",
+      "signature": "public.upsert_contractor_profile_for_org(uuid, jsonb)",
+      "sourceMigration": "supabase/migrations/20260521140200_upsert_contractor_profile_preserve_fields.sql"
+    },
+    {
+      "key": "public.submit_contractor_profile_for_moderation",
+      "schema": "public",
+      "name": "submit_contractor_profile_for_moderation",
+      "signature": "public.submit_contractor_profile_for_moderation(uuid)",
+      "sourceMigration": "supabase/migrations/20260521140100_create_org_with_contractor_profile.sql"
     }
   ],
   "policies": [

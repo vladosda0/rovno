@@ -199,6 +199,7 @@ Triggers:
 | `created_by` | `uuid` | yes |   | no |
 | `created_at` | `timestamptz` | no | `now()` | no |
 | `updated_at` | `timestamptz` | no | `now()` | no |
+| `inn` | `text` | yes |   | no |
 
 Constraints:
 - unnamed check (expression `status in ('draft','pending_moderation','published','archived')`)
