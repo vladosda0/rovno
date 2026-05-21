@@ -403,6 +403,14 @@
     {
       "path": "supabase/migrations/20260516120200_alter_subscriptions_recurrent.sql",
       "sha256": "fe112ff1f5963913c2bdb2fbb5603262dbffd70d06e3d11d121f160343b5b211"
+    },
+    {
+      "path": "supabase/migrations/20260521140100_create_org_with_contractor_profile.sql",
+      "sha256": "0a48436994931906af66530202568034808246fe41f0a91274ddf27c253d8416"
+    },
+    {
+      "path": "supabase/migrations/20260521140200_upsert_contractor_profile_preserve_fields.sql",
+      "sha256": "9e56cea474507ee72f3396f9a979fad7aa7851ba1dfb74a17f57a4e1270143fb"
     }
   ],
   "generated_artifacts": [
@@ -529,6 +537,8 @@
     "sql/20260516120000_extend_billing_provider_to_tbank.sql",
     "sql/20260516120100_create_payment_intents.sql",
     "sql/20260516120200_alter_subscriptions_recurrent.sql",
+    "sql/20260521140100_create_org_with_contractor_profile.sql",
+    "sql/20260521140200_upsert_contractor_profile_preserve_fields.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],

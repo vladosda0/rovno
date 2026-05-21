@@ -977,6 +977,27 @@
       "name": "move_org_document_to_folder",
       "signature": "public.move_org_document_to_folder(uuid, uuid)",
       "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+    },
+    {
+      "key": "public.create_org_with_contractor_profile",
+      "schema": "public",
+      "name": "create_org_with_contractor_profile",
+      "signature": "public.create_org_with_contractor_profile(text, text, jsonb)",
+      "sourceMigration": "supabase/migrations/20260521140100_create_org_with_contractor_profile.sql"
+    },
+    {
+      "key": "public.upsert_contractor_profile_for_org",
+      "schema": "public",
+      "name": "upsert_contractor_profile_for_org",
+      "signature": "public.upsert_contractor_profile_for_org(uuid, jsonb)",
+      "sourceMigration": "supabase/migrations/20260521140200_upsert_contractor_profile_preserve_fields.sql"
+    },
+    {
+      "key": "public.submit_contractor_profile_for_moderation",
+      "schema": "public",
+      "name": "submit_contractor_profile_for_moderation",
+      "signature": "public.submit_contractor_profile_for_moderation(uuid)",
+      "sourceMigration": "supabase/migrations/20260521140100_create_org_with_contractor_profile.sql"
     }
   ],
   "policies": [

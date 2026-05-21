@@ -2471,6 +2471,81 @@
       "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql",
       "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "create_org_with_contractor_profile",
+      "signature": "public.create_org_with_contractor_profile(text, text, jsonb)",
+      "args": [
+        {
+          "name": "p_org_name",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_org_slug",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_profile_data",
+          "type": "jsonb",
+          "identityType": "jsonb"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260521140100_create_org_with_contractor_profile.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "upsert_contractor_profile_for_org",
+      "signature": "public.upsert_contractor_profile_for_org(uuid, jsonb)",
+      "args": [
+        {
+          "name": "p_org_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_profile_data",
+          "type": "jsonb",
+          "identityType": "jsonb"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260521140200_upsert_contractor_profile_preserve_fields.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "submit_contractor_profile_for_moderation",
+      "signature": "public.submit_contractor_profile_for_moderation(uuid)",
+      "args": [
+        {
+          "name": "p_org_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260521140100_create_org_with_contractor_profile.sql",
+      "triggerUsages": []
     }
   ]
 }

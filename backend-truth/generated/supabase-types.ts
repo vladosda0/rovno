@@ -1931,6 +1931,7 @@ export type Database = {
           "created_by": string | null
           "created_at": string
           "updated_at": string
+          "inn": string | null
           }
           Insert: {
           "id"?: string
@@ -1948,6 +1949,7 @@ export type Database = {
           "created_by"?: string | null
           "created_at"?: string
           "updated_at"?: string
+          "inn"?: string | null
           }
           Update: {
           "id"?: string
@@ -1965,6 +1967,7 @@ export type Database = {
           "created_by"?: string | null
           "created_at"?: string
           "updated_at"?: string
+          "inn"?: string | null
           }
           Relationships: []
         }
@@ -2252,6 +2255,14 @@ export type Database = {
           Args: {
           "p_org_id": string
           "p_name": string
+          }
+          Returns: Json
+        }
+        "create_org_with_contractor_profile": {
+          Args: {
+          "p_org_name": string
+          "p_org_slug": string
+          "p_profile_data": Json
           }
           Returns: Json
         }
@@ -2569,6 +2580,19 @@ export type Database = {
           "p_org_id": string
           }
           Returns: unknown
+        }
+        "submit_contractor_profile_for_moderation": {
+          Args: {
+          "p_org_id": string
+          }
+          Returns: Json
+        }
+        "upsert_contractor_profile_for_org": {
+          Args: {
+          "p_org_id": string
+          "p_profile_data": Json
+          }
+          Returns: Json
         }
     }
     Enums: {
