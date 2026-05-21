@@ -25,6 +25,9 @@ const Home = lazy(() => import("@/pages/Home"));
 const Pricing = lazy(() => import("@/pages/Pricing"));
 const Profile = lazy(() => import("@/pages/Profile"));
 const Settings = lazy(() => import("@/pages/Settings"));
+const BillingCheckout = lazy(() => import("@/pages/billing/Checkout"));
+const BillingSuccess = lazy(() => import("@/pages/billing/Success"));
+const BillingFail = lazy(() => import("@/pages/billing/Fail"));
 const ProjectDashboard = lazy(() => import("@/pages/project/ProjectDashboard"));
 const ProjectTasks = lazy(() => import("@/pages/project/ProjectTasks"));
 const ProjectEstimate = lazy(() => import("@/pages/project/ProjectEstimate"));
@@ -98,6 +101,12 @@ const App = () => (
             <Route path="/profile" element={routeElement(<Profile />)} />
             <Route path="/profile/upgrade" element={routeElement(<Navigate to="/settings?tab=billing" replace />)} />
             <Route path="/settings" element={routeElement(<Settings />)} />
+
+            {/* T-Bank billing flow (phase 1c). Pages self-redirect to /pricing
+                when VITE_BILLING_ENABLED is off. */}
+            <Route path="/billing/checkout" element={routeElement(<BillingCheckout />)} />
+            <Route path="/billing/success" element={routeElement(<BillingSuccess />)} />
+            <Route path="/billing/fail" element={routeElement(<BillingFail />)} />
 
             {/* Project with nested tabs */}
             <Route path="/project/:id" element={routeElement(<ProjectLayout />)}>
