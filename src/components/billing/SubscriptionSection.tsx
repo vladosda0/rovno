@@ -25,7 +25,7 @@ export function SubscriptionSection() {
         description={t("settings.billing.noSubscription")}
       >
         <Button asChild>
-          <Link to="/pricing">{t("settings.billing.choosePlan")}</Link>
+          <Link to="/#pricing">{t("settings.billing.choosePlan")}</Link>
         </Button>
       </SettingsSection>
     );

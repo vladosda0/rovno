@@ -17,7 +17,7 @@ export default function Success() {
   const intentId = params.get("intent");
 
   useEffect(() => {
-    if (!BILLING_ENABLED) navigate("/pricing", { replace: true });
+    if (!BILLING_ENABLED) navigate("/#pricing", { replace: true });
   }, [navigate]);
 
   const intentQuery = usePaymentStatus(intentId);

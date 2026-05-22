@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import {
   ArrowUpRight,
   Bot,
@@ -20,7 +20,6 @@ import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { BetaBar } from "@/components/BetaBar";
 import { PaymentLogos, TBankAttribution } from "@/components/PaymentLogos";
 import { PricingBlock } from "@/components/billing/PricingBlock";
 import { seedProjects } from "@/data/seed";
@@ -960,98 +959,6 @@ export default function Landing() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  useEffect(() => {
-    let consumed = false;
-    let animating = false;
-    let touchStartY: number | null = null;
-
-    const triggerTransition = () => {
-      if (consumed || animating) return;
-      const target = document.getElementById("demos");
-      if (!target) return;
-      const stickyHeader = document.querySelector("header") as HTMLElement | null;
-      const headerOffset = (stickyHeader?.offsetHeight ?? 0) + 16;
-      const targetY = target.getBoundingClientRect().top + window.scrollY - headerOffset;
-      const startY = window.scrollY;
-      const distance = targetY - startY;
-      if (distance <= 0) {
-        consumed = true;
-        return;
-      }
-      animating = true;
-      const duration = 1100;
-      const startTime = performance.now();
-      const ease = (t: number) => t * t * t;
-      const step = (now: number) => {
-        const progress = Math.min((now - startTime) / duration, 1);
-        window.scrollTo(0, startY + distance * ease(progress));
-        if (progress < 1) {
-          requestAnimationFrame(step);
-        } else {
-          consumed = true;
-          animating = false;
-        }
-      };
-      requestAnimationFrame(step);
-    };
-
-    const handleWheel = (event: WheelEvent) => {
-      if (consumed) return;
-      if (event.deltaY <= 0) return;
-      if (window.scrollY > window.innerHeight * 0.1) {
-        consumed = true;
-        return;
-      }
-      event.preventDefault();
-      triggerTransition();
-    };
-
-    const handleTouchStart = (event: TouchEvent) => {
-      if (consumed) return;
-      touchStartY = event.touches[0]?.clientY ?? null;
-    };
-
-    const handleTouchMove = (event: TouchEvent) => {
-      if (consumed || touchStartY == null) return;
-      const currentY = event.touches[0]?.clientY ?? touchStartY;
-      if (touchStartY - currentY <= 10) return;
-      if (window.scrollY > window.innerHeight * 0.1) {
-        consumed = true;
-        return;
-      }
-      event.preventDefault();
-      triggerTransition();
-    };
-
-    const handleKey = (event: KeyboardEvent) => {
-      if (consumed) return;
-      if (
-        event.key === "ArrowDown" ||
-        event.key === "PageDown" ||
-        event.key === " " ||
-        event.key === "Spacebar"
-      ) {
-        if (window.scrollY > window.innerHeight * 0.1) {
-          consumed = true;
-          return;
-        }
-        event.preventDefault();
-        triggerTransition();
-      }
-    };
-
-    window.addEventListener("wheel", handleWheel, { passive: false });
-    window.addEventListener("touchstart", handleTouchStart, { passive: true });
-    window.addEventListener("touchmove", handleTouchMove, { passive: false });
-    window.addEventListener("keydown", handleKey);
-    return () => {
-      window.removeEventListener("wheel", handleWheel);
-      window.removeEventListener("touchstart", handleTouchStart);
-      window.removeEventListener("touchmove", handleTouchMove);
-      window.removeEventListener("keydown", handleKey);
-    };
-  }, []);
-
   useLayoutEffect(() => {
     if (activeControlTab !== "documents") return;
     const node = docViewerRef.current;
@@ -1136,6 +1043,8 @@ export default function Landing() {
     [],
   );
 
+  const location = useLocation();
+
   const scrollToSection = (id: string) => {
     const target = document.getElementById(id);
     if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1145,6 +1054,37 @@ export default function Landing() {
     scrollToSection(id);
     setMobileMenuOpen(false);
   };
+
+  // Smooth-scroll to #pricing when arriving with that hash — e.g. /#pricing from
+  // Settings → billing or any former /pricing caller. Retry across frames until
+  // the lazily-rendered section exists, then re-scroll once after layout settles
+  // (lazy images can shift the page and leave the first scroll short).
+  useEffect(() => {
+    if (location.hash !== "#pricing") return;
+    let raf = 0;
+    let timer = 0;
+    let attempts = 0;
+    const scrollToPricing = () => {
+      const el = document.getElementById("pricing");
+      if (!el) {
+        if (attempts++ < 30) raf = window.requestAnimationFrame(scrollToPricing);
+        return;
+      }
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+      timer = window.setTimeout(
+        () =>
+          document
+            .getElementById("pricing")
+            ?.scrollIntoView({ behavior: "smooth", block: "start" }),
+        300,
+      );
+    };
+    raf = window.requestAnimationFrame(scrollToPricing);
+    return () => {
+      window.cancelAnimationFrame(raf);
+      window.clearTimeout(timer);
+    };
+  }, [location.hash]);
 
   const handleCommunitySubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1473,7 +1413,6 @@ export default function Landing() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <BetaBar />
       <header
         className={`sticky top-0 z-50 border-b border-border transition-all duration-200 ${
           isScrolled ? "bg-background/90 py-2 backdrop-blur-xl" : "bg-background/70 py-3 backdrop-blur-md"
@@ -1492,9 +1431,9 @@ export default function Landing() {
             <button onClick={() => scrollToSection("resources")} className="rounded-md px-3 py-2 text-body-sm text-muted-foreground transition-colors hover:text-foreground">
               {t("landing.nav.resources")}
             </button>
-            <Link to="/pricing" className="rounded-md px-3 py-2 text-body-sm text-muted-foreground transition-colors hover:text-foreground">
+            <button onClick={() => scrollToSection("pricing")} className="rounded-md px-3 py-2 text-body-sm text-muted-foreground transition-colors hover:text-foreground">
               {t("landing.nav.pricing")}
-            </Link>
+            </button>
             <button onClick={() => scrollToSection("community")} className="rounded-md px-3 py-2 text-body-sm text-muted-foreground transition-colors hover:text-foreground">
               {t("landing.nav.community")}
             </button>
@@ -1527,10 +1466,8 @@ export default function Landing() {
                   <Button variant="ghost" className="w-full justify-start" onClick={() => handleMobileScroll("resources")}>
                     {t("landing.nav.resources")}
                   </Button>
-                  <Button variant="ghost" asChild className="w-full justify-start">
-                    <Link to="/pricing" onClick={() => setMobileMenuOpen(false)}>
-                      {t("landing.nav.pricing")}
-                    </Link>
+                  <Button variant="ghost" className="w-full justify-start" onClick={() => handleMobileScroll("pricing")}>
+                    {t("landing.nav.pricing")}
                   </Button>
                   <Button variant="ghost" className="w-full justify-start" onClick={() => handleMobileScroll("community")}>
                     {t("landing.nav.community")}

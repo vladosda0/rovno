@@ -16,7 +16,7 @@ describe("PricingBlock", () => {
     renderBlock();
     // "Free" appears as both the plan name and its price label, so allow >1.
     expect(screen.getAllByText("Free").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText("Home")).toBeInTheDocument();
+    expect(screen.getByText("Master")).toBeInTheDocument();
     expect(screen.getByText("Crew")).toBeInTheDocument();
   });
 
@@ -26,9 +26,9 @@ describe("PricingBlock", () => {
     expect(screen.getByText("990 ₽")).toBeInTheDocument();
   });
 
-  it("marks paid plans as coming soon while billing is disabled", () => {
-    // VITE_BILLING_ENABLED is unset under test, so paid CTAs and badges read "Coming soon".
+  it("renders an active CTA on every plan", () => {
+    // All three plans expose a clickable "Continue" CTA (no "coming soon" gating).
     renderBlock();
-    expect(screen.getAllByText("Coming soon").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("Continue").length).toBe(3);
   });
 });

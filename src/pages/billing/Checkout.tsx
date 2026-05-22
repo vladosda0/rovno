@@ -67,7 +67,7 @@ export default function Checkout() {
   // Invalid params or billing disabled -> back to pricing.
   useEffect(() => {
     if (!allowed) {
-      navigate("/pricing", { replace: true });
+      navigate("/#pricing", { replace: true });
     }
   }, [allowed, navigate]);
 
@@ -162,7 +162,7 @@ export default function Checkout() {
   return (
     <div className="mx-auto w-full max-w-4xl px-sp-3 py-sp-4">
       <Button variant="ghost" size="sm" asChild className="mb-sp-3 -ml-2">
-        <Link to="/pricing">
+        <Link to="/#pricing">
           <ChevronLeft className="mr-1 h-4 w-4" />
           {t("billing.checkout.back")}
         </Link>

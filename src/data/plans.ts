@@ -11,7 +11,7 @@ export interface PlanConfig {
 }
 
 export const PLANS: Readonly<Record<string, PlanConfig>> = {
-  master: { display_name: "Дом", amount_kopecks: 99000 },
+  master: { display_name: "Мастер", amount_kopecks: 99000 },
   brigade: { display_name: "Бригада", amount_kopecks: 299000 },
 };
 

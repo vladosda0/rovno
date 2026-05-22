@@ -22,7 +22,7 @@ const EmailSent = lazy(() => import("@/pages/auth/EmailSent"));
 const AuthCallback = lazy(() => import("@/pages/auth/AuthCallback"));
 const Onboarding = lazy(() => import("@/pages/Onboarding"));
 const Home = lazy(() => import("@/pages/Home"));
-const Pricing = lazy(() => import("@/pages/Pricing"));
+const PromoRedeem = lazy(() => import("@/pages/promo/Redeem"));
 const Profile = lazy(() => import("@/pages/Profile"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const BillingCheckout = lazy(() => import("@/pages/billing/Checkout"));
@@ -72,7 +72,7 @@ const App = () => (
           {/* Standalone pages */}
           <Route path="/" element={routeElement(<Landing />)} />
           <Route path="/onboarding" element={routeElement(<Onboarding />)} />
-          <Route path="/pricing" element={routeElement(<Pricing />)} />
+          <Route path="/promo/redeem" element={routeElement(<PromoRedeem />)} />
           <Route path="/theme" element={routeElement(<ThemeDemo />)} />
           <Route path="/share/estimate/:shareId" element={routeElement(<ShareEstimate />)} />
           <Route path="/invite/accept/:inviteToken" element={routeElement(<InviteAccept />)} />
@@ -102,7 +102,7 @@ const App = () => (
             <Route path="/profile/upgrade" element={routeElement(<Navigate to="/settings?tab=billing" replace />)} />
             <Route path="/settings" element={routeElement(<Settings />)} />
 
-            {/* T-Bank billing flow (phase 1c). Pages self-redirect to /pricing
+            {/* T-Bank billing flow (phase 1c). Pages self-redirect to /#pricing
                 when VITE_BILLING_ENABLED is off. */}
             <Route path="/billing/checkout" element={routeElement(<BillingCheckout />)} />
             <Route path="/billing/success" element={routeElement(<BillingSuccess />)} />

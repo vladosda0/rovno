@@ -1,62 +1,109 @@
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
 import { trackEvent } from "@/lib/analytics";
 import { PLANS, type PlanCode } from "@/data/plans";
-import { BILLING_ENABLED, formatRubFromKopecks } from "@/lib/billing";
-import { BetaCountdown } from "./BetaCountdown";
-import { PlanCard } from "./PlanCard";
+import { formatRubFromKopecks } from "@/lib/billing";
+import { PlanCard, type FeatureGroup } from "./PlanCard";
 
-interface PaidPlanDef {
-  code: PlanCode;
-  nameKey: string;
-  descriptionKey: string;
-  featureKeys: string[];
-}
-
-// Display metadata for the catalogue. Prices/codes come from @/data/plans (the
-// sync-checked source of truth); names/descriptions/features are localized i18n.
-const PAID_PLANS: PaidPlanDef[] = [
-  {
-    code: "master",
-    nameKey: "pricing.plans.master.name",
-    descriptionKey: "pricing.plans.master.description",
-    featureKeys: [
-      "pricing.plans.master.everythingIn",
-      "pricing.plans.master.f1",
-      "pricing.plans.master.f2",
-      "pricing.plans.master.f5",
-      "pricing.plans.master.f6",
-    ],
-  },
-  {
-    code: "brigade",
-    nameKey: "pricing.plans.brigade.name",
-    descriptionKey: "pricing.plans.brigade.description",
-    featureKeys: [
-      "pricing.plans.brigade.everythingIn",
-      "pricing.plans.brigade.f1",
-      "pricing.plans.brigade.f2",
-      "pricing.plans.brigade.f3",
-      "pricing.plans.brigade.f4",
-    ],
-  },
-];
-
-const FREE_FEATURE_KEYS = [
-  "pricing.plans.free.f1",
-  "pricing.plans.free.f2",
-  "pricing.plans.free.f3",
-  "pricing.plans.free.f4",
-  "pricing.plans.free.f5",
-  "pricing.plans.free.f6",
-];
+// Struck-through "regular" price shown before the start price. This is marketing
+// copy, NOT the contractual amount — the source of truth for billing stays
+// @/data/plans (sync-checked against the backend). Hardcoded here on purpose so
+// display-only data does not widen the shared plan contract.
+const ORIGINAL_PRICES_KOPECKS: Record<PlanCode, number> = {
+  master: 169000, // 1 690 ₽
+  brigade: 420000, // 4 200 ₽
+};
 
 export function PricingBlock({ className }: { className?: string }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { status } = useRuntimeAuth();
   const isAuthenticated = status === "authenticated";
+
+  const freeGroups: FeatureGroup[] = [
+    {
+      icon: "🤖",
+      items: [
+        { text: t("pricing.plans.free.ai.title"), bold: true },
+        { text: t("pricing.plans.free.ai.chat") },
+        { text: t("pricing.plans.free.ai.doc") },
+        { text: t("pricing.plans.free.ai.photo") },
+      ],
+    },
+    { icon: "👤", items: [{ text: t("pricing.plans.free.users"), bold: true }] },
+    { icon: "📊", items: [{ text: t("pricing.plans.free.estimates"), bold: true }] },
+  ];
+
+  const masterGroups: FeatureGroup[] = [
+    {
+      icon: "🤖",
+      items: [
+        { text: t("pricing.plans.master.ai.title"), bold: true },
+        { text: t("pricing.plans.master.ai.chat") },
+        { text: t("pricing.plans.master.ai.doc") },
+        { text: t("pricing.plans.master.ai.photo") },
+      ],
+    },
+    {
+      icon: "📱",
+      items: [
+        {
+          text: t("pricing.plans.master.telegram"),
+          note: t("pricing.plans.master.telegramNote"),
+          bold: true,
+        },
+      ],
+    },
+    { icon: "👥", items: [{ text: t("pricing.plans.master.users"), bold: true }] },
+    { icon: "👀", items: [{ text: t("pricing.plans.master.guests"), bold: true }] },
+    {
+      icon: "📊",
+      items: [
+        {
+          text: t("pricing.plans.master.estimates"),
+          note: t("pricing.plans.master.estimatesNote"),
+          bold: true,
+        },
+      ],
+    },
+  ];
+
+  const brigadeGroups: FeatureGroup[] = [
+    {
+      icon: "🤖",
+      items: [
+        { text: t("pricing.plans.brigade.ai.title"), bold: true },
+        { text: t("pricing.plans.brigade.ai.chat") },
+        { text: t("pricing.plans.brigade.ai.doc") },
+        { text: t("pricing.plans.brigade.ai.photo") },
+      ],
+    },
+    {
+      icon: "📱",
+      items: [
+        {
+          text: t("pricing.plans.brigade.telegram"),
+          note: t("pricing.plans.brigade.telegramNote"),
+          bold: true,
+        },
+      ],
+    },
+    { icon: "👥", items: [{ text: t("pricing.plans.brigade.users"), bold: true }] },
+    { icon: "🏢", items: [{ text: t("pricing.plans.brigade.org"), bold: true }] },
+    {
+      icon: "🪪",
+      items: [
+        {
+          text: t("pricing.plans.brigade.profile"),
+          note: t("pricing.plans.brigade.profileNote"),
+          bold: true,
+        },
+      ],
+    },
+    { icon: "🚀", items: [{ text: t("pricing.plans.brigade.priority"), bold: true }] },
+    { icon: "🔜", items: [{ text: t("pricing.plans.brigade.marketplace") }] },
+  ];
 
   const handleSelectFree = () => {
     trackEvent("billing_plan_selected", { plan: "free" });
@@ -65,39 +112,65 @@ export function PricingBlock({ className }: { className?: string }) {
 
   const handleSelectPaid = (code: PlanCode) => {
     trackEvent("billing_plan_selected", { plan: code });
-    // CTA is disabled when billing is off, so this should not fire then.
-    if (!BILLING_ENABLED) return;
     const target = `/billing/checkout?plan=${code}`;
-    navigate(isAuthenticated ? target : `/auth/signup?return=${encodeURIComponent(target)}`);
+    navigate(isAuthenticated ? target : `/auth/signup?next=${encodeURIComponent(target)}`);
   };
 
   return (
     <div className={className}>
-      <BetaCountdown />
       <div className="grid w-full auto-rows-fr grid-cols-1 gap-sp-3 md:grid-cols-3">
         <PlanCard
           name={t("pricing.plans.free.name")}
-          description={t("pricing.plans.free.description")}
           priceLabel={t("pricing.plans.free.priceLabel")}
-          features={FREE_FEATURE_KEYS.map((key) => t(key))}
-          ctaLabel={t("pricing.cta.start")}
+          featureGroups={freeGroups}
+          ctaLabel={t("pricing.cta.continue")}
           onCta={handleSelectFree}
+        />
+        <PlanCard
+          name={t("pricing.plans.master.name")}
+          originalPriceLabel={formatRubFromKopecks(ORIGINAL_PRICES_KOPECKS.master)}
+          priceLabel={formatRubFromKopecks(PLANS.master.amount_kopecks)}
+          pricePeriodLabel={t("pricing.perMonth")}
+          priceTooltip={t("pricing.priceTooltip")}
+          featureGroups={masterGroups}
+          ctaLabel={t("pricing.cta.continue")}
+          onCta={() => handleSelectPaid("master")}
+          recommendedBadge={t("pricing.recommendedBadge")}
           highlighted
         />
-        {PAID_PLANS.map((plan) => (
-          <PlanCard
-            key={plan.code}
-            name={t(plan.nameKey)}
-            description={t(plan.descriptionKey)}
-            priceLabel={formatRubFromKopecks(PLANS[plan.code].amount_kopecks)}
-            pricePeriodLabel={t("pricing.perMonth")}
-            features={plan.featureKeys.map((key) => t(key))}
-            ctaLabel={BILLING_ENABLED ? t("pricing.cta.continue") : t("pricing.cta.soon")}
-            onCta={() => handleSelectPaid(plan.code)}
-            ctaDisabled={!BILLING_ENABLED}
-            showSoonBadge={!BILLING_ENABLED}
-          />
-        ))}
+        <PlanCard
+          name={t("pricing.plans.brigade.name")}
+          originalPriceLabel={formatRubFromKopecks(ORIGINAL_PRICES_KOPECKS.brigade)}
+          priceLabel={formatRubFromKopecks(PLANS.brigade.amount_kopecks)}
+          pricePeriodLabel={t("pricing.perMonth")}
+          priceTooltip={t("pricing.priceTooltip")}
+          featureGroups={brigadeGroups}
+          ctaLabel={t("pricing.cta.continue")}
+          onCta={() => handleSelectPaid("brigade")}
+        />
+      </div>
+
+      <div className="mt-sp-4 rounded-panel border border-border bg-muted/30 p-sp-3">
+        <p className="text-body-sm font-semibold text-foreground">
+          {t("pricing.allIncluded.title")}
+        </p>
+        <ul className="mt-2 grid gap-1 text-body-sm text-muted-foreground md:grid-cols-2">
+          <li>✓ {t("pricing.allIncluded.f1")}</li>
+          <li>✓ {t("pricing.allIncluded.f2")}</li>
+          <li>✓ {t("pricing.allIncluded.f3")}</li>
+          <li>✓ {t("pricing.allIncluded.f4")}</li>
+          <li>✓ {t("pricing.allIncluded.f5")}</li>
+        </ul>
+      </div>
+
+      <div className="mt-sp-3 flex justify-center text-center text-caption text-muted-foreground">
+        <Link
+          to="/promo/redeem"
+          className="underline hover:text-foreground"
+          onClick={() => trackEvent("promo_redeem_link_clicked")}
+        >
+          {t("pricing.promoLink")}
+        </Link>
       </div>
     </div>
   );

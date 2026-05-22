@@ -16,7 +16,7 @@ export default function Fail() {
   const reasonParam = params.get("reason");
 
   useEffect(() => {
-    if (!BILLING_ENABLED) navigate("/pricing", { replace: true });
+    if (!BILLING_ENABLED) navigate("/#pricing", { replace: true });
   }, [navigate]);
 
   const intentQuery = usePaymentStatus(intentId);
@@ -53,7 +53,7 @@ export default function Fail() {
           </Button>
         ) : null}
         <Button asChild variant="outline">
-          <Link to="/pricing">{t("billing.fail.ctaBack")}</Link>
+          <Link to="/#pricing">{t("billing.fail.ctaBack")}</Link>
         </Button>
       </div>
     </div>
