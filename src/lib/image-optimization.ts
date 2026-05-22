@@ -32,7 +32,7 @@ function isHeic(file: File): boolean {
   return !file.type && HEIC_EXT_RE.test(file.name);
 }
 
-function isImage(file: File): boolean {
+export function isImage(file: File): boolean {
   if (file.type) return file.type.startsWith("image/");
   return /\.(jpe?g|png|webp|gif|avif|heic|heif|bmp|tiff?)$/i.test(file.name);
 }
@@ -69,6 +69,7 @@ export interface ImageOptimizationResult {
  */
 export async function optimizeImageForUpload(
   file: File,
+  options?: { forceReencode?: boolean },
 ): Promise<ImageOptimizationResult> {
   if (!isImage(file)) {
     return { file, optimized: false };
@@ -80,10 +81,11 @@ export async function optimizeImageForUpload(
   if (isHeic(file)) {
     working = await decodeHeicToJpegFile(file);
     didConvert = true;
-  } else if (file.size <= SKIP_OPTIMIZE_BELOW_BYTES) {
+  } else if (!options?.forceReencode && file.size <= SKIP_OPTIMIZE_BELOW_BYTES) {
     // Small natively-renderable images (screenshots, small JPEGs) don't need
     // re-encoding. Returning the original avoids unnecessary quality loss
-    // for diagrams and PNG screenshots.
+    // for diagrams and PNG screenshots. Callers that publish images to a
+    // public bucket pass forceReencode to strip EXIF/GPS even for small files.
     return { file, optimized: false };
   }
 

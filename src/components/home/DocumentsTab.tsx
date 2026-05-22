@@ -20,7 +20,7 @@ import { DocumentsViewModeToggle, type DocumentViewMode } from "@/components/doc
 import { useCurrentUser, useWorkspaceMode } from "@/hooks/use-mock-data";
 import { useWorkspaceDocuments, type WorkspaceDoc } from "@/hooks/use-workspace-documents-source";
 import { useActiveOrg, useOrgDocuments } from "@/hooks/use-orgs";
-import { UploadDocumentDialog } from "@/components/home/UploadDocumentDialog";
+import { MultiStepUploadModal } from "@/components/upload/MultiStepUploadModal";
 
 const CATEGORIES = [
   { id: "How-tos", labelKey: "documentsTab.categories.howTos" },
@@ -315,7 +315,7 @@ export function DocumentsTab() {
         </div>
       )}
 
-      <UploadDocumentDialog open={uploadOpen} onOpenChange={setUploadOpen} />
+      <MultiStepUploadModal open={uploadOpen} onOpenChange={setUploadOpen} presetType="document" />
 
       <Dialog open={!!viewDoc} onOpenChange={(open) => { if (!open) setViewDoc(null); }}>
         <DialogContent className="bg-card border border-border rounded-modal max-w-lg shadow-xl p-0 gap-0 [&>button.absolute]:hidden">

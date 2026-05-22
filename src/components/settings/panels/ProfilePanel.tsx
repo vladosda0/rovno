@@ -1,14 +1,21 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useCurrentUser } from "@/hooks/use-mock-data";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  useWorkspaceProfileContactInfoState,
+  useUpdateWorkspaceProfileContactInfo,
+  useUpdateWorkspaceProfileIdentity,
+} from "@/hooks/use-workspace-source";
+import { useAvatarUpload } from "@/hooks/use-avatar-upload";
+import { PHONE_PREFILL, phoneValueForSave } from "@/lib/phone";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SettingsSection } from "@/components/settings/SettingsSection";
-import { Camera } from "lucide-react";
+import { Camera, Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 const TIMEZONES = [
@@ -37,31 +44,110 @@ function normalizeSelectableLanguage(locale: string | undefined): string {
 export function ProfilePanel() {
   const { t } = useTranslation();
   const user = useCurrentUser();
-  const initials = user.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+  const { contactInfo } = useWorkspaceProfileContactInfoState();
+  const updateIdentity = useUpdateWorkspaceProfileIdentity();
+  const updateContactInfo = useUpdateWorkspaceProfileContactInfo();
+  const { uploadAvatar } = useAvatarUpload();
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState(user.name);
   const [email] = useState(user.email);
   const [roleTitle, setRoleTitle] = useState("");
-  const [phone, setPhone] = useState("");
+  const [phone, setPhone] = useState(PHONE_PREFILL);
   const [timezone, setTimezone] = useState(user.timezone || "auto");
   const [language, setLanguage] = useState(() => normalizeSelectableLanguage(user.locale));
   const [signature, setSignature] = useState("");
   const [bio, setBio] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState(user.avatar ?? "");
+  const [avatarUploading, setAvatarUploading] = useState(false);
 
-  const isDirty = name !== user.name || roleTitle || phone || signature || bio || timezone !== (user.timezone || "auto") || language !== normalizeSelectableLanguage(user.locale);
+  // Seed identity fields once the current user resolves (async in supabase mode).
+  useEffect(() => {
+    setName(user.name);
+    setTimezone(user.timezone || "auto");
+    setLanguage(normalizeSelectableLanguage(user.locale));
+    setAvatarUrl(user.avatar ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user.id]);
 
-  const handleSave = () => {
-    toast({ title: t("profile.savedToast"), description: t("profile.savedToastDescription") });
+  // Seed contact-info fields once per active user. Keyed on user.id so a
+  // background refetch can't clobber in-progress edits, but switching the active
+  // profile (Settings stays mounted) re-seeds for the new user.
+  const contactSeededForRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!contactInfo || contactSeededForRef.current === user.id) return;
+    contactSeededForRef.current = user.id;
+    setRoleTitle(contactInfo.roleTitle ?? "");
+    setPhone(contactInfo.phone ?? PHONE_PREFILL);
+    setBio(contactInfo.bio ?? "");
+    setSignature(contactInfo.signatureBlock ?? "");
+  }, [contactInfo, user.id]);
+
+  const initials = name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+  const saving = updateIdentity.isPending || updateContactInfo.isPending;
+
+  const isDirty =
+    name !== user.name ||
+    (avatarUrl ?? "") !== (user.avatar ?? "") ||
+    timezone !== (user.timezone || "auto") ||
+    language !== normalizeSelectableLanguage(user.locale) ||
+    roleTitle !== (contactInfo?.roleTitle ?? "") ||
+    (phoneValueForSave(phone) ?? "") !== (contactInfo?.phone ?? "") ||
+    bio !== (contactInfo?.bio ?? "") ||
+    signature !== (contactInfo?.signatureBlock ?? "");
+
+  async function handleAvatarSelect(file: File | null) {
+    if (!file) return;
+    setAvatarUploading(true);
+    try {
+      const { url } = await uploadAvatar(file);
+      setAvatarUrl(url);
+    } catch (error) {
+      toast({
+        title: t("profile.avatar.uploadFailed"),
+        description: error instanceof Error ? error.message : undefined,
+        variant: "destructive",
+      });
+    } finally {
+      setAvatarUploading(false);
+    }
+  }
+
+  const handleSave = async () => {
+    try {
+      await Promise.all([
+        updateIdentity.mutateAsync({
+          fullName: name.trim() || null,
+          avatarUrl: avatarUrl || null,
+          locale: language,
+          timezone,
+        }),
+        updateContactInfo.mutateAsync({
+          roleTitle: roleTitle.trim() || null,
+          phone: phoneValueForSave(phone),
+          bio: bio.trim() || null,
+          signatureBlock: signature.trim() || null,
+        }),
+      ]);
+      toast({ title: t("profile.savedToast"), description: t("profile.savedToastDescription") });
+    } catch (error) {
+      toast({
+        title: t("profile.saveFailedToast"),
+        description: error instanceof Error ? error.message : t("profile.saveFailedDescription"),
+        variant: "destructive",
+      });
+    }
   };
 
   const handleDiscard = () => {
     setName(user.name);
-    setRoleTitle("");
-    setPhone("");
     setTimezone(user.timezone || "auto");
     setLanguage(normalizeSelectableLanguage(user.locale));
-    setSignature("");
-    setBio("");
+    setAvatarUrl(user.avatar ?? "");
+    setRoleTitle(contactInfo?.roleTitle ?? "");
+    setPhone(contactInfo?.phone ?? PHONE_PREFILL);
+    setBio(contactInfo?.bio ?? "");
+    setSignature(contactInfo?.signatureBlock ?? "");
   };
 
   return (
@@ -71,15 +157,35 @@ export function ProfilePanel() {
         <div className="flex flex-wrap items-center gap-sp-2">
           <div className="relative">
             <Avatar className="h-16 w-16">
+              {avatarUrl && <AvatarImage src={avatarUrl} alt="" />}
               <AvatarFallback className="text-h3 bg-accent text-accent-foreground">{initials}</AvatarFallback>
             </Avatar>
-            <button className="absolute -bottom-1 -right-1 h-7 w-7 rounded-full bg-secondary border border-border flex items-center justify-center hover:bg-muted transition-colors">
-              <Camera className="h-3.5 w-3.5 text-muted-foreground" />
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={avatarUploading}
+              aria-label={t("profile.avatar.upload")}
+              className="absolute -bottom-1 -right-1 h-7 w-7 rounded-full bg-secondary border border-border flex items-center justify-center hover:bg-muted transition-colors disabled:opacity-60"
+            >
+              {avatarUploading ? (
+                <Loader2 className="h-3.5 w-3.5 text-muted-foreground animate-spin" />
+              ) : (
+                <Camera className="h-3.5 w-3.5 text-muted-foreground" />
+              )}
             </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => handleAvatarSelect(e.target.files?.[0] ?? null)}
+            />
           </div>
           <div>
-            <p className="text-body-sm font-medium text-foreground">{user.name}</p>
-            <p className="text-caption text-muted-foreground">{t("profile.avatar.uploadComingSoon")}</p>
+            <p className="text-body-sm font-medium text-foreground">{name}</p>
+            <p className="text-caption text-muted-foreground">
+              {avatarUploading ? t("profile.avatar.uploading") : t("profile.avatar.upload")}
+            </p>
           </div>
         </div>
 
@@ -142,9 +248,13 @@ export function ProfilePanel() {
 
       {/* Actions */}
       <div className="flex flex-wrap gap-sp-2 pt-sp-1">
-        <Button className="w-full sm:w-auto" onClick={handleSave} disabled={!isDirty}>{t("profile.save")}</Button>
+        <Button className="w-full sm:w-auto" onClick={handleSave} disabled={!isDirty || saving || avatarUploading}>
+          {saving ? t("profile.saving") : t("profile.save")}
+        </Button>
         {isDirty && (
-          <Button variant="ghost" className="w-full sm:w-auto" onClick={handleDiscard}>{t("profile.discard")}</Button>
+          <Button variant="ghost" className="w-full sm:w-auto" onClick={handleDiscard} disabled={saving}>
+            {t("profile.discard")}
+          </Button>
         )}
       </div>
     </div>
