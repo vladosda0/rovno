@@ -70,17 +70,18 @@ export function ProfilePanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user.id]);
 
-  // Seed contact-info fields once they first load. Guarded with a ref so a
-  // background refetch (new object reference) can't clobber in-progress edits.
-  const contactSeededRef = useRef(false);
+  // Seed contact-info fields once per active user. Keyed on user.id so a
+  // background refetch can't clobber in-progress edits, but switching the active
+  // profile (Settings stays mounted) re-seeds for the new user.
+  const contactSeededForRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!contactInfo || contactSeededRef.current) return;
-    contactSeededRef.current = true;
+    if (!contactInfo || contactSeededForRef.current === user.id) return;
+    contactSeededForRef.current = user.id;
     setRoleTitle(contactInfo.roleTitle ?? "");
     setPhone(contactInfo.phone ?? PHONE_PREFILL);
     setBio(contactInfo.bio ?? "");
     setSignature(contactInfo.signatureBlock ?? "");
-  }, [contactInfo]);
+  }, [contactInfo, user.id]);
 
   const initials = name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
   const saving = updateIdentity.isPending || updateContactInfo.isPending;
