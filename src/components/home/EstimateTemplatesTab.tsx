@@ -15,7 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { FileStack, Plus } from "lucide-react";
+import { FileStack } from "lucide-react";
 import {
   useEstimateTemplates,
   useEstimateTemplateDetail,
@@ -231,24 +231,11 @@ export function EstimateTemplatesTab() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h2 className="text-h3 text-foreground">{t("home.estimateTemplates.title")}</h2>
-          <p className="text-caption text-muted-foreground mt-0.5">
-            {t("home.estimateTemplates.subtitle")}
-          </p>
-        </div>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span tabIndex={0} className="inline-block">
-              <Button variant="outline" size="sm" disabled>
-                <Plus className="h-3.5 w-3.5 mr-1.5" />
-                {t("home.estimateTemplates.createButton")}
-              </Button>
-            </span>
-          </TooltipTrigger>
-          <TooltipContent>{t("home.estimateTemplates.createDisabledTooltip")}</TooltipContent>
-        </Tooltip>
+      <div>
+        <h2 className="text-h3 text-foreground">{t("home.estimateTemplates.title")}</h2>
+        <p className="text-caption text-muted-foreground mt-0.5">
+          {t("home.estimateTemplates.subtitle")}
+        </p>
       </div>
 
       {isPending && (

@@ -1,8 +1,10 @@
+import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { FileSpreadsheet, FileText, IdCard, Download } from "lucide-react";
+import { MultiStepUploadModal } from "@/components/upload/MultiStepUploadModal";
 
 const CATALOG_TEMPLATE_HREF = "/templates/rovno-catalog-template.xlsx";
 const ESTIMATE_TEMPLATE_HREF = "/templates/rovno-estimate-template.csv";
@@ -35,6 +37,8 @@ function PinnedCard({ icon, title, description, action, body }: PinnedCardProps)
 
 export function DocumentTemplatesTab() {
   const { t } = useTranslation();
+  const [, setSearchParams] = useSearchParams();
+  const [visitkaOpen, setVisitkaOpen] = useState(false);
 
   const visitkaFields = [
     t("home.documentTemplates.pinned.visitka.fields.displayName"),
@@ -99,18 +103,9 @@ export function DocumentTemplatesTab() {
               </ul>
             )}
             action={(
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span tabIndex={0} className="inline-block">
-                    <Button variant="default" size="sm" disabled>
-                      {t("home.documentTemplates.pinned.visitka.action")}
-                    </Button>
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>
-                  {t("home.documentTemplates.pinned.visitka.disabledTooltip")}
-                </TooltipContent>
-              </Tooltip>
+              <Button variant="default" size="sm" onClick={() => setVisitkaOpen(true)}>
+                {t("home.documentTemplates.pinned.visitka.action")}
+              </Button>
             )}
           />
         </div>
@@ -126,6 +121,21 @@ export function DocumentTemplatesTab() {
           </CardContent>
         </Card>
       </section>
+
+      <MultiStepUploadModal
+        open={visitkaOpen}
+        onOpenChange={setVisitkaOpen}
+        presetType="visitka"
+        onComplete={() => {
+          // Show the saved card under the org contractor-card leaf.
+          setSearchParams((prev) => {
+            const next = new URLSearchParams(prev);
+            next.set("tab", "documents");
+            next.set("docTab", "org-contractor-card");
+            return next;
+          });
+        }}
+      />
     </div>
   );
 }

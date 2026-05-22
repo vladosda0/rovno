@@ -48,6 +48,12 @@ interface UploadDocumentDialogProps {
   defaultProjectId?: string;
 }
 
+/**
+ * @deprecated Use {@link MultiStepUploadModal} from `@/components/upload/MultiStepUploadModal`
+ * instead. This single-step variant is retained for one release cycle as a
+ * rollback fallback and is no longer wired into the /home tabs. It will be
+ * removed in a future release.
+ */
 export function UploadDocumentDialog({
   open,
   onOpenChange,
