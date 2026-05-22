@@ -3640,7 +3640,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
         confirmLabel={t("ai.sidebar.limitModal.confirmLabel")}
         onConfirm={() => {
           setLimitModalOpen(false);
-          navigate("/pricing");
+          navigate("/#pricing");
         }}
         onCancel={() => setLimitModalOpen(false)}
       />

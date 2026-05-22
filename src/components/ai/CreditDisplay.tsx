@@ -18,7 +18,7 @@ export function CreditDisplay({ onLimitReached }: { onLimitReached: () => void }
     if (isEmpty) {
       onLimitReached();
     } else {
-      navigate("/pricing");
+      navigate("/#pricing");
     }
   };
 

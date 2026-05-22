@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { useTranslation } from "react-i18next";
+import { Trans, useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -94,7 +94,7 @@ export default function Signup() {
       subtitle={t("auth.signup.subtitle")}
       footer={
         <p className="text-center text-body-sm text-muted-foreground">
-          {t("auth.signup.alreadyHaveAccount")} <Link to="/auth/login" className="text-accent hover:underline">{t("auth.signup.signIn")}</Link>
+          {t("auth.signup.alreadyHaveAccount")} <Link to={nextUrl ? `/auth/login?next=${encodeURIComponent(nextUrl)}` : "/auth/login"} className="text-accent hover:underline">{t("auth.signup.signIn")}</Link>
         </p>
       }
     >
@@ -125,6 +125,29 @@ export default function Signup() {
         <Button type="submit" disabled={loading} className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
           {loading ? t("auth.signup.submitting") : t("auth.signup.submit")}
         </Button>
+        <p className="text-center text-caption text-muted-foreground">
+          <Trans
+            i18nKey="auth.signup.consent"
+            components={{
+              offer: (
+                <a
+                  href="/offer"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-foreground"
+                />
+              ),
+              privacy: (
+                <a
+                  href="/privacy"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-foreground"
+                />
+              ),
+            }}
+          />
+        </p>
       </form>
     </AuthCard>
   );

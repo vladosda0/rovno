@@ -49,7 +49,7 @@ export function BillingPanel() {
               </div>
               <p className="text-caption text-muted-foreground">{t("billing.currentTier")}</p>
             </div>
-            <Button variant="outline" size="sm" className="w-full sm:w-auto sm:shrink-0" onClick={() => { trackEvent("billing_panel_compare_plans_clicked"); navigate("/pricing"); }}>{t("billing.comparePlans")}</Button>
+            <Button variant="outline" size="sm" className="w-full sm:w-auto sm:shrink-0" onClick={() => { trackEvent("billing_panel_compare_plans_clicked"); navigate("/#pricing"); }}>{t("billing.comparePlans")}</Button>
           </CardContent>
         </Card>
 
@@ -96,7 +96,7 @@ export function BillingPanel() {
           )}
 
           <div className="flex flex-wrap gap-sp-2 pt-sp-1">
-            <Button className="w-full sm:w-auto" onClick={() => { trackEvent("billing_panel_purchase_credits_clicked"); navigate("/pricing"); }}>
+            <Button className="w-full sm:w-auto" onClick={() => { trackEvent("billing_panel_purchase_credits_clicked"); navigate("/#pricing"); }}>
               <CreditCard className="h-4 w-4 mr-1.5" />
               {t("billing.purchase")}
             </Button>
