@@ -8,6 +8,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { SettingsSection } from "@/components/settings/SettingsSection";
 import { AlertTriangle, Coins, CreditCard, Sparkles } from "lucide-react";
+import { BILLING_ENABLED } from "@/lib/billing";
+import { SubscriptionSection } from "@/components/billing/SubscriptionSection";
 
 const PLAN_KEYS: Record<string, string> = {
   free: "billing.plan.free",
@@ -27,6 +29,10 @@ export function BillingPanel() {
 
   return (
     <div className="space-y-sp-3">
+      {/* Real T-Bank subscription management (phase 1c). Hidden until the
+          billing flag is on; the credits panel below is the existing surface. */}
+      {BILLING_ENABLED ? <SubscriptionSection /> : null}
+
       <SettingsSection title={t("billing.title")} description={t("billing.description")}>
         {/* Plan card */}
         <Card>

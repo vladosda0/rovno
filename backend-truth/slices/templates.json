@@ -1285,6 +1285,16 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "inn",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [

@@ -22,6 +22,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { BetaBar } from "@/components/BetaBar";
 import { PaymentLogos, TBankAttribution } from "@/components/PaymentLogos";
+import { PricingBlock } from "@/components/billing/PricingBlock";
 import { seedProjects } from "@/data/seed";
 import { enterDemoSession } from "@/lib/auth-state";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
@@ -1470,30 +1471,6 @@ export default function Landing() {
     },
   ];
 
-  const pricingTeaserTiers = [
-    {
-      key: "free",
-      nameKey: "landing.pricingTeaser.free.name",
-      priceKey: "landing.pricingTeaser.free.price",
-      briefKey: "landing.pricingTeaser.free.brief",
-      active: true,
-    },
-    {
-      key: "home",
-      nameKey: "landing.pricingTeaser.home.name",
-      priceKey: "landing.pricingTeaser.home.price",
-      briefKey: "landing.pricingTeaser.home.brief",
-      active: false,
-    },
-    {
-      key: "brigade",
-      nameKey: "landing.pricingTeaser.brigade.name",
-      priceKey: "landing.pricingTeaser.brigade.price",
-      briefKey: "landing.pricingTeaser.brigade.brief",
-      active: false,
-    },
-  ] as const;
-
   return (
     <div className="min-h-screen bg-background text-foreground">
       <BetaBar />
@@ -2632,45 +2609,7 @@ export default function Landing() {
             <h2 className="text-h2 text-foreground">{t("landing.pricingTeaser.title")}</h2>
             <p className="mt-1 text-body text-muted-foreground">{t("landing.pricingTeaser.subtitle")}</p>
 
-            <div className="mt-sp-3 grid grid-cols-1 gap-sp-2 sm:grid-cols-3">
-              {pricingTeaserTiers.map((tier) => (
-                <div
-                  key={tier.key}
-                  className={`flex flex-col rounded-card border p-sp-3 ${
-                    tier.active
-                      ? "border-accent/40 bg-background/60"
-                      : "border-border bg-background/30 opacity-70"
-                  }`}
-                >
-                  <p className="text-body font-semibold text-foreground">{t(tier.nameKey)}</p>
-                  <p className="mt-1 text-h3 text-foreground">{t(tier.priceKey)}</p>
-                  <p className="mt-2 text-body-sm text-muted-foreground">{t(tier.briefKey)}</p>
-                  {!tier.active ? (
-                    <span className="mt-3 inline-flex w-fit items-center rounded-pill border border-border bg-muted/60 px-2.5 py-1 text-caption text-muted-foreground">
-                      {t("landing.pricingTeaser.soonCta")}
-                    </span>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-sp-3 flex flex-wrap items-center gap-3">
-              <Button asChild variant="outline">
-                <Link to="/pricing">
-                  {t("landing.pricingTeaser.viewPricing")}
-                  <ArrowUpRight className="ml-1.5 h-4 w-4" />
-                </Link>
-              </Button>
-              <p className="text-body-sm text-muted-foreground">
-                {t("landing.pricingTeaser.enterpriseNote")}{" "}
-                <Link
-                  to="/pricing#enterprise"
-                  className="font-medium text-accent hover:text-accent/80"
-                >
-                  {t("landing.pricingTeaser.enterpriseCta")} →
-                </Link>
-              </p>
-            </div>
+            <PricingBlock className="mt-sp-3" />
           </div>
         </section>
 
