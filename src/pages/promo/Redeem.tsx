@@ -78,6 +78,13 @@ export default function PromoRedeem() {
         case "already_subscribed":
           toast({ title: t("promo.redeem.error.alreadySubscribed"), variant: "destructive" });
           break;
+        case "unauthenticated": {
+          // Stale/expired session despite a local "authenticated" status: route
+          // back through signup, preserving the code so the flow can resume.
+          const ret = `/promo/redeem?code=${encodeURIComponent(trimmed)}`;
+          navigate(`/auth/signup?next=${encodeURIComponent(ret)}`);
+          break;
+        }
         default:
           toast({ title: t("promo.redeem.error.unknown"), variant: "destructive" });
       }

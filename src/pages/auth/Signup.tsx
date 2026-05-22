@@ -94,7 +94,7 @@ export default function Signup() {
       subtitle={t("auth.signup.subtitle")}
       footer={
         <p className="text-center text-body-sm text-muted-foreground">
-          {t("auth.signup.alreadyHaveAccount")} <Link to="/auth/login" className="text-accent hover:underline">{t("auth.signup.signIn")}</Link>
+          {t("auth.signup.alreadyHaveAccount")} <Link to={nextUrl ? `/auth/login?next=${encodeURIComponent(nextUrl)}` : "/auth/login"} className="text-accent hover:underline">{t("auth.signup.signIn")}</Link>
         </p>
       }
     >
