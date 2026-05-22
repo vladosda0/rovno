@@ -7,6 +7,14 @@ import { __unsafeResetRuntimeAuthForTests } from "@/hooks/use-runtime-auth";
 // Tests use English for readability.
 void i18n.changeLanguage("en");
 
+// jsdom lacks ResizeObserver, which some Radix primitives (e.g. Checkbox) use.
+class ResizeObserverMock {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+globalThis.ResizeObserver = globalThis.ResizeObserver ?? (ResizeObserverMock as unknown as typeof ResizeObserver);
+
 Object.defineProperty(window, "matchMedia", {
   writable: true,
   value: (query: string) => ({

@@ -4,6 +4,9 @@ import {
   getWorkspaceSource,
   hasSupabaseWorkspaceConfig,
   isSupabaseWorkspaceRequested,
+  type ProfileContactInfo,
+  type ProfileContactInfoPatch,
+  type ProfileIdentityPatch,
   type ProfilePreferences,
   type ProfilePreferencesPatch,
   type WorkspaceMode,
@@ -35,6 +38,7 @@ export const workspaceQueryKeys = {
   mode: () => ["workspace", "mode"] as const,
   currentUser: (profileId: string) => ["workspace", "current-user", profileId] as const,
   profilePreferences: (profileId: string) => ["workspace", "profile-preferences", profileId] as const,
+  profileContactInfo: (profileId: string) => ["workspace", "profile-contact-info", profileId] as const,
   projects: (profileId: string) => ["workspace", "projects", profileId] as const,
   project: (profileId: string, projectId: string) => ["workspace", "project", profileId, projectId] as const,
   projectMembers: (profileId: string, projectId: string) => ["workspace", "project-members", profileId, projectId] as const,
@@ -161,6 +165,71 @@ export function useUpdateWorkspaceProfilePreferences() {
       const profileId = mode.kind === "supabase" ? mode.profileId : mode.kind;
       queryClient.setQueryData(workspaceQueryKeys.profilePreferences(profileId), preferences);
       void queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.profilePreferences(profileId) });
+    },
+  });
+}
+
+export function useWorkspaceProfileContactInfoState(): {
+  contactInfo: ProfileContactInfo | undefined;
+  isLoading: boolean;
+} {
+  const mode = useWorkspaceModeState();
+  const supabaseMode = mode.kind === "supabase" ? mode : null;
+  const queryProfileId = supabaseMode?.profileId ?? mode.kind;
+  const query = useQuery({
+    queryKey: workspaceQueryKeys.profileContactInfo(queryProfileId),
+    queryFn: async () => {
+      const source = await getWorkspaceSource(
+        mode.kind === "local" || mode.kind === "demo" || mode.kind === "supabase" ? mode : undefined,
+      );
+      return source.getProfileContactInfo();
+    },
+    enabled: mode.kind === "local" || mode.kind === "demo" || mode.kind === "supabase",
+    staleTime: WORKSPACE_QUERY_STALE_TIME_MS,
+  });
+
+  if (mode.kind === "pending-supabase") {
+    return { contactInfo: undefined, isLoading: true };
+  }
+
+  return { contactInfo: query.data, isLoading: query.isPending };
+}
+
+export function useUpdateWorkspaceProfileIdentity() {
+  const mode = useWorkspaceModeState();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (patch: ProfileIdentityPatch) => {
+      if (mode.kind !== "local" && mode.kind !== "demo" && mode.kind !== "supabase") {
+        throw new Error("Profile is not available yet.");
+      }
+      const source = await getWorkspaceSource(mode);
+      return source.updateProfileIdentity(patch);
+    },
+    onSuccess: (user) => {
+      const profileId = mode.kind === "supabase" ? mode.profileId : mode.kind;
+      // Refresh the app-wide current user (header avatar / name) after a save.
+      queryClient.setQueryData(workspaceQueryKeys.currentUser(profileId), user);
+      void queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.currentUser(profileId) });
+    },
+  });
+}
+
+export function useUpdateWorkspaceProfileContactInfo() {
+  const mode = useWorkspaceModeState();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (patch: ProfileContactInfoPatch) => {
+      if (mode.kind !== "local" && mode.kind !== "demo" && mode.kind !== "supabase") {
+        throw new Error("Profile is not available yet.");
+      }
+      const source = await getWorkspaceSource(mode);
+      return source.updateProfileContactInfo(patch);
+    },
+    onSuccess: (contactInfo) => {
+      const profileId = mode.kind === "supabase" ? mode.profileId : mode.kind;
+      queryClient.setQueryData(workspaceQueryKeys.profileContactInfo(profileId), contactInfo);
+      void queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.profileContactInfo(profileId) });
     },
   });
 }

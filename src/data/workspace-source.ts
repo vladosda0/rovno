@@ -18,6 +18,7 @@ export type WorkspaceProjectInvite = WorkspaceDatabase["public"]["Tables"]["proj
 type ProfileRow = WorkspaceDatabase["public"]["Tables"]["profiles"]["Row"];
 type ProfileSettingsRow = WorkspaceDatabase["public"]["Tables"]["profile_settings"]["Row"];
 type ProfileSettingsInsert = WorkspaceDatabase["public"]["Tables"]["profile_settings"]["Insert"];
+type ProfilesUpdate = WorkspaceDatabase["public"]["Tables"]["profiles"]["Update"];
 type ProjectRow = WorkspaceDatabase["public"]["Tables"]["projects"]["Row"];
 type ProjectMemberRow = WorkspaceDatabase["public"]["Tables"]["project_members"]["Row"];
 type ProjectInsert = WorkspaceDatabase["public"]["Tables"]["projects"]["Insert"];
@@ -47,6 +48,9 @@ export interface WorkspaceSource {
   getCurrentUser: () => Promise<User>;
   getProfilePreferences: () => Promise<ProfilePreferences>;
   updateProfilePreferences: (patch: ProfilePreferencesPatch) => Promise<ProfilePreferences>;
+  getProfileContactInfo: () => Promise<ProfileContactInfo>;
+  updateProfileIdentity: (patch: ProfileIdentityPatch) => Promise<User>;
+  updateProfileContactInfo: (patch: ProfileContactInfoPatch) => Promise<ProfileContactInfo>;
   getProjects: () => Promise<Project[]>;
   getProjectById: (projectId: string) => Promise<Project | undefined>;
   getProjectMembers: (projectId: string) => Promise<Member[]>;
@@ -72,6 +76,24 @@ export interface ProfilePreferences {
 }
 
 export type ProfilePreferencesPatch = Partial<ProfilePreferences>;
+
+/** profiles columns the user edits in Settings (identity is also exposed via User). */
+export interface ProfileIdentity {
+  fullName: string | null;
+  avatarUrl: string | null;
+  locale: string;
+  timezone: string;
+}
+export type ProfileIdentityPatch = Partial<ProfileIdentity>;
+
+/** profile_settings free-text contact fields edited in Settings. */
+export interface ProfileContactInfo {
+  roleTitle: string | null;
+  phone: string | null;
+  bio: string | null;
+  signatureBlock: string | null;
+}
+export type ProfileContactInfoPatch = Partial<ProfileContactInfo>;
 
 export const DEFAULT_PROFILE_PREFERENCES: ProfilePreferences = {
   currency: "RUB",
@@ -231,6 +253,21 @@ function createBrowserWorkspaceSource(mode: store.BrowserWorkspaceKind): Workspa
       });
       writeLocalProfilePreferences(next);
       return next;
+    },
+    async getProfileContactInfo() {
+      return { roleTitle: null, phone: null, bio: null, signatureBlock: null };
+    },
+    async updateProfileIdentity() {
+      // Demo/local identity is seed data and not persisted; echo the current user.
+      return store.getCurrentUserForMode(mode);
+    },
+    async updateProfileContactInfo(patch: ProfileContactInfoPatch) {
+      return {
+        roleTitle: patch.roleTitle ?? null,
+        phone: patch.phone ?? null,
+        bio: patch.bio ?? null,
+        signatureBlock: patch.signatureBlock ?? null,
+      };
     },
     async getProjects() {
       return store.getProjectsForMode(mode);
@@ -624,6 +661,74 @@ function createSupabaseWorkspaceSource(
       }
 
       return mapProfileSettingsRowToPreferences(data);
+    },
+
+    async getProfileContactInfo() {
+      const { data, error } = await supabase
+        .from("profile_settings")
+        .select("role_title, phone, bio, signature_block")
+        .eq("profile_id", profileId)
+        .maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+
+      return {
+        roleTitle: data?.role_title ?? null,
+        phone: data?.phone ?? null,
+        bio: data?.bio ?? null,
+        signatureBlock: data?.signature_block ?? null,
+      };
+    },
+
+    async updateProfileIdentity(patch: ProfileIdentityPatch) {
+      const update: ProfilesUpdate = {};
+      if (patch.fullName !== undefined) update.full_name = patch.fullName;
+      if (patch.avatarUrl !== undefined) update.avatar_url = patch.avatarUrl;
+      if (patch.locale !== undefined) update.locale = patch.locale;
+      if (patch.timezone !== undefined) update.timezone = patch.timezone;
+
+      const { data, error } = await supabase
+        .from("profiles")
+        .update(update)
+        .eq("id", profileId)
+        .select("id, email, full_name, avatar_url, locale, timezone, plan, credits_free, credits_paid")
+        .single();
+
+      if (error || !data) {
+        throw error ?? new Error("Current workspace profile not found");
+      }
+
+      const user = mapProfileRowToUser(data);
+      cacheWorkspaceUsers([user]);
+      return user;
+    },
+
+    async updateProfileContactInfo(patch: ProfileContactInfoPatch) {
+      const payload: ProfileSettingsInsert = {
+        profile_id: profileId,
+        role_title: patch.roleTitle ?? null,
+        phone: patch.phone ?? null,
+        bio: patch.bio ?? null,
+        signature_block: patch.signatureBlock ?? null,
+      };
+      const { data, error } = await supabase
+        .from("profile_settings")
+        .upsert(payload, { onConflict: "profile_id" })
+        .select("role_title, phone, bio, signature_block")
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      return {
+        roleTitle: data.role_title ?? null,
+        phone: data.phone ?? null,
+        bio: data.bio ?? null,
+        signatureBlock: data.signature_block ?? null,
+      };
     },
 
     async getProjects() {
