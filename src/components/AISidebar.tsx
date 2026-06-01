@@ -33,6 +33,10 @@ import {
 import { TutorialModal } from "@/components/onboarding/TutorialModal";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { useQueryClient } from "@tanstack/react-query";
+import { selectAiUsage, TIER_QUOTA_QUERY_KEY, useTierQuota } from "@/hooks/useTierQuota";
+import { AIQuotaGate } from "@/components/billing/AIQuotaGate";
+import { AIQuotaWarning } from "@/components/billing/AIQuotaWarning";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { MediaImage } from "@/components/MediaImage";
@@ -771,7 +775,6 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const [proposalQueue, setProposalQueue] = useState<ProposalQueueState | null>(null);
   const [inputValue, setInputValue] = useState("");
   const [composerMultiline, setComposerMultiline] = useState(false);
-  const [limitModalOpen, setLimitModalOpen] = useState(false);
   const [activityFilter, setActivityFilter] = useState<FeedFilter>("all");
   const [learnMode, setLearnMode] = useState(false);
   const [automationMode, setAutomationMode] = useState<AutomationMode>("manual");
@@ -812,9 +815,28 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const [expandedArchiveChatId, setExpandedArchiveChatId] = useState<string | null>(null);
 
   // Photo consult state
+  const queryClient = useQueryClient();
+  const { data: tierQuota } = useTierQuota();
   const [photoConsult, setPhotoConsult] = useState<PhotoConsultContext | null>(null);
   const [photoAnalysis, setPhotoAnalysis] = useState<PhotoAnalysisResult | null>(null);
   const [photoAnalysisLoading, setPhotoAnalysisLoading] = useState(false);
+  // Tracks the photo whose analysis was already billed, so a NEW photo bills one
+  // 'photo' credit and follow-up questions about it bill 'chat'.
+  const billedPhotoIdRef = useRef<string | null>(null);
+  // Drives the quota gate/warning UI. Bill 'photo' only for the first message
+  // about a newly attached photo; later messages about it bill 'chat'.
+  const currentUsageType: "chat" | "doc" | "photo" =
+    photoConsult && billedPhotoIdRef.current !== photoConsult.photo.id
+      ? "photo"
+      : "chat";
+
+  // Reset the photo-billed tracker when the consult closes, so a re-attach of
+  // the same photo bills 'photo' again on the next first message.
+  useEffect(() => {
+    if (!photoConsult) {
+      billedPhotoIdRef.current = null;
+    }
+  }, [photoConsult]);
   const [suggestedActions, setSuggestedActions] = useState<ProposalChange[]>([]);
   const [selectedActions, setSelectedActions] = useState<Set<number>>(new Set());
 
@@ -1054,7 +1076,6 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     document.addEventListener("mouseup", handleMouseUp);
   }, [width]);
 
-  const totalCredits = user.credits_free + user.credits_paid;
   const activeWorkLogs = useMemo(() => Array.from(workLogs.values()), [workLogs]);
   const latestWorkLog = activeWorkLogs[activeWorkLogs.length - 1];
   const activeQueueItem = proposalQueue ? proposalQueue.items[proposalQueue.activeIndex] : null;
@@ -1393,7 +1414,6 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
             procurementSummary: ctxProcurementSummary,
             events: ctxEventsFull.slice(0, 5),
             memberCount: ctxMembers.length,
-            userCredits: user.credits_free + user.credits_paid,
           };
           void buildAIProjectContext(seamForProjectCommit!, contextInputs);
         }
@@ -1529,11 +1549,23 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
           procurementSummary: ctxProcurementSummary,
           events: ctxEventsFull.slice(0, 5),
           memberCount: ctxMembers.length,
-          userCredits: user.credits_free + user.credits_paid,
         };
         const contextPack = buildAIProjectContext(seam, contextInputs);
         const chatId = getOrCreateProjectChatSessionId(targetProjectId);
         const priorTurns = buildPriorTurnsForInference(messages, userMessageId);
+
+        // Bill 'photo' only for the first message about a newly attached photo;
+        // mark it billed so follow-up questions bill 'chat'. If the call fails
+        // (hard failure with refund), the catch resets the ref so a retry bills
+        // 'photo' again rather than 'chat'.
+        const sendUsageType: "chat" | "doc" | "photo" =
+          photoConsult && billedPhotoIdRef.current !== photoConsult.photo.id
+            ? "photo"
+            : "chat";
+        const willBillPhoto = sendUsageType === "photo" && photoConsult !== null;
+        if (willBillPhoto && photoConsult) {
+          billedPhotoIdRef.current = photoConsult.photo.id;
+        }
 
         try {
           const result = await invokeLiveTextAssistant({
@@ -1546,6 +1578,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
             priorTurns,
             chatId,
             llmProvider: aiChatModel,
+            usageType: sendUsageType,
           });
           setWorkLogs((prev) => {
             const next = new Map(prev);
@@ -1581,6 +1614,11 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
             grounding: result.grounding,
           });
         } catch (err) {
+          // Reset the photo billed tracker so a retry after a failed/refunded
+          // send bills 'photo' again rather than 'chat'.
+          if (willBillPhoto) {
+            billedPhotoIdRef.current = null;
+          }
           setWorkLogs((prev) => {
             const next = new Map(prev);
             next.delete(workLogId);
@@ -1599,6 +1637,10 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
               mode: responseMode,
             },
           ]);
+        } finally {
+          // Refresh the tier quota so meters / gates reflect the credit just
+          // consumed (or the 402 that blocked it).
+          queryClient.invalidateQueries({ queryKey: TIER_QUOTA_QUERY_KEY });
         }
       })();
       return;
@@ -1617,10 +1659,10 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     defaultDirectEditForNewProposal,
     permResult.isLoading,
     seamForProjectCommit,
-    user.credits_free,
-    user.credits_paid,
     messages,
     workspaceMode.kind,
+    photoConsult,
+    queryClient,
   ]);
 
   useLayoutEffect(() => {
@@ -1680,15 +1722,24 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
       setPhotoConsult(null);
     }
 
-    if (totalCredits <= 0) {
-      trackEvent("upgrade_prompt_shown", { surface: "ai_sidebar" });
-      setLimitModalOpen(true);
-      return;
-    }
-
     if (!isGuest && resolvedPermissionProjectId && !permResult.can("ai.generate")) {
       toast({ title: t("ai.sidebar.toast.accessDenied.title"), description: t("ai.sidebar.toast.accessDenied.generationDescription"), variant: "destructive" });
       return;
+    }
+
+    // Tier-limit short-circuit: surface the paywall toast and don't POST to
+    // ai-inference if the AI quota for `currentUsageType` is exhausted. Also
+    // closes the keyboard bypass on AIQuotaGate (which is visual only).
+    if (tierQuota) {
+      const { used, limit } = selectAiUsage(tierQuota, currentUsageType);
+      if (limit > 0 && used >= limit) {
+        const periodEnd = new Date(tierQuota.period_end).toLocaleDateString(i18n.language);
+        toast({
+          title: t(`quota.gate.${currentUsageType}.title`),
+          description: t(`quota.gate.${currentUsageType}.body`, { periodEnd }),
+        });
+        return;
+      }
     }
 
     if (!isProjectContext && isHomeContext && homeProjectMode === GENERAL_MODE_VALUE && shouldAskProjectBeforeProposal(content)) {
@@ -3547,12 +3598,14 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
 
                   {!isInputLocked && (
                     <>
+                      <AIQuotaWarning usageType={currentUsageType} />
                       <SuggestionChips
                         suggestions={suggestions}
                         onSelect={(text) => setInputValue(text)}
                         singleLineScrollable
                       />
 
+                      <AIQuotaGate usageType={currentUsageType}>
                       <div
                         className={cn(
                           "w-full min-w-0 border border-sidebar-border bg-sidebar-accent/50 shadow-sm transition-[box-shadow,border-color] focus-within:border-accent/40 focus-within:ring-2 focus-within:ring-accent/25",
@@ -3585,6 +3638,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
                           <div className="order-3 flex shrink-0 self-end">{composerActionRow}</div>
                         ) : null}
                       </div>
+                      </AIQuotaGate>
 
                       {isHomeContext && (
                         <div className="w-full min-w-0">
@@ -3631,19 +3685,6 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
           </div>
         )}
       </div>
-
-      <ConfirmModal
-        open={limitModalOpen}
-        onOpenChange={setLimitModalOpen}
-        title={t("ai.sidebar.limitModal.title")}
-        description={t("ai.sidebar.limitModal.description")}
-        confirmLabel={t("ai.sidebar.limitModal.confirmLabel")}
-        onConfirm={() => {
-          setLimitModalOpen(false);
-          navigate("/#pricing");
-        }}
-        onCancel={() => setLimitModalOpen(false)}
-      />
 
       <SaveLearnTargetDialog
         open={pendingSaveMessage !== null}

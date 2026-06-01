@@ -18,6 +18,7 @@ import {
   type ContractorProfileData,
 } from "@/data/contractor-profile-source";
 import { slugifyOrgName, isValidOrgSlug } from "@/lib/transliterate";
+import { TierLockTooltip } from "@/components/billing/TierLockTooltip";
 import { PHONE_PREFILL, phoneIsFilled } from "@/lib/phone";
 import type { UploadResult } from "@/components/upload/types";
 
@@ -536,13 +537,28 @@ export function VisitkaForm({ onBack, onClose, onComplete }: VisitkaFormProps) {
         <Button type="button" variant="outline" onClick={onBack} disabled={submitting}>
           {t("upload.modal.back")}
         </Button>
-        <Button
-          type="submit"
-          className="bg-accent text-accent-foreground hover:bg-accent/90"
-          disabled={submitting || avatarUploading || !canSubmit}
-        >
-          {submitting ? t("upload.modal.saving") : t("upload.modal.step3.visitka.save")}
-        </Button>
+        {hasOrg ? (
+          <Button
+            type="submit"
+            className="bg-accent text-accent-foreground hover:bg-accent/90"
+            disabled={submitting || avatarUploading || !canSubmit}
+          >
+            {submitting ? t("upload.modal.saving") : t("upload.modal.step3.visitka.save")}
+          </Button>
+        ) : (
+          // Creating a new org + business card is Brigade-only. Editing an
+          // existing card (hasOrg) stays open so grandfathered owners are not
+          // locked out. The backend enforces the same rule.
+          <TierLockTooltip requiredPlan="brigade" feature="create_business_card">
+            <Button
+              type="submit"
+              className="bg-accent text-accent-foreground hover:bg-accent/90"
+              disabled={submitting || avatarUploading || !canSubmit}
+            >
+              {submitting ? t("upload.modal.saving") : t("upload.modal.step3.visitka.save")}
+            </Button>
+          </TierLockTooltip>
+        )}
       </div>
     </form>
   );
