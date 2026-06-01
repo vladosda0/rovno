@@ -50,16 +50,20 @@ export function selectAiUsage(
 }
 
 export function useTierQuota() {
-  const { status } = useRuntimeAuth();
+  const { status, profileId } = useRuntimeAuth();
   return useQuery({
-    queryKey: TIER_QUOTA_QUERY_KEY,
+    // Key by profile so a sign-out/sign-in in the same browser session can't
+    // serve user A's cached quota to user B (codex P2). TIER_QUOTA_QUERY_KEY stays
+    // the prefix, so invalidateQueries({ queryKey: TIER_QUOTA_QUERY_KEY }) still
+    // matches the profile-scoped entry.
+    queryKey: [...TIER_QUOTA_QUERY_KEY, profileId],
     queryFn: async (): Promise<TierQuota | null> => {
       const { data, error } = await rawSupabase.rpc("get_current_usage");
       if (error) throw error;
       const row = Array.isArray(data) ? data[0] : data;
       return (row as TierQuota | undefined) ?? null;
     },
-    enabled: status === "authenticated",
+    enabled: status === "authenticated" && Boolean(profileId),
     refetchInterval: 60_000,
     staleTime: 30_000,
   });
