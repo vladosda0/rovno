@@ -110,7 +110,6 @@ export interface AIContextProcurement {
 
 export interface AIContextUser {
   role: string;
-  credits: number;
 }
 
 export interface AIContextEvent {
@@ -143,7 +142,6 @@ export interface AIContextInputs {
   procurementSummary: ProcurementReadProjectSummary | null;
   events: Event[];
   memberCount: number;
-  userCredits: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -237,7 +235,7 @@ export function buildAIProjectContext(
   const members: number | null = domainVisible("participants") ? inputs.memberCount : null;
 
   // -- User info --
-  const user: AIContextUser = { role, credits: inputs.userCredits };
+  const user: AIContextUser = { role };
 
   // -- Recent events (strip sensitive payloads; only type + time) --
   const recentEvents: AIContextEvent[] = inputs.events.slice(0, 5).map((e) => ({
