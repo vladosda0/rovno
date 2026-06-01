@@ -66,12 +66,10 @@ export function BillingPanel() {
                 limit={quota.ai_chat_limit}
                 periodEnd={quota.period_end}
               />
-              <UsageMeter
-                title={t("quota.meter.doc")}
-                used={quota.ai_doc_used}
-                limit={quota.ai_doc_limit}
-                periodEnd={quota.period_end}
-              />
+              {/* Document-check meter hidden until a usageType:'doc' caller
+                  exists (no flow sends it yet, so it would always read 0). The
+                  backend doc limit stays dormant; re-add this meter when the
+                  document-analysis path is wired. */}
               <UsageMeter
                 title={t("quota.meter.photo")}
                 used={quota.ai_photo_used}
