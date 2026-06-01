@@ -33,6 +33,8 @@ export interface InvokeLiveTextAssistantInput {
   priorTurns?: ReadonlyArray<AiInferencePriorTurn>;
   /** Hosted `ai-inference` — GigaChat vs Qwen (DashScope). Omit to use Edge default / env. */
   llmProvider?: AiLlmProvider;
+  /** Tier-limit usage slot: 'chat' (default), 'doc', or 'photo'. Selects which monthly limit the server consumes. */
+  usageType?: "chat" | "doc" | "photo";
 }
 
 export interface AiInferencePriorTurn {
@@ -107,6 +109,7 @@ interface AIInferenceRequestBody {
   chatId?: string;
   priorTurns?: AiInferencePriorTurn[];
   llmProvider?: AiLlmProvider;
+  usageType?: "chat" | "doc" | "photo";
   mode: InferenceMode;
   message: string;
   contextPack: {
@@ -410,6 +413,7 @@ export function buildInferenceRequestBody(
   priorTurns?: ReadonlyArray<AiInferencePriorTurn>,
   chatId?: string,
   llmProvider?: AiLlmProvider,
+  usageType?: "chat" | "doc" | "photo",
 ): AIInferenceRequestBody {
   const { _meta: _, ...safeContext } = contextPack;
   const body: AIInferenceRequestBody = {
@@ -430,6 +434,9 @@ export function buildInferenceRequestBody(
   }
   if (llmProvider) {
     body.llmProvider = llmProvider;
+  }
+  if (usageType) {
+    body.usageType = usageType;
   }
   return body;
 }
@@ -460,6 +467,14 @@ export function sanitizeAiInferenceUserMessage(
     : "The assistant could not complete this request. Please try again.";
   if (!t) return fallback;
   const lower = t.toLowerCase();
+  if (lower === "quota_exceeded" || lower.includes("quota_exceeded")) {
+    // ai-inference returns body.error = "quota_exceeded" with status 402 when a
+    // usage credit can't be consumed. The visual paywall (AIQuotaGate) normally
+    // pre-empts this, but it's reachable on the stale-cache / multi-tab race.
+    return lang === "ru"
+      ? "Лимит ИИ исчерпан. Откройте Настройки → Биллинг, чтобы увидеть детали и обновить тариф."
+      : "AI usage limit reached. Open Settings → Billing for details and to upgrade.";
+  }
   if (
     lower.includes("invalid json")
     || lower.includes("provider returned")
@@ -552,6 +567,7 @@ async function invokeHosted(
   priorTurns?: ReadonlyArray<AiInferencePriorTurn>,
   chatId?: string,
   llmProvider?: AiLlmProvider,
+  usageType?: "chat" | "doc" | "photo",
 ): Promise<LiveTextAssistantResult> {
   const { supabase } = await import("@/integrations/supabase/client");
   const body = buildInferenceRequestBody(
@@ -562,6 +578,7 @@ async function invokeHosted(
     priorTurns,
     chatId,
     llmProvider,
+    usageType,
   );
 
   const { data, error } = await supabase.functions.invoke("ai-inference", { body });
@@ -738,6 +755,7 @@ export async function invokeLiveTextAssistant(
       input.priorTurns,
       input.chatId,
       input.llmProvider,
+      input.usageType,
     );
   }
   return invokeMock(input, assistantUiLanguage);

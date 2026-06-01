@@ -77,6 +77,8 @@ import {
   useWorkspaceProjectState,
 } from "@/hooks/use-workspace-source";
 import { trackEvent } from "@/lib/analytics";
+import { useTierQuota } from "@/hooks/useTierQuota";
+import { showTierLimitPaywallByType } from "@/lib/tier-limit-error";
 import {
   approveVersion,
   clearEstimateV2ProjectAccessContext,
@@ -851,6 +853,7 @@ export default function ProjectEstimate() {
   const [bulkFinishedTasks, setBulkFinishedTasks] = useState<Task[] | null>(null);
   const [collapsedStageIds, setCollapsedStageIds] = useState<Set<string>>(new Set());
   const estimateHasSavedContent = stages.length > 0 || works.length > 0 || lines.length > 0 || versions.length > 0;
+  const { data: tierQuota } = useTierQuota();
   const [estimateEditorStarted, setEstimateEditorStarted] = useState(estimateHasSavedContent);
   const previousProjectIdRef = useRef(pid);
   const [pendingStageTitleEditId, setPendingStageTitleEditId] = useState<string | null>(null);
@@ -2083,6 +2086,16 @@ export default function ProjectEstimate() {
   };
 
   const handleStartEstimate = () => {
+    // Proactive tier gate: a Free user is capped at 1 estimate total. Block
+    // creating another and surface the paywall (the backend trigger also blocks).
+    if (
+      tierQuota &&
+      tierQuota.estimates_limit >= 0 &&
+      tierQuota.estimates_used >= tierQuota.estimates_limit
+    ) {
+      showTierLimitPaywallByType("estimates_total", t);
+      return;
+    }
     setEstimateEditorStarted(true);
     setActiveTab("estimate");
   };

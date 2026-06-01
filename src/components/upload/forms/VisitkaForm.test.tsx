@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
 
 const orgsMock = vi.fn();
 const activeOrgMock = vi.fn();
@@ -29,7 +30,9 @@ function renderForm() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <VisitkaForm onBack={() => {}} onClose={() => {}} />
+      <MemoryRouter>
+        <VisitkaForm onBack={() => {}} onClose={() => {}} />
+      </MemoryRouter>
     </QueryClientProvider>,
   );
 }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { showTierLimitPaywall } from "@/lib/tier-limit-error";
 import {
   AlertTriangle,
   BrainCircuit,
@@ -821,6 +822,7 @@ export default function ProjectParticipants() {
       if (workspaceMode.kind === "supabase" && context?.previousInvites) {
         queryClient.setQueryData(invitesQueryKey, context.previousInvites);
       }
+      if (showTierLimitPaywall(error, t)) return;
       toast({
         title: t("participants.toast.inviteFailed"),
         description: error instanceof Error ? error.message : t("participants.toast.inviteFailedDesc"),
@@ -939,6 +941,7 @@ export default function ProjectParticipants() {
       if (workspaceMode.kind === "supabase" && context?.previousInvites) {
         queryClient.setQueryData(invitesQueryKey, context.previousInvites);
       }
+      if (showTierLimitPaywall(error, t)) return;
       toast({
         title: t("participants.toast.accessUpdateFailed"),
         description: error instanceof Error ? error.message : t("participants.toast.accessUpdateFailedDesc"),

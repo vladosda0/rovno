@@ -31,6 +31,8 @@ export type AnalyticsEventName =
   | "pricing_page_viewed"
   | "billing_panel_compare_plans_clicked"
   | "billing_panel_purchase_credits_clicked"
+  | "quota_gate_upgrade_clicked"
+  | "tier_lock_cta_clicked"
   | "billing_plan_selected"
   | "billing_checkout_started"
   | "billing_init_payment_succeeded"

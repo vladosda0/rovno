@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useUserOrganizations, useSetActiveOrg } from "@/hooks/use-orgs";
 import { useWorkspaceMode } from "@/hooks/use-workspace-source";
 import { CreateOrgDialog } from "@/components/orgs/CreateOrgDialog";
+import { TierLockTooltip } from "@/components/billing/TierLockTooltip";
 import { DeleteOrgDialog } from "@/components/orgs/DeleteOrgDialog";
 import { toast } from "@/hooks/use-toast";
 import type { OrgSummary } from "@/data/org-source";
@@ -62,14 +63,16 @@ export function OrgBlock() {
                 {t("home.org.cta.description")}
               </p>
             </div>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setCreateOpen(true)}
-            >
-              <Plus className="h-4 w-4 mr-1.5" />
-              {t("home.org.cta.action")}
-            </Button>
+            <TierLockTooltip requiredPlan="brigade" feature="create_organization">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setCreateOpen(true)}
+              >
+                <Plus className="h-4 w-4 mr-1.5" />
+                {t("home.org.cta.action")}
+              </Button>
+            </TierLockTooltip>
           </CardContent>
         </Card>
         <CreateOrgDialog open={createOpen} onOpenChange={setCreateOpen} />

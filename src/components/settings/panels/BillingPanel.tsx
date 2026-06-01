@@ -5,11 +5,12 @@ import { useCurrentUser } from "@/hooks/use-mock-data";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import { SettingsSection } from "@/components/settings/SettingsSection";
-import { AlertTriangle, Coins, CreditCard, Sparkles } from "lucide-react";
+import { Coins, CreditCard, Sparkles } from "lucide-react";
 import { BILLING_ENABLED } from "@/lib/billing";
 import { SubscriptionSection } from "@/components/billing/SubscriptionSection";
+import { UsageMeter } from "@/components/billing/UsageMeter";
+import { useTierQuota } from "@/hooks/useTierQuota";
 
 const PLAN_KEYS: Record<string, string> = {
   free: "billing.plan.free",
@@ -21,10 +22,7 @@ export function BillingPanel() {
   const { t } = useTranslation();
   const user = useCurrentUser();
   const navigate = useNavigate();
-  const total = user.credits_free + user.credits_paid;
-  const isEmpty = total <= 0;
-  const maxCredits = 300;
-  const pct = Math.min((total / maxCredits) * 100, 100);
+  const { data: quota } = useTierQuota();
   const planLabel = PLAN_KEYS[user.plan] ? t(PLAN_KEYS[user.plan]) : user.plan;
 
   return (
@@ -53,46 +51,32 @@ export function BillingPanel() {
           </CardContent>
         </Card>
 
-        {/* Credits */}
+        {/* AI usage this period (real tier quota from get_current_usage) */}
         <div className="space-y-sp-2">
           <div className="flex items-center gap-2">
             <Coins className="h-4 w-4 text-accent" />
-            <p className="text-body-sm font-semibold text-foreground">{t("billing.creditsRemaining")}</p>
+            <p className="text-body-sm font-semibold text-foreground">{t("quota.section.title")}</p>
           </div>
 
-          <div className="grid gap-sp-2 sm:grid-cols-2">
-            <Card className="bg-muted/30">
-              <CardContent className="p-1.5 px-sp-2 space-y-0.5">
-                <p className="text-caption text-muted-foreground">{t("billing.free")}</p>
-                <p className="text-h3 font-bold text-foreground">{user.credits_free}</p>
-              </CardContent>
-            </Card>
-            <Card className="bg-muted/30">
-              <CardContent className="p-1.5 px-sp-2 space-y-0.5">
-                <p className="text-caption text-muted-foreground">{t("billing.paid")}</p>
-                <p className="text-h3 font-bold text-foreground">{user.credits_paid}</p>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="rounded-panel bg-muted/40 p-1.5 px-sp-2 space-y-1.5">
-            <div className="flex justify-between text-caption text-muted-foreground">
-              <span>{t("billing.total", { count: total })}</span>
-              <span>{t("billing.max", { max: maxCredits })}</span>
+          {quota && (
+            <div className="space-y-sp-2">
+              <UsageMeter
+                title={t("quota.meter.chat")}
+                used={quota.ai_chat_used}
+                limit={quota.ai_chat_limit}
+                periodEnd={quota.period_end}
+              />
+              {/* Document-check meter hidden until a usageType:'doc' caller
+                  exists (no flow sends it yet, so it would always read 0). The
+                  backend doc limit stays dormant; re-add this meter when the
+                  document-analysis path is wired. */}
+              <UsageMeter
+                title={t("quota.meter.photo")}
+                used={quota.ai_photo_used}
+                limit={quota.ai_photo_limit}
+                periodEnd={quota.period_end}
+              />
             </div>
-            <Progress value={pct} className="h-2" />
-          </div>
-
-          {isEmpty && (
-            <Card className="border-warning/30 bg-warning/5">
-              <CardContent className="p-1.5 px-sp-2 flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-warning shrink-0" />
-                <div>
-                  <p className="text-body-sm font-medium text-foreground">{t("billing.empty")}</p>
-                  <p className="text-caption text-muted-foreground">{t("billing.emptyDescription")}</p>
-                </div>
-              </CardContent>
-            </Card>
           )}
 
           <div className="flex flex-wrap gap-sp-2 pt-sp-1">

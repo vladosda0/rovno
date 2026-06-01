@@ -37,7 +37,6 @@ export function ContextInspector({ projectId }: ContextInspectorProps) {
     procurementSummary,
     events,
     memberCount: members.length,
-    userCredits: user.credits_free + user.credits_paid,
   });
 
   return (
