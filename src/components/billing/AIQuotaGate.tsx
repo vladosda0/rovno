@@ -4,6 +4,8 @@ import { useNavigate } from "react-router-dom";
 import { type AiUsageType, selectAiUsage, useTierQuota } from "@/hooks/useTierQuota";
 import { Button } from "@/components/ui/button";
 import { trackEvent } from "@/lib/analytics";
+import { PLANS } from "@/data/plans";
+import { formatRubFromKopecks } from "@/lib/billing";
 
 interface AIQuotaGateProps {
   usageType: AiUsageType;
@@ -58,7 +60,9 @@ export function AIQuotaGate({ usageType, children }: AIQuotaGateProps) {
                 navigate(`/billing/checkout?plan=${nextPlan}`);
               }}
             >
-              {t(nextPlan === "brigade" ? "quota.gate.cta.brigade" : "quota.gate.cta")}
+              {t(nextPlan === "brigade" ? "quota.gate.cta.brigade" : "quota.gate.cta", {
+                price: formatRubFromKopecks(PLANS[nextPlan]?.amount_kopecks ?? 0),
+              })}
             </Button>
           )}
         </div>
