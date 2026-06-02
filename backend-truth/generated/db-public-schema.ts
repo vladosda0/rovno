@@ -415,6 +415,10 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260521140200_upsert_contractor_profile_preserve_fields.sql",
       "sha256": "9e56cea474507ee72f3396f9a979fad7aa7851ba1dfb74a17f57a4e1270143fb"
+    },
+    {
+      "path": "supabase/migrations/20260602075944_can_access_storage_object_workspace_org.sql",
+      "sha256": "6a7d4cdfc626baa9add7c9d0eacd8514defe01f24ab53929d51870f91691232c"
     }
   ],
   "generated_artifacts": [
@@ -543,6 +547,7 @@ export const manifest = {
     "sql/20260516120200_alter_subscriptions_recurrent.sql",
     "sql/20260521140100_create_org_with_contractor_profile.sql",
     "sql/20260521140200_upsert_contractor_profile_preserve_fields.sql",
+    "sql/20260602075944_can_access_storage_object_workspace_org.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -14518,7 +14523,7 @@ export const functions = {
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
+      "sourceMigration": "supabase/migrations/20260602075944_can_access_storage_object_workspace_org.sql",
       "triggerUsages": []
     },
     {
@@ -19497,7 +19502,7 @@ export const sourceTrace = {
       "schema": "public",
       "name": "can_access_storage_object",
       "signature": "public.can_access_storage_object(uuid)",
-      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
+      "sourceMigration": "supabase/migrations/20260602075944_can_access_storage_object_workspace_org.sql"
     },
     {
       "key": "public.accept_project_invite",
@@ -21602,12 +21607,13 @@ export const sourceTrace = {
         "supabase/migrations/20260317120000_storage_upload_intents.sql",
         "supabase/migrations/20260320110000_task_final_media_contract.sql",
         "supabase/migrations/20260506120200_org_documents_and_doc_links.sql",
-        "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
+        "supabase/migrations/20260602075944_can_access_storage_object_workspace_org.sql",
         "supabase/migrations/20260317133000_storage_bucket_config_table.sql",
         "supabase/migrations/20260317121000_storage_upload_rpcs.sql",
         "supabase/migrations/20260407190000_track4_upload_visibility_class.sql",
         "supabase/migrations/20260415130000_wave7_documents_media_ai_metadata_evidence.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
+        "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
         "supabase/migrations/20260326213000_internal_visibility_write_boundary.sql",
         "supabase/migrations/20260408100000_document_versions_insert_internal_visibility_parity.sql"
       ],
@@ -22370,12 +22376,13 @@ export const slices = {
         "supabase/migrations/20260317120000_storage_upload_intents.sql",
         "supabase/migrations/20260320110000_task_final_media_contract.sql",
         "supabase/migrations/20260506120200_org_documents_and_doc_links.sql",
-        "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
+        "supabase/migrations/20260602075944_can_access_storage_object_workspace_org.sql",
         "supabase/migrations/20260317133000_storage_bucket_config_table.sql",
         "supabase/migrations/20260317121000_storage_upload_rpcs.sql",
         "supabase/migrations/20260407190000_track4_upload_visibility_class.sql",
         "supabase/migrations/20260415130000_wave7_documents_media_ai_metadata_evidence.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
+        "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
         "supabase/migrations/20260326213000_internal_visibility_write_boundary.sql",
         "supabase/migrations/20260408100000_document_versions_insert_internal_visibility_parity.sql"
       ],

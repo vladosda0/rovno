@@ -487,7 +487,7 @@
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
+      "sourceMigration": "supabase/migrations/20260602075944_can_access_storage_object_workspace_org.sql",
       "triggerUsages": []
     },
     {

@@ -411,6 +411,10 @@
     {
       "path": "supabase/migrations/20260521140200_upsert_contractor_profile_preserve_fields.sql",
       "sha256": "9e56cea474507ee72f3396f9a979fad7aa7851ba1dfb74a17f57a4e1270143fb"
+    },
+    {
+      "path": "supabase/migrations/20260602075944_can_access_storage_object_workspace_org.sql",
+      "sha256": "6a7d4cdfc626baa9add7c9d0eacd8514defe01f24ab53929d51870f91691232c"
     }
   ],
   "generated_artifacts": [
@@ -539,6 +543,7 @@
     "sql/20260516120200_alter_subscriptions_recurrent.sql",
     "sql/20260521140100_create_org_with_contractor_profile.sql",
     "sql/20260521140200_upsert_contractor_profile_preserve_fields.sql",
+    "sql/20260602075944_can_access_storage_object_workspace_org.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
