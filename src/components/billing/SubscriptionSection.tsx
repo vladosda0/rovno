@@ -1,5 +1,8 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { SettingsSection } from "@/components/settings/SettingsSection";
@@ -9,12 +12,37 @@ import { PaymentHistory } from "@/components/billing/PaymentHistory";
 import { CancelSubscriptionDialog } from "@/components/billing/CancelSubscriptionDialog";
 import { PLANS } from "@/data/plans";
 import { formatRubFromKopecks } from "@/lib/billing";
+import { toast } from "@/hooks/use-toast";
+import { trackEvent } from "@/lib/analytics";
+
+// tbank RPC is not in the generated Database type; use the untyped client.
+const rawSupabase = supabase as unknown as SupabaseClient;
 
 // Real T-Bank subscription management. Rendered by BillingPanel only when
 // BILLING_ENABLED, so prod (flag off) behavior is unchanged.
 export function SubscriptionSection() {
   const { t, i18n } = useTranslation();
   const { subscription, status, readOnly, isLoading, refetch } = useActiveSubscription();
+  const [clearingDowngrade, setClearingDowngrade] = useState(false);
+
+  // "Keep current plan" — cancel a scheduled downgrade. Passing null clears
+  // pending_plan_code; auto_renew is left as-is (the RPC never mutates it).
+  const clearScheduledDowngrade = async () => {
+    if (!subscription) return;
+    setClearingDowngrade(true);
+    const { error } = await rawSupabase.rpc("tbank_schedule_plan_change", {
+      p_subscription_id: subscription.id,
+      p_target_plan_code: null,
+    });
+    setClearingDowngrade(false);
+    if (error) {
+      toast({ title: t("settings.billing.pendingDowngradeError"), variant: "destructive" });
+      return;
+    }
+    trackEvent("billing_downgrade_cleared");
+    toast({ title: t("settings.billing.pendingDowngradeCleared") });
+    refetch();
+  };
 
   if (isLoading) return null;
 
@@ -76,6 +104,27 @@ export function SubscriptionSection() {
           ) : null}
         </CardContent>
       </Card>
+
+      {subscription.pending_plan_code ? (
+        <div className="rounded-panel border border-border bg-muted/30 p-sp-2 space-y-sp-1">
+          <p className="text-body-sm text-foreground">
+            {t("settings.billing.pendingDowngrade", {
+              plan:
+                PLANS[subscription.pending_plan_code as keyof typeof PLANS]?.display_name ??
+                subscription.pending_plan_code,
+              date: endsAt ?? "—",
+            })}
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={clearScheduledDowngrade}
+            disabled={clearingDowngrade}
+          >
+            {t("settings.billing.pendingDowngradeKeep", { plan: planName })}
+          </Button>
+        </div>
+      ) : null}
 
       <AutoRenewToggle
         subscriptionId={subscription.id}

@@ -8,7 +8,7 @@ import { CheckoutBlocked } from "@/components/billing/CheckoutBlocked";
 import { TBankIframeWidget } from "@/components/billing/TBankIframeWidget";
 import { TBankQuickPayWidget } from "@/components/billing/TBankQuickPayWidget";
 import { getPlan, isPlanCode, PLANS } from "@/data/plans";
-import { BILLING_ENABLED, formatRubFromKopecks, newIdempotencyKey } from "@/lib/billing";
+import { BILLING_ENABLED, formatRubFromKopecks, newIdempotencyKey, planRank } from "@/lib/billing";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
 import { useActiveSubscription } from "@/hooks/useActiveSubscription";
 import { useInitPayment } from "@/hooks/useInitPayment";
@@ -31,9 +31,27 @@ export default function Checkout() {
   const plan = isValidPlan ? getPlan(planCode) : null;
   const allowed = BILLING_ENABLED && isValidPlan;
 
-  // M2: never let a user with an active subscription buy again (double charge).
+  // M2: never let a user with an active subscription buy the SAME or a LOWER tier
+  // again (double charge). An upgrade (higher tier) is the exception — it is
+  // allowed through, and tbank-init-payment charges only the catalogue
+  // difference. Downgrades are scheduled from PlansDialog, never paid here.
   const { status: subStatus, subscription, isLoading: subLoading } = useActiveSubscription();
-  const blocked = subStatus === "active";
+  const currentPlanCode = subscription?.plan_code ?? null;
+  const isUpgrade =
+    subStatus === "active" && isValidPlan && planRank(planCode) > planRank(currentPlanCode);
+  const blocked = subStatus === "active" && !isUpgrade;
+
+  // Upgrade pricing shown to the user = full new price − current plan's catalogue
+  // price, mirroring tbank-init-payment's server-side math. Non-upgrade = full price.
+  const currentCatalogueKopecks = currentPlanCode
+    ? getPlan(currentPlanCode)?.amount_kopecks ?? 0
+    : 0;
+  const chargeKopecks = isUpgrade && plan
+    ? Math.max(plan.amount_kopecks - currentCatalogueKopecks, 0)
+    : plan?.amount_kopecks ?? 0;
+  const currentPlanName = currentPlanCode
+    ? PLANS[currentPlanCode]?.display_name ?? currentPlanCode
+    : null;
 
   const [autoRenew, setAutoRenew] = useState(true);
   const [retryNonce, setRetryNonce] = useState(0);
@@ -173,7 +191,12 @@ export default function Checkout() {
       <div className="grid gap-sp-4 md:grid-cols-2">
         <OrderSummary
           planName={plan.display_name}
-          priceLabel={formatRubFromKopecks(plan.amount_kopecks)}
+          priceLabel={formatRubFromKopecks(chargeKopecks)}
+          priceNote={
+            isUpgrade && currentPlanName
+              ? t("billing.checkout.upgradeNote", { plan: currentPlanName })
+              : undefined
+          }
           receiptEmail={user?.email ?? ""}
           autoRenew={autoRenew}
           onAutoRenewChange={setAutoRenew}

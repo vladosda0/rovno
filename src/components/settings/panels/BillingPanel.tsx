@@ -1,40 +1,46 @@
-import { useNavigate } from "react-router-dom";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { trackEvent } from "@/lib/analytics";
-import { useCurrentUser } from "@/hooks/use-mock-data";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { SettingsSection } from "@/components/settings/SettingsSection";
-import { Coins, CreditCard, Sparkles } from "lucide-react";
+import { Coins, Sparkles, ArrowUpRight } from "lucide-react";
 import { BILLING_ENABLED } from "@/lib/billing";
 import { SubscriptionSection } from "@/components/billing/SubscriptionSection";
 import { UsageMeter } from "@/components/billing/UsageMeter";
+import { PlansDialog } from "@/components/billing/PlansDialog";
 import { useTierQuota } from "@/hooks/useTierQuota";
-
-const PLAN_KEYS: Record<string, string> = {
-  free: "billing.plan.free",
-  pro: "billing.plan.pro",
-  business: "billing.plan.business",
-};
+import { PLANS } from "@/data/plans";
+import { TIER_LIMITS } from "@/data/tier-limits";
 
 export function BillingPanel() {
-  const { t } = useTranslation();
-  const user = useCurrentUser();
-  const navigate = useNavigate();
-  const { data: quota } = useTierQuota();
-  const planLabel = PLAN_KEYS[user.plan] ? t(PLAN_KEYS[user.plan]) : user.plan;
+  const { t, i18n } = useTranslation();
+  const { data: quota, isLoading } = useTierQuota();
+  const [plansOpen, setPlansOpen] = useState(false);
+
+  // Plan comes from the active subscription (get_current_usage), the billing
+  // source of truth — not the legacy profiles.plan field.
+  const planCode = quota?.plan_code ?? "free";
+  const planLabel = PLANS[planCode]?.display_name ?? planCode;
+  const canUpgrade = planCode !== "brigade";
+  // Per-project participant (editor) seats: a static per-tier allowance, since
+  // get_current_usage exposes no live member count. -1 renders as the ∞ label.
+  const participantSeats = TIER_LIMITS[planCode]?.editors_per_project ?? 0;
+  const participantsAllowance =
+    participantSeats < 0 ? t("quota.meter.unlimited") : String(participantSeats);
 
   return (
     <div className="space-y-sp-3">
       {/* Real T-Bank subscription management (phase 1c). Hidden until the
-          billing flag is on; the credits panel below is the existing surface. */}
+          billing flag is on. */}
       {BILLING_ENABLED ? <SubscriptionSection /> : null}
 
       <SettingsSection title={t("billing.title")} description={t("billing.description")}>
-        {/* Plan card */}
+        {/* Current plan */}
         <Card>
-          <CardContent className="p-1.5 px-sp-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+          <CardContent className="p-sp-2 flex flex-col gap-2 sm:flex-row sm:items-center">
             <div className="h-9 w-9 rounded-panel bg-accent/10 flex items-center justify-center shrink-0">
               <Sparkles className="h-5 w-5 text-accent" />
             </div>
@@ -43,50 +49,89 @@ export function BillingPanel() {
                 <p className="text-body font-semibold text-foreground">
                   {t("billing.planSuffix", { plan: planLabel })}
                 </p>
-                <Badge variant="secondary" className="text-[10px] capitalize">{user.plan}</Badge>
+                <Badge variant="secondary" className="text-[10px] capitalize">{planCode}</Badge>
               </div>
               <p className="text-caption text-muted-foreground">{t("billing.currentTier")}</p>
             </div>
-            <Button variant="outline" size="sm" className="w-full sm:w-auto sm:shrink-0" onClick={() => { trackEvent("billing_panel_compare_plans_clicked"); navigate("/#pricing"); }}>{t("billing.comparePlans")}</Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full sm:w-auto sm:shrink-0"
+              onClick={() => { trackEvent("billing_panel_compare_plans_clicked"); setPlansOpen(true); }}
+            >
+              {t("billing.comparePlans")}
+            </Button>
           </CardContent>
         </Card>
 
-        {/* AI usage this period (real tier quota from get_current_usage) */}
+        {/* Usage + tier limits (real quota from get_current_usage) */}
         <div className="space-y-sp-2">
-          <div className="flex items-center gap-2">
-            <Coins className="h-4 w-4 text-accent" />
-            <p className="text-body-sm font-semibold text-foreground">{t("quota.section.title")}</p>
+          <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+            <div className="flex items-center gap-2">
+              <Coins className="h-4 w-4 text-accent" />
+              <p className="text-body-sm font-semibold text-foreground">{t("quota.section.title")}</p>
+            </div>
+            {quota?.period_end && (
+              <span className="text-caption text-muted-foreground">
+                {t("quota.meter.renews", {
+                  date: new Date(quota.period_end).toLocaleDateString(i18n.language),
+                })}
+              </span>
+            )}
           </div>
 
+          {isLoading && !quota && <Skeleton className="h-24 w-full" />}
           {quota && (
             <div className="space-y-sp-2">
               <UsageMeter
                 title={t("quota.meter.chat")}
                 used={quota.ai_chat_used}
                 limit={quota.ai_chat_limit}
-                periodEnd={quota.period_end}
               />
-              {/* Document-check meter hidden until a usageType:'doc' caller
-                  exists (no flow sends it yet, so it would always read 0). The
-                  backend doc limit stays dormant; re-add this meter when the
-                  document-analysis path is wired. */}
+              <UsageMeter
+                title={t("quota.meter.doc")}
+                used={quota.ai_doc_used}
+                limit={quota.ai_doc_limit}
+              />
               <UsageMeter
                 title={t("quota.meter.photo")}
                 used={quota.ai_photo_used}
                 limit={quota.ai_photo_limit}
-                periodEnd={quota.period_end}
               />
+              <UsageMeter
+                title={t("quota.meter.estimates")}
+                used={quota.estimates_used}
+                limit={quota.estimates_limit}
+              />
+              {/* Participants = per-project editor seats; a static per-tier
+                  allowance, not a consumption meter (no live member count in
+                  get_current_usage). */}
+              <div className="flex items-center justify-between gap-2 rounded-panel bg-muted/40 p-1.5 px-sp-2">
+                <span className="text-body-sm font-semibold text-foreground">
+                  {t("quota.meter.participants")}
+                </span>
+                <span className="text-caption font-medium tabular-nums text-muted-foreground">
+                  {participantsAllowance}
+                </span>
+              </div>
             </div>
           )}
 
-          <div className="flex flex-wrap gap-sp-2 pt-sp-1">
-            <Button className="w-full sm:w-auto" onClick={() => { trackEvent("billing_panel_purchase_credits_clicked"); navigate("/#pricing"); }}>
-              <CreditCard className="h-4 w-4 mr-1.5" />
-              {t("billing.purchase")}
-            </Button>
-          </div>
+          {canUpgrade && (
+            <div className="flex flex-wrap gap-sp-2 pt-sp-1">
+              <Button
+                className="w-full sm:w-auto"
+                onClick={() => { trackEvent("billing_panel_upgrade_clicked", { plan: planCode }); setPlansOpen(true); }}
+              >
+                <ArrowUpRight className="h-4 w-4 mr-1.5" />
+                {t("billing.upgradePlan")}
+              </Button>
+            </div>
+          )}
         </div>
       </SettingsSection>
+
+      <PlansDialog open={plansOpen} onOpenChange={setPlansOpen} currentPlan={planCode} />
     </div>
   );
 }
