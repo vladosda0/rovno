@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
 import { trackEvent } from "@/lib/analytics";
 import { PLANS, type PlanCode } from "@/data/plans";
-import { formatRubFromKopecks } from "@/lib/billing";
+import { BILLING_ENABLED, formatRubFromKopecks } from "@/lib/billing";
 import { PlanCard, type FeatureGroup } from "./PlanCard";
 
 // Struck-through "regular" price shown before the start price. This is marketing
@@ -107,13 +107,21 @@ export function PricingBlock({ className }: { className?: string }) {
 
   const handleSelectFree = () => {
     trackEvent("billing_plan_selected", { plan: "free" });
-    navigate(isAuthenticated ? "/home" : "/auth/signup");
+    // Logged-in users land on their plan/usage page rather than a generic home.
+    navigate(isAuthenticated ? "/settings?tab=billing" : "/auth/signup");
   };
 
   const handleSelectPaid = (code: PlanCode) => {
     trackEvent("billing_plan_selected", { plan: code });
-    const target = `/billing/checkout?plan=${code}`;
-    navigate(isAuthenticated ? target : `/auth/signup?next=${encodeURIComponent(target)}`);
+    const checkout = `/billing/checkout?plan=${code}`;
+    if (!isAuthenticated) {
+      navigate(`/auth/signup?next=${encodeURIComponent(checkout)}`);
+      return;
+    }
+    // When checkout is live, go straight to purchase; otherwise land on the
+    // Settings billing page (plan + usage limits + upgrade) instead of
+    // dead-ending — /billing/checkout redirects to /pricing while billing is off.
+    navigate(BILLING_ENABLED ? checkout : "/settings?tab=billing");
   };
 
   return (

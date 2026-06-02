@@ -4,6 +4,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 interface OrderSummaryProps {
   planName: string;
   priceLabel: string;
+  priceNote?: string;
   receiptEmail: string;
   autoRenew: boolean;
   onAutoRenewChange: (value: boolean) => void;
@@ -12,6 +13,7 @@ interface OrderSummaryProps {
 export function OrderSummary({
   planName,
   priceLabel,
+  priceNote,
   receiptEmail,
   autoRenew,
   onAutoRenewChange,
@@ -35,6 +37,9 @@ export function OrderSummary({
           <dt className="text-muted-foreground">{t("billing.checkout.price")}</dt>
           <dd className="font-semibold text-foreground">{priceLabel}</dd>
         </div>
+        {priceNote ? (
+          <p className="text-caption text-muted-foreground">{priceNote}</p>
+        ) : null}
       </dl>
 
       <label className="flex cursor-pointer items-start gap-2">

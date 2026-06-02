@@ -14,7 +14,7 @@ const rawSupabase = supabase as unknown as SupabaseClient;
 // rebill_id intentionally NOT selected (audit #2): it is a recurring-charge
 // token-equivalent the UI never uses; keep it off the wire/cache.
 const SUBSCRIPTION_COLUMNS =
-  "id, profile_id, provider, plan_code, status, is_current, currency, amount_cents, auto_renew, current_period_starts_at, current_period_ends_at, canceled_at, grace_until, created_at";
+  "id, profile_id, provider, plan_code, status, is_current, currency, amount_cents, auto_renew, current_period_starts_at, current_period_ends_at, canceled_at, grace_until, created_at, pending_plan_code";
 
 export interface ActiveSubscription {
   status: SubscriptionStatus;

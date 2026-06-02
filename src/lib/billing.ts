@@ -18,6 +18,14 @@ export function formatRubFromKopecks(kopecks: number): string {
   return `${rubFormatter.format(Math.round(kopecks / 100))} ₽`;
 }
 
+// Plan tier ordering shared by the upgrade/downgrade UI. Higher rank = pricier
+// tier. Mirrors the backend rank in tbank-init-payment / tbank_schedule_plan_change.
+export const PLAN_RANK: Record<string, number> = { free: 0, master: 1, brigade: 2 };
+
+export function planRank(code: string | null | undefined): number {
+  return code ? (PLAN_RANK[code] ?? 0) : 0;
+}
+
 // UUID for the mandatory idempotency_key. Prefers WebCrypto; the fallback emits
 // a UUID v4 *shape* so the backend's isUuid() check accepts it even in a
 // non-secure context (file://, http-localhost). The fallback uses Math.random
@@ -55,6 +63,8 @@ export interface SubscriptionRow {
   readonly canceled_at: string | null;
   readonly grace_until: string | null;
   readonly created_at: string;
+  // Scheduled downgrade target applied at the next renewal (null when none).
+  readonly pending_plan_code: string | null;
 }
 
 export interface PaymentIntentRow {
