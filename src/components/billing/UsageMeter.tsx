@@ -6,21 +6,27 @@ interface UsageMeterProps {
   title: string;
   used: number;
   limit: number;
-  periodEnd?: string | null;
 }
 
-// One labelled progress bar for an AI usage slot. limit < 0 means unlimited.
-export function UsageMeter({ title, used, limit, periodEnd }: UsageMeterProps) {
-  const { t, i18n } = useTranslation();
+// One labelled progress bar for a usage slot, showing how much is REMAINING
+// (not how much is used) — a fresh free plan reads "50 left" with a full bar,
+// rather than "0 of 50" with an empty bar that looks exhausted. limit < 0 means
+// unlimited. The shared renewal date is shown once beside the section header,
+// not per meter.
+export function UsageMeter({ title, used, limit }: UsageMeterProps) {
+  const { t } = useTranslation();
   const unlimited = limit < 0;
-  const pct = unlimited || limit === 0
+  const remaining = unlimited ? 0 : Math.max(limit - used, 0);
+  // Bar fills with what's LEFT: full when nothing used, empty when exhausted.
+  // limit < 0 = unlimited (no bar). limit === 0 = a zero allowance → empty bar,
+  // not a full 100% bar that would misread as "available".
+  const remainingPct = unlimited
+    ? 100
+    : limit <= 0
     ? 0
-    : Math.min(Math.round((used / limit) * 100), 100);
-  const atLimit = !unlimited && used >= limit;
-  const near = !unlimited && !atLimit && pct >= 90;
-  const renewLabel = periodEnd
-    ? new Date(periodEnd).toLocaleDateString(i18n.language)
-    : null;
+    : Math.round((remaining / limit) * 100);
+  const atLimit = !unlimited && remaining <= 0;
+  const low = !unlimited && !atLimit && remainingPct <= 10;
 
   return (
     <div className="rounded-panel bg-muted/40 p-1.5 px-sp-2 space-y-1.5">
@@ -31,22 +37,17 @@ export function UsageMeter({ title, used, limit, periodEnd }: UsageMeterProps) {
             "text-caption font-medium tabular-nums",
             atLimit
               ? "text-destructive"
-              : near
+              : low
               ? "text-warning"
               : "text-muted-foreground",
           )}
         >
           {unlimited
             ? t("quota.meter.unlimited")
-            : t("quota.meter.used", { used, limit })}
+            : t("quota.meter.remaining", { remaining, limit })}
         </span>
       </div>
-      {!unlimited && <Progress value={pct} className="h-2" />}
-      {renewLabel && (
-        <p className="text-caption text-muted-foreground">
-          {t("quota.meter.renews", { date: renewLabel })}
-        </p>
-      )}
+      {!unlimited && <Progress value={remainingPct} className="h-2" />}
     </div>
   );
 }
