@@ -38,7 +38,7 @@ export function OrderSummary({
           <dd className="font-semibold text-foreground">{priceLabel}</dd>
         </div>
         {priceNote ? (
-          <p className="text-caption text-muted-foreground">{priceNote}</p>
+          <div className="text-caption text-muted-foreground">{priceNote}</div>
         ) : null}
       </dl>
 
