@@ -12,12 +12,13 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 - `supabase/migrations/20260317120000_storage_upload_intents.sql`
 - `supabase/migrations/20260320110000_task_final_media_contract.sql`
 - `supabase/migrations/20260506120200_org_documents_and_doc_links.sql`
-- `supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql`
+- `supabase/migrations/20260602075944_can_access_storage_object_workspace_org.sql`
 - `supabase/migrations/20260317133000_storage_bucket_config_table.sql`
 - `supabase/migrations/20260317121000_storage_upload_rpcs.sql`
 - `supabase/migrations/20260407190000_track4_upload_visibility_class.sql`
 - `supabase/migrations/20260415130000_wave7_documents_media_ai_metadata_evidence.sql`
 - `supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql`
+- `supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql`
 - `supabase/migrations/20260326213000_internal_visibility_write_boundary.sql`
 - `supabase/migrations/20260408100000_document_versions_insert_internal_visibility_parity.sql`
 
@@ -210,7 +211,7 @@ Constraints:
 
 | Function | Returns | Auth Execute | Kind | Source |
 | --- | --- | --- | --- | --- |
-| `public.can_access_storage_object(uuid)` | `boolean` | yes | `rpc` | `supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql` |
+| `public.can_access_storage_object(uuid)` | `boolean` | yes | `rpc` | `supabase/migrations/20260602075944_can_access_storage_object_workspace_org.sql` |
 | `public.prepare_project_media_upload(uuid, text, text, text, bigint, text)` | `table ( upload_intent_id uuid, bucket text, object_path text, filename text, mime_type text, size_bytes bigint )` | yes | `rpc` | `supabase/migrations/20260317133000_storage_bucket_config_table.sql` |
 | `public.finalize_project_media_upload(uuid)` | `table ( project_media_id uuid, storage_object_id uuid, project_id uuid, bucket text, object_path text, filename text )` | yes | `rpc` | `supabase/migrations/20260317121000_storage_upload_rpcs.sql` |
 | `public.finalize_document_upload(uuid)` | `table ( document_id uuid, document_version_id uuid, storage_object_id uuid, project_id uuid, bucket text, object_path text, filename text )` | yes | `rpc` | `supabase/migrations/20260407190000_track4_upload_visibility_class.sql` |
