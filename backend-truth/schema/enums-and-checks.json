@@ -1604,6 +1604,60 @@
       "allowedValues": null,
       "expression": "case\n      when is_recurrent_charge then parent_intent_id is not null\n      else parent_intent_id is null\n    end",
       "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+    },
+    {
+      "schema": "public",
+      "table": "system_stage_articles",
+      "column": null,
+      "constraintName": "system_stage_articles_name_nonempty",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "length(trim(name)) > 0",
+      "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+    },
+    {
+      "schema": "public",
+      "table": "system_work_articles",
+      "column": "default_qty",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "default_qty >= 0",
+      "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+    },
+    {
+      "schema": "public",
+      "table": "system_work_articles",
+      "column": "default_resource_type",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "labor",
+        "subcontractor",
+        "other"
+      ],
+      "expression": "default_resource_type in ('labor','subcontractor','other')",
+      "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+    },
+    {
+      "schema": "public",
+      "table": "system_work_articles",
+      "column": null,
+      "constraintName": "system_work_articles_name_nonempty",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "length(trim(name)) > 0",
+      "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+    },
+    {
+      "schema": "public",
+      "table": "system_work_articles",
+      "column": null,
+      "constraintName": "system_work_articles_default_unit_nonempty",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "length(trim(default_unit)) > 0",
+      "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
     }
   ]
 }

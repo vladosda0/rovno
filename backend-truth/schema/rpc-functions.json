@@ -153,6 +153,16 @@
           "table": "public.payment_intents",
           "triggerName": "set_payment_intents_updated_at",
           "activation": "before update"
+        },
+        {
+          "table": "public.system_stage_articles",
+          "triggerName": "set_system_stage_articles_updated_at",
+          "activation": "before update"
+        },
+        {
+          "table": "public.system_work_articles",
+          "triggerName": "set_system_work_articles_updated_at",
+          "activation": "before update"
         }
       ]
     },
@@ -2180,7 +2190,7 @@
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql",
+      "sourceMigration": "supabase/migrations/20260602150200_apply_template_propagate_library_fks.sql",
       "triggerUsages": []
     },
     {

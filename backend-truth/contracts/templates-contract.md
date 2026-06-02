@@ -11,9 +11,11 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 - `supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql`
 - `supabase/migrations/20260512132310_estimate_templates_schema.sql`
 - `supabase/migrations/20260512132330_contractor_profiles_schema.sql`
+- `supabase/migrations/20260602150000_canonical_library_stages_and_works.sql`
+- `supabase/migrations/20260602150100_instance_tables_library_fks.sql`
 - `supabase/migrations/20260512132320_template_rls.sql`
 - `supabase/migrations/20260512132340_template_rpcs.sql`
-- `supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql`
+- `supabase/migrations/20260602150200_apply_template_propagate_library_fks.sql`
 
 ## Tables
 
@@ -111,6 +113,7 @@ Triggers:
 | `parameter_definitions` | `jsonb` | no | `'[]'::jsonb` | no |
 | `created_at` | `timestamptz` | no | `now()` | no |
 | `updated_at` | `timestamptz` | no | `now()` | no |
+| `system_stage_article_id` | `uuid` | yes |   | no |
 
 Constraints:
 - `template_stages_title_nonempty` check (expression `length(trim(title)) > 0`)
@@ -119,6 +122,7 @@ Constraints:
 
 Indexes:
 - `idx_template_stages_template` on (`estimate_template_id`)
+- `idx_template_stages_canonical` on (`system_stage_article_id`), where `system_stage_article_id is not null`
 
 Triggers:
 - `set_template_stages_updated_at`: before update, executes `public.set_updated_at()`
@@ -135,6 +139,7 @@ Triggers:
 | `parameter_definitions` | `jsonb` | no | `'[]'::jsonb` | no |
 | `created_at` | `timestamptz` | no | `now()` | no |
 | `updated_at` | `timestamptz` | no | `now()` | no |
+| `system_work_article_id` | `uuid` | yes |   | no |
 
 Constraints:
 - `template_works_title_nonempty` check (expression `length(trim(title)) > 0`)
@@ -142,6 +147,7 @@ Constraints:
 
 Indexes:
 - `idx_template_works_stage` on (`template_stage_id`)
+- `idx_template_works_canonical` on (`system_work_article_id`), where `system_work_article_id is not null`
 
 Triggers:
 - `set_template_works_updated_at`: before update, executes `public.set_updated_at()`
@@ -214,6 +220,64 @@ Indexes:
 Triggers:
 - `set_contractor_profiles_updated_at`: before update, executes `public.set_updated_at()`
 
+### public.system_stage_articles
+
+| Column | Type | Nullable | Default | Primary Key |
+| --- | --- | --- | --- | --- |
+| `id` | `uuid` | no | `gen_random_uuid()` | yes |
+| `name` | `text` | no |   | no |
+| `description` | `text` | no | `''` | no |
+| `default_sort_hint` | `integer` | no | `100` | no |
+| `category_tag` | `text` | no | `'general'` | no |
+| `source` | `text` | no | `'rovno_seed'` | no |
+| `source_version` | `text` | yes |   | no |
+| `archived` | `boolean` | no | `false` | no |
+| `created_at` | `timestamptz` | no | `now()` | no |
+| `updated_at` | `timestamptz` | no | `now()` | no |
+
+Constraints:
+- `system_stage_articles_name_nonempty` check (expression `length(trim(name)) > 0`)
+
+Indexes:
+- `idx_system_stage_articles_name_unique_active` on (`name`), unique, where `archived = false`
+- `idx_system_stage_articles_sort` on (`default_sort_hint`)
+- `idx_system_stage_articles_archived` on (`archived`), where `archived = false`
+
+Triggers:
+- `set_system_stage_articles_updated_at`: before update, executes `public.set_updated_at()`
+
+### public.system_work_articles
+
+| Column | Type | Nullable | Default | Primary Key |
+| --- | --- | --- | --- | --- |
+| `id` | `uuid` | no | `gen_random_uuid()` | yes |
+| `parent_stage_article_id` | `uuid` | no |   | no |
+| `name` | `text` | no |   | no |
+| `description` | `text` | no | `''` | no |
+| `default_unit` | `text` | no |   | no |
+| `default_qty` | `numeric(14,3)` | no | `1` | no |
+| `default_sort_hint` | `integer` | no | `100` | no |
+| `default_resource_type` | `text` | no | `'labor'` | no |
+| `source` | `text` | no | `'rovno_seed'` | no |
+| `source_version` | `text` | yes |   | no |
+| `archived` | `boolean` | no | `false` | no |
+| `created_at` | `timestamptz` | no | `now()` | no |
+| `updated_at` | `timestamptz` | no | `now()` | no |
+
+Constraints:
+- unnamed check (expression `default_qty >= 0`)
+- unnamed check (expression `default_resource_type in ('labor','subcontractor','other')`)
+- `system_work_articles_name_nonempty` check (expression `length(trim(name)) > 0`)
+- `system_work_articles_default_unit_nonempty` check (expression `length(trim(default_unit)) > 0`)
+
+Indexes:
+- `idx_system_work_articles_stage` on (`parent_stage_article_id`)
+- `idx_system_work_articles_stage_sort` on (`parent_stage_article_id`, `default_sort_hint`)
+- `idx_system_work_articles_archived` on (`archived`), where `archived = false`
+
+Triggers:
+- `set_system_work_articles_updated_at`: before update, executes `public.set_updated_at()`
+
 ## Relations
 
 | From | To | On Delete | Source |
@@ -226,6 +290,12 @@ Triggers:
 | `public.contractor_profiles(org_id)` | `public.organizations(id)` | `cascade` | `supabase/migrations/20260512132330_contractor_profiles_schema.sql` |
 | `public.contractor_profiles(moderated_by)` | `public.profiles(id)` | `set null` | `supabase/migrations/20260512132330_contractor_profiles_schema.sql` |
 | `public.contractor_profiles(created_by)` | `public.profiles(id)` | `set null` | `supabase/migrations/20260512132330_contractor_profiles_schema.sql` |
+| `public.system_work_articles(parent_stage_article_id)` | `public.system_stage_articles(id)` | `restrict` | `supabase/migrations/20260602150000_canonical_library_stages_and_works.sql` |
+| `public.template_stages(system_stage_article_id)` | `public.system_stage_articles(id)` | `set null` | `supabase/migrations/20260602150100_instance_tables_library_fks.sql` |
+| `public.template_works(system_work_article_id)` | `public.system_work_articles(id)` | `set null` | `supabase/migrations/20260602150100_instance_tables_library_fks.sql` |
+| `public.project_stages(system_stage_article_id)` | `public.system_stage_articles(id)` | `set null` | `supabase/migrations/20260602150100_instance_tables_library_fks.sql` |
+| `public.estimate_works(system_work_article_id)` | `public.system_work_articles(id)` | `set null` | `supabase/migrations/20260602150100_instance_tables_library_fks.sql` |
+| `public.estimate_resource_lines(system_resource_article_id)` | `public.system_resource_articles(id)` | `set null` | `supabase/migrations/20260602150100_instance_tables_library_fks.sql` |
 
 ## Functions
 
@@ -235,7 +305,7 @@ Triggers:
 | `public.can_manage_template(text, uuid)` | `boolean` | yes | `rpc` | `supabase/migrations/20260512132320_template_rls.sql` |
 | `public.list_estimate_templates(text)` | `table ( id uuid, owner_kind text, owner_label text, title text, description text, scope text, published_to_public boolean, cover_image_url text, stage_count integer, is_manageable boolean, updated_at timestamptz )` | yes | `rpc` | `supabase/migrations/20260512132340_template_rpcs.sql` |
 | `public.get_estimate_template_detail(uuid)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260512132340_template_rpcs.sql` |
-| `public.apply_template_stage_to_estimate(uuid, uuid, integer)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql` |
+| `public.apply_template_stage_to_estimate(uuid, uuid, integer)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260602150200_apply_template_propagate_library_fks.sql` |
 
 ## RLS and Grants
 
@@ -329,4 +399,20 @@ Triggers:
     with check: `public.can_manage_org(org_id)`
   - `contractor_profiles_delete` for `delete` to `authenticated`
     using: `public.can_manage_org(org_id)`
+
+### public.system_stage_articles
+
+- RLS enabled: yes
+- Authenticated grants: `select`
+- Policies:
+  - `system_stage_articles_select` for `select` to `authenticated`
+    using: `true`
+
+### public.system_work_articles
+
+- RLS enabled: yes
+- Authenticated grants: `select`
+- Policies:
+  - `system_work_articles_select` for `select` to `authenticated`
+    using: `true`
 

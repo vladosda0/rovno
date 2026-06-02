@@ -419,6 +419,18 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260602075944_can_access_storage_object_workspace_org.sql",
       "sha256": "6a7d4cdfc626baa9add7c9d0eacd8514defe01f24ab53929d51870f91691232c"
+    },
+    {
+      "path": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql",
+      "sha256": "05cc3f143d72339e84b610d8de0d6e04d3cd655cfa3a2bc8eb4a82a903945642"
+    },
+    {
+      "path": "supabase/migrations/20260602150100_instance_tables_library_fks.sql",
+      "sha256": "1cd22137aa33ef1ceeec8c5cc9ed265927640e6afec3d6270d55d3b911fd639d"
+    },
+    {
+      "path": "supabase/migrations/20260602150200_apply_template_propagate_library_fks.sql",
+      "sha256": "799a09ee4cf6a65008481b6d0eefc7bb9913c18e67e749113ed6b84c4f371e62"
     }
   ],
   "generated_artifacts": [
@@ -548,6 +560,9 @@ export const manifest = {
     "sql/20260521140100_create_org_with_contractor_profile.sql",
     "sql/20260521140200_upsert_contractor_profile_preserve_fields.sql",
     "sql/20260602075944_can_access_storage_object_workspace_org.sql",
+    "sql/20260602150000_canonical_library_stages_and_works.sql",
+    "sql/20260602150100_instance_tables_library_fks.sql",
+    "sql/20260602150200_apply_template_propagate_library_fks.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -2080,6 +2095,23 @@ export const tables = {
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "system_stage_article_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "system_stage_articles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
         }
       ],
       "constraints": [
@@ -2144,6 +2176,16 @@ export const tables = {
           "where": null,
           "attachedConstraintName": "project_stages_project_id_sort_order_key",
           "sourceMigration": "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql"
+        },
+        {
+          "name": "idx_project_stages_canonical",
+          "unique": false,
+          "expressions": [
+            "system_stage_article_id"
+          ],
+          "where": "system_stage_article_id is not null",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260602150100_instance_tables_library_fks.sql"
         }
       ],
       "triggers": [
@@ -3642,6 +3684,23 @@ export const tables = {
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "system_work_article_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "system_work_articles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
         }
       ],
       "constraints": [
@@ -3686,6 +3745,16 @@ export const tables = {
           "where": null,
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        },
+        {
+          "name": "idx_estimate_works_canonical",
+          "unique": false,
+          "expressions": [
+            "system_work_article_id"
+          ],
+          "where": "system_work_article_id is not null",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260602150100_instance_tables_library_fks.sql"
         }
       ],
       "triggers": [
@@ -3877,6 +3946,23 @@ export const tables = {
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "system_resource_article_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "system_resource_articles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
         }
       ],
       "constraints": [
@@ -3991,6 +4077,16 @@ export const tables = {
           "where": "assignee_profile_id is not null",
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260417120000_estimate_resource_line_assignee_profile.sql"
+        },
+        {
+          "name": "idx_estimate_resource_lines_canonical",
+          "unique": false,
+          "expressions": [
+            "system_resource_article_id"
+          ],
+          "where": "system_resource_article_id is not null",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260602150100_instance_tables_library_fks.sql"
         }
       ],
       "triggers": []
@@ -9069,6 +9165,23 @@ export const tables = {
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "system_stage_article_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "system_stage_articles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
         }
       ],
       "constraints": [
@@ -9108,6 +9221,16 @@ export const tables = {
           "where": null,
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        },
+        {
+          "name": "idx_template_stages_canonical",
+          "unique": false,
+          "expressions": [
+            "system_stage_article_id"
+          ],
+          "where": "system_stage_article_id is not null",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260602150100_instance_tables_library_fks.sql"
         }
       ],
       "triggers": [
@@ -9212,6 +9335,23 @@ export const tables = {
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "system_work_article_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "system_work_articles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
         }
       ],
       "constraints": [
@@ -9243,6 +9383,16 @@ export const tables = {
           "where": null,
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        },
+        {
+          "name": "idx_template_works_canonical",
+          "unique": false,
+          "expressions": [
+            "system_work_article_id"
+          ],
+          "where": "system_work_article_id is not null",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260602150100_instance_tables_library_fks.sql"
         }
       ],
       "triggers": [
@@ -10519,6 +10669,393 @@ export const tables = {
           "functionName": "set_updated_at",
           "functionSignature": "public.set_updated_at()",
           "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "system_stage_articles",
+      "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql",
+      "columns": [
+        {
+          "name": "id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "gen_random_uuid()",
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "name",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "description",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "''",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "default_sort_hint",
+          "sqlType": "integer",
+          "tsType": "number",
+          "nullable": false,
+          "defaultSql": "100",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "category_tag",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "'general'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "source",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "'rovno_seed'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "source_version",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "archived",
+          "sqlType": "boolean",
+          "tsType": "boolean",
+          "nullable": false,
+          "defaultSql": "false",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "updated_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": "system_stage_articles_name_nonempty",
+          "columns": [],
+          "expression": "length(trim(name)) > 0",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_system_stage_articles_name_unique_active",
+          "unique": true,
+          "expressions": [
+            "name"
+          ],
+          "where": "archived = false",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+        },
+        {
+          "name": "idx_system_stage_articles_sort",
+          "unique": false,
+          "expressions": [
+            "default_sort_hint"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+        },
+        {
+          "name": "idx_system_stage_articles_archived",
+          "unique": false,
+          "expressions": [
+            "archived"
+          ],
+          "where": "archived = false",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "set_system_stage_articles_updated_at",
+          "activation": "before update",
+          "functionSchema": "public",
+          "functionName": "set_updated_at",
+          "functionSignature": "public.set_updated_at()",
+          "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "system_work_articles",
+      "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql",
+      "columns": [
+        {
+          "name": "id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "gen_random_uuid()",
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "parent_stage_article_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "system_stage_articles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "restrict"
+          }
+        },
+        {
+          "name": "name",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "description",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "''",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "default_unit",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "default_qty",
+          "sqlType": "numeric(14,3)",
+          "tsType": "number",
+          "nullable": false,
+          "defaultSql": "1",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "default_sort_hint",
+          "sqlType": "integer",
+          "tsType": "number",
+          "nullable": false,
+          "defaultSql": "100",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "default_resource_type",
+          "sqlType": "text",
+          "tsType": "\"labor\" | \"subcontractor\" | \"other\"",
+          "nullable": false,
+          "defaultSql": "'labor'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "source",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "'rovno_seed'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "source_version",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "archived",
+          "sqlType": "boolean",
+          "tsType": "boolean",
+          "nullable": false,
+          "defaultSql": "false",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "updated_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "default_qty"
+          ],
+          "expression": "default_qty >= 0",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "default_resource_type"
+          ],
+          "expression": "default_resource_type in ('labor','subcontractor','other')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+        },
+        {
+          "type": "check",
+          "name": "system_work_articles_name_nonempty",
+          "columns": [],
+          "expression": "length(trim(name)) > 0",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+        },
+        {
+          "type": "check",
+          "name": "system_work_articles_default_unit_nonempty",
+          "columns": [],
+          "expression": "length(trim(default_unit)) > 0",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_system_work_articles_stage",
+          "unique": false,
+          "expressions": [
+            "parent_stage_article_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+        },
+        {
+          "name": "idx_system_work_articles_stage_sort",
+          "unique": false,
+          "expressions": [
+            "parent_stage_article_id",
+            "default_sort_hint"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+        },
+        {
+          "name": "idx_system_work_articles_archived",
+          "unique": false,
+          "expressions": [
+            "archived"
+          ],
+          "where": "archived = false",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "set_system_work_articles_updated_at",
+          "activation": "before update",
+          "functionSchema": "public",
+          "functionName": "set_updated_at",
+          "functionSignature": "public.set_updated_at()",
+          "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
         }
       ]
     }
@@ -12420,6 +12957,102 @@ export const relations = {
         "id"
       ],
       "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "system_work_articles",
+      "fromColumns": [
+        "parent_stage_article_id"
+      ],
+      "toSchema": "public",
+      "toTable": "system_stage_articles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "restrict"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260602150100_instance_tables_library_fks.sql",
+      "sourceKind": "alter_table",
+      "fromSchema": "public",
+      "fromTable": "template_stages",
+      "fromColumns": [
+        "system_stage_article_id"
+      ],
+      "toSchema": "public",
+      "toTable": "system_stage_articles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260602150100_instance_tables_library_fks.sql",
+      "sourceKind": "alter_table",
+      "fromSchema": "public",
+      "fromTable": "template_works",
+      "fromColumns": [
+        "system_work_article_id"
+      ],
+      "toSchema": "public",
+      "toTable": "system_work_articles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260602150100_instance_tables_library_fks.sql",
+      "sourceKind": "alter_table",
+      "fromSchema": "public",
+      "fromTable": "project_stages",
+      "fromColumns": [
+        "system_stage_article_id"
+      ],
+      "toSchema": "public",
+      "toTable": "system_stage_articles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260602150100_instance_tables_library_fks.sql",
+      "sourceKind": "alter_table",
+      "fromSchema": "public",
+      "fromTable": "estimate_works",
+      "fromColumns": [
+        "system_work_article_id"
+      ],
+      "toSchema": "public",
+      "toTable": "system_work_articles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260602150100_instance_tables_library_fks.sql",
+      "sourceKind": "alter_table",
+      "fromSchema": "public",
+      "fromTable": "estimate_resource_lines",
+      "fromColumns": [
+        "system_resource_article_id"
+      ],
+      "toSchema": "public",
+      "toTable": "system_resource_articles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
     }
   ]
 } as const;
@@ -14030,6 +14663,60 @@ export const checks = {
       "allowedValues": null,
       "expression": "case\n      when is_recurrent_charge then parent_intent_id is not null\n      else parent_intent_id is null\n    end",
       "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+    },
+    {
+      "schema": "public",
+      "table": "system_stage_articles",
+      "column": null,
+      "constraintName": "system_stage_articles_name_nonempty",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "length(trim(name)) > 0",
+      "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+    },
+    {
+      "schema": "public",
+      "table": "system_work_articles",
+      "column": "default_qty",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "default_qty >= 0",
+      "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+    },
+    {
+      "schema": "public",
+      "table": "system_work_articles",
+      "column": "default_resource_type",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "labor",
+        "subcontractor",
+        "other"
+      ],
+      "expression": "default_resource_type in ('labor','subcontractor','other')",
+      "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+    },
+    {
+      "schema": "public",
+      "table": "system_work_articles",
+      "column": null,
+      "constraintName": "system_work_articles_name_nonempty",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "length(trim(name)) > 0",
+      "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+    },
+    {
+      "schema": "public",
+      "table": "system_work_articles",
+      "column": null,
+      "constraintName": "system_work_articles_default_unit_nonempty",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "length(trim(default_unit)) > 0",
+      "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
     }
   ]
 } as const;
@@ -14188,6 +14875,16 @@ export const functions = {
         {
           "table": "public.payment_intents",
           "triggerName": "set_payment_intents_updated_at",
+          "activation": "before update"
+        },
+        {
+          "table": "public.system_stage_articles",
+          "triggerName": "set_system_stage_articles_updated_at",
+          "activation": "before update"
+        },
+        {
+          "table": "public.system_work_articles",
+          "triggerName": "set_system_work_articles_updated_at",
           "activation": "before update"
         }
       ]
@@ -16216,7 +16913,7 @@ export const functions = {
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql",
+      "sourceMigration": "supabase/migrations/20260602150200_apply_template_propagate_library_fks.sql",
       "triggerUsages": []
     },
     {
@@ -19059,6 +19756,50 @@ export const rls = {
           "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
         }
       ]
+    },
+    {
+      "schema": "public",
+      "table": "system_stage_articles",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "select"
+      ],
+      "policies": [
+        {
+          "name": "system_stage_articles_select",
+          "schema": "public",
+          "table": "system_stage_articles",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "true",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "table": "system_work_articles",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "select"
+      ],
+      "policies": [
+        {
+          "name": "system_work_articles_select",
+          "schema": "public",
+          "table": "system_work_articles",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "true",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+        }
+      ]
     }
   ]
 } as const;
@@ -19382,6 +20123,18 @@ export const sourceTrace = {
       "schema": "public",
       "table": "payment_intents",
       "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+    },
+    {
+      "key": "public.system_stage_articles",
+      "schema": "public",
+      "table": "system_stage_articles",
+      "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+    },
+    {
+      "key": "public.system_work_articles",
+      "schema": "public",
+      "table": "system_work_articles",
+      "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
     }
   ],
   "functions": [
@@ -19957,7 +20710,7 @@ export const sourceTrace = {
       "schema": "public",
       "name": "apply_template_stage_to_estimate",
       "signature": "public.apply_template_stage_to_estimate(uuid, uuid, integer)",
-      "sourceMigration": "supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql"
+      "sourceMigration": "supabase/migrations/20260602150200_apply_template_propagate_library_fks.sql"
     },
     {
       "key": "public.get_shared_estimate_version",
@@ -21297,6 +22050,22 @@ export const sourceTrace = {
       "name": "payment_intents_self_select",
       "command": "select",
       "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+    },
+    {
+      "key": "public.system_stage_articles.system_stage_articles_select",
+      "schema": "public",
+      "table": "system_stage_articles",
+      "name": "system_stage_articles_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+    },
+    {
+      "key": "public.system_work_articles.system_work_articles_select",
+      "schema": "public",
+      "table": "system_work_articles",
+      "name": "system_work_articles_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
     }
   ],
   "slices": [
@@ -21470,6 +22239,7 @@ export const sourceTrace = {
         "supabase/migrations/20260306164000_hr_domain.sql",
         "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
         "supabase/migrations/20260320110000_task_final_media_contract.sql",
+        "supabase/migrations/20260602150100_instance_tables_library_fks.sql",
         "supabase/migrations/20260416120000_session2_ai_humanize_tasks_hr.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
       ],
@@ -21595,6 +22365,11 @@ export const sourceTrace = {
           "from": "public.project_media",
           "to": "public.tasks",
           "sourceMigration": "supabase/migrations/20260320110000_task_final_media_contract.sql"
+        },
+        {
+          "from": "public.project_stages",
+          "to": "public.system_stage_articles",
+          "sourceMigration": "supabase/migrations/20260602150100_instance_tables_library_fks.sql"
         }
       ]
     },
@@ -21765,6 +22540,7 @@ export const sourceTrace = {
         "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
         "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql",
         "supabase/migrations/20260417120000_estimate_resource_line_assignee_profile.sql",
+        "supabase/migrations/20260602150100_instance_tables_library_fks.sql",
         "supabase/migrations/20260418120000_estimate_resource_line_assignee_label.sql",
         "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql",
         "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql",
@@ -21890,6 +22666,16 @@ export const sourceTrace = {
           "from": "public.estimate_resource_lines",
           "to": "public.profiles",
           "sourceMigration": "supabase/migrations/20260417120000_estimate_resource_line_assignee_profile.sql"
+        },
+        {
+          "from": "public.estimate_works",
+          "to": "public.system_work_articles",
+          "sourceMigration": "supabase/migrations/20260602150100_instance_tables_library_fks.sql"
+        },
+        {
+          "from": "public.estimate_resource_lines",
+          "to": "public.system_resource_articles",
+          "sourceMigration": "supabase/migrations/20260602150100_instance_tables_library_fks.sql"
         }
       ]
     },
@@ -21901,9 +22687,11 @@ export const sourceTrace = {
         "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql",
         "supabase/migrations/20260512132310_estimate_templates_schema.sql",
         "supabase/migrations/20260512132330_contractor_profiles_schema.sql",
+        "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql",
+        "supabase/migrations/20260602150100_instance_tables_library_fks.sql",
         "supabase/migrations/20260512132320_template_rls.sql",
         "supabase/migrations/20260512132340_template_rpcs.sql",
-        "supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql"
+        "supabase/migrations/20260602150200_apply_template_propagate_library_fks.sql"
       ],
       "tables": [
         "public.system_resource_articles",
@@ -21912,7 +22700,9 @@ export const sourceTrace = {
         "public.template_stages",
         "public.template_works",
         "public.template_resource_lines",
-        "public.contractor_profiles"
+        "public.contractor_profiles",
+        "public.system_stage_articles",
+        "public.system_work_articles"
       ],
       "functions": [
         "public.can_read_template",
@@ -21943,7 +22733,9 @@ export const sourceTrace = {
         "public.contractor_profiles.contractor_profiles_select",
         "public.contractor_profiles.contractor_profiles_insert",
         "public.contractor_profiles.contractor_profiles_update",
-        "public.contractor_profiles.contractor_profiles_delete"
+        "public.contractor_profiles.contractor_profiles_delete",
+        "public.system_stage_articles.system_stage_articles_select",
+        "public.system_work_articles.system_work_articles_select"
       ],
       "relations": [
         {
@@ -21985,6 +22777,36 @@ export const sourceTrace = {
           "from": "public.contractor_profiles",
           "to": "public.profiles",
           "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
+        },
+        {
+          "from": "public.system_work_articles",
+          "to": "public.system_stage_articles",
+          "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+        },
+        {
+          "from": "public.template_stages",
+          "to": "public.system_stage_articles",
+          "sourceMigration": "supabase/migrations/20260602150100_instance_tables_library_fks.sql"
+        },
+        {
+          "from": "public.template_works",
+          "to": "public.system_work_articles",
+          "sourceMigration": "supabase/migrations/20260602150100_instance_tables_library_fks.sql"
+        },
+        {
+          "from": "public.project_stages",
+          "to": "public.system_stage_articles",
+          "sourceMigration": "supabase/migrations/20260602150100_instance_tables_library_fks.sql"
+        },
+        {
+          "from": "public.estimate_works",
+          "to": "public.system_work_articles",
+          "sourceMigration": "supabase/migrations/20260602150100_instance_tables_library_fks.sql"
+        },
+        {
+          "from": "public.estimate_resource_lines",
+          "to": "public.system_resource_articles",
+          "sourceMigration": "supabase/migrations/20260602150100_instance_tables_library_fks.sql"
         }
       ]
     },
@@ -22360,6 +23182,7 @@ export const slices = {
         "supabase/migrations/20260306164000_hr_domain.sql",
         "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
         "supabase/migrations/20260320110000_task_final_media_contract.sql",
+        "supabase/migrations/20260602150100_instance_tables_library_fks.sql",
         "supabase/migrations/20260416120000_session2_ai_humanize_tasks_hr.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
       ],
@@ -22401,6 +23224,7 @@ export const slices = {
         "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
         "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql",
         "supabase/migrations/20260417120000_estimate_resource_line_assignee_profile.sql",
+        "supabase/migrations/20260602150100_instance_tables_library_fks.sql",
         "supabase/migrations/20260418120000_estimate_resource_line_assignee_label.sql",
         "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql",
         "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql",
@@ -22419,13 +23243,15 @@ export const slices = {
         "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql",
         "supabase/migrations/20260512132310_estimate_templates_schema.sql",
         "supabase/migrations/20260512132330_contractor_profiles_schema.sql",
+        "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql",
+        "supabase/migrations/20260602150100_instance_tables_library_fks.sql",
         "supabase/migrations/20260512132320_template_rls.sql",
         "supabase/migrations/20260512132340_template_rpcs.sql",
-        "supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql"
+        "supabase/migrations/20260602150200_apply_template_propagate_library_fks.sql"
       ],
-      "tableCount": 7,
+      "tableCount": 9,
       "functionCount": 5,
-      "rlsTableCount": 7
+      "rlsTableCount": 9
     },
     {
       "name": "procurement-inventory",

@@ -317,6 +317,18 @@
       "schema": "public",
       "table": "payment_intents",
       "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+    },
+    {
+      "key": "public.system_stage_articles",
+      "schema": "public",
+      "table": "system_stage_articles",
+      "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+    },
+    {
+      "key": "public.system_work_articles",
+      "schema": "public",
+      "table": "system_work_articles",
+      "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
     }
   ],
   "functions": [
@@ -892,7 +904,7 @@
       "schema": "public",
       "name": "apply_template_stage_to_estimate",
       "signature": "public.apply_template_stage_to_estimate(uuid, uuid, integer)",
-      "sourceMigration": "supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql"
+      "sourceMigration": "supabase/migrations/20260602150200_apply_template_propagate_library_fks.sql"
     },
     {
       "key": "public.get_shared_estimate_version",
@@ -2232,6 +2244,22 @@
       "name": "payment_intents_self_select",
       "command": "select",
       "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+    },
+    {
+      "key": "public.system_stage_articles.system_stage_articles_select",
+      "schema": "public",
+      "table": "system_stage_articles",
+      "name": "system_stage_articles_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+    },
+    {
+      "key": "public.system_work_articles.system_work_articles_select",
+      "schema": "public",
+      "table": "system_work_articles",
+      "name": "system_work_articles_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
     }
   ],
   "slices": [
@@ -2405,6 +2433,7 @@
         "supabase/migrations/20260306164000_hr_domain.sql",
         "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
         "supabase/migrations/20260320110000_task_final_media_contract.sql",
+        "supabase/migrations/20260602150100_instance_tables_library_fks.sql",
         "supabase/migrations/20260416120000_session2_ai_humanize_tasks_hr.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
       ],
@@ -2530,6 +2559,11 @@
           "from": "public.project_media",
           "to": "public.tasks",
           "sourceMigration": "supabase/migrations/20260320110000_task_final_media_contract.sql"
+        },
+        {
+          "from": "public.project_stages",
+          "to": "public.system_stage_articles",
+          "sourceMigration": "supabase/migrations/20260602150100_instance_tables_library_fks.sql"
         }
       ]
     },
@@ -2700,6 +2734,7 @@
         "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
         "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql",
         "supabase/migrations/20260417120000_estimate_resource_line_assignee_profile.sql",
+        "supabase/migrations/20260602150100_instance_tables_library_fks.sql",
         "supabase/migrations/20260418120000_estimate_resource_line_assignee_label.sql",
         "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql",
         "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql",
@@ -2825,6 +2860,16 @@
           "from": "public.estimate_resource_lines",
           "to": "public.profiles",
           "sourceMigration": "supabase/migrations/20260417120000_estimate_resource_line_assignee_profile.sql"
+        },
+        {
+          "from": "public.estimate_works",
+          "to": "public.system_work_articles",
+          "sourceMigration": "supabase/migrations/20260602150100_instance_tables_library_fks.sql"
+        },
+        {
+          "from": "public.estimate_resource_lines",
+          "to": "public.system_resource_articles",
+          "sourceMigration": "supabase/migrations/20260602150100_instance_tables_library_fks.sql"
         }
       ]
     },
@@ -2836,9 +2881,11 @@
         "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql",
         "supabase/migrations/20260512132310_estimate_templates_schema.sql",
         "supabase/migrations/20260512132330_contractor_profiles_schema.sql",
+        "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql",
+        "supabase/migrations/20260602150100_instance_tables_library_fks.sql",
         "supabase/migrations/20260512132320_template_rls.sql",
         "supabase/migrations/20260512132340_template_rpcs.sql",
-        "supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql"
+        "supabase/migrations/20260602150200_apply_template_propagate_library_fks.sql"
       ],
       "tables": [
         "public.system_resource_articles",
@@ -2847,7 +2894,9 @@
         "public.template_stages",
         "public.template_works",
         "public.template_resource_lines",
-        "public.contractor_profiles"
+        "public.contractor_profiles",
+        "public.system_stage_articles",
+        "public.system_work_articles"
       ],
       "functions": [
         "public.can_read_template",
@@ -2878,7 +2927,9 @@
         "public.contractor_profiles.contractor_profiles_select",
         "public.contractor_profiles.contractor_profiles_insert",
         "public.contractor_profiles.contractor_profiles_update",
-        "public.contractor_profiles.contractor_profiles_delete"
+        "public.contractor_profiles.contractor_profiles_delete",
+        "public.system_stage_articles.system_stage_articles_select",
+        "public.system_work_articles.system_work_articles_select"
       ],
       "relations": [
         {
@@ -2920,6 +2971,36 @@
           "from": "public.contractor_profiles",
           "to": "public.profiles",
           "sourceMigration": "supabase/migrations/20260512132330_contractor_profiles_schema.sql"
+        },
+        {
+          "from": "public.system_work_articles",
+          "to": "public.system_stage_articles",
+          "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+        },
+        {
+          "from": "public.template_stages",
+          "to": "public.system_stage_articles",
+          "sourceMigration": "supabase/migrations/20260602150100_instance_tables_library_fks.sql"
+        },
+        {
+          "from": "public.template_works",
+          "to": "public.system_work_articles",
+          "sourceMigration": "supabase/migrations/20260602150100_instance_tables_library_fks.sql"
+        },
+        {
+          "from": "public.project_stages",
+          "to": "public.system_stage_articles",
+          "sourceMigration": "supabase/migrations/20260602150100_instance_tables_library_fks.sql"
+        },
+        {
+          "from": "public.estimate_works",
+          "to": "public.system_work_articles",
+          "sourceMigration": "supabase/migrations/20260602150100_instance_tables_library_fks.sql"
+        },
+        {
+          "from": "public.estimate_resource_lines",
+          "to": "public.system_resource_articles",
+          "sourceMigration": "supabase/migrations/20260602150100_instance_tables_library_fks.sql"
         }
       ]
     },
