@@ -14,6 +14,7 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 - `supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql`
 - `supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql`
 - `supabase/migrations/20260417120000_estimate_resource_line_assignee_profile.sql`
+- `supabase/migrations/20260602150100_instance_tables_library_fks.sql`
 - `supabase/migrations/20260418120000_estimate_resource_line_assignee_label.sql`
 - `supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql`
 - `supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql`
@@ -78,6 +79,7 @@ Indexes:
 | `created_at` | `timestamptz` | no | `now()` | no |
 | `planned_start` | `timestamptz` | yes |   | no |
 | `planned_end` | `timestamptz` | yes |   | no |
+| `system_work_article_id` | `uuid` | yes |   | no |
 
 Constraints:
 - unnamed check (expression `sort_order > 0`)
@@ -86,6 +88,7 @@ Constraints:
 Indexes:
 - `idx_estimate_works_estimate_version_id` on (`estimate_version_id`)
 - `idx_estimate_works_project_stage_id` on (`project_stage_id`)
+- `idx_estimate_works_canonical` on (`system_work_article_id`), where `system_work_article_id is not null`
 
 Triggers:
 - `guard_estimate_work_stage_reassignment`: before update of project_stage_id, executes `public.guard_estimate_work_stage_reassignment()`
@@ -110,6 +113,7 @@ Triggers:
 | `discount_bps_override` | `integer` | yes |   | no |
 | `assignee_profile_id` | `uuid` | yes |   | no |
 | `assignee_label` | `text` | yes |   | no |
+| `system_resource_article_id` | `uuid` | yes |   | no |
 
 Constraints:
 - unnamed check (expression `quantity >= 0`)
@@ -125,6 +129,7 @@ Constraints:
 Indexes:
 - `idx_estimate_resource_lines_estimate_work_id` on (`estimate_work_id`)
 - `idx_estimate_resource_lines_assignee_profile_id` on (`assignee_profile_id`), where `assignee_profile_id is not null`
+- `idx_estimate_resource_lines_canonical` on (`system_resource_article_id`), where `system_resource_article_id is not null`
 
 ### public.estimate_dependencies
 
@@ -167,6 +172,8 @@ Indexes:
 | `public.tasks(estimate_work_id)` | `public.estimate_works(id)` | `set null` | `supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql` |
 | `public.hr_items(estimate_resource_line_id)` | `public.estimate_resource_lines(id)` | `set null` | `supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql` |
 | `public.estimate_resource_lines(assignee_profile_id)` | `public.profiles(id)` | `set null` | `supabase/migrations/20260417120000_estimate_resource_line_assignee_profile.sql` |
+| `public.estimate_works(system_work_article_id)` | `public.system_work_articles(id)` | `set null` | `supabase/migrations/20260602150100_instance_tables_library_fks.sql` |
+| `public.estimate_resource_lines(system_resource_article_id)` | `public.system_resource_articles(id)` | `set null` | `supabase/migrations/20260602150100_instance_tables_library_fks.sql` |
 
 ## Functions
 

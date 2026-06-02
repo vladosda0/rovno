@@ -415,6 +415,18 @@
     {
       "path": "supabase/migrations/20260602075944_can_access_storage_object_workspace_org.sql",
       "sha256": "6a7d4cdfc626baa9add7c9d0eacd8514defe01f24ab53929d51870f91691232c"
+    },
+    {
+      "path": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql",
+      "sha256": "05cc3f143d72339e84b610d8de0d6e04d3cd655cfa3a2bc8eb4a82a903945642"
+    },
+    {
+      "path": "supabase/migrations/20260602150100_instance_tables_library_fks.sql",
+      "sha256": "1cd22137aa33ef1ceeec8c5cc9ed265927640e6afec3d6270d55d3b911fd639d"
+    },
+    {
+      "path": "supabase/migrations/20260602150200_apply_template_propagate_library_fks.sql",
+      "sha256": "799a09ee4cf6a65008481b6d0eefc7bb9913c18e67e749113ed6b84c4f371e62"
     }
   ],
   "generated_artifacts": [
@@ -544,6 +556,9 @@
     "sql/20260521140100_create_org_with_contractor_profile.sql",
     "sql/20260521140200_upsert_contractor_profile_preserve_fields.sql",
     "sql/20260602075944_can_access_storage_object_workspace_org.sql",
+    "sql/20260602150000_canonical_library_stages_and_works.sql",
+    "sql/20260602150100_instance_tables_library_fks.sql",
+    "sql/20260602150200_apply_template_propagate_library_fks.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],

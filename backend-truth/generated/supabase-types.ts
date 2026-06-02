@@ -305,6 +305,7 @@ export type Database = {
           "discount_bps": number
           "created_at": string
           "updated_at": string
+          "system_stage_article_id": string | null
           }
           Insert: {
           "id"?: string
@@ -316,6 +317,7 @@ export type Database = {
           "discount_bps"?: number
           "created_at"?: string
           "updated_at"?: string
+          "system_stage_article_id"?: string | null
           }
           Update: {
           "id"?: string
@@ -327,6 +329,7 @@ export type Database = {
           "discount_bps"?: number
           "created_at"?: string
           "updated_at"?: string
+          "system_stage_article_id"?: string | null
           }
           Relationships: []
         }
@@ -633,6 +636,7 @@ export type Database = {
           "created_at": string
           "planned_start": string | null
           "planned_end": string | null
+          "system_work_article_id": string | null
           }
           Insert: {
           "id"?: string
@@ -645,6 +649,7 @@ export type Database = {
           "created_at"?: string
           "planned_start"?: string | null
           "planned_end"?: string | null
+          "system_work_article_id"?: string | null
           }
           Update: {
           "id"?: string
@@ -657,6 +662,7 @@ export type Database = {
           "created_at"?: string
           "planned_start"?: string | null
           "planned_end"?: string | null
+          "system_work_article_id"?: string | null
           }
           Relationships: []
         }
@@ -678,6 +684,7 @@ export type Database = {
           "discount_bps_override": number | null
           "assignee_profile_id": string | null
           "assignee_label": string | null
+          "system_resource_article_id": string | null
           }
           Insert: {
           "id"?: string
@@ -696,6 +703,7 @@ export type Database = {
           "discount_bps_override"?: number | null
           "assignee_profile_id"?: string | null
           "assignee_label"?: string | null
+          "system_resource_article_id"?: string | null
           }
           Update: {
           "id"?: string
@@ -714,6 +722,7 @@ export type Database = {
           "discount_bps_override"?: number | null
           "assignee_profile_id"?: string | null
           "assignee_label"?: string | null
+          "system_resource_article_id"?: string | null
           }
           Relationships: []
         }
@@ -1808,6 +1817,7 @@ export type Database = {
           "parameter_definitions": Json
           "created_at": string
           "updated_at": string
+          "system_stage_article_id": string | null
           }
           Insert: {
           "id"?: string
@@ -1819,6 +1829,7 @@ export type Database = {
           "parameter_definitions"?: Json
           "created_at"?: string
           "updated_at"?: string
+          "system_stage_article_id"?: string | null
           }
           Update: {
           "id"?: string
@@ -1830,6 +1841,7 @@ export type Database = {
           "parameter_definitions"?: Json
           "created_at"?: string
           "updated_at"?: string
+          "system_stage_article_id"?: string | null
           }
           Relationships: []
         }
@@ -1843,6 +1855,7 @@ export type Database = {
           "parameter_definitions": Json
           "created_at": string
           "updated_at": string
+          "system_work_article_id": string | null
           }
           Insert: {
           "id"?: string
@@ -1853,6 +1866,7 @@ export type Database = {
           "parameter_definitions"?: Json
           "created_at"?: string
           "updated_at"?: string
+          "system_work_article_id"?: string | null
           }
           Update: {
           "id"?: string
@@ -1863,6 +1877,7 @@ export type Database = {
           "parameter_definitions"?: Json
           "created_at"?: string
           "updated_at"?: string
+          "system_work_article_id"?: string | null
           }
           Relationships: []
         }
@@ -2122,6 +2137,93 @@ export type Database = {
           "authorized_at"?: string | null
           "confirmed_at"?: string | null
           "cancelled_at"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Relationships: []
+        }
+        "system_stage_articles": {
+          Row: {
+          "id": string
+          "name": string
+          "description": string
+          "default_sort_hint": number
+          "category_tag": string
+          "source": string
+          "source_version": string | null
+          "archived": boolean
+          "created_at": string
+          "updated_at": string
+          }
+          Insert: {
+          "id"?: string
+          "name": string
+          "description"?: string
+          "default_sort_hint"?: number
+          "category_tag"?: string
+          "source"?: string
+          "source_version"?: string | null
+          "archived"?: boolean
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Update: {
+          "id"?: string
+          "name"?: string
+          "description"?: string
+          "default_sort_hint"?: number
+          "category_tag"?: string
+          "source"?: string
+          "source_version"?: string | null
+          "archived"?: boolean
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Relationships: []
+        }
+        "system_work_articles": {
+          Row: {
+          "id": string
+          "parent_stage_article_id": string
+          "name": string
+          "description": string
+          "default_unit": string
+          "default_qty": number
+          "default_sort_hint": number
+          "default_resource_type": "labor" | "subcontractor" | "other"
+          "source": string
+          "source_version": string | null
+          "archived": boolean
+          "created_at": string
+          "updated_at": string
+          }
+          Insert: {
+          "id"?: string
+          "parent_stage_article_id": string
+          "name": string
+          "description"?: string
+          "default_unit": string
+          "default_qty"?: number
+          "default_sort_hint"?: number
+          "default_resource_type"?: "labor" | "subcontractor" | "other"
+          "source"?: string
+          "source_version"?: string | null
+          "archived"?: boolean
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Update: {
+          "id"?: string
+          "parent_stage_article_id"?: string
+          "name"?: string
+          "description"?: string
+          "default_unit"?: string
+          "default_qty"?: number
+          "default_sort_hint"?: number
+          "default_resource_type"?: "labor" | "subcontractor" | "other"
+          "source"?: string
+          "source_version"?: string | null
+          "archived"?: boolean
           "created_at"?: string
           "updated_at"?: string
           }

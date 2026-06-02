@@ -128,6 +128,9 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20260521140100_create_org_with_contractor_profile.sql`
 - `supabase/migrations/20260521140200_upsert_contractor_profile_preserve_fields.sql`
 - `supabase/migrations/20260602075944_can_access_storage_object_workspace_org.sql`
+- `supabase/migrations/20260602150000_canonical_library_stages_and_works.sql`
+- `supabase/migrations/20260602150100_instance_tables_library_fks.sql`
+- `supabase/migrations/20260602150200_apply_template_propagate_library_fks.sql`
 
 ## Exclusions
 

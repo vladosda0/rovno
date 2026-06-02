@@ -14,6 +14,7 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 - `supabase/migrations/20260306164000_hr_domain.sql`
 - `supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql`
 - `supabase/migrations/20260320110000_task_final_media_contract.sql`
+- `supabase/migrations/20260602150100_instance_tables_library_fks.sql`
 - `supabase/migrations/20260416120000_session2_ai_humanize_tasks_hr.sql`
 - `supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql`
 
@@ -32,6 +33,7 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 | `discount_bps` | `integer` | no | `0` | no |
 | `created_at` | `timestamptz` | no | `now()` | no |
 | `updated_at` | `timestamptz` | no | `now()` | no |
+| `system_stage_article_id` | `uuid` | yes |   | no |
 
 Constraints:
 - unnamed check (expression `sort_order > 0`)
@@ -42,6 +44,7 @@ Constraints:
 Indexes:
 - `idx_project_stages_project_id` on (`project_id`)
 - `idx_project_stages_sort_order` on (`project_id`, `sort_order`), unique, attached to `project_stages_project_id_sort_order_key`
+- `idx_project_stages_canonical` on (`system_stage_article_id`), where `system_stage_article_id is not null`
 
 Triggers:
 - `set_project_stages_updated_at`: before update, executes `public.set_updated_at()`
@@ -143,6 +146,7 @@ Triggers:
 | `public.tasks(estimate_work_id)` | `public.estimate_works(id)` | `set null` | `supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql` |
 | `public.project_media_upload_intents(task_id)` | `public.tasks(id)` | `set null` | `supabase/migrations/20260320110000_task_final_media_contract.sql` |
 | `public.project_media(task_id)` | `public.tasks(id)` | `set null` | `supabase/migrations/20260320110000_task_final_media_contract.sql` |
+| `public.project_stages(system_stage_article_id)` | `public.system_stage_articles(id)` | `set null` | `supabase/migrations/20260602150100_instance_tables_library_fks.sql` |
 
 ## Functions
 
