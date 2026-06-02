@@ -15,8 +15,14 @@ const AISidebar = lazy(() =>
   import("@/components/AISidebar").then((module) => ({ default: module.AISidebar })),
 );
 
-/** MVP: hide reusable project AI sidebar on `/home` (see architecture contract); code preserved in `AISidebar`. */
-const HIDE_AI_ROUTES = ["/settings", "/home"];
+/**
+ * The project AI sidebar appears ONLY on project pages (`/project/:id/...`).
+ * Every other AppLayout route — Home, Settings, Profile, Demo, and the full
+ * T-Bank billing flow (checkout / success / fail) — renders full-width without
+ * it. Matched by pathname prefix, so query strings are irrelevant. Code
+ * preserved in `AISidebar`.
+ */
+const AI_SIDEBAR_ROUTE_PREFIX = "/project/";
 
 const MOBILE_BREAKPOINT_PX = 768;
 
@@ -29,7 +35,7 @@ export default function AppLayout() {
   });
   const location = useLocation();
 
-  const hideAi = HIDE_AI_ROUTES.some((r) => location.pathname.startsWith(r));
+  const hideAi = !location.pathname.startsWith(AI_SIDEBAR_ROUTE_PREFIX);
   const runtimeAuth = useRuntimeAuth();
 
   useEffect(() => {
