@@ -987,7 +987,7 @@
   "billing.checkout.quickPayTitle": "Быстрая оплата",
   "billing.checkout.orCard": "или картой",
   "billing.checkout.preparing": "Готовим оплату…",
-  "billing.checkout.widgetFallback": "Не удалось загрузить виджет оплаты. Обновите страницу или попробуйте позже.",
+  "billing.checkout.widgetFallback": "Виджет быстрой оплаты сейчас недоступен. Нажмите «Оплатить на странице Т-Банка» ниже, чтобы оплатить картой.",
   "billing.checkout.receiptTo": "Чек придёт на {{email}}",
   "billing.checkout.supportTitle": "Поддержка",
   "billing.checkout.supportEmail": "vlad@rovno.ai",
