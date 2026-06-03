@@ -979,7 +979,7 @@
   "billing.checkout.quickPayTitle": "Quick pay",
   "billing.checkout.orCard": "or by card",
   "billing.checkout.preparing": "Preparing payment…",
-  "billing.checkout.widgetFallback": "Couldn't load the payment widget. Refresh the page or try again later.",
+  "billing.checkout.widgetFallback": "The quick-pay widget is unavailable right now. Use \"Pay on T-Bank's page\" below to pay by card.",
   "billing.checkout.receiptTo": "Receipt will be sent to {{email}}",
   "billing.checkout.supportTitle": "Support",
   "billing.checkout.supportEmail": "vlad@rovno.ai",

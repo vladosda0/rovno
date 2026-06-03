@@ -231,6 +231,7 @@ export default function Checkout() {
           {widgetFailed && paymentUrl ? (
             <a
               href={paymentUrl}
+              target="_blank"
               rel="noopener noreferrer"
               data-testid="tbank-fallback-link"
               className="inline-flex w-full items-center justify-center rounded-pill bg-accent px-sp-3 py-2 text-body-sm font-medium text-accent-foreground hover:bg-accent/90"
