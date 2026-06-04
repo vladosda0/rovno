@@ -5,8 +5,7 @@ import { ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OrderSummary } from "@/components/billing/OrderSummary";
 import { CheckoutBlocked } from "@/components/billing/CheckoutBlocked";
-import { TBankIframeWidget } from "@/components/billing/TBankIframeWidget";
-import { TBankQuickPayWidget } from "@/components/billing/TBankQuickPayWidget";
+import { TBankPaymentForm } from "@/components/billing/TBankPaymentForm";
 import { getPlan, isPlanCode, PLANS } from "@/data/plans";
 import { BILLING_ENABLED, formatRubFromKopecks, newIdempotencyKey, planRank } from "@/lib/billing";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
@@ -55,7 +54,6 @@ export default function Checkout() {
 
   const [retryNonce, setRetryNonce] = useState(0);
   const [intentId, setIntentId] = useState<string | null>(null);
-  const [paymentId, setPaymentId] = useState<string | null>(null);
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
   const [widgetReady, setWidgetReady] = useState(false);
   const [widgetFailed, setWidgetFailed] = useState(false);
@@ -65,9 +63,8 @@ export default function Checkout() {
   // billing. 152-ФЗ consent is the purchase itself plus the recurring disclosure
   // shown in OrderSummary.
 
-  // #1: stable identity so TBankIframeWidget's effect does not re-run (and thus
-  // re-`connect()` the iframe) on every Checkout re-render (status polling,
-  // widget/auto-renew toggles).
+  // #1: stable identity so TBankPaymentForm's effect does not re-run (and thus
+  // re-init the widget) on every Checkout re-render (status polling, etc.).
   const handleWidgetReady = useCallback(() => {
     setWidgetReady(true);
     setWidgetFailed(false);
@@ -90,7 +87,6 @@ export default function Checkout() {
     if (!allowed || authStatus === "loading" || subLoading || blocked) return;
     let cancelled = false;
     setIntentId(null);
-    setPaymentId(null);
     setPaymentUrl(null);
     setWidgetReady(false);
     setWidgetFailed(false);
@@ -105,7 +101,6 @@ export default function Checkout() {
       .then((res) => {
         if (cancelled) return;
         setIntentId(res.intent_id);
-        setPaymentId(res.payment_id);
         setPaymentUrl(res.payment_url);
         trackEvent("billing_init_payment_succeeded", { plan: planCode });
       })
@@ -126,10 +121,10 @@ export default function Checkout() {
 
   // C1: reveal the hosted-page fallback if the widget never reports ready.
   useEffect(() => {
-    if (!paymentId || widgetReady) return;
+    if (!paymentUrl || widgetReady) return;
     const timer = window.setTimeout(() => setWidgetFailed(true), WIDGET_FALLBACK_MS);
     return () => window.clearTimeout(timer);
-  }, [paymentId, widgetReady]);
+  }, [paymentUrl, widgetReady]);
 
   // Navigate on terminal payment status (realtime + polling backup).
   useEffect(() => {
@@ -197,25 +192,12 @@ export default function Checkout() {
         <div className="glass space-y-sp-3 rounded-panel p-sp-3">
           <h2 className="text-h3 text-foreground">{t("billing.checkout.paymentMethods")}</h2>
 
-          {initPayment.isPending && !paymentId ? (
+          {initPayment.isPending && !paymentUrl ? (
             <p className="text-body-sm text-muted-foreground">{t("billing.checkout.preparing")}</p>
           ) : null}
 
-          {paymentId && intentId ? (
-            <>
-              <div className="space-y-sp-2">
-                <p className="text-body-sm font-medium text-foreground">
-                  {t("billing.checkout.quickPayTitle")}
-                </p>
-                <TBankQuickPayWidget paymentId={paymentId} />
-              </div>
-              <p className="text-caption text-muted-foreground">{t("billing.checkout.orCard")}</p>
-              <TBankIframeWidget
-                paymentId={paymentId}
-                intentId={intentId}
-                onReady={handleWidgetReady}
-              />
-            </>
+          {paymentUrl ? (
+            <TBankPaymentForm paymentUrl={paymentUrl} onReady={handleWidgetReady} />
           ) : null}
 
           {/* C1: hosted-page fallback so payment still completes if the widget
@@ -232,7 +214,11 @@ export default function Checkout() {
             </a>
           ) : null}
 
-          {initPayment.isError && !paymentId ? (
+          {/* M1: show retry whenever init SETTLED without a usable payment_url — not
+              just on error. A 200 with payment_url:null (e.g. a missing/non-https
+              PaymentURL, or an idempotent replay) would otherwise leave an empty panel
+              with no widget, no hosted-page fallback, and no way forward. */}
+          {!paymentUrl && (initPayment.isError || initPayment.isSuccess) ? (
             <Button variant="outline" onClick={() => setRetryNonce((n) => n + 1)}>
               {t("billing.fail.ctaRetry")}
             </Button>
