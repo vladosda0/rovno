@@ -10,6 +10,7 @@ import { SettingsSection } from "@/components/settings/SettingsSection";
 import { useActiveSubscription } from "@/hooks/useActiveSubscription";
 import { useCardOnFile } from "@/hooks/useCardOnFile";
 import { PaymentHistory } from "@/components/billing/PaymentHistory";
+import { ChangePaymentMethodDialog } from "@/components/billing/ChangePaymentMethodDialog";
 import { CancelSubscriptionDialog } from "@/components/billing/CancelSubscriptionDialog";
 import { PLANS } from "@/data/plans";
 import { formatRubFromKopecks } from "@/lib/billing";
@@ -26,7 +27,7 @@ const rawSupabase = supabase as unknown as SupabaseClient;
 export function SubscriptionSection() {
   const { t, i18n } = useTranslation();
   const { subscription, status, readOnly, isLoading, refetch } = useActiveSubscription();
-  const { data: card } = useCardOnFile();
+  const { data: card, refetch: refetchCard } = useCardOnFile();
   const [clearingDowngrade, setClearingDowngrade] = useState(false);
   const [reactivating, setReactivating] = useState(false);
 
@@ -130,6 +131,17 @@ export function SubscriptionSection() {
               <span className="inline-flex items-center gap-1.5 text-foreground tabular-nums">
                 <CreditCard className="h-4 w-4 text-muted-foreground" />
                 {cardLabel}
+                <ChangePaymentMethodDialog
+                  onChanged={() => refetchCard()}
+                  trigger={
+                    <button
+                      type="button"
+                      className="ml-1 text-caption font-medium text-accent underline underline-offset-2 hover:text-accent/80"
+                    >
+                      {t("settings.billing.changeCard")}
+                    </button>
+                  }
+                />
               </span>
             </div>
           ) : null}

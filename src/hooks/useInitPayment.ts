@@ -29,7 +29,8 @@ export function useInitPayment() {
 
 // On FunctionsHttpError, error.context is the raw (unconsumed) Response. Read it
 // so the toast shows the backend reason (matches src/data/workspace-source.ts).
-async function messageFromInvokeFailure(error: unknown, data: unknown): Promise<string> {
+// Exported so sibling edge-function hooks (e.g. useAddCard) reuse the same extraction.
+export async function messageFromInvokeFailure(error: unknown, data: unknown): Promise<string> {
   const fromData = parseErrorBody(data);
   if (fromData) return fromData;
 
