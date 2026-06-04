@@ -38,10 +38,18 @@ export function TBankPaymentForm({ paymentUrl, onReady, onStatus }: TBankPayment
       .then((integration) => {
         if (!active || !quickPayRef.current || !cardRef.current) return undefined;
         const paymentStartCallback = () => Promise.resolve(paymentUrl);
+        // Treat any status event as "ready" too (clears the hosted-page fallback timer),
+        // and pass the status callback in both the top-level and nested `status` shape so
+        // it fires regardless of integration.js's exact iframe shape (codex PR #101).
+        const handleStatus = (status: TbankIntegrationStatus) => {
+          onReady?.();
+          onStatus?.(status);
+        };
         const config = {
           language: (i18n.language === "en" ? "en" : "ru") as "ru" | "en",
           loadedCallback: () => onReady?.(),
-          changedCallback: (status: TbankIntegrationStatus) => onStatus?.(status),
+          changedCallback: handleStatus,
+          status: { changedCallback: handleStatus },
         };
         return integration
           .init({

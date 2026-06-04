@@ -43,6 +43,10 @@ export interface TbankFeatureConfig {
   language?: "ru" | "en";
   loadedCallback?: () => void;
   changedCallback?: (status: TbankIntegrationStatus) => void;
+  // integration.js nests the status callback under `status` for the iframe / addcardIframe
+  // features. We pass the callback in BOTH shapes (top-level + nested) so a SUCCESS/PROCESSING
+  // event fires regardless of the exact runtime shape (codex PR #101 / terminal-verify gate).
+  status?: { changedCallback?: (status: TbankIntegrationStatus) => void };
 }
 
 export interface TbankFeature {

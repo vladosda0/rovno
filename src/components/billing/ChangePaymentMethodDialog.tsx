@@ -101,7 +101,10 @@ export function ChangePaymentMethodDialog({ trigger, onChanged }: ChangePaymentM
           <p className="text-body-sm text-muted-foreground">{t("billing.checkout.preparing")}</p>
         ) : null}
 
-        {paymentUrl && !widgetFailed ? (
+        {/* Keep the iframe mounted even after a soft timeout (codex P2): a working-but-
+            silent form must not be torn down. The hosted-page link below appears as an
+            additional option, not a replacement. */}
+        {paymentUrl ? (
           <TBankAddCardForm
             paymentUrl={paymentUrl}
             onSuccess={handleSuccess}
