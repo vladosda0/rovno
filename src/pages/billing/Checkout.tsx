@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ChevronLeft } from "lucide-react";
@@ -53,7 +53,6 @@ export default function Checkout() {
     ? PLANS[currentPlanCode]?.display_name ?? currentPlanCode
     : null;
 
-  const [autoRenew, setAutoRenew] = useState(true);
   const [retryNonce, setRetryNonce] = useState(0);
   const [intentId, setIntentId] = useState<string | null>(null);
   const [paymentId, setPaymentId] = useState<string | null>(null);
@@ -61,15 +60,10 @@ export default function Checkout() {
   const [widgetReady, setWidgetReady] = useState(false);
   const [widgetFailed, setWidgetFailed] = useState(false);
 
-  // M3 (Variant A): the payment is initialised once; reading auto-renew through a
-  // ref avoids re-creating the intent + T-Bank Init on every checkbox toggle.
-  // Trade-off: the choice is captured at init time (default on); it can still be
-  // changed afterwards in Settings → billing. Variant B (init on "pay") is a
-  // post-MVP refinement.
-  const autoRenewRef = useRef(autoRenew);
-  useEffect(() => {
-    autoRenewRef.current = autoRenew;
-  }, [autoRenew]);
+  // All subscriptions are recurrent (no user-facing auto-renew toggle): checkout
+  // always opts into monthly auto-renewal; cancel/resume lives in Settings →
+  // billing. 152-ФЗ consent is the purchase itself plus the recurring disclosure
+  // shown in OrderSummary.
 
   // #1: stable identity so TBankIframeWidget's effect does not re-run (and thus
   // re-`connect()` the iframe) on every Checkout re-render (status polling,
@@ -105,7 +99,7 @@ export default function Checkout() {
       .mutateAsync({
         plan_code: planCode,
         receipt_email: user?.email ?? "",
-        auto_renew: autoRenewRef.current,
+        auto_renew: true,
         idempotency_key: newIdempotencyKey(),
       })
       .then((res) => {
@@ -198,8 +192,6 @@ export default function Checkout() {
               : undefined
           }
           receiptEmail={user?.email ?? ""}
-          autoRenew={autoRenew}
-          onAutoRenewChange={setAutoRenew}
         />
 
         <div className="glass space-y-sp-3 rounded-panel p-sp-3">

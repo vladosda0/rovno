@@ -11,6 +11,15 @@ const twMerge = extendTailwindMerge({
     theme: {
       spacing: ["sp-1", "sp-2", "sp-3"],
     },
+    classGroups: {
+      // The design system defines custom font sizes (text-h1/h2/h3, text-body,
+      // text-body-sm, text-caption) in tailwind.config. Without registering them,
+      // tailwind-merge misclassifies e.g. `text-caption` as a text COLOR and drops
+      // it when merged with a real color such as `text-muted-foreground`, silently
+      // collapsing the element to the 16px browser default. Declaring them as
+      // font-size keeps size and color independent inside cn().
+      "font-size": [{ text: ["h1", "h2", "h3", "body", "body-sm", "caption"] }],
+    },
   },
 });
 

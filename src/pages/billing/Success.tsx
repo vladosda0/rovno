@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { CheckCircle2 } from "lucide-react";
@@ -21,13 +21,41 @@ export default function Success() {
   }, [navigate]);
 
   const intentQuery = usePaymentStatus(intentId);
-  const { subscription } = useActiveSubscription();
+  const { subscription, refetch } = useActiveSubscription();
 
   useEffect(() => {
     if (intentQuery.data?.status === "confirmed") {
       trackEvent("billing_payment_confirmed", { plan: intentQuery.data.plan_code });
     }
   }, [intentQuery.data?.status, intentQuery.data?.plan_code]);
+
+  // The active-subscription row flips to the paid plan a beat AFTER the payment
+  // reads confirmed (apply_confirmed_payment runs just after the status update
+  // server-side, and react-query may still hold the pre-purchase row). Until the
+  // subscription reflects the plan we just paid for, its period is the OLD one
+  // (e.g. the Free period), which is exactly the wrong date users saw here. Poll
+  // until it syncs, then show the real date.
+  const paidPlan = intentQuery.data?.status === "confirmed"
+    ? intentQuery.data.plan_code ?? null
+    : null;
+  const upgradeApplied = !!paidPlan && subscription?.plan_code === paidPlan;
+  const needsSync = !!paidPlan && !upgradeApplied;
+  const pollsRef = useRef(0);
+  useEffect(() => {
+    if (!needsSync) {
+      pollsRef.current = 0;
+      return;
+    }
+    const timer = window.setInterval(() => {
+      if (pollsRef.current >= 20) {
+        window.clearInterval(timer);
+        return;
+      }
+      pollsRef.current += 1;
+      void refetch();
+    }, 1500);
+    return () => window.clearInterval(timer);
+  }, [needsSync, refetch]);
 
   if (!BILLING_ENABLED) return null;
 
@@ -36,7 +64,9 @@ export default function Success() {
     month: "long",
     year: "numeric",
   });
-  const endsAt = subscription?.current_period_ends_at
+  // Only show the period once the subscription reflects the paid plan, so we never
+  // flash the stale (pre-upgrade) date.
+  const endsAt = upgradeApplied && subscription?.current_period_ends_at
     ? dateFmt.format(new Date(subscription.current_period_ends_at))
     : null;
   const email = user?.email ?? "";

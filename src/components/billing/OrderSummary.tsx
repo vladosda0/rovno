@@ -1,13 +1,10 @@
 import { useTranslation } from "react-i18next";
-import { Checkbox } from "@/components/ui/checkbox";
 
 interface OrderSummaryProps {
   planName: string;
   priceLabel: string;
   priceNote?: string;
   receiptEmail: string;
-  autoRenew: boolean;
-  onAutoRenewChange: (value: boolean) => void;
 }
 
 export function OrderSummary({
@@ -15,8 +12,6 @@ export function OrderSummary({
   priceLabel,
   priceNote,
   receiptEmail,
-  autoRenew,
-  onAutoRenewChange,
 }: OrderSummaryProps) {
   const { t } = useTranslation();
 
@@ -42,19 +37,9 @@ export function OrderSummary({
         ) : null}
       </dl>
 
-      <label className="flex cursor-pointer items-start gap-2">
-        <Checkbox
-          checked={autoRenew}
-          onCheckedChange={(value) => onAutoRenewChange(value === true)}
-          className="mt-0.5"
-        />
-        <span className="text-body-sm">
-          <span className="block text-foreground">{t("billing.checkout.autoRenewLabel")}</span>
-          <span className="block text-caption text-muted-foreground">
-            {t("billing.checkout.autoRenewHint")}
-          </span>
-        </span>
-      </label>
+      <p className="text-caption text-muted-foreground">
+        {t("billing.checkout.recurringNote")}
+      </p>
 
       {receiptEmail ? (
         <p className="text-caption text-muted-foreground">

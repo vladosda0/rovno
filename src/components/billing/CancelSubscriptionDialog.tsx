@@ -13,7 +13,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { trackEvent } from "@/lib/analytics";
 
@@ -54,9 +53,12 @@ export function CancelSubscriptionDialog({
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <Button variant="outline" className="text-destructive hover:text-destructive">
+        <button
+          type="button"
+          className="text-caption text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors"
+        >
           {t("settings.billing.cancel")}
-        </Button>
+        </button>
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
