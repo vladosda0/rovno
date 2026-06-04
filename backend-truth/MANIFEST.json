@@ -427,6 +427,14 @@
     {
       "path": "supabase/migrations/20260602150200_apply_template_propagate_library_fks.sql",
       "sha256": "799a09ee4cf6a65008481b6d0eefc7bb9913c18e67e749113ed6b84c4f371e62"
+    },
+    {
+      "path": "supabase/migrations/20260604120000_create_card_bindings.sql",
+      "sha256": "58bd90bac9e50ca00fa6a85fae35a97161067961266a968852adff7948e48536"
+    },
+    {
+      "path": "supabase/migrations/20260604120100_get_card_on_file_prefer_binding.sql",
+      "sha256": "ae538f9e7f904116643fe423bcd9e564f6a436377fa73cb89ec712f5e077206c"
     }
   ],
   "generated_artifacts": [
@@ -559,6 +567,8 @@
     "sql/20260602150000_canonical_library_stages_and_works.sql",
     "sql/20260602150100_instance_tables_library_fks.sql",
     "sql/20260602150200_apply_template_propagate_library_fks.sql",
+    "sql/20260604120000_create_card_bindings.sql",
+    "sql/20260604120100_get_card_on_file_prefer_binding.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],

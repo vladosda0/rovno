@@ -1989,6 +1989,22 @@
         "id"
       ],
       "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260604120000_create_card_bindings.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "card_bindings",
+      "fromColumns": [
+        "profile_id"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
     }
   ]
 }

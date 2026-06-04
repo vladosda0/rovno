@@ -2229,6 +2229,57 @@ export type Database = {
           }
           Relationships: []
         }
+        "card_bindings": {
+          Row: {
+          "id": string
+          "profile_id": string
+          "provider": "tbank"
+          "request_key": string
+          "status": "pending" | "active" | "inactive" | "rejected"
+          "check_type": string | null
+          "rebill_id": string | null
+          "card_id": string | null
+          "pan_masked": string | null
+          "bound_at": string | null
+          "last_notification": Json | null
+          "error_code": string | null
+          "created_at": string
+          "updated_at": string
+          }
+          Insert: {
+          "id"?: string
+          "profile_id": string
+          "provider"?: "tbank"
+          "request_key": string
+          "status"?: "pending" | "active" | "inactive" | "rejected"
+          "check_type"?: string | null
+          "rebill_id"?: string | null
+          "card_id"?: string | null
+          "pan_masked"?: string | null
+          "bound_at"?: string | null
+          "last_notification"?: Json | null
+          "error_code"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Update: {
+          "id"?: string
+          "profile_id"?: string
+          "provider"?: "tbank"
+          "request_key"?: string
+          "status"?: "pending" | "active" | "inactive" | "rejected"
+          "check_type"?: string | null
+          "rebill_id"?: string | null
+          "card_id"?: string | null
+          "pan_masked"?: string | null
+          "bound_at"?: string | null
+          "last_notification"?: Json | null
+          "error_code"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Relationships: []
+        }
     }
     Views: {
       [_ in never]: never
@@ -2454,6 +2505,10 @@ export type Database = {
           "p_project_id": string
           }
           Returns: Json
+        }
+        "get_card_on_file": {
+          Args: Record<PropertyKey, never>
+          Returns: unknown
         }
         "get_documents_ai_metadata_evidence": {
           Args: {
