@@ -23,11 +23,17 @@ export function useCardOnFile() {
     queryKey: ["card-on-file", profileId],
     enabled,
     queryFn: async (): Promise<CardOnFile | null> => {
+      // get_card_on_file is a tbank RPC reached via the untyped client and is
+      // intentionally excluded from the backend-truth contract (same family as the
+      // other tbank RPCs). If it is not yet applied to the target environment,
+      // degrade silently — hide the card line — rather than surfacing a
+      // missing-function error; the rest of billing is unaffected (codex P2).
       const { data, error } = await rawSupabase.rpc("get_card_on_file");
-      if (error) throw error;
+      if (error) return null;
       const row = Array.isArray(data) ? data[0] : data;
       if (!row || !row.last4) return null;
       return { last4: row.last4 as string, brand: (row.brand as string | null) ?? null };
     },
+    retry: false,
   });
 }
