@@ -10465,6 +10465,215 @@
           "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
         }
       ]
+    },
+    {
+      "schema": "public",
+      "name": "card_bindings",
+      "sourceMigration": "supabase/migrations/20260604120000_create_card_bindings.sql",
+      "columns": [
+        {
+          "name": "id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "gen_random_uuid()",
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "profile_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "profiles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "cascade"
+          }
+        },
+        {
+          "name": "provider",
+          "sqlType": "text",
+          "tsType": "\"tbank\"",
+          "nullable": false,
+          "defaultSql": "'tbank'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "request_key",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": true,
+          "references": null
+        },
+        {
+          "name": "status",
+          "sqlType": "text",
+          "tsType": "\"pending\" | \"active\" | \"inactive\" | \"rejected\"",
+          "nullable": false,
+          "defaultSql": "'pending'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "check_type",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "rebill_id",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "card_id",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "pan_masked",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "bound_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "last_notification",
+          "sqlType": "jsonb",
+          "tsType": "Json",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "error_code",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "updated_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "provider"
+          ],
+          "expression": "provider in ('tbank')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260604120000_create_card_bindings.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "status"
+          ],
+          "expression": "status in (\n    'pending',\n    'active',\n    'inactive',\n    'rejected'\n  )",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260604120000_create_card_bindings.sql"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_card_bindings_profile",
+          "unique": false,
+          "expressions": [
+            "profile_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260604120000_create_card_bindings.sql"
+        },
+        {
+          "name": "idx_card_bindings_active",
+          "unique": false,
+          "expressions": [
+            "profile_id",
+            "bound_at desc"
+          ],
+          "where": "status = 'active'",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260604120000_create_card_bindings.sql"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "set_card_bindings_updated_at",
+          "activation": "before update",
+          "functionSchema": "public",
+          "functionName": "set_updated_at",
+          "functionSignature": "public.set_updated_at()",
+          "sourceMigration": "supabase/migrations/20260604120000_create_card_bindings.sql"
+        }
+      ]
     }
   ]
 }

@@ -329,6 +329,12 @@
       "schema": "public",
       "table": "system_work_articles",
       "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+    },
+    {
+      "key": "public.card_bindings",
+      "schema": "public",
+      "table": "card_bindings",
+      "sourceMigration": "supabase/migrations/20260604120000_create_card_bindings.sql"
     }
   ],
   "functions": [
@@ -1010,6 +1016,13 @@
       "name": "submit_contractor_profile_for_moderation",
       "signature": "public.submit_contractor_profile_for_moderation(uuid)",
       "sourceMigration": "supabase/migrations/20260521140100_create_org_with_contractor_profile.sql"
+    },
+    {
+      "key": "public.get_card_on_file",
+      "schema": "public",
+      "name": "get_card_on_file",
+      "signature": "public.get_card_on_file()",
+      "sourceMigration": "supabase/migrations/20260604120100_get_card_on_file_prefer_binding.sql"
     }
   ],
   "policies": [

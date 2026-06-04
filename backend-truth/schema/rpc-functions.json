@@ -163,6 +163,11 @@
           "table": "public.system_work_articles",
           "triggerName": "set_system_work_articles_updated_at",
           "activation": "before update"
+        },
+        {
+          "table": "public.card_bindings",
+          "triggerName": "set_card_bindings_updated_at",
+          "activation": "before update"
         }
       ]
     },
@@ -2555,6 +2560,20 @@
       "searchPath": "public",
       "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260521140100_create_org_with_contractor_profile.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "get_card_on_file",
+      "signature": "public.get_card_on_file()",
+      "args": [],
+      "returnType": "table (last4 text, brand text)",
+      "language": "sql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260604120100_get_card_on_file_prefer_binding.sql",
       "triggerUsages": []
     }
   ]

@@ -131,6 +131,8 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20260602150000_canonical_library_stages_and_works.sql`
 - `supabase/migrations/20260602150100_instance_tables_library_fks.sql`
 - `supabase/migrations/20260602150200_apply_template_propagate_library_fks.sql`
+- `supabase/migrations/20260604120000_create_card_bindings.sql`
+- `supabase/migrations/20260604120100_get_card_on_file_prefer_binding.sql`
 
 ## Exclusions
 

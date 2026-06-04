@@ -1658,6 +1658,33 @@
       "allowedValues": null,
       "expression": "length(trim(default_unit)) > 0",
       "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+    },
+    {
+      "schema": "public",
+      "table": "card_bindings",
+      "column": "provider",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "tbank"
+      ],
+      "expression": "provider in ('tbank')",
+      "sourceMigration": "supabase/migrations/20260604120000_create_card_bindings.sql"
+    },
+    {
+      "schema": "public",
+      "table": "card_bindings",
+      "column": "status",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "pending",
+        "active",
+        "inactive",
+        "rejected"
+      ],
+      "expression": "status in (\n    'pending',\n    'active',\n    'inactive',\n    'rejected'\n  )",
+      "sourceMigration": "supabase/migrations/20260604120000_create_card_bindings.sql"
     }
   ]
 }

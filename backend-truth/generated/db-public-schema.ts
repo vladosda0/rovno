@@ -431,6 +431,14 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260602150200_apply_template_propagate_library_fks.sql",
       "sha256": "799a09ee4cf6a65008481b6d0eefc7bb9913c18e67e749113ed6b84c4f371e62"
+    },
+    {
+      "path": "supabase/migrations/20260604120000_create_card_bindings.sql",
+      "sha256": "58bd90bac9e50ca00fa6a85fae35a97161067961266a968852adff7948e48536"
+    },
+    {
+      "path": "supabase/migrations/20260604120100_get_card_on_file_prefer_binding.sql",
+      "sha256": "ae538f9e7f904116643fe423bcd9e564f6a436377fa73cb89ec712f5e077206c"
     }
   ],
   "generated_artifacts": [
@@ -563,6 +571,8 @@ export const manifest = {
     "sql/20260602150000_canonical_library_stages_and_works.sql",
     "sql/20260602150100_instance_tables_library_fks.sql",
     "sql/20260602150200_apply_template_propagate_library_fks.sql",
+    "sql/20260604120000_create_card_bindings.sql",
+    "sql/20260604120100_get_card_on_file_prefer_binding.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -11058,6 +11068,215 @@ export const tables = {
           "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
         }
       ]
+    },
+    {
+      "schema": "public",
+      "name": "card_bindings",
+      "sourceMigration": "supabase/migrations/20260604120000_create_card_bindings.sql",
+      "columns": [
+        {
+          "name": "id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "gen_random_uuid()",
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "profile_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "profiles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "cascade"
+          }
+        },
+        {
+          "name": "provider",
+          "sqlType": "text",
+          "tsType": "\"tbank\"",
+          "nullable": false,
+          "defaultSql": "'tbank'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "request_key",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": true,
+          "references": null
+        },
+        {
+          "name": "status",
+          "sqlType": "text",
+          "tsType": "\"pending\" | \"active\" | \"inactive\" | \"rejected\"",
+          "nullable": false,
+          "defaultSql": "'pending'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "check_type",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "rebill_id",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "card_id",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "pan_masked",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "bound_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "last_notification",
+          "sqlType": "jsonb",
+          "tsType": "Json",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "error_code",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "updated_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "provider"
+          ],
+          "expression": "provider in ('tbank')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260604120000_create_card_bindings.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "status"
+          ],
+          "expression": "status in (\n    'pending',\n    'active',\n    'inactive',\n    'rejected'\n  )",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260604120000_create_card_bindings.sql"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_card_bindings_profile",
+          "unique": false,
+          "expressions": [
+            "profile_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260604120000_create_card_bindings.sql"
+        },
+        {
+          "name": "idx_card_bindings_active",
+          "unique": false,
+          "expressions": [
+            "profile_id",
+            "bound_at desc"
+          ],
+          "where": "status = 'active'",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260604120000_create_card_bindings.sql"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "set_card_bindings_updated_at",
+          "activation": "before update",
+          "functionSchema": "public",
+          "functionName": "set_updated_at",
+          "functionSignature": "public.set_updated_at()",
+          "sourceMigration": "supabase/migrations/20260604120000_create_card_bindings.sql"
+        }
+      ]
     }
   ]
 } as const;
@@ -13053,6 +13272,22 @@ export const relations = {
         "id"
       ],
       "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260604120000_create_card_bindings.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "card_bindings",
+      "fromColumns": [
+        "profile_id"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
     }
   ]
 } as const;
@@ -14717,6 +14952,33 @@ export const checks = {
       "allowedValues": null,
       "expression": "length(trim(default_unit)) > 0",
       "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+    },
+    {
+      "schema": "public",
+      "table": "card_bindings",
+      "column": "provider",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "tbank"
+      ],
+      "expression": "provider in ('tbank')",
+      "sourceMigration": "supabase/migrations/20260604120000_create_card_bindings.sql"
+    },
+    {
+      "schema": "public",
+      "table": "card_bindings",
+      "column": "status",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "pending",
+        "active",
+        "inactive",
+        "rejected"
+      ],
+      "expression": "status in (\n    'pending',\n    'active',\n    'inactive',\n    'rejected'\n  )",
+      "sourceMigration": "supabase/migrations/20260604120000_create_card_bindings.sql"
     }
   ]
 } as const;
@@ -14885,6 +15147,11 @@ export const functions = {
         {
           "table": "public.system_work_articles",
           "triggerName": "set_system_work_articles_updated_at",
+          "activation": "before update"
+        },
+        {
+          "table": "public.card_bindings",
+          "triggerName": "set_card_bindings_updated_at",
           "activation": "before update"
         }
       ]
@@ -17278,6 +17545,20 @@ export const functions = {
       "searchPath": "public",
       "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260521140100_create_org_with_contractor_profile.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "get_card_on_file",
+      "signature": "public.get_card_on_file()",
+      "args": [],
+      "returnType": "table (last4 text, brand text)",
+      "language": "sql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260604120100_get_card_on_file_prefer_binding.sql",
       "triggerUsages": []
     }
   ]
@@ -19800,6 +20081,13 @@ export const rls = {
           "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
         }
       ]
+    },
+    {
+      "schema": "public",
+      "table": "card_bindings",
+      "rlsEnabled": true,
+      "authenticatedGrants": [],
+      "policies": []
     }
   ]
 } as const;
@@ -20135,6 +20423,12 @@ export const sourceTrace = {
       "schema": "public",
       "table": "system_work_articles",
       "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+    },
+    {
+      "key": "public.card_bindings",
+      "schema": "public",
+      "table": "card_bindings",
+      "sourceMigration": "supabase/migrations/20260604120000_create_card_bindings.sql"
     }
   ],
   "functions": [
@@ -20816,6 +21110,13 @@ export const sourceTrace = {
       "name": "submit_contractor_profile_for_moderation",
       "signature": "public.submit_contractor_profile_for_moderation(uuid)",
       "sourceMigration": "supabase/migrations/20260521140100_create_org_with_contractor_profile.sql"
+    },
+    {
+      "key": "public.get_card_on_file",
+      "schema": "public",
+      "name": "get_card_on_file",
+      "signature": "public.get_card_on_file()",
+      "sourceMigration": "supabase/migrations/20260604120100_get_card_on_file_prefer_binding.sql"
     }
   ],
   "policies": [

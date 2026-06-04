@@ -2515,6 +2515,13 @@
           "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
         }
       ]
+    },
+    {
+      "schema": "public",
+      "table": "card_bindings",
+      "rlsEnabled": true,
+      "authenticatedGrants": [],
+      "policies": []
     }
   ]
 }
