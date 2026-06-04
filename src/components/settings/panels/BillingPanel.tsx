@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { trackEvent } from "@/lib/analytics";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -33,10 +32,8 @@ export function BillingPanel() {
 
   return (
     <div className="space-y-sp-3">
-      {/* Real T-Bank subscription management (phase 1c). Hidden until the
-          billing flag is on. */}
-      {BILLING_ENABLED ? <SubscriptionSection /> : null}
-
+      {/* "Тарифы": current plan, plan comparison, and AI usage/limits (merged
+          from the former Подписка plan-facts + Биллинг blocks). */}
       <SettingsSection title={t("billing.title")} description={t("billing.description")}>
         {/* Current plan */}
         <Card>
@@ -45,12 +42,9 @@ export function BillingPanel() {
               <Sparkles className="h-5 w-5 text-accent" />
             </div>
             <div className="flex-1 min-w-0 space-y-0.5">
-              <div className="flex items-center gap-1.5">
-                <p className="text-body font-semibold text-foreground">
-                  {t("billing.planSuffix", { plan: planLabel })}
-                </p>
-                <Badge variant="secondary" className="text-[10px] capitalize">{planCode}</Badge>
-              </div>
+              <p className="text-body-sm font-semibold text-foreground">
+                {t("billing.planSuffix", { plan: planLabel })}
+              </p>
               <p className="text-caption text-muted-foreground">{t("billing.currentTier")}</p>
             </div>
             <Button
@@ -104,16 +98,12 @@ export function BillingPanel() {
                 limit={quota.estimates_limit}
               />
               {/* Participants = per-project editor seats; a static per-tier
-                  allowance, not a consumption meter (no live member count in
-                  get_current_usage). */}
-              <div className="flex items-center justify-between gap-2 rounded-panel bg-muted/40 p-1.5 px-sp-2">
-                <span className="text-body-sm font-semibold text-foreground">
-                  {t("quota.meter.participants")}
-                </span>
-                <span className="text-caption font-medium tabular-nums text-muted-foreground">
-                  {participantsAllowance}
-                </span>
-              </div>
+                  allowance, not a consumption meter. Rendered via UsageMeter's
+                  allowance mode so its typography matches the meters exactly. */}
+              <UsageMeter
+                title={t("quota.meter.participants")}
+                allowanceLabel={participantsAllowance}
+              />
             </div>
           )}
 
@@ -130,6 +120,11 @@ export function BillingPanel() {
           )}
         </div>
       </SettingsSection>
+
+      {/* "Подписка": payments, attached card, period, price, cancel/resume.
+          Hidden until the billing flag is on, so prod (flag off) is unchanged.
+          Placed last so the quiet cancel link sits at the bottom of the page. */}
+      {BILLING_ENABLED ? <SubscriptionSection /> : null}
 
       <PlansDialog open={plansOpen} onOpenChange={setPlansOpen} currentPlan={planCode} />
     </div>

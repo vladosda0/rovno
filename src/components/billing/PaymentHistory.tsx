@@ -1,10 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { useTranslation } from "react-i18next";
-import { Check } from "lucide-react";
+import { Check, ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
-import { RefundRequestDialog } from "@/components/billing/RefundRequestDialog";
+import { PaymentDetailDialog } from "@/components/billing/PaymentDetailDialog";
 import { formatRubFromKopecks, type PaymentIntentRow } from "@/lib/billing";
 import { PLANS } from "@/data/plans";
 
@@ -47,20 +47,36 @@ export function PaymentHistory() {
   });
 
   return (
-    <ul className="space-y-1.5">
+    <ul className="space-y-0.5">
       {data.map((row) => {
         const name = PLANS[row.plan_code as keyof typeof PLANS]?.display_name ?? row.plan_code;
         const when = row.confirmed_at ?? row.created_at;
         return (
-          <li key={row.id} className="flex items-center justify-between gap-2 text-body-sm">
-            <span className="text-muted-foreground">{dateFmt.format(new Date(when))}</span>
-            <span className="flex-1 truncate text-foreground">{name}</span>
-            <span className="font-medium text-foreground">
-              {formatRubFromKopecks(row.amount_kopecks)}
-            </span>
-            <Check className="h-4 w-4 shrink-0 text-success" />
-            {/* All listed rows are status='confirmed', so every row is refundable. */}
-            <RefundRequestDialog payment={row} userEmail={user?.email ?? ""} />
+          <li key={row.id}>
+            {/* The whole row opens the payment detail + refund-request dialog.
+                "Request refund" is no longer a standalone control in the list;
+                it lives inside the dialog (all listed rows are 'confirmed', so
+                every payment is refundable). */}
+            <PaymentDetailDialog
+              payment={row}
+              userEmail={user?.email ?? ""}
+              trigger={
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-sp-2 rounded-md px-sp-2 py-1.5 text-left text-body-sm transition-colors hover:bg-muted/50"
+                >
+                  <span className="shrink-0 tabular-nums text-muted-foreground">
+                    {dateFmt.format(new Date(when))}
+                  </span>
+                  <span className="flex-1 truncate text-foreground">{name}</span>
+                  <span className="shrink-0 font-medium tabular-nums text-foreground">
+                    {formatRubFromKopecks(row.amount_kopecks)}
+                  </span>
+                  <Check className="h-4 w-4 shrink-0 text-success" />
+                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                </button>
+              }
+            />
           </li>
         );
       })}

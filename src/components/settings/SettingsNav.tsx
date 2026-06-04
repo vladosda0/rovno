@@ -40,14 +40,21 @@ export function SettingsNav({ activeTab, onTabChange }: SettingsNavProps) {
             type="button"
             onClick={() => onTabChange(item.tab)}
             className={cn(
-              "w-full flex items-center gap-2.5 rounded-md border border-transparent px-2.5 py-2 text-left text-body-sm transition-colors",
+              "w-full flex items-center gap-2 rounded-md border border-transparent px-2 py-2 text-left text-body-sm transition-colors",
               activeTab === item.tab
                 ? "bg-accent/10 border-accent/20 text-accent font-medium"
                 : "text-muted-foreground hover:bg-muted/70 hover:text-foreground",
             )}
           >
             <item.icon className="h-4 w-4 shrink-0" />
-            <span className="flex-1 min-w-0">{t(item.labelKey)}</span>
+            <span
+              className={cn(
+                "flex-1",
+                item.tab === "billing" || item.tab === "privacy" ? "whitespace-nowrap" : "min-w-0",
+              )}
+            >
+              {t(item.labelKey)}
+            </span>
           </button>
         ))}
       </div>
