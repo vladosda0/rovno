@@ -7,12 +7,18 @@ export interface InitPaymentArgs {
   readonly receipt_email: string;
   readonly auto_renew: boolean;
   readonly idempotency_key: string;
+  // T-Bank go-live requirement: explicit, user-ticked consent to the recurring
+  // charges. The checkout only fires init after the box is ticked, so this is
+  // always true; the backend rejects a payment without it (consent_required).
+  readonly consent_accepted: boolean;
+  // Version of the consent text the user agreed to (see CONSENT_VERSION).
+  readonly consent_version: string;
 }
 
-// Wraps the tbank-init-payment Edge Function. The phase 1b contract is
-// { plan_code, receipt_email, auto_renew, idempotency_key } in, and
-// { intent_id, payment_id, status, amount_kopecks, plan_display_name } out.
-// There is intentionally no billing_period: phase 1c is monthly-only.
+// Wraps the tbank-init-payment Edge Function. The contract is
+// { plan_code, receipt_email, auto_renew, idempotency_key, consent_accepted,
+// consent_version } in, and { intent_id, payment_id, status, amount_kopecks,
+// plan_display_name } out. There is intentionally no billing_period: monthly-only.
 export function useInitPayment() {
   return useMutation<InitPaymentResponse, Error, InitPaymentArgs>({
     mutationFn: async (args) => {

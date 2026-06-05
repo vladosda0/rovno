@@ -1,13 +1,14 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { useTranslation } from "react-i18next";
+import { Trans, useTranslation } from "react-i18next";
 import { ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { OrderSummary } from "@/components/billing/OrderSummary";
 import { CheckoutBlocked } from "@/components/billing/CheckoutBlocked";
 import { TBankPaymentForm } from "@/components/billing/TBankPaymentForm";
 import { getPlan, isPlanCode, PLANS } from "@/data/plans";
-import { BILLING_ENABLED, formatRubFromKopecks, newIdempotencyKey, planRank } from "@/lib/billing";
+import { BILLING_ENABLED, CONSENT_VERSION, formatRubFromKopecks, newIdempotencyKey, planRank } from "@/lib/billing";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
 import { useActiveSubscription } from "@/hooks/useActiveSubscription";
 import { useInitPayment } from "@/hooks/useInitPayment";
@@ -57,11 +58,15 @@ export default function Checkout() {
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
   const [widgetReady, setWidgetReady] = useState(false);
   const [widgetFailed, setWidgetFailed] = useState(false);
+  // Recurring-charge consent (T-Bank go-live requirement): the customer must tick
+  // this before we contact T-Bank. It gates the init call AND the rendered pay
+  // widget / hosted-page fallback, so payment is impossible without it.
+  const [consent, setConsent] = useState(false);
 
   // All subscriptions are recurrent (no user-facing auto-renew toggle): checkout
   // always opts into monthly auto-renewal; cancel/resume lives in Settings →
-  // billing. 152-ФЗ consent is the purchase itself plus the recurring disclosure
-  // shown in OrderSummary.
+  // billing. The explicit `consent` checkbox below captures the user's agreement
+  // to the recurring charges (T-Bank requirement) and gates the payment.
 
   // #1: stable identity so TBankPaymentForm's effect does not re-run (and thus
   // re-init the widget) on every Checkout re-render (status polling, etc.).
@@ -80,23 +85,35 @@ export default function Checkout() {
     }
   }, [allowed, navigate]);
 
+  // Funnel (M1): fire ONCE when the payable checkout is actually shown. Kept out
+  // of the consent-gated init effect so it isn't re-emitted on every consent
+  // toggle / retry. (A distinct consent-tick analytics event is deferred to the
+  // analytics workstream, which owns the AnalyticsEventName registry.)
+  const startedRef = useRef(false);
+  useEffect(() => {
+    if (startedRef.current || !allowed || subLoading || blocked) return;
+    startedRef.current = true;
+    trackEvent("billing_checkout_started", { plan: planCode });
+  }, [allowed, subLoading, blocked, planCode]);
+
   // Initialise the payment once subscription state is known and the user is not
   // already subscribed. Re-runs only on plan/auth change and explicit retry —
   // NOT on auto-renew toggle (M3).
   useEffect(() => {
-    if (!allowed || authStatus === "loading" || subLoading || blocked) return;
+    if (!allowed || authStatus === "loading" || subLoading || blocked || !consent) return;
     let cancelled = false;
     setIntentId(null);
     setPaymentUrl(null);
     setWidgetReady(false);
     setWidgetFailed(false);
-    trackEvent("billing_checkout_started", { plan: planCode });
     void initPayment
       .mutateAsync({
         plan_code: planCode,
         receipt_email: user?.email ?? "",
         auto_renew: true,
         idempotency_key: newIdempotencyKey(),
+        consent_accepted: true,
+        consent_version: CONSENT_VERSION,
       })
       .then((res) => {
         if (cancelled) return;
@@ -117,14 +134,14 @@ export default function Checkout() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allowed, authStatus, subLoading, blocked, planCode, retryNonce]);
+  }, [allowed, authStatus, subLoading, blocked, consent, planCode, retryNonce]);
 
   // C1: reveal the hosted-page fallback if the widget never reports ready.
   useEffect(() => {
-    if (!paymentUrl || widgetReady) return;
+    if (!paymentUrl || widgetReady || !consent) return;
     const timer = window.setTimeout(() => setWidgetFailed(true), WIDGET_FALLBACK_MS);
     return () => window.clearTimeout(timer);
-  }, [paymentUrl, widgetReady]);
+  }, [paymentUrl, widgetReady, consent]);
 
   // Navigate on terminal payment status (realtime + polling backup).
   useEffect(() => {
@@ -192,17 +209,67 @@ export default function Checkout() {
         <div className="glass space-y-sp-3 rounded-panel p-sp-3">
           <h2 className="text-h3 text-foreground">{t("billing.checkout.paymentMethods")}</h2>
 
+          {/* T-Bank go-live requirement: explicit, user-ticked consent to the
+              recurring charges. Gates init + the pay widget + the hosted fallback,
+              so the customer cannot pay without agreeing. */}
+          <div className="space-y-1">
+            <div className="flex items-start gap-2">
+              <Checkbox
+                id="recurring-consent"
+                checked={consent}
+                onCheckedChange={(value) => setConsent(value === true)}
+                aria-labelledby="recurring-consent-text"
+                className="mt-0.5"
+              />
+              <span
+                id="recurring-consent-text"
+                className="text-caption leading-snug text-muted-foreground"
+              >
+                <Trans
+                  i18nKey="billing.checkout.recurringConsent"
+                  values={{
+                    amount: formatRubFromKopecks(plan.amount_kopecks),
+                    plan: plan.display_name,
+                  }}
+                  components={{
+                    offer: (
+                      <a
+                        href="/offer"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline hover:text-foreground"
+                      />
+                    ),
+                    refund: (
+                      <a
+                        href="/refund"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline hover:text-foreground"
+                      />
+                    ),
+                  }}
+                />
+              </span>
+            </div>
+            {!consent ? (
+              <p className="pl-6 text-caption text-muted-foreground/80">
+                {t("billing.checkout.consentRequiredHint")}
+              </p>
+            ) : null}
+          </div>
+
           {initPayment.isPending && !paymentUrl ? (
             <p className="text-body-sm text-muted-foreground">{t("billing.checkout.preparing")}</p>
           ) : null}
 
-          {paymentUrl ? (
+          {paymentUrl && consent ? (
             <TBankPaymentForm paymentUrl={paymentUrl} onReady={handleWidgetReady} />
           ) : null}
 
           {/* C1: hosted-page fallback so payment still completes if the widget
               can't mount. */}
-          {widgetFailed && paymentUrl ? (
+          {widgetFailed && paymentUrl && consent ? (
             <a
               href={paymentUrl}
               target="_blank"
