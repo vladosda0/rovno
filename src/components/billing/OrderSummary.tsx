@@ -1,4 +1,4 @@
-import { useTranslation } from "react-i18next";
+import { Trans, useTranslation } from "react-i18next";
 
 interface OrderSummaryProps {
   planName: string;
@@ -51,6 +51,21 @@ export function OrderSummary({
         <p className="font-medium text-foreground">{t("billing.checkout.supportTitle")}</p>
         <p>{t("billing.checkout.supportEmail")}</p>
         <p>{t("billing.checkout.supportPhone")}</p>
+        <p className="pt-1">
+          <Trans
+            i18nKey="billing.checkout.refundCancelNote"
+            components={{
+              refund: (
+                <a
+                  href="/refund"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-foreground"
+                />
+              ),
+            }}
+          />
+        </p>
       </div>
     </div>
   );

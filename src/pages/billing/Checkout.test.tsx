@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
 // Force the billing flag on for these tests (it is false by default in test env).
@@ -10,7 +10,7 @@ vi.mock("@/lib/billing", async (importOriginal) => {
 
 const mutateAsync = vi.fn();
 vi.mock("@/hooks/useInitPayment", () => ({
-  useInitPayment: () => ({ mutateAsync, isPending: false, isError: false }),
+  useInitPayment: () => ({ mutateAsync, isPending: false, isError: false, isSuccess: false }),
 }));
 
 type ActiveSub = ReturnType<typeof import("@/hooks/useActiveSubscription").useActiveSubscription>;
@@ -83,8 +83,18 @@ describe("Checkout", () => {
     });
 
     renderCheckout();
-    // Flush the init promise first so payment_id is set and the 5s fallback
-    // timer is scheduled at clock 0...
+    // Init is gated on the recurring-consent checkbox: nothing is sent to T-Bank
+    // until the user ticks it (T-Bank go-live requirement).
+    expect(mutateAsync).not.toHaveBeenCalled();
+    // M3: the payment surface must be ABSENT before consent — guards against a
+    // future regression that drops `&& consent` from the widget/fallback render.
+    expect(onReadyRefs.length).toBe(0);
+    expect(screen.queryByTestId("tbank-fallback-link")).toBeNull();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("checkbox"));
+    });
+    // Flush the init promise so payment_id is set and the 5s fallback timer is
+    // scheduled...
     await act(async () => {
       await Promise.resolve();
       await Promise.resolve();
@@ -97,6 +107,9 @@ describe("Checkout", () => {
     const link = screen.getByTestId("tbank-fallback-link");
     expect(link).toHaveAttribute("href", "https://securepay.tbank.ru/abc");
     expect(mutateAsync).toHaveBeenCalledTimes(1);
+    expect(mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ consent_accepted: true, consent_version: expect.any(String) }),
+    );
   });
 
   it("#1: passes a stable onReady across re-renders so the widget can't re-connect", async () => {
@@ -110,6 +123,10 @@ describe("Checkout", () => {
     });
 
     renderCheckout();
+    // Tick the recurring-consent checkbox to trigger the gated init.
+    await act(async () => {
+      fireEvent.click(screen.getByRole("checkbox"));
+    });
     await act(async () => {
       await Promise.resolve();
       await Promise.resolve();

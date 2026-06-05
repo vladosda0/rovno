@@ -11,6 +11,13 @@
 // plans render a "soon" badge and /billing/* routes redirect to /pricing.
 export const BILLING_ENABLED = import.meta.env.VITE_BILLING_ENABLED === "true";
 
+// Version tag of the recurring-payment consent text shown at checkout (T-Bank
+// go-live requirement). Sent to tbank-init-payment and stored on the payment
+// intent as proof of exactly what the user agreed to. BUMP this whenever the
+// wording in the `billing.checkout.recurringConsent` i18n key changes, so older
+// records stay attributable to their precise text version.
+export const CONSENT_VERSION = "recurring-2026-06-05";
+
 const rubFormatter = new Intl.NumberFormat("ru-RU");
 
 // 99000 kopecks -> "990 ₽"
