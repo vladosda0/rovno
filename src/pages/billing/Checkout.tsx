@@ -96,9 +96,9 @@ export default function Checkout() {
     trackEvent("billing_checkout_started", { plan: planCode });
   }, [allowed, subLoading, blocked, planCode]);
 
-  // Initialise the payment once subscription state is known and the user is not
-  // already subscribed. Re-runs only on plan/auth change and explicit retry —
-  // NOT on auto-renew toggle (M3).
+  // Initialise the payment once subscription state is known, the user is not
+  // already subscribed, and consent is given. Re-runs on plan/auth change,
+  // explicit retry, and the consent toggle (the payment gate).
   useEffect(() => {
     if (!allowed || authStatus === "loading" || subLoading || blocked || !consent) return;
     let cancelled = false;
@@ -211,13 +211,16 @@ export default function Checkout() {
 
           {/* T-Bank go-live requirement: explicit, user-ticked consent to the
               recurring charges. Gates init + the pay widget + the hosted fallback,
-              so the customer cannot pay without agreeing. */}
+              so the customer cannot pay without agreeing. Locks once init starts
+              (isPending/paymentUrl) so an un-tick→re-tick can't mint a duplicate
+              payment intent. */}
           <div className="space-y-1">
             <div className="flex items-start gap-2">
               <Checkbox
                 id="recurring-consent"
                 checked={consent}
                 onCheckedChange={(value) => setConsent(value === true)}
+                disabled={initPayment.isPending || !!paymentUrl}
                 aria-labelledby="recurring-consent-text"
                 className="mt-0.5"
               />

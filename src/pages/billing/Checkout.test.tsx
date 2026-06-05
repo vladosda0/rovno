@@ -10,7 +10,7 @@ vi.mock("@/lib/billing", async (importOriginal) => {
 
 const mutateAsync = vi.fn();
 vi.mock("@/hooks/useInitPayment", () => ({
-  useInitPayment: () => ({ mutateAsync, isPending: false, isError: false }),
+  useInitPayment: () => ({ mutateAsync, isPending: false, isError: false, isSuccess: false }),
 }));
 
 type ActiveSub = ReturnType<typeof import("@/hooks/useActiveSubscription").useActiveSubscription>;
