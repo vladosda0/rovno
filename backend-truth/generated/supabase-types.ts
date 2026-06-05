@@ -2087,6 +2087,8 @@ export type Database = {
           "cancelled_at": string | null
           "created_at": string
           "updated_at": string
+          "consent_accepted_at": string | null
+          "consent_version": string | null
           }
           Insert: {
           "id"?: string
@@ -2113,6 +2115,8 @@ export type Database = {
           "cancelled_at"?: string | null
           "created_at"?: string
           "updated_at"?: string
+          "consent_accepted_at"?: string | null
+          "consent_version"?: string | null
           }
           Update: {
           "id"?: string
@@ -2139,6 +2143,8 @@ export type Database = {
           "cancelled_at"?: string | null
           "created_at"?: string
           "updated_at"?: string
+          "consent_accepted_at"?: string | null
+          "consent_version"?: string | null
           }
           Relationships: []
         }
