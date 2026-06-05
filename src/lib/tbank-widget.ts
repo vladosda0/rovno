@@ -1,49 +1,102 @@
-// T-Bank web-acquiring JS widget loader.
+// T-Bank web-acquiring integration.js loader.
 //
-// IMPORTANT: the script URL and the init API (speedpay.init / iframe.connect)
-// follow the phase 1c design doc and MUST be verified against the live T-Bank
-// docs (developer.tbank.ru/eacq/intro/developer/setup_js) before
-// VITE_BILLING_ENABLED is turned on. Everything degrades gracefully: if the
-// script fails to load or the global is absent, the widgets render a fallback
-// and the flow still completes via payment-status polling.
+// Loads T-Bank's official integration script (verified against
+// developer.tbank.ru/eacq/intro/developer/setup_js) and resolves the global
+// `PaymentIntegration`. Callers then call PaymentIntegration.init(...) ONCE per page
+// with the features they need:
+//   - iframe        — inline card payment form
+//   - payment       — quick-pay buttons (T-Pay / SBP / SberPay / …)
+//   - addcardIframe — card-binding form ("change card")
+// Every feature takes { container, config, paymentStartCallback }, where
+// paymentStartCallback resolves to a T-Bank PaymentURL produced by our backend
+// (tbank-init-payment for checkout, tbank-add-card for rebind).
+//
+// Everything degrades gracefully: if the script fails to load, the global never
+// appears, init rejects, or VITE_TBANK_TERMINAL_KEY is unset, the caller renders a
+// fallback (redirect to the hosted PaymentURL) and the flow still completes via
+// payment-status polling / the notification webhook.
+//
+// CSP (if any is set at the edge): allow https://*.tinkoff.ru https://*.tcsbank.ru
+// https://*.tbank.ru https://*.nspk.ru https://*.t-static.ru on script/img/connect/
+// style-src. Do NOT set frame-src for the card iframe — it breaks 3DS.
 
-const TBANK_SCRIPT_URL = "https://acdn.tbank.ru/static/web-acquiring/checkout.js";
-const SCRIPT_ID = "tbank-web-acquiring";
+const TBANK_SCRIPT_URL = "https://integrationjs.t-static.ru/integration.js";
+const SCRIPT_ID = "tbank-integration-js";
 const READY_TIMEOUT_MS = 10000;
 const READY_POLL_MS = 250;
 
-export interface TbankWidgetApi {
-  speedpay?: { init?: (opts: Record<string, unknown>) => void };
-  iframe?: { connect?: (opts: Record<string, unknown>) => void };
+// Subset of T-Bank's PaymentIntegrationStatus the UI reacts to.
+export type TbankIntegrationStatus =
+  | "NEW"
+  | "PROCESSING"
+  | "SUCCESS"
+  | "REJECTED"
+  | "CANCELED"
+  | "EXPIRED"
+  | "PROCESSING_ERROR"
+  | "REFUNDED";
+
+// Returns the T-Bank PaymentURL to embed (from our backend).
+export type TbankPaymentStartCallback = () => Promise<string>;
+
+export interface TbankFeatureConfig {
+  language?: "ru" | "en";
+  loadedCallback?: () => void;
+  changedCallback?: (status: TbankIntegrationStatus) => void;
+  // integration.js nests the status callback under `status` for the iframe / addcardIframe
+  // features. We pass the callback in BOTH shapes (top-level + nested) so a SUCCESS/PROCESSING
+  // event fires regardless of the exact runtime shape (codex PR #101 / terminal-verify gate).
+  status?: { changedCallback?: (status: TbankIntegrationStatus) => void };
+}
+
+export interface TbankFeature {
+  container: HTMLElement;
+  config?: TbankFeatureConfig;
+  paymentStartCallback: TbankPaymentStartCallback;
+}
+
+export interface TbankInitConfig {
+  terminalKey: string;
+  product: "eacq";
+  features: {
+    payment?: TbankFeature;
+    iframe?: TbankFeature;
+    addcardIframe?: TbankFeature;
+  };
+}
+
+export interface PaymentIntegrationApi {
+  init: (config: TbankInitConfig) => Promise<unknown>;
 }
 
 declare global {
   interface Window {
-    tbankCheckout?: TbankWidgetApi;
+    PaymentIntegration?: PaymentIntegrationApi;
   }
 }
 
-let loaderPromise: Promise<TbankWidgetApi> | null = null;
+let loaderPromise: Promise<PaymentIntegrationApi> | null = null;
 
-export function loadTbankWidget(): Promise<TbankWidgetApi> {
+export function loadTbankIntegration(): Promise<PaymentIntegrationApi> {
   if (typeof window === "undefined" || typeof document === "undefined") {
-    return Promise.reject(new Error("T-Bank widget needs a browser environment"));
+    return Promise.reject(new Error("T-Bank integration needs a browser environment"));
   }
-  if (window.tbankCheckout) {
-    return Promise.resolve(window.tbankCheckout);
+  if (window.PaymentIntegration) {
+    return Promise.resolve(window.PaymentIntegration);
   }
   if (loaderPromise) {
     return loaderPromise;
   }
 
-  loaderPromise = new Promise<TbankWidgetApi>((resolve, reject) => {
+  loaderPromise = new Promise<PaymentIntegrationApi>((resolve, reject) => {
     const waitForGlobal = () => {
       const start = Date.now();
       const poll = () => {
-        if (window.tbankCheckout) {
-          resolve(window.tbankCheckout);
+        if (window.PaymentIntegration) {
+          resolve(window.PaymentIntegration);
         } else if (Date.now() - start > READY_TIMEOUT_MS) {
-          reject(new Error("T-Bank widget global did not appear"));
+          loaderPromise = null;
+          reject(new Error("T-Bank PaymentIntegration global did not appear"));
         } else {
           window.setTimeout(poll, READY_POLL_MS);
         }
@@ -64,10 +117,15 @@ export function loadTbankWidget(): Promise<TbankWidgetApi> {
     script.onload = waitForGlobal;
     script.onerror = () => {
       loaderPromise = null;
-      reject(new Error("Failed to load the T-Bank widget script"));
+      reject(new Error("Failed to load the T-Bank integration script"));
     };
     document.head.appendChild(script);
   });
 
   return loaderPromise;
+}
+
+// The TerminalKey is public (safe in the browser); read it from the build env.
+export function tbankTerminalKey(): string {
+  return import.meta.env.VITE_TBANK_TERMINAL_KEY ?? "";
 }

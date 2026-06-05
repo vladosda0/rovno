@@ -92,6 +92,18 @@ export interface InitPaymentResponse {
   readonly payment_url: string | null;
 }
 
+// Response of the tbank-add-card Edge Function (change payment method / card rebind).
+export interface AddCardResponse {
+  // The T-Bank RequestKey for this binding session. Returned for completeness; the FE
+  // does not use it (the widget mounts on payment_url; the RebillId is matched to the
+  // binding server-side by request_key in the AddCard notification).
+  readonly request_key: string;
+  readonly customer_key: string;
+  // T-Bank hosted card-binding page; embedded by the addcardIframe widget and used as
+  // the fallback when it can't mount.
+  readonly payment_url: string | null;
+}
+
 export type SubscriptionStatus = "none" | "active" | "grace" | "expired";
 
 const GRACE_DAYS = 7;

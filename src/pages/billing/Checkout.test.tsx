@@ -24,17 +24,14 @@ vi.mock("@/hooks/usePaymentStatus", () => ({
   isTerminalPaymentStatus: () => false,
 }));
 
-// Widgets that never report ready, so the C1 fallback timer fires. The iframe
-// mock records every onReady reference it receives to assert callback stability (#1).
+// Widget that never reports ready, so the C1 fallback timer fires. The mock records
+// every onReady reference it receives to assert callback stability (#1).
 const onReadyRefs: Array<unknown> = [];
-vi.mock("@/components/billing/TBankIframeWidget", () => ({
-  TBankIframeWidget: (props: { onReady?: () => void }) => {
+vi.mock("@/components/billing/TBankPaymentForm", () => ({
+  TBankPaymentForm: (props: { onReady?: () => void }) => {
     onReadyRefs.push(props.onReady);
     return null;
   },
-}));
-vi.mock("@/components/billing/TBankQuickPayWidget", () => ({
-  TBankQuickPayWidget: () => null,
 }));
 
 import Checkout from "@/pages/billing/Checkout";
