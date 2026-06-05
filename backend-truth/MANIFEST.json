@@ -435,6 +435,10 @@
     {
       "path": "supabase/migrations/20260604120100_get_card_on_file_prefer_binding.sql",
       "sha256": "ae538f9e7f904116643fe423bcd9e564f6a436377fa73cb89ec712f5e077206c"
+    },
+    {
+      "path": "supabase/migrations/20260605130000_payment_intents_consent.sql",
+      "sha256": "9d32582a5ee963ac31a5b6c432958fa3eed9a32ea8fc972d3f40ecf03ba8282e"
     }
   ],
   "generated_artifacts": [
@@ -569,6 +573,7 @@
     "sql/20260602150200_apply_template_propagate_library_fks.sql",
     "sql/20260604120000_create_card_bindings.sql",
     "sql/20260604120100_get_card_on_file_prefer_binding.sql",
+    "sql/20260605130000_payment_intents_consent.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],

@@ -133,6 +133,7 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20260602150200_apply_template_propagate_library_fks.sql`
 - `supabase/migrations/20260604120000_create_card_bindings.sql`
 - `supabase/migrations/20260604120100_get_card_on_file_prefer_binding.sql`
+- `supabase/migrations/20260605130000_payment_intents_consent.sql`
 
 ## Exclusions
 
