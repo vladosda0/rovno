@@ -172,7 +172,7 @@ function TemplateDetailDialog({
                 size="icon"
                 className="h-8 w-8 shrink-0"
                 onClick={() => setSelectedStageId(null)}
-                aria-label="Назад"
+                aria-label={t("common.back")}
               >
                 <ChevronLeft className="h-5 w-5" />
               </Button>
