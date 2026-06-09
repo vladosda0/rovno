@@ -162,6 +162,7 @@ describe("Checkout", () => {
         canceled_at: null,
         grace_until: null,
         created_at: "2026-05-15T00:00:00Z",
+        pending_plan_code: null,
       },
       readOnly: false,
       isLoading: false,
