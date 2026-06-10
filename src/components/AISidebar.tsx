@@ -1809,7 +1809,6 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
           project_id: projectId,
           surface: "ai",
           proposal_id: current.proposal.id,
-          reason: "", // or from some state
         });
       }
       if (nextQueue.items.every((item) => item.decision !== "unresolved")) {

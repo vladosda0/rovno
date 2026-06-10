@@ -252,7 +252,8 @@ export function useProjectHRMutations(projectId: string) {
       hr_item_id: hrItemId,
       previous_status: previousStatus,
       new_status: status,
-      item_title: currentItem?.title,
+      // item_title intentionally omitted: free-text that routinely contains a
+      // worker's name (PII / 152-ФЗ). hr_item_id is the safe correlation key.
     });
 
     if (resolvedMode.kind === "supabase") {

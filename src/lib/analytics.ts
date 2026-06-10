@@ -60,61 +60,95 @@ export type AnalyticsEventName =
   | "ai_proposal_revised"
   | "ai_proposal_applied"
   | "ai_proposal_rejected"
-  | "ai_live_text_completed";
+  | "ai_live_text_completed"
+  // ─── New events added during Mixpanel → Yandex Metrika migration (2026-06).
+  // Call sites for these will be wired in a follow-up step.
+  | "estimate_created_empty"
+  | "estimate_first_resource_added"
+  | "estimate_constructor_opened"
+  | "ai_photo_analyzed"
+  | "custom_catalog_created"
+  | "custom_estimate_template_created"
+  // ─── Task status transitions (2026-06). One marker event per terminal
+  // status the user moves a task into. Payload includes `from_status` for
+  // funnel breakdown ("how often does in_progress → done vs in_progress → blocked").
+  | "task_marked_in_progress"
+  | "task_marked_done"
+  | "task_marked_blocked";
 
 export type AnalyticsEventPayload = Record<string, unknown>;
 
-import mixpanel from 'mixpanel-browser';
+/**
+ * Product analytics provider: Yandex Metrika.
+ *
+ * History: this module previously used Mixpanel (api-eu.mixpanel.com).
+ * Migrated to Yandex Metrika in 2026-06 to comply with 152-ФЗ
+ * (personal-data localization) — see project_analytics_migration memory.
+ *
+ * The public API (`trackEvent`, `setAnalyticsUserId`, `AnalyticsEventName`)
+ * is preserved unchanged so call sites do not need to be touched.
+ *
+ * The counter ID comes from `VITE_METRIKA_COUNTER_ID` (see `METRIKA_COUNTER_ID`
+ * below); the tag itself is bootstrapped by `initMetrika()`, called once from
+ * `main.tsx`. Per-route SPA hits are emitted by `MetrikaPageviewTracker`.
+ * When no counter is configured, everything in this module is an inert no-op.
+ */
 
-const SESSION_ID = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `session-${Date.now()}`;
+/**
+ * Single source of truth for the Metrika counter ID, read once from the
+ * per-environment env var (prod / staging / dev each get their own counter,
+ * so non-prod traffic never lands in the production counter).
+ *
+ * `null` when the env var is empty or missing — in that case Metrika is fully
+ * disabled: `initMetrika()` injects nothing and `trackEvent` / pageviews no-op.
+ */
+export const METRIKA_COUNTER_ID: number | null = (() => {
+  const raw = import.meta.env.VITE_METRIKA_COUNTER_ID;
+  if (raw === undefined || raw === null || `${raw}`.trim() === "") return null;
+  const id = Number(raw);
+  return Number.isInteger(id) && id > 0 ? id : null;
+})();
 
-const MIXPANEL_TOKEN = import.meta.env.VITE_MIXPANEL_TOKEN;
+type YandexMetrikaFn = ((counterId: number, action: string, ...args: unknown[]) => void) & {
+  a?: unknown[];
+  l?: number;
+};
 
-let mixpanelInitialized = false;
-
-function initMixpanel() {
-  if (mixpanelInitialized || !MIXPANEL_TOKEN || typeof window === 'undefined') return;
-  try {
-    mixpanel.init(MIXPANEL_TOKEN, {
-      debug: import.meta.env.DEV,
-      api_host: "https://api-eu.mixpanel.com",
-      persistence: "localStorage",
-      ignore_dnt: true,
-      autocapture: false,
-      record_sessions_percent: 0,
-    });
-    mixpanel.opt_in_tracking();
-    mixpanelInitialized = true;
-    if (currentUserId) {
-      try {
-        mixpanel.identify(currentUserId);
-      } catch (error) {
-        console.warn('[analytics] Mixpanel identify failed:', error);
-      }
-    }
-  } catch (error) {
-    console.warn('[analytics] Mixpanel init failed:', error);
+declare global {
+  interface Window {
+    ym?: YandexMetrikaFn;
   }
 }
 
+const SESSION_ID =
+  typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `session-${Date.now()}`;
+
 let currentUserId: string | null = null;
 
-export function setAnalyticsUserId(userId: string | null) {
+export function setAnalyticsUserId(userId: string | null): void {
   currentUserId = userId;
-  if (mixpanelInitialized) {
-    if (userId) {
-      try {
-        mixpanel.identify(userId);
-      } catch (error) {
-        console.warn('[analytics] Mixpanel identify failed:', error);
-      }
-    } else {
-      try {
-        mixpanel.reset();
-      } catch (error) {
-        console.warn('[analytics] Mixpanel reset failed:', error);
-      }
-    }
+
+  if (METRIKA_COUNTER_ID === null) return;
+
+  if (typeof window === "undefined" || typeof window.ym !== "function") {
+    // ym is queued by the Metrika snippet, so calls before tag.js loads
+    // are normally buffered. Bail out only if the snippet itself is missing.
+    return;
+  }
+
+  if (!userId) {
+    // Metrika has no explicit "logout" call. Future events from this
+    // browser will simply stop carrying a UserID until setAnalyticsUserId
+    // is called again with a new value.
+    return;
+  }
+
+  try {
+    window.ym(METRIKA_COUNTER_ID, "setUserID", userId);
+  } catch (error) {
+    console.warn("[analytics] Metrika setUserID failed:", error);
   }
 }
 
@@ -136,12 +170,71 @@ export function trackEvent(
     console.info("[analytics]", event, fullPayload);
   }
 
-  if (!mixpanelInitialized) initMixpanel();
-  if (mixpanelInitialized) {
-    try {
-      mixpanel.track(event, fullPayload);
-    } catch (error) {
-      console.warn('[analytics] Mixpanel track failed:', error);
-    }
+  if (METRIKA_COUNTER_ID === null) return;
+
+  if (typeof window === "undefined" || typeof window.ym !== "function") {
+    return;
   }
+
+  try {
+    window.ym(METRIKA_COUNTER_ID, "reachGoal", event, fullPayload);
+  } catch (error) {
+    console.warn("[analytics] Metrika reachGoal failed:", error);
+  }
+}
+
+/**
+ * Bootstrap the Yandex Metrika tag. Call exactly once at app startup
+ * (`main.tsx`), before the first render.
+ *
+ * The body is gated on the raw env var, which Vite statically replaces at
+ * build time, so when no counter is configured esbuild dead-code-eliminates
+ * this whole loader from the bundle — no `mc.yandex.ru` request, no init.
+ *
+ * Session replay is deliberately disabled below: it records PII and is gated
+ * behind a separate consent + field-masking workstream (152-ФЗ). Only
+ * clickmap / accurateTrackBounce / trackLinks remain on.
+ */
+export function initMetrika(): void {
+  if (!import.meta.env.VITE_METRIKA_COUNTER_ID) return;
+  if (METRIKA_COUNTER_ID === null) return;
+  if (typeof window === "undefined" || typeof document === "undefined") return;
+
+  const counterId = METRIKA_COUNTER_ID;
+  const src = `https://mc.yandex.ru/metrika/tag.js?id=${counterId}`;
+
+  // Don't bootstrap twice (HMR / an accidental second call).
+  const existingScripts = document.getElementsByTagName("script");
+  for (let i = 0; i < existingScripts.length; i++) {
+    if (existingScripts[i].src === src) return;
+  }
+
+  // Define the ym() command queue exactly as the official snippet does, so
+  // calls issued before tag.js finishes loading are buffered, not dropped.
+  const w = window;
+  const ym: YandexMetrikaFn = (w.ym =
+    w.ym ||
+    function (...args: unknown[]) {
+      (w.ym!.a = w.ym!.a || []).push(args);
+    });
+  ym.l = Date.now();
+
+  const script = document.createElement("script");
+  script.async = true;
+  script.src = src;
+  const firstScript = document.getElementsByTagName("script")[0];
+  if (firstScript?.parentNode) {
+    firstScript.parentNode.insertBefore(script, firstScript);
+  } else {
+    document.head.appendChild(script);
+  }
+
+  ym(counterId, "init", {
+    webvisor: false,
+    clickmap: true,
+    accurateTrackBounce: true,
+    trackLinks: true,
+    referrer: document.referrer,
+    url: location.href,
+  });
 }
