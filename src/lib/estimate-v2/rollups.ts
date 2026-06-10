@@ -176,7 +176,10 @@ export function computePlannedFromEstimateV2(input: {
   );
 
   return {
-    plannedBudgetCents: totals.totalCents,
+    // Planned budget basis is cost (себестоимость), matching the estimate
+    // finance header's cost-based utilization (spent / cost). Was totals.totalCents
+    // (client price incl. markup + VAT), which made dashboard "spent %" read low.
+    plannedBudgetCents: totals.costTotalCents,
     plannedCostByTypeCents: totals.breakdownByType,
     plannedSubtotalCents: totals.subtotalCents,
     plannedTaxCents: totals.taxAmountCents,
