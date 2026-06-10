@@ -829,7 +829,6 @@ export default function ProjectEstimate() {
     && !isEstimateLoading;
   const showEstimateInternalPricing = estimateFinanceMode === "detail";
   const showEstimateMarkup = estimateFinanceMode === "detail" && isContractorMode;
-  const showEstimateCommercialSummary = estimateFinanceMode === "detail" && isContractorMode;
 
   const [activeTab, setActiveTab] = useState("estimate");
   const [approvalModalOpen, setApprovalModalOpen] = useState(false);
