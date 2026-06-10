@@ -59,6 +59,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { AssigneeCell } from "@/components/estimate-v2/AssigneeCell";
+import { EstimateFinanceHeader, type EstimateFinanceView } from "@/components/estimate-v2/EstimateFinanceHeader";
 import { InlineEditableNumber } from "@/components/estimate-v2/InlineEditableNumber";
 import { InlineEditableText } from "@/components/estimate-v2/InlineEditableText";
 import { ResourceTypeBadge } from "@/components/estimate-v2/ResourceTypeBadge";
@@ -375,23 +376,9 @@ const dayRangeFormatter = new Intl.DateTimeFormat("ru-RU", {
   year: "numeric",
 });
 
-const TIMING_TOOLTIP_KEYS: Record<
-  "durationPlanned" | "durationEstimated" | "daysToEnd" | "behindSchedule",
-  string
-> = {
-  durationPlanned: "estimate.tooltip.durationPlanned",
-  durationEstimated: "estimate.tooltip.durationEstimated",
-  daysToEnd: "estimate.tooltip.daysToEnd",
-  behindSchedule: "estimate.tooltip.behindSchedule",
-};
-
 function formatDayIndex(dayIndex: number | null): string {
   if (dayIndex == null) return "—";
   return dayRangeFormatter.format(new Date(fromDayIndex(dayIndex)));
-}
-
-function formatPercent(value: number): string {
-  return `${value.toFixed(1)}%`;
 }
 
 function buildCsv(rows: string[][]): string {
@@ -859,8 +846,6 @@ export default function ProjectEstimate() {
   const [pendingStageTitleEditId, setPendingStageTitleEditId] = useState<string | null>(null);
   const [pendingWorkTitleEditId, setPendingWorkTitleEditId] = useState<string | null>(null);
   const [pendingLineTitleEditId, setPendingLineTitleEditId] = useState<string | null>(null);
-  const [detailedCostOverviewOpen, setDetailedCostOverviewOpen] = useState(false);
-  const [financialResourcesExpanded, setFinancialResourcesExpanded] = useState(false);
   const [customUnitDraftByLineId, setCustomUnitDraftByLineId] = useState<Record<string, string>>({});
   const [customUnitInputLineIds, setCustomUnitInputLineIds] = useState<Set<string>>(new Set());
   const [pendingDelete, setPendingDelete] = useState<PendingDeleteState | null>(null);
@@ -1434,6 +1419,19 @@ export default function ProjectEstimate() {
     }, 0);
   }, [tasks, works]);
 
+  const taskCompletion = useMemo(() => {
+    const taskById = new Map(tasks.map((task) => [task.id, task]));
+    let total = 0;
+    let done = 0;
+    works.forEach((work) => {
+      if (!work.taskId) return;
+      total += 1;
+      const task = taskById.get(work.taskId);
+      if (task && task.status === "done") done += 1;
+    });
+    return { done, total, pct: total > 0 ? (done / total) * 100 : null };
+  }, [tasks, works]);
+
   const combinedPlanFact = useMemo(
     () => combinePlanFact(
       plannedRollups,
@@ -1455,15 +1453,6 @@ export default function ProjectEstimate() {
       ))
     ),
     [hrPayments.length, orders],
-  );
-
-  const resourcesTotalCents = useMemo(
-    () => totals.breakdownByType.material
-      + totals.breakdownByType.tool
-      + totals.breakdownByType.labor
-      + totals.breakdownByType.subcontractor
-      + totals.breakdownByType.other,
-    [totals.breakdownByType],
   );
 
   const todayDay = toDayIndex(new Date());
@@ -1525,6 +1514,53 @@ export default function ProjectEstimate() {
     };
   }, [baselineRange, currentRange, estimateProject.estimateStatus, incompleteLinkedTaskCount, todayDay]);
 
+  const financeView = useMemo<EstimateFinanceView>(() => {
+    const utilizationPct = totals.costTotalCents > 0
+      ? (combinedPlanFact.fact.spentCents / totals.costTotalCents) * 100
+      : null;
+    return {
+      revenueExVatCents: totals.taxableBaseCents,
+      costTotalCents: totals.costTotalCents,
+      profitExVatCents,
+      profitabilityPct,
+      hasActualFinancialData,
+      spentCents: combinedPlanFact.fact.spentCents,
+      utilizationPct,
+      overspendCents: combinedPlanFact.fact.spentCents - totals.costTotalCents,
+      completion: taskCompletion,
+      toBePaidPlannedCents: combinedPlanFact.fact.toBePaidPlannedCents,
+      daysToEnd: timingMetrics.daysToEnd,
+      behindScheduleDays: timingMetrics.behindScheduleDays,
+      planningRangeLabel,
+      planningDurationDays,
+      markupTotalCents: totals.markupTotalCents,
+      subtotalBeforeDiscountCents: totals.subtotalBeforeDiscountCents,
+      discountTotalCents: totals.discountTotalCents,
+      taxAmountCents: totals.taxAmountCents,
+      totalIncVatCents: totals.totalCents,
+      plannedCostByTypeCents: totals.breakdownByType,
+      spentByTypeCents: combinedPlanFact.fact.spentByTypeCents,
+      operationalUpperBlock,
+      rpcSummaryTotalIncVatCents,
+      uiTotalIncVatCents,
+      taxBps: estimateProject.taxBps,
+    };
+  }, [
+    totals,
+    profitExVatCents,
+    profitabilityPct,
+    hasActualFinancialData,
+    combinedPlanFact,
+    taskCompletion,
+    timingMetrics,
+    planningRangeLabel,
+    planningDurationDays,
+    operationalUpperBlock,
+    rpcSummaryTotalIncVatCents,
+    uiTotalIncVatCents,
+    estimateProject.taxBps,
+  ]);
+
   const ctaState = resolveProjectEstimateCtaState({
     projectMode,
     isOwner: canSubmitToClient,
@@ -1541,37 +1577,6 @@ export default function ProjectEstimate() {
     latestApproved
     && (!latestProposed || latestApproved.number >= latestProposed.number),
   );
-  const financialBreakdownTypeRows: Array<{ label: string; amountCents: number }> = [
-    { label: t("estimate.breakdown.materialCost"), amountCents: totals.breakdownByType.material },
-    { label: t("estimate.breakdown.toolCost"), amountCents: totals.breakdownByType.tool },
-    { label: t("estimate.breakdown.laborCost"), amountCents: totals.breakdownByType.labor },
-    { label: t("estimate.breakdown.subcontractorCost"), amountCents: totals.breakdownByType.subcontractor },
-    { label: t("estimate.breakdown.otherCost"), amountCents: totals.breakdownByType.other },
-  ];
-  const financialBreakdownSummaryRows: Array<{ label: string; amountCents: number; emphasized?: boolean }> = [
-    ...(isContractorMode ? [{ label: t("estimate.breakdown.markup"), amountCents: totals.markupTotalCents }] : []),
-    { label: t("estimate.breakdown.subtotalExVat"), amountCents: totals.subtotalBeforeDiscountCents },
-    { label: t("estimate.breakdown.discount"), amountCents: totals.discountTotalCents },
-    { label: t("estimate.breakdown.vatAmount"), amountCents: totals.taxAmountCents },
-    { label: t("estimate.breakdown.totalIncVat"), amountCents: totals.totalCents, emphasized: true },
-  ];
-  const planVsActualRows = (["material", "tool", "labor", "subcontractor", "other"] as const).map((type) => ({
-    label: t(semanticLabelKeyForType(type)),
-    planned: money(combinedPlanFact.planned.plannedCostByTypeCents[type], estimateProject.currency),
-    actual: hasActualFinancialData ? money(combinedPlanFact.fact.spentByTypeCents[type], estimateProject.currency) : "—",
-  }));
-
-  useEffect(() => {
-    if (estimateProject.estimateStatus === "in_work") return;
-    setDetailedCostOverviewOpen(false);
-  }, [estimateProject.estimateStatus]);
-
-  useEffect(() => {
-    if (canViewSensitiveDetail) return;
-    setDetailedCostOverviewOpen(false);
-    setFinancialResourcesExpanded(false);
-  }, [canViewSensitiveDetail]);
-
   const handleEstimateStatusChange = async (
     nextStatus: EstimateExecutionStatus,
     options?: { skipSetup?: boolean; projectTasks?: Task[] },
@@ -2398,419 +2403,17 @@ export default function ProjectEstimate() {
           )}
         </div>
 
-        {showEstimateWorkspace && (isInWork ? (
-          <div className="rounded-lg border border-border p-3">
-            <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4">
-                  {estimateFinanceMode === "detail" && (
-                    <>
-                      <p className="col-span-2 text-sm font-semibold text-foreground md:col-span-3 lg:col-span-4">{t("estimate.summary.financial")}</p>
-                      <div className="rounded-md bg-muted/30 px-2.5 py-2">
-                        <p className="text-[11px] text-muted-foreground">{t("estimate.summary.plannedTotal")}</p>
-                        <p className="text-sm font-semibold tabular-nums text-foreground">
-                          {money(combinedPlanFact.planned.plannedBudgetCents, estimateProject.currency)}
-                        </p>
-                      </div>
-                      <div className="rounded-md bg-muted/30 px-2.5 py-2">
-                        <p className="text-[11px] text-muted-foreground">{t("estimate.summary.actualSpent")}</p>
-                        <p className="text-sm font-semibold tabular-nums text-foreground">
-                          {hasActualFinancialData ? money(combinedPlanFact.fact.spentCents, estimateProject.currency) : "—"}
-                        </p>
-                      </div>
-                      <div className="rounded-md bg-muted/30 px-2.5 py-2">
-                        <p className="text-[11px] text-muted-foreground">{t("estimate.summary.overUnder")}</p>
-                        <p className={`text-sm font-semibold tabular-nums ${
-                          hasActualFinancialData
-                            && combinedPlanFact.fact.spentCents - combinedPlanFact.planned.plannedBudgetCents > 0
-                              ? "text-destructive"
-                              : "text-foreground"
-                        }`}>
-                          {hasActualFinancialData
-                            ? money(combinedPlanFact.fact.spentCents - combinedPlanFact.planned.plannedBudgetCents, estimateProject.currency)
-                            : "—"}
-                        </p>
-                        {hasActualFinancialData
-                          && combinedPlanFact.fact.spentCents - combinedPlanFact.planned.plannedBudgetCents > 0 && (
-                            <p className="text-[11px] font-medium text-destructive">{t("estimate.budgetExceeded")}</p>
-                          )}
-                      </div>
-                      <div className="rounded-md bg-muted/30 px-2.5 py-2">
-                        <p className="text-[11px] text-muted-foreground">{t("estimate.summary.toBePaid")}</p>
-                        <p className="text-sm font-semibold tabular-nums text-foreground">
-                          {money(combinedPlanFact.fact.toBePaidPlannedCents, estimateProject.currency)}
-                        </p>
-                      </div>
-                    </>
-                  )}
-                  {useReadOnlySummaryPricing && operationalUpperBlock && (
-                    <>
-                      <p className="col-span-2 text-sm font-semibold text-foreground md:col-span-3 lg:col-span-4">{t("estimate.summary.financial")}</p>
-                      {operationalUpperBlock.clientTotalCents != null && (
-                        <div className="rounded-md bg-muted/30 px-2.5 py-2">
-                          <p className="text-[11px] text-muted-foreground">{t("estimate.summary.clientTotalExVat")}</p>
-                          <p className="text-sm font-semibold tabular-nums text-foreground">
-                            {money(operationalUpperBlock.clientTotalCents, estimateProject.currency)}
-                          </p>
-                        </div>
-                      )}
-                      <div className="rounded-md bg-muted/30 px-2.5 py-2">
-                        <p className="text-[11px] text-muted-foreground">{t("estimate.summary.vatRate")}</p>
-                        <p className="text-sm font-semibold tabular-nums text-foreground">
-                          {fromBpsToPercent(operationalUpperBlock.vatBps ?? estimateProject.taxBps)}%
-                        </p>
-                      </div>
-                      {operationalUpperBlock.discountBps != null && operationalUpperBlock.discountBps > 0 && (
-                        <div className="rounded-md bg-muted/30 px-2.5 py-2">
-                          <p className="text-[11px] text-muted-foreground">{t("estimate.summary.discountMax")}</p>
-                          <p className="text-sm font-semibold tabular-nums text-foreground">
-                            {fromBpsToPercent(operationalUpperBlock.discountBps)}%
-                          </p>
-                        </div>
-                      )}
-                      {rpcSummaryTotalIncVatCents != null && (
-                        <div className="rounded-md bg-muted/30 px-2.5 py-2">
-                          <p className="text-[11px] text-muted-foreground">{t("estimate.summary.totalIncVat")}</p>
-                          <p className="text-sm font-semibold tabular-nums text-foreground">
-                            {money(rpcSummaryTotalIncVatCents, estimateProject.currency)}
-                          </p>
-                        </div>
-                      )}
-                      {operationalUpperBlock.resourceCostBreakdownClientSafeOnly
-                        && Object.keys(operationalUpperBlock.resourceCostBreakdownClientSafeOnly).length > 0 && (
-                        <div className="col-span-2 rounded-md bg-muted/30 px-2.5 py-2 md:col-span-3 lg:col-span-4">
-                          <p className="text-[11px] text-muted-foreground">{t("estimate.summary.byResourceTypeClient")}</p>
-                          <div className="mt-1 space-y-1">
-                            {Object.entries(operationalUpperBlock.resourceCostBreakdownClientSafeOnly).map(([key, cents]) => (
-                              <div key={key} className="flex justify-between text-sm">
-                                <span className="text-muted-foreground">{labelForRpcResourceTypeKey(key, t)}</span>
-                                <span className="font-medium tabular-nums text-foreground">{money(cents, estimateProject.currency)}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  )}
-                  <p className="col-span-2 text-sm font-semibold text-foreground md:col-span-3 lg:col-span-4">{t("estimate.summary.timing")}</p>
-                  <div className="rounded-md bg-muted/30 px-2.5 py-2">
-                    <p className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                      {t("estimate.summary.daysToEnd")}
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button type="button" className="text-muted-foreground hover:text-foreground">
-                            <Info className="h-3 w-3" />
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent>{t(TIMING_TOOLTIP_KEYS.daysToEnd)}</TooltipContent>
-                      </Tooltip>
-                    </p>
-                    <p className="text-sm font-semibold tabular-nums text-foreground">
-                      {timingMetrics.daysToEnd == null ? "—" : t("estimate.summary.dayUnit", { count: timingMetrics.daysToEnd })}
-                    </p>
-                  </div>
-                  <div className="rounded-md bg-muted/30 px-2.5 py-2">
-                    <p className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                      {t("estimate.summary.behindSchedule")}
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button type="button" className="text-muted-foreground hover:text-foreground">
-                            <Info className="h-3 w-3" />
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent>{t(TIMING_TOOLTIP_KEYS.behindSchedule)}</TooltipContent>
-                      </Tooltip>
-                    </p>
-                    <p className="text-sm font-semibold tabular-nums text-foreground">{t("estimate.summary.dayUnit", { count: timingMetrics.behindScheduleDays })}</p>
-                  </div>
-                  <div className="rounded-md bg-muted/30 px-2.5 py-2">
-                    <p className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                      {t("estimate.summary.durationPlanned")}
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button type="button" className="text-muted-foreground hover:text-foreground">
-                            <Info className="h-3 w-3" />
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent>{t(TIMING_TOOLTIP_KEYS.durationPlanned)}</TooltipContent>
-                      </Tooltip>
-                    </p>
-                    <p className="text-sm font-semibold tabular-nums text-foreground">
-                      {timingMetrics.durationPlannedDays == null ? "—" : t("estimate.summary.dayUnit", { count: timingMetrics.durationPlannedDays })}
-                    </p>
-                  </div>
-                  <div className="rounded-md bg-muted/30 px-2.5 py-2">
-                    <p className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                      {t("estimate.summary.durationEstimated")}
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button type="button" className="text-muted-foreground hover:text-foreground">
-                            <Info className="h-3 w-3" />
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent>{t(TIMING_TOOLTIP_KEYS.durationEstimated)}</TooltipContent>
-                      </Tooltip>
-                    </p>
-                    <p className="text-sm font-semibold tabular-nums text-foreground">
-                      {timingMetrics.durationEstimatedDays == null ? "—" : t("estimate.summary.dayUnit", { count: timingMetrics.durationEstimatedDays })}
-                    </p>
-                  </div>
-                </div>
-
-                {canViewSensitiveDetail && (
-                  <div className="border-t border-border/60 pt-3">
-                  <Collapsible open={detailedCostOverviewOpen} onOpenChange={setDetailedCostOverviewOpen}>
-                    <div className="rounded-lg border border-border/70">
-                      <CollapsibleTrigger asChild>
-                        <button
-                          type="button"
-                          className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-muted/20"
-                        >
-                          <span className="inline-flex items-center gap-2 text-sm font-semibold text-foreground">
-                            {detailedCostOverviewOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                            {t("estimate.costOverview.title")}
-                          </span>
-                          <span className="text-caption tabular-nums text-muted-foreground">
-                            {money(totals.totalCents, estimateProject.currency)}
-                          </span>
-                        </button>
-                      </CollapsibleTrigger>
-
-                      <CollapsibleContent className="border-t border-border/60 px-3 py-3">
-                        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-                          <div className="space-y-2 rounded-md border border-border/60 bg-background/30 p-3">
-                            <p className="text-sm font-semibold text-foreground">{t("estimate.costOverview.financialBreakdown")}</p>
-                            <div className="space-y-2">
-                              <button
-                                type="button"
-                                className="flex w-full items-center justify-between gap-3 rounded-md border border-border/60 px-3 py-2 text-left text-sm hover:bg-muted/30"
-                                onClick={() => setFinancialResourcesExpanded((current) => !current)}
-                              >
-                                <span className="inline-flex items-center gap-1 text-muted-foreground">
-                                  {financialResourcesExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                                  {t("estimate.costOverview.resources")}
-                                </span>
-                                <span className="font-medium tabular-nums text-foreground">{money(resourcesTotalCents, estimateProject.currency)}</span>
-                              </button>
-                              {financialResourcesExpanded && (
-                                <div className="space-y-2 pl-3">
-                                  {financialBreakdownTypeRows.map((row) => (
-                                    <div key={row.label} className="flex items-center justify-between gap-3 rounded-md border border-border/60 px-3 py-2 text-sm">
-                                      <span className="text-muted-foreground">{row.label}</span>
-                                      <span className="font-medium tabular-nums text-foreground">
-                                        {money(row.amountCents, estimateProject.currency)}
-                                      </span>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                              {financialBreakdownSummaryRows.map((row) => (
-                                <div
-                                  key={row.label}
-                                  className={`flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm ${
-                                    row.emphasized ? "border-border/70 bg-muted/30" : "border-border/60"
-                                  }`}
-                                >
-                                  <span className={row.emphasized ? "font-medium text-foreground" : "text-muted-foreground"}>
-                                    {row.label}
-                                  </span>
-                                  <span className={`${row.emphasized ? "font-semibold" : "font-medium"} tabular-nums text-foreground`}>
-                                    {money(row.amountCents, estimateProject.currency)}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-
-                          <div className="space-y-2 rounded-md border border-border/60 bg-background/30 p-3">
-                            <p className="text-sm font-semibold text-foreground">{t("estimate.costOverview.planVsActual")}</p>
-                            <div className="grid grid-cols-[minmax(0,1fr)_minmax(112px,auto)_minmax(112px,auto)] gap-3 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                              <span>{t("estimate.costOverview.col.category")}</span>
-                              <span className="text-right">{t("estimate.costOverview.col.planned")}</span>
-                              <span className="text-right">{t("estimate.costOverview.col.actual")}</span>
-                            </div>
-                            <div className="space-y-2">
-                              {planVsActualRows.map((row) => (
-                                <div key={row.label} className="grid grid-cols-[minmax(0,1fr)_minmax(112px,auto)_minmax(112px,auto)] items-center gap-3 rounded-md border border-border/60 px-3 py-2 text-sm">
-                                  <span className="text-muted-foreground">{row.label}</span>
-                                  <span className="text-right font-medium tabular-nums text-foreground">{row.planned}</span>
-                                  <span className="text-right font-medium tabular-nums text-foreground">{row.actual}</span>
-                                </div>
-                              ))}
-                              <div className="grid grid-cols-[minmax(0,1fr)_minmax(112px,auto)_minmax(112px,auto)] items-center gap-3 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-sm">
-                                <span className="font-medium text-foreground">{t("estimate.costOverview.total")}</span>
-                                <span className="text-right font-semibold tabular-nums text-foreground">
-                                  {money(combinedPlanFact.planned.plannedBudgetCents, estimateProject.currency)}
-                                </span>
-                                <span className="text-right font-semibold tabular-nums text-foreground">
-                                  {hasActualFinancialData ? money(combinedPlanFact.fact.spentCents, estimateProject.currency) : "—"}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </CollapsibleContent>
-                    </div>
-                  </Collapsible>
-                  </div>
-                )}
-              </div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-            <div className="rounded-lg border border-border p-3">
-              <p className="text-sm font-semibold text-foreground">{t("estimate.summary.timing")}</p>
-              <div className="mt-2 grid grid-cols-2 gap-2 text-caption">
-                <div className="rounded-md border border-border/70 p-2">
-                  <p className="text-muted-foreground">{t("estimate.planning.durationRange")}</p>
-                  <p className="text-sm font-medium text-foreground">{planningRangeLabel}</p>
-                </div>
-                <div className="rounded-md border border-border/70 p-2">
-                  <p className="text-muted-foreground">{t("estimate.planning.durationDays")}</p>
-                  <p className="text-sm font-medium text-foreground">{planningDurationDays == null ? "—" : t("estimate.summary.dayUnit", { count: planningDurationDays })}</p>
-                </div>
-                <div className="rounded-md border border-border/70 p-2">
-                  <p className="text-muted-foreground">{t("estimate.summary.daysToEnd")}</p>
-                  <p className="text-sm font-medium text-foreground">
-                    {timingMetrics.daysToEnd == null ? "—" : t("estimate.summary.dayUnit", { count: timingMetrics.daysToEnd })}
-                  </p>
-                </div>
-                <div className="rounded-md border border-border/70 p-2">
-                  <p className="text-muted-foreground">{t("estimate.summary.behindSchedule")}</p>
-                  <p className="text-sm font-medium text-foreground">{t("estimate.summary.dayUnit", { count: timingMetrics.behindScheduleDays })}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-lg border border-border p-3">
-              <p className="text-sm font-semibold text-foreground">{t("estimate.summary.financial")}</p>
-              {estimateFinanceMode === "none" ? (
-                <p className="mt-2 text-caption text-muted-foreground">
-                  {t("estimate.planning.financeHidden")}
-                </p>
-              ) : useReadOnlySummaryPricing && operationalUpperBlock ? (
-                <div className="mt-2 space-y-2 text-caption">
-                  {operationalUpperBlock.clientTotalCents != null && (
-                    <div className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
-                      <span className="text-muted-foreground">{t("estimate.summary.clientTotalExVat")}</span>
-                      <span className="font-medium tabular-nums text-foreground">
-                        {money(operationalUpperBlock.clientTotalCents, estimateProject.currency)}
-                      </span>
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
-                    <span className="text-muted-foreground">{t("estimate.summary.vatRate")}</span>
-                    <span className="font-medium tabular-nums text-foreground">
-                      {fromBpsToPercent(operationalUpperBlock.vatBps ?? estimateProject.taxBps)}%
-                    </span>
-                  </div>
-                  {operationalUpperBlock.discountBps != null && operationalUpperBlock.discountBps > 0 && (
-                    <div className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
-                      <span className="text-muted-foreground">{t("estimate.summary.discountMax")}</span>
-                      <span className="font-medium tabular-nums text-foreground">
-                        {fromBpsToPercent(operationalUpperBlock.discountBps)}%
-                      </span>
-                    </div>
-                  )}
-                  {operationalUpperBlock.resourceCostBreakdownClientSafeOnly
-                    && Object.keys(operationalUpperBlock.resourceCostBreakdownClientSafeOnly).length > 0 && (
-                    <div className="space-y-1 rounded-md border border-border/70 px-2 py-2">
-                      <span className="text-muted-foreground">{t("estimate.summary.byResourceTypeClient")}</span>
-                      {Object.entries(operationalUpperBlock.resourceCostBreakdownClientSafeOnly).map(([key, cents]) => (
-                        <div key={key} className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">{labelForRpcResourceTypeKey(key, t)}</span>
-                          <span className="tabular-nums text-foreground">{money(cents, estimateProject.currency)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between rounded-md border border-border/70 bg-muted/30 px-2 py-1">
-                    <span className="font-medium text-foreground">{t("estimate.summary.totalIncVat")}</span>
-                    <span className="font-semibold tabular-nums text-foreground">
-                      {money(uiTotalIncVatCents, estimateProject.currency)}
-                    </span>
-                  </div>
-                </div>
-              ) : !canViewSensitiveDetail ? (
-                <div className="mt-2 rounded-md border border-border/70 p-2">
-                  <p className="text-xs text-muted-foreground">{t("estimate.summary.totalIncVat")}</p>
-                  <p className="text-2xl font-semibold text-foreground">{money(uiTotalIncVatCents, estimateProject.currency)}</p>
-                </div>
-              ) : (
-                <div className="mt-2 space-y-1 text-caption">
-                  <button
-                    type="button"
-                    className="flex w-full items-center justify-between rounded-md border border-border/70 px-2 py-1 text-left hover:bg-muted/30"
-                    onClick={() => setFinancialResourcesExpanded((current) => !current)}
-                  >
-                    <span className="inline-flex items-center gap-1 text-muted-foreground">
-                      {financialResourcesExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                      {t("estimate.costOverview.resources")}
-                    </span>
-                    <span className="font-medium tabular-nums text-foreground">{money(resourcesTotalCents, estimateProject.currency)}</span>
-                  </button>
-                  {financialResourcesExpanded && (
-                    <div className="space-y-1 pl-5">
-                      <div className="flex items-center justify-between rounded-md border border-border/60 px-2 py-1">
-                        <span className="text-muted-foreground">{t("estimate.breakdown.materialCost")}</span>
-                        <span className="tabular-nums text-foreground">{money(totals.breakdownByType.material, estimateProject.currency)}</span>
-                      </div>
-                      <div className="flex items-center justify-between rounded-md border border-border/60 px-2 py-1">
-                        <span className="text-muted-foreground">{t("estimate.breakdown.toolCost")}</span>
-                        <span className="tabular-nums text-foreground">{money(totals.breakdownByType.tool, estimateProject.currency)}</span>
-                      </div>
-                      <div className="flex items-center justify-between rounded-md border border-border/60 px-2 py-1">
-                        <span className="text-muted-foreground">{t("estimate.breakdown.laborCost")}</span>
-                        <span className="tabular-nums text-foreground">{money(totals.breakdownByType.labor, estimateProject.currency)}</span>
-                      </div>
-                      <div className="flex items-center justify-between rounded-md border border-border/60 px-2 py-1">
-                        <span className="text-muted-foreground">{t("estimate.breakdown.subcontractorCost")}</span>
-                        <span className="tabular-nums text-foreground">{money(totals.breakdownByType.subcontractor, estimateProject.currency)}</span>
-                      </div>
-                      <div className="flex items-center justify-between rounded-md border border-border/60 px-2 py-1">
-                        <span className="text-muted-foreground">{t("estimate.breakdown.otherCost")}</span>
-                        <span className="tabular-nums text-foreground">{money(totals.breakdownByType.other, estimateProject.currency)}</span>
-                      </div>
-                    </div>
-                  )}
-                  {showEstimateCommercialSummary && (
-                    <div className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
-                      <span className="text-muted-foreground">{t("estimate.breakdown.markup")}</span>
-                      <span className="tabular-nums text-foreground">{money(totals.markupTotalCents, estimateProject.currency)}</span>
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
-                    <span className="text-muted-foreground">{t("estimate.breakdown.subtotalExVat")}</span>
-                    <span className="tabular-nums text-foreground">{money(totals.subtotalBeforeDiscountCents, estimateProject.currency)}</span>
-                  </div>
-                  <div className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
-                    <span className="text-muted-foreground">{t("estimate.breakdown.discount")}</span>
-                    <span className="tabular-nums text-foreground">{money(totals.discountTotalCents, estimateProject.currency)}</span>
-                  </div>
-                  <div className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
-                    <span className="text-muted-foreground">{t("estimate.breakdown.vatAmount")}</span>
-                    <span className="tabular-nums text-foreground">{money(totals.taxAmountCents, estimateProject.currency)}</span>
-                  </div>
-                  <div className="flex items-center justify-between rounded-md border border-border/70 bg-muted/30 px-2 py-1">
-                    <span className="font-medium text-foreground">{t("estimate.breakdown.totalIncVat")}</span>
-                    <span className="font-semibold tabular-nums text-foreground">{money(totals.totalCents, estimateProject.currency)}</span>
-                  </div>
-                  {showEstimateCommercialSummary && (
-                    <div className="mt-2 grid grid-cols-2 gap-2">
-                      <div className="rounded-md border border-border/70 p-2">
-                        <p className="text-muted-foreground">{t("estimate.planning.profitExVat")}</p>
-                        <p className="text-sm font-medium text-foreground">{money(profitExVatCents, estimateProject.currency)}</p>
-                      </div>
-                      <div className="rounded-md border border-border/70 p-2">
-                        <p className="text-muted-foreground">{t("estimate.planning.profitabilityPct")}</p>
-                        <p className="text-sm font-medium text-foreground">{profitabilityPct == null ? "—" : formatPercent(profitabilityPct)}</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
+        {showEstimateWorkspace && (
+          <EstimateFinanceHeader
+            status={estimateProject.estimateStatus}
+            financeMode={estimateFinanceMode}
+            useReadOnlySummaryPricing={useReadOnlySummaryPricing}
+            currency={estimateProject.currency}
+            isContractorMode={isContractorMode}
+            view={financeView}
+            resourceKeyLabel={(key) => labelForRpcResourceTypeKey(key, t)}
+          />
+        )}
 
         {showEstimateWorkspace && <VersionBanner
           hasPending={pendingProposed && Boolean(latestProposed)}
