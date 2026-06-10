@@ -863,6 +863,33 @@ export default function ProjectEstimate() {
     setEstimateEditorStarted(estimateHasSavedContent);
   }, [estimateHasSavedContent, pid]);
 
+  // ─── Analytics: empty-estimate marker.
+  // Fires once per project_id when the user views an estimate that has no
+  // stages / works / lines / versions yet. Used as the funnel denominator
+  // for activation: estimate_created_empty → estimate_first_resource_added.
+  const firedEstimateCreatedEmptyForPidRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!pid) return;
+    if (estimateHasSavedContent) return;
+    if (firedEstimateCreatedEmptyForPidRef.current.has(pid)) return;
+    firedEstimateCreatedEmptyForPidRef.current.add(pid);
+    trackEvent("estimate_created_empty", { project_id: pid });
+  }, [pid, estimateHasSavedContent]);
+
+  // ─── Analytics: activation marker.
+  // Fires once per project_id the moment the estimate contains at least
+  // one resource line with a non-zero unit price. This is the canonical
+  // activation event — see project_analytics_migration memory.
+  const firedEstimateFirstResourceForPidRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!pid) return;
+    if (firedEstimateFirstResourceForPidRef.current.has(pid)) return;
+    const hasPricedLine = lines.some((line) => (line.costUnitCents ?? 0) > 0);
+    if (!hasPricedLine) return;
+    firedEstimateFirstResourceForPidRef.current.add(pid);
+    trackEvent("estimate_first_resource_added", { project_id: pid });
+  }, [pid, lines]);
+
   useEffect(() => {
     if (!pendingStageTitleEditId) return;
     let firstFrame = 0;

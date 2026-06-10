@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
 import { EnvBanner } from "@/components/system/EnvBanner";
+import { MetrikaPageviewTracker } from "@/components/system/MetrikaPageviewTracker";
 
 const AppLayout = lazy(() => import("@/layouts/AppLayout"));
 const AuthLayout = lazy(() => import("@/layouts/AuthLayout"));
@@ -68,6 +69,7 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
+        <MetrikaPageviewTracker />
         <Routes>
           {/* Standalone pages */}
           <Route path="/" element={routeElement(<Landing />)} />

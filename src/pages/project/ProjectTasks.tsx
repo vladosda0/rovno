@@ -275,6 +275,13 @@ export default function ProjectTasks() {
         await source.updateProjectTask(taskId, { status: newStatus });
         await invalidateProjectTasks();
         toast({ title: t("tasks.toast.statusUpdated"), description: t(statusMeta[newStatus].labelKey) });
+        if (newStatus === "in_progress") {
+          trackEvent("task_marked_in_progress", {
+            project_id: pid,
+            task_id: taskId,
+            from_status: task.status,
+          });
+        }
       } catch (error) {
         toast({
           title: t("tasks.toast.statusUpdateFailed.title"),
@@ -343,6 +350,11 @@ export default function ProjectTasks() {
       }
       await source.updateProjectTask(donePrompt.taskId, { status: "done" });
       await invalidateProjectTasks();
+      trackEvent("task_marked_done", {
+        project_id: pid,
+        task_id: donePrompt.taskId,
+        from_status: task.status,
+      });
 
       setDonePrompt(null);
       setDoneFiles([]);
@@ -396,6 +408,12 @@ export default function ProjectTasks() {
       await source.createTaskComment(blockedPrompt.taskId, t("tasks.toast.blockerPrefix", { reason: blockedReason.trim() }), authorId);
       await source.updateProjectTask(blockedPrompt.taskId, { status: "blocked" });
       await invalidateProjectTasks();
+      const blockedTaskFromStatus = tasks.find((entry) => entry.id === blockedPrompt.taskId)?.status ?? "unknown";
+      trackEvent("task_marked_blocked", {
+        project_id: pid,
+        task_id: blockedPrompt.taskId,
+        from_status: blockedTaskFromStatus,
+      });
       setBlockedPrompt(null);
       setBlockedReason("");
       toast({ title: t("tasks.toast.markedBlocked") });
