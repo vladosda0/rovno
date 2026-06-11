@@ -23,6 +23,7 @@ import {
   resolveEstimateV2FinanceProjectMeta,
   type EstimateV2FinanceProjectSummary,
   type EstimateV2FinanceSnapshot,
+  type EstimateV2FinanceTaskSlice,
 } from "@/lib/estimate-v2/finance-read-model";
 import { computeFactFromDataSources } from "@/lib/estimate-v2/rollups";
 import * as store from "@/data/store";
@@ -221,7 +222,7 @@ export function useEstimateV2FinanceProjectSummary(
 export function useEstimateV2FinanceProjectSummaryFromWorkspace(
   projectId: string,
   projectInput: Pick<Project, "id" | "title"> | null | undefined,
-  options: { hrReadsEnabled: boolean },
+  options: { hrReadsEnabled: boolean; tasks?: EstimateV2FinanceTaskSlice[] },
 ): EstimateV2FinanceProjectSummary | null {
   const procurementItems = useProcurementV2(projectId);
   const orders = useOrders(projectId);
@@ -251,12 +252,13 @@ export function useEstimateV2FinanceProjectSummaryFromWorkspace(
       hrItems,
       hrPayments,
     });
-    return buildEstimateV2FinanceProjectSummary(project.id, project.title, state, fact);
+    return buildEstimateV2FinanceProjectSummary(project.id, project.title, state, fact, options.tasks);
   }, [
     revision,
     projectId,
     projectInput,
     options.hrReadsEnabled,
+    options.tasks,
     procurementItems,
     orders,
     hrItems,

@@ -1,4 +1,4 @@
-import { getProject } from "@/data/store";
+import { getProject, getTasks } from "@/data/store";
 import { getEstimateV2ProjectState, type EstimateV2ProjectView } from "@/data/estimate-v2-store";
 import {
   computeFactFromProcurementAndHR,
@@ -6,10 +6,15 @@ import {
   type FactRollups,
 } from "@/lib/estimate-v2/rollups";
 import { computeProjectTotals } from "@/lib/estimate-v2/pricing";
-import type { Project } from "@/types/entities";
+import { toDayIndex } from "@/lib/estimate-v2/schedule";
+import type { Project, Task } from "@/types/entities";
 import type {
   EstimateExecutionStatus,
+  EstimateV2Work,
+  ScheduleBaseline,
 } from "@/types/estimate-v2";
+
+export type EstimateV2FinanceTaskSlice = Pick<Task, "id" | "status">;
 
 export interface EstimateV2FinanceProjectSummary {
   projectId: string;
@@ -27,6 +32,18 @@ export interface EstimateV2FinanceProjectSummary {
   percentSpent: number;
   /** Same semantics as ProjectEstimate: margin on pricing totals (taxable base vs cost); null when no revenue base. */
   percentProfitability: number | null;
+  /** Revenue ex VAT (taxable base after discount); the estimate header "Выручка". */
+  contractValueCents: number;
+  /** Cost basis (себестоимость), same as the header cost card. */
+  costCents: number;
+  /** contractValue − cost (маржа в ₽). */
+  marginCents: number;
+  /** spent / cost × 100, unclamped (UI clamps bars itself); null when cost is 0. */
+  percentUtilization: number | null;
+  /** Days until the current works range ends (>= 0); null when dates are missing. */
+  daysToEnd: number | null;
+  /** Behind-schedule days vs baseline; 0 unless overdue with unfinished linked tasks. */
+  behindScheduleDays: number;
   /**
    * When false, monetary fields are cleared and workspace totals exclude this project (Home sensitive-detail gate).
    * Omitted means fully visible (legacy callers).
@@ -77,7 +94,59 @@ export function resolveEstimateV2FinanceProjectMeta(
 type EstimateV2FinanceStateSlice = Pick<
   EstimateV2ProjectView,
   "project" | "stages" | "works" | "lines" | "versions"
->;
+> & Partial<Pick<EstimateV2ProjectView, "scheduleBaseline">>;
+
+function worksRangeDays(works: EstimateV2Work[]): { startDay: number; endDay: number } | null {
+  let min = Number.POSITIVE_INFINITY;
+  let max = Number.NEGATIVE_INFINITY;
+
+  works.forEach((work) => {
+    const start = toDayIndex(work.plannedStart);
+    const end = toDayIndex(work.plannedEnd);
+    if (start == null || end == null) return;
+    min = Math.min(min, start);
+    max = Math.max(max, end);
+  });
+
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return null;
+  return { startDay: min, endDay: max };
+}
+
+/**
+ * Same timing semantics as the estimate header: days-to-end from the current works range
+ * (baseline end as fallback), behind-days only past the baseline with unfinished linked tasks.
+ * Without a tasks slice — including an EMPTY one, which is what still-loading task queries
+ * return — behind-days stays 0, so loading and missing data take the same no-false-alarm path.
+ */
+function computeSummaryTiming(
+  works: EstimateV2Work[],
+  scheduleBaseline: ScheduleBaseline | null | undefined,
+  tasks: EstimateV2FinanceTaskSlice[] | undefined,
+): { daysToEnd: number | null; behindScheduleDays: number } {
+  const todayDay = toDayIndex(new Date());
+  const currentRange = worksRangeDays(works);
+  const baselineEndDay = scheduleBaseline?.projectBaselineEnd
+    ? toDayIndex(scheduleBaseline.projectBaselineEnd)
+    : null;
+  const targetEndDay = currentRange?.endDay ?? baselineEndDay;
+  const daysToEnd = targetEndDay != null && todayDay != null
+    ? Math.max(0, targetEndDay - todayDay)
+    : null;
+
+  let behindScheduleDays = 0;
+  if (tasks && tasks.length > 0 && baselineEndDay != null && todayDay != null && todayDay > baselineEndDay) {
+    const taskById = new Map(tasks.map((task) => [task.id, task]));
+    const unfinishedLinked = works.reduce((count, work) => {
+      if (!work.taskId) return count;
+      const task = taskById.get(work.taskId);
+      if (!task) return count + 1;
+      return task.status === "done" ? count : count + 1;
+    }, 0);
+    if (unfinishedLinked > 0) behindScheduleDays = todayDay - baselineEndDay;
+  }
+
+  return { daysToEnd, behindScheduleDays };
+}
 
 /**
  * Pure summary from estimate-v2 state + fact rollups (same fact path as ProjectEstimate when inputs match).
@@ -87,6 +156,7 @@ export function buildEstimateV2FinanceProjectSummary(
   projectTitle: string,
   state: EstimateV2FinanceStateSlice,
   fact: FactRollups,
+  tasks?: EstimateV2FinanceTaskSlice[],
 ): EstimateV2FinanceProjectSummary {
   const planned = computePlannedFromEstimateV2({
     project: state.project,
@@ -120,6 +190,13 @@ export function buildEstimateV2FinanceProjectSummary(
     ? ((revenueExVatCents - costExVatCents) / revenueExVatCents) * 100
     : null;
 
+  const contractValueCents = hasEstimate ? revenueExVatCents : 0;
+  const costCents = hasEstimate ? costExVatCents : 0;
+  const percentUtilization = costCents > 0 ? (spentCents / costCents) * 100 : null;
+  const timing = hasEstimate
+    ? computeSummaryTiming(state.works, state.scheduleBaseline, tasks)
+    : { daysToEnd: null, behindScheduleDays: 0 };
+
   return {
     projectId,
     projectTitle,
@@ -135,6 +212,12 @@ export function buildEstimateV2FinanceProjectSummary(
     varianceCents,
     percentSpent,
     percentProfitability,
+    contractValueCents,
+    costCents,
+    marginCents: contractValueCents - costCents,
+    percentUtilization,
+    daysToEnd: timing.daysToEnd,
+    behindScheduleDays: timing.behindScheduleDays,
   };
 }
 
@@ -147,7 +230,7 @@ export function getEstimateV2FinanceProjectSummary(
 
   const state = getEstimateV2ProjectState(projectId);
   const fact = computeFactFromProcurementAndHR(projectId);
-  return buildEstimateV2FinanceProjectSummary(project.id, project.title, state, fact);
+  return buildEstimateV2FinanceProjectSummary(project.id, project.title, state, fact, getTasks(projectId));
 }
 
 export function getEstimateV2FinanceSnapshot(
@@ -201,6 +284,10 @@ export function applySensitiveDetailToEstimateV2FinanceSnapshot(
       varianceCents: 0,
       percentSpent: 0,
       percentProfitability: null,
+      contractValueCents: 0,
+      costCents: 0,
+      marginCents: 0,
+      percentUtilization: null,
     };
   });
 

@@ -16,12 +16,21 @@ import {
 } from "@/data/estimate-v2-store";
 import {
   applySensitiveDetailToEstimateV2FinanceSnapshot,
+  buildEstimateV2FinanceProjectSummary,
   getEstimateV2FinanceProjectSummary,
   getEstimateV2FinanceSnapshot,
+  type EstimateV2FinanceTaskSlice,
 } from "@/lib/estimate-v2/finance-read-model";
 import { computeProjectTotals } from "@/lib/estimate-v2/pricing";
-import { computeFactFromProcurementAndHR } from "@/lib/estimate-v2/rollups";
+import { computeFactFromProcurementAndHR, type FactRollups } from "@/lib/estimate-v2/rollups";
 import { clearDemoSession, enterDemoSession, setAuthRole } from "@/lib/auth-state";
+import type {
+  EstimateV2Project,
+  EstimateV2ResourceLine,
+  EstimateV2Stage,
+  EstimateV2Work,
+  ScheduleBaseline,
+} from "@/types/estimate-v2";
 
 describe("estimate-v2 finance read model", () => {
   beforeEach(() => {
@@ -240,5 +249,213 @@ describe("estimate-v2 finance read model", () => {
     const restored = applySensitiveDetailToEstimateV2FinanceSnapshot(snap, () => true);
     expect(restored.totals.plannedBudgetCents).toBe(snap.totals.plannedBudgetCents);
     expect(restored.projects.every((p) => p.sensitiveFinanceVisible === true)).toBe(true);
+  });
+});
+
+// --- Pure-fixture tests for the Phase 2 summary fields (contract/cost/margin/utilization/timing) ---
+
+function fixtureProject(partial: Partial<EstimateV2Project> = {}): EstimateV2Project {
+  return {
+    id: "estimate-v2-fixture",
+    projectId: "project-fixture",
+    title: "Project",
+    projectMode: "contractor",
+    currency: "RUB",
+    taxBps: 1_000,
+    discountBps: 0,
+    markupBps: 1_000,
+    estimateStatus: "in_work",
+    receivedCents: 0,
+    pnlPlaceholderCents: 0,
+    createdAt: "2025-01-01T00:00:00.000Z",
+    updatedAt: "2025-01-01T00:00:00.000Z",
+    ...partial,
+  };
+}
+
+function fixtureStage(): EstimateV2Stage {
+  return {
+    id: "stage-1",
+    projectId: "project-fixture",
+    title: "Stage",
+    order: 1,
+    discountBps: 0,
+    createdAt: "2025-01-01T00:00:00.000Z",
+    updatedAt: "2025-01-01T00:00:00.000Z",
+  };
+}
+
+function fixtureWork(partial: Partial<EstimateV2Work> = {}): EstimateV2Work {
+  return {
+    id: "work-1",
+    projectId: "project-fixture",
+    stageId: "stage-1",
+    title: "Work",
+    order: 1,
+    discountBps: 0,
+    plannedStart: null,
+    plannedEnd: null,
+    taskId: null,
+    status: "planned",
+    createdAt: "2025-01-01T00:00:00.000Z",
+    updatedAt: "2025-01-01T00:00:00.000Z",
+    ...partial,
+  };
+}
+
+function fixtureLine(partial: Partial<EstimateV2ResourceLine> = {}): EstimateV2ResourceLine {
+  return {
+    id: "line-1",
+    projectId: "project-fixture",
+    stageId: "stage-1",
+    workId: "work-1",
+    title: "Line",
+    type: "material",
+    unit: "pcs",
+    qtyMilli: 1_000,
+    costUnitCents: 10_000,
+    markupBps: 0,
+    discountBpsOverride: null,
+    assigneeId: null,
+    assigneeName: null,
+    assigneeEmail: null,
+    receivedCents: 0,
+    pnlPlaceholderCents: 0,
+    createdAt: "2025-01-01T00:00:00.000Z",
+    updatedAt: "2025-01-01T00:00:00.000Z",
+    ...partial,
+  };
+}
+
+function fixtureFact(partial: Partial<FactRollups> = {}): FactRollups {
+  return {
+    spentCents: 0,
+    spentByTypeCents: { material: 0, tool: 0, labor: 0, subcontractor: 0, overhead: 0, other: 0 },
+    unattributedSpendCents: 0,
+    toBePaidPlannedCents: 0,
+    spentAbovePlannedCents: 0,
+    ...partial,
+  };
+}
+
+function isoDaysFromNow(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toISOString();
+}
+
+const OVERDUE_BASELINE: ScheduleBaseline = {
+  capturedAt: "2025-01-01T00:00:00.000Z",
+  projectBaselineStart: "2025-01-01T00:00:00.000Z",
+  projectBaselineEnd: "2025-01-01T00:00:00.000Z",
+  works: [],
+};
+
+function buildFixtureSummary(input: {
+  works?: EstimateV2Work[];
+  scheduleBaseline?: ScheduleBaseline | null;
+  tasks?: EstimateV2FinanceTaskSlice[];
+  factOverrides?: Partial<FactRollups>;
+}) {
+  return buildEstimateV2FinanceProjectSummary(
+    "project-fixture",
+    "Project",
+    {
+      project: fixtureProject(),
+      stages: [fixtureStage()],
+      works: input.works ?? [fixtureWork()],
+      lines: [fixtureLine()],
+      versions: [],
+      scheduleBaseline: input.scheduleBaseline ?? null,
+    },
+    fixtureFact(input.factOverrides),
+    input.tasks,
+  );
+}
+
+describe("buildEstimateV2FinanceProjectSummary (Phase 2 fields)", () => {
+  const overdueWork = () => fixtureWork({
+    taskId: "task-1",
+    plannedStart: isoDaysFromNow(-30),
+    plannedEnd: isoDaysFromNow(-5),
+  });
+
+  it("exposes contract, cost, margin, and utilization on the cost basis", () => {
+    // cost 10 000, markup 10% → taxable base 11 000; margin 1 000.
+    const summary = buildFixtureSummary({ factOverrides: { spentCents: 5_000 } });
+
+    expect(summary.contractValueCents).toBe(11_000);
+    expect(summary.costCents).toBe(10_000);
+    expect(summary.marginCents).toBe(1_000);
+    expect(summary.percentUtilization).toBeCloseTo(50, 5);
+  });
+
+  it("keeps behind-schedule at zero when the tasks slice is empty (still loading)", () => {
+    const summary = buildFixtureSummary({
+      works: [overdueWork()],
+      scheduleBaseline: OVERDUE_BASELINE,
+      tasks: [],
+    });
+
+    expect(summary.behindScheduleDays).toBe(0);
+  });
+
+  it("keeps behind-schedule at zero without a tasks slice", () => {
+    const summary = buildFixtureSummary({
+      works: [overdueWork()],
+      scheduleBaseline: OVERDUE_BASELINE,
+    });
+
+    expect(summary.behindScheduleDays).toBe(0);
+  });
+
+  it("reports behind-schedule days past the baseline with unfinished linked tasks", () => {
+    const summary = buildFixtureSummary({
+      works: [overdueWork()],
+      scheduleBaseline: OVERDUE_BASELINE,
+      tasks: [{ id: "task-1", status: "in_progress" }] as EstimateV2FinanceTaskSlice[],
+    });
+
+    expect(summary.behindScheduleDays).toBeGreaterThan(0);
+  });
+
+  it("does not alarm when all linked tasks are done", () => {
+    const summary = buildFixtureSummary({
+      works: [overdueWork()],
+      scheduleBaseline: OVERDUE_BASELINE,
+      tasks: [{ id: "task-1", status: "done" }] as EstimateV2FinanceTaskSlice[],
+    });
+
+    expect(summary.behindScheduleDays).toBe(0);
+  });
+
+  it("derives days-to-end from the current works range, clamped at zero", () => {
+    const future = buildFixtureSummary({
+      works: [fixtureWork({ plannedStart: isoDaysFromNow(-1), plannedEnd: isoDaysFromNow(14) })],
+    });
+    expect(future.daysToEnd).toBe(14);
+
+    const past = buildFixtureSummary({
+      works: [fixtureWork({ plannedStart: isoDaysFromNow(-20), plannedEnd: isoDaysFromNow(-5) })],
+    });
+    expect(past.daysToEnd).toBe(0);
+
+    const dateless = buildFixtureSummary({ works: [fixtureWork()] });
+    expect(dateless.daysToEnd).toBeNull();
+  });
+
+  it("zeroes the new monetary fields for redacted projects", () => {
+    const summary = buildFixtureSummary({ factOverrides: { spentCents: 5_000 } });
+    const redacted = applySensitiveDetailToEstimateV2FinanceSnapshot(
+      { projects: [summary], totals: { plannedBudgetCents: 0, spentCents: 0, toBePaidCents: 0, varianceCents: 0 } },
+      () => false,
+    );
+
+    const row = redacted.projects[0];
+    expect(row.sensitiveFinanceVisible).toBe(false);
+    expect(row.contractValueCents).toBe(0);
+    expect(row.costCents).toBe(0);
+    expect(row.marginCents).toBe(0);
+    expect(row.percentUtilization).toBeNull();
   });
 });
