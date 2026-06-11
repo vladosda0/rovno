@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatPct, formatSignedPct } from "@/components/finance/FinancePrimitives";
+import { formatPct, formatSignedPct } from "@/lib/finance/format";
 
 describe("formatPct", () => {
   it("renders an em dash for null and non-finite values", () => {

@@ -4,7 +4,7 @@ import { ChevronRight, Wallet } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { formatCompactMoney } from "@/lib/estimate-v2/format-money";
-import { formatPct } from "@/components/finance/FinancePrimitives";
+import { formatPct } from "@/lib/finance/format";
 import type { EstimateV2FinanceProjectSummary } from "@/lib/estimate-v2/finance-read-model";
 import { cn } from "@/lib/utils";
 
