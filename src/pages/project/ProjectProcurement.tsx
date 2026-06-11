@@ -611,6 +611,10 @@ export default function ProjectProcurement() {
     const nameById = new Map(items.map((item) => [item.id, item.name]));
     const ppv = computePurchasePriceVariance(pid, items, orders);
     const inStockGroups = computeInStockByLocation(pid, items, orders, locations);
+    // One in-stock source for the card AND the by-location breakdown (and the tab
+    // table): event-replay valuation at per-item prices. The snapshot-based chip
+    // total stays a count-only signal on the tab button.
+    const inStockValue = inStockGroups.reduce((sum, group) => sum + group.totalValue, 0);
 
     return {
       budgetCents: toCents(normalizedBudget),
@@ -619,7 +623,7 @@ export default function ProjectProcurement() {
       usedCents: toCentsOrNull(used),
       remainingBudgetCents: used === null ? null : toCents(normalizedBudget - used),
       toOrderCents: toCents(chipTotals.requested.total),
-      inStockValueCents: toCents(chipTotals.inStock.total),
+      inStockValueCents: toCents(inStockValue),
       hasLinkedItems: headerKpis.hasLinkedItems,
       missingPlannedPriceCount: headerKpis.missingPlannedPriceCount,
       missingOrderPriceCount: headerKpis.missingOrderPriceCount,

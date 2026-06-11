@@ -379,6 +379,8 @@ export interface PurchasePriceVarianceSummary {
  * quantities only (a fact price is required, so unreceived lines never count). Planned
  * comes from the line's planned price falling back to the item's; actual from the line's
  * actual price falling back to the item's — no planned-as-actual substitution.
+ * Estimate-linked items only, matching the budget/funnel population: the planned price
+ * basis is the estimate line, so out-of-estimate manual purchases are out of scope here.
  */
 export function computePurchasePriceVariance(
   projectId: string,
@@ -386,7 +388,10 @@ export function computePurchasePriceVariance(
   orders: OrderWithLines[],
 ): PurchasePriceVarianceSummary {
   const itemById = new Map(
-    items.filter((item) => item.projectId === projectId).map((item) => [item.id, item]),
+    items
+      .filter((item) => item.projectId === projectId)
+      .filter(isEstimateLinkedProcurementItem)
+      .map((item) => [item.id, item]),
   );
 
   let deltaTotal = 0;

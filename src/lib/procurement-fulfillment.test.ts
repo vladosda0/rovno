@@ -601,7 +601,7 @@ describe("computePurchasePriceVariance", () => {
   }
 
   it("computes overpay over received quantities only", () => {
-    const item = buildTestRequestLine(projectId, "ppv-item", 10, { plannedUnitPrice: 100, actualUnitPrice: null });
+    const item = buildTestRequestLine(projectId, "ppv-item", 10, { plannedUnitPrice: 100, actualUnitPrice: null, sourceEstimateV2LineId: "est-line-1" });
     const orders = [supplierOrder([
       { id: "l-1", orderId: "o-ppv", procurementItemId: item.id, qty: 5, receivedQty: 2, unit: "pcs", plannedUnitPrice: 100, actualUnitPrice: 120 },
     ])];
@@ -617,8 +617,8 @@ describe("computePurchasePriceVariance", () => {
   });
 
   it("reports savings as a negative delta and sorts lines by |delta|", () => {
-    const itemA = buildTestRequestLine(projectId, "ppv-a", 10, { plannedUnitPrice: 100, actualUnitPrice: null });
-    const itemB = buildTestRequestLine(projectId, "ppv-b", 10, { plannedUnitPrice: 50, actualUnitPrice: null });
+    const itemA = buildTestRequestLine(projectId, "ppv-a", 10, { plannedUnitPrice: 100, actualUnitPrice: null, sourceEstimateV2LineId: "est-line-a" });
+    const itemB = buildTestRequestLine(projectId, "ppv-b", 10, { plannedUnitPrice: 50, actualUnitPrice: null, sourceEstimateV2LineId: "est-line-b" });
     const orders = [supplierOrder([
       { id: "l-a", orderId: "o-ppv", procurementItemId: itemA.id, qty: 2, receivedQty: 2, unit: "pcs", plannedUnitPrice: 100, actualUnitPrice: 90 },
       { id: "l-b", orderId: "o-ppv", procurementItemId: itemB.id, qty: 4, receivedQty: 4, unit: "pcs", plannedUnitPrice: 50, actualUnitPrice: 75 },
@@ -632,8 +632,8 @@ describe("computePurchasePriceVariance", () => {
   });
 
   it("skips received lines without a resolvable planned or actual price", () => {
-    const noPlanned = buildTestRequestLine(projectId, "ppv-no-plan", 10, { plannedUnitPrice: null, actualUnitPrice: null });
-    const noActual = buildTestRequestLine(projectId, "ppv-no-actual", 10, { plannedUnitPrice: 100, actualUnitPrice: null });
+    const noPlanned = buildTestRequestLine(projectId, "ppv-no-plan", 10, { plannedUnitPrice: null, actualUnitPrice: null, sourceEstimateV2LineId: "est-line-np" });
+    const noActual = buildTestRequestLine(projectId, "ppv-no-actual", 10, { plannedUnitPrice: 100, actualUnitPrice: null, sourceEstimateV2LineId: "est-line-na" });
     const orders = [supplierOrder([
       { id: "l-1", orderId: "o-ppv", procurementItemId: noPlanned.id, qty: 1, receivedQty: 1, unit: "pcs", plannedUnitPrice: null, actualUnitPrice: 120 },
       { id: "l-2", orderId: "o-ppv", procurementItemId: noActual.id, qty: 1, receivedQty: 1, unit: "pcs", plannedUnitPrice: null, actualUnitPrice: null },
@@ -648,7 +648,7 @@ describe("computePurchasePriceVariance", () => {
   });
 
   it("falls back to item prices when line prices are missing", () => {
-    const item = buildTestRequestLine(projectId, "ppv-fallback", 10, { plannedUnitPrice: 100, actualUnitPrice: 110 });
+    const item = buildTestRequestLine(projectId, "ppv-fallback", 10, { plannedUnitPrice: 100, actualUnitPrice: 110, sourceEstimateV2LineId: "est-line-fb" });
     const orders = [supplierOrder([
       { id: "l-1", orderId: "o-ppv", procurementItemId: item.id, qty: 3, receivedQty: 3, unit: "pcs", plannedUnitPrice: null, actualUnitPrice: null },
     ])];
@@ -658,8 +658,22 @@ describe("computePurchasePriceVariance", () => {
     expect(ppv.baseTotal).toBe(300);
   });
 
+  it("excludes items not linked to the estimate (manual purchases are out of scope)", () => {
+    const manualItem = buildTestRequestLine(projectId, "ppv-manual", 10, { plannedUnitPrice: 100, actualUnitPrice: null, sourceEstimateV2LineId: null });
+    const orders = [supplierOrder([
+      { id: "l-m", orderId: "o-ppv", procurementItemId: manualItem.id, qty: 2, receivedQty: 2, unit: "pcs", plannedUnitPrice: 100, actualUnitPrice: 150 },
+    ])];
+
+    const ppv = computePurchasePriceVariance(projectId, [manualItem], orders);
+    expect(ppv.deltaTotal).toBe(0);
+    expect(ppv.baseTotal).toBe(0);
+    expect(ppv.pct).toBeNull();
+    expect(ppv.lines).toHaveLength(0);
+    expect(ppv.skippedLineCount).toBe(0);
+  });
+
   it("ignores draft and stock orders", () => {
-    const item = buildTestRequestLine(projectId, "ppv-draft", 10, { plannedUnitPrice: 100, actualUnitPrice: null });
+    const item = buildTestRequestLine(projectId, "ppv-draft", 10, { plannedUnitPrice: 100, actualUnitPrice: null, sourceEstimateV2LineId: "est-line-d" });
     const orders = [
       supplierOrder([
         { id: "l-1", orderId: "o-draft", procurementItemId: item.id, qty: 2, receivedQty: 2, unit: "pcs", plannedUnitPrice: 100, actualUnitPrice: 150 },
