@@ -352,6 +352,116 @@ export function computeProcurementHeaderKpis(
   };
 }
 
+export interface PurchasePriceVarianceLine {
+  procurementItemId: string;
+  receivedQty: number;
+  plannedUnitPrice: number;
+  actualUnitPrice: number;
+  /** (actual − planned) × receivedQty; positive = переплата, negative = экономия. */
+  deltaTotal: number;
+}
+
+export interface PurchasePriceVarianceSummary {
+  /** Σ delta over received lines with both prices known. Positive = переплата. */
+  deltaTotal: number;
+  /** Σ planned × receivedQty over the same lines (the comparison base). */
+  baseTotal: number;
+  /** deltaTotal / baseTotal × 100; null when nothing received with known prices. */
+  pct: number | null;
+  /** Per-line breakdown, non-zero deltas only, largest |delta| first. */
+  lines: PurchasePriceVarianceLine[];
+  /** Received lines skipped because planned or actual price is unknown. */
+  skippedLineCount: number;
+}
+
+/**
+ * Purchase price variance (spec Part 2 §7.5): fact price vs planned price over RECEIVED
+ * quantities only (a fact price is required, so unreceived lines never count). Planned
+ * comes from the line's planned price falling back to the item's; actual from the line's
+ * actual price falling back to the item's — no planned-as-actual substitution.
+ */
+export function computePurchasePriceVariance(
+  projectId: string,
+  items: ProcurementItemV2[],
+  orders: OrderWithLines[],
+): PurchasePriceVarianceSummary {
+  const itemById = new Map(
+    items.filter((item) => item.projectId === projectId).map((item) => [item.id, item]),
+  );
+
+  let deltaTotal = 0;
+  let baseTotal = 0;
+  let skippedLineCount = 0;
+  const lines: PurchasePriceVarianceLine[] = [];
+
+  orders
+    .filter((order) => order.projectId === projectId && order.kind === "supplier" && isAppliedOrder(order))
+    .forEach((order) => {
+      order.lines.forEach((line) => {
+        const receivedQty = Math.max(line.receivedQty, 0);
+        if (receivedQty <= 0) return;
+        const item = itemById.get(line.procurementItemId);
+        if (!item) return;
+
+        const plannedUnitPrice = line.plannedUnitPrice ?? item.plannedUnitPrice ?? null;
+        const actualUnitPrice = line.actualUnitPrice ?? item.actualUnitPrice ?? null;
+        if (
+          plannedUnitPrice === null || !Number.isFinite(plannedUnitPrice)
+          || actualUnitPrice === null || !Number.isFinite(actualUnitPrice)
+        ) {
+          skippedLineCount += 1;
+          return;
+        }
+
+        const deltaLine = (actualUnitPrice - plannedUnitPrice) * receivedQty;
+        deltaTotal += deltaLine;
+        baseTotal += plannedUnitPrice * receivedQty;
+        if (deltaLine !== 0) {
+          lines.push({
+            procurementItemId: line.procurementItemId,
+            receivedQty,
+            plannedUnitPrice,
+            actualUnitPrice,
+            deltaTotal: deltaLine,
+          });
+        }
+      });
+    });
+
+  lines.sort((a, b) => Math.abs(b.deltaTotal) - Math.abs(a.deltaTotal));
+
+  return {
+    deltaTotal,
+    baseTotal,
+    pct: baseTotal > 0 ? (deltaTotal / baseTotal) * 100 : null,
+    lines,
+    skippedLineCount,
+  };
+}
+
+/**
+ * Latest SUPPLIER receipt timestamp across the project's applied orders. Internal
+ * stock transfers (move_in arrivals) are not deliveries, so they don't count here —
+ * unlike the per-location computeLastReceivedAt, where an arrival at that location does.
+ */
+export function computeProjectLastReceivedAt(projectId: string, orders: OrderWithLines[]): string | null {
+  let maxTimestampMs = Number.NEGATIVE_INFINITY;
+  let maxTimestampIso: string | null = null;
+
+  orders.forEach((order) => {
+    if (order.projectId !== projectId || order.kind !== "supplier" || !isAppliedOrder(order)) return;
+    (order.receiveEvents ?? []).forEach((event) => {
+      if (event.eventType !== "receive" || event.deltaQty <= 0) return;
+      const ts = new Date(event.createdAt).getTime();
+      if (Number.isNaN(ts) || ts <= maxTimestampMs) return;
+      maxTimestampMs = ts;
+      maxTimestampIso = event.createdAt;
+    });
+  });
+
+  return maxTimestampIso;
+}
+
 export function computeTabChipTotals(
   projectId: string,
   items: ProcurementItemV2[],
