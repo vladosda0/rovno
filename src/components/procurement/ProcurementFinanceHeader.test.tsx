@@ -8,7 +8,7 @@ import { formatCompactMoney, formatMoney } from "@/lib/estimate-v2/format-money"
 
 // Testing-library normalizes DOM whitespace (incl. NBSP) to plain spaces.
 function asText(value: string): string {
-  return value.replace(/[  ]/g, " ");
+  return value.replace(/[\u00A0\u202F]/g, " ");
 }
 
 // Calibration from the spec (project «test again», Part 2 Appendix B), in cents.

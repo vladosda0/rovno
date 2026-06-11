@@ -278,9 +278,9 @@ export function ProcurementFinanceHeader({ view, currency }: ProcurementFinanceH
                         valueClassName={view.ppv.deltaCents > 0 ? "text-destructive" : undefined}
                         emphasized
                       />
-                      {view.ppv.lines.map((line) => (
+                      {view.ppv.lines.map((line, index) => (
                         <DetailRow
-                          key={line.procurementItemId}
+                          key={`${line.procurementItemId}-${index}`}
                           label={line.name}
                           value={formatMoney(line.deltaCents, currency)}
                           valueClassName={line.deltaCents > 0 ? "text-destructive" : undefined}
