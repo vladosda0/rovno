@@ -5,7 +5,10 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
+import { DetailRow, KpiCard, formatPct, formatSignedPct } from "@/components/finance/FinancePrimitives";
+import { UTILIZATION_RISK_GAP_PP } from "@/lib/finance/thresholds";
 import { formatCompactMoney, formatMoney } from "@/lib/estimate-v2/format-money";
+import type { EacForecast, FinishedAccuracy } from "@/lib/estimate-v2/finance-insights";
 import type { EstimateOperationalUpperBlock } from "@/data/estimate-source";
 import type { EstimateFinanceVisibilityMode } from "@/lib/permissions";
 import type { EstimateExecutionStatus, ResourceLineType } from "@/types/estimate-v2";
@@ -18,10 +21,6 @@ const RESOURCE_TYPE_ORDER: ResourceLineType[] = [
   "overhead",
   "other",
 ];
-
-// Accent the risk line / overspend once utilization runs this many percentage points
-// ahead of completion (or once it exceeds 100% of cost). Tunable.
-const UTILIZATION_RISK_GAP_PP = 20;
 
 /**
  * Pre-computed view-model for the top finance block. Every value already exists in
@@ -55,6 +54,12 @@ export interface EstimateFinanceView {
   // Plan/fact breakdown (details)
   plannedCostByTypeCents: Record<ResourceLineType, number>;
   spentByTypeCents: Record<ResourceLineType, number>;
+  /** Spend that could not be attributed to a resource type; reconciles Σ fact with spentCents. */
+  unattributedSpendCents: number;
+  /** Cost forecast (details, in-work only); null under the early-stage guard. */
+  eac: EacForecast | null;
+  /** Fact-vs-plan accuracy for the finished strip; null until actual financial data exists. */
+  finishedAccuracy: FinishedAccuracy | null;
   // Summary-mode plumbing
   operationalUpperBlock: EstimateOperationalUpperBlock | null;
   rpcSummaryTotalIncVatCents: number | null;
@@ -72,57 +77,8 @@ interface EstimateFinanceHeaderProps {
   resourceKeyLabel: (key: string) => string;
 }
 
-function formatPct(value: number | null, digits = 0): string {
-  if (value == null || !Number.isFinite(value)) return "—";
-  return `${new Intl.NumberFormat("ru-RU", { maximumFractionDigits: digits }).format(value)}%`;
-}
-
 function bpsToPct(bps: number): string {
   return (bps / 100).toString();
-}
-
-function KpiCard({
-  label,
-  value,
-  valueClassName,
-  sub,
-  subClassName,
-}: {
-  label: string;
-  value: string;
-  valueClassName?: string;
-  sub?: string | null;
-  subClassName?: string;
-}) {
-  return (
-    <div className="rounded-md bg-muted/30 px-3 py-2">
-      <p className="text-[13px] text-muted-foreground">{label}</p>
-      <p className={cn("text-xl font-medium tabular-nums text-foreground", valueClassName)}>{value}</p>
-      {sub ? <p className={cn("text-[11px] text-muted-foreground", subClassName)}>{sub}</p> : null}
-    </div>
-  );
-}
-
-function DetailRow({
-  label,
-  value,
-  emphasized,
-}: {
-  label: string;
-  value: string;
-  emphasized?: boolean;
-}) {
-  return (
-    <div
-      className={cn(
-        "flex items-center justify-between gap-3 rounded-md px-3 py-1.5 text-[13px]",
-        emphasized && "bg-muted/30",
-      )}
-    >
-      <span className={emphasized ? "font-medium text-foreground" : "text-muted-foreground"}>{label}</span>
-      <span className={cn("tabular-nums text-foreground", emphasized ? "font-semibold" : "font-medium")}>{value}</span>
-    </div>
-  );
 }
 
 export function EstimateFinanceHeader({
@@ -194,6 +150,10 @@ export function EstimateFinanceHeader({
 
   // detail mode
   const showsExecution = status !== "planning";
+  // Finished strip switches to fact-based totals (spec §7 Finished) once actual
+  // financial data exists; without it we keep the generic execution layout.
+  const finished = status === "finished" ? view.finishedAccuracy : null;
+  const showsExecutionBar = showsExecution && !finished;
   const overspend = view.hasActualFinancialData && view.overspendCents > 0;
   const riskActive =
     view.hasActualFinancialData &&
@@ -212,6 +172,18 @@ export function EstimateFinanceHeader({
         : view.planningRangeLabel !== "—"
           ? view.planningRangeLabel
           : null;
+  } else if (finished) {
+    termValue = finished.durationFactDays != null ? dayUnit(finished.durationFactDays) : "—";
+    if (finished.durationDeltaDays != null) {
+      termSub = t("estimate.finance.durationDeltaDays", {
+        delta: `${finished.durationDeltaDays > 0 ? "+" : ""}${finished.durationDeltaDays}`,
+      });
+      termSubDestructive = finished.durationDeltaDays > 0;
+    } else if (finished.durationFactDays == null) {
+      // Only claim "no dates" when there really is no fact duration; a missing
+      // baseline alone just leaves the delta sub out.
+      termSub = t("estimate.finance.noDates");
+    }
   } else {
     termValue = view.daysToEnd != null ? dayUnit(view.daysToEnd) : "—";
     if (view.behindScheduleDays > 0) {
@@ -225,19 +197,52 @@ export function EstimateFinanceHeader({
   return (
     <div className="space-y-3 rounded-lg border border-border p-3">
       <div className={cn("grid grid-cols-2 gap-2 md:grid-cols-3", showsExecution ? "lg:grid-cols-5" : "lg:grid-cols-4")}>
-        <KpiCard label={t("estimate.finance.revenueExVat")} value={formatCompactMoney(view.revenueExVatCents, currency)} />
-        <KpiCard label={t("estimate.finance.costTotal")} value={formatCompactMoney(view.costTotalCents, currency)} />
         <KpiCard
-          label={t("estimate.finance.marginPct")}
-          value={formatPct(view.profitabilityPct, 1)}
-          sub={`${t("estimate.finance.margin")}: ${formatCompactMoney(view.profitExVatCents, currency)}`}
+          label={finished ? t("estimate.finance.finalRevenueExVat") : t("estimate.finance.revenueExVat")}
+          value={formatCompactMoney(view.revenueExVatCents, currency)}
         />
-        {showsExecution && (
+        {finished ? (
           <KpiCard
-            label={t("estimate.finance.completion")}
-            value={formatPct(view.completion.pct, 0)}
-            sub={t("estimate.finance.completionTasks", { done: view.completion.done, total: view.completion.total })}
+            label={t("estimate.finance.finalCost")}
+            value={formatCompactMoney(view.spentCents, currency)}
+            sub={t("estimate.finance.finalCostPlan", { value: formatCompactMoney(view.costTotalCents, currency) })}
           />
+        ) : (
+          <KpiCard label={t("estimate.finance.costTotal")} value={formatCompactMoney(view.costTotalCents, currency)} />
+        )}
+        {finished ? (
+          <KpiCard
+            label={t("estimate.finance.finalMarginPct")}
+            value={formatPct(finished.marginFactPct, 1)}
+            sub={finished.marginDeltaPp != null
+              ? t("estimate.finance.marginDeltaPp", {
+                // Sign from the rounded value (signDisplay) so -0.04 renders "0", not "-0".
+                delta: new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 1, signDisplay: "exceptZero" }).format(finished.marginDeltaPp),
+              })
+              : null}
+            subClassName={finished.marginDeltaPp != null && Math.round(finished.marginDeltaPp * 10) / 10 < 0 ? "text-destructive" : undefined}
+          />
+        ) : (
+          <KpiCard
+            label={t("estimate.finance.marginPct")}
+            value={formatPct(view.profitabilityPct, 1)}
+            sub={`${t("estimate.finance.margin")}: ${formatCompactMoney(view.profitExVatCents, currency)}`}
+          />
+        )}
+        {finished ? (
+          <KpiCard
+            label={t("estimate.finance.costAccuracy")}
+            value={formatSignedPct(finished.costDeltaPct, 0)}
+            valueClassName={finished.costDeltaPct != null && Math.round(finished.costDeltaPct) > 0 ? "text-destructive" : undefined}
+          />
+        ) : (
+          showsExecution && (
+            <KpiCard
+              label={t("estimate.finance.completion")}
+              value={formatPct(view.completion.pct, 0)}
+              sub={t("estimate.finance.completionTasks", { done: view.completion.done, total: view.completion.total })}
+            />
+          )
         )}
         <KpiCard
           label={t("estimate.finance.term")}
@@ -247,7 +252,7 @@ export function EstimateFinanceHeader({
         />
       </div>
 
-      {showsExecution && (
+      {showsExecutionBar && (
         <div className="space-y-1.5">
           <Progress
             value={Math.min(100, Math.max(0, view.utilizationPct ?? 0))}
@@ -268,10 +273,14 @@ export function EstimateFinanceHeader({
             </p>
             {riskActive && (
               <p className="text-[11px] font-medium text-destructive">
-                {t("estimate.finance.utilizationRisk", {
-                  spent: Math.round(view.utilizationPct ?? 0),
-                  done: Math.round(view.completion.pct ?? 0),
-                })}
+                {view.completion.pct != null
+                  ? t("estimate.finance.utilizationRisk", {
+                    spent: Math.round(view.utilizationPct ?? 0),
+                    done: Math.round(view.completion.pct),
+                  })
+                  : t("estimate.finance.utilizationRiskNoCompletion", {
+                    spent: Math.round(view.utilizationPct ?? 0),
+                  })}
               </p>
             )}
           </div>
@@ -302,6 +311,19 @@ export function EstimateFinanceHeader({
                 <DetailRow label={t("estimate.breakdown.vatAmount")} value={formatMoney(view.taxAmountCents, currency)} />
                 <DetailRow label={t("estimate.summary.totalIncVat")} value={formatMoney(view.totalIncVatCents, currency)} emphasized />
                 <DetailRow label={t("estimate.summary.toBePaid")} value={formatMoney(view.toBePaidPlannedCents, currency)} />
+                {showsExecutionBar && (
+                  <>
+                    <DetailRow
+                      label={t("estimate.finance.eac")}
+                      value={view.eac ? formatMoney(view.eac.eacCents, currency) : "—"}
+                    />
+                    <DetailRow
+                      label={t("estimate.finance.eacOverrun")}
+                      value={view.eac ? formatMoney(view.eac.overrunCents, currency) : "—"}
+                      valueClassName={view.eac && view.eac.overrunCents > 0 ? "text-destructive" : undefined}
+                    />
+                  </>
+                )}
               </div>
 
               <div className="space-y-1">
@@ -322,6 +344,13 @@ export function EstimateFinanceHeader({
                     </span>
                   </div>
                 ))}
+                {view.hasActualFinancialData && view.unattributedSpendCents > 0 && (
+                  <div className="grid grid-cols-[minmax(0,1fr)_minmax(92px,auto)_minmax(92px,auto)] items-center gap-3 rounded-md px-3 py-1.5 text-[13px]">
+                    <span className="text-muted-foreground">{t("estimate.finance.unattributedSpend")}</span>
+                    <span className="text-right tabular-nums text-muted-foreground">—</span>
+                    <span className="text-right tabular-nums text-foreground">{formatMoney(view.unattributedSpendCents, currency)}</span>
+                  </div>
+                )}
                 <div className="grid grid-cols-[minmax(0,1fr)_minmax(92px,auto)_minmax(92px,auto)] items-center gap-3 rounded-md bg-muted/30 px-3 py-1.5 text-[13px]">
                   <span className="font-medium text-foreground">{t("estimate.costOverview.total")}</span>
                   <span className="text-right font-semibold tabular-nums text-foreground">{formatMoney(view.costTotalCents, currency)}</span>

@@ -124,6 +124,7 @@ import {
   computePlannedFromEstimateV2,
 } from "@/lib/estimate-v2/rollups";
 import { fromDayIndex, toDayIndex } from "@/lib/estimate-v2/schedule";
+import { computeEac, computeFinishedAccuracy } from "@/lib/estimate-v2/finance-insights";
 import { useOrders } from "@/hooks/use-order-data";
 import { activityQueryKeys } from "@/hooks/use-activity-source";
 import { hrQueryKeys } from "@/hooks/use-hr-source";
@@ -1544,6 +1545,21 @@ export default function ProjectEstimate() {
     const utilizationPct = totals.costTotalCents > 0
       ? (combinedPlanFact.fact.spentCents / totals.costTotalCents) * 100
       : null;
+    const eac = computeEac({
+      costTotalCents: totals.costTotalCents,
+      spentCents: combinedPlanFact.fact.spentCents,
+      completionPct: taskCompletion.pct,
+    });
+    const finishedAccuracy = hasActualFinancialData
+      ? computeFinishedAccuracy({
+        costTotalCents: totals.costTotalCents,
+        spentCents: combinedPlanFact.fact.spentCents,
+        revenueExVatCents: totals.taxableBaseCents,
+        plannedMarginPct: profitabilityPct,
+        durationPlannedDays: timingMetrics.durationPlannedDays,
+        durationEstimatedDays: timingMetrics.durationEstimatedDays,
+      })
+      : null;
     return {
       revenueExVatCents: totals.taxableBaseCents,
       costTotalCents: totals.costTotalCents,
@@ -1566,6 +1582,9 @@ export default function ProjectEstimate() {
       totalIncVatCents: totals.totalCents,
       plannedCostByTypeCents: totals.breakdownByType,
       spentByTypeCents: combinedPlanFact.fact.spentByTypeCents,
+      unattributedSpendCents: combinedPlanFact.fact.unattributedSpendCents,
+      eac,
+      finishedAccuracy,
       operationalUpperBlock,
       rpcSummaryTotalIncVatCents,
       uiTotalIncVatCents,
