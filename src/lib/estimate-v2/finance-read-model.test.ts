@@ -4,7 +4,6 @@ import {
   addMember,
   addProject,
   getEstimate,
-  getProjects,
   updateEstimateItems,
 } from "@/data/store";
 import * as store from "@/data/store";
@@ -15,10 +14,8 @@ import {
   updateEstimateV2Project,
 } from "@/data/estimate-v2-store";
 import {
-  applySensitiveDetailToEstimateV2FinanceSnapshot,
   buildEstimateV2FinanceProjectSummary,
   getEstimateV2FinanceProjectSummary,
-  getEstimateV2FinanceSnapshot,
   type EstimateV2FinanceTaskSlice,
 } from "@/lib/estimate-v2/finance-read-model";
 import { computeProjectTotals } from "@/lib/estimate-v2/pricing";
@@ -138,13 +135,11 @@ describe("estimate-v2 finance read model", () => {
     });
 
     const summary = getEstimateV2FinanceProjectSummary("project-empty-finance");
-    const snapshot = getEstimateV2FinanceSnapshot(getProjects());
 
     expect(summary).not.toBeNull();
     expect(summary?.hasEstimate).toBe(false);
     expect(summary?.plannedBudgetCents).toBe(0);
     expect(summary?.spentCents).toBe(0);
-    expect(snapshot.projects.find((project) => project.projectId === "project-empty-finance")?.hasEstimate).toBe(false);
   });
 
   it("can resolve a project summary from an explicit project input when the browser store project is unavailable", () => {
@@ -219,36 +214,6 @@ describe("estimate-v2 finance read model", () => {
       ? ((totals.taxableBaseCents - totals.costTotalCents) / totals.taxableBaseCents) * 100
       : null;
     expect(summary.percentProfitability).toBe(expectedProfitPct);
-  });
-
-  it("applySensitiveDetailToEstimateV2FinanceSnapshot clears totals when no project may view detail", () => {
-    const state = getEstimateV2ProjectState("project-1");
-    const work = state.works[0];
-    if (!work) {
-      throw new Error("Expected seeded estimate-v2 work scaffold");
-    }
-
-    createLine("project-1", {
-      stageId: work.stageId,
-      workId: work.id,
-      title: "Sensitive line",
-      type: "material",
-      qtyMilli: 1_000,
-      costUnitCents: 50_000,
-    });
-
-    const snap = getEstimateV2FinanceSnapshot(getProjects());
-    expect(snap.totals.plannedBudgetCents).toBeGreaterThan(0);
-
-    const redacted = applySensitiveDetailToEstimateV2FinanceSnapshot(snap, () => false);
-    expect(redacted.totals.plannedBudgetCents).toBe(0);
-    expect(redacted.totals.spentCents).toBe(0);
-    expect(redacted.projects.every((p) => p.sensitiveFinanceVisible === false)).toBe(true);
-    expect(redacted.projects[0]?.plannedBudgetCents).toBe(0);
-
-    const restored = applySensitiveDetailToEstimateV2FinanceSnapshot(snap, () => true);
-    expect(restored.totals.plannedBudgetCents).toBe(snap.totals.plannedBudgetCents);
-    expect(restored.projects.every((p) => p.sensitiveFinanceVisible === true)).toBe(true);
   });
 });
 
@@ -442,20 +407,5 @@ describe("buildEstimateV2FinanceProjectSummary (Phase 2 fields)", () => {
 
     const dateless = buildFixtureSummary({ works: [fixtureWork()] });
     expect(dateless.daysToEnd).toBeNull();
-  });
-
-  it("zeroes the new monetary fields for redacted projects", () => {
-    const summary = buildFixtureSummary({ factOverrides: { spentCents: 5_000 } });
-    const redacted = applySensitiveDetailToEstimateV2FinanceSnapshot(
-      { projects: [summary], totals: { plannedBudgetCents: 0, spentCents: 0, toBePaidCents: 0, varianceCents: 0 } },
-      () => false,
-    );
-
-    const row = redacted.projects[0];
-    expect(row.sensitiveFinanceVisible).toBe(false);
-    expect(row.contractValueCents).toBe(0);
-    expect(row.costCents).toBe(0);
-    expect(row.marginCents).toBe(0);
-    expect(row.percentUtilization).toBeNull();
   });
 });

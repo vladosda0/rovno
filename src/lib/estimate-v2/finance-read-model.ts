@@ -57,16 +57,6 @@ export interface EstimateV2FinanceProjectSummary {
   sensitiveFinanceVisible?: boolean;
 }
 
-export interface EstimateV2FinanceSnapshot {
-  projects: EstimateV2FinanceProjectSummary[];
-  totals: {
-    plannedBudgetCents: number;
-    spentCents: number;
-    toBePaidCents: number;
-    varianceCents: number;
-  };
-}
-
 function hasEstimateContent(input: {
   lineCount: number;
   versionCount: number;
@@ -271,65 +261,4 @@ export function getEstimateV2FinanceProjectSummary(
   const state = getEstimateV2ProjectState(projectId);
   const fact = computeFactFromProcurementAndHR(projectId);
   return buildEstimateV2FinanceProjectSummary(project.id, project.title, state, fact, getTasks(projectId));
-}
-
-export function getEstimateV2FinanceSnapshot(
-  projects: Array<Pick<Project, "id" | "title">>,
-): EstimateV2FinanceSnapshot {
-  const summaries = projects
-    .map((project) => getEstimateV2FinanceProjectSummary(project.id, project))
-    .filter((summary): summary is EstimateV2FinanceProjectSummary => summary != null);
-
-  return {
-    projects: summaries,
-    totals: {
-      plannedBudgetCents: summaries.reduce((sum, summary) => sum + summary.plannedBudgetCents, 0),
-      spentCents: summaries.reduce((sum, summary) => sum + summary.spentCents, 0),
-      toBePaidCents: summaries.reduce((sum, summary) => sum + summary.toBePaidCents, 0),
-      varianceCents: summaries.reduce((sum, summary) => sum + summary.varianceCents, 0),
-    },
-  };
-}
-
-/**
- * Home-only: strip per-project monetary fields when the viewer lacks sensitive-detail access,
- * and recompute workspace totals from allowed projects only.
- */
-export function applySensitiveDetailToEstimateV2FinanceSnapshot(
-  snapshot: EstimateV2FinanceSnapshot,
-  canViewSensitiveDetail: (projectId: string) => boolean,
-): EstimateV2FinanceSnapshot {
-  const totals = {
-    plannedBudgetCents: 0,
-    spentCents: 0,
-    toBePaidCents: 0,
-    varianceCents: 0,
-  };
-
-  const projects = snapshot.projects.map((summary) => {
-    const sensitiveFinanceVisible = canViewSensitiveDetail(summary.projectId);
-    if (sensitiveFinanceVisible) {
-      totals.plannedBudgetCents += summary.plannedBudgetCents;
-      totals.spentCents += summary.spentCents;
-      totals.toBePaidCents += summary.toBePaidCents;
-      totals.varianceCents += summary.varianceCents;
-      return { ...summary, sensitiveFinanceVisible: true };
-    }
-    return {
-      ...summary,
-      sensitiveFinanceVisible: false,
-      plannedBudgetCents: 0,
-      spentCents: 0,
-      toBePaidCents: 0,
-      varianceCents: 0,
-      percentSpent: 0,
-      percentProfitability: null,
-      contractValueCents: 0,
-      costCents: 0,
-      marginCents: 0,
-      percentUtilization: null,
-    };
-  });
-
-  return { projects, totals };
 }
