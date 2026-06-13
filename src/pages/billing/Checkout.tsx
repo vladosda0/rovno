@@ -5,7 +5,6 @@ import { ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import { CheckoutBlocked } from "@/components/billing/CheckoutBlocked";
 import { TBankPaymentForm } from "@/components/billing/TBankPaymentForm";
 import { getPlan, isPlanCode, PLANS } from "@/data/plans";
@@ -69,10 +68,10 @@ export default function Checkout() {
   const [autoRenew, setAutoRenew] = useState(true);
   const [showRenewOptOut, setShowRenewOptOut] = useState(false);
 
-  // All subscriptions are recurrent (no user-facing auto-renew toggle): checkout
-  // always opts into monthly auto-renewal; cancel/resume lives in Settings →
-  // billing. The explicit `consent` checkbox below captures the user's agreement
-  // to the recurring charges (T-Bank requirement) and gates the payment.
+  // Payment gate. Recurring mode requires the ticked checkbox; one-time mode
+  // (autoRenew=false) is only reachable by flipping the opt-out toggle, whose
+  // own label carries the one-time agreement — so flipping it IS the consent.
+  const consentGiven = autoRenew ? consent : true;
 
   // #1: stable identity so TBankPaymentForm's effect does not re-run (and thus
   // re-init the widget) on every Checkout re-render (status polling, etc.).
@@ -83,6 +82,10 @@ export default function Checkout() {
 
   const initPayment = useInitPayment();
   const statusQuery = usePaymentStatus(intentId);
+
+  // Once init has produced a payment_url, freeze the consent/mode controls so an
+  // un-tick→re-tick (or mode flip) can't mint a duplicate payment intent.
+  const consentLocked = initPayment.isPending || !!paymentUrl;
 
   // Invalid params or billing disabled -> back to pricing.
   useEffect(() => {
@@ -106,7 +109,7 @@ export default function Checkout() {
   // already subscribed, and consent is given. Re-runs on plan/auth change,
   // explicit retry, and the consent toggle (the payment gate).
   useEffect(() => {
-    if (!allowed || authStatus === "loading" || subLoading || blocked || !consent) return;
+    if (!allowed || authStatus === "loading" || subLoading || blocked || !consentGiven) return;
     let cancelled = false;
     setIntentId(null);
     setPaymentUrl(null);
@@ -140,14 +143,14 @@ export default function Checkout() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allowed, authStatus, subLoading, blocked, consent, autoRenew, planCode, retryNonce]);
+  }, [allowed, authStatus, subLoading, blocked, consentGiven, autoRenew, planCode, retryNonce]);
 
   // C1: reveal the hosted-page fallback if the widget never reports ready.
   useEffect(() => {
-    if (!paymentUrl || widgetReady || !consent) return;
+    if (!paymentUrl || widgetReady || !consentGiven) return;
     const timer = window.setTimeout(() => setWidgetFailed(true), WIDGET_FALLBACK_MS);
     return () => window.clearTimeout(timer);
-  }, [paymentUrl, widgetReady, consent]);
+  }, [paymentUrl, widgetReady, consentGiven]);
 
   // Navigate on terminal payment status (realtime + polling backup).
   useEffect(() => {
@@ -201,30 +204,38 @@ export default function Checkout() {
       <h1 className="mb-sp-4 text-h2 text-foreground">{t("billing.checkout.title")}</h1>
 
       <div className="glass space-y-sp-3 rounded-panel p-sp-3">
-        {/* Compact order summary: plan + recurring price, one line of terms, receipt. */}
+        {/* Order summary. The big figure is the amount due TODAY — the upgrade
+            difference when upgrading, otherwise the full plan price. The smaller
+            note below spells out the recurring / one-time terms (and, for an
+            upgrade, the full monthly price that applies from next period). */}
         <div className="space-y-1">
           <div className="flex items-baseline justify-between gap-3">
             <span className="text-h3 text-foreground">{plan.display_name}</span>
             <span className="text-h3 text-foreground">
-              {formatRubFromKopecks(plan.amount_kopecks)}
-              {autoRenew ? (
+              {formatRubFromKopecks(chargeKopecks)}
+              {!isUpgrade && autoRenew ? (
                 <span className="ml-1 text-body-sm font-normal text-muted-foreground">
                   {t("billing.checkout.perMonth")}
                 </span>
               ) : null}
             </span>
           </div>
-          {isUpgrade && currentPlanName && chargeKopecks < plan.amount_kopecks ? (
+          {isUpgrade && currentPlanName ? (
             <p className="text-caption text-muted-foreground">
-              {t("billing.checkout.upgradeTodayNote", {
-                amount: formatRubFromKopecks(chargeKopecks),
-                plan: currentPlanName,
-              })}
+              {autoRenew
+                ? t("billing.checkout.upgradeRecurringNote", {
+                    plan: currentPlanName,
+                    full: formatRubFromKopecks(plan.amount_kopecks),
+                  })
+                : t("billing.checkout.upgradeOneTimeNote", { plan: currentPlanName })}
             </p>
-          ) : null}
-          {autoRenew ? (
-            <p className="text-caption text-muted-foreground">{t("billing.checkout.recurringNote")}</p>
-          ) : null}
+          ) : (
+            <p className="text-caption text-muted-foreground">
+              {autoRenew
+                ? t("billing.checkout.recurringNote")
+                : t("billing.checkout.oneTimeNote")}
+            </p>
+          )}
           {user?.email ? (
             <p className="text-caption text-muted-foreground">
               {t("billing.checkout.receiptTo", { email: user.email })}
@@ -232,83 +243,120 @@ export default function Checkout() {
           ) : null}
         </div>
 
-        {/* T-Bank go-live requirement: explicit, user-ticked consent to the
-            recurring charges. Gates init + the pay widget + the hosted fallback,
-            so the customer cannot pay without agreeing. Locks once init starts
-            (isPending/paymentUrl) so an un-tick→re-tick can't mint a duplicate
-            payment intent. The full recurring terms live in the linked offer. */}
-        <div className="space-y-1 border-t border-border pt-sp-3">
-          <div className="flex items-start gap-2">
-            <Checkbox
-              id="recurring-consent"
-              checked={consent}
-              onCheckedChange={(value) => setConsent(value === true)}
-              disabled={initPayment.isPending || !!paymentUrl}
-              aria-labelledby="recurring-consent-text"
-              className="mt-0.5"
-            />
-            <span
-              id="recurring-consent-text"
-              className="text-caption leading-snug text-muted-foreground"
-            >
-              <Trans
-                i18nKey={autoRenew ? "billing.checkout.recurringConsent" : "billing.checkout.oneTimeConsent"}
-                values={{
-                  amount: formatRubFromKopecks(plan.amount_kopecks),
-                  plan: plan.display_name,
-                }}
-                components={{
-                  offer: (
-                    <a
-                      href="/offer"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="underline hover:text-foreground"
-                    />
-                  ),
-                  refund: (
-                    <a
-                      href="/refund"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="underline hover:text-foreground"
-                    />
-                  ),
-                }}
-              />
-            </span>
-          </div>
-          {!consent ? (
-            <p className="pl-6 text-caption text-muted-foreground/80">
-              {t("billing.checkout.consentRequiredHint")}
-            </p>
+        {/* Consent / payment-mode gate (T-Bank go-live requirement): explicit
+            agreement before we contact T-Bank, gating init + the pay widget +
+            the hosted fallback. Recurring mode → a ticked checkbox; opting out
+            flips to a one-time charge whose agreement lives in the toggle label
+            itself. Frozen once init mints a payment_url so a re-toggle can't
+            create a duplicate intent. */}
+        <div className="space-y-2 border-t border-border pt-sp-3">
+          {/* Recurring consent — hidden in one-time mode (#3): the toggle below
+              carries its own agreement. */}
+          {autoRenew ? (
+            <>
+              <div className="flex items-start gap-2">
+                <Checkbox
+                  id="recurring-consent"
+                  checked={consent}
+                  onCheckedChange={(value) => setConsent(value === true)}
+                  disabled={consentLocked}
+                  aria-labelledby="recurring-consent-text"
+                  className="mt-0.5"
+                />
+                <span
+                  id="recurring-consent-text"
+                  className="text-caption leading-snug text-muted-foreground"
+                >
+                  <Trans
+                    i18nKey="billing.checkout.recurringConsent"
+                    values={{
+                      amount: formatRubFromKopecks(plan.amount_kopecks),
+                      plan: plan.display_name,
+                    }}
+                    components={{
+                      offer: (
+                        <a
+                          href="/offer"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="underline hover:text-foreground"
+                        />
+                      ),
+                      refund: (
+                        <a
+                          href="/refund"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="underline hover:text-foreground"
+                        />
+                      ),
+                    }}
+                  />
+                </span>
+              </div>
+              {!consent ? (
+                <p className="pl-6 text-caption text-muted-foreground/80">
+                  {t("billing.checkout.consentRequiredHint")}
+                </p>
+              ) : null}
+            </>
           ) : null}
-        </div>
 
-        {/* TEMP (T-Bank Тест 1 cert): opt out of auto-renewal → one-time payment. */}
-        <div className="pl-6">
-          <button
-            type="button"
-            onClick={() => setShowRenewOptOut((v) => !v)}
-            className="text-caption text-muted-foreground underline hover:text-foreground"
-          >
-            {t("billing.checkout.autoRenewOptOutLink")}
-          </button>
-          {showRenewOptOut ? (
-            <div className="mt-1 flex items-center gap-2 rounded-md border border-border p-2">
-              <Switch
-                id="one-time-payment"
-                checked={!autoRenew}
-                onCheckedChange={(value) => setAutoRenew(!(value === true))}
-                disabled={initPayment.isPending}
-              />
-              <Label
-                htmlFor="one-time-payment"
-                className="text-caption font-normal leading-snug text-muted-foreground"
+          {/* Opt-out → one-time payment. Hidden once recurring is agreed (#2).
+              The toggle's own label carries the one-time agreement (#3). TEMP for
+              T-Bank Тест 1 cert; remove with the autoRenew plumbing afterwards. */}
+          {!consent ? (
+            !showRenewOptOut ? (
+              <button
+                type="button"
+                onClick={() => setShowRenewOptOut(true)}
+                disabled={consentLocked}
+                className="text-caption text-muted-foreground underline hover:text-foreground disabled:opacity-50"
               >
-                {t("billing.checkout.oneTimeToggle")}
-              </Label>
-            </div>
+                {t("billing.checkout.autoRenewOptOutLink")}
+              </button>
+            ) : (
+              <div className="flex items-start gap-2 rounded-md border border-border p-2">
+                <Switch
+                  id="one-time-payment"
+                  checked={!autoRenew}
+                  onCheckedChange={(value) => setAutoRenew(!(value === true))}
+                  disabled={consentLocked}
+                  aria-labelledby="one-time-consent-text"
+                  className="mt-0.5"
+                />
+                <span
+                  id="one-time-consent-text"
+                  className="text-caption leading-snug text-muted-foreground"
+                >
+                  <Trans
+                    i18nKey="billing.checkout.oneTimeToggleConsent"
+                    values={{
+                      amount: formatRubFromKopecks(chargeKopecks),
+                      plan: plan.display_name,
+                    }}
+                    components={{
+                      offer: (
+                        <a
+                          href="/offer"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="underline hover:text-foreground"
+                        />
+                      ),
+                      refund: (
+                        <a
+                          href="/refund"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="underline hover:text-foreground"
+                        />
+                      ),
+                    }}
+                  />
+                </span>
+              </div>
+            )
           ) : null}
         </div>
 
@@ -316,12 +364,12 @@ export default function Checkout() {
           <p className="text-body-sm text-muted-foreground">{t("billing.checkout.preparing")}</p>
         ) : null}
 
-        {paymentUrl && consent ? (
+        {paymentUrl && consentGiven ? (
           <TBankPaymentForm paymentUrl={paymentUrl} onReady={handleWidgetReady} />
         ) : null}
 
         {/* C1: hosted-page fallback so payment still completes if the widget can't mount. */}
-        {widgetFailed && paymentUrl && consent ? (
+        {widgetFailed && paymentUrl && consentGiven ? (
           <a
             href={paymentUrl}
             target="_blank"
