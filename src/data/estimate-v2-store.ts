@@ -9,6 +9,7 @@ import {
   loadEstimateOperationalSummary,
   type EstimateOperationalUpperBlock,
   saveCurrentEstimateDraft,
+  updateProjectEstimateExecutionStatus,
 } from "@/data/estimate-source";
 import { getPlanningSource, syncProjectTasksFromEstimate } from "@/data/planning-source";
 import { syncProjectProcurementFromEstimate } from "@/data/procurement-source";
@@ -769,6 +770,27 @@ function getManagedEstimateRemoteSyncContext(projectId: string): { profileId: st
   return {
     profileId: context.profileId,
   };
+}
+
+/**
+ * Best-effort mirror of the execution status onto the estimate root for the portfolio
+ * rollup. Fire-and-forget: only in managed supabase sync, errors swallowed; a no-row
+ * update (root not yet synced) is a harmless no-op.
+ *
+ * Self-healing is asymmetric: a lost in_work write is recovered by the RPC reader fallback
+ * (root status='approved' → in_work), but paused/finished have NO server-side fallback, so
+ * those rely on the hydration reconciliation (this is re-fired on every non-planning
+ * hydrate) to converge after a dropped write.
+ */
+function persistExecutionStatusIfManaged(projectId: string, status: EstimateExecutionStatus): void {
+  if (!getManagedEstimateRemoteSyncContext(projectId)) return;
+  const estimateId = statesByProjectId.get(projectId)?.project.id;
+  if (!estimateId) return;
+  void updateProjectEstimateExecutionStatus(estimateId, status).catch((error) => {
+    if (import.meta.env.DEV) {
+      console.warn(`execution_status sync failed for ${projectId}`, error);
+    }
+  });
 }
 
 function queueProjectDraftSync(projectId: string) {
@@ -1728,6 +1750,7 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
       notify();
       if (isNonPlanningEstimateStatus(cachedState.project.estimateStatus)) {
         queueProjectDraftSync(projectId);
+        persistExecutionStatusIfManaged(projectId, cachedState.project.estimateStatus);
       }
       return;
     }
@@ -2093,6 +2116,10 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
     notify();
     if (isNonPlanningEstimateStatus(nextState.project.estimateStatus)) {
       queueProjectDraftSync(projectId);
+      // Reconcile the portfolio status mirror on every hydration of a non-planning
+      // project, so a paused/finished project whose immediate fire-and-forget write was
+      // lost self-heals on next view (those statuses have no server-side reader fallback).
+      persistExecutionStatusIfManaged(projectId, nextState.project.estimateStatus);
     }
   })().finally(() => {
     remoteHydrationPromises.delete(cacheKey);
@@ -2960,6 +2987,7 @@ export function setProjectEstimateStatus(
   }
 
   commitProjectStateChange(projectId);
+  persistExecutionStatusIfManaged(projectId, status);
 
   if (previousStatus !== status) {
     emitEstimateEvent(projectId, "estimate.status_changed", {

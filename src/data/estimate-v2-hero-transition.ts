@@ -19,6 +19,7 @@ import {
   ensureProjectEstimateRoot,
   loadCurrentEstimateDraft,
   resolveEstimateDraftRemoteIds,
+  updateProjectEstimateExecutionStatus,
   updateProjectEstimateRootStatus,
   upsertEstimateResourceLines,
   upsertEstimateWorks,
@@ -698,6 +699,17 @@ export async function persistEstimateV2HeroTransition(
       estimateId: ids.estimateId,
       status: "approved",
     });
+
+    // Mirror the execution status at the canonical planning→in_work moment, where the
+    // root is guaranteed to exist. Best-effort: a failure here must not fail the
+    // transition (the approved→in_work reader fallback still resolves the status).
+    try {
+      await updateProjectEstimateExecutionStatus(ids.estimateId, "in_work");
+    } catch (executionStatusError) {
+      if (import.meta.env.DEV) {
+        console.warn("execution_status write failed during hero transition", executionStatusError);
+      }
+    }
   } catch (error) {
     if (error instanceof EstimateV2HeroTransitionError) {
       throw error;

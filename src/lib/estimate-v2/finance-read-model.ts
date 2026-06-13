@@ -40,6 +40,12 @@ export interface EstimateV2FinanceProjectSummary {
   marginCents: number;
   /** spent / cost × 100, unclamped (UI clamps bars itself); null when cost is 0. */
   percentUtilization: number | null;
+  /** Works linked to a task whose task is done (ProjectEstimate taskCompletion semantics). */
+  tasksDone: number;
+  /** Works linked to a task (the completion denominator). */
+  tasksTotal: number;
+  /** tasksDone / tasksTotal × 100; null when no linked tasks. */
+  percentComplete: number | null;
   /** Days until the current works range ends (>= 0); null when dates are missing. */
   daysToEnd: number | null;
   /** Behind-schedule days vs baseline; 0 unless overdue with unfinished linked tasks. */
@@ -49,16 +55,6 @@ export interface EstimateV2FinanceProjectSummary {
    * Omitted means fully visible (legacy callers).
    */
   sensitiveFinanceVisible?: boolean;
-}
-
-export interface EstimateV2FinanceSnapshot {
-  projects: EstimateV2FinanceProjectSummary[];
-  totals: {
-    plannedBudgetCents: number;
-    spentCents: number;
-    toBePaidCents: number;
-    varianceCents: number;
-  };
 }
 
 function hasEstimateContent(input: {
@@ -149,6 +145,34 @@ function computeSummaryTiming(
 }
 
 /**
+ * ProjectEstimate taskCompletion semantics: count works linked to a task; a work is "done"
+ * when its linked task is done. Without a tasks slice (or an empty still-loading one) the
+ * denominator is 0 and percentComplete is null.
+ */
+function computeSummaryCompletion(
+  works: EstimateV2Work[],
+  tasks: EstimateV2FinanceTaskSlice[] | undefined,
+): { tasksDone: number; tasksTotal: number; percentComplete: number | null } {
+  if (!tasks || tasks.length === 0) {
+    return { tasksDone: 0, tasksTotal: 0, percentComplete: null };
+  }
+  const taskById = new Map(tasks.map((task) => [task.id, task]));
+  let total = 0;
+  let done = 0;
+  works.forEach((work) => {
+    if (!work.taskId) return;
+    total += 1;
+    const task = taskById.get(work.taskId);
+    if (task && task.status === "done") done += 1;
+  });
+  return {
+    tasksDone: done,
+    tasksTotal: total,
+    percentComplete: total > 0 ? (done / total) * 100 : null,
+  };
+}
+
+/**
  * Pure summary from estimate-v2 state + fact rollups (same fact path as ProjectEstimate when inputs match).
  */
 export function buildEstimateV2FinanceProjectSummary(
@@ -196,6 +220,9 @@ export function buildEstimateV2FinanceProjectSummary(
   const timing = hasEstimate
     ? computeSummaryTiming(state.works, state.scheduleBaseline, tasks)
     : { daysToEnd: null, behindScheduleDays: 0 };
+  const completion = hasEstimate
+    ? computeSummaryCompletion(state.works, tasks)
+    : { tasksDone: 0, tasksTotal: 0, percentComplete: null };
 
   return {
     projectId,
@@ -216,6 +243,9 @@ export function buildEstimateV2FinanceProjectSummary(
     costCents,
     marginCents: contractValueCents - costCents,
     percentUtilization,
+    tasksDone: completion.tasksDone,
+    tasksTotal: completion.tasksTotal,
+    percentComplete: completion.percentComplete,
     daysToEnd: timing.daysToEnd,
     behindScheduleDays: timing.behindScheduleDays,
   };
@@ -231,65 +261,4 @@ export function getEstimateV2FinanceProjectSummary(
   const state = getEstimateV2ProjectState(projectId);
   const fact = computeFactFromProcurementAndHR(projectId);
   return buildEstimateV2FinanceProjectSummary(project.id, project.title, state, fact, getTasks(projectId));
-}
-
-export function getEstimateV2FinanceSnapshot(
-  projects: Array<Pick<Project, "id" | "title">>,
-): EstimateV2FinanceSnapshot {
-  const summaries = projects
-    .map((project) => getEstimateV2FinanceProjectSummary(project.id, project))
-    .filter((summary): summary is EstimateV2FinanceProjectSummary => summary != null);
-
-  return {
-    projects: summaries,
-    totals: {
-      plannedBudgetCents: summaries.reduce((sum, summary) => sum + summary.plannedBudgetCents, 0),
-      spentCents: summaries.reduce((sum, summary) => sum + summary.spentCents, 0),
-      toBePaidCents: summaries.reduce((sum, summary) => sum + summary.toBePaidCents, 0),
-      varianceCents: summaries.reduce((sum, summary) => sum + summary.varianceCents, 0),
-    },
-  };
-}
-
-/**
- * Home-only: strip per-project monetary fields when the viewer lacks sensitive-detail access,
- * and recompute workspace totals from allowed projects only.
- */
-export function applySensitiveDetailToEstimateV2FinanceSnapshot(
-  snapshot: EstimateV2FinanceSnapshot,
-  canViewSensitiveDetail: (projectId: string) => boolean,
-): EstimateV2FinanceSnapshot {
-  const totals = {
-    plannedBudgetCents: 0,
-    spentCents: 0,
-    toBePaidCents: 0,
-    varianceCents: 0,
-  };
-
-  const projects = snapshot.projects.map((summary) => {
-    const sensitiveFinanceVisible = canViewSensitiveDetail(summary.projectId);
-    if (sensitiveFinanceVisible) {
-      totals.plannedBudgetCents += summary.plannedBudgetCents;
-      totals.spentCents += summary.spentCents;
-      totals.toBePaidCents += summary.toBePaidCents;
-      totals.varianceCents += summary.varianceCents;
-      return { ...summary, sensitiveFinanceVisible: true };
-    }
-    return {
-      ...summary,
-      sensitiveFinanceVisible: false,
-      plannedBudgetCents: 0,
-      spentCents: 0,
-      toBePaidCents: 0,
-      varianceCents: 0,
-      percentSpent: 0,
-      percentProfitability: null,
-      contractValueCents: 0,
-      costCents: 0,
-      marginCents: 0,
-      percentUtilization: null,
-    };
-  });
-
-  return { projects, totals };
 }
