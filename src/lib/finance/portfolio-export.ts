@@ -8,8 +8,10 @@ const BOM = "﻿";
 function escapeCsv(value: string): string {
   // Neutralize spreadsheet formula injection: a cell starting with = + - @ (or tab/CR)
   // is evaluated as a formula by Excel/Sheets even inside quotes, so prefix a literal
-  // apostrophe before RFC-quoting.
-  const guarded = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+  // apostrophe before RFC-quoting. Skip plain signed numbers (e.g. "-100000.00") so
+  // negative money/percent cells stay numeric rather than becoming text.
+  const isPlainNumber = /^-?\d/.test(value);
+  const guarded = !isPlainNumber && /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
   if (/[",\r\n]/.test(guarded)) {
     return `"${guarded.replace(/"/g, '""')}"`;
   }

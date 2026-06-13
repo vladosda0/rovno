@@ -181,6 +181,18 @@ describe("buildPortfolioCsv", () => {
     expect(csv).not.toContain("\n=HYPERLINK");
   });
 
+  it("keeps negative money cells numeric (not apostrophe-guarded as a formula)", () => {
+    const snap = snapshot({
+      projects: [projectRow({ title: "Loss maker", marginCents: -100_000, marginPct: -20, toBePaidCents: -5_000 })],
+    });
+    const csv = buildPortfolioCsv(snap, labels);
+    const dataLine = csv.trim().split("\r\n")[1];
+    // Negative values stay as plain signed decimals, never "'-...".
+    expect(dataLine).toContain("-1000.00");
+    expect(dataLine).toContain("-20.0");
+    expect(dataLine).not.toContain("'-");
+  });
+
   it("leaves money cells empty for redacted projects", () => {
     const snap = snapshot({
       projects: [projectRow({ title: "Hidden", financeVisibility: "none", contractValueCents: null, costCents: null, marginCents: null, marginPct: null, spentCents: null, percentSpent: null, toBePaidCents: null })],
