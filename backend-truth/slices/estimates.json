@@ -20,6 +20,7 @@
     "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql",
     "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql",
     "supabase/migrations/20260611120100_get_portfolio_finance_snapshot.sql",
+    "supabase/migrations/20260613120600_get_resource_article_price_comparison.sql",
     "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
     "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
   ],
@@ -160,6 +161,7 @@
         {
           "name": "idx_project_estimates_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -297,6 +299,7 @@
         {
           "name": "idx_estimate_versions_estimate_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "estimate_id"
           ],
@@ -307,6 +310,7 @@
         {
           "name": "idx_estimate_versions_current_per_estimate",
           "unique": true,
+          "method": null,
           "expressions": [
             "estimate_id"
           ],
@@ -480,6 +484,7 @@
         {
           "name": "idx_estimate_works_estimate_version_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "estimate_version_id"
           ],
@@ -490,6 +495,7 @@
         {
           "name": "idx_estimate_works_project_stage_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_stage_id"
           ],
@@ -500,6 +506,7 @@
         {
           "name": "idx_estimate_works_canonical",
           "unique": false,
+          "method": null,
           "expressions": [
             "system_work_article_id"
           ],
@@ -812,6 +819,7 @@
         {
           "name": "idx_estimate_resource_lines_estimate_work_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "estimate_work_id"
           ],
@@ -822,6 +830,7 @@
         {
           "name": "idx_estimate_resource_lines_assignee_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "assignee_profile_id"
           ],
@@ -832,6 +841,7 @@
         {
           "name": "idx_estimate_resource_lines_canonical",
           "unique": false,
+          "method": null,
           "expressions": [
             "system_resource_article_id"
           ],
@@ -955,6 +965,7 @@
         {
           "name": "idx_estimate_dependencies_estimate_version_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "estimate_version_id"
           ],
@@ -965,6 +976,7 @@
         {
           "name": "idx_estimate_dependencies_from_work_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "from_work_id"
           ],
@@ -975,6 +987,7 @@
         {
           "name": "idx_estimate_dependencies_to_work_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "to_work_id"
           ],
@@ -1388,6 +1401,32 @@
       "securityDefiner": true,
       "searchPath": "public",
       "sourceMigration": "supabase/migrations/20260611120100_get_portfolio_finance_snapshot.sql",
+      "authenticatedExecute": true,
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "get_resource_article_price_comparison",
+      "key": "public.get_resource_article_price_comparison",
+      "signature": "public.get_resource_article_price_comparison(uuid, uuid)",
+      "args": [
+        {
+          "name": "p_article_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_exclude_project_id",
+          "type": "uuid default null",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "sourceMigration": "supabase/migrations/20260613120600_get_resource_article_price_comparison.sql",
       "authenticatedExecute": true,
       "triggerUsages": []
     }

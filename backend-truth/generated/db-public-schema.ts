@@ -451,6 +451,34 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260611120100_get_portfolio_finance_snapshot.sql",
       "sha256": "0f847ef131b64fef084580e166f8a6e61fe07f35a7c62b046aa94beb1a59e5b2"
+    },
+    {
+      "path": "supabase/migrations/20260613120000_enable_pg_trgm_and_article_name_search_indexes.sql",
+      "sha256": "5c950618234cbffc69f4dc8b528817eef799a20a9b32385db77aed3fb618075c"
+    },
+    {
+      "path": "supabase/migrations/20260613120100_search_canonical_library.sql",
+      "sha256": "a47eebd6c372bc4124f9720cf72ddb1d4b8dd28656ab89d283b48db66040a525"
+    },
+    {
+      "path": "supabase/migrations/20260613120200_list_canonical_stages_with_works.sql",
+      "sha256": "097ff862f0ce96aab3aa9140135b79d2c4fb2725755c04aa6bbf08b9db1e137e"
+    },
+    {
+      "path": "supabase/migrations/20260613120300_get_resource_article_detail.sql",
+      "sha256": "5e323f04843ce9080e2694763eda8e03f775c81d743a9c150bc4ed8cc35f3f1b"
+    },
+    {
+      "path": "supabase/migrations/20260613120400_add_library_work_to_estimate.sql",
+      "sha256": "10c6e237d98f87b5ffe345fb89dbd4bd14fbf1fb7281c8171d7283ff93df8e73"
+    },
+    {
+      "path": "supabase/migrations/20260613120500_browse_canonical_catalog.sql",
+      "sha256": "54bfb0f4c3bd5f453f4e62499747b3ded88d349739eb4a4b64b78f447ee9aa00"
+    },
+    {
+      "path": "supabase/migrations/20260613120600_get_resource_article_price_comparison.sql",
+      "sha256": "ab53e3d887217881daf027fe3e024947f2687d97d0626f625e17c9493954a4ae"
     }
   ],
   "generated_artifacts": [
@@ -588,6 +616,13 @@ export const manifest = {
     "sql/20260605130000_payment_intents_consent.sql",
     "sql/20260611120000_project_estimates_execution_status.sql",
     "sql/20260611120100_get_portfolio_finance_snapshot.sql",
+    "sql/20260613120000_enable_pg_trgm_and_article_name_search_indexes.sql",
+    "sql/20260613120100_search_canonical_library.sql",
+    "sql/20260613120200_list_canonical_stages_with_works.sql",
+    "sql/20260613120300_get_resource_article_detail.sql",
+    "sql/20260613120400_add_library_work_to_estimate.sql",
+    "sql/20260613120500_browse_canonical_catalog.sql",
+    "sql/20260613120600_get_resource_article_price_comparison.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -612,6 +647,11 @@ export const manifest = {
       "kind": "extension",
       "name": "pgcrypto",
       "sourceMigration": "supabase/migrations/20260306160000_extensions_and_base_helpers.sql"
+    },
+    {
+      "kind": "extension",
+      "name": "pg_trgm",
+      "sourceMigration": "supabase/migrations/20260613120000_enable_pg_trgm_and_article_name_search_indexes.sql"
     }
   ]
 } as const;
@@ -813,6 +853,7 @@ export const tables = {
         {
           "name": "idx_profiles_email_unique",
           "unique": true,
+          "method": null,
           "expressions": [
             "lower(email)"
           ],
@@ -1380,6 +1421,7 @@ export const tables = {
         {
           "name": "idx_projects_owner_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "owner_profile_id"
           ],
@@ -1390,6 +1432,7 @@ export const tables = {
         {
           "name": "idx_projects_archived_at",
           "unique": false,
+          "method": null,
           "expressions": [
             "archived_at"
           ],
@@ -1652,6 +1695,7 @@ export const tables = {
         {
           "name": "idx_project_members_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -1662,6 +1706,7 @@ export const tables = {
         {
           "name": "idx_project_members_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "profile_id"
           ],
@@ -1979,6 +2024,7 @@ export const tables = {
         {
           "name": "idx_project_invites_active_email",
           "unique": true,
+          "method": null,
           "expressions": [
             "project_id",
             "lower(email)"
@@ -1990,6 +2036,7 @@ export const tables = {
         {
           "name": "idx_project_invites_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -2000,6 +2047,7 @@ export const tables = {
         {
           "name": "idx_project_invites_invited_by",
           "unique": false,
+          "method": null,
           "expressions": [
             "invited_by"
           ],
@@ -2184,6 +2232,7 @@ export const tables = {
         {
           "name": "idx_project_stages_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -2194,6 +2243,7 @@ export const tables = {
         {
           "name": "idx_project_stages_sort_order",
           "unique": true,
+          "method": null,
           "expressions": [
             "project_id",
             "sort_order"
@@ -2205,6 +2255,7 @@ export const tables = {
         {
           "name": "idx_project_stages_canonical",
           "unique": false,
+          "method": null,
           "expressions": [
             "system_stage_article_id"
           ],
@@ -2424,6 +2475,7 @@ export const tables = {
         {
           "name": "idx_tasks_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -2434,6 +2486,7 @@ export const tables = {
         {
           "name": "idx_tasks_stage_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "stage_id"
           ],
@@ -2444,6 +2497,7 @@ export const tables = {
         {
           "name": "idx_tasks_assignee_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "assignee_profile_id"
           ],
@@ -2454,6 +2508,7 @@ export const tables = {
         {
           "name": "idx_tasks_estimate_work_id_unique",
           "unique": true,
+          "method": null,
           "expressions": [
             "estimate_work_id"
           ],
@@ -2556,6 +2611,7 @@ export const tables = {
         {
           "name": "idx_task_comments_task_id_created_at_desc",
           "unique": false,
+          "method": null,
           "expressions": [
             "task_id",
             "created_at desc"
@@ -2698,6 +2754,7 @@ export const tables = {
         {
           "name": "idx_storage_objects_uploaded_by",
           "unique": false,
+          "method": null,
           "expressions": [
             "uploaded_by"
           ],
@@ -2916,6 +2973,7 @@ export const tables = {
         {
           "name": "idx_documents_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -2926,6 +2984,7 @@ export const tables = {
         {
           "name": "idx_documents_linked_workspace_document_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "linked_workspace_document_id"
           ],
@@ -2936,6 +2995,7 @@ export const tables = {
         {
           "name": "idx_documents_linked_org_document_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "linked_org_document_id"
           ],
@@ -3088,6 +3148,7 @@ export const tables = {
         {
           "name": "idx_document_versions_document_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "document_id"
           ],
@@ -3098,6 +3159,7 @@ export const tables = {
         {
           "name": "idx_document_versions_current_per_document",
           "unique": true,
+          "method": null,
           "expressions": [
             "document_id"
           ],
@@ -3268,6 +3330,7 @@ export const tables = {
         {
           "name": "idx_project_media_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -3278,6 +3341,7 @@ export const tables = {
         {
           "name": "idx_project_media_storage_object_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "storage_object_id"
           ],
@@ -3288,6 +3352,7 @@ export const tables = {
         {
           "name": "idx_project_media_task_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "task_id"
           ],
@@ -3298,6 +3363,7 @@ export const tables = {
         {
           "name": "idx_project_media_task_id_is_final",
           "unique": false,
+          "method": null,
           "expressions": [
             "task_id",
             "is_final"
@@ -3454,6 +3520,7 @@ export const tables = {
         {
           "name": "idx_project_estimates_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -3591,6 +3658,7 @@ export const tables = {
         {
           "name": "idx_estimate_versions_estimate_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "estimate_id"
           ],
@@ -3601,6 +3669,7 @@ export const tables = {
         {
           "name": "idx_estimate_versions_current_per_estimate",
           "unique": true,
+          "method": null,
           "expressions": [
             "estimate_id"
           ],
@@ -3774,6 +3843,7 @@ export const tables = {
         {
           "name": "idx_estimate_works_estimate_version_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "estimate_version_id"
           ],
@@ -3784,6 +3854,7 @@ export const tables = {
         {
           "name": "idx_estimate_works_project_stage_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_stage_id"
           ],
@@ -3794,6 +3865,7 @@ export const tables = {
         {
           "name": "idx_estimate_works_canonical",
           "unique": false,
+          "method": null,
           "expressions": [
             "system_work_article_id"
           ],
@@ -4106,6 +4178,7 @@ export const tables = {
         {
           "name": "idx_estimate_resource_lines_estimate_work_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "estimate_work_id"
           ],
@@ -4116,6 +4189,7 @@ export const tables = {
         {
           "name": "idx_estimate_resource_lines_assignee_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "assignee_profile_id"
           ],
@@ -4126,6 +4200,7 @@ export const tables = {
         {
           "name": "idx_estimate_resource_lines_canonical",
           "unique": false,
+          "method": null,
           "expressions": [
             "system_resource_article_id"
           ],
@@ -4249,6 +4324,7 @@ export const tables = {
         {
           "name": "idx_estimate_dependencies_estimate_version_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "estimate_version_id"
           ],
@@ -4259,6 +4335,7 @@ export const tables = {
         {
           "name": "idx_estimate_dependencies_from_work_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "from_work_id"
           ],
@@ -4269,6 +4346,7 @@ export const tables = {
         {
           "name": "idx_estimate_dependencies_to_work_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "to_work_id"
           ],
@@ -4377,6 +4455,7 @@ export const tables = {
         {
           "name": "idx_inventory_items_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -4464,6 +4543,7 @@ export const tables = {
         {
           "name": "idx_inventory_locations_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -4590,6 +4670,7 @@ export const tables = {
         {
           "name": "idx_inventory_balances_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -4600,6 +4681,7 @@ export const tables = {
         {
           "name": "idx_inventory_balances_inventory_item_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "inventory_item_id"
           ],
@@ -4610,6 +4692,7 @@ export const tables = {
         {
           "name": "idx_inventory_balances_inventory_location_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "inventory_location_id"
           ],
@@ -4859,6 +4942,7 @@ export const tables = {
         {
           "name": "idx_procurement_items_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -4869,6 +4953,7 @@ export const tables = {
         {
           "name": "idx_procurement_items_estimate_resource_line_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "estimate_resource_line_id"
           ],
@@ -4879,6 +4964,7 @@ export const tables = {
         {
           "name": "idx_procurement_items_task_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "task_id"
           ],
@@ -4889,6 +4975,7 @@ export const tables = {
         {
           "name": "idx_procurement_items_estimate_resource_line_id_unique",
           "unique": true,
+          "method": null,
           "expressions": [
             "estimate_resource_line_id"
           ],
@@ -5044,6 +5131,7 @@ export const tables = {
         {
           "name": "idx_orders_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -5209,6 +5297,7 @@ export const tables = {
         {
           "name": "idx_order_lines_order_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "order_id"
           ],
@@ -5219,6 +5308,7 @@ export const tables = {
         {
           "name": "idx_order_lines_procurement_item_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "procurement_item_id"
           ],
@@ -5403,6 +5493,7 @@ export const tables = {
         {
           "name": "idx_inventory_movements_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -5413,6 +5504,7 @@ export const tables = {
         {
           "name": "idx_inventory_movements_inventory_item_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "inventory_item_id"
           ],
@@ -5423,6 +5515,7 @@ export const tables = {
         {
           "name": "idx_inventory_movements_inventory_location_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "inventory_location_id"
           ],
@@ -5433,6 +5526,7 @@ export const tables = {
         {
           "name": "idx_inventory_movements_order_line_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "order_line_id"
           ],
@@ -5443,6 +5537,7 @@ export const tables = {
         {
           "name": "idx_inventory_movements_procurement_item_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "procurement_item_id"
           ],
@@ -5624,6 +5719,7 @@ export const tables = {
         {
           "name": "idx_task_checklist_items_task_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "task_id"
           ],
@@ -5634,6 +5730,7 @@ export const tables = {
         {
           "name": "idx_task_checklist_items_procurement_item_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "procurement_item_id"
           ],
@@ -5644,6 +5741,7 @@ export const tables = {
         {
           "name": "idx_task_checklist_items_estimate_resource_line_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "estimate_resource_line_id"
           ],
@@ -5654,6 +5752,7 @@ export const tables = {
         {
           "name": "idx_task_checklist_items_estimate_work_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "estimate_work_id"
           ],
@@ -5937,6 +6036,7 @@ export const tables = {
         {
           "name": "idx_hr_items_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -5947,6 +6047,7 @@ export const tables = {
         {
           "name": "idx_hr_items_project_stage_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_stage_id"
           ],
@@ -5957,6 +6058,7 @@ export const tables = {
         {
           "name": "idx_hr_items_estimate_work_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "estimate_work_id"
           ],
@@ -5967,6 +6069,7 @@ export const tables = {
         {
           "name": "idx_hr_items_task_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "task_id"
           ],
@@ -5977,6 +6080,7 @@ export const tables = {
         {
           "name": "idx_hr_items_estimate_resource_line_id_unique",
           "unique": true,
+          "method": null,
           "expressions": [
             "estimate_resource_line_id"
           ],
@@ -6092,6 +6196,7 @@ export const tables = {
         {
           "name": "idx_hr_item_assignees_hr_item_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "hr_item_id"
           ],
@@ -6102,6 +6207,7 @@ export const tables = {
         {
           "name": "idx_hr_item_assignees_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "profile_id"
           ],
@@ -6272,6 +6378,7 @@ export const tables = {
         {
           "name": "idx_hr_payments_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -6282,6 +6389,7 @@ export const tables = {
         {
           "name": "idx_hr_payments_hr_item_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "hr_item_id"
           ],
@@ -6292,6 +6400,7 @@ export const tables = {
         {
           "name": "idx_hr_payments_paid_to_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "paid_to_profile_id"
           ],
@@ -6407,6 +6516,7 @@ export const tables = {
         {
           "name": "idx_activity_events_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -6417,6 +6527,7 @@ export const tables = {
         {
           "name": "idx_activity_events_actor_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "actor_profile_id"
           ],
@@ -6427,6 +6538,7 @@ export const tables = {
         {
           "name": "idx_activity_events_project_created_at",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id",
             "created_at desc"
@@ -6563,6 +6675,7 @@ export const tables = {
         {
           "name": "idx_notifications_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "profile_id"
           ],
@@ -6573,6 +6686,7 @@ export const tables = {
         {
           "name": "idx_notifications_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -6583,6 +6697,7 @@ export const tables = {
         {
           "name": "idx_notifications_profile_is_read_created_at",
           "unique": false,
+          "method": null,
           "expressions": [
             "profile_id",
             "is_read",
@@ -6736,6 +6851,7 @@ export const tables = {
         {
           "name": "idx_billing_customers_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "profile_id"
           ],
@@ -7051,6 +7167,7 @@ export const tables = {
         {
           "name": "idx_subscriptions_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "profile_id"
           ],
@@ -7061,6 +7178,7 @@ export const tables = {
         {
           "name": "idx_subscriptions_billing_customer_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "billing_customer_id"
           ],
@@ -7071,6 +7189,7 @@ export const tables = {
         {
           "name": "idx_subscriptions_current_per_profile",
           "unique": true,
+          "method": null,
           "expressions": [
             "profile_id"
           ],
@@ -7081,6 +7200,7 @@ export const tables = {
         {
           "name": "idx_subscriptions_rebill_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "rebill_id"
           ],
@@ -7091,6 +7211,7 @@ export const tables = {
         {
           "name": "idx_subscriptions_grace_until",
           "unique": false,
+          "method": null,
           "expressions": [
             "grace_until"
           ],
@@ -7350,6 +7471,7 @@ export const tables = {
         {
           "name": "idx_project_media_upload_intents_task_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "task_id"
           ],
@@ -7360,6 +7482,7 @@ export const tables = {
         {
           "name": "idx_project_media_upload_intents_task_id_is_final",
           "unique": false,
+          "method": null,
           "expressions": [
             "task_id",
             "is_final"
@@ -7757,6 +7880,7 @@ export const tables = {
         {
           "name": "idx_project_ai_chat_sessions_project_profile",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id",
             "profile_id"
@@ -7768,6 +7892,7 @@ export const tables = {
         {
           "name": "uq_project_ai_chat_sessions_derived_chat_key",
           "unique": true,
+          "method": null,
           "expressions": [
             "derived_chat_key"
           ],
@@ -7896,6 +8021,7 @@ export const tables = {
         {
           "name": "idx_organizations_owner_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "owner_profile_id"
           ],
@@ -8037,6 +8163,7 @@ export const tables = {
         {
           "name": "idx_org_members_org_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "org_id"
           ],
@@ -8047,6 +8174,7 @@ export const tables = {
         {
           "name": "idx_org_members_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "profile_id"
           ],
@@ -8257,6 +8385,7 @@ export const tables = {
         {
           "name": "idx_org_documents_org_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "org_id"
           ],
@@ -8267,6 +8396,7 @@ export const tables = {
         {
           "name": "idx_org_documents_folder",
           "unique": false,
+          "method": null,
           "expressions": [
             "folder_id"
           ],
@@ -8400,6 +8530,7 @@ export const tables = {
         {
           "name": "idx_org_document_versions_doc_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "org_document_id"
           ],
@@ -8546,6 +8677,7 @@ export const tables = {
         {
           "name": "idx_org_document_upload_intents_org",
           "unique": false,
+          "method": null,
           "expressions": [
             "org_id"
           ],
@@ -8734,6 +8866,7 @@ export const tables = {
         {
           "name": "idx_system_resource_articles_rovno_sku",
           "unique": false,
+          "method": null,
           "expressions": [
             "rovno_sku"
           ],
@@ -8744,6 +8877,7 @@ export const tables = {
         {
           "name": "idx_system_resource_articles_name",
           "unique": false,
+          "method": null,
           "expressions": [
             "name"
           ],
@@ -8754,6 +8888,7 @@ export const tables = {
         {
           "name": "idx_system_resource_articles_category_path",
           "unique": false,
+          "method": null,
           "expressions": [
             "category_path text_pattern_ops"
           ],
@@ -8764,6 +8899,7 @@ export const tables = {
         {
           "name": "idx_system_resource_articles_source_version",
           "unique": false,
+          "method": null,
           "expressions": [
             "source_version"
           ],
@@ -8774,12 +8910,35 @@ export const tables = {
         {
           "name": "idx_system_resource_articles_archived",
           "unique": false,
+          "method": null,
           "expressions": [
             "archived"
           ],
           "where": "archived = false",
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+        },
+        {
+          "name": "idx_system_resource_articles_name_trgm",
+          "unique": false,
+          "method": "gin",
+          "expressions": [
+            "name gin_trgm_ops"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260613120000_enable_pg_trgm_and_article_name_search_indexes.sql"
+        },
+        {
+          "name": "idx_system_resource_articles_canonical_name_trgm",
+          "unique": false,
+          "method": "gin",
+          "expressions": [
+            "canonical_name gin_trgm_ops"
+          ],
+          "where": "canonical_name is not null",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260613120000_enable_pg_trgm_and_article_name_search_indexes.sql"
         }
       ],
       "triggers": [
@@ -9059,6 +9218,7 @@ export const tables = {
         {
           "name": "idx_estimate_templates_owner",
           "unique": false,
+          "method": null,
           "expressions": [
             "owner_kind",
             "owner_id"
@@ -9070,6 +9230,7 @@ export const tables = {
         {
           "name": "idx_estimate_templates_scope",
           "unique": false,
+          "method": null,
           "expressions": [
             "scope"
           ],
@@ -9080,6 +9241,7 @@ export const tables = {
         {
           "name": "idx_estimate_templates_published",
           "unique": false,
+          "method": null,
           "expressions": [
             "published_to_public"
           ],
@@ -9090,6 +9252,7 @@ export const tables = {
         {
           "name": "estimate_templates_system_singleton",
           "unique": true,
+          "method": null,
           "expressions": [
             "owner_kind"
           ],
@@ -9260,6 +9423,7 @@ export const tables = {
         {
           "name": "idx_template_stages_template",
           "unique": false,
+          "method": null,
           "expressions": [
             "estimate_template_id"
           ],
@@ -9270,6 +9434,7 @@ export const tables = {
         {
           "name": "idx_template_stages_canonical",
           "unique": false,
+          "method": null,
           "expressions": [
             "system_stage_article_id"
           ],
@@ -9422,6 +9587,7 @@ export const tables = {
         {
           "name": "idx_template_works_stage",
           "unique": false,
+          "method": null,
           "expressions": [
             "template_stage_id"
           ],
@@ -9432,6 +9598,7 @@ export const tables = {
         {
           "name": "idx_template_works_canonical",
           "unique": false,
+          "method": null,
           "expressions": [
             "system_work_article_id"
           ],
@@ -9674,6 +9841,7 @@ export const tables = {
         {
           "name": "idx_template_resource_lines_work",
           "unique": false,
+          "method": null,
           "expressions": [
             "template_work_id"
           ],
@@ -9684,6 +9852,7 @@ export const tables = {
         {
           "name": "idx_template_resource_lines_article",
           "unique": false,
+          "method": null,
           "expressions": [
             "system_resource_article_id"
           ],
@@ -9924,6 +10093,7 @@ export const tables = {
         {
           "name": "idx_contractor_profiles_one_per_org",
           "unique": true,
+          "method": null,
           "expressions": [
             "org_id"
           ],
@@ -9934,6 +10104,7 @@ export const tables = {
         {
           "name": "idx_contractor_profiles_status",
           "unique": false,
+          "method": null,
           "expressions": [
             "status"
           ],
@@ -9944,6 +10115,7 @@ export const tables = {
         {
           "name": "idx_contractor_profiles_published",
           "unique": false,
+          "method": null,
           "expressions": [
             "status"
           ],
@@ -10159,6 +10331,7 @@ export const tables = {
         {
           "name": "estimate_share_snapshots_project_id_idx",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -10169,6 +10342,7 @@ export const tables = {
         {
           "name": "estimate_share_snapshots_active_project_idx",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id",
             "version_number desc"
@@ -10285,6 +10459,7 @@ export const tables = {
         {
           "name": "idx_org_document_folders_org",
           "unique": false,
+          "method": null,
           "expressions": [
             "org_id"
           ],
@@ -10295,6 +10470,7 @@ export const tables = {
         {
           "name": "idx_org_document_folders_org_lower_name",
           "unique": true,
+          "method": null,
           "expressions": [
             "org_id",
             "lower(name)"
@@ -10677,6 +10853,7 @@ export const tables = {
         {
           "name": "idx_payment_intents_profile",
           "unique": false,
+          "method": null,
           "expressions": [
             "profile_id"
           ],
@@ -10687,6 +10864,7 @@ export const tables = {
         {
           "name": "uq_payment_intents_external_payment_id",
           "unique": true,
+          "method": null,
           "expressions": [
             "external_payment_id"
           ],
@@ -10697,6 +10875,7 @@ export const tables = {
         {
           "name": "uq_payment_intents_order_per_provider",
           "unique": true,
+          "method": null,
           "expressions": [
             "provider",
             "order_id"
@@ -10708,6 +10887,7 @@ export const tables = {
         {
           "name": "idx_payment_intents_status",
           "unique": false,
+          "method": null,
           "expressions": [
             "status"
           ],
@@ -10718,6 +10898,7 @@ export const tables = {
         {
           "name": "idx_payment_intents_parent",
           "unique": false,
+          "method": null,
           "expressions": [
             "parent_intent_id"
           ],
@@ -10858,6 +11039,7 @@ export const tables = {
         {
           "name": "idx_system_stage_articles_name_unique_active",
           "unique": true,
+          "method": null,
           "expressions": [
             "name"
           ],
@@ -10868,6 +11050,7 @@ export const tables = {
         {
           "name": "idx_system_stage_articles_sort",
           "unique": false,
+          "method": null,
           "expressions": [
             "default_sort_hint"
           ],
@@ -10878,12 +11061,24 @@ export const tables = {
         {
           "name": "idx_system_stage_articles_archived",
           "unique": false,
+          "method": null,
           "expressions": [
             "archived"
           ],
           "where": "archived = false",
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+        },
+        {
+          "name": "idx_system_stage_articles_name_trgm",
+          "unique": false,
+          "method": "gin",
+          "expressions": [
+            "name gin_trgm_ops"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260613120000_enable_pg_trgm_and_article_name_search_indexes.sql"
         }
       ],
       "triggers": [
@@ -11084,6 +11279,7 @@ export const tables = {
         {
           "name": "idx_system_work_articles_stage",
           "unique": false,
+          "method": null,
           "expressions": [
             "parent_stage_article_id"
           ],
@@ -11094,6 +11290,7 @@ export const tables = {
         {
           "name": "idx_system_work_articles_stage_sort",
           "unique": false,
+          "method": null,
           "expressions": [
             "parent_stage_article_id",
             "default_sort_hint"
@@ -11105,12 +11302,24 @@ export const tables = {
         {
           "name": "idx_system_work_articles_archived",
           "unique": false,
+          "method": null,
           "expressions": [
             "archived"
           ],
           "where": "archived = false",
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+        },
+        {
+          "name": "idx_system_work_articles_name_trgm",
+          "unique": false,
+          "method": "gin",
+          "expressions": [
+            "name gin_trgm_ops"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260613120000_enable_pg_trgm_and_article_name_search_indexes.sql"
         }
       ],
       "triggers": [
@@ -11303,6 +11512,7 @@ export const tables = {
         {
           "name": "idx_card_bindings_profile",
           "unique": false,
+          "method": null,
           "expressions": [
             "profile_id"
           ],
@@ -11313,6 +11523,7 @@ export const tables = {
         {
           "name": "idx_card_bindings_active",
           "unique": false,
+          "method": null,
           "expressions": [
             "profile_id",
             "bound_at desc"
@@ -17639,6 +17850,151 @@ export const functions = {
       "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260611120100_get_portfolio_finance_snapshot.sql",
       "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "search_canonical_library",
+      "signature": "public.search_canonical_library(text, text)",
+      "args": [
+        {
+          "name": "p_query",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_kind",
+          "type": "text",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260613120100_search_canonical_library.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "list_canonical_stages_with_works",
+      "signature": "public.list_canonical_stages_with_works(uuid)",
+      "args": [
+        {
+          "name": "p_template_id",
+          "type": "uuid default null",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260613120200_list_canonical_stages_with_works.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "get_resource_article_detail",
+      "signature": "public.get_resource_article_detail(uuid)",
+      "args": [
+        {
+          "name": "p_article_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260613120300_get_resource_article_detail.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "add_library_work_to_estimate",
+      "signature": "public.add_library_work_to_estimate(uuid, uuid, uuid, integer)",
+      "args": [
+        {
+          "name": "p_estimate_version_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_project_stage_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_template_work_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_sort_position",
+          "type": "integer default null",
+          "identityType": "integer"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260613120400_add_library_work_to_estimate.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "browse_canonical_catalog",
+      "signature": "public.browse_canonical_catalog(text)",
+      "args": [
+        {
+          "name": "p_subcategory",
+          "type": "text default null",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260613120500_browse_canonical_catalog.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "get_resource_article_price_comparison",
+      "signature": "public.get_resource_article_price_comparison(uuid, uuid)",
+      "args": [
+        {
+          "name": "p_article_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_exclude_project_id",
+          "type": "uuid default null",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260613120600_get_resource_article_price_comparison.sql",
+      "triggerUsages": []
     }
   ]
 } as const;
@@ -21203,6 +21559,48 @@ export const sourceTrace = {
       "name": "get_portfolio_finance_snapshot",
       "signature": "public.get_portfolio_finance_snapshot()",
       "sourceMigration": "supabase/migrations/20260611120100_get_portfolio_finance_snapshot.sql"
+    },
+    {
+      "key": "public.search_canonical_library",
+      "schema": "public",
+      "name": "search_canonical_library",
+      "signature": "public.search_canonical_library(text, text)",
+      "sourceMigration": "supabase/migrations/20260613120100_search_canonical_library.sql"
+    },
+    {
+      "key": "public.list_canonical_stages_with_works",
+      "schema": "public",
+      "name": "list_canonical_stages_with_works",
+      "signature": "public.list_canonical_stages_with_works(uuid)",
+      "sourceMigration": "supabase/migrations/20260613120200_list_canonical_stages_with_works.sql"
+    },
+    {
+      "key": "public.get_resource_article_detail",
+      "schema": "public",
+      "name": "get_resource_article_detail",
+      "signature": "public.get_resource_article_detail(uuid)",
+      "sourceMigration": "supabase/migrations/20260613120300_get_resource_article_detail.sql"
+    },
+    {
+      "key": "public.add_library_work_to_estimate",
+      "schema": "public",
+      "name": "add_library_work_to_estimate",
+      "signature": "public.add_library_work_to_estimate(uuid, uuid, uuid, integer)",
+      "sourceMigration": "supabase/migrations/20260613120400_add_library_work_to_estimate.sql"
+    },
+    {
+      "key": "public.browse_canonical_catalog",
+      "schema": "public",
+      "name": "browse_canonical_catalog",
+      "signature": "public.browse_canonical_catalog(text)",
+      "sourceMigration": "supabase/migrations/20260613120500_browse_canonical_catalog.sql"
+    },
+    {
+      "key": "public.get_resource_article_price_comparison",
+      "schema": "public",
+      "name": "get_resource_article_price_comparison",
+      "signature": "public.get_resource_article_price_comparison(uuid, uuid)",
+      "sourceMigration": "supabase/migrations/20260613120600_get_resource_article_price_comparison.sql"
     }
   ],
   "policies": [
@@ -22932,6 +23330,7 @@ export const sourceTrace = {
         "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql",
         "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql",
         "supabase/migrations/20260611120100_get_portfolio_finance_snapshot.sql",
+        "supabase/migrations/20260613120600_get_resource_article_price_comparison.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
@@ -22946,7 +23345,8 @@ export const sourceTrace = {
         "public.get_estimate_operational_summary",
         "public.get_shared_estimate_version",
         "public.approve_estimate_version_by_share_token",
-        "public.get_portfolio_finance_snapshot"
+        "public.get_portfolio_finance_snapshot",
+        "public.get_resource_article_price_comparison"
       ],
       "policies": [
         "public.project_estimates.project_estimates_select",
@@ -23080,7 +23480,12 @@ export const sourceTrace = {
         "supabase/migrations/20260602150100_instance_tables_library_fks.sql",
         "supabase/migrations/20260512132320_template_rls.sql",
         "supabase/migrations/20260512132340_template_rpcs.sql",
-        "supabase/migrations/20260602150200_apply_template_propagate_library_fks.sql"
+        "supabase/migrations/20260602150200_apply_template_propagate_library_fks.sql",
+        "supabase/migrations/20260613120100_search_canonical_library.sql",
+        "supabase/migrations/20260613120200_list_canonical_stages_with_works.sql",
+        "supabase/migrations/20260613120300_get_resource_article_detail.sql",
+        "supabase/migrations/20260613120400_add_library_work_to_estimate.sql",
+        "supabase/migrations/20260613120500_browse_canonical_catalog.sql"
       ],
       "tables": [
         "public.system_resource_articles",
@@ -23098,7 +23503,12 @@ export const sourceTrace = {
         "public.can_manage_template",
         "public.list_estimate_templates",
         "public.get_estimate_template_detail",
-        "public.apply_template_stage_to_estimate"
+        "public.apply_template_stage_to_estimate",
+        "public.search_canonical_library",
+        "public.list_canonical_stages_with_works",
+        "public.get_resource_article_detail",
+        "public.add_library_work_to_estimate",
+        "public.browse_canonical_catalog"
       ],
       "policies": [
         "public.system_resource_articles.system_resource_articles_select",
@@ -23618,11 +24028,12 @@ export const slices = {
         "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql",
         "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql",
         "supabase/migrations/20260611120100_get_portfolio_finance_snapshot.sql",
+        "supabase/migrations/20260613120600_get_resource_article_price_comparison.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
       "tableCount": 5,
-      "functionCount": 4,
+      "functionCount": 5,
       "rlsTableCount": 5
     },
     {
@@ -23637,10 +24048,15 @@ export const slices = {
         "supabase/migrations/20260602150100_instance_tables_library_fks.sql",
         "supabase/migrations/20260512132320_template_rls.sql",
         "supabase/migrations/20260512132340_template_rpcs.sql",
-        "supabase/migrations/20260602150200_apply_template_propagate_library_fks.sql"
+        "supabase/migrations/20260602150200_apply_template_propagate_library_fks.sql",
+        "supabase/migrations/20260613120100_search_canonical_library.sql",
+        "supabase/migrations/20260613120200_list_canonical_stages_with_works.sql",
+        "supabase/migrations/20260613120300_get_resource_article_detail.sql",
+        "supabase/migrations/20260613120400_add_library_work_to_estimate.sql",
+        "supabase/migrations/20260613120500_browse_canonical_catalog.sql"
       ],
       "tableCount": 9,
-      "functionCount": 5,
+      "functionCount": 10,
       "rlsTableCount": 9
     },
     {

@@ -1030,6 +1030,48 @@
       "name": "get_portfolio_finance_snapshot",
       "signature": "public.get_portfolio_finance_snapshot()",
       "sourceMigration": "supabase/migrations/20260611120100_get_portfolio_finance_snapshot.sql"
+    },
+    {
+      "key": "public.search_canonical_library",
+      "schema": "public",
+      "name": "search_canonical_library",
+      "signature": "public.search_canonical_library(text, text)",
+      "sourceMigration": "supabase/migrations/20260613120100_search_canonical_library.sql"
+    },
+    {
+      "key": "public.list_canonical_stages_with_works",
+      "schema": "public",
+      "name": "list_canonical_stages_with_works",
+      "signature": "public.list_canonical_stages_with_works(uuid)",
+      "sourceMigration": "supabase/migrations/20260613120200_list_canonical_stages_with_works.sql"
+    },
+    {
+      "key": "public.get_resource_article_detail",
+      "schema": "public",
+      "name": "get_resource_article_detail",
+      "signature": "public.get_resource_article_detail(uuid)",
+      "sourceMigration": "supabase/migrations/20260613120300_get_resource_article_detail.sql"
+    },
+    {
+      "key": "public.add_library_work_to_estimate",
+      "schema": "public",
+      "name": "add_library_work_to_estimate",
+      "signature": "public.add_library_work_to_estimate(uuid, uuid, uuid, integer)",
+      "sourceMigration": "supabase/migrations/20260613120400_add_library_work_to_estimate.sql"
+    },
+    {
+      "key": "public.browse_canonical_catalog",
+      "schema": "public",
+      "name": "browse_canonical_catalog",
+      "signature": "public.browse_canonical_catalog(text)",
+      "sourceMigration": "supabase/migrations/20260613120500_browse_canonical_catalog.sql"
+    },
+    {
+      "key": "public.get_resource_article_price_comparison",
+      "schema": "public",
+      "name": "get_resource_article_price_comparison",
+      "signature": "public.get_resource_article_price_comparison(uuid, uuid)",
+      "sourceMigration": "supabase/migrations/20260613120600_get_resource_article_price_comparison.sql"
     }
   ],
   "policies": [
@@ -2759,6 +2801,7 @@
         "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql",
         "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql",
         "supabase/migrations/20260611120100_get_portfolio_finance_snapshot.sql",
+        "supabase/migrations/20260613120600_get_resource_article_price_comparison.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
@@ -2773,7 +2816,8 @@
         "public.get_estimate_operational_summary",
         "public.get_shared_estimate_version",
         "public.approve_estimate_version_by_share_token",
-        "public.get_portfolio_finance_snapshot"
+        "public.get_portfolio_finance_snapshot",
+        "public.get_resource_article_price_comparison"
       ],
       "policies": [
         "public.project_estimates.project_estimates_select",
@@ -2907,7 +2951,12 @@
         "supabase/migrations/20260602150100_instance_tables_library_fks.sql",
         "supabase/migrations/20260512132320_template_rls.sql",
         "supabase/migrations/20260512132340_template_rpcs.sql",
-        "supabase/migrations/20260602150200_apply_template_propagate_library_fks.sql"
+        "supabase/migrations/20260602150200_apply_template_propagate_library_fks.sql",
+        "supabase/migrations/20260613120100_search_canonical_library.sql",
+        "supabase/migrations/20260613120200_list_canonical_stages_with_works.sql",
+        "supabase/migrations/20260613120300_get_resource_article_detail.sql",
+        "supabase/migrations/20260613120400_add_library_work_to_estimate.sql",
+        "supabase/migrations/20260613120500_browse_canonical_catalog.sql"
       ],
       "tables": [
         "public.system_resource_articles",
@@ -2925,7 +2974,12 @@
         "public.can_manage_template",
         "public.list_estimate_templates",
         "public.get_estimate_template_detail",
-        "public.apply_template_stage_to_estimate"
+        "public.apply_template_stage_to_estimate",
+        "public.search_canonical_library",
+        "public.list_canonical_stages_with_works",
+        "public.get_resource_article_detail",
+        "public.add_library_work_to_estimate",
+        "public.browse_canonical_catalog"
       ],
       "policies": [
         "public.system_resource_articles.system_resource_articles_select",

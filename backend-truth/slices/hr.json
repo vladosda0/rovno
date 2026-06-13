@@ -280,6 +280,7 @@
         {
           "name": "idx_hr_items_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -290,6 +291,7 @@
         {
           "name": "idx_hr_items_project_stage_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_stage_id"
           ],
@@ -300,6 +302,7 @@
         {
           "name": "idx_hr_items_estimate_work_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "estimate_work_id"
           ],
@@ -310,6 +313,7 @@
         {
           "name": "idx_hr_items_task_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "task_id"
           ],
@@ -320,6 +324,7 @@
         {
           "name": "idx_hr_items_estimate_resource_line_id_unique",
           "unique": true,
+          "method": null,
           "expressions": [
             "estimate_resource_line_id"
           ],
@@ -435,6 +440,7 @@
         {
           "name": "idx_hr_item_assignees_hr_item_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "hr_item_id"
           ],
@@ -445,6 +451,7 @@
         {
           "name": "idx_hr_item_assignees_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "profile_id"
           ],
@@ -615,6 +622,7 @@
         {
           "name": "idx_hr_payments_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -625,6 +633,7 @@
         {
           "name": "idx_hr_payments_hr_item_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "hr_item_id"
           ],
@@ -635,6 +644,7 @@
         {
           "name": "idx_hr_payments_paid_to_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "paid_to_profile_id"
           ],
