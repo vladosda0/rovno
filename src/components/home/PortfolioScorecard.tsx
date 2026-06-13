@@ -11,19 +11,38 @@ interface Props {
   currency: string;
 }
 
+/**
+ * Overall progress weighted by contract value over detail-visible projects (spec §7.1 P1).
+ * Falls back to the snapshot's simple average when there is no contract weight to apply.
+ */
+function weightedProgressPct(snapshot: PortfolioFinanceSnapshot): number | null {
+  let weight = 0;
+  let acc = 0;
+  for (const project of snapshot.projects) {
+    if (project.financeVisibility !== "detail") continue;
+    const contract = project.contractValueCents ?? 0;
+    if (contract <= 0 || project.percentComplete == null) continue;
+    weight += contract;
+    acc += project.percentComplete * contract;
+  }
+  if (weight > 0) return acc / weight;
+  return snapshot.totals.avgPercentComplete;
+}
+
 export function PortfolioScorecard({ snapshot, currency }: Props) {
   const { t } = useTranslation();
   const { totals } = snapshot;
   const money = (cents: number) => formatCompactMoney(cents, currency);
+  const overallProgress = weightedProgressPct(snapshot);
 
   return (
     <div className="space-y-3">
       {/* Hero: contracts (revenue) — bigger padding, same type scale. */}
       <div className="rounded-lg bg-muted/30 px-4 py-4">
-        <p className="text-[13px] text-muted-foreground">{t("financeTab.contracts")}</p>
+        <p className="text-[15px] text-muted-foreground">{t("financeTab.contracts")}</p>
         <p className="text-2xl font-medium tabular-nums text-foreground">{money(totals.contractValueCents)}</p>
         {totals.redactedProjectCount > 0 && (
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-[13px] text-muted-foreground">
             {t("financeTab.redactedNote", { count: totals.redactedProjectCount })}
           </p>
         )}
@@ -38,7 +57,7 @@ export function PortfolioScorecard({ snapshot, currency }: Props) {
         />
         <KpiCard label={t("financeTab.cost")} value={money(totals.costCents)} />
         <KpiCard label={t("financeTab.activeProjects")} value={String(totals.activeCount)} />
-        <KpiCard label={t("financeTab.overallProgress")} value={formatPct(totals.avgPercentComplete, 0)} />
+        <KpiCard label={t("financeTab.overallProgress")} value={formatPct(overallProgress, 0)} />
         <KpiCard
           label={t("financeTab.atRisk")}
           value={String(totals.atRiskCount)}

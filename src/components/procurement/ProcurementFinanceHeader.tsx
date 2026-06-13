@@ -202,24 +202,24 @@ export function ProcurementFinanceHeader({ view, currency }: ProcurementFinanceH
             <div className="h-full bg-muted-foreground/40" style={{ width: `${inTransitSegmentPct}%` }} />
           )}
         </div>
-        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-[13px]">
+        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-[15px]">
           {legend.map((entry) => (
             <span key={entry.key} className="inline-flex items-baseline gap-1.5">
               <span className={cn("inline-block h-2 w-2 shrink-0 self-center rounded-full", entry.dotClassName)} />
               <span className="text-muted-foreground">{entry.label}:</span>
               <span className="font-medium tabular-nums text-foreground">{entry.value}</span>
               {entry.pct !== null && (
-                <span className="text-[11px] text-muted-foreground">· {formatPct(entry.pct, 0)}</span>
+                <span className="text-[13px] text-muted-foreground">· {formatPct(entry.pct, 0)}</span>
               )}
             </span>
           ))}
         </div>
         {insight && (
-          <p className={cn("text-[11px] font-medium", insight.destructive ? "text-destructive" : "text-muted-foreground")}>
+          <p className={cn("text-[13px] font-medium", insight.destructive ? "text-destructive" : "text-muted-foreground")}>
             {insight.text}
           </p>
         )}
-        {dataHint && <p className="text-[11px] text-muted-foreground">{dataHint}</p>}
+        {dataHint && <p className="text-[13px] text-muted-foreground">{dataHint}</p>}
       </div>
 
       <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
@@ -229,7 +229,7 @@ export function ProcurementFinanceHeader({ view, currency }: ProcurementFinanceH
               type="button"
               className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-muted/20"
             >
-              <span className="inline-flex items-center gap-2 text-[13px] font-medium text-foreground">
+              <span className="inline-flex items-center gap-2 text-[15px] font-medium text-foreground">
                 {detailsOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                 {t("procurement.finance.details")}
               </span>
@@ -263,7 +263,7 @@ export function ProcurementFinanceHeader({ view, currency }: ProcurementFinanceH
 
               <div className="space-y-3">
                 <div className="space-y-1">
-                  <p className="px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                  <p className="px-3 text-[13px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
                     {t("procurement.finance.ppv.title")}
                   </p>
                   {view.ppv && (view.ppv.pct !== null || view.ppv.deltaCents !== 0 || view.ppv.lines.length > 0) ? (
@@ -288,13 +288,13 @@ export function ProcurementFinanceHeader({ view, currency }: ProcurementFinanceH
                       ))}
                     </>
                   ) : (
-                    <p className="px-3 text-[13px] text-muted-foreground">{t("procurement.finance.ppv.none")}</p>
+                    <p className="px-3 text-[15px] text-muted-foreground">{t("procurement.finance.ppv.none")}</p>
                   )}
                 </div>
 
                 {view.inStockByLocation.length > 0 && (
                   <div className="space-y-1">
-                    <p className="px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                    <p className="px-3 text-[13px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
                       {t("procurement.finance.byLocation")}
                     </p>
                     {view.inStockByLocation.map((location) => (

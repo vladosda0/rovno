@@ -20,17 +20,17 @@ export function PortfolioPipeline({ pipeline, currency }: Props) {
 
   return (
     <div>
-      <h3 className="mb-2 text-[13px] font-medium text-foreground">{t("financeTab.pipeline")}</h3>
+      <h3 className="mb-2 text-[15px] font-medium text-foreground">{t("financeTab.pipeline")}</h3>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         {columns.map((column) => (
           <div key={column.key} className="rounded-md bg-muted/30 px-3 py-2">
-            <p className="text-[13px] text-muted-foreground">{column.label}</p>
-            <p className="text-xl font-medium tabular-nums text-foreground">
+            <p className="text-[15px] text-muted-foreground">{column.label}</p>
+            <p className="text-2xl font-medium tabular-nums text-foreground">
               {t("financeTab.pipelineCount", { count: column.bucket.count })}
             </p>
-            <p className="text-[11px] text-muted-foreground tabular-nums">{money(column.bucket.contractValueCents)}</p>
+            <p className="text-[13px] text-muted-foreground tabular-nums">{money(column.bucket.contractValueCents)}</p>
             {column.bucket.backlogCents !== undefined && (
-              <p className="text-[11px] text-muted-foreground tabular-nums">
+              <p className="text-[13px] text-muted-foreground tabular-nums">
                 {t("financeTab.pipelineBacklog", { value: money(column.bucket.backlogCents) })}
               </p>
             )}
