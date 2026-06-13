@@ -1023,6 +1023,13 @@
       "name": "get_card_on_file",
       "signature": "public.get_card_on_file()",
       "sourceMigration": "supabase/migrations/20260604120100_get_card_on_file_prefer_binding.sql"
+    },
+    {
+      "key": "public.get_portfolio_finance_snapshot",
+      "schema": "public",
+      "name": "get_portfolio_finance_snapshot",
+      "signature": "public.get_portfolio_finance_snapshot()",
+      "sourceMigration": "supabase/migrations/20260611120100_get_portfolio_finance_snapshot.sql"
     }
   ],
   "policies": [
@@ -2751,6 +2758,7 @@
         "supabase/migrations/20260418120000_estimate_resource_line_assignee_label.sql",
         "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql",
         "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql",
+        "supabase/migrations/20260611120100_get_portfolio_finance_snapshot.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
@@ -2764,7 +2772,8 @@
       "functions": [
         "public.get_estimate_operational_summary",
         "public.get_shared_estimate_version",
-        "public.approve_estimate_version_by_share_token"
+        "public.approve_estimate_version_by_share_token",
+        "public.get_portfolio_finance_snapshot"
       ],
       "policies": [
         "public.project_estimates.project_estimates_select",

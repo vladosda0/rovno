@@ -134,6 +134,8 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20260604120000_create_card_bindings.sql`
 - `supabase/migrations/20260604120100_get_card_on_file_prefer_binding.sql`
 - `supabase/migrations/20260605130000_payment_intents_consent.sql`
+- `supabase/migrations/20260611120000_project_estimates_execution_status.sql`
+- `supabase/migrations/20260611120100_get_portfolio_finance_snapshot.sql`
 
 ## Exclusions
 

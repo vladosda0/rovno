@@ -2798,6 +2798,16 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "execution_status",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -2810,6 +2820,16 @@
           "expression": "status in ('draft', 'approved', 'archived')",
           "usingIndex": null,
           "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "execution_status"
+          ],
+          "expression": "execution_status is null\n    or execution_status in ('planning', 'in_work', 'paused', 'finished')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260611120000_project_estimates_execution_status.sql"
         }
       ],
       "indexes": [

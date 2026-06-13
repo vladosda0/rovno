@@ -18,6 +18,7 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 - `supabase/migrations/20260418120000_estimate_resource_line_assignee_label.sql`
 - `supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql`
 - `supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql`
+- `supabase/migrations/20260611120100_get_portfolio_finance_snapshot.sql`
 - `supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql`
 - `supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql`
 
@@ -35,9 +36,11 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 | `created_by` | `uuid` | no |   | no |
 | `created_at` | `timestamptz` | no | `now()` | no |
 | `updated_at` | `timestamptz` | no | `now()` | no |
+| `execution_status` | `text` | yes |   | no |
 
 Constraints:
 - unnamed check (expression `status in ('draft', 'approved', 'archived')`)
+- unnamed check (expression `execution_status is null or execution_status in ('planning', 'in_work', 'paused', 'finished')`)
 
 Indexes:
 - `idx_project_estimates_project_id` on (`project_id`)
@@ -182,6 +185,7 @@ Indexes:
 | `public.get_estimate_operational_summary(uuid, uuid, integer, integer)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260418120000_estimate_resource_line_assignee_label.sql` |
 | `public.get_shared_estimate_version(text)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql` |
 | `public.approve_estimate_version_by_share_token(text, jsonb)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql` |
+| `public.get_portfolio_finance_snapshot()` | `jsonb` | yes | `rpc` | `supabase/migrations/20260611120100_get_portfolio_finance_snapshot.sql` |
 
 ## RLS and Grants
 

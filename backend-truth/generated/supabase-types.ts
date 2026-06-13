@@ -571,6 +571,7 @@ export type Database = {
           "created_by": string
           "created_at": string
           "updated_at": string
+          "execution_status": string | null
           }
           Insert: {
           "id"?: string
@@ -581,6 +582,7 @@ export type Database = {
           "created_by": string
           "created_at"?: string
           "updated_at"?: string
+          "execution_status"?: string | null
           }
           Update: {
           "id"?: string
@@ -591,6 +593,7 @@ export type Database = {
           "created_by"?: string
           "created_at"?: string
           "updated_at"?: string
+          "execution_status"?: string | null
           }
           Relationships: []
         }
@@ -2545,6 +2548,10 @@ export type Database = {
           "p_limit": unknown
           "p_offset": unknown
           }
+          Returns: Json
+        }
+        "get_portfolio_finance_snapshot": {
+          Args: Record<PropertyKey, never>
           Returns: Json
         }
         "get_procurement_ai_operational_evidence": {
