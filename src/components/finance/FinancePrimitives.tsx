@@ -20,9 +20,9 @@ export function KpiCard({
 }) {
   return (
     <div className="rounded-md bg-muted/30 px-3 py-2">
-      <p className="text-[13px] text-muted-foreground">{label}</p>
-      <p className={cn("text-xl font-medium tabular-nums text-foreground", valueClassName)}>{value}</p>
-      {sub ? <p className={cn("text-[11px] text-muted-foreground", subClassName)}>{sub}</p> : null}
+      <p className="text-[15px] text-muted-foreground">{label}</p>
+      <p className={cn("text-2xl font-medium tabular-nums text-foreground", valueClassName)}>{value}</p>
+      {sub ? <p className={cn("text-[13px] text-muted-foreground", subClassName)}>{sub}</p> : null}
     </div>
   );
 }
@@ -41,7 +41,7 @@ export function DetailRow({
   return (
     <div
       className={cn(
-        "flex items-center justify-between gap-3 rounded-md px-3 py-1.5 text-[13px]",
+        "flex items-center justify-between gap-3 rounded-md px-3 py-1.5 text-[15px]",
         emphasized && "bg-muted/30",
       )}
     >

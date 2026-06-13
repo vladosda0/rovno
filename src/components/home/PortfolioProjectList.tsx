@@ -55,7 +55,7 @@ export function PortfolioProjectList({ projects }: Props) {
   return (
     <div>
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-[13px] font-medium text-foreground">{t("financeTab.projects")}</h3>
+        <h3 className="text-[15px] font-medium text-foreground">{t("financeTab.projects")}</h3>
         <div className="flex flex-wrap gap-1">
           {sortOptions.map((option) => (
             <button
@@ -63,7 +63,7 @@ export function PortfolioProjectList({ projects }: Props) {
               type="button"
               onClick={() => setSortKey(option.key)}
               className={cn(
-                "rounded-md px-2 py-1 text-[11px] transition-colors",
+                "rounded-md px-2 py-1 text-[13px] transition-colors",
                 sortKey === option.key
                   ? "bg-muted text-foreground"
                   : "text-muted-foreground hover:bg-muted/40",
@@ -82,14 +82,14 @@ export function PortfolioProjectList({ projects }: Props) {
             <Link
               key={project.projectId}
               to={`/project/${project.projectId}/estimate`}
-              className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2.5 text-[13px] hover:bg-muted/20"
+              className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2.5 text-[15px] hover:bg-muted/20"
             >
               <div className="min-w-0">
                 <p className="truncate font-medium text-foreground">{project.title}</p>
                 {redacted ? (
-                  <p className="text-[11px] text-muted-foreground">{t("financeTab.financialDetailsHidden")}</p>
+                  <p className="text-[13px] text-muted-foreground">{t("financeTab.financialDetailsHidden")}</p>
                 ) : (
-                  <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground tabular-nums">
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[13px] text-muted-foreground tabular-nums">
                     <span>{t("financeTab.colMargin")}: {formatPct(project.marginPct, 1)}</span>
                     <span>{t("financeTab.colUtilization")}: {formatPct(project.percentSpent, 0)}</span>
                     <span>{t("financeTab.colProgress")}: {formatPct(project.percentComplete, 0)}</span>
@@ -106,7 +106,7 @@ export function PortfolioProjectList({ projects }: Props) {
           );
         })}
         {sorted.length === 0 && (
-          <div className="px-3 py-6 text-[13px] text-muted-foreground">{t("financeTab.empty")}</div>
+          <div className="px-3 py-6 text-[15px] text-muted-foreground">{t("financeTab.empty")}</div>
         )}
       </div>
     </div>

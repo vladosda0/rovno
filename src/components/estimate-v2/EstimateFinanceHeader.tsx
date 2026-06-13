@@ -103,7 +103,7 @@ export function EstimateFinanceHeader({
   if (financeMode === "none") {
     return (
       <div className="rounded-lg border border-border p-3">
-        <p className="text-[13px] text-muted-foreground">{t("estimate.planning.financeHidden")}</p>
+        <p className="text-[15px] text-muted-foreground">{t("estimate.planning.financeHidden")}</p>
       </div>
     );
   }
@@ -127,10 +127,10 @@ export function EstimateFinanceHeader({
           </div>
           {Object.keys(clientBreakdown).length > 0 && (
             <div className="rounded-md bg-muted/30 px-3 py-2">
-              <p className="text-[13px] text-muted-foreground">{t("estimate.summary.byResourceTypeClient")}</p>
+              <p className="text-[15px] text-muted-foreground">{t("estimate.summary.byResourceTypeClient")}</p>
               <div className="mt-1 space-y-1">
                 {Object.entries(clientBreakdown).map(([key, cents]) => (
-                  <div key={key} className="flex items-center justify-between text-[13px]">
+                  <div key={key} className="flex items-center justify-between text-[15px]">
                     <span className="text-muted-foreground">{resourceKeyLabel(key)}</span>
                     <span className="font-medium tabular-nums text-foreground">{formatMoney(cents, currency)}</span>
                   </div>
@@ -260,7 +260,7 @@ export function EstimateFinanceHeader({
             className="h-2 bg-muted"
             indicatorClassName={overspend ? "bg-destructive" : "bg-foreground"}
           />
-          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-[13px]">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-[15px]">
             <p>
               <span className="text-muted-foreground">{t("estimate.summary.actualSpent")}: </span>
               <span className={cn("font-medium tabular-nums", overspend ? "text-destructive" : "text-foreground")}>
@@ -273,7 +273,7 @@ export function EstimateFinanceHeader({
               )}
             </p>
             {riskActive && (
-              <p className="text-[11px] font-medium text-destructive">
+              <p className="text-[13px] font-medium text-destructive">
                 {view.completion.pct != null
                   ? t("estimate.finance.utilizationRisk", {
                     spent: Math.round(view.utilizationPct ?? 0),
@@ -295,7 +295,7 @@ export function EstimateFinanceHeader({
               type="button"
               className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-muted/20"
             >
-              <span className="inline-flex items-center gap-2 text-[13px] font-medium text-foreground">
+              <span className="inline-flex items-center gap-2 text-[15px] font-medium text-foreground">
                 {detailsOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                 {t("estimate.finance.details")}
               </span>
@@ -328,7 +328,7 @@ export function EstimateFinanceHeader({
               </div>
 
               <div className="space-y-1">
-                <div className="grid grid-cols-[minmax(0,1fr)_minmax(92px,auto)_minmax(92px,auto)] gap-3 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                <div className="grid grid-cols-[minmax(0,1fr)_minmax(92px,auto)_minmax(92px,auto)] gap-3 px-3 text-[13px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
                   <span>{t("estimate.costOverview.col.category")}</span>
                   <span className="text-right">{t("estimate.costOverview.col.planned")}</span>
                   <span className="text-right">{t("estimate.costOverview.col.actual")}</span>
@@ -336,7 +336,7 @@ export function EstimateFinanceHeader({
                 {RESOURCE_TYPE_ORDER.map((type) => (
                   <div
                     key={type}
-                    className="grid grid-cols-[minmax(0,1fr)_minmax(92px,auto)_minmax(92px,auto)] items-center gap-3 rounded-md px-3 py-1.5 text-[13px]"
+                    className="grid grid-cols-[minmax(0,1fr)_minmax(92px,auto)_minmax(92px,auto)] items-center gap-3 rounded-md px-3 py-1.5 text-[15px]"
                   >
                     <span className="text-muted-foreground">{t(`estimate.resource.semantic.${type}`)}</span>
                     <span className="text-right tabular-nums text-foreground">{formatMoney(view.plannedCostByTypeCents[type], currency)}</span>
@@ -346,13 +346,13 @@ export function EstimateFinanceHeader({
                   </div>
                 ))}
                 {view.hasActualFinancialData && view.unattributedSpendCents > 0 && (
-                  <div className="grid grid-cols-[minmax(0,1fr)_minmax(92px,auto)_minmax(92px,auto)] items-center gap-3 rounded-md px-3 py-1.5 text-[13px]">
+                  <div className="grid grid-cols-[minmax(0,1fr)_minmax(92px,auto)_minmax(92px,auto)] items-center gap-3 rounded-md px-3 py-1.5 text-[15px]">
                     <span className="text-muted-foreground">{t("estimate.finance.unattributedSpend")}</span>
                     <span className="text-right tabular-nums text-muted-foreground">—</span>
                     <span className="text-right tabular-nums text-foreground">{formatMoney(view.unattributedSpendCents, currency)}</span>
                   </div>
                 )}
-                <div className="grid grid-cols-[minmax(0,1fr)_minmax(92px,auto)_minmax(92px,auto)] items-center gap-3 rounded-md bg-muted/30 px-3 py-1.5 text-[13px]">
+                <div className="grid grid-cols-[minmax(0,1fr)_minmax(92px,auto)_minmax(92px,auto)] items-center gap-3 rounded-md bg-muted/30 px-3 py-1.5 text-[15px]">
                   <span className="font-medium text-foreground">{t("estimate.costOverview.total")}</span>
                   <span className="text-right font-semibold tabular-nums text-foreground">{formatMoney(view.costTotalCents, currency)}</span>
                   <span className="text-right font-semibold tabular-nums text-foreground">
