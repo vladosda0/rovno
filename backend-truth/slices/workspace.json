@@ -221,6 +221,7 @@
         {
           "name": "idx_profiles_email_unique",
           "unique": true,
+          "method": null,
           "expressions": [
             "lower(email)"
           ],
@@ -788,6 +789,7 @@
         {
           "name": "idx_projects_owner_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "owner_profile_id"
           ],
@@ -798,6 +800,7 @@
         {
           "name": "idx_projects_archived_at",
           "unique": false,
+          "method": null,
           "expressions": [
             "archived_at"
           ],
@@ -1060,6 +1063,7 @@
         {
           "name": "idx_project_members_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -1070,6 +1074,7 @@
         {
           "name": "idx_project_members_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "profile_id"
           ],
@@ -1387,6 +1392,7 @@
         {
           "name": "idx_project_invites_active_email",
           "unique": true,
+          "method": null,
           "expressions": [
             "project_id",
             "lower(email)"
@@ -1398,6 +1404,7 @@
         {
           "name": "idx_project_invites_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -1408,6 +1415,7 @@
         {
           "name": "idx_project_invites_invited_by",
           "unique": false,
+          "method": null,
           "expressions": [
             "invited_by"
           ],
@@ -1532,6 +1540,7 @@
         {
           "name": "idx_project_ai_chat_sessions_project_profile",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id",
             "profile_id"
@@ -1543,6 +1552,7 @@
         {
           "name": "uq_project_ai_chat_sessions_derived_chat_key",
           "unique": true,
+          "method": null,
           "expressions": [
             "derived_chat_key"
           ],

@@ -16,6 +16,11 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 - `supabase/migrations/20260512132320_template_rls.sql`
 - `supabase/migrations/20260512132340_template_rpcs.sql`
 - `supabase/migrations/20260602150200_apply_template_propagate_library_fks.sql`
+- `supabase/migrations/20260613120100_search_canonical_library.sql`
+- `supabase/migrations/20260613120200_list_canonical_stages_with_works.sql`
+- `supabase/migrations/20260613120300_get_resource_article_detail.sql`
+- `supabase/migrations/20260613120400_add_library_work_to_estimate.sql`
+- `supabase/migrations/20260613120500_browse_canonical_catalog.sql`
 
 ## Tables
 
@@ -49,6 +54,8 @@ Indexes:
 - `idx_system_resource_articles_category_path` on (`category_path text_pattern_ops`)
 - `idx_system_resource_articles_source_version` on (`source_version`)
 - `idx_system_resource_articles_archived` on (`archived`), where `archived = false`
+- `idx_system_resource_articles_name_trgm` on (`name gin_trgm_ops`), using gin
+- `idx_system_resource_articles_canonical_name_trgm` on (`canonical_name gin_trgm_ops`), using gin, where `canonical_name is not null`
 
 Triggers:
 - `set_system_resource_articles_updated_at`: before update, executes `public.set_updated_at()`
@@ -242,6 +249,7 @@ Indexes:
 - `idx_system_stage_articles_name_unique_active` on (`name`), unique, where `archived = false`
 - `idx_system_stage_articles_sort` on (`default_sort_hint`)
 - `idx_system_stage_articles_archived` on (`archived`), where `archived = false`
+- `idx_system_stage_articles_name_trgm` on (`name gin_trgm_ops`), using gin
 
 Triggers:
 - `set_system_stage_articles_updated_at`: before update, executes `public.set_updated_at()`
@@ -274,6 +282,7 @@ Indexes:
 - `idx_system_work_articles_stage` on (`parent_stage_article_id`)
 - `idx_system_work_articles_stage_sort` on (`parent_stage_article_id`, `default_sort_hint`)
 - `idx_system_work_articles_archived` on (`archived`), where `archived = false`
+- `idx_system_work_articles_name_trgm` on (`name gin_trgm_ops`), using gin
 
 Triggers:
 - `set_system_work_articles_updated_at`: before update, executes `public.set_updated_at()`
@@ -306,6 +315,11 @@ Triggers:
 | `public.list_estimate_templates(text)` | `table ( id uuid, owner_kind text, owner_label text, title text, description text, scope text, published_to_public boolean, cover_image_url text, stage_count integer, is_manageable boolean, updated_at timestamptz )` | yes | `rpc` | `supabase/migrations/20260512132340_template_rpcs.sql` |
 | `public.get_estimate_template_detail(uuid)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260512132340_template_rpcs.sql` |
 | `public.apply_template_stage_to_estimate(uuid, uuid, integer)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260602150200_apply_template_propagate_library_fks.sql` |
+| `public.search_canonical_library(text, text)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260613120100_search_canonical_library.sql` |
+| `public.list_canonical_stages_with_works(uuid)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260613120200_list_canonical_stages_with_works.sql` |
+| `public.get_resource_article_detail(uuid)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260613120300_get_resource_article_detail.sql` |
+| `public.add_library_work_to_estimate(uuid, uuid, uuid, integer)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260613120400_add_library_work_to_estimate.sql` |
+| `public.browse_canonical_catalog(text)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260613120500_browse_canonical_catalog.sql` |
 
 ## RLS and Grants
 

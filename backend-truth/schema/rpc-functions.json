@@ -2589,6 +2589,151 @@
       "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260611120100_get_portfolio_finance_snapshot.sql",
       "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "search_canonical_library",
+      "signature": "public.search_canonical_library(text, text)",
+      "args": [
+        {
+          "name": "p_query",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_kind",
+          "type": "text",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260613120100_search_canonical_library.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "list_canonical_stages_with_works",
+      "signature": "public.list_canonical_stages_with_works(uuid)",
+      "args": [
+        {
+          "name": "p_template_id",
+          "type": "uuid default null",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260613120200_list_canonical_stages_with_works.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "get_resource_article_detail",
+      "signature": "public.get_resource_article_detail(uuid)",
+      "args": [
+        {
+          "name": "p_article_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260613120300_get_resource_article_detail.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "add_library_work_to_estimate",
+      "signature": "public.add_library_work_to_estimate(uuid, uuid, uuid, integer)",
+      "args": [
+        {
+          "name": "p_estimate_version_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_project_stage_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_template_work_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_sort_position",
+          "type": "integer default null",
+          "identityType": "integer"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260613120400_add_library_work_to_estimate.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "browse_canonical_catalog",
+      "signature": "public.browse_canonical_catalog(text)",
+      "args": [
+        {
+          "name": "p_subcategory",
+          "type": "text default null",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260613120500_browse_canonical_catalog.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "get_resource_article_price_comparison",
+      "signature": "public.get_resource_article_price_comparison(uuid, uuid)",
+      "args": [
+        {
+          "name": "p_article_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_exclude_project_id",
+          "type": "uuid default null",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260613120600_get_resource_article_price_comparison.sql",
+      "triggerUsages": []
     }
   ]
 }

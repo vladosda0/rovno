@@ -155,6 +155,7 @@
         {
           "name": "idx_storage_objects_uploaded_by",
           "unique": false,
+          "method": null,
           "expressions": [
             "uploaded_by"
           ],
@@ -373,6 +374,7 @@
         {
           "name": "idx_documents_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -383,6 +385,7 @@
         {
           "name": "idx_documents_linked_workspace_document_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "linked_workspace_document_id"
           ],
@@ -393,6 +396,7 @@
         {
           "name": "idx_documents_linked_org_document_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "linked_org_document_id"
           ],
@@ -545,6 +549,7 @@
         {
           "name": "idx_document_versions_document_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "document_id"
           ],
@@ -555,6 +560,7 @@
         {
           "name": "idx_document_versions_current_per_document",
           "unique": true,
+          "method": null,
           "expressions": [
             "document_id"
           ],
@@ -725,6 +731,7 @@
         {
           "name": "idx_project_media_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -735,6 +742,7 @@
         {
           "name": "idx_project_media_storage_object_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "storage_object_id"
           ],
@@ -745,6 +753,7 @@
         {
           "name": "idx_project_media_task_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "task_id"
           ],
@@ -755,6 +764,7 @@
         {
           "name": "idx_project_media_task_id_is_final",
           "unique": false,
+          "method": null,
           "expressions": [
             "task_id",
             "is_final"
@@ -1015,6 +1025,7 @@
         {
           "name": "idx_project_media_upload_intents_task_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "task_id"
           ],
@@ -1025,6 +1036,7 @@
         {
           "name": "idx_project_media_upload_intents_task_id_is_final",
           "unique": false,
+          "method": null,
           "expressions": [
             "task_id",
             "is_final"

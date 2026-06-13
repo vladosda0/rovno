@@ -136,6 +136,13 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20260605130000_payment_intents_consent.sql`
 - `supabase/migrations/20260611120000_project_estimates_execution_status.sql`
 - `supabase/migrations/20260611120100_get_portfolio_finance_snapshot.sql`
+- `supabase/migrations/20260613120000_enable_pg_trgm_and_article_name_search_indexes.sql`
+- `supabase/migrations/20260613120100_search_canonical_library.sql`
+- `supabase/migrations/20260613120200_list_canonical_stages_with_works.sql`
+- `supabase/migrations/20260613120300_get_resource_article_detail.sql`
+- `supabase/migrations/20260613120400_add_library_work_to_estimate.sql`
+- `supabase/migrations/20260613120500_browse_canonical_catalog.sql`
+- `supabase/migrations/20260613120600_get_resource_article_price_comparison.sql`
 
 ## Exclusions
 
@@ -151,6 +158,7 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 ## Platform Dependencies
 
 - Extension `pgcrypto` from `supabase/migrations/20260306160000_extensions_and_base_helpers.sql`
+- Extension `pg_trgm` from `supabase/migrations/20260613120000_enable_pg_trgm_and_article_name_search_indexes.sql`
 
 ## Derived Contract Bundles
 

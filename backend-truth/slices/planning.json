@@ -185,6 +185,7 @@
         {
           "name": "idx_project_stages_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -195,6 +196,7 @@
         {
           "name": "idx_project_stages_sort_order",
           "unique": true,
+          "method": null,
           "expressions": [
             "project_id",
             "sort_order"
@@ -206,6 +208,7 @@
         {
           "name": "idx_project_stages_canonical",
           "unique": false,
+          "method": null,
           "expressions": [
             "system_stage_article_id"
           ],
@@ -425,6 +428,7 @@
         {
           "name": "idx_tasks_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -435,6 +439,7 @@
         {
           "name": "idx_tasks_stage_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "stage_id"
           ],
@@ -445,6 +450,7 @@
         {
           "name": "idx_tasks_assignee_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "assignee_profile_id"
           ],
@@ -455,6 +461,7 @@
         {
           "name": "idx_tasks_estimate_work_id_unique",
           "unique": true,
+          "method": null,
           "expressions": [
             "estimate_work_id"
           ],
@@ -557,6 +564,7 @@
         {
           "name": "idx_task_comments_task_id_created_at_desc",
           "unique": false,
+          "method": null,
           "expressions": [
             "task_id",
             "created_at desc"
@@ -730,6 +738,7 @@
         {
           "name": "idx_task_checklist_items_task_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "task_id"
           ],
@@ -740,6 +749,7 @@
         {
           "name": "idx_task_checklist_items_procurement_item_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "procurement_item_id"
           ],
@@ -750,6 +760,7 @@
         {
           "name": "idx_task_checklist_items_estimate_resource_line_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "estimate_resource_line_id"
           ],
@@ -760,6 +771,7 @@
         {
           "name": "idx_task_checklist_items_estimate_work_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "estimate_work_id"
           ],

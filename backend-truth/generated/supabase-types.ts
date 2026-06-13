@@ -2315,6 +2315,15 @@ export type Database = {
           }
           Returns: Database['public']['Tables']["project_invites"]['Row']
         }
+        "add_library_work_to_estimate": {
+          Args: {
+          "p_estimate_version_id": string
+          "p_project_stage_id": string
+          "p_template_work_id": string
+          "p_sort_position": unknown
+          }
+          Returns: Json
+        }
         "ai_access_rank": {
           Args: {
           "p_access": string
@@ -2342,6 +2351,12 @@ export type Database = {
           Args: {
           "p_share_token": string
           "p_payload": Json
+          }
+          Returns: Json
+        }
+        "browse_canonical_catalog": {
+          Args: {
+          "p_subcategory": unknown
           }
           Returns: Json
         }
@@ -2586,6 +2601,19 @@ export type Database = {
           }
           Returns: Json
         }
+        "get_resource_article_detail": {
+          Args: {
+          "p_article_id": string
+          }
+          Returns: Json
+        }
+        "get_resource_article_price_comparison": {
+          Args: {
+          "p_article_id": string
+          "p_exclude_project_id": unknown
+          }
+          Returns: Json
+        }
         "get_shared_estimate_version": {
           Args: {
           "p_share_token": string
@@ -2640,6 +2668,12 @@ export type Database = {
           "p_actor": string
           }
           Returns: boolean
+        }
+        "list_canonical_stages_with_works": {
+          Args: {
+          "p_template_id": unknown
+          }
+          Returns: Json
         }
         "list_estimate_templates": {
           Args: {
@@ -2744,6 +2778,13 @@ export type Database = {
           "p_project_id": string
           }
           Returns: string
+        }
+        "search_canonical_library": {
+          Args: {
+          "p_query": string
+          "p_kind": string
+          }
+          Returns: Json
         }
         "set_active_org_context": {
           Args: {

@@ -195,6 +195,7 @@
         {
           "name": "idx_profiles_email_unique",
           "unique": true,
+          "method": null,
           "expressions": [
             "lower(email)"
           ],
@@ -762,6 +763,7 @@
         {
           "name": "idx_projects_owner_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "owner_profile_id"
           ],
@@ -772,6 +774,7 @@
         {
           "name": "idx_projects_archived_at",
           "unique": false,
+          "method": null,
           "expressions": [
             "archived_at"
           ],
@@ -1034,6 +1037,7 @@
         {
           "name": "idx_project_members_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -1044,6 +1048,7 @@
         {
           "name": "idx_project_members_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "profile_id"
           ],
@@ -1361,6 +1366,7 @@
         {
           "name": "idx_project_invites_active_email",
           "unique": true,
+          "method": null,
           "expressions": [
             "project_id",
             "lower(email)"
@@ -1372,6 +1378,7 @@
         {
           "name": "idx_project_invites_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -1382,6 +1389,7 @@
         {
           "name": "idx_project_invites_invited_by",
           "unique": false,
+          "method": null,
           "expressions": [
             "invited_by"
           ],
@@ -1566,6 +1574,7 @@
         {
           "name": "idx_project_stages_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -1576,6 +1585,7 @@
         {
           "name": "idx_project_stages_sort_order",
           "unique": true,
+          "method": null,
           "expressions": [
             "project_id",
             "sort_order"
@@ -1587,6 +1597,7 @@
         {
           "name": "idx_project_stages_canonical",
           "unique": false,
+          "method": null,
           "expressions": [
             "system_stage_article_id"
           ],
@@ -1806,6 +1817,7 @@
         {
           "name": "idx_tasks_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -1816,6 +1828,7 @@
         {
           "name": "idx_tasks_stage_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "stage_id"
           ],
@@ -1826,6 +1839,7 @@
         {
           "name": "idx_tasks_assignee_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "assignee_profile_id"
           ],
@@ -1836,6 +1850,7 @@
         {
           "name": "idx_tasks_estimate_work_id_unique",
           "unique": true,
+          "method": null,
           "expressions": [
             "estimate_work_id"
           ],
@@ -1938,6 +1953,7 @@
         {
           "name": "idx_task_comments_task_id_created_at_desc",
           "unique": false,
+          "method": null,
           "expressions": [
             "task_id",
             "created_at desc"
@@ -2080,6 +2096,7 @@
         {
           "name": "idx_storage_objects_uploaded_by",
           "unique": false,
+          "method": null,
           "expressions": [
             "uploaded_by"
           ],
@@ -2298,6 +2315,7 @@
         {
           "name": "idx_documents_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -2308,6 +2326,7 @@
         {
           "name": "idx_documents_linked_workspace_document_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "linked_workspace_document_id"
           ],
@@ -2318,6 +2337,7 @@
         {
           "name": "idx_documents_linked_org_document_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "linked_org_document_id"
           ],
@@ -2470,6 +2490,7 @@
         {
           "name": "idx_document_versions_document_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "document_id"
           ],
@@ -2480,6 +2501,7 @@
         {
           "name": "idx_document_versions_current_per_document",
           "unique": true,
+          "method": null,
           "expressions": [
             "document_id"
           ],
@@ -2650,6 +2672,7 @@
         {
           "name": "idx_project_media_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -2660,6 +2683,7 @@
         {
           "name": "idx_project_media_storage_object_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "storage_object_id"
           ],
@@ -2670,6 +2694,7 @@
         {
           "name": "idx_project_media_task_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "task_id"
           ],
@@ -2680,6 +2705,7 @@
         {
           "name": "idx_project_media_task_id_is_final",
           "unique": false,
+          "method": null,
           "expressions": [
             "task_id",
             "is_final"
@@ -2836,6 +2862,7 @@
         {
           "name": "idx_project_estimates_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -2973,6 +3000,7 @@
         {
           "name": "idx_estimate_versions_estimate_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "estimate_id"
           ],
@@ -2983,6 +3011,7 @@
         {
           "name": "idx_estimate_versions_current_per_estimate",
           "unique": true,
+          "method": null,
           "expressions": [
             "estimate_id"
           ],
@@ -3156,6 +3185,7 @@
         {
           "name": "idx_estimate_works_estimate_version_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "estimate_version_id"
           ],
@@ -3166,6 +3196,7 @@
         {
           "name": "idx_estimate_works_project_stage_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_stage_id"
           ],
@@ -3176,6 +3207,7 @@
         {
           "name": "idx_estimate_works_canonical",
           "unique": false,
+          "method": null,
           "expressions": [
             "system_work_article_id"
           ],
@@ -3488,6 +3520,7 @@
         {
           "name": "idx_estimate_resource_lines_estimate_work_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "estimate_work_id"
           ],
@@ -3498,6 +3531,7 @@
         {
           "name": "idx_estimate_resource_lines_assignee_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "assignee_profile_id"
           ],
@@ -3508,6 +3542,7 @@
         {
           "name": "idx_estimate_resource_lines_canonical",
           "unique": false,
+          "method": null,
           "expressions": [
             "system_resource_article_id"
           ],
@@ -3631,6 +3666,7 @@
         {
           "name": "idx_estimate_dependencies_estimate_version_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "estimate_version_id"
           ],
@@ -3641,6 +3677,7 @@
         {
           "name": "idx_estimate_dependencies_from_work_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "from_work_id"
           ],
@@ -3651,6 +3688,7 @@
         {
           "name": "idx_estimate_dependencies_to_work_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "to_work_id"
           ],
@@ -3759,6 +3797,7 @@
         {
           "name": "idx_inventory_items_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -3846,6 +3885,7 @@
         {
           "name": "idx_inventory_locations_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -3972,6 +4012,7 @@
         {
           "name": "idx_inventory_balances_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -3982,6 +4023,7 @@
         {
           "name": "idx_inventory_balances_inventory_item_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "inventory_item_id"
           ],
@@ -3992,6 +4034,7 @@
         {
           "name": "idx_inventory_balances_inventory_location_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "inventory_location_id"
           ],
@@ -4241,6 +4284,7 @@
         {
           "name": "idx_procurement_items_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -4251,6 +4295,7 @@
         {
           "name": "idx_procurement_items_estimate_resource_line_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "estimate_resource_line_id"
           ],
@@ -4261,6 +4306,7 @@
         {
           "name": "idx_procurement_items_task_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "task_id"
           ],
@@ -4271,6 +4317,7 @@
         {
           "name": "idx_procurement_items_estimate_resource_line_id_unique",
           "unique": true,
+          "method": null,
           "expressions": [
             "estimate_resource_line_id"
           ],
@@ -4426,6 +4473,7 @@
         {
           "name": "idx_orders_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -4591,6 +4639,7 @@
         {
           "name": "idx_order_lines_order_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "order_id"
           ],
@@ -4601,6 +4650,7 @@
         {
           "name": "idx_order_lines_procurement_item_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "procurement_item_id"
           ],
@@ -4785,6 +4835,7 @@
         {
           "name": "idx_inventory_movements_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -4795,6 +4846,7 @@
         {
           "name": "idx_inventory_movements_inventory_item_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "inventory_item_id"
           ],
@@ -4805,6 +4857,7 @@
         {
           "name": "idx_inventory_movements_inventory_location_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "inventory_location_id"
           ],
@@ -4815,6 +4868,7 @@
         {
           "name": "idx_inventory_movements_order_line_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "order_line_id"
           ],
@@ -4825,6 +4879,7 @@
         {
           "name": "idx_inventory_movements_procurement_item_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "procurement_item_id"
           ],
@@ -5006,6 +5061,7 @@
         {
           "name": "idx_task_checklist_items_task_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "task_id"
           ],
@@ -5016,6 +5072,7 @@
         {
           "name": "idx_task_checklist_items_procurement_item_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "procurement_item_id"
           ],
@@ -5026,6 +5083,7 @@
         {
           "name": "idx_task_checklist_items_estimate_resource_line_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "estimate_resource_line_id"
           ],
@@ -5036,6 +5094,7 @@
         {
           "name": "idx_task_checklist_items_estimate_work_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "estimate_work_id"
           ],
@@ -5319,6 +5378,7 @@
         {
           "name": "idx_hr_items_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -5329,6 +5389,7 @@
         {
           "name": "idx_hr_items_project_stage_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_stage_id"
           ],
@@ -5339,6 +5400,7 @@
         {
           "name": "idx_hr_items_estimate_work_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "estimate_work_id"
           ],
@@ -5349,6 +5411,7 @@
         {
           "name": "idx_hr_items_task_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "task_id"
           ],
@@ -5359,6 +5422,7 @@
         {
           "name": "idx_hr_items_estimate_resource_line_id_unique",
           "unique": true,
+          "method": null,
           "expressions": [
             "estimate_resource_line_id"
           ],
@@ -5474,6 +5538,7 @@
         {
           "name": "idx_hr_item_assignees_hr_item_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "hr_item_id"
           ],
@@ -5484,6 +5549,7 @@
         {
           "name": "idx_hr_item_assignees_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "profile_id"
           ],
@@ -5654,6 +5720,7 @@
         {
           "name": "idx_hr_payments_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -5664,6 +5731,7 @@
         {
           "name": "idx_hr_payments_hr_item_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "hr_item_id"
           ],
@@ -5674,6 +5742,7 @@
         {
           "name": "idx_hr_payments_paid_to_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "paid_to_profile_id"
           ],
@@ -5789,6 +5858,7 @@
         {
           "name": "idx_activity_events_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -5799,6 +5869,7 @@
         {
           "name": "idx_activity_events_actor_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "actor_profile_id"
           ],
@@ -5809,6 +5880,7 @@
         {
           "name": "idx_activity_events_project_created_at",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id",
             "created_at desc"
@@ -5945,6 +6017,7 @@
         {
           "name": "idx_notifications_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "profile_id"
           ],
@@ -5955,6 +6028,7 @@
         {
           "name": "idx_notifications_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -5965,6 +6039,7 @@
         {
           "name": "idx_notifications_profile_is_read_created_at",
           "unique": false,
+          "method": null,
           "expressions": [
             "profile_id",
             "is_read",
@@ -6118,6 +6193,7 @@
         {
           "name": "idx_billing_customers_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "profile_id"
           ],
@@ -6433,6 +6509,7 @@
         {
           "name": "idx_subscriptions_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "profile_id"
           ],
@@ -6443,6 +6520,7 @@
         {
           "name": "idx_subscriptions_billing_customer_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "billing_customer_id"
           ],
@@ -6453,6 +6531,7 @@
         {
           "name": "idx_subscriptions_current_per_profile",
           "unique": true,
+          "method": null,
           "expressions": [
             "profile_id"
           ],
@@ -6463,6 +6542,7 @@
         {
           "name": "idx_subscriptions_rebill_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "rebill_id"
           ],
@@ -6473,6 +6553,7 @@
         {
           "name": "idx_subscriptions_grace_until",
           "unique": false,
+          "method": null,
           "expressions": [
             "grace_until"
           ],
@@ -6732,6 +6813,7 @@
         {
           "name": "idx_project_media_upload_intents_task_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "task_id"
           ],
@@ -6742,6 +6824,7 @@
         {
           "name": "idx_project_media_upload_intents_task_id_is_final",
           "unique": false,
+          "method": null,
           "expressions": [
             "task_id",
             "is_final"
@@ -7139,6 +7222,7 @@
         {
           "name": "idx_project_ai_chat_sessions_project_profile",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id",
             "profile_id"
@@ -7150,6 +7234,7 @@
         {
           "name": "uq_project_ai_chat_sessions_derived_chat_key",
           "unique": true,
+          "method": null,
           "expressions": [
             "derived_chat_key"
           ],
@@ -7278,6 +7363,7 @@
         {
           "name": "idx_organizations_owner_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "owner_profile_id"
           ],
@@ -7419,6 +7505,7 @@
         {
           "name": "idx_org_members_org_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "org_id"
           ],
@@ -7429,6 +7516,7 @@
         {
           "name": "idx_org_members_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "profile_id"
           ],
@@ -7639,6 +7727,7 @@
         {
           "name": "idx_org_documents_org_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "org_id"
           ],
@@ -7649,6 +7738,7 @@
         {
           "name": "idx_org_documents_folder",
           "unique": false,
+          "method": null,
           "expressions": [
             "folder_id"
           ],
@@ -7782,6 +7872,7 @@
         {
           "name": "idx_org_document_versions_doc_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "org_document_id"
           ],
@@ -7928,6 +8019,7 @@
         {
           "name": "idx_org_document_upload_intents_org",
           "unique": false,
+          "method": null,
           "expressions": [
             "org_id"
           ],
@@ -8116,6 +8208,7 @@
         {
           "name": "idx_system_resource_articles_rovno_sku",
           "unique": false,
+          "method": null,
           "expressions": [
             "rovno_sku"
           ],
@@ -8126,6 +8219,7 @@
         {
           "name": "idx_system_resource_articles_name",
           "unique": false,
+          "method": null,
           "expressions": [
             "name"
           ],
@@ -8136,6 +8230,7 @@
         {
           "name": "idx_system_resource_articles_category_path",
           "unique": false,
+          "method": null,
           "expressions": [
             "category_path text_pattern_ops"
           ],
@@ -8146,6 +8241,7 @@
         {
           "name": "idx_system_resource_articles_source_version",
           "unique": false,
+          "method": null,
           "expressions": [
             "source_version"
           ],
@@ -8156,12 +8252,35 @@
         {
           "name": "idx_system_resource_articles_archived",
           "unique": false,
+          "method": null,
           "expressions": [
             "archived"
           ],
           "where": "archived = false",
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+        },
+        {
+          "name": "idx_system_resource_articles_name_trgm",
+          "unique": false,
+          "method": "gin",
+          "expressions": [
+            "name gin_trgm_ops"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260613120000_enable_pg_trgm_and_article_name_search_indexes.sql"
+        },
+        {
+          "name": "idx_system_resource_articles_canonical_name_trgm",
+          "unique": false,
+          "method": "gin",
+          "expressions": [
+            "canonical_name gin_trgm_ops"
+          ],
+          "where": "canonical_name is not null",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260613120000_enable_pg_trgm_and_article_name_search_indexes.sql"
         }
       ],
       "triggers": [
@@ -8441,6 +8560,7 @@
         {
           "name": "idx_estimate_templates_owner",
           "unique": false,
+          "method": null,
           "expressions": [
             "owner_kind",
             "owner_id"
@@ -8452,6 +8572,7 @@
         {
           "name": "idx_estimate_templates_scope",
           "unique": false,
+          "method": null,
           "expressions": [
             "scope"
           ],
@@ -8462,6 +8583,7 @@
         {
           "name": "idx_estimate_templates_published",
           "unique": false,
+          "method": null,
           "expressions": [
             "published_to_public"
           ],
@@ -8472,6 +8594,7 @@
         {
           "name": "estimate_templates_system_singleton",
           "unique": true,
+          "method": null,
           "expressions": [
             "owner_kind"
           ],
@@ -8642,6 +8765,7 @@
         {
           "name": "idx_template_stages_template",
           "unique": false,
+          "method": null,
           "expressions": [
             "estimate_template_id"
           ],
@@ -8652,6 +8776,7 @@
         {
           "name": "idx_template_stages_canonical",
           "unique": false,
+          "method": null,
           "expressions": [
             "system_stage_article_id"
           ],
@@ -8804,6 +8929,7 @@
         {
           "name": "idx_template_works_stage",
           "unique": false,
+          "method": null,
           "expressions": [
             "template_stage_id"
           ],
@@ -8814,6 +8940,7 @@
         {
           "name": "idx_template_works_canonical",
           "unique": false,
+          "method": null,
           "expressions": [
             "system_work_article_id"
           ],
@@ -9056,6 +9183,7 @@
         {
           "name": "idx_template_resource_lines_work",
           "unique": false,
+          "method": null,
           "expressions": [
             "template_work_id"
           ],
@@ -9066,6 +9194,7 @@
         {
           "name": "idx_template_resource_lines_article",
           "unique": false,
+          "method": null,
           "expressions": [
             "system_resource_article_id"
           ],
@@ -9306,6 +9435,7 @@
         {
           "name": "idx_contractor_profiles_one_per_org",
           "unique": true,
+          "method": null,
           "expressions": [
             "org_id"
           ],
@@ -9316,6 +9446,7 @@
         {
           "name": "idx_contractor_profiles_status",
           "unique": false,
+          "method": null,
           "expressions": [
             "status"
           ],
@@ -9326,6 +9457,7 @@
         {
           "name": "idx_contractor_profiles_published",
           "unique": false,
+          "method": null,
           "expressions": [
             "status"
           ],
@@ -9541,6 +9673,7 @@
         {
           "name": "estimate_share_snapshots_project_id_idx",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -9551,6 +9684,7 @@
         {
           "name": "estimate_share_snapshots_active_project_idx",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id",
             "version_number desc"
@@ -9667,6 +9801,7 @@
         {
           "name": "idx_org_document_folders_org",
           "unique": false,
+          "method": null,
           "expressions": [
             "org_id"
           ],
@@ -9677,6 +9812,7 @@
         {
           "name": "idx_org_document_folders_org_lower_name",
           "unique": true,
+          "method": null,
           "expressions": [
             "org_id",
             "lower(name)"
@@ -10059,6 +10195,7 @@
         {
           "name": "idx_payment_intents_profile",
           "unique": false,
+          "method": null,
           "expressions": [
             "profile_id"
           ],
@@ -10069,6 +10206,7 @@
         {
           "name": "uq_payment_intents_external_payment_id",
           "unique": true,
+          "method": null,
           "expressions": [
             "external_payment_id"
           ],
@@ -10079,6 +10217,7 @@
         {
           "name": "uq_payment_intents_order_per_provider",
           "unique": true,
+          "method": null,
           "expressions": [
             "provider",
             "order_id"
@@ -10090,6 +10229,7 @@
         {
           "name": "idx_payment_intents_status",
           "unique": false,
+          "method": null,
           "expressions": [
             "status"
           ],
@@ -10100,6 +10240,7 @@
         {
           "name": "idx_payment_intents_parent",
           "unique": false,
+          "method": null,
           "expressions": [
             "parent_intent_id"
           ],
@@ -10240,6 +10381,7 @@
         {
           "name": "idx_system_stage_articles_name_unique_active",
           "unique": true,
+          "method": null,
           "expressions": [
             "name"
           ],
@@ -10250,6 +10392,7 @@
         {
           "name": "idx_system_stage_articles_sort",
           "unique": false,
+          "method": null,
           "expressions": [
             "default_sort_hint"
           ],
@@ -10260,12 +10403,24 @@
         {
           "name": "idx_system_stage_articles_archived",
           "unique": false,
+          "method": null,
           "expressions": [
             "archived"
           ],
           "where": "archived = false",
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+        },
+        {
+          "name": "idx_system_stage_articles_name_trgm",
+          "unique": false,
+          "method": "gin",
+          "expressions": [
+            "name gin_trgm_ops"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260613120000_enable_pg_trgm_and_article_name_search_indexes.sql"
         }
       ],
       "triggers": [
@@ -10466,6 +10621,7 @@
         {
           "name": "idx_system_work_articles_stage",
           "unique": false,
+          "method": null,
           "expressions": [
             "parent_stage_article_id"
           ],
@@ -10476,6 +10632,7 @@
         {
           "name": "idx_system_work_articles_stage_sort",
           "unique": false,
+          "method": null,
           "expressions": [
             "parent_stage_article_id",
             "default_sort_hint"
@@ -10487,12 +10644,24 @@
         {
           "name": "idx_system_work_articles_archived",
           "unique": false,
+          "method": null,
           "expressions": [
             "archived"
           ],
           "where": "archived = false",
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+        },
+        {
+          "name": "idx_system_work_articles_name_trgm",
+          "unique": false,
+          "method": "gin",
+          "expressions": [
+            "name gin_trgm_ops"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260613120000_enable_pg_trgm_and_article_name_search_indexes.sql"
         }
       ],
       "triggers": [
@@ -10685,6 +10854,7 @@
         {
           "name": "idx_card_bindings_profile",
           "unique": false,
+          "method": null,
           "expressions": [
             "profile_id"
           ],
@@ -10695,6 +10865,7 @@
         {
           "name": "idx_card_bindings_active",
           "unique": false,
+          "method": null,
           "expressions": [
             "profile_id",
             "bound_at desc"
