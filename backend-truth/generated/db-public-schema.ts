@@ -443,6 +443,14 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260605130000_payment_intents_consent.sql",
       "sha256": "9d32582a5ee963ac31a5b6c432958fa3eed9a32ea8fc972d3f40ecf03ba8282e"
+    },
+    {
+      "path": "supabase/migrations/20260611120000_project_estimates_execution_status.sql",
+      "sha256": "69f1e331b79e05a719c0887cabe29a53e5fd074e0f0508b4212662511cea3646"
+    },
+    {
+      "path": "supabase/migrations/20260611120100_get_portfolio_finance_snapshot.sql",
+      "sha256": "0f847ef131b64fef084580e166f8a6e61fe07f35a7c62b046aa94beb1a59e5b2"
     }
   ],
   "generated_artifacts": [
@@ -578,6 +586,8 @@ export const manifest = {
     "sql/20260604120000_create_card_bindings.sql",
     "sql/20260604120100_get_card_on_file_prefer_binding.sql",
     "sql/20260605130000_payment_intents_consent.sql",
+    "sql/20260611120000_project_estimates_execution_status.sql",
+    "sql/20260611120100_get_portfolio_finance_snapshot.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -3406,6 +3416,16 @@ export const tables = {
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "execution_status",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -3418,6 +3438,16 @@ export const tables = {
           "expression": "status in ('draft', 'approved', 'archived')",
           "usingIndex": null,
           "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "execution_status"
+          ],
+          "expression": "execution_status is null\n    or execution_status in ('planning', 'in_work', 'paused', 'finished')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260611120000_project_estimates_execution_status.sql"
         }
       ],
       "indexes": [
@@ -13873,6 +13903,16 @@ export const checks = {
     },
     {
       "schema": "public",
+      "table": "project_estimates",
+      "column": "execution_status",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "execution_status is null\n    or execution_status in ('planning', 'in_work', 'paused', 'finished')",
+      "sourceMigration": "supabase/migrations/20260611120000_project_estimates_execution_status.sql"
+    },
+    {
+      "schema": "public",
       "table": "estimate_versions",
       "column": "client_vat_bps",
       "constraintName": null,
@@ -17585,6 +17625,20 @@ export const functions = {
       "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260604120100_get_card_on_file_prefer_binding.sql",
       "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "get_portfolio_finance_snapshot",
+      "signature": "public.get_portfolio_finance_snapshot()",
+      "args": [],
+      "returnType": "jsonb",
+      "language": "sql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260611120100_get_portfolio_finance_snapshot.sql",
+      "triggerUsages": []
     }
   ]
 } as const;
@@ -21142,6 +21196,13 @@ export const sourceTrace = {
       "name": "get_card_on_file",
       "signature": "public.get_card_on_file()",
       "sourceMigration": "supabase/migrations/20260604120100_get_card_on_file_prefer_binding.sql"
+    },
+    {
+      "key": "public.get_portfolio_finance_snapshot",
+      "schema": "public",
+      "name": "get_portfolio_finance_snapshot",
+      "signature": "public.get_portfolio_finance_snapshot()",
+      "sourceMigration": "supabase/migrations/20260611120100_get_portfolio_finance_snapshot.sql"
     }
   ],
   "policies": [
@@ -22870,6 +22931,7 @@ export const sourceTrace = {
         "supabase/migrations/20260418120000_estimate_resource_line_assignee_label.sql",
         "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql",
         "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql",
+        "supabase/migrations/20260611120100_get_portfolio_finance_snapshot.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
@@ -22883,7 +22945,8 @@ export const sourceTrace = {
       "functions": [
         "public.get_estimate_operational_summary",
         "public.get_shared_estimate_version",
-        "public.approve_estimate_version_by_share_token"
+        "public.approve_estimate_version_by_share_token",
+        "public.get_portfolio_finance_snapshot"
       ],
       "policies": [
         "public.project_estimates.project_estimates_select",
@@ -23554,11 +23617,12 @@ export const slices = {
         "supabase/migrations/20260418120000_estimate_resource_line_assignee_label.sql",
         "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql",
         "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql",
+        "supabase/migrations/20260611120100_get_portfolio_finance_snapshot.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
       "tableCount": 5,
-      "functionCount": 3,
+      "functionCount": 4,
       "rlsTableCount": 5
     },
     {

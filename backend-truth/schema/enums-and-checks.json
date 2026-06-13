@@ -554,6 +554,16 @@
     },
     {
       "schema": "public",
+      "table": "project_estimates",
+      "column": "execution_status",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "execution_status is null\n    or execution_status in ('planning', 'in_work', 'paused', 'finished')",
+      "sourceMigration": "supabase/migrations/20260611120000_project_estimates_execution_status.sql"
+    },
+    {
+      "schema": "public",
       "table": "estimate_versions",
       "column": "client_vat_bps",
       "constraintName": null,
