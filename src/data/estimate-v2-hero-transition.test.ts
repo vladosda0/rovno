@@ -8,6 +8,7 @@ const {
   ensureProjectEstimateRootMock,
   ensureEstimateCurrentVersionMock,
   updateProjectEstimateRootStatusMock,
+  updateProjectEstimateExecutionStatusMock,
   loadCurrentEstimateDraftMock,
   upsertEstimateWorksMock,
   upsertEstimateResourceLinesMock,
@@ -32,6 +33,7 @@ const {
   ensureProjectEstimateRootMock: vi.fn(),
   ensureEstimateCurrentVersionMock: vi.fn(),
   updateProjectEstimateRootStatusMock: vi.fn(),
+  updateProjectEstimateExecutionStatusMock: vi.fn(),
   loadCurrentEstimateDraftMock: vi.fn(),
   upsertEstimateWorksMock: vi.fn(),
   upsertEstimateResourceLinesMock: vi.fn(),
@@ -71,6 +73,7 @@ vi.mock("@/data/estimate-source", async () => {
     ensureProjectEstimateRoot: ensureProjectEstimateRootMock,
     ensureEstimateCurrentVersion: ensureEstimateCurrentVersionMock,
     updateProjectEstimateRootStatus: updateProjectEstimateRootStatusMock,
+    updateProjectEstimateExecutionStatus: updateProjectEstimateExecutionStatusMock,
     loadCurrentEstimateDraft: loadCurrentEstimateDraftMock,
     upsertEstimateWorks: upsertEstimateWorksMock,
     upsertEstimateResourceLines: upsertEstimateResourceLinesMock,
@@ -135,6 +138,7 @@ describe("persistEstimateV2HeroTransition", () => {
       },
     });
     updateProjectEstimateRootStatusMock.mockResolvedValue(undefined);
+    updateProjectEstimateExecutionStatusMock.mockResolvedValue(undefined);
     loadCurrentEstimateDraftMock.mockResolvedValue({
       estimate: {
         id: "estimate-existing",
@@ -295,6 +299,11 @@ describe("persistEstimateV2HeroTransition", () => {
         estimateId: "estimate-existing",
         status: "approved",
       },
+    );
+    // Portfolio status mirror: in_work written for the estimate root, after the approval.
+    expect(updateProjectEstimateExecutionStatusMock).toHaveBeenCalledWith("estimate-existing", "in_work");
+    expect(updateProjectEstimateExecutionStatusMock.mock.invocationCallOrder[0]).toBeGreaterThan(
+      updateProjectEstimateRootStatusMock.mock.invocationCallOrder[0],
     );
     expect(insertHeroTransitionEventMock).toHaveBeenCalledWith(
       {},

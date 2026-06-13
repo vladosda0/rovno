@@ -40,6 +40,12 @@ export interface EstimateV2FinanceProjectSummary {
   marginCents: number;
   /** spent / cost × 100, unclamped (UI clamps bars itself); null when cost is 0. */
   percentUtilization: number | null;
+  /** Works linked to a task whose task is done (ProjectEstimate taskCompletion semantics). */
+  tasksDone: number;
+  /** Works linked to a task (the completion denominator). */
+  tasksTotal: number;
+  /** tasksDone / tasksTotal × 100; null when no linked tasks. */
+  percentComplete: number | null;
   /** Days until the current works range ends (>= 0); null when dates are missing. */
   daysToEnd: number | null;
   /** Behind-schedule days vs baseline; 0 unless overdue with unfinished linked tasks. */
@@ -149,6 +155,34 @@ function computeSummaryTiming(
 }
 
 /**
+ * ProjectEstimate taskCompletion semantics: count works linked to a task; a work is "done"
+ * when its linked task is done. Without a tasks slice (or an empty still-loading one) the
+ * denominator is 0 and percentComplete is null.
+ */
+function computeSummaryCompletion(
+  works: EstimateV2Work[],
+  tasks: EstimateV2FinanceTaskSlice[] | undefined,
+): { tasksDone: number; tasksTotal: number; percentComplete: number | null } {
+  if (!tasks || tasks.length === 0) {
+    return { tasksDone: 0, tasksTotal: 0, percentComplete: null };
+  }
+  const taskById = new Map(tasks.map((task) => [task.id, task]));
+  let total = 0;
+  let done = 0;
+  works.forEach((work) => {
+    if (!work.taskId) return;
+    total += 1;
+    const task = taskById.get(work.taskId);
+    if (task && task.status === "done") done += 1;
+  });
+  return {
+    tasksDone: done,
+    tasksTotal: total,
+    percentComplete: total > 0 ? (done / total) * 100 : null,
+  };
+}
+
+/**
  * Pure summary from estimate-v2 state + fact rollups (same fact path as ProjectEstimate when inputs match).
  */
 export function buildEstimateV2FinanceProjectSummary(
@@ -196,6 +230,9 @@ export function buildEstimateV2FinanceProjectSummary(
   const timing = hasEstimate
     ? computeSummaryTiming(state.works, state.scheduleBaseline, tasks)
     : { daysToEnd: null, behindScheduleDays: 0 };
+  const completion = hasEstimate
+    ? computeSummaryCompletion(state.works, tasks)
+    : { tasksDone: 0, tasksTotal: 0, percentComplete: null };
 
   return {
     projectId,
@@ -216,6 +253,9 @@ export function buildEstimateV2FinanceProjectSummary(
     costCents,
     marginCents: contractValueCents - costCents,
     percentUtilization,
+    tasksDone: completion.tasksDone,
+    tasksTotal: completion.tasksTotal,
+    percentComplete: completion.percentComplete,
     daysToEnd: timing.daysToEnd,
     behindScheduleDays: timing.behindScheduleDays,
   };

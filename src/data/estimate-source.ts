@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../../backend-truth/generated/supabase-types";
 import { computeLineTotals } from "@/lib/estimate-v2/pricing";
-import type { EstimateV2Snapshot, ResourceLineType } from "@/types/estimate-v2";
+import type { EstimateExecutionStatus, EstimateV2Snapshot, ResourceLineType } from "@/types/estimate-v2";
 import { parsePersistedEstimateResourceType, resourceLineTypeToPersisted } from "@/lib/estimate-v2/resource-type-contract";
 
 type TypedSupabaseClient = SupabaseClient<Database>;
@@ -290,6 +290,32 @@ export async function updateProjectEstimateRootStatus(
     .from("project_estimates")
     .update(patch)
     .eq("id", input.estimateId);
+
+  if (error) {
+    throw error;
+  }
+}
+
+/**
+ * Mirror the app's execution status (planning|in_work|paused|finished) onto the estimate
+ * root so the portfolio rollup (get_portfolio_finance_snapshot) can bucket projects by it.
+ * Self-loads the client; a no-row update (root not synced yet) is a harmless no-op.
+ * Only the in_work value has a server-side reader fallback (root status='approved');
+ * paused/finished depend on this write converging (see the hydration reconciliation).
+ */
+export async function updateProjectEstimateExecutionStatus(
+  estimateId: string,
+  executionStatus: EstimateExecutionStatus,
+): Promise<void> {
+  const supabase = await loadSupabaseClient();
+  const patch: ProjectEstimateUpdate = {
+    execution_status: executionStatus,
+  };
+
+  const { error } = await supabase
+    .from("project_estimates")
+    .update(patch)
+    .eq("id", estimateId);
 
   if (error) {
     throw error;
