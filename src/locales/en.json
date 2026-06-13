@@ -582,7 +582,6 @@
   "financeTab.sortUtilization": "By spend",
   "financeTab.sortProgress": "By progress",
   "financeTab.financialDetailsHidden": "Financial details hidden",
-  "financeTab.details": "Details",
   "financeTab.empty": "No projects with finance data yet. Create an estimate to see the portfolio.",
   "financeTab.error": "Could not load the portfolio",
   "financeTab.retry": "Retry",

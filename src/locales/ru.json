@@ -594,7 +594,6 @@
   "financeTab.sortUtilization": "По освоению",
   "financeTab.sortProgress": "По прогрессу",
   "financeTab.financialDetailsHidden": "Финансовые детали скрыты",
-  "financeTab.details": "Детали",
   "financeTab.empty": "Нет проектов с финансовыми данными. Создай смету, чтобы увидеть портфель.",
   "financeTab.error": "Не удалось загрузить портфель",
   "financeTab.retry": "Повторить",
