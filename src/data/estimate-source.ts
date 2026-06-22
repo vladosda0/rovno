@@ -278,6 +278,44 @@ export async function ensureEstimateCurrentVersion(
   return { ok: true, row: inserted };
 }
 
+/**
+ * Ensures the server project_estimates root + current estimate_versions row exist for a
+ * project (creating them when missing) and returns the current version id. Uses the SAME
+ * deterministic ids as saveCurrentEstimateDraft (resolveEstimateDraftRemoteIds), so a later
+ * autosave reuses this exact version instead of conflicting. Lets the EstimateConstructor
+ * bootstrap a brand-new (empty) estimate before applying a template stage.
+ */
+export async function ensureRemoteEstimateCurrentVersionId(
+  projectId: string,
+  snapshot: EstimateV2Snapshot,
+  profileId: string,
+): Promise<string> {
+  const supabase = await loadSupabaseClient();
+  const existingDraft = await loadCurrentEstimateDraft(projectId);
+  const resolvedIds = resolveEstimateDraftRemoteIds({ projectId, snapshot, existingDraft });
+
+  const estimateResult = await ensureProjectEstimateRoot(supabase, {
+    projectId,
+    estimateId: resolvedIds.estimateId,
+    title: snapshot.project.title,
+    createdBy: profileId,
+  });
+  if (!estimateResult.ok) {
+    throw new Error(`Unable to ensure estimate root: ${estimateResult.reason}`);
+  }
+
+  const versionResult = await ensureEstimateCurrentVersion(supabase, {
+    estimateId: estimateResult.row.id,
+    versionId: resolvedIds.versionId,
+    createdBy: profileId,
+  });
+  if (!versionResult.ok) {
+    throw new Error(`Unable to ensure estimate current version: ${versionResult.reason}`);
+  }
+
+  return versionResult.row.id;
+}
+
 export async function updateProjectEstimateRootStatus(
   supabase: TypedSupabaseClient,
   input: UpdateProjectEstimateRootStatusInput,

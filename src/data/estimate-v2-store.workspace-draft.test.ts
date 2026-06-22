@@ -206,6 +206,38 @@ describe("estimate-v2 workspace drafts", () => {
     expect(titles).not.toContain("Server Applied");
   });
 
+  it("forceFresh runs its own pass and is not swallowed by an in-flight non-forced hydrate (dedup bypass)", async () => {
+    const projectId = "project-remote-1";
+    registerEstimateV2ProjectAccessContext(projectId, {
+      mode: "supabase", profileId: "profile-1", projectOwnerProfileId: "profile-1", membershipRole: "owner",
+    });
+    await hydrateEstimateV2ProjectFromWorkspace(projectId, { profileId: "profile-1" });
+    // A local edit leaves a pending autosave, so a NON-forced hydrate would early-return.
+    createStage(projectId, { title: "Local pending stage" });
+
+    // Gate the in-flight non-forced hydrate's draft load so it stays in flight while we fire forced.
+    let releaseNonForced: (() => void) | null = null;
+    const gate = new Promise<void>((resolve) => { releaseNonForced = resolve; });
+    loadCurrentEstimateDraftMock.mockImplementationOnce(async () => {
+      await gate;
+      return serverDraftWithStage(projectId, "Stale Non-Forced");
+    });
+    const nonForced = hydrateEstimateV2ProjectFromWorkspace(projectId, { profileId: "profile-1" });
+
+    // While that non-forced hydrate is in flight, a forced hydrate must NOT be downgraded to it.
+    loadCurrentEstimateDraftMock.mockResolvedValue(serverDraftWithStage(projectId, "Forced Applied"));
+    const forced = hydrateEstimateV2ProjectFromWorkspace(projectId, { profileId: "profile-1", forceFresh: true });
+
+    releaseNonForced?.();
+    await nonForced;
+    await forced;
+
+    // The forced pass adopted server truth; without the dedup bypass it would have resolved to
+    // the in-flight non-forced promise (which early-returns) and kept the stale local stage.
+    const titles = getEstimateV2ProjectState(projectId).stages.map((stage) => stage.title);
+    expect(titles).toContain("Forced Applied");
+  });
+
   it("hydrates the current remote draft and links works back to planning tasks", async () => {
     const projectId = "project-remote-1";
     loadCurrentEstimateDraftMock.mockResolvedValue({

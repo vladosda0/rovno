@@ -8,6 +8,7 @@ import { ToastAction } from "@/components/ui/toast";
 import {
   deleteStage,
   deleteWork,
+  ensureRemoteEstimateVersionId,
   flushProjectDraftSync,
   hydrateEstimateV2ProjectFromWorkspace,
 } from "@/data/estimate-v2-store";
@@ -49,17 +50,33 @@ export function useApplyTemplateStages(
   const applyStages = useCallback(
     async (selections: StageApplySelection[]) => {
       if (selections.length === 0) return;
-      if (!estimateVersionId) {
-        toast({ title: t("estimate.constructor.applyError"), variant: "destructive" });
-        return;
-      }
       setIsApplying(true);
       try {
+        // Drain any pending autosave BEFORE mutating server rows, so its prune step can't
+        // race the apply RPC and delete the stages/works we're about to insert.
+        await flushProjectDraftSync(projectId);
+
+        // A brand-new estimate has no server version yet; create the root + current version
+        // (idempotent, reusing the autosave's deterministic ids) so the constructor can
+        // populate an empty estimate. Otherwise use the already-resolved version id.
+        let versionId = estimateVersionId;
+        if (!versionId) {
+          try {
+            versionId = await ensureRemoteEstimateVersionId(projectId);
+          } catch {
+            versionId = null;
+          }
+          if (!versionId) {
+            toast({ title: t("estimate.constructor.applyError"), variant: "destructive" });
+            return;
+          }
+        }
+
         const appliedStageIds: string[] = [];
         const resultBySelection: Array<{ projectStageId: string; workIds: string[] } | null> = [];
         for (const selection of selections) {
           const { data, error } = await rawSupabase.rpc("apply_template_stage_to_estimate", {
-            p_estimate_version_id: estimateVersionId,
+            p_estimate_version_id: versionId,
             p_template_stage_id: selection.templateStageId,
             p_sort_position: null,
           });
@@ -78,14 +95,11 @@ export function useApplyTemplateStages(
           return;
         }
 
-        // Flush any pending autosave first so its prune step can't race and delete
-        // the rows we just applied, then force a fresh re-hydrate that bypasses the
-        // pending-sync early-return. The apply RPC is non-idempotent, so on a refresh
-        // failure we do NOT retry: the stages are committed server-side, ask the user
-        // to reload (and let the caller clear its selection so a blind re-apply can't
-        // double-insert).
+        // Force a fresh re-hydrate that adopts server truth (bypassing the pending-sync
+        // early-return). The apply RPC is non-idempotent, so on a refresh failure we do NOT
+        // retry: the stages are committed server-side, ask the user to reload (and let the
+        // caller clear its selection so a blind re-apply can't double-insert).
         try {
-          await flushProjectDraftSync(projectId);
           await hydrateEstimateV2ProjectFromWorkspace(projectId, { profileId, forceFresh: true });
         } catch {
           toast({ title: t("estimate.constructor.applyRefreshFailed"), variant: "destructive" });

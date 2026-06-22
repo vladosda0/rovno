@@ -5,6 +5,7 @@ import {
 } from "@/lib/permissions";
 import { persistEstimateV2HeroTransition, EstimateV2HeroTransitionError } from "@/data/estimate-v2-hero-transition";
 import {
+  ensureRemoteEstimateCurrentVersionId,
   loadCurrentEstimateDraft,
   loadEstimateOperationalSummary,
   type EstimateOperationalUpperBlock,
@@ -1714,8 +1715,16 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
   retainedSupabaseSyncProfileIdByProjectId.set(projectId, input.profileId);
   const cacheKey = `${projectId}:${input.profileId}`;
   const pending = remoteHydrationPromises.get(cacheKey);
-  if (pending) {
+  if (pending && !input.forceFresh) {
     return pending;
+  }
+  if (pending) {
+    // A forceFresh hydrate must NOT be downgraded to an in-flight non-forced one (which
+    // can early-return on a pending sync and keep stale state). Wait for the in-flight
+    // hydrate to settle, then run a fresh forced pass below. The awaited promise clears its
+    // own remoteHydrationPromises entry in its .finally before resolving, so the set() at
+    // the end won't clobber a live entry.
+    await pending.catch(() => {});
   }
 
   const hydration = (async () => {
@@ -2174,11 +2183,38 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
       persistExecutionStatusIfManaged(projectId, nextState.project.estimateStatus);
     }
   })().finally(() => {
-    remoteHydrationPromises.delete(cacheKey);
+    // Identity-guard the cleanup (mirrors runAndTrackProjectDraftSync): with the forceFresh
+    // dedup bypass, two forced hydrations can both reach the set() below, so only delete the
+    // entry if it's still ours — otherwise an earlier pass settling could drop a newer live
+    // entry and make a concurrent non-forced caller start a redundant hydration.
+    if (remoteHydrationPromises.get(cacheKey) === hydration) {
+      remoteHydrationPromises.delete(cacheKey);
+    }
   });
 
   remoteHydrationPromises.set(cacheKey, hydration);
   return hydration;
+}
+
+/**
+ * Bootstrap helper for the EstimateConstructor: ensures the server estimate root + current
+ * version exist for a brand-new estimate and returns the version id, so the constructor can
+ * apply a template into an estimate that has never been saved. Returns null when there is no
+ * managed supabase sync context (demo/local mode). Reuses the same snapshot + deterministic
+ * ids as the autosave, so it never conflicts with a later save.
+ */
+export async function ensureRemoteEstimateVersionId(projectId: string): Promise<string | null> {
+  const state = statesByProjectId.get(projectId);
+  const managedSyncContext = getManagedEstimateRemoteSyncContext(projectId);
+  if (!state || !managedSyncContext) {
+    return null;
+  }
+  const normalized = normalizeStateForWorkspace(projectId, state);
+  return ensureRemoteEstimateCurrentVersionId(
+    projectId,
+    getSnapshotFromState(normalized),
+    managedSyncContext.profileId,
+  );
 }
 
 function ensureProjectState(projectId: string): EstimateV2ProjectState {
