@@ -20,7 +20,7 @@
     "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql",
     "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql",
     "supabase/migrations/20260611120100_get_portfolio_finance_snapshot.sql",
-    "supabase/migrations/20260613120600_get_resource_article_price_comparison.sql",
+    "supabase/migrations/20260622120000_tighten_price_comparison_finance_gate.sql",
     "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
     "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
   ],
@@ -1426,7 +1426,7 @@
       "volatility": "stable",
       "securityDefiner": true,
       "searchPath": "public",
-      "sourceMigration": "supabase/migrations/20260613120600_get_resource_article_price_comparison.sql",
+      "sourceMigration": "supabase/migrations/20260622120000_tighten_price_comparison_finance_gate.sql",
       "authenticatedExecute": true,
       "triggerUsages": []
     }

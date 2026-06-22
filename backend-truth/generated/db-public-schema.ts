@@ -479,6 +479,10 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260613120600_get_resource_article_price_comparison.sql",
       "sha256": "ab53e3d887217881daf027fe3e024947f2687d97d0626f625e17c9493954a4ae"
+    },
+    {
+      "path": "supabase/migrations/20260622120000_tighten_price_comparison_finance_gate.sql",
+      "sha256": "b0603c6247008016fdb84274e8b7f75dad578721bdb134e587fec650ac689dbe"
     }
   ],
   "generated_artifacts": [
@@ -623,6 +627,7 @@ export const manifest = {
     "sql/20260613120400_add_library_work_to_estimate.sql",
     "sql/20260613120500_browse_canonical_catalog.sql",
     "sql/20260613120600_get_resource_article_price_comparison.sql",
+    "sql/20260622120000_tighten_price_comparison_finance_gate.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -17993,7 +17998,7 @@ export const functions = {
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260613120600_get_resource_article_price_comparison.sql",
+      "sourceMigration": "supabase/migrations/20260622120000_tighten_price_comparison_finance_gate.sql",
       "triggerUsages": []
     }
   ]
@@ -21600,7 +21605,7 @@ export const sourceTrace = {
       "schema": "public",
       "name": "get_resource_article_price_comparison",
       "signature": "public.get_resource_article_price_comparison(uuid, uuid)",
-      "sourceMigration": "supabase/migrations/20260613120600_get_resource_article_price_comparison.sql"
+      "sourceMigration": "supabase/migrations/20260622120000_tighten_price_comparison_finance_gate.sql"
     }
   ],
   "policies": [
@@ -23330,7 +23335,7 @@ export const sourceTrace = {
         "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql",
         "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql",
         "supabase/migrations/20260611120100_get_portfolio_finance_snapshot.sql",
-        "supabase/migrations/20260613120600_get_resource_article_price_comparison.sql",
+        "supabase/migrations/20260622120000_tighten_price_comparison_finance_gate.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
@@ -24028,7 +24033,7 @@ export const slices = {
         "supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql",
         "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql",
         "supabase/migrations/20260611120100_get_portfolio_finance_snapshot.sql",
-        "supabase/migrations/20260613120600_get_resource_article_price_comparison.sql",
+        "supabase/migrations/20260622120000_tighten_price_comparison_finance_gate.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],

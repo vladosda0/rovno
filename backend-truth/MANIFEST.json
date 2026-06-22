@@ -475,6 +475,10 @@
     {
       "path": "supabase/migrations/20260613120600_get_resource_article_price_comparison.sql",
       "sha256": "ab53e3d887217881daf027fe3e024947f2687d97d0626f625e17c9493954a4ae"
+    },
+    {
+      "path": "supabase/migrations/20260622120000_tighten_price_comparison_finance_gate.sql",
+      "sha256": "b0603c6247008016fdb84274e8b7f75dad578721bdb134e587fec650ac689dbe"
     }
   ],
   "generated_artifacts": [
@@ -619,6 +623,7 @@
     "sql/20260613120400_add_library_work_to_estimate.sql",
     "sql/20260613120500_browse_canonical_catalog.sql",
     "sql/20260613120600_get_resource_article_price_comparison.sql",
+    "sql/20260622120000_tighten_price_comparison_finance_gate.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
