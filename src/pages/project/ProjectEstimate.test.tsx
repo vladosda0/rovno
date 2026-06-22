@@ -141,31 +141,11 @@ async function flushUi() {
 }
 
 async function changeEstimateStatus(nextStatus: string) {
-  const [trigger] = screen.getAllByRole("combobox");
-  if (!trigger) {
-    throw new Error("Estimate status trigger not found");
-  }
-  trigger.focus();
-  trigger.dispatchEvent(new window.PointerEvent("pointerdown", {
-    bubbles: true,
-    cancelable: true,
-    button: 0,
-    ctrlKey: false,
-    pointerType: "mouse",
-  }));
-  await flushUi();
-  if (trigger.getAttribute("aria-expanded") !== "true") {
-    fireEvent.keyDown(trigger, { key: "ArrowDown", code: "ArrowDown", keyCode: 40 });
-    await flushUi();
-  }
-  if (trigger.getAttribute("aria-expanded") !== "true") {
-    fireEvent.keyDown(trigger, { key: "Enter", code: "Enter", keyCode: 13 });
-    await flushUi();
-  }
-  const option = await screen.findByRole("option", { name: nextStatus }).catch(async () => (
-    await screen.findByText(nextStatus)
-  ));
-  fireEvent.click(option);
+  const actionName = nextStatus === "In work" ? "Start work"
+    : nextStatus === "Finished" ? "Finish"
+    : nextStatus === "Paused" ? "Pause"
+    : nextStatus;
+  fireEvent.click(screen.getByRole("button", { name: actionName }));
   await flushUi();
 }
 
@@ -464,6 +444,28 @@ describe("ProjectEstimate", () => {
     expect(screen.queryByText("Stage 1")).not.toBeInTheDocument();
     expect(screen.queryByText("General work")).not.toBeInTheDocument();
   }, 20_000);
+
+  it("renders the estimate header status rail and tab-row actions", async () => {
+    const projectId = "project-estimate-header-rail";
+    setupLocalProject(projectId);
+
+    await act(async () => {
+      renderProjectEstimate(projectId);
+      await flushUi();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Create estimate" }));
+      await flushUi();
+    });
+
+    expect(screen.getByText("Planning")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start work" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Finish" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Pause" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Export estimate" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Constructor" })).toBeInTheDocument();
+  });
 
   it("numbers default resource names per work instead of across the whole estimate", async () => {
     const projectId = "project-estimate-resource-naming-scope";

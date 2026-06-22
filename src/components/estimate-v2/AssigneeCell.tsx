@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Mail, User } from "lucide-react";
+import { Mail, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -93,7 +93,7 @@ export function AssigneeCell({
   }, [assigneeEmail, assigneeId, assigneeName, open, selectedParticipant]);
 
   if (clientView || !editable) {
-    return <span className="text-xs text-muted-foreground">{displayName || t("common.emptyDash")}</span>;
+    return <span className="block truncate text-xs text-muted-foreground">{displayName || ""}</span>;
   }
 
   const trimmedName = nameInput.trim();
@@ -117,13 +117,18 @@ export function AssigneeCell({
         variant="ghost"
         size="sm"
         className={cn(
-          "h-7 max-w-full justify-start gap-1 px-1 text-xs",
+          "h-7 w-full max-w-full justify-start px-1 text-xs",
           displayName ? "text-foreground" : "text-muted-foreground",
         )}
         onClick={() => setOpen(true)}
+        aria-label={displayName || t("estimate.assignee.assignButton")}
+        title={displayName || t("estimate.assignee.assignButton")}
       >
-        <User className="h-3.5 w-3.5 shrink-0" />
-        <span className="truncate">{displayName || t("estimate.assignee.assignButton")}</span>
+        {displayName ? (
+          <span className="truncate">{displayName}</span>
+        ) : (
+          <UserPlus className="h-3.5 w-3.5 shrink-0" aria-hidden />
+        )}
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
