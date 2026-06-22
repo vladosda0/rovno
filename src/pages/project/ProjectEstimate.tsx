@@ -6,6 +6,9 @@ import {
   useMemo,
   useRef,
   useState,
+  Fragment,
+  type ChangeEvent,
+  type FormEvent,
   type ReactNode,
 } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -14,10 +17,12 @@ import {
   AlertTriangle,
   ArrowRight,
   BookOpen,
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   Download,
+  Wrench,
   Info,
   Layers,
   Loader2,
@@ -61,7 +66,6 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { AssigneeCell } from "@/components/estimate-v2/AssigneeCell";
 import { EstimateFinanceHeader, type EstimateFinanceView } from "@/components/estimate-v2/EstimateFinanceHeader";
 import { InlineEditableNumber } from "@/components/estimate-v2/InlineEditableNumber";
-import { InlineEditableText } from "@/components/estimate-v2/InlineEditableText";
 import { ResourceTypeBadge } from "@/components/estimate-v2/ResourceTypeBadge";
 import {
   useHRItems,
@@ -145,6 +149,12 @@ import { publishEstimateShareSnapshot } from "@/data/estimate-share-source";
 import { ApprovalStampCard } from "@/components/estimate-v2/ApprovalStampCard";
 import { ApprovalStampFormModal } from "@/components/estimate-v2/ApprovalStampFormModal";
 import { EstimateExportModal } from "@/components/estimate-v2/EstimateExportModal";
+import { LibraryArticleBadge } from "@/components/estimate-v2/LibraryArticleBadge";
+import { ResourceModal } from "@/components/estimate-v2/ResourceModal";
+import { LibraryNameInput } from "@/components/estimate-v2/LibraryNameInput";
+import type { CanonicalSuggestion } from "@/hooks/use-canonical-search";
+import { EstimateConstructor } from "@/components/estimate-v2/EstimateConstructor";
+import { useCurrentEstimateVersionId } from "@/hooks/use-current-estimate-version";
 import type {
   ExportLineRow,
   ExportPayload,
@@ -343,12 +353,28 @@ function estimateStatusLabelKey(status: EstimateExecutionStatus): string {
   return "estimate.status.finished";
 }
 
-function estimateStatusClassName(status: EstimateExecutionStatus): string {
-  if (status === "planning") return "border-foreground/15 bg-foreground/5 text-foreground";
-  if (status === "in_work") return "border-info/25 bg-info/10 text-info";
-  if (status === "paused") return "border-warning/25 bg-warning/15 text-warning-foreground";
-  return "border-success/25 bg-success/12 text-success";
+function estimateStatusRailLabelKey(status: EstimateExecutionStatus, activeStatus: EstimateExecutionStatus): string {
+  if (status === "in_work") {
+    return activeStatus === "in_work" ? "estimate.status.rail.inWork" : "estimate.status.rail.startWork";
+  }
+  if (status === "finished") {
+    return activeStatus === "finished" ? "estimate.status.rail.finished" : "estimate.status.rail.finish";
+  }
+  if (status === "paused") {
+    return activeStatus === "paused" ? "estimate.status.rail.paused" : "estimate.status.rail.pause";
+  }
+  return "estimate.status.planning";
 }
+
+const ESTIMATE_STATUS_RAIL_MAIN: EstimateExecutionStatus[] = ["planning", "in_work", "finished"];
+const ESTIMATE_STATUS_RAIL_PAUSED: EstimateExecutionStatus = "paused";
+const ESTIMATE_TAB_ACTION_CLASSNAME = [
+  "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-sm px-3 py-1.5",
+  "text-sm font-medium text-muted-foreground ring-offset-background transition-all",
+  "hover:bg-background hover:text-foreground",
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+  "disabled:pointer-events-none disabled:opacity-50 [&_svg]:h-4 [&_svg]:w-4",
+].join(" ");
 
 function durationDays(startDay: number | null, endDay: number | null): number | null {
   if (startDay == null || endDay == null) return null;
@@ -400,6 +426,8 @@ const RESOURCE_TYPE_OPTIONS: Array<{ value: ResourceLineType; labelKey: string }
   { value: "overhead", labelKey: "estimate.resource.type.overhead" },
   { value: "other", labelKey: "estimate.resource.type.other" },
 ];
+
+const RESOURCE_LINE_TYPES = new Set<ResourceLineType>(RESOURCE_TYPE_OPTIONS.map((option) => option.value));
 
 const RESOURCE_CREATE_OPTIONS: Array<{ labelKey: string; value: ResourceLineType }> = [
   { labelKey: "estimate.resource.createOption.material", value: "material" },
@@ -556,6 +584,8 @@ function WorkTableFrame({
   const tableRef = useRef<HTMLTableElement | null>(null);
   const mirrorScrollRef = useRef<HTMLDivElement | null>(null);
   const [scrollState, setScrollState] = useState({
+    scrollLeft: 0,
+    maxLeft: 0,
     hasOverflow: false,
     canScrollLeft: false,
     canScrollRight: false,
@@ -571,15 +601,18 @@ function WorkTableFrame({
     const hasOverflow = scrollWidth > clientWidth + edgeSlack;
     const canScrollLeft = scrollLeft > edgeSlack;
     const canScrollRight = scrollLeft < maxLeft - edgeSlack;
+    const normalizedScrollLeft = Math.min(Math.max(scrollLeft, 0), maxLeft);
     setScrollState((current) => {
       if (
-        current.hasOverflow === hasOverflow
+        current.scrollLeft === normalizedScrollLeft
+        && current.maxLeft === maxLeft
+        && current.hasOverflow === hasOverflow
         && current.canScrollLeft === canScrollLeft
         && current.canScrollRight === canScrollRight
       ) {
         return current;
       }
-      return { hasOverflow, canScrollLeft, canScrollRight };
+      return { scrollLeft: normalizedScrollLeft, maxLeft, hasOverflow, canScrollLeft, canScrollRight };
     });
   }, []);
 
@@ -591,7 +624,7 @@ function WorkTableFrame({
     const mirror = mirrorScrollRef.current;
     const syncScroll = () => {
       updateScrollState();
-      if (mirror) mirror.scrollLeft = container.scrollLeft;
+      if (mirror && mirror.scrollLeft !== container.scrollLeft) mirror.scrollLeft = container.scrollLeft;
     };
 
     syncScroll();
@@ -608,11 +641,18 @@ function WorkTableFrame({
     };
   }, [updateScrollState]);
 
-  const scrollTable = useCallback((direction: "left" | "right") => {
+  const handleScrollSliderChange = useCallback((event: ChangeEvent<HTMLInputElement> | FormEvent<HTMLInputElement>) => {
     const container = tableRef.current?.parentElement as HTMLDivElement | null;
     if (!container) return;
-    const jump = Math.min(Math.round(container.clientWidth * 0.55), 420);
-    container.scrollBy({ left: direction === "right" ? jump : -jump, behavior: "smooth" });
+    const nextScrollLeft = Number(event.currentTarget.value);
+    container.scrollLeft = nextScrollLeft;
+    if (mirrorScrollRef.current) mirrorScrollRef.current.scrollLeft = nextScrollLeft;
+    setScrollState((current) => ({
+      ...current,
+      scrollLeft: Math.min(Math.max(nextScrollLeft, 0), current.maxLeft),
+      canScrollLeft: nextScrollLeft > 3,
+      canScrollRight: nextScrollLeft < current.maxLeft - 3,
+    }));
   }, []);
 
   const showEdgeHints = scrollState.hasOverflow;
@@ -624,10 +664,16 @@ function WorkTableFrame({
     () => columns.filter((col) => !col.hideOnMobile).reduce((sum, col) => sum + col.widthPx, 0),
     [columns],
   );
-  const effectiveMinWidth = isMobile ? mobileVisibleWidth : minWidthPx;
+  const columnWidth = useMemo(
+    () => columns.reduce((sum, col) => sum + col.widthPx, 0),
+    [columns],
+  );
+  const effectiveMinWidth = isMobile ? mobileVisibleWidth : Math.max(minWidthPx, columnWidth);
+  const sliderMax = Math.max(scrollState.maxLeft, 1);
+  const sliderValue = Math.min(scrollState.scrollLeft, sliderMax);
 
   return (
-    <div className="relative space-y-1.5 pl-0 md:pl-4">
+    <div className="relative space-y-1.5 pl-0">
       <div className="sticky top-14 z-30 flex items-stretch rounded-md bg-card/95 shadow-sm ring-1 ring-border/60 backdrop-blur">
         <div ref={mirrorScrollRef} className="min-w-0 flex-1 overflow-hidden">
           <div className="flex items-stretch" style={{ minWidth: effectiveMinWidth }}>
@@ -647,70 +693,18 @@ function WorkTableFrame({
             ))}
           </div>
         </div>
-        {showEdgeHints ? (
-          <div className="hidden md:flex shrink-0 items-center gap-1 border-l border-border/60 px-1">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border/60 bg-card/80 text-amber-600 shadow-sm hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                  aria-label={t("estimate.table.hiddenColumnsAria")}
-                >
-                  <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top" className="max-w-[min(280px,calc(100vw-2rem))] text-left text-xs leading-snug">
-                {t("estimate.table.hiddenColumnsTooltip")}
-              </TooltipContent>
-            </Tooltip>
-            <div className="flex shrink-0 items-center gap-1">
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                className="h-7 w-7 border-border/80 bg-card/90 shadow-sm"
-                disabled={!scrollState.canScrollLeft}
-                aria-label={t("estimate.table.scrollLeftAria")}
-                title={t("estimate.table.scrollLeftTitle")}
-                onClick={() => scrollTable("left")}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                className={cn(
-                  "h-7 w-7 border-border/80 bg-card/90 shadow-sm",
-                  scrollState.canScrollRight
-                  && !scrollState.canScrollLeft
-                  && "motion-safe:animate-pulse",
-                )}
-                disabled={!scrollState.canScrollRight}
-                aria-label={t("estimate.table.scrollRightAria")}
-                title={t("estimate.table.scrollRightTitle")}
-                onClick={() => scrollTable("right")}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        ) : null}
       </div>
 
       <div className="relative min-w-0">
         <Table
           ref={tableRef}
-          className={className}
+          className={cn(className, "[&_td]:pl-1")}
+          style={{ minWidth: effectiveMinWidth }}
           wrapperClassName={cn(
             "relative w-full",
-            "overflow-y-auto overflow-x-scroll",
-            "[scrollbar-width:thin]",
-            "[scrollbar-color:hsl(var(--muted-foreground)/0.4)_hsl(var(--muted)/0.35)]",
-            "[&::-webkit-scrollbar]:h-2",
-            "[&::-webkit-scrollbar-thumb]:rounded-full",
-            "[&::-webkit-scrollbar-thumb]:bg-muted-foreground/35",
-            "[&::-webkit-scrollbar-track]:bg-muted/30",
+            "overflow-y-auto overflow-x-auto",
+            "[scrollbar-width:none]",
+            "[&::-webkit-scrollbar]:hidden",
           )}
         >
           <colgroup>
@@ -738,6 +732,26 @@ function WorkTableFrame({
           />
         ) : null}
       </div>
+
+      <input
+        type="range"
+        min={0}
+        max={sliderMax}
+        step={1}
+        value={sliderValue}
+        onInput={handleScrollSliderChange}
+        onChange={handleScrollSliderChange}
+        aria-label={t("estimate.table.scrollRightAria")}
+        className={cn(
+          "block h-5 w-full cursor-pointer appearance-none rounded-full bg-transparent",
+          "disabled:cursor-default disabled:opacity-60",
+          "[&::-webkit-slider-runnable-track]:h-2 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-muted/55",
+          "[&::-webkit-slider-thumb]:-mt-1.5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-16 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border [&::-webkit-slider-thumb]:border-border/70 [&::-webkit-slider-thumb]:bg-foreground/75 [&::-webkit-slider-thumb]:shadow-sm",
+          "[&::-moz-range-track]:h-2 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-muted/55",
+          "[&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-16 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border [&::-moz-range-thumb]:border-border/70 [&::-moz-range-thumb]:bg-foreground/75",
+        )}
+        disabled={!scrollState.hasOverflow}
+      />
     </div>
   );
 }
@@ -772,6 +786,107 @@ function EstimateSyncStatusIndicator({ sync }: { sync: EstimateV2ProjectSyncStat
     <span className={`text-[11px] font-medium ${colorClass}`}>
       {label}
     </span>
+  );
+}
+
+function EstimateStatusRail({
+  status,
+  canEdit,
+  isTransitioningToInWork,
+  onChange,
+}: {
+  status: EstimateExecutionStatus;
+  canEdit: boolean;
+  isTransitioningToInWork: boolean;
+  onChange: (status: EstimateExecutionStatus) => void;
+}) {
+  const { t } = useTranslation();
+  const activeMainIndex = ESTIMATE_STATUS_RAIL_MAIN.indexOf(status);
+  const renderStep = (step: EstimateExecutionStatus, options?: { passed?: boolean; independent?: boolean }) => {
+    const active = step === status;
+    const passed = Boolean(options?.passed);
+    const canSelect = canEdit && !isTransitioningToInWork && step !== "planning" && !active;
+    const showTransitionLoader = isTransitioningToInWork && step === "in_work";
+    const colored = active || passed;
+    const finishedPlanning = step === "planning" && passed;
+    const content = (
+      <>
+        {finishedPlanning ? (
+          <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-info text-info-foreground shadow-sm">
+            <Check className="h-3.5 w-3.5" />
+          </span>
+        ) : (
+          <span
+            className={cn(
+              "h-4 w-4 shrink-0 rounded-full border-4 transition-colors",
+              colored
+                ? "border-info bg-info"
+                : "border-muted-foreground/25 bg-muted-foreground/25",
+              active && status === "finished" && "border-success bg-success",
+              active && status === "paused" && "border-warning bg-warning",
+            )}
+          />
+        )}
+        <span className="min-w-0 text-center leading-tight">{t(estimateStatusRailLabelKey(step, status))}</span>
+        {showTransitionLoader ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+      </>
+    );
+    const itemClassName = cn(
+      "relative z-10 inline-flex min-h-10 min-w-0 max-w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold leading-tight transition-colors sm:px-4 sm:py-2.5",
+      colored
+        ? "border-info/40 bg-info/10 text-info"
+        : "border-border/70 bg-transparent text-muted-foreground",
+      active && status === "finished" && "border-success/40 bg-success/10 text-success",
+      active && status === "paused" && "border-warning/45 bg-warning/10 text-warning-foreground",
+      canSelect && "hover:border-foreground/25 hover:bg-background/45 hover:text-foreground",
+    );
+
+    return canSelect ? (
+      <button
+        type="button"
+        className={itemClassName}
+        onClick={() => onChange(step)}
+      >
+        {content}
+      </button>
+    ) : (
+      <span
+        className={itemClassName}
+        aria-current={active ? "step" : undefined}
+      >
+        {content}
+      </span>
+    );
+  };
+
+  return (
+    <div className="w-full min-w-0 py-1">
+      <div className="flex w-full min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-2 overflow-visible">
+        <div className="flex min-w-0 flex-[1_1_480px] items-center justify-end gap-2 sm:gap-3">
+          {ESTIMATE_STATUS_RAIL_MAIN.map((step, index) => {
+            const passed = activeMainIndex > index;
+            const lineActive = activeMainIndex > index;
+
+            return (
+              <Fragment key={step}>
+                {renderStep(step, { passed })}
+                {index < ESTIMATE_STATUS_RAIL_MAIN.length - 1 ? (
+                  <span
+                    className={cn(
+                      "h-1 min-w-4 flex-[1_1_32px] rounded-full transition-colors sm:min-w-8",
+                      lineActive ? "bg-info/55" : "bg-border/80",
+                    )}
+                  />
+                ) : null}
+              </Fragment>
+            );
+          })}
+        </div>
+        <div className="flex min-w-0 flex-[0_1_auto] items-center justify-end">
+          {renderStep(ESTIMATE_STATUS_RAIL_PAUSED, { independent: true })}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -810,6 +925,13 @@ export default function ProjectEstimate() {
     isLoading: isEstimateLoading,
   } = useEstimateV2Project(pid);
 
+  const [constructorOpen, setConstructorOpen] = useState(false);
+  const constructorVersionQuery = useCurrentEstimateVersionId(pid, constructorOpen && workspaceMode.kind === "supabase");
+  // Canonical-library typeahead only works against the Supabase backend; gate it
+  // off in demo/local mode so editing names never fires search_canonical_library.
+  const canonicalSearchEnabled = workspaceMode.kind === "supabase";
+  const constructorProfileId = workspaceMode.kind === "supabase" ? workspaceMode.profileId : (currentUser.id || "");
+
   const currentMembership = members.find((member) => member.user_id === currentUser.id) ?? null;
   const canSubmitByMembership = currentMembership?.role === "owner" || currentMembership?.role === "co_owner";
   const projectMode = estimateProject.projectMode;
@@ -834,6 +956,7 @@ export default function ProjectEstimate() {
   const [activeTab, setActiveTab] = useState("estimate");
   const [approvalModalOpen, setApprovalModalOpen] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [resourceModalLineId, setResourceModalLineId] = useState<string | null>(null);
   const [missingDatesWorkIds, setMissingDatesWorkIds] = useState<string[]>([]);
   const [isTransitioningToInWork, setIsTransitioningToInWork] = useState(false);
   const [incompleteTaskBlocks, setIncompleteTaskBlocks] = useState<Array<{ taskId: string | null; title: string }>>([]);
@@ -2258,6 +2381,24 @@ export default function ProjectEstimate() {
     });
   };
 
+  const openResourceModal = (lineId: string) => setResourceModalLineId(lineId);
+  const resourceModalLine = resourceModalLineId ? lineById.get(resourceModalLineId) ?? null : null;
+
+  // Fill a resource line from a canonical-library suggestion (links the line to
+  // the article so the row indicator + resource modal light up). Resource-level
+  // apply is client-side and silent (no revert toast), per spec.
+  const applyResourceSuggestion = (lineId: string, suggestion: CanonicalSuggestion) => {
+    const partial: Partial<EstimateV2ResourceLine> = {
+      title: suggestion.name,
+      systemResourceArticleId: suggestion.id,
+    };
+    if (suggestion.unit) partial.unit = suggestion.unit;
+    if (RESOURCE_LINE_TYPES.has(suggestion.badgeType as ResourceLineType)) {
+      partial.type = suggestion.badgeType as ResourceLineType;
+    }
+    updateLine(pid, lineId, partial);
+  };
+
   const openWorkDelete = (workId: string) => {
     const work = workById.get(workId);
     if (!work) return;
@@ -2369,30 +2510,12 @@ export default function ProjectEstimate() {
         ]}
       />
       <div className="space-y-3 md:rounded-card md:border md:border-border md:bg-card md:p-sp-2">
-        <div className="flex flex-wrap items-start justify-between gap-3 lg:flex-nowrap">
-          <div className="min-w-0 flex-1 space-y-2">
+        <div className="grid gap-3 xl:grid-cols-[minmax(180px,260px)_minmax(0,1fr)] xl:items-start 2xl:grid-cols-[minmax(200px,320px)_minmax(0,1fr)]">
+          <div className="min-w-0 space-y-1.5">
             <h2 className="truncate text-xl font-semibold text-foreground">{project.title}</h2>
             {showEstimateWorkspace && (
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">{t("estimate.header.statusLabel")}</span>
-                <Select
-                  value={estimateProject.estimateStatus}
-                  onValueChange={(value) => handleEstimateStatusChange(value as EstimateExecutionStatus)}
-                  disabled={!canEditEstimate || isTransitioningToInWork}
-                >
-                  <SelectTrigger className={`h-8 w-auto min-w-[116px] rounded-md border px-3 text-xs font-semibold shadow-none ${estimateStatusClassName(estimateProject.estimateStatus)}`}>
-                    <span className="flex items-center gap-1.5">
-                      <span>{t(estimateStatusLabelKey(estimateProject.estimateStatus))}</span>
-                      {isTransitioningToInWork ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
-                    </span>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="in_work">{t("estimate.status.inWork")}</SelectItem>
-                    <SelectItem value="paused">{t("estimate.status.paused")}</SelectItem>
-                    <SelectItem value="finished">{t("estimate.status.finished")}</SelectItem>
-                  </SelectContent>
-                </Select>
-
+              <div className="flex min-h-5 flex-wrap items-center gap-2">
+                <EstimateSyncStatusIndicator sync={estimateSync} />
                 {SHOW_ESTIMATE_VERSION_UI ? (
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -2410,39 +2533,20 @@ export default function ProjectEstimate() {
                     </TooltipContent>
                   </Tooltip>
                 ) : null}
-                <EstimateSyncStatusIndicator sync={estimateSync} />
               </div>
             )}
           </div>
 
           {showEstimateWorkspace && (
-            <div className="flex w-full min-w-0 flex-col items-start gap-1 lg:w-auto lg:items-end">
-              <div className="flex w-full flex-wrap items-center gap-2 lg:justify-end">
-                {canExportEstimateCsv && (
-                  <Button variant="outline" size="sm" onClick={() => setExportModalOpen(true)}>
-                    <Download className="mr-1 h-4 w-4" /> {t("estimate.header.export")}
-                  </Button>
-                )}
-
-                {ctaState.showApprove && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="border-accent/30 text-accent hover:bg-accent/10"
-                    onClick={() => setApprovalModalOpen(true)}
-                    disabled={ctaState.approveDisabled}
-                    title={ctaState.approveDisabledReason ?? undefined}
-                  >
-                    {t("estimate.header.approve")}
-                  </Button>
-                )}
-              </div>
-
-              {(!canEditEstimate || (ctaState.showApprove && ctaState.approveDisabledReason)) && (
-                <div className="flex flex-wrap gap-x-3 gap-y-1 text-caption text-muted-foreground lg:justify-end">
-                  {!canEditEstimate && <span>{t("estimate.header.ownerOnly")}</span>}
-                  {ctaState.showApprove && ctaState.approveDisabledReason && <span>{ctaState.approveDisabledReason}</span>}
-                </div>
+            <div className="min-w-0 space-y-1 xl:justify-self-end xl:self-start xl:w-full">
+              <EstimateStatusRail
+                status={estimateProject.estimateStatus}
+                canEdit={canEditEstimate}
+                isTransitioningToInWork={isTransitioningToInWork}
+                onChange={handleEstimateStatusChange}
+              />
+              {!canEditEstimate && (
+                <div className="text-caption text-muted-foreground xl:text-right">{t("estimate.header.ownerOnly")}</div>
               )}
             </div>
           )}
@@ -2476,24 +2580,68 @@ export default function ProjectEstimate() {
         </VersionBanner>}
 
         <Tabs value={activeTab} onValueChange={handleTabChange}>
-          <TabsList className="h-auto w-full justify-start gap-1 bg-transparent p-0 flex-nowrap overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <TabsTrigger value="estimate">{t("estimate.tabs.estimate")}</TabsTrigger>
-            <TabsTrigger value="work_schedule" disabled={!showEstimateWorkspace}>{t("estimate.tabs.workSchedule")}</TabsTrigger>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span>
-                  <TabsTrigger value="work_log" disabled={!showEstimateWorkspace}>
-                    {t("estimate.tabs.workLog")}
-                  </TabsTrigger>
-                </span>
-              </TooltipTrigger>
-              {!showEstimateWorkspace && (
-                <TooltipContent>
-                  {t("estimate.tabs.workLogDisabledTooltip")}
-                </TooltipContent>
-              )}
-            </Tooltip>
-          </TabsList>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <TabsList className="h-auto w-full justify-start gap-1 bg-transparent p-0 flex-nowrap overflow-x-auto whitespace-nowrap sm:w-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <TabsTrigger value="estimate">{t("estimate.tabs.estimate")}</TabsTrigger>
+              <TabsTrigger value="work_schedule" disabled={!showEstimateWorkspace}>{t("estimate.tabs.workSchedule")}</TabsTrigger>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span>
+                    <TabsTrigger value="work_log" disabled={!showEstimateWorkspace}>
+                      {t("estimate.tabs.workLog")}
+                    </TabsTrigger>
+                  </span>
+                </TooltipTrigger>
+                {!showEstimateWorkspace && (
+                  <TooltipContent>
+                    {t("estimate.tabs.workLogDisabledTooltip")}
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            </TabsList>
+
+            {showEstimateWorkspace && (
+              <div className="flex min-w-0 flex-col items-end gap-1">
+                <div className="flex flex-wrap items-center justify-end gap-1">
+                  {canExportEstimateCsv && (
+                    <button
+                      type="button"
+                      className={ESTIMATE_TAB_ACTION_CLASSNAME}
+                      onClick={() => setExportModalOpen(true)}
+                    >
+                      <Download /> {t("estimate.header.export")}
+                    </button>
+                  )}
+
+                  {canEditEstimate && (
+                    <button
+                      type="button"
+                      className={ESTIMATE_TAB_ACTION_CLASSNAME}
+                      onClick={() => setConstructorOpen(true)}
+                    >
+                      <Wrench /> {t("estimate.header.constructor")}
+                    </button>
+                  )}
+
+                  {ctaState.showApprove && (
+                    <button
+                      type="button"
+                      className={cn(ESTIMATE_TAB_ACTION_CLASSNAME, "text-accent hover:bg-accent/10 hover:text-accent")}
+                      onClick={() => setApprovalModalOpen(true)}
+                      disabled={ctaState.approveDisabled}
+                      title={ctaState.approveDisabledReason ?? undefined}
+                    >
+                      {t("estimate.header.approve")}
+                    </button>
+                  )}
+                </div>
+
+                {ctaState.showApprove && ctaState.approveDisabledReason && (
+                  <div className="text-right text-caption text-muted-foreground">{ctaState.approveDisabledReason}</div>
+                )}
+              </div>
+            )}
+          </div>
 
           <TabsContent value="estimate" className="mt-3 space-y-3">
             {!showEstimateWorkspace ? (
@@ -2544,8 +2692,10 @@ export default function ProjectEstimate() {
                           <span className="w-6 shrink-0 text-sm font-semibold text-muted-foreground tabular-nums md:w-7">
                             {stageNumber}
                           </span>
-                          <InlineEditableText
+                          <LibraryNameInput
                             value={stage.title}
+                            kind="stage"
+                            searchEnabled={canonicalSearchEnabled}
                             readOnly={!canEditEstimate}
                             startInEditMode={pendingStageTitleEditId === stage.id}
                             onCommit={(nextValue) => updateStage(pid, stage.id, { title: nextValue || stage.title })}
@@ -2604,7 +2754,7 @@ export default function ProjectEstimate() {
                               + (canEditEstimate ? 1 : 0);
 
                             const workTableColumns: WorkTableColumnDef[] = [
-                              { key: "resource", title: t("estimate.table.col.resource"), widthPx: 180, sticky: true },
+                              { key: "resource", title: t("estimate.table.col.resource"), widthPx: 252, sticky: true },
                               ...(showAssignmentColumn
                                 ? [{
                                     key: "assigned",
@@ -2614,23 +2764,23 @@ export default function ProjectEstimate() {
                                         <span>{t("estimate.table.col.assigned")}</span>
                                       </span>
                                     ),
-                                    widthPx: 88,
+                                    widthPx: 116,
                                   } as WorkTableColumnDef]
                                 : []),
-                              { key: "qty", title: t("estimate.table.col.qty"), widthPx: 92 },
-                              { key: "unit", title: t("estimate.table.col.unit"), widthPx: 168 },
+                              { key: "qty", title: t("estimate.table.col.qty"), widthPx: 72 },
+                              { key: "unit", title: t("estimate.table.col.unit"), widthPx: 132 },
                               ...(showEstimateInternalPricing
                                 ? [
                                     { key: "costUnit", title: t("estimate.table.col.costUnit"), widthPx: 120, align: "right" } as WorkTableColumnDef,
-                                    { key: "costTotal", title: t("estimate.table.col.costTotal"), widthPx: 120, align: "right" } as WorkTableColumnDef,
-                                    { key: "vatPct", title: t("estimate.table.col.vatPct"), widthPx: 92, align: "right" } as WorkTableColumnDef,
+                                    { key: "costTotal", title: t("estimate.table.col.costTotal"), widthPx: 126, align: "right" } as WorkTableColumnDef,
+                                    { key: "vatPct", title: t("estimate.table.col.vatPct"), widthPx: 78, align: "right" } as WorkTableColumnDef,
                                   ]
                                 : []),
                               ...(showEstimateMarkup
                                 ? [{ key: "markupPct", title: t("estimate.table.col.markupPct"), widthPx: 92, align: "right" } as WorkTableColumnDef]
                                 : []),
                               ...(showEstimateInternalPricing
-                                ? [{ key: "discountPct", title: t("estimate.table.col.discountPct"), widthPx: 92, align: "right" } as WorkTableColumnDef]
+                                ? [{ key: "discountPct", title: t("estimate.table.col.discountPct"), widthPx: 88, align: "right" } as WorkTableColumnDef]
                                 : []),
                               ...(showClientPricingColumns
                                 ? [
@@ -2642,7 +2792,7 @@ export default function ProjectEstimate() {
                                 ? [{ key: "discountedClient", title: t("estimate.table.col.discountedClient"), widthPx: 140, align: "right" } as WorkTableColumnDef]
                                 : []),
                               ...(canEditEstimate
-                                ? [{ key: "actions", title: "", widthPx: 40 } as WorkTableColumnDef]
+                                ? [{ key: "actions", title: "", widthPx: 36 } as WorkTableColumnDef]
                                 : []),
                             ];
 
@@ -2651,8 +2801,10 @@ export default function ProjectEstimate() {
                                 <div className="flex flex-wrap items-start justify-between gap-2 pl-0 md:pl-2">
                                   <div className="flex min-w-0 flex-1 items-center gap-2">
                                     <span className="w-12 shrink-0 text-xs font-medium text-muted-foreground tabular-nums">{workNumber}</span>
-                                    <InlineEditableText
+                                    <LibraryNameInput
                                       value={work.title}
+                                      kind="work"
+                                      searchEnabled={canonicalSearchEnabled}
                                       readOnly={!canEditEstimate}
                                       startInEditMode={pendingWorkTitleEditId === work.id}
                                       onCommit={(nextValue) => updateWork(pid, work.id, { title: nextValue || work.title })}
@@ -2695,7 +2847,7 @@ export default function ProjectEstimate() {
                                         const shouldShowCustomInput = isCustomUnit || customUnitInputLineIds.has(line.id);
                                         return (
                                           <TableRow key={line.id} className={cn("border-b border-border/40 last:border-b-0 md:border-b-0", changedLineIds.has(line.id) ? "bg-warning/10" : "")}>
-                                            <TableCell className="sticky left-0 z-20 w-[180px] border-r border-border bg-card py-1.5 pr-2 align-top shadow-[6px_0_10px_-10px_hsl(var(--foreground)/0.35)]">
+                                            <TableCell className="sticky left-0 z-20 w-[252px] border-r border-border bg-card py-1.5 pr-1 align-top shadow-[6px_0_10px_-10px_hsl(var(--foreground)/0.35)] focus-within:z-40">
                                               <div className="flex min-w-0 items-start gap-2">
                                                 {canEditEstimate ? (
                                                   <DropdownMenu>
@@ -2724,11 +2876,20 @@ export default function ProjectEstimate() {
                                                     <ResourceTypeBadge type={line.type} iconOnly />
                                                   </span>
                                                 )}
-                                                <InlineEditableText
+                                                {line.systemResourceArticleId ? (
+                                                  <LibraryArticleBadge
+                                                    className="mt-0.5"
+                                                    onOpen={() => openResourceModal(line.id)}
+                                                  />
+                                                ) : null}
+                                                <LibraryNameInput
                                                   value={line.title}
+                                                  kind="resource"
+                                                  searchEnabled={canonicalSearchEnabled}
                                                   readOnly={!canEditEstimate}
                                                   startInEditMode={pendingLineTitleEditId === line.id}
-                                                  onCommit={(nextValue) => updateLine(pid, line.id, { title: nextValue || line.title })}
+                                                  onCommit={(nextValue) => updateLine(pid, line.id, { title: nextValue || line.title, systemResourceArticleId: null })}
+                                                  onApplySuggestion={(suggestion) => applyResourceSuggestion(line.id, suggestion)}
                                                   className="min-w-0 flex-1"
                                                   displayClassName="whitespace-normal break-words leading-5 line-clamp-2 font-medium"
                                                 />
@@ -2736,7 +2897,7 @@ export default function ProjectEstimate() {
                                             </TableCell>
 
                                             {showAssignmentColumn && (
-                                              <TableCell className="w-[88px] py-1.5 pr-2 align-top">
+                                              <TableCell className="w-[116px] py-1.5 pr-1 align-top">
                                                 {isAssignableResourceType(line.type) ? (
                                                   <AssigneeCell
                                                     assigneeId={line.assigneeId}
@@ -2750,12 +2911,12 @@ export default function ProjectEstimate() {
                                                     onCommit={(nextValue) => updateLine(pid, line.id, nextValue)}
                                                   />
                                                 ) : (
-                                                  <div className="flex h-7 items-center px-1 text-xs text-muted-foreground">—</div>
+                                                  <div className="h-7" />
                                                 )}
                                               </TableCell>
                                             )}
 
-                                            <TableCell className="w-[92px] py-1.5 pr-2 align-top">
+                                            <TableCell className="w-[72px] py-1.5 pr-1 align-top">
                                               <InlineEditableNumber
                                                 value={line.qtyMilli}
                                                 readOnly={!canEditEstimate}
@@ -2767,13 +2928,12 @@ export default function ProjectEstimate() {
                                               />
                                             </TableCell>
 
-                                            <TableCell className="w-[168px] py-1.5 pr-2 align-top">
+                                            <TableCell className="w-[132px] py-1.5 pr-1 text-left align-top">
                                               {canEditEstimate ? (
                                                 shouldShowCustomInput ? (
-                                                  <div className="inline-flex max-w-full items-center gap-1">
+                                                  <div className="inline-flex w-full max-w-full items-center justify-start gap-1 text-left">
                                                     <Input
-                                                      className="h-7 w-auto max-w-[calc(100%-1.75rem)] px-2 py-0 text-sm"
-                                                      size={Math.min(18, Math.max(3, (customDraft ?? "").length + 1))}
+                                                      className="h-7 min-w-0 flex-1 px-1 py-0 text-left text-sm"
                                                       value={customDraft}
                                                       placeholder=""
                                                       aria-label={t("estimate.table.unitAria")}
@@ -2797,10 +2957,10 @@ export default function ProjectEstimate() {
                                                           type="button"
                                                           variant="ghost"
                                                           size="icon"
-                                                          className="h-7 w-7 shrink-0 border border-transparent bg-transparent text-foreground shadow-none hover:bg-muted/60 focus-visible:ring-1 focus-visible:ring-ring/40"
+                                                          className="h-7 w-5 shrink-0 border border-transparent bg-transparent text-foreground shadow-none hover:bg-muted/60 focus-visible:ring-1 focus-visible:ring-ring/40"
                                                           aria-label={t("estimate.unit.presetAria")}
                                                         >
-                                                          <ChevronDown className="h-4 w-4 opacity-50" />
+                                                          <ChevronDown className="h-3.5 w-3.5 opacity-50" />
                                                         </Button>
                                                       </DropdownMenuTrigger>
                                                       <DropdownMenuContent align="end" className="max-h-60 overflow-y-auto">
@@ -2830,7 +2990,7 @@ export default function ProjectEstimate() {
                                                       updateLine(pid, line.id, { unit: nextValue });
                                                     }}
                                                   >
-                                                    <SelectTrigger className="h-7 w-full min-w-0 border-transparent bg-transparent px-1 py-0 text-sm shadow-none focus:ring-1 focus:ring-ring/40">
+                                                    <SelectTrigger className="h-7 w-full min-w-0 justify-start gap-1 border-transparent bg-transparent px-0 py-0 text-left text-sm shadow-none focus:ring-1 focus:ring-ring/40 [&>span]:min-w-0 [&>span]:flex-1 [&>span]:truncate [&>span]:text-left [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:shrink-0">
                                                       <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -2843,7 +3003,7 @@ export default function ProjectEstimate() {
                                                   </Select>
                                                 )
                                               ) : (
-                                                <div className="min-h-7 px-1 py-0.5 text-sm text-foreground">
+                                                <div className="min-h-7 px-1 py-0.5 text-left text-sm text-foreground">
                                                   {line.unit ? getUnitLabel(line.unit, t) : "—"}
                                                 </div>
                                               )}
@@ -2863,13 +3023,13 @@ export default function ProjectEstimate() {
                                             )}
 
                                             {showEstimateInternalPricing && (
-                                              <TableCell className="w-[120px] py-1.5 pr-2 text-right text-sm tabular-nums align-top">
+                                              <TableCell className="w-[126px] py-1.5 pr-2 text-right text-sm tabular-nums align-top">
                                                 {money(computed.costTotalCents, estimateProject.currency)}
                                               </TableCell>
                                             )}
 
                                             {showEstimateInternalPricing && (
-                                              <TableCell className="w-[92px] py-1.5 pr-2 align-top">
+                                              <TableCell className="w-[78px] py-1.5 pr-2 align-top">
                                                 {canEditEstimate ? (
                                                   <InlineEditableNumber
                                                     value={effectiveTaxForDisplay(line, estimateProject.taxBps)}
@@ -2887,7 +3047,7 @@ export default function ProjectEstimate() {
                                             )}
 
                                             {showEstimateMarkup && (
-                                              <TableCell className="w-[92px] py-1.5 pr-2 align-top">
+                                              <TableCell className="w-[88px] py-1.5 pr-2 align-top">
                                                 <InlineEditableNumber
                                                   value={effectiveMarkupForDisplay(line, estimateProject.markupBps)}
                                                   readOnly={!canEditEstimate}
@@ -2936,7 +3096,7 @@ export default function ProjectEstimate() {
                                             )}
 
                                             {canEditEstimate && (
-                                              <TableCell className="w-10 py-1.5 pr-0 align-top">
+                                              <TableCell className="w-9 py-1.5 pr-0 align-top">
                                                 <Button
                                                   size="icon"
                                                   variant="ghost"
@@ -2957,7 +3117,7 @@ export default function ProjectEstimate() {
                                         const typeLabel = row.typeLabel ?? t(semanticLabelKeyForType(row.type));
                                         return (
                                           <TableRow key={row.id} className="border-b border-border/40 last:border-b-0 md:border-b-0">
-                                            <TableCell className="sticky left-0 z-20 w-[180px] border-r border-border bg-card py-1.5 pr-2 align-top shadow-[6px_0_10px_-10px_hsl(var(--foreground)/0.35)]">
+                                            <TableCell className="sticky left-0 z-20 w-[252px] border-r border-border bg-card py-1.5 pr-1 align-top shadow-[6px_0_10px_-10px_hsl(var(--foreground)/0.35)]">
                                               <div className="flex min-w-0 items-start gap-2">
                                                 <span title={typeLabel}>
                                                   <ResourceTypeBadge
@@ -2973,25 +3133,25 @@ export default function ProjectEstimate() {
                                             </TableCell>
 
                                             {showAssignmentColumn && (
-                                              <TableCell className="w-[88px] py-1.5 pr-2 align-top">
+                                              <TableCell className="w-[116px] py-1.5 pr-1 align-top">
                                                 {isAssignableResourceType(row.type) && (row.assigneeName || row.assigneeEmail) ? (
                                                   <div className="flex min-h-7 items-center px-1 py-0.5 text-sm text-foreground">
                                                     {row.assigneeName || row.assigneeEmail}
                                                   </div>
                                                 ) : (
-                                                  <div className="flex min-h-7 items-center px-1 py-0.5 text-xs text-muted-foreground">—</div>
+                                                  <div className="min-h-7" />
                                                 )}
                                               </TableCell>
                                             )}
 
-                                            <TableCell className="w-[92px] py-1.5 pr-2 align-top">
+                                            <TableCell className="w-[72px] py-1.5 pr-1 align-top">
                                               <div className="min-h-7 px-1 py-0.5 text-sm text-foreground tabular-nums">
                                                 {row.qtyMilli != null ? qtyFromMilli(row.qtyMilli) : "—"}
                                               </div>
                                             </TableCell>
 
-                                            <TableCell className="w-[168px] py-1.5 pr-2 align-top">
-                                              <div className="min-h-7 px-1 py-0.5 text-sm text-foreground">
+                                            <TableCell className="w-[132px] py-1.5 pr-1 text-left align-top">
+                                              <div className="min-h-7 px-1 py-0.5 text-left text-sm text-foreground">
                                                 {row.unit || "—"}
                                               </div>
                                             </TableCell>
@@ -3001,7 +3161,7 @@ export default function ProjectEstimate() {
 
                                       {canEditEstimate && (
                                         <TableRow className="border-b-0 hover:bg-transparent">
-                                          <TableCell className="sticky left-0 z-20 w-[180px] border-r border-border bg-card py-1 pr-2 shadow-[6px_0_10px_-10px_hsl(var(--foreground)/0.35)]">
+                                          <TableCell className="sticky left-0 z-20 w-[252px] border-r border-border bg-card py-1 pr-1 shadow-[6px_0_10px_-10px_hsl(var(--foreground)/0.35)]">
                                             <div className="flex h-8 items-center rounded-md border border-dashed border-border/70 bg-background/40 px-2">
                                               <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
@@ -3373,6 +3533,28 @@ export default function ProjectEstimate() {
           canShowInternal={canViewSensitiveDetail}
           onDownloadCsv={handleExportCsv}
           onEnsureShareLink={ensureShareLinkForExport}
+        />
+
+        <ResourceModal
+          open={resourceModalLine != null && Boolean(resourceModalLine.systemResourceArticleId)}
+          onOpenChange={(open) => {
+            if (!open) setResourceModalLineId(null);
+          }}
+          articleId={resourceModalLine?.systemResourceArticleId ?? null}
+          projectId={pid}
+          line={resourceModalLine}
+          lines={lines}
+          versions={versions}
+          canViewSensitiveDetail={canViewSensitiveDetail}
+        />
+
+        <EstimateConstructor
+          open={constructorOpen}
+          onOpenChange={setConstructorOpen}
+          projectId={pid}
+          estimateVersionId={constructorVersionQuery.data ?? null}
+          canApply={workspaceMode.kind === "supabase" && !constructorVersionQuery.isError}
+          profileId={constructorProfileId}
         />
       </div>
     </div>

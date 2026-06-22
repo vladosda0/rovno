@@ -40,9 +40,9 @@ type ProjectStageInsert = Database["public"]["Tables"]["project_stages"]["Insert
 
 const PROJECT_ESTIMATE_SELECT = "id, project_id, title, description, status, created_by, created_at, updated_at";
 const ESTIMATE_VERSION_SELECT = "id, estimate_id, version_number, is_current, created_by, created_at";
-const PROJECT_STAGE_SELECT = "id, project_id, title, description, sort_order, status, discount_bps, created_at, updated_at";
-const ESTIMATE_WORK_SELECT = "id, estimate_version_id, project_stage_id, title, description, sort_order, planned_cost_cents, planned_start, planned_end, created_at";
-const ESTIMATE_RESOURCE_LINE_SELECT = "id, estimate_work_id, resource_type, title, quantity, unit, unit_price_cents, total_price_cents, client_unit_price_cents, client_total_price_cents, markup_bps, discount_bps_override, assignee_profile_id, assignee_label, created_at";
+const PROJECT_STAGE_SELECT = "id, project_id, title, description, sort_order, status, discount_bps, system_stage_article_id, created_at, updated_at";
+const ESTIMATE_WORK_SELECT = "id, estimate_version_id, project_stage_id, title, description, sort_order, planned_cost_cents, planned_start, planned_end, system_work_article_id, created_at";
+const ESTIMATE_RESOURCE_LINE_SELECT = "id, estimate_work_id, resource_type, title, quantity, unit, unit_price_cents, total_price_cents, client_unit_price_cents, client_total_price_cents, markup_bps, discount_bps_override, assignee_profile_id, assignee_label, system_resource_article_id, created_at";
 const ESTIMATE_DEPENDENCY_SELECT = "id, estimate_version_id, from_work_id, to_work_id, dependency_type, lag_days, created_at";
 
 export interface EnsureProjectEstimateRootInput {
@@ -276,6 +276,44 @@ export async function ensureEstimateCurrentVersion(
   }
 
   return { ok: true, row: inserted };
+}
+
+/**
+ * Ensures the server project_estimates root + current estimate_versions row exist for a
+ * project (creating them when missing) and returns the current version id. Uses the SAME
+ * deterministic ids as saveCurrentEstimateDraft (resolveEstimateDraftRemoteIds), so a later
+ * autosave reuses this exact version instead of conflicting. Lets the EstimateConstructor
+ * bootstrap a brand-new (empty) estimate before applying a template stage.
+ */
+export async function ensureRemoteEstimateCurrentVersionId(
+  projectId: string,
+  snapshot: EstimateV2Snapshot,
+  profileId: string,
+): Promise<string> {
+  const supabase = await loadSupabaseClient();
+  const existingDraft = await loadCurrentEstimateDraft(projectId);
+  const resolvedIds = resolveEstimateDraftRemoteIds({ projectId, snapshot, existingDraft });
+
+  const estimateResult = await ensureProjectEstimateRoot(supabase, {
+    projectId,
+    estimateId: resolvedIds.estimateId,
+    title: snapshot.project.title,
+    createdBy: profileId,
+  });
+  if (!estimateResult.ok) {
+    throw new Error(`Unable to ensure estimate root: ${estimateResult.reason}`);
+  }
+
+  const versionResult = await ensureEstimateCurrentVersion(supabase, {
+    estimateId: estimateResult.row.id,
+    versionId: resolvedIds.versionId,
+    createdBy: profileId,
+  });
+  if (!versionResult.ok) {
+    throw new Error(`Unable to ensure estimate current version: ${versionResult.reason}`);
+  }
+
+  return versionResult.row.id;
 }
 
 export async function updateProjectEstimateRootStatus(
@@ -922,6 +960,7 @@ export async function saveCurrentEstimateDraft(
       discount_bps_override: line.discountBpsOverride ?? null,
       assignee_profile_id: assigneeProfileId,
       assignee_label: assigneeLabel,
+      system_resource_article_id: line.systemResourceArticleId ?? null,
     } as EstimateResourceLineInsert;
   });
 
