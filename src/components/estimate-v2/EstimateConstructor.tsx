@@ -47,7 +47,10 @@ export function EstimateConstructor({
   profileId,
 }: EstimateConstructorProps) {
   const { t } = useTranslation();
-  const treeQuery = useCanonicalStagesWithWorks(open);
+  // The canonical tree is a Supabase-only feature; gate the RPC on canApply (supabase mode)
+  // so opening the Constructor in demo/local never fires list_canonical_stages_with_works
+  // against a session-less client (mirrors the LibraryNameInput search + version-id gates).
+  const treeQuery = useCanonicalStagesWithWorks(open && canApply);
   const { applyStages, isApplying } = useApplyTemplateStages(projectId, estimateVersionId, profileId);
   // Guard: don't apply while an autosave is pending/in-flight — its prune could
   // race the server-side apply (the flush in the hook is the real fix; this is belt-and-suspenders).
