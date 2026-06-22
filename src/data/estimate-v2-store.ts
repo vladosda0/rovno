@@ -232,6 +232,8 @@ const remoteDraftSyncErrorSignatureByProjectId = new Map<string, string>();
 const heroTransitionInFlightByProjectId = new Set<string>();
 const deferredDraftSyncByProjectId = new Set<string>();
 const remoteProjectionSyncInFlightByProjectId = new Set<string>();
+// Promise for an in-flight runProjectDraftSync, so flushProjectDraftSync can await it.
+const runningProjectDraftSyncByProjectId = new Map<string, Promise<void>>();
 const retainedSupabaseSyncProfileIdByProjectId = new Map<string, string>();
 
 function notify() {
@@ -826,10 +828,52 @@ function queueProjectDraftSync(projectId: string) {
 
   const timer = setTimeout(() => {
     remoteDraftSyncTimers.delete(projectId);
-    void runProjectDraftSync(projectId);
+    void runAndTrackProjectDraftSync(projectId);
   }, ESTIMATE_V2_REMOTE_SYNC_DEBOUNCE_MS);
 
   remoteDraftSyncTimers.set(projectId, timer);
+}
+
+// Run a draft sync while tracking its promise so flushProjectDraftSync can await it.
+function runAndTrackProjectDraftSync(projectId: string): Promise<void> {
+  const run = runProjectDraftSync(projectId).finally(() => {
+    if (runningProjectDraftSyncByProjectId.get(projectId) === run) {
+      runningProjectDraftSyncByProjectId.delete(projectId);
+    }
+  });
+  runningProjectDraftSyncByProjectId.set(projectId, run);
+  return run;
+}
+
+/**
+ * Flush any pending or in-flight debounced draft sync and await completion. Call
+ * this before a server-side estimate mutation (e.g. apply_template_stage_to_estimate)
+ * so the autosave's prune step can't race and DELETE the freshly-applied rows.
+ * No-op when there is no managed remote sync (local/demo mode).
+ */
+export async function flushProjectDraftSync(projectId: string): Promise<void> {
+  if (!getManagedEstimateRemoteSyncContext(projectId)) return;
+  for (let i = 0; i < 5 && hasPendingProjectDraftSync(projectId); i += 1) {
+    const timer = remoteDraftSyncTimers.get(projectId);
+    if (timer) {
+      clearTimeout(timer);
+      remoteDraftSyncTimers.delete(projectId);
+      await runAndTrackProjectDraftSync(projectId);
+      continue;
+    }
+    const running = runningProjectDraftSyncByProjectId.get(projectId);
+    if (running) {
+      await running;
+      continue;
+    }
+    if (deferredDraftSyncByProjectId.has(projectId)) {
+      deferredDraftSyncByProjectId.delete(projectId);
+      await runAndTrackProjectDraftSync(projectId);
+      continue;
+    }
+    // Only a hero transition remains in-flight (rare); it cannot be awaited here.
+    break;
+  }
 }
 
 function hasProjectDraftProjectionDrift(
@@ -1665,7 +1709,7 @@ function displayForTaskProfileId(
 
 export async function hydrateEstimateV2ProjectFromWorkspace(
   projectId: string,
-  input: { profileId: string },
+  input: { profileId: string; forceFresh?: boolean },
 ): Promise<void> {
   retainedSupabaseSyncProfileIdByProjectId.set(projectId, input.profileId);
   const cacheKey = `${projectId}:${input.profileId}`;
@@ -1697,6 +1741,7 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
 
     if (
       hadExistingState
+      && !input.forceFresh
       && hasPendingProjectDraftSync(projectId)
       && (
         currentState.lines.length > 0
@@ -1794,6 +1839,7 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
           title: stage.title,
           order: stage.sort_order,
           discountBps: stage.discount_bps,
+          systemStageArticleId: stage.system_stage_article_id ?? cachedStage?.systemStageArticleId ?? null,
           createdAt: cachedStage?.createdAt ?? stage.created_at,
           updatedAt: stage.updated_at,
         } satisfies EstimateV2Stage;
@@ -1822,6 +1868,7 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
           id: work.estimate_work_id,
           projectId,
           stageId: work.project_stage_id,
+          systemWorkArticleId: cachedWork?.systemWorkArticleId ?? null,
           title: work.title,
           order: work.sort_order,
           discountBps: cachedWork?.discountBps ?? 0,
@@ -1847,6 +1894,7 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
               id: workId,
               projectId,
               stageId: stageIdFromTask || cachedWork?.stageId || fallbackStageId,
+              systemWorkArticleId: cachedWork?.systemWorkArticleId ?? null,
               title: task?.title ?? cachedWork?.title ?? `Work ${index + 1}`,
               order: cachedWork?.order ?? index + 1,
               discountBps: cachedWork?.discountBps ?? 0,
@@ -1869,6 +1917,7 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
             id: work.id,
             projectId,
             stageId: work.project_stage_id ?? cachedWork?.stageId ?? stages[0]?.id ?? "",
+            systemWorkArticleId: work.system_work_article_id ?? cachedWork?.systemWorkArticleId ?? null,
             title: work.title,
             order: work.sort_order,
             discountBps: cachedWork?.discountBps ?? 0,
@@ -1897,6 +1946,7 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
           unit: line.unit ?? cachedLine?.unit ?? "unit",
           qtyMilli: Math.max(1, Math.round(line.quantity * 1_000)),
           costUnitCents: 0,
+          systemResourceArticleId: cachedLine?.systemResourceArticleId ?? null,
           ...summaryClientFieldsFromOptionalCents(line.client_unit_price_cents, line.client_total_price_cents),
           ...summaryDiscountedClientField(line.discounted_client_total_price_cents),
           markupBps: 0,
@@ -1946,6 +1996,7 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
             unit: item.estimateV2Unit ?? cachedLine?.unit ?? "unit",
             qtyMilli: Math.max(1, Math.round(item.estimateV2QtyMilli ?? cachedLine?.qtyMilli ?? 1_000)),
             costUnitCents: Math.max(0, Math.round(cachedLine?.costUnitCents ?? 0)),
+            systemResourceArticleId: cachedLine?.systemResourceArticleId ?? null,
             markupBps: cachedLine?.markupBps ?? currentState.project.markupBps,
             discountBpsOverride: cachedLine?.discountBpsOverride ?? null,
             taxBpsOverride: cachedLine?.taxBpsOverride ?? null,
@@ -1993,6 +2044,7 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
             unit: line.unit ?? cachedLine?.unit ?? "unit",
             qtyMilli: Math.max(1, Math.round(line.quantity * 1_000)),
             costUnitCents: Math.max(0, Math.round(line.unit_price_cents ?? 0)),
+            systemResourceArticleId: line.system_resource_article_id ?? cachedLine?.systemResourceArticleId ?? null,
             ...summaryClientFieldsFromOptionalCents(line.client_unit_price_cents, line.client_total_price_cents),
             markupBps: persistedMarkupBps ?? cachedLine?.markupBps ?? currentState.project.markupBps,
             discountBpsOverride: persistedDiscountOverride ?? cachedLine?.discountBpsOverride ?? null,

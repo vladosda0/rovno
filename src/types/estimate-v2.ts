@@ -32,6 +32,8 @@ export interface EstimateV2Stage {
   title: string;
   order: number;
   discountBps: number;
+  /** Canonical-library link (system_stage_article_id). Set when this stage came from the rovno.ai library. */
+  systemStageArticleId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -47,6 +49,8 @@ export interface EstimateV2Work {
   plannedEnd: string | null;
   taskId: string | null;
   status: EstimateV2WorkStatus;
+  /** Canonical-library link (system_work_article_id). Set when this work came from the rovno.ai library. */
+  systemWorkArticleId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -61,6 +65,8 @@ export interface EstimateV2ResourceLine {
   unit: string;
   qtyMilli: number;
   costUnitCents: number;
+  /** Canonical-library link (system_resource_article_id). Set when this line came from the rovno.ai library; drives the library row indicator + resource modal. */
+  systemResourceArticleId?: string | null;
   /** Populated from operational RPC when finance visibility is summary-only (no cost in payload). */
   summaryClientUnitCents?: number | null;
   summaryClientTotalCents?: number | null;

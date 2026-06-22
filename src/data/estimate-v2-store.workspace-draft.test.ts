@@ -152,6 +152,60 @@ describe("estimate-v2 workspace drafts", () => {
     expect(created?.title).toBe("Shell");
   });
 
+  // The apply-flow race fix: after a server-side apply, the constructor calls
+  // hydrate({ forceFresh: true }) so the in-flight autosave's early-return can't keep
+  // stale state (and its prune can't delete the freshly-applied rows).
+  const serverDraftWithStage = (projectId: string, stageTitle: string) => ({
+    estimate: {
+      id: "estimate-1", project_id: projectId, title: "Remote Estimate", description: null,
+      status: "draft", created_by: "profile-1",
+      created_at: "2026-03-01T00:00:00.000Z", updated_at: "2026-03-02T00:00:00.000Z",
+    },
+    currentVersion: {
+      id: "version-1", estimate_id: "estimate-1", version_number: 1, is_current: true,
+      created_by: "profile-1", created_at: "2026-03-01T00:00:00.000Z",
+    },
+    stages: [{
+      id: "server-stage", project_id: projectId, title: stageTitle, description: "",
+      sort_order: 1, status: "open", discount_bps: 0,
+      created_at: "2026-03-01T00:00:00.000Z", updated_at: "2026-03-02T00:00:00.000Z",
+    }],
+    works: [], lines: [], dependencies: [],
+  });
+
+  it("forceFresh hydrate adopts the server draft even while a save is pending", async () => {
+    const projectId = "project-remote-1";
+    registerEstimateV2ProjectAccessContext(projectId, {
+      mode: "supabase", profileId: "profile-1", projectOwnerProfileId: "profile-1", membershipRole: "owner",
+    });
+    await hydrateEstimateV2ProjectFromWorkspace(projectId, { profileId: "profile-1" });
+    // Local edit → queues a debounced autosave (a pending sync exists now).
+    createStage(projectId, { title: "Local pending stage" });
+    // Server now reports a freshly-applied stage.
+    loadCurrentEstimateDraftMock.mockResolvedValue(serverDraftWithStage(projectId, "Server Applied"));
+
+    await hydrateEstimateV2ProjectFromWorkspace(projectId, { profileId: "profile-1", forceFresh: true });
+
+    const titles = getEstimateV2ProjectState(projectId).stages.map((stage) => stage.title);
+    expect(titles).toContain("Server Applied");
+  });
+
+  it("a non-forced hydrate keeps stale local state while a save is pending (early-return)", async () => {
+    const projectId = "project-remote-1";
+    registerEstimateV2ProjectAccessContext(projectId, {
+      mode: "supabase", profileId: "profile-1", projectOwnerProfileId: "profile-1", membershipRole: "owner",
+    });
+    await hydrateEstimateV2ProjectFromWorkspace(projectId, { profileId: "profile-1" });
+    createStage(projectId, { title: "Local pending stage" });
+    loadCurrentEstimateDraftMock.mockResolvedValue(serverDraftWithStage(projectId, "Server Applied"));
+
+    await hydrateEstimateV2ProjectFromWorkspace(projectId, { profileId: "profile-1" });
+
+    const titles = getEstimateV2ProjectState(projectId).stages.map((stage) => stage.title);
+    expect(titles).toContain("Local pending stage");
+    expect(titles).not.toContain("Server Applied");
+  });
+
   it("hydrates the current remote draft and links works back to planning tasks", async () => {
     const projectId = "project-remote-1";
     loadCurrentEstimateDraftMock.mockResolvedValue({
