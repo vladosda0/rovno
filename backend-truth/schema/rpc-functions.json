@@ -2732,7 +2732,7 @@
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260613120600_get_resource_article_price_comparison.sql",
+      "sourceMigration": "supabase/migrations/20260622120000_tighten_price_comparison_finance_gate.sql",
       "triggerUsages": []
     }
   ]
