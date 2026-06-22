@@ -45,6 +45,12 @@ interface LibraryNameInputProps {
    * just commits its name.
    */
   onApplySuggestion?: (suggestion: CanonicalSuggestion) => void;
+  /**
+   * Gate the canonical-library typeahead. When false (e.g. demo/local workspace
+   * mode, which has no Supabase session), the dropdown stays closed and no
+   * search_canonical_library RPC is issued. Defaults to true.
+   */
+  searchEnabled?: boolean;
   readOnly?: boolean;
   startInEditMode?: boolean;
   className?: string;
@@ -63,6 +69,7 @@ export function LibraryNameInput({
   kind,
   onCommit,
   onApplySuggestion,
+  searchEnabled = true,
   readOnly = false,
   startInEditMode = false,
   className,
@@ -78,7 +85,7 @@ export function LibraryNameInput({
   const skipBlurRef = useRef(false);
 
   const debounced = useDebounce(draft, 200);
-  const dropdownOpen = isEditing && draft.trim().length > 0;
+  const dropdownOpen = isEditing && draft.trim().length > 0 && searchEnabled;
   const search = useCanonicalSearch(debounced, kind, dropdownOpen);
   // True while the debounce gap hasn't caught up to the latest keystroke OR the
   // query is in flight — prevents the "no matches" empty state from flashing mid-type.

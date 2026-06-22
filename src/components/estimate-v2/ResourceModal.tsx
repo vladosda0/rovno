@@ -32,6 +32,12 @@ interface ResourceModalProps {
   lines: EstimateV2ResourceLine[];
   /** Version snapshots — for the price-over-versions sparkline. */
   versions: EstimateV2Version[];
+  /**
+   * Whether the viewer may see sensitive finance detail. Gates the cross-project price
+   * comparison (median/avg/min/max), which aggregates other projects' unit prices and must
+   * not leak to summary/none finance-visibility members.
+   */
+  canViewSensitiveDetail: boolean;
 }
 
 const RESOURCE_TYPES = new Set<ResourceLineType>([
@@ -91,10 +97,14 @@ function Sparkline({ points }: { points: number[] }) {
   );
 }
 
-function ResourceModalBody({ articleId, projectId, line, lines, versions, open }: Omit<ResourceModalProps, "onOpenChange">) {
+function ResourceModalBody({ articleId, projectId, line, lines, versions, open, canViewSensitiveDetail }: Omit<ResourceModalProps, "onOpenChange">) {
   const { t } = useTranslation();
   const detailQuery = useResourceArticleDetail(open ? articleId : null);
-  const comparisonQuery = useResourceArticlePriceComparison(open ? articleId : null, projectId, { enabled: open });
+  // Cross-project price comparison is sensitive finance detail: only fetch it for viewers
+  // allowed to see it (the RPC is also gated server-side; this is defense in depth).
+  const comparisonQuery = useResourceArticlePriceComparison(open ? articleId : null, projectId, {
+    enabled: open && canViewSensitiveDetail,
+  });
 
   const estimateQtyMilli = useMemo(
     () => lines.filter((l) => l.systemResourceArticleId === articleId).reduce((sum, l) => sum + l.qtyMilli, 0),
@@ -217,37 +227,39 @@ function ResourceModalBody({ articleId, projectId, line, lines, versions, open }
             </div>
           )}
 
-          <div className="rounded-md border border-border p-3">
-            <p className="mb-2 text-xs font-medium text-muted-foreground">
-              {t("estimate.resourceModal.tabs.priceHistory")}
-            </p>
-            {comparison && comparison.sampleCount > 0 ? (
-              <dl className="divide-y divide-border">
-                <Field label={t("estimate.resourceModal.price.median")} value={formatCents(comparison.medianCents)} />
-                <Field label={t("estimate.resourceModal.price.average")} value={formatCents(comparison.avgCents)} />
-                <Field
-                  label={t("estimate.resourceModal.price.range")}
-                  value={`${formatCents(comparison.minCents)} – ${formatCents(comparison.maxCents)}`}
-                />
-                <Field
-                  label={t("estimate.resourceModal.price.basis")}
-                  value={t("estimate.resourceModal.price.basisValue", {
-                    projects: comparison.projectCount,
-                    samples: comparison.sampleCount,
-                  })}
-                />
-              </dl>
-            ) : (
-              <p className="text-sm text-muted-foreground">{t("estimate.resourceModal.price.noComparison")}</p>
-            )}
-          </div>
+          {canViewSensitiveDetail && (
+            <div className="rounded-md border border-border p-3">
+              <p className="mb-2 text-xs font-medium text-muted-foreground">
+                {t("estimate.resourceModal.tabs.priceHistory")}
+              </p>
+              {comparison && comparison.sampleCount > 0 ? (
+                <dl className="divide-y divide-border">
+                  <Field label={t("estimate.resourceModal.price.median")} value={formatCents(comparison.medianCents)} />
+                  <Field label={t("estimate.resourceModal.price.average")} value={formatCents(comparison.avgCents)} />
+                  <Field
+                    label={t("estimate.resourceModal.price.range")}
+                    value={`${formatCents(comparison.minCents)} – ${formatCents(comparison.maxCents)}`}
+                  />
+                  <Field
+                    label={t("estimate.resourceModal.price.basis")}
+                    value={t("estimate.resourceModal.price.basisValue", {
+                      projects: comparison.projectCount,
+                      samples: comparison.sampleCount,
+                    })}
+                  />
+                </dl>
+              ) : (
+                <p className="text-sm text-muted-foreground">{t("estimate.resourceModal.price.noComparison")}</p>
+              )}
+            </div>
+          )}
         </TabsContent>
       </div>
     </Tabs>
   );
 }
 
-export function ResourceModal({ open, onOpenChange, articleId, projectId, line, lines, versions }: ResourceModalProps) {
+export function ResourceModal({ open, onOpenChange, articleId, projectId, line, lines, versions, canViewSensitiveDetail }: ResourceModalProps) {
   const { t } = useTranslation();
   const title = line?.title || t("estimate.resourceModal.title");
 
@@ -269,6 +281,7 @@ export function ResourceModal({ open, onOpenChange, articleId, projectId, line, 
           line={line}
           lines={lines}
           versions={versions}
+          canViewSensitiveDetail={canViewSensitiveDetail}
         />
       </DialogContent>
     </Dialog>

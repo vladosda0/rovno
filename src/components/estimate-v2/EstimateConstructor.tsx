@@ -28,6 +28,11 @@ interface EstimateConstructorProps {
   onOpenChange: (open: boolean) => void;
   projectId: string;
   estimateVersionId: string | null;
+  /**
+   * Whether server-side apply is available (supabase workspace mode). When false the Apply
+   * button stays disabled; when true a null estimateVersionId is bootstrapped on apply.
+   */
+  canApply: boolean;
   profileId: string;
 }
 
@@ -38,6 +43,7 @@ export function EstimateConstructor({
   onOpenChange,
   projectId,
   estimateVersionId,
+  canApply,
   profileId,
 }: EstimateConstructorProps) {
   const { t } = useTranslation();
@@ -226,12 +232,9 @@ export function EstimateConstructor({
             </div>
 
             <SheetFooter className="border-t border-border p-3 sm:flex-col">
-              {!estimateVersionId && (
-                <p className="mb-1 text-xs text-muted-foreground">{t("estimate.constructor.noEstimate")}</p>
-              )}
               <Button
                 className="w-full"
-                disabled={selectedWorkCount === 0 || isApplying || isSaving || !estimateVersionId}
+                disabled={selectedWorkCount === 0 || isApplying || isSaving || !canApply}
                 onClick={handleApply}
               >
                 {isApplying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}

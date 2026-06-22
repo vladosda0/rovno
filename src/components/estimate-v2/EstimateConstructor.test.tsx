@@ -42,6 +42,7 @@ function renderConstructor() {
       onOpenChange={() => {}}
       projectId="p1"
       estimateVersionId="v1"
+      canApply
       profileId="prof1"
     />,
   );

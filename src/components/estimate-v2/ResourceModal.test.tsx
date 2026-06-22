@@ -4,6 +4,8 @@ import { render, screen } from "@testing-library/react";
 import { ResourceModal } from "@/components/estimate-v2/ResourceModal";
 import type { EstimateV2ResourceLine } from "@/types/estimate-v2";
 
+const { priceComparisonSpy } = vi.hoisted(() => ({ priceComparisonSpy: vi.fn() }));
+
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string, opts?: Record<string, unknown>) =>
@@ -34,17 +36,20 @@ vi.mock("@/hooks/use-resource-article", () => ({
       siblings: [],
     },
   }),
-  useResourceArticlePriceComparison: () => ({
-    data: {
-      articleId: "a1",
-      sampleCount: 4,
-      projectCount: 3,
-      medianCents: 50000,
-      avgCents: 52000,
-      minCents: 40000,
-      maxCents: 70000,
-    },
-  }),
+  useResourceArticlePriceComparison: (...args: unknown[]) => {
+    priceComparisonSpy(...args);
+    return {
+      data: {
+        articleId: "a1",
+        sampleCount: 4,
+        projectCount: 3,
+        medianCents: 50000,
+        avgCents: 52000,
+        minCents: 40000,
+        maxCents: 70000,
+      },
+    };
+  },
 }));
 
 const line: EstimateV2ResourceLine = {
@@ -80,6 +85,7 @@ describe("ResourceModal", () => {
         line={line}
         lines={[line]}
         versions={[]}
+        canViewSensitiveDetail
       />,
     );
 
@@ -104,6 +110,7 @@ describe("ResourceModal", () => {
         line={line}
         lines={[line]}
         versions={[]}
+        canViewSensitiveDetail
       />,
     );
     // default (description) tab shows the source badge + subcategory
@@ -121,8 +128,45 @@ describe("ResourceModal", () => {
         line={line}
         lines={[line]}
         versions={[]}
+        canViewSensitiveDetail
       />,
     );
     expect(screen.queryByText("estimate.resourceModal.tabs.description")).not.toBeInTheDocument();
+  });
+
+  it("disables the cross-project price-comparison query without detail access", () => {
+    priceComparisonSpy.mockClear();
+    render(
+      <ResourceModal
+        open
+        onOpenChange={() => {}}
+        articleId="a1"
+        projectId="p1"
+        line={line}
+        lines={[line]}
+        versions={[]}
+        canViewSensitiveDetail={false}
+      />,
+    );
+    // The cross-project aggregate (other projects' unit prices) must never be fetched for a
+    // summary/none finance-visibility viewer: the RPC query is disabled.
+    expect(priceComparisonSpy).toHaveBeenCalledWith("a1", "p1", expect.objectContaining({ enabled: false }));
+  });
+
+  it("enables the price-comparison query with detail access", () => {
+    priceComparisonSpy.mockClear();
+    render(
+      <ResourceModal
+        open
+        onOpenChange={() => {}}
+        articleId="a1"
+        projectId="p1"
+        line={line}
+        lines={[line]}
+        versions={[]}
+        canViewSensitiveDetail
+      />,
+    );
+    expect(priceComparisonSpy).toHaveBeenCalledWith("a1", "p1", expect.objectContaining({ enabled: true }));
   });
 });

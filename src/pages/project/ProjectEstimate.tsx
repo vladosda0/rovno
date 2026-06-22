@@ -927,6 +927,9 @@ export default function ProjectEstimate() {
 
   const [constructorOpen, setConstructorOpen] = useState(false);
   const constructorVersionQuery = useCurrentEstimateVersionId(pid, constructorOpen && workspaceMode.kind === "supabase");
+  // Canonical-library typeahead only works against the Supabase backend; gate it
+  // off in demo/local mode so editing names never fires search_canonical_library.
+  const canonicalSearchEnabled = workspaceMode.kind === "supabase";
   const constructorProfileId = workspaceMode.kind === "supabase" ? workspaceMode.profileId : (currentUser.id || "");
 
   const currentMembership = members.find((member) => member.user_id === currentUser.id) ?? null;
@@ -2692,6 +2695,7 @@ export default function ProjectEstimate() {
                           <LibraryNameInput
                             value={stage.title}
                             kind="stage"
+                            searchEnabled={canonicalSearchEnabled}
                             readOnly={!canEditEstimate}
                             startInEditMode={pendingStageTitleEditId === stage.id}
                             onCommit={(nextValue) => updateStage(pid, stage.id, { title: nextValue || stage.title })}
@@ -2800,6 +2804,7 @@ export default function ProjectEstimate() {
                                     <LibraryNameInput
                                       value={work.title}
                                       kind="work"
+                                      searchEnabled={canonicalSearchEnabled}
                                       readOnly={!canEditEstimate}
                                       startInEditMode={pendingWorkTitleEditId === work.id}
                                       onCommit={(nextValue) => updateWork(pid, work.id, { title: nextValue || work.title })}
@@ -2880,9 +2885,10 @@ export default function ProjectEstimate() {
                                                 <LibraryNameInput
                                                   value={line.title}
                                                   kind="resource"
+                                                  searchEnabled={canonicalSearchEnabled}
                                                   readOnly={!canEditEstimate}
                                                   startInEditMode={pendingLineTitleEditId === line.id}
-                                                  onCommit={(nextValue) => updateLine(pid, line.id, { title: nextValue || line.title })}
+                                                  onCommit={(nextValue) => updateLine(pid, line.id, { title: nextValue || line.title, systemResourceArticleId: null })}
                                                   onApplySuggestion={(suggestion) => applyResourceSuggestion(line.id, suggestion)}
                                                   className="min-w-0 flex-1"
                                                   displayClassName="whitespace-normal break-words leading-5 line-clamp-2 font-medium"
@@ -3539,6 +3545,7 @@ export default function ProjectEstimate() {
           line={resourceModalLine}
           lines={lines}
           versions={versions}
+          canViewSensitiveDetail={canViewSensitiveDetail}
         />
 
         <EstimateConstructor
@@ -3546,6 +3553,7 @@ export default function ProjectEstimate() {
           onOpenChange={setConstructorOpen}
           projectId={pid}
           estimateVersionId={constructorVersionQuery.data ?? null}
+          canApply={workspaceMode.kind === "supabase" && !constructorVersionQuery.isError}
           profileId={constructorProfileId}
         />
       </div>

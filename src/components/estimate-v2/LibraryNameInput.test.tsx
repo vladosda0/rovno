@@ -76,4 +76,24 @@ describe("LibraryNameInput", () => {
     render(<LibraryNameInput value="" kind="resource" startInEditMode onCommit={vi.fn()} onApplySuggestion={vi.fn()} />);
     expect(screen.queryByText("Песок речной")).not.toBeInTheDocument();
   });
+
+  it("does not open the dropdown or enable the search RPC when searchEnabled is false (demo/local)", () => {
+    setSuggestions([resourceSuggestion]);
+    render(
+      <LibraryNameInput
+        value=""
+        kind="resource"
+        startInEditMode
+        searchEnabled={false}
+        onCommit={vi.fn()}
+        onApplySuggestion={vi.fn()}
+      />,
+    );
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "песок" } });
+    // Gated off: no suggestions, no empty hint, and useCanonicalSearch is disabled so the
+    // search_canonical_library RPC never fires in a session-less workspace.
+    expect(screen.queryByText("Песок речной")).not.toBeInTheDocument();
+    expect(screen.queryByText("estimate.search.empty")).not.toBeInTheDocument();
+    expect(mockSearch).toHaveBeenLastCalledWith("песок", "resource", false);
+  });
 });
