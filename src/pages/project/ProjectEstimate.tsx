@@ -22,6 +22,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
+  ExternalLink,
   Wrench,
   Info,
   Layers,
@@ -149,7 +150,6 @@ import { publishEstimateShareSnapshot } from "@/data/estimate-share-source";
 import { ApprovalStampCard } from "@/components/estimate-v2/ApprovalStampCard";
 import { ApprovalStampFormModal } from "@/components/estimate-v2/ApprovalStampFormModal";
 import { EstimateExportModal } from "@/components/estimate-v2/EstimateExportModal";
-import { LibraryArticleBadge } from "@/components/estimate-v2/LibraryArticleBadge";
 import { ResourceModal } from "@/components/estimate-v2/ResourceModal";
 import { LibraryNameInput } from "@/components/estimate-v2/LibraryNameInput";
 import type { CanonicalSuggestion } from "@/hooks/use-canonical-search";
@@ -2876,23 +2876,42 @@ export default function ProjectEstimate() {
                                                     <ResourceTypeBadge type={line.type} iconOnly />
                                                   </span>
                                                 )}
-                                                {line.systemResourceArticleId ? (
-                                                  <LibraryArticleBadge
-                                                    className="mt-0.5"
-                                                    onOpen={() => openResourceModal(line.id)}
+                                                <div
+                                                  className={cn(
+                                                    "flex min-w-0 flex-1 items-start gap-1",
+                                                    line.systemResourceArticleId && "group/libname",
+                                                  )}
+                                                >
+                                                  <LibraryNameInput
+                                                    value={line.title}
+                                                    kind="resource"
+                                                    searchEnabled={canonicalSearchEnabled}
+                                                    readOnly={!canEditEstimate}
+                                                    startInEditMode={pendingLineTitleEditId === line.id}
+                                                    onCommit={(nextValue) => updateLine(pid, line.id, { title: nextValue || line.title, systemResourceArticleId: null })}
+                                                    onApplySuggestion={(suggestion) => applyResourceSuggestion(line.id, suggestion)}
+                                                    className="min-w-0 flex-1"
+                                                    displayClassName={cn(
+                                                      "whitespace-normal break-words leading-5 line-clamp-2 font-medium",
+                                                      line.systemResourceArticleId &&
+                                                        "group-hover/libname:underline group-hover/libname:underline-offset-4",
+                                                    )}
                                                   />
-                                                ) : null}
-                                                <LibraryNameInput
-                                                  value={line.title}
-                                                  kind="resource"
-                                                  searchEnabled={canonicalSearchEnabled}
-                                                  readOnly={!canEditEstimate}
-                                                  startInEditMode={pendingLineTitleEditId === line.id}
-                                                  onCommit={(nextValue) => updateLine(pid, line.id, { title: nextValue || line.title, systemResourceArticleId: null })}
-                                                  onApplySuggestion={(suggestion) => applyResourceSuggestion(line.id, suggestion)}
-                                                  className="min-w-0 flex-1"
-                                                  displayClassName="whitespace-normal break-words leading-5 line-clamp-2 font-medium"
-                                                />
+                                                  {line.systemResourceArticleId ? (
+                                                    <button
+                                                      type="button"
+                                                      title={t("estimate.library.openTooltip")}
+                                                      aria-label={t("estimate.library.openTooltip")}
+                                                      onClick={(event) => {
+                                                        event.stopPropagation();
+                                                        openResourceModal(line.id);
+                                                      }}
+                                                      className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-[3px] text-muted-foreground opacity-60 transition-opacity hover:opacity-100 group-hover/libname:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                                    >
+                                                      <ExternalLink className="h-3.5 w-3.5" />
+                                                    </button>
+                                                  ) : null}
+                                                </div>
                                               </div>
                                             </TableCell>
 
