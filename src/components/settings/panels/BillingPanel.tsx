@@ -11,6 +11,8 @@ import { SubscriptionSection } from "@/components/billing/SubscriptionSection";
 import { UsageMeter } from "@/components/billing/UsageMeter";
 import { PlansDialog } from "@/components/billing/PlansDialog";
 import { useTierQuota } from "@/hooks/useTierQuota";
+import { useWorkspaceMode } from "@/hooks/use-workspace-source";
+import { SignInPrompt } from "@/components/settings/SignInPrompt";
 import { PLANS } from "@/data/plans";
 import { TIER_LIMITS } from "@/data/tier-limits";
 
@@ -18,6 +20,12 @@ export function BillingPanel() {
   const { t, i18n } = useTranslation();
   const { data: quota, isLoading } = useTierQuota();
   const [plansOpen, setPlansOpen] = useState(false);
+  const workspaceMode = useWorkspaceMode();
+  // A logged-out visitor on a Supabase deployment (AppLayout doesn't redirect)
+  // sees the default free-plan card; the upgrade CTA can't transact without a
+  // session, so swap it for a sign-in nudge. Demo / local keep the CTA (the plan
+  // comparison is part of the product showcase); pending-supabase is transient.
+  const needsSignIn = workspaceMode.kind === "guest";
 
   // Plan comes from the active subscription (get_current_usage), the billing
   // source of truth — not the legacy profiles.plan field.
@@ -107,7 +115,11 @@ export function BillingPanel() {
             </div>
           )}
 
-          {canUpgrade && (
+          {needsSignIn ? (
+            <div className="pt-sp-1">
+              <SignInPrompt hint={t("billing.signInHint")} ctaLabel={t("billing.signIn")} />
+            </div>
+          ) : canUpgrade ? (
             <div className="flex flex-wrap gap-sp-2 pt-sp-1">
               <Button
                 className="w-full sm:w-auto"
@@ -117,7 +129,7 @@ export function BillingPanel() {
                 {t("billing.upgradePlan")}
               </Button>
             </div>
-          )}
+          ) : null}
         </div>
       </SettingsSection>
 

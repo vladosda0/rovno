@@ -2,11 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useCurrentUser } from "@/hooks/use-mock-data";
 import {
+  useWorkspaceMode,
   useWorkspaceProfileContactInfoState,
   useUpdateWorkspaceProfileContactInfo,
   useUpdateWorkspaceProfileIdentity,
 } from "@/hooks/use-workspace-source";
 import { useAvatarUpload } from "@/hooks/use-avatar-upload";
+import { SignInPrompt } from "@/components/settings/SignInPrompt";
 import { PHONE_PREFILL, phoneValueForSave } from "@/lib/phone";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -49,6 +51,20 @@ export function ProfilePanel() {
   const updateContactInfo = useUpdateWorkspaceProfileContactInfo();
   const { uploadAvatar } = useAvatarUpload();
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const workspaceMode = useWorkspaceMode();
+  // Identity / contact-info writes succeed against the in-memory store in demo /
+  // local mode and against Supabase in supabase mode. In guest / pending-supabase
+  // there's a Supabase backend but no session, so mutateAsync throws ("Profile is
+  // not available yet.") and Save / avatar upload surface a destructive toast.
+  const canEditProfile =
+    workspaceMode.kind === "demo" ||
+    workspaceMode.kind === "local" ||
+    workspaceMode.kind === "supabase";
+  // Only the stable logged-out state gets the sign-in prompt; pending-supabase is
+  // a sub-second auth-resolving flash, so we keep the form quiet there and just
+  // block the doomed actions.
+  const needsSignIn = workspaceMode.kind === "guest";
 
   const [name, setName] = useState(user.name);
   const [email] = useState(user.email);
@@ -163,7 +179,7 @@ export function ProfilePanel() {
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
-              disabled={avatarUploading}
+              disabled={avatarUploading || !canEditProfile}
               aria-label={t("profile.avatar.upload")}
               className="absolute -bottom-1 -right-1 h-7 w-7 rounded-full bg-secondary border border-border flex items-center justify-center hover:bg-muted transition-colors disabled:opacity-60"
             >
@@ -247,16 +263,26 @@ export function ProfilePanel() {
       </SettingsSection>
 
       {/* Actions */}
-      <div className="flex flex-wrap gap-sp-2 pt-sp-1">
-        <Button className="w-full sm:w-auto" onClick={handleSave} disabled={!isDirty || saving || avatarUploading}>
-          {saving ? t("profile.saving") : t("profile.save")}
-        </Button>
-        {isDirty && (
-          <Button variant="ghost" className="w-full sm:w-auto" onClick={handleDiscard} disabled={saving}>
-            {t("profile.discard")}
+      {needsSignIn ? (
+        <div className="pt-sp-1">
+          <SignInPrompt hint={t("profile.signInHint")} ctaLabel={t("profile.signIn")} />
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-sp-2 pt-sp-1">
+          <Button
+            className="w-full sm:w-auto"
+            onClick={handleSave}
+            disabled={!isDirty || saving || avatarUploading || !canEditProfile}
+          >
+            {saving ? t("profile.saving") : t("profile.save")}
           </Button>
-        )}
-      </div>
+          {isDirty && (
+            <Button variant="ghost" className="w-full sm:w-auto" onClick={handleDiscard} disabled={saving}>
+              {t("profile.discard")}
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
