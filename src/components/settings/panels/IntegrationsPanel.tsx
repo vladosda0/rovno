@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Send, Copy, Check, ExternalLink, Loader2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Send, Copy, Check, ExternalLink, Loader2, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SettingsSection } from "@/components/settings/SettingsSection";
 import { toast } from "@/hooks/use-toast";
+import { useWorkspaceMode } from "@/hooks/use-workspace-source";
 import {
   createLinkCode,
   listLinkedIdentities,
@@ -15,6 +17,14 @@ import {
 
 export function IntegrationsPanel() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const workspaceMode = useWorkspaceMode();
+  // The bot-identity RPCs (create_link_code, etc.) require auth.uid(), so the
+  // link flow only works with a real Supabase session. Demo / local / guest
+  // visitors can reach this panel (AppLayout does not redirect them), so gate
+  // the flow behind a sign-in prompt rather than firing a doomed RPC that
+  // surfaces a destructive error toast.
+  const hasSession = workspaceMode.kind === "supabase";
   const [loading, setLoading] = useState(true);
   const [identities, setIdentities] = useState<LinkedIdentity[]>([]);
   const [code, setCode] = useState<string | null>(null);
@@ -25,6 +35,17 @@ export function IntegrationsPanel() {
   const telegram = identities.find((i) => i.provider === "telegram") ?? null;
 
   const refresh = useCallback(async () => {
+    if (workspaceMode.kind === "pending-supabase") {
+      // Auth still resolving: keep the spinner until the real mode is known.
+      return;
+    }
+    if (workspaceMode.kind !== "supabase") {
+      // No session: skip the RPC (it would only error) and show the sign-in
+      // prompt below.
+      setIdentities([]);
+      setLoading(false);
+      return;
+    }
     try {
       setIdentities(await listLinkedIdentities());
     } catch (err) {
@@ -35,7 +56,7 @@ export function IntegrationsPanel() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [workspaceMode.kind]);
 
   useEffect(() => {
     void refresh();
@@ -95,6 +116,16 @@ export function IntegrationsPanel() {
           <div className="flex items-center gap-2 text-body-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
             {t("integrations.loading")}
+          </div>
+        ) : !hasSession ? (
+          <div className="space-y-sp-2">
+            <p className="text-caption text-muted-foreground">
+              {t("integrations.telegram.signInHint")}
+            </p>
+            <Button className="w-full sm:w-auto" onClick={() => navigate("/auth/login")}>
+              <LogIn className="mr-2 h-4 w-4" />
+              {t("integrations.signIn")}
+            </Button>
           </div>
         ) : telegram ? (
           <div className="space-y-sp-2 rounded-panel bg-muted/40 p-sp-2">

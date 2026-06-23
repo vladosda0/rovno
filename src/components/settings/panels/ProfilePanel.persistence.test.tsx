@@ -19,6 +19,8 @@ const toastMock = vi.fn();
 
 vi.mock("@/hooks/use-mock-data", () => ({ useCurrentUser: () => currentUser }));
 vi.mock("@/hooks/use-workspace-source", () => ({
+  // Authenticated session: Save / avatar edits are enabled (not gated).
+  useWorkspaceMode: () => ({ kind: "supabase", profileId: "u1" }),
   useWorkspaceProfileContactInfoState: () => ({ contactInfo, isLoading: false }),
   useUpdateWorkspaceProfileIdentity: () => ({ mutateAsync: identityMutate, isPending: false }),
   useUpdateWorkspaceProfileContactInfo: () => ({ mutateAsync: contactMutate, isPending: false }),
