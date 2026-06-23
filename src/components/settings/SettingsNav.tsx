@@ -1,11 +1,11 @@
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import {
-  User, SlidersHorizontal, Bell, Shield, Database, CreditCard,
+  User, SlidersHorizontal, Bell, Shield, Database, CreditCard, Link2,
 } from "lucide-react";
 
 export type SettingsTab =
-  | "profile" | "preferences" | "notifications" | "security" | "privacy" | "billing";
+  | "profile" | "preferences" | "notifications" | "integrations" | "security" | "privacy" | "billing";
 
 interface NavItem {
   tab: SettingsTab;
@@ -17,6 +17,7 @@ const NAV_ITEMS: NavItem[] = [
   { tab: "profile", labelKey: "settingsNav.personal.profile", icon: User },
   { tab: "preferences", labelKey: "settingsNav.personal.preferences", icon: SlidersHorizontal },
   { tab: "notifications", labelKey: "settingsNav.personal.notifications", icon: Bell },
+  { tab: "integrations", labelKey: "settingsNav.personal.integrations", icon: Link2 },
   { tab: "security", labelKey: "settingsNav.personal.security", icon: Shield },
   { tab: "privacy", labelKey: "settingsNav.personal.privacy", icon: Database },
   { tab: "billing", labelKey: "settingsNav.personal.billing", icon: CreditCard },
