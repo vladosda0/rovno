@@ -21,15 +21,20 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ClipboardList,
   Download,
   ExternalLink,
+  HardHat,
+  House,
   Wrench,
   Info,
   Layers,
   Loader2,
+  Pause,
   Plus,
   Trash2,
   User,
+  type LucideIcon,
 } from "lucide-react";
 import { TutorialModal } from "@/components/onboarding/TutorialModal";
 import { Button } from "@/components/ui/button";
@@ -765,22 +770,31 @@ function formatRelativeTime(iso: string | null, t: TFn): string | null {
   return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-function EstimateSyncStatusIndicator({ sync }: { sync: EstimateV2ProjectSyncState }) {
+function EstimateSyncStatusIndicator({
+  sync,
+  fallbackSavedAt,
+}: {
+  sync: EstimateV2ProjectSyncState;
+  /** Persistent "last saved" time (project.updatedAt) shown when there's no live
+   *  in-session save status yet — keeps "Сохранено …" visible on load. */
+  fallbackSavedAt?: string | null;
+}) {
   const { t } = useTranslation();
   const status = sync.draftSaveStatus ?? "idle";
+  const savedTime = formatRelativeTime(sync.draftSaveLastSucceededAt ?? fallbackSavedAt ?? null, t);
   const label = status === "saving" ? t("estimate.sync.saving")
     : status === "pending" ? t("estimate.sync.pending")
-    : status === "saved" ? t("estimate.sync.saved", { time: formatRelativeTime(sync.draftSaveLastSucceededAt, t) ?? "" })
     : status === "error" ? t("estimate.sync.error")
+    : savedTime ? t("estimate.sync.saved", { time: savedTime })
     : null;
 
   if (!label) return null;
 
   const colorClass = status === "error"
     ? "text-destructive"
-    : status === "saved"
-      ? "text-muted-foreground"
-      : "text-muted-foreground/70";
+    : status === "saving" || status === "pending"
+      ? "text-muted-foreground/70"
+      : "text-muted-foreground";
 
   return (
     <span className={`text-[11px] font-medium ${colorClass}`}>
@@ -789,6 +803,17 @@ function EstimateSyncStatusIndicator({ sync }: { sync: EstimateV2ProjectSyncStat
   );
 }
 
+const ESTIMATE_STATUS_RAIL_ICON: Record<EstimateExecutionStatus, LucideIcon> = {
+  planning: ClipboardList,
+  in_work: HardHat,
+  finished: House,
+  paused: Pause,
+};
+
+// The rail's flex-basis (set on its header wrapper) is kept above the
+// `estimate-rail` container-query breakpoint in index.css so the rail wraps to
+// its own full-width row *before* it would ever cramp inline — keeping the label
+// transition monotonic (full inline → full filled row → icons) with no flicker.
 function EstimateStatusRail({
   status,
   canEdit,
@@ -802,89 +827,102 @@ function EstimateStatusRail({
 }) {
   const { t } = useTranslation();
   const activeMainIndex = ESTIMATE_STATUS_RAIL_MAIN.indexOf(status);
-  const renderStep = (step: EstimateExecutionStatus, options?: { passed?: boolean; independent?: boolean }) => {
-    const active = step === status;
+
+  const renderStep = (step: EstimateExecutionStatus, options?: { passed?: boolean }) => {
     const passed = Boolean(options?.passed);
+    const active = step === status;
+    const isPause = step === "paused";
     const canSelect = canEdit && !isTransitioningToInWork && step !== "planning" && !active;
-    const showTransitionLoader = isTransitioningToInWork && step === "in_work";
-    const colored = active || passed;
-    const finishedPlanning = step === "planning" && passed;
-    const content = (
-      <>
-        {finishedPlanning ? (
-          <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-info text-info-foreground shadow-sm">
-            <Check className="h-3.5 w-3.5" />
-          </span>
-        ) : (
-          <span
-            className={cn(
-              "h-4 w-4 shrink-0 rounded-full border-4 transition-colors",
-              colored
-                ? "border-info bg-info"
-                : "border-muted-foreground/25 bg-muted-foreground/25",
-              active && status === "finished" && "border-success bg-success",
-              active && status === "paused" && "border-warning bg-warning",
-            )}
-          />
-        )}
-        <span className="min-w-0 text-center leading-tight">{t(estimateStatusRailLabelKey(step, status))}</span>
-        {showTransitionLoader ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-      </>
+    const showLoader = isTransitioningToInWork && step === "in_work";
+    // The active step always shows its label; the secondary pause control is
+    // icon-only until active. Every other primary label is rendered but collapses
+    // to an icon via the `estimate-rail` container query when the rail is narrow
+    // (see index.css) — a pure-CSS responsive collapse that reacts to the rail's
+    // own width, including AI-sidebar changes, with no layout thrash.
+    const renderLabel = active || !isPause;
+    const labelCollapsible = renderLabel && !active;
+    // Passed steps read in their completed form ("В работе"), upcoming ones as the
+    // call to action ("В работу").
+    const label = t(estimateStatusRailLabelKey(step, passed ? step : status));
+    const tone = active
+      ? status === "finished"
+        ? "success"
+        : status === "paused"
+          ? "warning"
+          : "info"
+      : "info";
+    const StepIcon = showLoader
+      ? Loader2
+      : step === "planning" && passed
+        ? Check
+        : ESTIMATE_STATUS_RAIL_ICON[step];
+
+    const pillClassName = cn(
+      "group inline-flex shrink-0 items-center rounded-full transition-colors",
+      active ? "gap-2 py-1 pl-1 pr-3" : "gap-1.5 p-1",
+      active && (tone === "success" ? "bg-success/10" : tone === "warning" ? "bg-warning/10" : "bg-info/10"),
+      canSelect && "cursor-pointer hover:bg-muted/60",
     );
-    const itemClassName = cn(
-      "relative z-10 inline-flex min-h-10 min-w-0 max-w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold leading-tight transition-colors sm:px-4 sm:py-2.5",
-      colored
-        ? "border-info/40 bg-info/10 text-info"
-        : "border-border/70 bg-transparent text-muted-foreground",
-      active && status === "finished" && "border-success/40 bg-success/10 text-success",
-      active && status === "paused" && "border-warning/45 bg-warning/10 text-warning-foreground",
-      canSelect && "hover:border-foreground/25 hover:bg-background/45 hover:text-foreground",
+    const nodeClassName = cn(
+      "grid h-7 w-7 shrink-0 place-items-center rounded-full transition-colors",
+      active
+        ? cn(
+            "shadow-sm",
+            tone === "success"
+              ? "bg-success text-success-foreground"
+              : tone === "warning"
+                ? "bg-warning text-warning-foreground"
+                : "bg-info text-info-foreground",
+          )
+        : passed
+          ? "bg-info/15 text-info"
+          : "border border-border bg-card text-muted-foreground group-hover:border-foreground/40 group-hover:text-foreground",
+    );
+    const labelClassName = cn(
+      "whitespace-nowrap text-[13px] leading-none transition-colors",
+      active ? "font-semibold text-foreground" : "font-medium text-muted-foreground group-hover:text-foreground",
+      labelCollapsible && "estimate-rail-label pr-1",
+    );
+
+    const inner = (
+      <>
+        <span className={nodeClassName}>
+          <StepIcon className={cn("h-3.5 w-3.5", showLoader && "animate-spin")} />
+        </span>
+        {renderLabel ? <span className={labelClassName}>{label}</span> : null}
+      </>
     );
 
     return canSelect ? (
-      <button
-        type="button"
-        className={itemClassName}
-        onClick={() => onChange(step)}
-      >
-        {content}
+      <button type="button" onClick={() => onChange(step)} className={pillClassName} aria-label={label} title={label}>
+        {inner}
       </button>
     ) : (
-      <span
-        className={itemClassName}
-        aria-current={active ? "step" : undefined}
-      >
-        {content}
+      <span className={pillClassName} aria-current={active ? "step" : undefined} aria-label={label} title={label}>
+        {inner}
       </span>
     );
   };
 
   return (
-    <div className="w-full min-w-0 py-1">
-      <div className="flex w-full min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-2 overflow-visible">
-        <div className="flex min-w-0 flex-[1_1_480px] items-center justify-end gap-2 sm:gap-3">
-          {ESTIMATE_STATUS_RAIL_MAIN.map((step, index) => {
-            const passed = activeMainIndex > index;
-            const lineActive = activeMainIndex > index;
-
-            return (
-              <Fragment key={step}>
-                {renderStep(step, { passed })}
-                {index < ESTIMATE_STATUS_RAIL_MAIN.length - 1 ? (
-                  <span
-                    className={cn(
-                      "h-1 min-w-4 flex-[1_1_32px] rounded-full transition-colors sm:min-w-8",
-                      lineActive ? "bg-info/55" : "bg-border/80",
-                    )}
-                  />
-                ) : null}
-              </Fragment>
-            );
-          })}
-        </div>
-        <div className="flex min-w-0 flex-[0_1_auto] items-center justify-end">
-          {renderStep(ESTIMATE_STATUS_RAIL_PAUSED, { independent: true })}
-        </div>
+    <div className="w-full min-w-0 py-1 [container-name:estimate-rail] [container-type:inline-size]">
+      <div className="flex min-w-0 flex-nowrap items-center gap-1.5">
+        {ESTIMATE_STATUS_RAIL_MAIN.map((step, index) => (
+          <Fragment key={step}>
+            {renderStep(step, { passed: activeMainIndex > index })}
+            {index < ESTIMATE_STATUS_RAIL_MAIN.length - 1 ? (
+              <span
+                aria-hidden
+                className={cn(
+                  "h-0.5 min-w-[12px] flex-1 rounded-full transition-colors",
+                  activeMainIndex > index ? "bg-info/50" : "bg-border",
+                )}
+              />
+            ) : null}
+          </Fragment>
+        ))}
+        <span aria-hidden className="mx-0.5 h-6 w-px shrink-0 bg-border" />
+        {renderStep(ESTIMATE_STATUS_RAIL_PAUSED)}
       </div>
     </div>
   );
@@ -2510,12 +2548,12 @@ export default function ProjectEstimate() {
         ]}
       />
       <div className="space-y-3 md:rounded-card md:border md:border-border md:bg-card md:p-sp-2">
-        <div className="grid gap-3 xl:grid-cols-[minmax(180px,260px)_minmax(0,1fr)] xl:items-start 2xl:grid-cols-[minmax(200px,320px)_minmax(0,1fr)]">
-          <div className="min-w-0 space-y-1.5">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+          <div className="min-w-0 max-w-full space-y-1.5">
             <h2 className="truncate text-xl font-semibold text-foreground">{project.title}</h2>
             {showEstimateWorkspace && (
               <div className="flex min-h-5 flex-wrap items-center gap-2">
-                <EstimateSyncStatusIndicator sync={estimateSync} />
+                <EstimateSyncStatusIndicator sync={estimateSync} fallbackSavedAt={estimateProject.updatedAt} />
                 {SHOW_ESTIMATE_VERSION_UI ? (
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -2538,7 +2576,7 @@ export default function ProjectEstimate() {
           </div>
 
           {showEstimateWorkspace && (
-            <div className="min-w-0 space-y-1 xl:justify-self-end xl:self-start xl:w-full">
+            <div className="min-w-0 flex-1 basis-[540px] space-y-1">
               <EstimateStatusRail
                 status={estimateProject.estimateStatus}
                 canEdit={canEditEstimate}
@@ -2546,7 +2584,7 @@ export default function ProjectEstimate() {
                 onChange={handleEstimateStatusChange}
               />
               {!canEditEstimate && (
-                <div className="text-caption text-muted-foreground xl:text-right">{t("estimate.header.ownerOnly")}</div>
+                <div className="text-caption text-muted-foreground">{t("estimate.header.ownerOnly")}</div>
               )}
             </div>
           )}

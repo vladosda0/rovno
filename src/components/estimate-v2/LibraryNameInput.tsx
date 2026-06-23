@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { useDebounce } from "@/hooks/use-debounce";
 import {
@@ -121,17 +122,18 @@ export function LibraryNameInput({
   };
 
   const pick = (suggestion: CanonicalSuggestion) => {
-    // Subcategory rows are groupings, not concrete items: refine the query and
-    // stay in edit mode (full catalog drill-down lands with the Phase 4 Каталоги tab).
-    if (suggestion.kind === "subcategory") {
-      skipBlurRef.current = false;
-      setDraft(suggestion.name);
-      inputRef.current?.focus();
-      return;
-    }
+    // Any choice closes the dropdown and applies — clicking a suggestion should
+    // never re-open the list.
     skipBlurRef.current = false;
     setIsEditing(false);
     setDraft(suggestion.name);
+    if (suggestion.kind === "subcategory") {
+      // Subcategories are groupings, not catalog articles: apply the label as free
+      // text (no library link) rather than refining. Full catalog drill-down lands
+      // with the Phase 4 Каталоги tab.
+      if (suggestion.name !== value) onCommit(suggestion.name);
+      return;
+    }
     if (onApplySuggestion) onApplySuggestion(suggestion);
     else if (suggestion.name !== value) onCommit(suggestion.name);
   };
@@ -162,45 +164,56 @@ export function LibraryNameInput({
   }
 
   return (
-    <div className={cn("relative", className)}>
-      <Input
-        ref={inputRef}
-        value={draft}
-        placeholder={placeholder}
-        onChange={(event) => setDraft(event.target.value)}
-        onBlur={() => {
-          if (skipBlurRef.current) {
-            skipBlurRef.current = false;
-            return;
-          }
-          commit();
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            skipBlurRef.current = true;
-            commit();
-          } else if (event.key === "Escape") {
-            event.preventDefault();
-            skipBlurRef.current = true;
-            cancel();
-          }
-        }}
-        className={cn(
-          "h-7 border-transparent bg-transparent px-1 py-0 shadow-none focus-visible:ring-1 focus-visible:ring-ring/40 focus-visible:ring-offset-0",
-          inputClassName,
-        )}
-      />
+    <Popover open={dropdownOpen}>
+      <PopoverAnchor asChild>
+        <div className={className}>
+          <Input
+            ref={inputRef}
+            value={draft}
+            placeholder={placeholder}
+            onChange={(event) => setDraft(event.target.value)}
+            onBlur={() => {
+              if (skipBlurRef.current) {
+                skipBlurRef.current = false;
+                return;
+              }
+              commit();
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                skipBlurRef.current = true;
+                commit();
+              } else if (event.key === "Escape") {
+                event.preventDefault();
+                skipBlurRef.current = true;
+                cancel();
+              }
+            }}
+            className={cn(
+              "h-7 border-transparent bg-transparent px-1 py-0 shadow-none focus-visible:ring-1 focus-visible:ring-ring/40 focus-visible:ring-offset-0",
+              inputClassName,
+            )}
+          />
+        </div>
+      </PopoverAnchor>
 
       {dropdownOpen && (
-        <div
+        <PopoverContent
+          align="start"
+          sideOffset={6}
+          // Don't steal focus from the input — keep typing alive while the list is open.
+          onOpenAutoFocus={(event) => event.preventDefault()}
+          onCloseAutoFocus={(event) => event.preventDefault()}
           // Keep input focus when interacting with the dropdown so onBlur doesn't
           // commit the raw draft out from under a suggestion click.
           onMouseDown={() => {
             skipBlurRef.current = true;
           }}
-          className="absolute left-0 top-full z-50 mt-1 max-h-64 w-full min-w-[240px] overflow-y-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
           role="listbox"
+          // Portaled out of the table so the table's overflow can't clip it; matches
+          // the cell width, shows ~5 rows, and scrolls (flips above near the bottom).
+          className="max-h-72 w-[var(--radix-popover-trigger-width)] min-w-[260px] overflow-y-auto p-1"
         >
           {searchPending ? (
             <div className="px-2 py-1.5 text-xs text-muted-foreground">
@@ -245,8 +258,8 @@ export function LibraryNameInput({
               );
             })
           )}
-        </div>
+        </PopoverContent>
       )}
-    </div>
+    </Popover>
   );
 }
