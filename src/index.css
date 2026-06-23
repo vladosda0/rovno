@@ -187,3 +187,13 @@
     z-index: 1;
   }
 }
+
+/* Estimate status rail: collapse non-active step labels to icons when the rail's
+   own container gets narrow (e.g. the AI sidebar is open). The rail wrapper sets
+   container-name:estimate-rail + container-type:inline-size; its flex-basis is
+   kept above this breakpoint so it wraps to a full-width row before collapsing. */
+@container estimate-rail (max-width: 520px) {
+  .estimate-rail-label {
+    display: none;
+  }
+}
