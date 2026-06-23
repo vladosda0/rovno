@@ -1424,7 +1424,7 @@
   "estimate.header.exportCsv": "Export CSV",
   "estimate.header.download": "Download estimate",
   "estimate.header.export": "Export estimate",
-  "estimate.library.indicatorTooltip": "Canonical Rovno item",
+  "estimate.library.openTooltip": "Open resource details",
   "estimate.search.loading": "Searching…",
   "estimate.search.empty": "No library matches. Press Enter to keep your text.",
   "estimate.search.badge.subcategory": "Subcategory",
