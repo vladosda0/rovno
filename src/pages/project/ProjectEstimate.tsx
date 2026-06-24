@@ -46,6 +46,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -158,6 +159,7 @@ import { EstimateExportModal } from "@/components/estimate-v2/EstimateExportModa
 import { ResourceModal } from "@/components/estimate-v2/ResourceModal";
 import { LibraryNameInput } from "@/components/estimate-v2/LibraryNameInput";
 import type { CanonicalSuggestion } from "@/hooks/use-canonical-search";
+import type { CatalogResource } from "@/hooks/use-canonical-catalog";
 import { EstimateConstructor } from "@/components/estimate-v2/EstimateConstructor";
 import { useCurrentEstimateVersionId } from "@/hooks/use-current-estimate-version";
 import type {
@@ -969,6 +971,16 @@ export default function ProjectEstimate() {
   // off in demo/local mode so editing names never fires search_canonical_library.
   const canonicalSearchEnabled = workspaceMode.kind === "supabase";
   const constructorProfileId = workspaceMode.kind === "supabase" ? workspaceMode.profileId : (currentUser.id || "");
+  const [constructorTarget, setConstructorTarget] = useState<{ stageId?: string; workId?: string } | null>(null);
+  const [constructorTab, setConstructorTab] = useState<"estimates" | "catalog">("estimates");
+  const openConstructor = (
+    target: { stageId?: string; workId?: string } | null,
+    tab: "estimates" | "catalog",
+  ) => {
+    setConstructorTarget(target);
+    setConstructorTab(tab);
+    setConstructorOpen(true);
+  };
 
   const currentMembership = members.find((member) => member.user_id === currentUser.id) ?? null;
   const canSubmitByMembership = currentMembership?.role === "owner" || currentMembership?.role === "co_owner";
@@ -2437,6 +2449,36 @@ export default function ProjectEstimate() {
     updateLine(pid, lineId, partial);
   };
 
+  // Add a catalog leaf as a new resource line on the constructor's target work (client-side;
+  // the system_resource_article_id FK persists via the normal save path). Backs the
+  // Конструктор Каталоги tab's leaf-click.
+  const handleAddCatalogResource = (resource: CatalogResource) => {
+    const stageId = constructorTarget?.stageId;
+    const workId = constructorTarget?.workId;
+    if (!stageId || !workId) return;
+    const type = RESOURCE_LINE_TYPES.has(resource.defaultResourceType as ResourceLineType)
+      ? (resource.defaultResourceType as ResourceLineType)
+      : "material";
+    const created = createLine(pid, {
+      stageId,
+      workId,
+      title: resource.name,
+      type,
+      unit: resource.unitDisplay ?? getUnitOptionsForType(type)[0] ?? "pcs",
+      qtyMilli: 1_000,
+      costUnitCents: 0,
+      systemResourceArticleId: resource.id,
+    });
+    if (!created) return;
+    trackEvent("estimate_line_created", {
+      project_id: pid,
+      stage_id: stageId,
+      work_id: workId,
+      resource_type: type,
+    });
+    toast({ title: t("estimate.constructor.catalogAdded", { name: resource.name }) });
+  };
+
   const openWorkDelete = (workId: string) => {
     const work = workById.get(workId);
     if (!work) return;
@@ -2655,7 +2697,7 @@ export default function ProjectEstimate() {
                     <button
                       type="button"
                       className={ESTIMATE_TAB_ACTION_CLASSNAME}
-                      onClick={() => setConstructorOpen(true)}
+                      onClick={() => openConstructor(null, "estimates")}
                     >
                       <Wrench /> {t("estimate.header.constructor")}
                     </button>
@@ -3255,6 +3297,19 @@ export default function ProjectEstimate() {
                                                       </DropdownMenuItem>
                                                     );
                                                   })}
+                                                  {canonicalSearchEnabled && (
+                                                    <>
+                                                      <DropdownMenuSeparator />
+                                                      <DropdownMenuItem
+                                                        onSelect={() =>
+                                                          openConstructor({ stageId: stage.id, workId: work.id }, "catalog")
+                                                        }
+                                                      >
+                                                        <Layers className="mr-2 h-4 w-4 text-muted-foreground" />
+                                                        {t("estimate.constructor.fromLibrary")}
+                                                      </DropdownMenuItem>
+                                                    </>
+                                                  )}
                                                 </DropdownMenuContent>
                                               </DropdownMenu>
                                             </div>
@@ -3270,7 +3325,7 @@ export default function ProjectEstimate() {
 
                           {canEditEstimate && (
                             <div className="rounded-md border border-dashed border-border/70 bg-background/40 px-2 py-1">
-                              <div className="flex h-7 items-center">
+                              <div className="flex h-7 items-center gap-1">
                                 <Button
                                   type="button"
                                   size="sm"
@@ -3281,6 +3336,18 @@ export default function ProjectEstimate() {
                                   <Plus className="h-3.5 w-3.5" />
                                   {t("estimate.work.addButton")}
                                 </Button>
+                                {canonicalSearchEnabled && (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-6 gap-1 px-2 text-xs text-muted-foreground"
+                                  onClick={() => openConstructor({ stageId: stage.id }, "estimates")}
+                                >
+                                  <Layers className="h-3.5 w-3.5" />
+                                  {t("estimate.constructor.fromLibrary")}
+                                </Button>
+                                )}
                               </div>
                             </div>
                           )}
@@ -3295,6 +3362,7 @@ export default function ProjectEstimate() {
 
             {canEditEstimate && (
               <div className="rounded-md border border-dashed border-border/70 bg-background/40 p-2">
+                <div className="flex items-center gap-1">
                 <Button
                   type="button"
                   size="sm"
@@ -3305,6 +3373,19 @@ export default function ProjectEstimate() {
                   <Plus className="h-3.5 w-3.5" />
                   {t("estimate.stage.addButton")}
                 </Button>
+                {canonicalSearchEnabled && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 gap-1 px-2 text-xs text-muted-foreground"
+                  onClick={() => openConstructor(null, "estimates")}
+                >
+                  <Layers className="h-3.5 w-3.5" />
+                  {t("estimate.constructor.fromLibrary")}
+                </Button>
+                )}
+                </div>
               </div>
             )}
             <div className="rounded-lg border border-border p-3">
@@ -3612,6 +3693,9 @@ export default function ProjectEstimate() {
           estimateVersionId={constructorVersionQuery.data ?? null}
           canApply={workspaceMode.kind === "supabase" && !constructorVersionQuery.isError}
           profileId={constructorProfileId}
+          target={constructorTarget}
+          initialTab={constructorTab}
+          onAddCatalogResource={handleAddCatalogResource}
         />
       </div>
     </div>

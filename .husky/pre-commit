@@ -1,4 +1,7 @@
-export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+# Pin the hook to Node 22 (Homebrew node@22), matching dev and `npm test`. The
+# unversioned Homebrew `node` is v26, whose native-module ABI differs and breaks
+# loading binaries (e.g. jsdom's canvas) built for Node 22. node@22 must be first.
+export PATH="/opt/homebrew/opt/node@22/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 # Husky runs from repo root; ensure local CLIs resolve (vitest is invoked by lint-staged).
 export PATH="$(git rev-parse --show-toplevel)/node_modules/.bin:$PATH"
 

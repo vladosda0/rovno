@@ -1,0 +1,316 @@
+/* =========================================================
+   Rovno marketing landing — design-system tokens.
+   Ported from the Claude Design handoff `colors_and_type.css`.
+   Every rule is scoped under `.rv-landing` so this token system
+   (intentionally distinct from the app's Tailwind tokens) cannot
+   leak into the rest of the SPA. @font-face / @import stay global
+   (they only register families, they don't apply anything).
+   ========================================================= */
+
+/* Inter — micro UI captions only (also loaded app-wide; harmless dup). */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+
+@font-face {
+  font-family: "Rostov";
+  src: url("/fonts/Rostov.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Involve";
+  src: url("/fonts/Involve-VF.ttf") format("truetype-variations"),
+       url("/fonts/Involve-VF.ttf") format("truetype");
+  font-weight: 300 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+.rv-landing {
+  /* ---------- Brand palette (from Figma usage counts) ---------- */
+  --rv-blue:        #1E5CCB;
+  --rv-blue-deep:   #0320A2;
+  --rv-cream:       #EDEBD7;
+  --rv-cream-soft:  #F4F2E2;
+  --rv-olive:       #8E9174;
+  --rv-olive-soft:  #4F5235;
+  --rv-orange:      #EE7A53;
+  --rv-orange-deep: #DD3B1C;
+  --rv-white:       #FFFFFF;
+  --rv-ink:         #0E0D06;
+  --rv-ink-soft:    #444444;
+
+  /* ---------- Semantic surfaces ---------- */
+  --bg:        var(--rv-cream);
+  --bg-alt:    var(--rv-cream-soft);
+  --bg-blue:   var(--rv-blue);
+  --bg-olive:  var(--rv-olive);
+  --bg-orange: var(--rv-orange);
+  --bg-ink:    var(--rv-ink);
+
+  /* Foreground levels (on cream) */
+  --fg1:    var(--rv-blue);
+  --fg2:    rgba(30, 92, 203, 0.72);
+  --fg3:    rgba(30, 92, 203, 0.48);
+  --fg-ink: var(--rv-ink);
+
+  /* On-blue foregrounds */
+  --fg-on-blue-1: var(--rv-cream);
+  --fg-on-blue-2: rgba(237, 235, 215, 0.72);
+  --fg-on-blue-3: rgba(237, 235, 215, 0.48);
+
+  /* On-olive / on-orange */
+  --fg-on-olive:  var(--rv-cream);
+  --fg-on-orange: var(--rv-cream);
+
+  /* Lines / dividers */
+  --line-blue:      rgba(30, 92, 203, 0.32);
+  --line-blue-soft: rgba(30, 92, 203, 0.16);
+  --line-cream:     rgba(237, 235, 215, 0.32);
+
+  /* ---------- Type ---------- */
+  --font-display: "Rostov", "Fraunces", "Times New Roman", serif;
+  --font-body:    "Involve", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono-ui: "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  /* ---------- Type scale ---------- */
+  --fs-display: 120px;
+  --fs-h1:       64px;
+  --fs-h2:       48px;
+  --fs-h3:       40px;
+  --fs-h4:       32px;
+  --fs-h5:       24px;
+  --fs-body-lg:  18px;
+  --fs-body:     16px;
+  --fs-body-sm:  14px;
+  --fs-caption:  12px;
+
+  --lh-display: 1.0;
+  --lh-heading: 1.0;
+  --lh-body:    1.333;
+  --lh-tight:   1.0;
+
+  --tracking-display: -0.03em;
+  --tracking-heading: -0.02em;
+  --tracking-body:     0em;
+
+  /* ---------- Spacing (8px grid) ---------- */
+  --sp-0: 0;
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+  --sp-8: 64px;
+  --sp-9: 96px;
+  --sp-10: 128px;
+
+  /* ---------- Radii ---------- */
+  --r-xs:  6px;
+  --r-sm:  8px;
+  --r-md:  12px;
+  --r-lg:  16px;
+  --r-xl:  24px;
+  --r-pill: 999px;
+
+  /* ---------- Shadows ---------- */
+  --shadow-1: 0 1px 2px rgba(14, 13, 6, 0.04), 0 1px 1px rgba(14, 13, 6, 0.03);
+  --shadow-2: 0 4px 16px rgba(14, 13, 6, 0.06), 0 1px 2px rgba(14, 13, 6, 0.04);
+  --shadow-3: 0 12px 32px rgba(14, 13, 6, 0.08);
+
+  /* ---------- Motion ---------- */
+  --ease-standard: cubic-bezier(0.2, 0.6, 0.2, 1);
+  --ease-soft:     cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur-med:  220ms;
+  --dur-slow: 360ms;
+
+  /* ---------- Section layout rhythm ---------- */
+  --section-pad-y: 96px;
+  --section-pad-x: 48px;
+  --content-max:   1632px;
+
+  /* Apply the landing's base typography to the wrapper itself. */
+  background: var(--bg);
+  color: var(--fg1);
+  font-family: var(--font-body);
+  font-size: var(--fs-body-lg);
+  line-height: var(--lh-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Smooth in-page anchor scrolling, with room for the fixed nav. */
+.rv-landing { scroll-behavior: smooth; }
+.rv-landing section[id] { scroll-margin-top: 88px; }
+
+/* ---------- Headings / body (scoped) ---------- */
+.rv-landing h1, .rv-landing .rv-h1 {
+  font-family: var(--font-display);
+  font-size: var(--fs-h1);
+  line-height: var(--lh-heading);
+  letter-spacing: var(--tracking-heading);
+  font-weight: 400;
+  color: var(--fg1);
+  margin: 0;
+}
+.rv-landing h2, .rv-landing .rv-h2 {
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-heading);
+  letter-spacing: var(--tracking-display);
+  font-weight: 400;
+  color: var(--fg1);
+  margin: 0;
+}
+.rv-landing h3, .rv-landing .rv-h3 {
+  font-family: var(--font-display);
+  font-size: var(--fs-h4);
+  line-height: 1.1;
+  letter-spacing: var(--tracking-heading);
+  font-weight: 400;
+  color: var(--fg1);
+  margin: 0;
+}
+.rv-landing p, .rv-landing .rv-body {
+  font-family: var(--font-body);
+  font-size: var(--fs-body-lg);
+  line-height: var(--lh-body);
+  color: var(--fg1);
+  margin: 0;
+}
+.rv-landing .rv-caption {
+  font-family: var(--font-mono-ui);
+  font-size: var(--fs-caption);
+  line-height: 1.0;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--fg2);
+}
+.rv-landing .rv-display {
+  font-family: var(--font-display);
+  font-size: var(--fs-display);
+  line-height: var(--lh-display);
+  letter-spacing: var(--tracking-display);
+}
+
+/* ---------- Section backgrounds — alternating rhythm ---------- */
+.rv-landing .rv-section        { background: var(--bg);        color: var(--fg1); }
+.rv-landing .rv-section.blue   { background: var(--rv-blue);   color: var(--fg-on-blue-1); }
+.rv-landing .rv-section.olive  { background: var(--rv-olive);  color: var(--fg-on-olive); }
+.rv-landing .rv-section.orange { background: var(--rv-orange); color: var(--fg-on-orange); }
+.rv-landing .rv-section.ink    { background: var(--rv-ink);    color: var(--rv-cream); }
+
+.rv-landing .rv-section.blue h1, .rv-landing .rv-section.blue h2, .rv-landing .rv-section.blue h3,
+.rv-landing .rv-section.blue .rv-h1, .rv-landing .rv-section.blue .rv-h2, .rv-landing .rv-section.blue .rv-h3,
+.rv-landing .rv-section.blue p, .rv-landing .rv-section.blue .rv-body,
+.rv-landing .rv-section.blue .rv-caption { color: var(--fg-on-blue-1); }
+
+.rv-landing .rv-section.olive h1, .rv-landing .rv-section.olive h2, .rv-landing .rv-section.olive h3,
+.rv-landing .rv-section.olive .rv-h1, .rv-landing .rv-section.olive .rv-h2, .rv-landing .rv-section.olive .rv-h3,
+.rv-landing .rv-section.olive p, .rv-landing .rv-section.olive .rv-body,
+.rv-landing .rv-section.olive .rv-caption { color: var(--fg-on-olive); }
+
+.rv-landing .rv-section.orange h1, .rv-landing .rv-section.orange h2, .rv-landing .rv-section.orange h3,
+.rv-landing .rv-section.orange .rv-h1, .rv-landing .rv-section.orange .rv-h2, .rv-landing .rv-section.orange .rv-h3,
+.rv-landing .rv-section.orange p, .rv-landing .rv-section.orange .rv-body,
+.rv-landing .rv-section.orange .rv-caption { color: var(--fg-on-orange); }
+
+/* ---------- Button primitives ---------- */
+.rv-landing .rv-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-radius: var(--r-md);
+  font-family: var(--font-display);
+  font-size: 28px;
+  line-height: 28px;
+  letter-spacing: -0.02em;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-standard),
+              color var(--dur-fast) var(--ease-standard),
+              border-color var(--dur-fast) var(--ease-standard),
+              transform var(--dur-fast) var(--ease-standard);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.rv-landing .rv-btn:active { transform: translateY(1px); }
+
+.rv-landing .rv-btn--primary { background: var(--rv-blue); color: var(--rv-cream); }
+.rv-landing .rv-btn--primary:hover { background: var(--rv-blue-deep); }
+
+.rv-landing .rv-btn--secondary { background: transparent; color: var(--rv-blue); border-color: var(--rv-blue); }
+.rv-landing .rv-btn--secondary:hover { background: var(--rv-blue); color: var(--rv-cream); }
+
+.rv-landing .rv-btn--tertiary { background: transparent; color: var(--rv-blue); padding: 12px 8px; }
+.rv-landing .rv-btn--tertiary:hover { background: rgba(30, 92, 203, 0.08); }
+
+.rv-landing .rv-section.blue .rv-btn--primary  { background: var(--rv-cream); color: var(--rv-blue); }
+.rv-landing .rv-section.blue .rv-btn--primary:hover { background: var(--rv-white); }
+.rv-landing .rv-section.blue .rv-btn--secondary { color: var(--rv-cream); border-color: var(--rv-cream); }
+.rv-landing .rv-section.blue .rv-btn--secondary:hover { background: var(--rv-cream); color: var(--rv-blue); }
+
+.rv-landing .rv-section.orange .rv-btn--primary { background: var(--rv-cream); color: var(--rv-orange-deep); }
+.rv-landing .rv-section.orange .rv-btn--secondary { color: var(--rv-cream); border-color: var(--rv-cream); }
+
+.rv-landing .rv-btn:disabled, .rv-landing .rv-btn[aria-disabled="true"] {
+  opacity: 0.32;
+  cursor: not-allowed;
+}
+
+/* ---------- Cards / surfaces ---------- */
+.rv-landing .rv-card {
+  background: var(--bg-alt);
+  border: 1px solid var(--line-blue-soft);
+  border-radius: var(--r-lg);
+  padding: var(--sp-5);
+}
+.rv-landing .rv-divider { height: 1px; background: var(--line-blue); border: none; opacity: 1; }
+.rv-landing .rv-section.blue .rv-divider { background: var(--line-cream); }
+
+/* ---------- Utility ---------- */
+.rv-landing .rv-caps    { text-transform: uppercase; letter-spacing: 0.08em; }
+.rv-landing .rv-mono    { font-family: var(--font-mono-ui); }
+.rv-landing .rv-content { max-width: var(--content-max); margin: 0 auto; padding: 0 var(--section-pad-x); }
+
+/* ============================================================
+   Responsive layer. The handoff is authored at 1728px desktop with
+   inline pixel styles, so layout-critical containers carry class hooks
+   (rv-hero, rv-cols*, rv-faq-grid, rv-nav-*) and these media queries
+   override them. !important is required because the base values live in
+   inline style attributes. KeyFeatures self-switches to a swipe strip
+   below 900px (its own JS), so it isn't grid-overridden here.
+   ============================================================ */
+
+/* Tablet — 4-up card grids drop to 2 columns. */
+@media (max-width: 1024px) {
+  .rv-landing .rv-cols-4 { grid-template-columns: repeat(2, 1fr) !important; }
+}
+
+/* Below desktop — stack the hero, 3-up pricing, and 2-up FAQ; hide the
+   desktop nav links (logo + primary CTA + Войти remain). */
+@media (max-width: 900px) {
+  .rv-landing .rv-hero { grid-template-columns: 1fr !important; }
+  .rv-landing .rv-cols-3 { grid-template-columns: 1fr !important; }
+  .rv-landing .rv-faq-grid { grid-template-columns: 1fr !important; }
+  .rv-landing .rv-nav-anchors { display: none !important; }
+}
+
+/* Phone — everything single-column, tighter gutters, smaller display type. */
+@media (max-width: 640px) {
+  .rv-landing .rv-cols-4,
+  .rv-landing .rv-cols-2 { grid-template-columns: 1fr !important; }
+  .rv-landing section[style*="48px"],
+  .rv-landing footer[style*="48px"],
+  .rv-landing .rv-kf-pad { padding-left: 20px !important; padding-right: 20px !important; }
+  .rv-landing .rv-nav { padding-left: 16px !important; padding-right: 16px !important; }
+  .rv-landing h1 { font-size: 40px !important; }
+  .rv-landing h2 { font-size: 32px !important; }
+}
