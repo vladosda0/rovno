@@ -2657,41 +2657,6 @@
     },
     {
       "schema": "public",
-      "name": "add_library_work_to_estimate",
-      "signature": "public.add_library_work_to_estimate(uuid, uuid, uuid, integer)",
-      "args": [
-        {
-          "name": "p_estimate_version_id",
-          "type": "uuid",
-          "identityType": "uuid"
-        },
-        {
-          "name": "p_project_stage_id",
-          "type": "uuid",
-          "identityType": "uuid"
-        },
-        {
-          "name": "p_template_work_id",
-          "type": "uuid",
-          "identityType": "uuid"
-        },
-        {
-          "name": "p_sort_position",
-          "type": "integer default null",
-          "identityType": "integer"
-        }
-      ],
-      "returnType": "jsonb",
-      "language": "plpgsql",
-      "volatility": "volatile",
-      "securityDefiner": true,
-      "searchPath": "public",
-      "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260613120400_add_library_work_to_estimate.sql",
-      "triggerUsages": []
-    },
-    {
-      "schema": "public",
       "name": "browse_canonical_catalog",
       "signature": "public.browse_canonical_catalog(text)",
       "args": [
@@ -2733,6 +2698,46 @@
       "searchPath": "public",
       "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260622120000_tighten_price_comparison_finance_gate.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "add_library_work_to_estimate",
+      "signature": "public.add_library_work_to_estimate(uuid, uuid, uuid, integer, uuid[])",
+      "args": [
+        {
+          "name": "p_estimate_version_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_project_stage_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_template_work_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_sort_position",
+          "type": "integer default null",
+          "identityType": "integer"
+        },
+        {
+          "name": "p_excluded_template_resource_line_ids",
+          "type": "uuid[] default '{}'",
+          "identityType": "uuid[]"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260624120000_add_library_work_resource_exclusions.sql",
       "triggerUsages": []
     }
   ]

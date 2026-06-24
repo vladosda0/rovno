@@ -19,8 +19,8 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 - `supabase/migrations/20260613120100_search_canonical_library.sql`
 - `supabase/migrations/20260613120200_list_canonical_stages_with_works.sql`
 - `supabase/migrations/20260613120300_get_resource_article_detail.sql`
-- `supabase/migrations/20260613120400_add_library_work_to_estimate.sql`
 - `supabase/migrations/20260613120500_browse_canonical_catalog.sql`
+- `supabase/migrations/20260624120000_add_library_work_resource_exclusions.sql`
 
 ## Tables
 
@@ -318,8 +318,8 @@ Triggers:
 | `public.search_canonical_library(text, text)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260613120100_search_canonical_library.sql` |
 | `public.list_canonical_stages_with_works(uuid)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260613120200_list_canonical_stages_with_works.sql` |
 | `public.get_resource_article_detail(uuid)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260613120300_get_resource_article_detail.sql` |
-| `public.add_library_work_to_estimate(uuid, uuid, uuid, integer)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260613120400_add_library_work_to_estimate.sql` |
 | `public.browse_canonical_catalog(text)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260613120500_browse_canonical_catalog.sql` |
+| `public.add_library_work_to_estimate(uuid, uuid, uuid, integer, uuid[])` | `jsonb` | yes | `rpc` | `supabase/migrations/20260624120000_add_library_work_resource_exclusions.sql` |
 
 ## RLS and Grants
 

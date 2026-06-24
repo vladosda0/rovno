@@ -2321,6 +2321,7 @@ export type Database = {
           "p_project_stage_id": string
           "p_template_work_id": string
           "p_sort_position": unknown
+          "p_excluded_template_resource_line_ids": unknown
           }
           Returns: Json
         }

@@ -1053,13 +1053,6 @@
       "sourceMigration": "supabase/migrations/20260613120300_get_resource_article_detail.sql"
     },
     {
-      "key": "public.add_library_work_to_estimate",
-      "schema": "public",
-      "name": "add_library_work_to_estimate",
-      "signature": "public.add_library_work_to_estimate(uuid, uuid, uuid, integer)",
-      "sourceMigration": "supabase/migrations/20260613120400_add_library_work_to_estimate.sql"
-    },
-    {
       "key": "public.browse_canonical_catalog",
       "schema": "public",
       "name": "browse_canonical_catalog",
@@ -1072,6 +1065,13 @@
       "name": "get_resource_article_price_comparison",
       "signature": "public.get_resource_article_price_comparison(uuid, uuid)",
       "sourceMigration": "supabase/migrations/20260622120000_tighten_price_comparison_finance_gate.sql"
+    },
+    {
+      "key": "public.add_library_work_to_estimate",
+      "schema": "public",
+      "name": "add_library_work_to_estimate",
+      "signature": "public.add_library_work_to_estimate(uuid, uuid, uuid, integer, uuid[])",
+      "sourceMigration": "supabase/migrations/20260624120000_add_library_work_resource_exclusions.sql"
     }
   ],
   "policies": [
@@ -2955,8 +2955,8 @@
         "supabase/migrations/20260613120100_search_canonical_library.sql",
         "supabase/migrations/20260613120200_list_canonical_stages_with_works.sql",
         "supabase/migrations/20260613120300_get_resource_article_detail.sql",
-        "supabase/migrations/20260613120400_add_library_work_to_estimate.sql",
-        "supabase/migrations/20260613120500_browse_canonical_catalog.sql"
+        "supabase/migrations/20260613120500_browse_canonical_catalog.sql",
+        "supabase/migrations/20260624120000_add_library_work_resource_exclusions.sql"
       ],
       "tables": [
         "public.system_resource_articles",
@@ -2978,8 +2978,8 @@
         "public.search_canonical_library",
         "public.list_canonical_stages_with_works",
         "public.get_resource_article_detail",
-        "public.add_library_work_to_estimate",
-        "public.browse_canonical_catalog"
+        "public.browse_canonical_catalog",
+        "public.add_library_work_to_estimate"
       ],
       "policies": [
         "public.system_resource_articles.system_resource_articles_select",
