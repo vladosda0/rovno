@@ -6,6 +6,7 @@ import {
 import { persistEstimateV2HeroTransition, EstimateV2HeroTransitionError } from "@/data/estimate-v2-hero-transition";
 import {
   ensureRemoteEstimateCurrentVersionId,
+  resolveRemoteEstimateStageId,
   loadCurrentEstimateDraft,
   loadEstimateOperationalSummary,
   type EstimateOperationalUpperBlock,
@@ -2217,6 +2218,22 @@ export async function ensureRemoteEstimateVersionId(projectId: string): Promise<
   );
 }
 
+/**
+ * Resolves the live project_stages.id for a (possibly local, not-yet-hydrated) stage id, so a
+ * server RPC (e.g. add_library_work_to_estimate) targets the right row. Returns null in
+ * demo/local (no managed sync context) or when the stage isn't in the current snapshot.
+ * Callers should flush the draft first so the resolved server row exists.
+ */
+export async function ensureRemoteStageId(projectId: string, localStageId: string): Promise<string | null> {
+  const state = statesByProjectId.get(projectId);
+  const managedSyncContext = getManagedEstimateRemoteSyncContext(projectId);
+  if (!state || !managedSyncContext) {
+    return null;
+  }
+  const normalized = normalizeStateForWorkspace(projectId, state);
+  return resolveRemoteEstimateStageId(projectId, getSnapshotFromState(normalized), localStageId);
+}
+
 function ensureProjectState(projectId: string): EstimateV2ProjectState {
   const existing = statesByProjectId.get(projectId);
   const demoActive = DEMO_PROJECT_IDS.has(projectId) && isDemoSessionActive();
@@ -2892,6 +2909,7 @@ export function createLine(
     costUnitCents?: number;
     markupBps?: number;
     discountBpsOverride?: number | null;
+    systemResourceArticleId?: string | null;
   },
 ): EstimateV2ResourceLine | null {
   const state = ensureProjectState(projectId);
@@ -2907,6 +2925,7 @@ export function createLine(
     unit: input.unit?.trim() || "unit",
     qtyMilli: Math.max(1, Math.round(input.qtyMilli ?? 1_000)),
     costUnitCents: Math.max(0, Math.round(input.costUnitCents ?? 0)),
+    systemResourceArticleId: input.systemResourceArticleId ?? null,
     markupBps: clampBps(input.markupBps),
     discountBpsOverride: clampBpsOrNull(input.discountBpsOverride),
     taxBpsOverride: null,

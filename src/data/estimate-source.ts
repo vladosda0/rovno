@@ -714,6 +714,22 @@ export async function loadEstimateOperationalSummary(
   return parseEstimateOperationalSummaryPayload(data);
 }
 
+/**
+ * Resolves the live project_stages.id for a (possibly local, not-yet-hydrated) stage id,
+ * using the SAME local->remote mapping as saveCurrentEstimateDraft. Callers must persist the
+ * stage first (flush the draft) so the resolved server row exists. Returns null if the stage
+ * isn't in the snapshot.
+ */
+export async function resolveRemoteEstimateStageId(
+  projectId: string,
+  snapshot: Pick<EstimateV2Snapshot, "project" | "stages" | "works" | "lines" | "dependencies">,
+  localStageId: string,
+): Promise<string | null> {
+  const existingDraft = await loadCurrentEstimateDraft(projectId);
+  const resolved = resolveEstimateDraftRemoteIds({ projectId, snapshot, existingDraft });
+  return resolved.stageIdByLocalStageId[localStageId] ?? null;
+}
+
 export function resolveEstimateDraftRemoteIds(input: {
   projectId: string;
   snapshot: Pick<EstimateV2Snapshot, "project" | "stages" | "works" | "lines" | "dependencies">;
