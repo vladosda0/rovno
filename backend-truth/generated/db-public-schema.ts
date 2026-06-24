@@ -483,6 +483,10 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260622120000_tighten_price_comparison_finance_gate.sql",
       "sha256": "b0603c6247008016fdb84274e8b7f75dad578721bdb134e587fec650ac689dbe"
+    },
+    {
+      "path": "supabase/migrations/20260624120000_add_library_work_resource_exclusions.sql",
+      "sha256": "71fedeb8e85f3a2f37f72130f924d55f08385f97476e3ce728cc439d259de99d"
     }
   ],
   "generated_artifacts": [
@@ -628,6 +632,7 @@ export const manifest = {
     "sql/20260613120500_browse_canonical_catalog.sql",
     "sql/20260613120600_get_resource_article_price_comparison.sql",
     "sql/20260622120000_tighten_price_comparison_finance_gate.sql",
+    "sql/20260624120000_add_library_work_resource_exclusions.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -17923,41 +17928,6 @@ export const functions = {
     },
     {
       "schema": "public",
-      "name": "add_library_work_to_estimate",
-      "signature": "public.add_library_work_to_estimate(uuid, uuid, uuid, integer)",
-      "args": [
-        {
-          "name": "p_estimate_version_id",
-          "type": "uuid",
-          "identityType": "uuid"
-        },
-        {
-          "name": "p_project_stage_id",
-          "type": "uuid",
-          "identityType": "uuid"
-        },
-        {
-          "name": "p_template_work_id",
-          "type": "uuid",
-          "identityType": "uuid"
-        },
-        {
-          "name": "p_sort_position",
-          "type": "integer default null",
-          "identityType": "integer"
-        }
-      ],
-      "returnType": "jsonb",
-      "language": "plpgsql",
-      "volatility": "volatile",
-      "securityDefiner": true,
-      "searchPath": "public",
-      "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260613120400_add_library_work_to_estimate.sql",
-      "triggerUsages": []
-    },
-    {
-      "schema": "public",
       "name": "browse_canonical_catalog",
       "signature": "public.browse_canonical_catalog(text)",
       "args": [
@@ -17999,6 +17969,46 @@ export const functions = {
       "searchPath": "public",
       "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260622120000_tighten_price_comparison_finance_gate.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "add_library_work_to_estimate",
+      "signature": "public.add_library_work_to_estimate(uuid, uuid, uuid, integer, uuid[])",
+      "args": [
+        {
+          "name": "p_estimate_version_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_project_stage_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_template_work_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_sort_position",
+          "type": "integer default null",
+          "identityType": "integer"
+        },
+        {
+          "name": "p_excluded_template_resource_line_ids",
+          "type": "uuid[] default '{}'",
+          "identityType": "uuid[]"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260624120000_add_library_work_resource_exclusions.sql",
       "triggerUsages": []
     }
   ]
@@ -21587,13 +21597,6 @@ export const sourceTrace = {
       "sourceMigration": "supabase/migrations/20260613120300_get_resource_article_detail.sql"
     },
     {
-      "key": "public.add_library_work_to_estimate",
-      "schema": "public",
-      "name": "add_library_work_to_estimate",
-      "signature": "public.add_library_work_to_estimate(uuid, uuid, uuid, integer)",
-      "sourceMigration": "supabase/migrations/20260613120400_add_library_work_to_estimate.sql"
-    },
-    {
       "key": "public.browse_canonical_catalog",
       "schema": "public",
       "name": "browse_canonical_catalog",
@@ -21606,6 +21609,13 @@ export const sourceTrace = {
       "name": "get_resource_article_price_comparison",
       "signature": "public.get_resource_article_price_comparison(uuid, uuid)",
       "sourceMigration": "supabase/migrations/20260622120000_tighten_price_comparison_finance_gate.sql"
+    },
+    {
+      "key": "public.add_library_work_to_estimate",
+      "schema": "public",
+      "name": "add_library_work_to_estimate",
+      "signature": "public.add_library_work_to_estimate(uuid, uuid, uuid, integer, uuid[])",
+      "sourceMigration": "supabase/migrations/20260624120000_add_library_work_resource_exclusions.sql"
     }
   ],
   "policies": [
@@ -23489,8 +23499,8 @@ export const sourceTrace = {
         "supabase/migrations/20260613120100_search_canonical_library.sql",
         "supabase/migrations/20260613120200_list_canonical_stages_with_works.sql",
         "supabase/migrations/20260613120300_get_resource_article_detail.sql",
-        "supabase/migrations/20260613120400_add_library_work_to_estimate.sql",
-        "supabase/migrations/20260613120500_browse_canonical_catalog.sql"
+        "supabase/migrations/20260613120500_browse_canonical_catalog.sql",
+        "supabase/migrations/20260624120000_add_library_work_resource_exclusions.sql"
       ],
       "tables": [
         "public.system_resource_articles",
@@ -23512,8 +23522,8 @@ export const sourceTrace = {
         "public.search_canonical_library",
         "public.list_canonical_stages_with_works",
         "public.get_resource_article_detail",
-        "public.add_library_work_to_estimate",
-        "public.browse_canonical_catalog"
+        "public.browse_canonical_catalog",
+        "public.add_library_work_to_estimate"
       ],
       "policies": [
         "public.system_resource_articles.system_resource_articles_select",
@@ -24057,8 +24067,8 @@ export const slices = {
         "supabase/migrations/20260613120100_search_canonical_library.sql",
         "supabase/migrations/20260613120200_list_canonical_stages_with_works.sql",
         "supabase/migrations/20260613120300_get_resource_article_detail.sql",
-        "supabase/migrations/20260613120400_add_library_work_to_estimate.sql",
-        "supabase/migrations/20260613120500_browse_canonical_catalog.sql"
+        "supabase/migrations/20260613120500_browse_canonical_catalog.sql",
+        "supabase/migrations/20260624120000_add_library_work_resource_exclusions.sql"
       ],
       "tableCount": 9,
       "functionCount": 10,

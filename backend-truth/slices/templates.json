@@ -20,8 +20,8 @@
     "supabase/migrations/20260613120100_search_canonical_library.sql",
     "supabase/migrations/20260613120200_list_canonical_stages_with_works.sql",
     "supabase/migrations/20260613120300_get_resource_article_detail.sql",
-    "supabase/migrations/20260613120400_add_library_work_to_estimate.sql",
-    "supabase/migrations/20260613120500_browse_canonical_catalog.sql"
+    "supabase/migrations/20260613120500_browse_canonical_catalog.sql",
+    "supabase/migrations/20260624120000_add_library_work_resource_exclusions.sql"
   ],
   "tables": [
     {
@@ -2309,9 +2309,30 @@
     },
     {
       "schema": "public",
+      "name": "browse_canonical_catalog",
+      "key": "public.browse_canonical_catalog",
+      "signature": "public.browse_canonical_catalog(text)",
+      "args": [
+        {
+          "name": "p_subcategory",
+          "type": "text default null",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "sourceMigration": "supabase/migrations/20260613120500_browse_canonical_catalog.sql",
+      "authenticatedExecute": true,
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
       "name": "add_library_work_to_estimate",
       "key": "public.add_library_work_to_estimate",
-      "signature": "public.add_library_work_to_estimate(uuid, uuid, uuid, integer)",
+      "signature": "public.add_library_work_to_estimate(uuid, uuid, uuid, integer, uuid[])",
       "args": [
         {
           "name": "p_estimate_version_id",
@@ -2332,6 +2353,11 @@
           "name": "p_sort_position",
           "type": "integer default null",
           "identityType": "integer"
+        },
+        {
+          "name": "p_excluded_template_resource_line_ids",
+          "type": "uuid[] default '{}'",
+          "identityType": "uuid[]"
         }
       ],
       "returnType": "jsonb",
@@ -2339,28 +2365,7 @@
       "volatility": "volatile",
       "securityDefiner": true,
       "searchPath": "public",
-      "sourceMigration": "supabase/migrations/20260613120400_add_library_work_to_estimate.sql",
-      "authenticatedExecute": true,
-      "triggerUsages": []
-    },
-    {
-      "schema": "public",
-      "name": "browse_canonical_catalog",
-      "key": "public.browse_canonical_catalog",
-      "signature": "public.browse_canonical_catalog(text)",
-      "args": [
-        {
-          "name": "p_subcategory",
-          "type": "text default null",
-          "identityType": "text"
-        }
-      ],
-      "returnType": "jsonb",
-      "language": "plpgsql",
-      "volatility": "stable",
-      "securityDefiner": true,
-      "searchPath": "public",
-      "sourceMigration": "supabase/migrations/20260613120500_browse_canonical_catalog.sql",
+      "sourceMigration": "supabase/migrations/20260624120000_add_library_work_resource_exclusions.sql",
       "authenticatedExecute": true,
       "triggerUsages": []
     }
