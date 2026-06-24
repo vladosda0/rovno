@@ -16,11 +16,6 @@ export function setStoredLanguage(lang: AppLanguage): void {
   localStorage.setItem(STORAGE_KEY, lang);
 }
 
-/** Coerce any stored/profile locale to a supported UI language. */
-export function toAppLanguage(locale: string | null | undefined): AppLanguage {
-  return locale === "ru" ? "ru" : locale === "en" ? "en" : "en";
-}
-
 /**
  * Apply a language everywhere in one call: switch i18n live AND persist it for the
  * next boot. Use this from every language switcher so the UI, localStorage, and
