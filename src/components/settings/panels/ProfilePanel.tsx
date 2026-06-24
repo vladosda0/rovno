@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SettingsSection } from "@/components/settings/SettingsSection";
 import { Camera, Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { setAppLanguage } from "@/i18n";
 
 const TIMEZONES = [
   { value: "auto", labelKey: "profile.timezoneOption.auto" },
@@ -33,14 +34,15 @@ const LANGUAGES: { value: string; label: string; disabled?: boolean }[] = [
   { value: "ru", label: "Русский" },
   { value: "en", label: "English" },
   { value: "de", label: "Deutsch", disabled: true },
-  { value: "fr", label: "Français" },
+  { value: "fr", label: "Français", disabled: true },
   { value: "es", label: "Español", disabled: true },
 ];
 
 function normalizeSelectableLanguage(locale: string | undefined): string {
   const raw = locale || "en";
-  if (raw === "de" || raw === "es") return "en";
-  return raw;
+  // Only ru/en are real translation bundles; any placeholder (de/fr/es) or stale
+  // backend value falls back to English.
+  return raw === "ru" || raw === "en" ? raw : "en";
 }
 
 export function ProfilePanel() {
@@ -145,6 +147,12 @@ export function ProfilePanel() {
           signatureBlock: signature.trim() || null,
         }),
       ]);
+      // Apply the chosen interface language live and persist it for the next boot.
+      // Saving locale to the backend alone never reached i18n, so the UI appeared
+      // not to change. Only ru/en are real bundles.
+      if (language === "ru" || language === "en") {
+        setAppLanguage(language);
+      }
       toast({ title: t("profile.savedToast"), description: t("profile.savedToastDescription") });
     } catch (error) {
       toast({

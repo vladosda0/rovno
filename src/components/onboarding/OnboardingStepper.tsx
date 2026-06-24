@@ -14,6 +14,7 @@ import { planningQueryKeys } from "@/hooks/use-planning-source";
 import { useCreateOrganization, useSetActiveOrg } from "@/hooks/use-orgs";
 import { suggestOrgSlug } from "@/data/org-source";
 import { toast } from "@/hooks/use-toast";
+import { type AppLanguage, getStoredLanguage, setAppLanguage } from "@/i18n";
 
 const MAX_ONBOARDING_STAGES = 5;
 
@@ -36,8 +37,16 @@ export function OnboardingStepper({ onComplete, onProjectCreated }: OnboardingSt
   const showAutomationStep = MVP_SHOW_AI_AUTOMATION_MODE_UI;
   const [step, setStep] = useState(showAutomationStep ? 0 : 1);
   const [selectedLevel, setSelectedLevel] = useState("manual");
-  const [language, setLanguage] = useState("ru");
+  const [language, setLanguage] = useState<AppLanguage>(() => getStoredLanguage());
   const [units, setUnits] = useState("metric");
+
+  // Apply + persist the interface language immediately when chosen. Previously the
+  // selection was discarded — it never reached i18n or localStorage.
+  const handleLanguageChange = (next: string) => {
+    const lang: AppLanguage = next === "en" ? "en" : "ru";
+    setLanguage(lang);
+    setAppLanguage(lang);
+  };
 
   const [projectTitle, setProjectTitle] = useState("");
   const [projectType, setProjectType] = useState("residential");
@@ -277,14 +286,13 @@ export function OnboardingStepper({ onComplete, onProjectCreated }: OnboardingSt
           <div className="space-y-sp-2">
             <div className="space-y-1.5">
               <label className="text-body-sm font-medium text-foreground">{t("onboarding.preferences.languageLabel")}</label>
-              <Select value={language} onValueChange={setLanguage}>
+              <Select value={language} onValueChange={handleLanguageChange}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ru">Русский</SelectItem>
                   <SelectItem value="en">English</SelectItem>
-                  <SelectItem value="es">Español</SelectItem>
                 </SelectContent>
               </Select>
             </div>
