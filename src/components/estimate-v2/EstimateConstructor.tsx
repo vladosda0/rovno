@@ -203,13 +203,11 @@ export function EstimateConstructor({
       for (const work of stage.works) {
         if (!checked.has(work.templateWorkId)) continue;
         const unchecked = uncheckedResources[work.templateWorkId];
-        const uncheckedResourceIndexes = unchecked
-          ? work.resourceLines.reduce<number[]>((acc, line, index) => {
-              if (unchecked.has(line.id)) acc.push(index);
-              return acc;
-            }, [])
+        // Only the work's own resource line ids (guards against any stale selection).
+        const excludedResourceLineIds = unchecked
+          ? work.resourceLines.filter((line) => unchecked.has(line.id)).map((line) => line.id)
           : [];
-        requests.push({ templateWorkId: work.templateWorkId, uncheckedResourceIndexes });
+        requests.push({ templateWorkId: work.templateWorkId, excludedResourceLineIds });
       }
     }
     if (requests.length === 0) return;

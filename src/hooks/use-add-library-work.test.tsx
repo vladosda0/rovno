@@ -3,7 +3,6 @@ import { act, renderHook } from "@testing-library/react";
 
 const rpcMock = vi.fn();
 const deleteWorkMock = vi.fn();
-const deleteLineMock = vi.fn();
 const hydrateMock = vi.fn();
 const flushMock = vi.fn();
 const ensureVersionMock = vi.fn();
@@ -23,7 +22,6 @@ vi.mock("react-i18next", () => ({
 }));
 vi.mock("@/data/estimate-v2-store", () => ({
   deleteWork: (...args: unknown[]) => deleteWorkMock(...args),
-  deleteLine: (...args: unknown[]) => deleteLineMock(...args),
   ensureRemoteEstimateVersionId: (...args: unknown[]) => ensureVersionMock(...args),
   ensureRemoteStageId: (...args: unknown[]) => ensureStageMock(...args),
   flushProjectDraftSync: (...args: unknown[]) => flushMock(...args),
@@ -33,16 +31,15 @@ vi.mock("@/data/estimate-v2-store", () => ({
 import { useAddLibraryWork, type AddWorkRequest } from "@/hooks/use-add-library-work";
 
 /** Build an AddWorkRequest with no deselected resources (the common case). */
-const req = (templateWorkId: string, uncheckedResourceIndexes: number[] = []): AddWorkRequest => ({
+const req = (templateWorkId: string, excludedResourceLineIds: string[] = []): AddWorkRequest => ({
   templateWorkId,
-  uncheckedResourceIndexes,
+  excludedResourceLineIds,
 });
 
 describe("useAddLibraryWork", () => {
   beforeEach(() => {
     rpcMock.mockReset();
     deleteWorkMock.mockReset();
-    deleteLineMock.mockReset();
     hydrateMock.mockReset().mockResolvedValue(undefined);
     flushMock.mockReset().mockResolvedValue(undefined);
     ensureVersionMock.mockReset().mockResolvedValue("v1");
@@ -151,39 +148,29 @@ describe("useAddLibraryWork", () => {
     expect(rpcMock).not.toHaveBeenCalled();
   });
 
-  it("prunes only the deselected resources (by returned line id) AFTER the hydrate, keeping the rest", async () => {
-    rpcMock.mockResolvedValue({
-      data: { work_id: "ew1", resource_line_ids: ["rl0", "rl1", "rl2"] },
-      error: null,
-    });
+  it("passes the deselected resource ids to the RPC so the server creates only the kept ones", async () => {
+    rpcMock.mockResolvedValue({ data: { work_id: "ew1" }, error: null });
     const { result } = renderHook(() => useAddLibraryWork("p1", "v1", "prof1"));
 
     await act(async () => {
-      // deselect resources at positions 0 and 2 → keep position 1.
-      await result.current.addWorks("ps-target", [req("tw1", [0, 2])]);
+      await result.current.addWorks("ps-target", [req("tw1", ["rl0", "rl2"]), req("tw2", [])]);
     });
 
-    expect(deleteLineMock).toHaveBeenCalledTimes(2);
-    expect(deleteLineMock).toHaveBeenCalledWith("p1", "rl0");
-    expect(deleteLineMock).toHaveBeenCalledWith("p1", "rl2");
-    expect(deleteLineMock).not.toHaveBeenCalledWith("p1", "rl1");
-    // The prune runs only once the server lines are in local state.
-    expect(hydrateMock.mock.invocationCallOrder[0]).toBeLessThan(
-      deleteLineMock.mock.invocationCallOrder[0],
+    expect(rpcMock).toHaveBeenNthCalledWith(
+      1,
+      "add_library_work_to_estimate",
+      expect.objectContaining({
+        p_template_work_id: "tw1",
+        p_excluded_template_resource_line_ids: ["rl0", "rl2"],
+      }),
     );
-  });
-
-  it("ignores out-of-range deselected indexes and prunes nothing when none are deselected", async () => {
-    rpcMock.mockResolvedValue({
-      data: { work_id: "ew1", resource_line_ids: ["rl0", "rl1"] },
-      error: null,
-    });
-    const { result } = renderHook(() => useAddLibraryWork("p1", "v1", "prof1"));
-
-    await act(async () => {
-      await result.current.addWorks("ps-target", [req("tw1", [5]), req("tw2", [])]);
-    });
-
-    expect(deleteLineMock).not.toHaveBeenCalled();
+    expect(rpcMock).toHaveBeenNthCalledWith(
+      2,
+      "add_library_work_to_estimate",
+      expect.objectContaining({
+        p_template_work_id: "tw2",
+        p_excluded_template_resource_line_ids: [],
+      }),
+    );
   });
 });

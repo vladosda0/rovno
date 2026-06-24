@@ -114,8 +114,8 @@ describe("EstimateConstructor", () => {
     fireEvent.click(screen.getByRole("button", { name: "estimate.constructor.addWorkButton" }));
     expect(addWorksSpy).toHaveBeenCalledTimes(1);
     expect(addWorksSpy).toHaveBeenCalledWith("ps-target", [
-      { templateWorkId: "tw1", uncheckedResourceIndexes: [] },
-      { templateWorkId: "tw2", uncheckedResourceIndexes: [] },
+      { templateWorkId: "tw1", excludedResourceLineIds: [] },
+      { templateWorkId: "tw2", excludedResourceLineIds: [] },
     ]);
     expect(applyStagesSpy).not.toHaveBeenCalled();
   });
@@ -130,8 +130,8 @@ describe("EstimateConstructor", () => {
     fireEvent.click(screen.getByLabelText("Гвозди"));
     fireEvent.click(screen.getByRole("button", { name: "estimate.constructor.addWorkButton" }));
     expect(addWorksSpy).toHaveBeenCalledWith("ps-target", [
-      { templateWorkId: "tw1", uncheckedResourceIndexes: [1] },
-      { templateWorkId: "tw2", uncheckedResourceIndexes: [] },
+      { templateWorkId: "tw1", excludedResourceLineIds: ["rl2"] },
+      { templateWorkId: "tw2", excludedResourceLineIds: [] },
     ]);
   });
 

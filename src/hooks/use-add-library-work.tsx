@@ -6,7 +6,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import {
-  deleteLine,
   deleteWork,
   ensureRemoteEstimateVersionId,
   ensureRemoteStageId,
@@ -18,15 +17,14 @@ const rawSupabase = supabase as unknown as SupabaseClient;
 const REVERT_MS = 15_000;
 
 /**
- * One template work to add, plus which of its default resources the user deselected
- * in the Constructor. `uncheckedResourceIndexes` are positions into the work's
- * `resourceLines` as listed by list_canonical_stages_with_works (ordered by
- * sort_hint, title) — the SAME order add_library_work_to_estimate returns its
- * `resource_line_ids` in, so a position maps 1:1 to a freshly-created estimate line.
+ * One template work to add, plus the template resource_line ids the user deselected in
+ * the Constructor. The RPC copies only the resources NOT in `excludedResourceLineIds`,
+ * so deselection is resolved server-side by stable id (no positional mapping) and never
+ * depends on the visibility-gated autosave to prune.
  */
 export interface AddWorkRequest {
   templateWorkId: string;
-  uncheckedResourceIndexes: number[];
+  excludedResourceLineIds: string[];
 }
 
 /**
@@ -37,12 +35,11 @@ export interface AddWorkRequest {
  * bootstrap a version if missing, forceFresh re-hydrate after, and on a refresh failure do
  * NOT retry (the works are committed server-side — ask the user to reload).
  *
- * Per-resource deselection: the RPC always copies the work's full default resource set
- * (so each kept line keeps the canonical cost/markup), then we prune the deselected ones.
- * The RPC returns `resource_line_ids` ordered exactly like the Constructor's resource
- * checkboxes, so `uncheckedResourceIndexes` index straight into it; the chosen server line
- * ids are deleted AFTER the forceFresh hydrate (when they exist in local state), and the
- * normal autosave-prune removes them server-side.
+ * Per-resource deselection is done by the RPC: each request's `excludedResourceLineIds`
+ * (template resource_line ids) are passed as `p_excluded_template_resource_line_ids`, so
+ * the server creates exactly the kept resources (each retaining its canonical cost/markup)
+ * in one atomic, security-definer call. No client-side prune, so it works for every
+ * finance-visibility class, not just managers whose estimate autosave is ungated.
  */
 export function useAddLibraryWork(
   projectId: string,
@@ -88,24 +85,19 @@ export function useAddLibraryWork(
         }
 
         const addedWorkIds: string[] = [];
-        // Server ids of the freshly-created resource lines the user deselected; deleted
-        // after the hydrate so the kept lines retain the RPC's canonical cost/markup.
-        const resourceLineIdsToPrune: string[] = [];
         for (const work of works) {
           const { data, error } = await rawSupabase.rpc("add_library_work_to_estimate", {
             p_estimate_version_id: versionId,
             p_project_stage_id: remoteStageId,
             p_template_work_id: work.templateWorkId,
             p_sort_position: null,
+            // The server copies only the non-excluded resources, so deselection is exact
+            // and atomic — no positional mapping, no visibility-gated client prune.
+            p_excluded_template_resource_line_ids: work.excludedResourceLineIds,
           });
           if (error || !data) continue;
-          const result = data as { work_id?: string; resource_line_ids?: string[] };
-          if (!result.work_id) continue;
-          addedWorkIds.push(result.work_id);
-          const lineIds = result.resource_line_ids ?? [];
-          for (const index of work.uncheckedResourceIndexes) {
-            if (index >= 0 && index < lineIds.length) resourceLineIdsToPrune.push(lineIds[index]);
-          }
+          const result = data as { work_id?: string };
+          if (result.work_id) addedWorkIds.push(result.work_id);
         }
 
         if (addedWorkIds.length === 0) {
@@ -119,10 +111,6 @@ export function useAddLibraryWork(
           toast({ title: t("estimate.constructor.applyRefreshFailed"), variant: "destructive" });
           return;
         }
-
-        // Drop the deselected resources now that they exist in local state; the debounced
-        // autosave prunes them server-side. Kept lines (with canonical costs) stay intact.
-        for (const lineId of resourceLineIdsToPrune) deleteLine(projectId, lineId);
 
         const { dismiss } = toast({
           title: t("estimate.constructor.worksAdded", { count: addedWorkIds.length }),
