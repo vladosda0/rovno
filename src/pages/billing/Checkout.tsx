@@ -184,7 +184,7 @@ export default function Checkout() {
       // G: usePaymentStatus marks refunded/partial_refund terminal (polling stops),
       // so without a nav branch here the user is stranded on a live-looking checkout
       // (audit Fix G / P2-7). Route to the fail screen with a refund-specific reason.
-      navigate(`/billing/fail?intent=${row.id}&reason=${row.status}`, { replace: true });
+      navigate(`/billing/fail?intent=${row.id}&reason=${encodeURIComponent(row.status)}`, { replace: true });
     }
   }, [statusQuery.data, navigate]);
 
