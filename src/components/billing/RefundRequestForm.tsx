@@ -3,32 +3,32 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
-import { formatRubFromKopecks, type PaymentIntentRow } from "@/lib/billing";
-import { PLANS } from "@/data/plans";
+import { supabase } from "@/integrations/supabase/client";
+import type { PaymentIntentRow } from "@/lib/billing";
 
-// Frontend-only refund REQUEST (audit M1 → handled manually for MVP). Emails Vlad
-// via FormSubmit; touches no DB and no edge function. The endpoint uses
-// FormSubmit's alias token (mapped to vlad@rovno.ai) rather than the naked email,
-// so the address is not exposed in the frontend bundle. Requires a one-time
-// "Activate Form" click in the email FormSubmit sent to vlad@rovno.ai before
-// submissions deliver.
-const REFUND_FORM_ENDPOINT = "https://formsubmit.co/ajax/69d1ca51fb2f4cef4cfd12f269d0b57e";
+// Refund REQUEST (audit M1 → handled manually for MVP). Sends the payment id +
+// reason to the internal `send-refund-request` Edge Function, which derives the
+// user's email server-side from the verified JWT and emails the billing inbox via
+// Resend. This replaces the prior POST to formsubmit.co — a third-party form relay
+// outside our data boundary that leaked billing PII (152-ФЗ, audit Fix E / P2-6).
+// Touches no DB; the edge function owns sending.
 const MIN_REASON = 10;
+// Mirror the edge function's MAX_REASON so an over-long reason is blocked client-side
+// with the inline counter rather than failing with a generic 400 toast.
+const MAX_REASON = 4000;
 
 interface RefundRequestFormProps {
   payment: PaymentIntentRow;
-  userEmail: string;
   // Partial refund: set when the full-refund window (14 days) has passed.
   partial?: boolean;
   onDone?: () => void;
 }
 
-export function RefundRequestForm({ payment, userEmail, partial = false, onDone }: RefundRequestFormProps) {
+export function RefundRequestForm({ payment, partial = false, onDone }: RefundRequestFormProps) {
   const { t } = useTranslation();
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const planName = PLANS[payment.plan_code as keyof typeof PLANS]?.display_name ?? payment.plan_code;
   const reasonTrimmed = reason.trim();
   const canSubmit = reasonTrimmed.length >= MIN_REASON && !submitting;
 
@@ -37,23 +37,14 @@ export function RefundRequestForm({ payment, userEmail, partial = false, onDone 
     if (!canSubmit) return;
     setSubmitting(true);
     try {
-      const response = await fetch(REFUND_FORM_ENDPOINT, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({
-          _subject: `Refund - ${payment.id}`,
-          refund_type: partial ? "partial" : "full",
+      const { error } = await supabase.functions.invoke("send-refund-request", {
+        body: {
           payment_id: payment.id,
-          payment_date: payment.confirmed_at ?? payment.created_at,
-          amount_kopecks: payment.amount_kopecks,
-          amount: formatRubFromKopecks(payment.amount_kopecks),
-          plan_code: payment.plan_code,
-          plan_display_name: planName,
-          user_email: userEmail,
           reason: reasonTrimmed,
-        }),
+          partial,
+        },
       });
-      if (!response.ok) throw new Error("refund request failed");
+      if (error) throw error;
       toast({ title: t("billing.refund.success") });
       setReason("");
       onDone?.();
@@ -73,6 +64,7 @@ export function RefundRequestForm({ payment, userEmail, partial = false, onDone 
         <Textarea
           id="refund-reason"
           required
+          maxLength={MAX_REASON}
           value={reason}
           onChange={(event) => setReason(event.target.value)}
           placeholder={t("billing.refund.reasonPlaceholder")}

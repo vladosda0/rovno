@@ -117,7 +117,6 @@ export function PaymentDetailDialog({ payment, userEmail, trigger }: PaymentDeta
             {withinWindow || partialMode ? (
               <RefundRequestForm
                 payment={payment}
-                userEmail={userEmail}
                 partial={!withinWindow}
                 onDone={() => setOpen(false)}
               />
