@@ -73,44 +73,34 @@ export function PlansDialog({ open, onOpenChange, currentPlan }: PlansDialogProp
       navigate(`/billing/checkout?plan=${code}`);
       return;
     }
-    // Downgrade to a cheaper paid plan → confirm, then schedule (no charge now).
+    // Downgrade to a cheaper paid plan. It is applied by the renewal cron, which
+    // only charges auto-renewing subs. A CANCELLED sub (auto_renew=false) must NOT
+    // be silently re-armed here: that would charge a card the user explicitly opted
+    // out of, with no checkout / consent re-capture (audit Fix C / P1-3). Require
+    // the user to reactivate first.
+    if (!subscription?.auto_renew) {
+      toast({ title: t("plans.dialog.resumeBeforeDowngrade"), variant: "destructive" });
+      return;
+    }
     setDowngradeTo(code);
   };
 
   const confirmDowngrade = async () => {
     if (!downgradeTo || !subscription) return;
-    setSubmitting(true);
-    // The downgrade is applied by the renewal cron, which only charges
-    // auto-renewing subs. Turn auto-renewal on first as an explicit step (the RPC
-    // refuses to schedule otherwise) so the cheaper plan is charged at the period
-    // boundary instead of the subscription lapsing to Free. Track whether WE
-    // enabled it, so a later failure can roll it back.
-    const weEnabledAutoRenew = !subscription.auto_renew;
-    if (weEnabledAutoRenew) {
-      const renew = await rawSupabase.rpc("tbank_set_auto_renew", {
-        p_subscription_id: subscription.id,
-        p_auto_renew: true,
-      });
-      if (renew.error) {
-        setSubmitting(false);
-        toast({ title: t("plans.dialog.downgradeError"), variant: "destructive" });
-        return;
-      }
+    // Defensive guard (handleSelect already blocks this): never schedule a downgrade
+    // on a cancelled sub, and never enable auto-renew as a side effect — re-arming a
+    // card the user opted out of is the bug this fix closes (audit Fix C / P1-3).
+    if (!subscription.auto_renew) {
+      setDowngradeTo(null);
+      toast({ title: t("plans.dialog.resumeBeforeDowngrade"), variant: "destructive" });
+      return;
     }
+    setSubmitting(true);
     const { error } = await rawSupabase.rpc("tbank_schedule_plan_change", {
       p_subscription_id: subscription.id,
       p_target_plan_code: downgradeTo,
     });
     if (error) {
-      // Roll back the auto-renewal we just enabled: otherwise a failed downgrade
-      // silently leaves the user auto-renewing their current (pricier) plan.
-      if (weEnabledAutoRenew) {
-        await rawSupabase.rpc("tbank_set_auto_renew", {
-          p_subscription_id: subscription.id,
-          p_auto_renew: false,
-        });
-        refetch();
-      }
       setSubmitting(false);
       toast({ title: t("plans.dialog.downgradeError"), variant: "destructive" });
       return;

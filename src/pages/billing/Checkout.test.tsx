@@ -19,16 +19,35 @@ vi.mock("@/hooks/useActiveSubscription", () => ({
   useActiveSubscription: () => activeSubReturn,
 }));
 
+// Settable payment-status row + a refetch spy (Fix I) + a real-ish terminal check (Fix G).
+type StatusRow = { id: string; status: string; error_code: string | null; plan_code?: string };
+let statusData: StatusRow | undefined = undefined;
+const refetchStatus = vi.fn();
+const TERMINAL = new Set(["confirmed", "rejected", "cancelled", "refunded", "partial_refund"]);
 vi.mock("@/hooks/usePaymentStatus", () => ({
-  usePaymentStatus: () => ({ data: undefined }),
-  isTerminalPaymentStatus: () => false,
+  usePaymentStatus: () => ({ data: statusData, refetch: refetchStatus }),
+  isTerminalPaymentStatus: (s: string | undefined | null) => !!s && TERMINAL.has(s),
 }));
 
-// Widget that never reports ready, so the C1 fallback timer fires. The mock records
-// every onReady reference it receives to assert callback stability (#1).
+// Capture the navigate calls (Fix G) while keeping the real MemoryRouter.
+const mockNavigate = vi.fn();
+vi.mock("react-router-dom", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react-router-dom")>();
+  return { ...actual, useNavigate: () => mockNavigate };
+});
+
+// Widget mock records every onReady reference (stability, #1) and the latest props
+// (so a test can drive onStatus — Fix I).
+type WidgetProps = {
+  onReady?: () => void;
+  onFailed?: () => void;
+  onStatus?: (status: string) => void;
+};
 const onReadyRefs: Array<unknown> = [];
+let widgetProps: WidgetProps = {};
 vi.mock("@/components/billing/TBankPaymentForm", () => ({
-  TBankPaymentForm: (props: { onReady?: () => void }) => {
+  TBankPaymentForm: (props: WidgetProps) => {
+    widgetProps = props;
     onReadyRefs.push(props.onReady);
     return null;
   },
@@ -53,11 +72,24 @@ function noSubscription(): ActiveSub {
   return { status: "none", subscription: null, readOnly: false, isLoading: false, refetch: vi.fn() };
 }
 
+const PAYMENT_URL_RESPONSE = {
+  intent_id: "i1",
+  payment_id: "p1",
+  status: "new",
+  amount_kopecks: 99000,
+  plan_display_name: "Дом",
+  payment_url: "https://securepay.tbank.ru/abc",
+};
+
 describe("Checkout", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     mutateAsync.mockReset();
+    refetchStatus.mockReset();
+    mockNavigate.mockReset();
     onReadyRefs.length = 0;
+    widgetProps = {};
+    statusData = undefined;
     activeSubReturn = noSubscription();
     __unsafeSetRuntimeAuthStateForTests({
       status: "authenticated",
@@ -72,15 +104,8 @@ describe("Checkout", () => {
     vi.clearAllMocks();
   });
 
-  it("C1: reveals the hosted-page fallback link after the widget timeout", async () => {
-    mutateAsync.mockResolvedValue({
-      intent_id: "i1",
-      payment_id: "p1",
-      status: "new",
-      amount_kopecks: 99000,
-      plan_display_name: "Дом",
-      payment_url: "https://securepay.tbank.ru/abc",
-    });
+  it("C1: reveals the hosted-page fallback link after the widget timeout (recurring consent)", async () => {
+    mutateAsync.mockResolvedValue(PAYMENT_URL_RESPONSE);
 
     renderCheckout();
     // Init is gated on the recurring-consent checkbox: nothing is sent to T-Bank
@@ -107,20 +132,18 @@ describe("Checkout", () => {
     const link = screen.getByTestId("tbank-fallback-link");
     expect(link).toHaveAttribute("href", "https://securepay.tbank.ru/abc");
     expect(mutateAsync).toHaveBeenCalledTimes(1);
+    // F: recurring checkout records the recurring consent version.
     expect(mutateAsync).toHaveBeenCalledWith(
-      expect.objectContaining({ consent_accepted: true, consent_version: expect.any(String) }),
+      expect.objectContaining({
+        auto_renew: true,
+        consent_accepted: true,
+        consent_version: expect.stringMatching(/^recurring-/),
+      }),
     );
   });
 
   it("#1: passes a stable onReady across re-renders so the widget can't re-connect", async () => {
-    mutateAsync.mockResolvedValue({
-      intent_id: "i1",
-      payment_id: "p1",
-      status: "new",
-      amount_kopecks: 99000,
-      plan_display_name: "Дом",
-      payment_url: "https://securepay.tbank.ru/abc",
-    });
+    mutateAsync.mockResolvedValue(PAYMENT_URL_RESPONSE);
 
     renderCheckout();
     // Tick the recurring-consent checkbox to trigger the gated init.
@@ -173,5 +196,84 @@ describe("Checkout", () => {
 
     expect(screen.getByText("You already have a subscription")).toBeInTheDocument();
     expect(mutateAsync).not.toHaveBeenCalled();
+  });
+
+  it("F: records the one-time consent version when auto-renewal is opted out", async () => {
+    mutateAsync.mockResolvedValue(PAYMENT_URL_RESPONSE);
+
+    renderCheckout();
+    // Do NOT tick recurring consent. Reveal the opt-out, then flip to one-time.
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /don't want auto-renewal/i }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("switch"));
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+    expect(mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        auto_renew: false,
+        consent_version: expect.stringMatching(/^one-time-/),
+      }),
+    );
+  });
+
+  it("G: routes to the fail screen with a refund reason on a refunded payment_intent", async () => {
+    statusData = { id: "i9", status: "refunded", error_code: null, plan_code: "master" };
+
+    renderCheckout();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockNavigate).toHaveBeenCalledWith(
+      "/billing/fail?intent=i9&reason=refunded",
+      { replace: true },
+    );
+  });
+
+  it("G: routes to the fail screen on a partial_refund payment_intent too", async () => {
+    statusData = { id: "i10", status: "partial_refund", error_code: null, plan_code: "master" };
+
+    renderCheckout();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockNavigate).toHaveBeenCalledWith(
+      "/billing/fail?intent=i10&reason=partial_refund",
+      { replace: true },
+    );
+  });
+
+  it("I: refetches payment status immediately when the widget reports SUCCESS", async () => {
+    mutateAsync.mockResolvedValue(PAYMENT_URL_RESPONSE);
+
+    renderCheckout();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("checkbox"));
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(typeof widgetProps.onStatus).toBe("function");
+    refetchStatus.mockClear();
+    await act(async () => {
+      widgetProps.onStatus?.("SUCCESS");
+    });
+    expect(refetchStatus).toHaveBeenCalledTimes(1);
+    // A non-SUCCESS status must NOT trigger a refetch.
+    refetchStatus.mockClear();
+    await act(async () => {
+      widgetProps.onStatus?.("PROCESSING");
+    });
+    expect(refetchStatus).not.toHaveBeenCalled();
   });
 });
