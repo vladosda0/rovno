@@ -5,7 +5,7 @@ import { type AiUsageType, selectAiUsage, useTierQuota } from "@/hooks/useTierQu
 import { Button } from "@/components/ui/button";
 import { trackEvent } from "@/lib/analytics";
 import { PLANS } from "@/data/plans";
-import { formatRubFromKopecks } from "@/lib/billing";
+import { formatRubFromKopecks, BILLING_ENABLED } from "@/lib/billing";
 
 interface AIQuotaGateProps {
   usageType: AiUsageType;
@@ -51,19 +51,26 @@ export function AIQuotaGate({ usageType, children }: AIQuotaGateProps) {
             {t(`quota.gate.${usageType}.body`, { periodEnd })}
           </p>
           {nextPlan && (
-            <Button
-              onClick={() => {
-                trackEvent("quota_gate_upgrade_clicked", {
-                  usage_type: usageType,
-                  plan: quota.plan_code,
-                });
-                navigate(`/billing/checkout?plan=${nextPlan}`);
-              }}
-            >
-              {t(nextPlan === "brigade" ? "quota.gate.cta.brigade" : "quota.gate.cta", {
-                price: formatRubFromKopecks(PLANS[nextPlan]?.amount_kopecks ?? 0),
-              })}
-            </Button>
+            BILLING_ENABLED ? (
+              <Button
+                onClick={() => {
+                  trackEvent("quota_gate_upgrade_clicked", {
+                    usage_type: usageType,
+                    plan: quota.plan_code,
+                  });
+                  navigate(`/billing/checkout?plan=${nextPlan}`);
+                }}
+              >
+                {t(nextPlan === "brigade" ? "quota.gate.cta.brigade" : "quota.gate.cta", {
+                  price: formatRubFromKopecks(PLANS[nextPlan]?.amount_kopecks ?? 0),
+                })}
+              </Button>
+            ) : (
+              // Billing off (prelaunch): no checkout flow exists yet, so show a
+              // disabled "soon" affordance (matching PlansDialog) instead of
+              // bouncing the user out to the marketing /#pricing page mid-session.
+              <Button variant="outline" disabled>{t("plans.dialog.soonCta")}</Button>
+            )
           )}
         </div>
       </div>

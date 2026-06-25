@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { type AiUsageType, selectAiUsage, useTierQuota } from "@/hooks/useTierQuota";
+import { BILLING_ENABLED } from "@/lib/billing";
 
 interface AIQuotaWarningProps {
   usageType: AiUsageType;
@@ -28,7 +29,7 @@ export function AIQuotaWarning({ usageType }: AIQuotaWarningProps) {
   return (
     <div className="rounded-pill border border-warning/30 bg-warning/10 px-sp-3 py-1.5 text-body-sm text-foreground">
       {t(`quota.warning.${usageType}`, { remaining, limit })}
-      {nextPlan && (
+      {nextPlan && BILLING_ENABLED && (
         <Link to={`/billing/checkout?plan=${nextPlan}`} className="underline ml-1">
           {t(nextPlan === "brigade" ? "quota.warning.cta.brigade" : "quota.warning.cta")}
         </Link>

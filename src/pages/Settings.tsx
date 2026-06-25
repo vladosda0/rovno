@@ -11,9 +11,13 @@ import { SecurityPanel } from "@/components/settings/panels/SecurityPanel";
 import { PrivacyPanel } from "@/components/settings/panels/PrivacyPanel";
 import { BillingPanel } from "@/components/settings/panels/BillingPanel";
 import { IntegrationsPanel } from "@/components/settings/panels/IntegrationsPanel";
+import { TELEGRAM_LINKING_ENABLED } from "@/data/messenger-links";
 
 const VALID_TABS = new Set<SettingsTab>([
-  "profile", "preferences", "notifications", "integrations", "security", "privacy", "billing",
+  "profile", "preferences", "notifications",
+  // Telegram linking is gated until a prod bot exists (see TELEGRAM_LINKING_ENABLED).
+  ...(TELEGRAM_LINKING_ENABLED ? ["integrations" as const] : []),
+  "security", "privacy", "billing",
 ]);
 
 function getTabFromParam(param: string | null): SettingsTab {

@@ -20,6 +20,15 @@ export interface LinkedIdentity {
 // `/link <code>` and the `/start <code>` deep-link alias.
 export const TELEGRAM_BOT_USERNAME = "rovno_ai_bot";
 
+// Feature flag for the Settings → Интеграции (Telegram linking) tab. Default
+// false. @rovno_ai_bot consumes link codes against a single Supabase project;
+// until a prod bot pointed at api.rovno.ai ships, a prod-minted code can never
+// be consumed (cross-environment dead end), so the tab stays hidden on prod.
+// Flip VITE_TELEGRAM_LINKING_ENABLED=true only in an env whose bot targets that
+// env's database.
+export const TELEGRAM_LINKING_ENABLED =
+  import.meta.env.VITE_TELEGRAM_LINKING_ENABLED === "true";
+
 export function telegramDeepLink(code: string): string {
   return `https://t.me/${TELEGRAM_BOT_USERNAME}?start=${encodeURIComponent(code)}`;
 }

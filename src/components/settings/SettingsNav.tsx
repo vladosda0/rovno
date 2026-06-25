@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import {
   User, SlidersHorizontal, Bell, Shield, Database, CreditCard, Link2,
 } from "lucide-react";
+import { TELEGRAM_LINKING_ENABLED } from "@/data/messenger-links";
 
 export type SettingsTab =
   | "profile" | "preferences" | "notifications" | "integrations" | "security" | "privacy" | "billing";
@@ -17,7 +18,10 @@ const NAV_ITEMS: NavItem[] = [
   { tab: "profile", labelKey: "settingsNav.personal.profile", icon: User },
   { tab: "preferences", labelKey: "settingsNav.personal.preferences", icon: SlidersHorizontal },
   { tab: "notifications", labelKey: "settingsNav.personal.notifications", icon: Bell },
-  { tab: "integrations", labelKey: "settingsNav.personal.integrations", icon: Link2 },
+  // Telegram linking is gated until a prod bot exists (see TELEGRAM_LINKING_ENABLED).
+  ...(TELEGRAM_LINKING_ENABLED
+    ? [{ tab: "integrations" as const, labelKey: "settingsNav.personal.integrations", icon: Link2 }]
+    : []),
   { tab: "security", labelKey: "settingsNav.personal.security", icon: Shield },
   { tab: "privacy", labelKey: "settingsNav.personal.privacy", icon: Database },
   { tab: "billing", labelKey: "settingsNav.personal.billing", icon: CreditCard },
