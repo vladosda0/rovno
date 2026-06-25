@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { AIQuotaGate } from "@/components/billing/AIQuotaGate";
@@ -7,6 +7,15 @@ import { type TierQuota, useTierQuota } from "@/hooks/useTierQuota";
 vi.mock("@/hooks/useTierQuota", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/hooks/useTierQuota")>();
   return { ...actual, useTierQuota: vi.fn() };
+});
+
+// Make BILLING_ENABLED togglable so the gate's billing-on (priced checkout CTA)
+// and billing-off (disabled "soon" affordance) branches are both covered,
+// independent of the ambient VITE_BILLING_ENABLED env.
+const billing = vi.hoisted(() => ({ enabled: true }));
+vi.mock("@/lib/billing", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/billing")>();
+  return { ...actual, get BILLING_ENABLED() { return billing.enabled; } };
 });
 
 const mockedUseTierQuota = vi.mocked(useTierQuota);
@@ -42,6 +51,10 @@ function renderGate() {
 }
 
 describe("AIQuotaGate", () => {
+  beforeEach(() => {
+    billing.enabled = true;
+  });
+
   it("renders children unobstructed when under the limit", () => {
     setQuota({ ai_chat_used: 5, ai_chat_limit: 50 });
     renderGate();
@@ -49,11 +62,20 @@ describe("AIQuotaGate", () => {
     expect(screen.queryByText("AI chat limit reached")).not.toBeInTheDocument();
   });
 
-  it("shows the paywall overlay and CTA when the slot is exhausted", () => {
+  it("shows the paywall overlay and priced CTA when the slot is exhausted and billing is on", () => {
     setQuota({ ai_chat_used: 50, ai_chat_limit: 50 });
     renderGate();
     expect(screen.getByText("AI chat limit reached")).toBeInTheDocument();
     expect(screen.getByText("Upgrade to Master for 990 ₽")).toBeInTheDocument();
+  });
+
+  it("shows a disabled 'soon' affordance instead of checkout when billing is off", () => {
+    billing.enabled = false;
+    setQuota({ ai_chat_used: 50, ai_chat_limit: 50 });
+    renderGate();
+    expect(screen.getByText("AI chat limit reached")).toBeInTheDocument();
+    expect(screen.queryByText("Upgrade to Master for 990 ₽")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Soon" })).toBeDisabled();
   });
 
   it("fails open and renders children while the quota is loading", () => {

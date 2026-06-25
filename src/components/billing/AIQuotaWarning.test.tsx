@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { AIQuotaWarning } from "@/components/billing/AIQuotaWarning";
@@ -7,6 +7,14 @@ import { type TierQuota, useTierQuota } from "@/hooks/useTierQuota";
 vi.mock("@/hooks/useTierQuota", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/hooks/useTierQuota")>();
   return { ...actual, useTierQuota: vi.fn() };
+});
+
+// Togglable BILLING_ENABLED so the upgrade-link-on and link-hidden-off branches
+// are both covered, independent of the ambient VITE_BILLING_ENABLED env.
+const billing = vi.hoisted(() => ({ enabled: true }));
+vi.mock("@/lib/billing", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/billing")>();
+  return { ...actual, get BILLING_ENABLED() { return billing.enabled; } };
 });
 
 const mockedUseTierQuota = vi.mocked(useTierQuota);
@@ -40,11 +48,23 @@ function renderWarning() {
 }
 
 describe("AIQuotaWarning", () => {
-  it("shows a banner with remaining count between 90% and 100%", () => {
+  beforeEach(() => {
+    billing.enabled = true;
+  });
+
+  it("shows a banner with remaining count and upgrade link between 90% and 100% when billing is on", () => {
     setQuota({ ai_chat_used: 19, ai_chat_limit: 20 });
     renderWarning();
     expect(screen.getByText(/1 of 20 AI messages left/)).toBeInTheDocument();
     expect(screen.getByText("Upgrade to Master")).toBeInTheDocument();
+  });
+
+  it("hides the upgrade link when billing is off but still shows the count", () => {
+    billing.enabled = false;
+    setQuota({ ai_chat_used: 19, ai_chat_limit: 20 });
+    renderWarning();
+    expect(screen.getByText(/1 of 20 AI messages left/)).toBeInTheDocument();
+    expect(screen.queryByText("Upgrade to Master")).not.toBeInTheDocument();
   });
 
   it("renders nothing below 90%", () => {
