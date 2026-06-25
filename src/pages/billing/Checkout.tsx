@@ -8,7 +8,8 @@ import { Switch } from "@/components/ui/switch";
 import { CheckoutBlocked } from "@/components/billing/CheckoutBlocked";
 import { TBankPaymentForm } from "@/components/billing/TBankPaymentForm";
 import { getPlan, isPlanCode, PLANS } from "@/data/plans";
-import { BILLING_ENABLED, CONSENT_VERSION, formatRubFromKopecks, newIdempotencyKey, planRank } from "@/lib/billing";
+import { BILLING_ENABLED, CONSENT_VERSION, formatRubFromKopecks, newIdempotencyKey, ONE_TIME_CONSENT_VERSION, planRank } from "@/lib/billing";
+import type { TbankIntegrationStatus } from "@/lib/tbank-widget";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
 import { useActiveSubscription } from "@/hooks/useActiveSubscription";
 import { useInitPayment } from "@/hooks/useInitPayment";
@@ -79,9 +80,25 @@ export default function Checkout() {
     setWidgetReady(true);
     setWidgetFailed(false);
   }, []);
+  // H: surface the hosted-page fallback IMMEDIATELY on a hard widget failure
+  // (e.g. missing VITE_TBANK_TERMINAL_KEY) instead of waiting out the 5s C1 timer.
+  const handleWidgetFailed = useCallback(() => {
+    setWidgetFailed(true);
+  }, []);
 
   const initPayment = useInitPayment();
   const statusQuery = usePaymentStatus(intentId);
+  // I: when the widget reports SUCCESS, refetch the payment status immediately so
+  // navigation to /billing/success doesn't wait up to a full 4s poll cycle. The
+  // webhook + poll remain the source of truth for `confirmed`; this only collapses
+  // the latency. refetch is referentially stable from react-query.
+  const { refetch: refetchStatus } = statusQuery;
+  const handleWidgetStatus = useCallback(
+    (status: TbankIntegrationStatus) => {
+      if (status === "SUCCESS") void refetchStatus();
+    },
+    [refetchStatus],
+  );
 
   // Once init has produced a payment_url, freeze the consent/mode controls so an
   // un-tick→re-tick (or mode flip) can't mint a duplicate payment intent.
@@ -122,7 +139,9 @@ export default function Checkout() {
         auto_renew: autoRenew,
         idempotency_key: newIdempotencyKey(),
         consent_accepted: true,
-        consent_version: CONSENT_VERSION,
+        // F: a one-time (auto_renew=false) checkout must record the one-time
+        // consent text the user agreed to, not the recurring version (audit Fix F).
+        consent_version: autoRenew ? CONSENT_VERSION : ONE_TIME_CONSENT_VERSION,
       })
       .then((res) => {
         if (cancelled) return;
@@ -161,6 +180,11 @@ export default function Checkout() {
     } else if (row.status === "rejected" || row.status === "cancelled") {
       const reason = row.error_code ? `&reason=${encodeURIComponent(row.error_code)}` : "";
       navigate(`/billing/fail?intent=${row.id}${reason}`, { replace: true });
+    } else if (row.status === "refunded" || row.status === "partial_refund") {
+      // G: usePaymentStatus marks refunded/partial_refund terminal (polling stops),
+      // so without a nav branch here the user is stranded on a live-looking checkout
+      // (audit Fix G / P2-7). Route to the fail screen with a refund-specific reason.
+      navigate(`/billing/fail?intent=${row.id}&reason=${encodeURIComponent(row.status)}`, { replace: true });
     }
   }, [statusQuery.data, navigate]);
 
@@ -365,7 +389,12 @@ export default function Checkout() {
         ) : null}
 
         {paymentUrl && consentGiven ? (
-          <TBankPaymentForm paymentUrl={paymentUrl} onReady={handleWidgetReady} />
+          <TBankPaymentForm
+            paymentUrl={paymentUrl}
+            onReady={handleWidgetReady}
+            onFailed={handleWidgetFailed}
+            onStatus={handleWidgetStatus}
+          />
         ) : null}
 
         {/* C1: hosted-page fallback so payment still completes if the widget can't mount. */}

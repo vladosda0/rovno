@@ -18,6 +18,13 @@ export const BILLING_ENABLED = import.meta.env.VITE_BILLING_ENABLED === "true";
 // records stay attributable to their precise text version.
 export const CONSENT_VERSION = "recurring-2026-06-05";
 
+// Version tag of the ONE-TIME (non-recurring) payment consent text — the
+// `billing.checkout.oneTimeToggleConsent` label the user agrees to when opting
+// out of auto-renewal. A one-time checkout must record THIS, not the recurring
+// version, so the stored consent matches what the user actually accepted (audit
+// Fix F / P2-1). BUMP when the one-time toggle wording changes.
+export const ONE_TIME_CONSENT_VERSION = "one-time-2026-06-05";
+
 const rubFormatter = new Intl.NumberFormat("ru-RU");
 
 // 99000 kopecks -> "990 ₽"
