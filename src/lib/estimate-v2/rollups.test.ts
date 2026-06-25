@@ -88,7 +88,8 @@ describe("estimate-v2 rollups", () => {
 
     expect(planned.plannedSubtotalCents).toBe(20_000);
     expect(planned.plannedTaxCents).toBe(2_000);
-    expect(planned.plannedBudgetCents).toBe(22_000);
+    // plannedBudgetCents is the cost basis (себестоимость); here cost == subtotal (no markup).
+    expect(planned.plannedBudgetCents).toBe(20_000);
     expect(planned.plannedCostByTypeCents.material).toBe(10_000);
     expect(planned.plannedCostByTypeCents.labor).toBe(10_000);
   });

@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# tsc incremental build cache
+*.tsbuildinfo
+
 # Local env overrides — never tracked. Use .env.example as the template.
 # Active `.env` is selected via `cp .env.<target> .env`:
 #   .env.cloud     — Cloud Supabase staging (DEFAULT for local dev)
@@ -40,3 +43,8 @@ dist-ssr
 
 # Supabase CLI local cache (do not commit)
 supabase/.temp/
+
+# Per-session scratch / handoff notes — never tracked
+HANDOFF.md
+STATUS.md
+handoff-*.md

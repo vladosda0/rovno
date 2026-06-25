@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   computeLastReceivedAt,
   computeProcurementHeaderKpis,
+  computeProjectLastReceivedAt,
+  computePurchasePriceVariance,
   computeTabChipTotals,
   collectItemLocationEventHistory,
   computeFulfilledQty,
@@ -577,5 +579,186 @@ describe("procurement fulfillment utils", () => {
     expect(kpis.received).toBe(200);
     expect(kpis.used).toBe(600);
     expect(kpis.variance).toBeNull();
+  });
+});
+
+describe("computePurchasePriceVariance", () => {
+  const projectId = "ppv-project";
+
+  function supplierOrder(lines: OrderWithLines["lines"], overrides: Partial<OrderWithLines> = {}): OrderWithLines {
+    return {
+      id: overrides.id ?? "o-ppv",
+      projectId,
+      status: "placed",
+      kind: "supplier",
+      supplierName: "Supplier",
+      deliverToLocationId: "loc-site",
+      createdAt: "2026-06-01T00:00:00.000Z",
+      updatedAt: "2026-06-01T00:00:00.000Z",
+      ...overrides,
+      lines,
+    } as OrderWithLines;
+  }
+
+  it("computes overpay over received quantities only", () => {
+    const item = buildTestRequestLine(projectId, "ppv-item", 10, { plannedUnitPrice: 100, actualUnitPrice: null, sourceEstimateV2LineId: "est-line-1" });
+    const orders = [supplierOrder([
+      { id: "l-1", orderId: "o-ppv", procurementItemId: item.id, qty: 5, receivedQty: 2, unit: "pcs", plannedUnitPrice: 100, actualUnitPrice: 120 },
+    ])];
+
+    const ppv = computePurchasePriceVariance(projectId, [item], orders);
+    // (120 − 100) × 2 received; the 3 open units do not count.
+    expect(ppv.deltaTotal).toBe(40);
+    expect(ppv.baseTotal).toBe(200);
+    expect(ppv.pct).toBeCloseTo(20, 5);
+    expect(ppv.lines).toHaveLength(1);
+    expect(ppv.lines[0].deltaTotal).toBe(40);
+    expect(ppv.skippedLineCount).toBe(0);
+  });
+
+  it("reports savings as a negative delta and sorts lines by |delta|", () => {
+    const itemA = buildTestRequestLine(projectId, "ppv-a", 10, { plannedUnitPrice: 100, actualUnitPrice: null, sourceEstimateV2LineId: "est-line-a" });
+    const itemB = buildTestRequestLine(projectId, "ppv-b", 10, { plannedUnitPrice: 50, actualUnitPrice: null, sourceEstimateV2LineId: "est-line-b" });
+    const orders = [supplierOrder([
+      { id: "l-a", orderId: "o-ppv", procurementItemId: itemA.id, qty: 2, receivedQty: 2, unit: "pcs", plannedUnitPrice: 100, actualUnitPrice: 90 },
+      { id: "l-b", orderId: "o-ppv", procurementItemId: itemB.id, qty: 4, receivedQty: 4, unit: "pcs", plannedUnitPrice: 50, actualUnitPrice: 75 },
+    ])];
+
+    const ppv = computePurchasePriceVariance(projectId, [itemA, itemB], orders);
+    // A: (90−100)×2 = −20 savings; B: (75−50)×4 = +100 overpay.
+    expect(ppv.deltaTotal).toBe(80);
+    expect(ppv.baseTotal).toBe(400);
+    expect(ppv.lines.map((line) => line.procurementItemId)).toEqual([itemB.id, itemA.id]);
+  });
+
+  it("skips received lines without a resolvable planned or actual price", () => {
+    const noPlanned = buildTestRequestLine(projectId, "ppv-no-plan", 10, { plannedUnitPrice: null, actualUnitPrice: null, sourceEstimateV2LineId: "est-line-np" });
+    const noActual = buildTestRequestLine(projectId, "ppv-no-actual", 10, { plannedUnitPrice: 100, actualUnitPrice: null, sourceEstimateV2LineId: "est-line-na" });
+    const orders = [supplierOrder([
+      { id: "l-1", orderId: "o-ppv", procurementItemId: noPlanned.id, qty: 1, receivedQty: 1, unit: "pcs", plannedUnitPrice: null, actualUnitPrice: 120 },
+      { id: "l-2", orderId: "o-ppv", procurementItemId: noActual.id, qty: 1, receivedQty: 1, unit: "pcs", plannedUnitPrice: null, actualUnitPrice: null },
+    ])];
+
+    const ppv = computePurchasePriceVariance(projectId, [noPlanned, noActual], orders);
+    expect(ppv.deltaTotal).toBe(0);
+    expect(ppv.baseTotal).toBe(0);
+    expect(ppv.pct).toBeNull();
+    expect(ppv.lines).toHaveLength(0);
+    expect(ppv.skippedLineCount).toBe(2);
+  });
+
+  it("falls back to item prices when line prices are missing", () => {
+    const item = buildTestRequestLine(projectId, "ppv-fallback", 10, { plannedUnitPrice: 100, actualUnitPrice: 110, sourceEstimateV2LineId: "est-line-fb" });
+    const orders = [supplierOrder([
+      { id: "l-1", orderId: "o-ppv", procurementItemId: item.id, qty: 3, receivedQty: 3, unit: "pcs", plannedUnitPrice: null, actualUnitPrice: null },
+    ])];
+
+    const ppv = computePurchasePriceVariance(projectId, [item], orders);
+    expect(ppv.deltaTotal).toBe(30);
+    expect(ppv.baseTotal).toBe(300);
+  });
+
+  it("excludes items not linked to the estimate (manual purchases are out of scope)", () => {
+    const manualItem = buildTestRequestLine(projectId, "ppv-manual", 10, { plannedUnitPrice: 100, actualUnitPrice: null, sourceEstimateV2LineId: null });
+    const orders = [supplierOrder([
+      { id: "l-m", orderId: "o-ppv", procurementItemId: manualItem.id, qty: 2, receivedQty: 2, unit: "pcs", plannedUnitPrice: 100, actualUnitPrice: 150 },
+    ])];
+
+    const ppv = computePurchasePriceVariance(projectId, [manualItem], orders);
+    expect(ppv.deltaTotal).toBe(0);
+    expect(ppv.baseTotal).toBe(0);
+    expect(ppv.pct).toBeNull();
+    expect(ppv.lines).toHaveLength(0);
+    expect(ppv.skippedLineCount).toBe(0);
+  });
+
+  it("ignores draft and stock orders", () => {
+    const item = buildTestRequestLine(projectId, "ppv-draft", 10, { plannedUnitPrice: 100, actualUnitPrice: null, sourceEstimateV2LineId: "est-line-d" });
+    const orders = [
+      supplierOrder([
+        { id: "l-1", orderId: "o-draft", procurementItemId: item.id, qty: 2, receivedQty: 2, unit: "pcs", plannedUnitPrice: 100, actualUnitPrice: 150 },
+      ], { id: "o-draft", status: "draft" }),
+      supplierOrder([
+        { id: "l-2", orderId: "o-stock", procurementItemId: item.id, qty: 2, receivedQty: 2, unit: "pcs", plannedUnitPrice: 100, actualUnitPrice: 150 },
+      ], { id: "o-stock", kind: "stock", status: "received" }),
+    ];
+
+    const ppv = computePurchasePriceVariance(projectId, [item], orders);
+    expect(ppv.deltaTotal).toBe(0);
+    expect(ppv.lines).toHaveLength(0);
+  });
+});
+
+describe("computeProjectLastReceivedAt", () => {
+  it("returns the latest receipt-like event across applied orders", () => {
+    const projectId = "last-received-project";
+    const item = buildTestRequestLine(projectId, "lr-item", 10);
+    const orders: OrderWithLines[] = [
+      {
+        id: "o-1",
+        projectId,
+        status: "received",
+        kind: "supplier",
+        supplierName: "Supplier",
+        deliverToLocationId: "loc-site",
+        createdAt: "2026-06-01T00:00:00.000Z",
+        updatedAt: "2026-06-01T00:00:00.000Z",
+        lines: [
+          { id: "l-1", orderId: "o-1", procurementItemId: item.id, qty: 2, receivedQty: 2, unit: "pcs", plannedUnitPrice: 100, actualUnitPrice: 100 },
+        ],
+        receiveEvents: [
+          { id: "e-1", orderId: "o-1", orderLineId: "l-1", procurementItemId: item.id, locationId: "loc-site", eventType: "receive", deltaQty: 1, createdAt: "2026-06-02T10:00:00.000Z" },
+          { id: "e-2", orderId: "o-1", orderLineId: "l-1", procurementItemId: item.id, locationId: "loc-site", eventType: "receive", deltaQty: 1, createdAt: "2026-06-05T09:00:00.000Z" },
+          { id: "e-3", orderId: "o-1", orderLineId: "l-1", procurementItemId: item.id, locationId: "loc-site", eventType: "use", deltaQty: -1, createdAt: "2026-06-06T09:00:00.000Z" },
+        ],
+      } as OrderWithLines,
+    ];
+
+    expect(computeProjectLastReceivedAt(projectId, orders)).toBe("2026-06-05T09:00:00.000Z");
+    expect(computeProjectLastReceivedAt(projectId, [])).toBeNull();
+  });
+
+  it("ignores internal transfer arrivals — moves are not deliveries", () => {
+    const projectId = "last-received-transfers";
+    const item = buildTestRequestLine(projectId, "lr-move-item", 10);
+    const orders: OrderWithLines[] = [
+      {
+        id: "o-sup",
+        projectId,
+        status: "received",
+        kind: "supplier",
+        supplierName: "Supplier",
+        deliverToLocationId: "loc-site",
+        createdAt: "2026-06-01T00:00:00.000Z",
+        updatedAt: "2026-06-01T00:00:00.000Z",
+        lines: [
+          { id: "l-1", orderId: "o-sup", procurementItemId: item.id, qty: 1, receivedQty: 1, unit: "pcs", plannedUnitPrice: 100, actualUnitPrice: 100 },
+        ],
+        receiveEvents: [
+          { id: "e-1", orderId: "o-sup", orderLineId: "l-1", procurementItemId: item.id, locationId: "loc-site", eventType: "receive", deltaQty: 1, createdAt: "2026-06-02T10:00:00.000Z" },
+        ],
+      } as OrderWithLines,
+      {
+        id: "o-move",
+        projectId,
+        status: "received",
+        kind: "stock",
+        fromLocationId: "loc-a",
+        toLocationId: "loc-site",
+        createdAt: "2026-06-08T00:00:00.000Z",
+        updatedAt: "2026-06-08T00:00:00.000Z",
+        lines: [
+          { id: "l-2", orderId: "o-move", procurementItemId: item.id, qty: 1, receivedQty: 1, unit: "pcs", plannedUnitPrice: 100, actualUnitPrice: 100 },
+        ],
+        receiveEvents: [
+          { id: "e-2", orderId: "o-move", orderLineId: "l-2", procurementItemId: item.id, locationId: "loc-site", eventType: "move_in", deltaQty: 1, createdAt: "2026-06-09T10:00:00.000Z" },
+        ],
+      } as OrderWithLines,
+    ];
+
+    // The later move_in must not bump the project-level delivery date.
+    expect(computeProjectLastReceivedAt(projectId, orders)).toBe("2026-06-02T10:00:00.000Z");
+    // Orders from another project never count.
+    expect(computeProjectLastReceivedAt("other-project", orders)).toBeNull();
   });
 });

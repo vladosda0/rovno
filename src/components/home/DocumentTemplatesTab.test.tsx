@@ -23,7 +23,7 @@ describe("DocumentTemplatesTab", () => {
     expect(screen.getByText(/Contractor business card template/i)).toBeInTheDocument();
   });
 
-  it("links the catalog and estimate templates to their static files and disables the visitka button", () => {
+  it("links the catalog and estimate templates to their static files and enables the visitka button", () => {
     renderTab();
     const catalogLink = screen
       .getByRole("link", { name: /Download template \(\.xlsx\)/i });
@@ -33,8 +33,9 @@ describe("DocumentTemplatesTab", () => {
       .getByRole("link", { name: /Download empty template \(\.csv\)/i });
     expect(csvLink).toHaveAttribute("href", "/templates/rovno-estimate-template.csv");
 
+    // 3.2.2 wires this button to open the multi-step upload modal (visitka).
     const createBtn = screen.getByRole("button", { name: /Create business card/i });
-    expect(createBtn).toBeDisabled();
+    expect(createBtn).not.toBeDisabled();
   });
 
   it("renders the visitka field preview list", () => {

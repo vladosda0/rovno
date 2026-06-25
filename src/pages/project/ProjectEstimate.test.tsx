@@ -141,31 +141,11 @@ async function flushUi() {
 }
 
 async function changeEstimateStatus(nextStatus: string) {
-  const [trigger] = screen.getAllByRole("combobox");
-  if (!trigger) {
-    throw new Error("Estimate status trigger not found");
-  }
-  trigger.focus();
-  trigger.dispatchEvent(new window.PointerEvent("pointerdown", {
-    bubbles: true,
-    cancelable: true,
-    button: 0,
-    ctrlKey: false,
-    pointerType: "mouse",
-  }));
-  await flushUi();
-  if (trigger.getAttribute("aria-expanded") !== "true") {
-    fireEvent.keyDown(trigger, { key: "ArrowDown", code: "ArrowDown", keyCode: 40 });
-    await flushUi();
-  }
-  if (trigger.getAttribute("aria-expanded") !== "true") {
-    fireEvent.keyDown(trigger, { key: "Enter", code: "Enter", keyCode: 13 });
-    await flushUi();
-  }
-  const option = await screen.findByRole("option", { name: nextStatus }).catch(async () => (
-    await screen.findByText(nextStatus)
-  ));
-  fireEvent.click(option);
+  const actionName = nextStatus === "In work" ? "Start work"
+    : nextStatus === "Finished" ? "Finish"
+    : nextStatus === "Paused" ? "Pause"
+    : nextStatus;
+  fireEvent.click(screen.getByRole("button", { name: actionName }));
   await flushUi();
 }
 
@@ -465,6 +445,28 @@ describe("ProjectEstimate", () => {
     expect(screen.queryByText("General work")).not.toBeInTheDocument();
   }, 20_000);
 
+  it("renders the estimate header status rail and tab-row actions", async () => {
+    const projectId = "project-estimate-header-rail";
+    setupLocalProject(projectId);
+
+    await act(async () => {
+      renderProjectEstimate(projectId);
+      await flushUi();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Create estimate" }));
+      await flushUi();
+    });
+
+    expect(screen.getByText("Planning")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start work" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Finish" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Pause" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Export estimate" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Constructor" })).toBeInTheDocument();
+  });
+
   it("numbers default resource names per work instead of across the whole estimate", async () => {
     const projectId = "project-estimate-resource-naming-scope";
     setupLocalProject(projectId);
@@ -637,7 +639,7 @@ describe("ProjectEstimate", () => {
     expect(firstCall?.[0]).toBe(`/project/${projectId}/tasks`);
   });
 
-  it("keeps the detailed cost overview collapsed by default in work mode", async () => {
+  it("keeps the finance details accordion collapsed by default in work mode, with margin always visible", async () => {
     const projectId = "project-estimate-in-work-ui";
     setupLocalProject(projectId);
     const seeded = seedEstimateLine(projectId);
@@ -651,27 +653,26 @@ describe("ProjectEstimate", () => {
       await flushUi();
     });
 
-    const overviewTrigger = screen.getByRole("button", { name: /Detailed cost overview/i });
-    expect(overviewTrigger).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByText("Financial breakdown")).not.toBeInTheDocument();
-    expect(screen.queryByText("Plan vs actual")).not.toBeInTheDocument();
+    // Revenue and margin are visible in the KPI strip without expanding details.
+    expect(screen.getByText("Revenue (ex VAT)")).toBeInTheDocument();
+    expect(screen.getByText("Margin %")).toBeInTheDocument();
+
+    // Commercial detail lives behind a single "Details" accordion, collapsed by default.
+    const detailsTrigger = screen.getByRole("button", { name: /Details/i });
+    expect(detailsTrigger).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("Subtotal (ex VAT)")).not.toBeInTheDocument();
+    expect(screen.queryByText("VAT amount")).not.toBeInTheDocument();
+    expect(screen.queryByText("To be paid")).not.toBeInTheDocument();
 
     await act(async () => {
-      fireEvent.click(overviewTrigger);
+      fireEvent.click(detailsTrigger);
       await flushUi();
     });
 
-    expect(overviewTrigger).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByText("Financial breakdown")).toBeInTheDocument();
-    expect(screen.getByText("Plan vs actual")).toBeInTheDocument();
-
-    const planPanel = screen.getByText("Plan vs actual").closest("div.rounded-md");
-    expect(planPanel).not.toBeNull();
-    if (!planPanel) return;
-
-    expect(within(planPanel).getByText("Planned")).toBeInTheDocument();
-    expect(within(planPanel).getByText("Actual")).toBeInTheDocument();
-    expect(within(planPanel).queryByRole("columnheader")).not.toBeInTheDocument();
+    expect(detailsTrigger).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("Subtotal (ex VAT)")).toBeInTheDocument();
+    expect(screen.getByText("VAT amount")).toBeInTheDocument();
+    expect(screen.getByText("To be paid")).toBeInTheDocument();
   });
 
   it("redacts internal financial detail for non-detail viewers while keeping client totals", async () => {

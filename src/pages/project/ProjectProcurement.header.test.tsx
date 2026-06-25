@@ -102,7 +102,7 @@ describe("ProjectProcurement header redesign", () => {
     expect(screen.queryByRole("heading", { name: "Procurement" })).not.toBeInTheDocument();
   });
 
-  it("renders KPI header + controls row with count-only tabs", () => {
+  it("renders the pipeline finance header + controls row with count-only tabs", () => {
     const projectId = "project-1";
     seedRequestedItem(projectId);
 
@@ -111,11 +111,20 @@ describe("ProjectProcurement header redesign", () => {
     const heading = screen.getByRole("heading", { name: "Procurement" });
     expect(heading).toBeInTheDocument();
 
-    expect(screen.getAllByText("Planned").length).toBeGreaterThan(0);
-    expect(screen.getByText("Committed")).toBeInTheDocument();
-    expect(screen.getByText("Received")).toBeInTheDocument();
-    expect(screen.getByText("Variance")).toBeInTheDocument();
-    expect(screen.queryByText(/^Actual:/i)).not.toBeInTheDocument();
+    // Anchor cards: one budget basis, the old Planned/Variance KPI grid is gone.
+    expect(screen.getByText("Procurement budget")).toBeInTheDocument();
+    expect(screen.getByText("Budget left")).toBeInTheDocument();
+    expect(screen.getByText("In stock")).toBeInTheDocument();
+    expect(screen.queryByText("Variance")).not.toBeInTheDocument();
+    expect(screen.queryByText("Used = Committed + Received")).not.toBeInTheDocument();
+
+    // Funnel legend separates received from in-transit instead of one "used" number.
+    expect(screen.getByText("Received:")).toBeInTheDocument();
+    expect(screen.getByText("In transit:")).toBeInTheDocument();
+    expect(screen.getByText("Left to order:")).toBeInTheDocument();
+
+    // Details accordion stays collapsed by default.
+    expect(screen.getByRole("button", { name: /Details/ })).toHaveAttribute("aria-expanded", "false");
 
     expect(screen.getByRole("button", { name: /^Requested \(\d+\)$/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^Ordered \(\d+\)$/i })).toBeInTheDocument();
@@ -170,9 +179,10 @@ describe("ProjectProcurement header redesign", () => {
 
     renderProjectProcurement(projectId);
 
-    expect(screen.queryByText("Budget")).not.toBeInTheDocument();
-    expect(screen.queryByText("Committed")).not.toBeInTheDocument();
-    expect(screen.queryByText("Variance")).not.toBeInTheDocument();
+    expect(screen.queryByText("Procurement budget")).not.toBeInTheDocument();
+    expect(screen.queryByText("Budget left")).not.toBeInTheDocument();
+    expect(screen.queryByText("Received:")).not.toBeInTheDocument();
+    expect(screen.queryByText("In transit:")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^Requested \(/i })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /^Requested \(/i }));

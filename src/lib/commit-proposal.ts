@@ -172,11 +172,6 @@ export function commitPhotoConsultActions(
     }
   }
 
-  const totalCredits = user.credits_free + user.credits_paid;
-  if (totalCredits <= 0) {
-    return { success: false, error: "No credits remaining. Upgrade your plan.", eventIds: [], created: [], updated: [] };
-  }
-
   const actorId = eventActorId ?? (eventSource === "ai" ? "ai" : user.id);
   const created: CommitResultItem[] = [];
   const updated: CommitResultItem[] = [];
@@ -295,11 +290,6 @@ export function commitProposal(proposal: AIProposal, options: CommitProposalOpti
       created: [],
       updated: [],
     };
-  }
-
-  const totalCredits = user.credits_free + user.credits_paid;
-  if (totalCredits <= 0) {
-    return { success: false, error: "No credits remaining. Upgrade your plan.", eventIds: [], created: [], updated: [] };
   }
 
   const project = authoritySeam.project ?? getProject(proposal.project_id);
@@ -480,11 +470,6 @@ function commitProjectProposal(proposal: AIProposal, options: CommitProposalOpti
     memberRole === "contractor" ? "consult_only" : memberRole === "viewer" ? "none" : "project_pool";
   if (!can(memberRole, "ai.generate", aiAccess)) {
     return { success: false, error: "You don't have permission to use AI generation.", eventIds: [], created: [], updated: [] };
-  }
-
-  const totalCredits = user.credits_free + user.credits_paid;
-  if (totalCredits <= 0) {
-    return { success: false, error: "No credits remaining.", eventIds: [], created: [], updated: [] };
   }
 
   const projectChange = proposal.changes.find((c) => c.entity_type === "project");

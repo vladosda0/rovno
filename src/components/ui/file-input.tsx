@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useTranslation } from "react-i18next";
-import { Paperclip } from "lucide-react";
+import { Check, Paperclip } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -10,6 +10,8 @@ export interface FileInputProps
   emptyLabel?: string;
   /** Localized label for the trigger button. Defaults to t("fileInput.choose"). */
   chooseLabel?: string;
+  /** Localized hint shown on the selected row to re-pick. Defaults to t("fileInput.change"). */
+  changeLabel?: string;
 }
 
 /**
@@ -20,7 +22,7 @@ export interface FileInputProps
  */
 export const FileInput = React.forwardRef<HTMLInputElement, FileInputProps>(
   function FileInput(
-    { className, onChange, disabled, emptyLabel, chooseLabel, ...props },
+    { className, onChange, disabled, emptyLabel, chooseLabel, changeLabel, ...props },
     forwardedRef,
   ) {
     const { t } = useTranslation();
@@ -53,23 +55,43 @@ export const FileInput = React.forwardRef<HTMLInputElement, FileInputProps>(
     return (
       <div
         className={cn(
-          "flex h-10 items-center gap-2 rounded-input border border-border bg-background px-3 text-body-sm",
+          "flex h-10 items-center gap-2 rounded-input border bg-background px-3 text-body-sm",
+          filename ? "border-success/40 bg-success/5" : "border-border",
           disabled && "opacity-60 cursor-not-allowed",
           className,
         )}
       >
-        <button
-          type="button"
-          onClick={openPicker}
-          disabled={disabled}
-          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2.5 py-1 text-caption font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          <Paperclip className="h-3.5 w-3.5" />
-          {chooseLabel ?? t("fileInput.choose")}
-        </button>
-        <span className={cn("flex-1 truncate", filename ? "text-foreground" : "text-muted-foreground")}>
-          {filename || emptyLabel || t("fileInput.empty")}
-        </span>
+        {filename ? (
+          // Once a file is picked: replace the choose button with a green check
+          // + filename. The whole row stays clickable to re-pick a different file.
+          <button
+            type="button"
+            onClick={openPicker}
+            disabled={disabled}
+            className="flex flex-1 items-center gap-2 min-w-0 text-left disabled:cursor-not-allowed"
+          >
+            <Check className="h-4 w-4 shrink-0 text-success" />
+            <span className="flex-1 truncate text-foreground">{filename}</span>
+            <span className="shrink-0 text-caption text-muted-foreground">
+              {changeLabel ?? t("fileInput.change")}
+            </span>
+          </button>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={openPicker}
+              disabled={disabled}
+              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2.5 py-1 text-caption font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Paperclip className="h-3.5 w-3.5" />
+              {chooseLabel ?? t("fileInput.choose")}
+            </button>
+            <span className="flex-1 truncate text-muted-foreground">
+              {emptyLabel || t("fileInput.empty")}
+            </span>
+          </>
+        )}
         <input
           {...props}
           ref={setRefs}

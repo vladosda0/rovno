@@ -6,6 +6,9 @@ import {
   useMemo,
   useRef,
   useState,
+  Fragment,
+  type ChangeEvent,
+  type FormEvent,
   type ReactNode,
 } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -14,16 +17,24 @@ import {
   AlertTriangle,
   ArrowRight,
   BookOpen,
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ClipboardList,
   Download,
+  ExternalLink,
+  HardHat,
+  House,
+  Wrench,
   Info,
   Layers,
   Loader2,
+  Pause,
   Plus,
   Trash2,
   User,
+  type LucideIcon,
 } from "lucide-react";
 import { TutorialModal } from "@/components/onboarding/TutorialModal";
 import { Button } from "@/components/ui/button";
@@ -35,6 +46,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -59,8 +71,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { AssigneeCell } from "@/components/estimate-v2/AssigneeCell";
+import { EstimateFinanceHeader, type EstimateFinanceView } from "@/components/estimate-v2/EstimateFinanceHeader";
 import { InlineEditableNumber } from "@/components/estimate-v2/InlineEditableNumber";
-import { InlineEditableText } from "@/components/estimate-v2/InlineEditableText";
 import { ResourceTypeBadge } from "@/components/estimate-v2/ResourceTypeBadge";
 import {
   useHRItems,
@@ -77,6 +89,8 @@ import {
   useWorkspaceProjectState,
 } from "@/hooks/use-workspace-source";
 import { trackEvent } from "@/lib/analytics";
+import { useTierQuota } from "@/hooks/useTierQuota";
+import { showTierLimitPaywallByType } from "@/lib/tier-limit-error";
 import {
   approveVersion,
   clearEstimateV2ProjectAccessContext,
@@ -121,6 +135,7 @@ import {
   computePlannedFromEstimateV2,
 } from "@/lib/estimate-v2/rollups";
 import { fromDayIndex, toDayIndex } from "@/lib/estimate-v2/schedule";
+import { computeEac, computeFinishedAccuracy } from "@/lib/estimate-v2/finance-insights";
 import { useOrders } from "@/hooks/use-order-data";
 import { activityQueryKeys } from "@/hooks/use-activity-source";
 import { hrQueryKeys } from "@/hooks/use-hr-source";
@@ -141,6 +156,12 @@ import { publishEstimateShareSnapshot } from "@/data/estimate-share-source";
 import { ApprovalStampCard } from "@/components/estimate-v2/ApprovalStampCard";
 import { ApprovalStampFormModal } from "@/components/estimate-v2/ApprovalStampFormModal";
 import { EstimateExportModal } from "@/components/estimate-v2/EstimateExportModal";
+import { ResourceModal } from "@/components/estimate-v2/ResourceModal";
+import { LibraryNameInput } from "@/components/estimate-v2/LibraryNameInput";
+import type { CanonicalSuggestion } from "@/hooks/use-canonical-search";
+import type { CatalogResource } from "@/hooks/use-canonical-catalog";
+import { EstimateConstructor } from "@/components/estimate-v2/EstimateConstructor";
+import { useCurrentEstimateVersionId } from "@/hooks/use-current-estimate-version";
 import type {
   ExportLineRow,
   ExportPayload,
@@ -339,12 +360,28 @@ function estimateStatusLabelKey(status: EstimateExecutionStatus): string {
   return "estimate.status.finished";
 }
 
-function estimateStatusClassName(status: EstimateExecutionStatus): string {
-  if (status === "planning") return "border-foreground/15 bg-foreground/5 text-foreground";
-  if (status === "in_work") return "border-info/25 bg-info/10 text-info";
-  if (status === "paused") return "border-warning/25 bg-warning/15 text-warning-foreground";
-  return "border-success/25 bg-success/12 text-success";
+function estimateStatusRailLabelKey(status: EstimateExecutionStatus, activeStatus: EstimateExecutionStatus): string {
+  if (status === "in_work") {
+    return activeStatus === "in_work" ? "estimate.status.rail.inWork" : "estimate.status.rail.startWork";
+  }
+  if (status === "finished") {
+    return activeStatus === "finished" ? "estimate.status.rail.finished" : "estimate.status.rail.finish";
+  }
+  if (status === "paused") {
+    return activeStatus === "paused" ? "estimate.status.rail.paused" : "estimate.status.rail.pause";
+  }
+  return "estimate.status.planning";
 }
+
+const ESTIMATE_STATUS_RAIL_MAIN: EstimateExecutionStatus[] = ["planning", "in_work", "finished"];
+const ESTIMATE_STATUS_RAIL_PAUSED: EstimateExecutionStatus = "paused";
+const ESTIMATE_TAB_ACTION_CLASSNAME = [
+  "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-sm px-3 py-1.5",
+  "text-sm font-medium text-muted-foreground ring-offset-background transition-all",
+  "hover:bg-background hover:text-foreground",
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+  "disabled:pointer-events-none disabled:opacity-50 [&_svg]:h-4 [&_svg]:w-4",
+].join(" ");
 
 function durationDays(startDay: number | null, endDay: number | null): number | null {
   if (startDay == null || endDay == null) return null;
@@ -373,23 +410,9 @@ const dayRangeFormatter = new Intl.DateTimeFormat("ru-RU", {
   year: "numeric",
 });
 
-const TIMING_TOOLTIP_KEYS: Record<
-  "durationPlanned" | "durationEstimated" | "daysToEnd" | "behindSchedule",
-  string
-> = {
-  durationPlanned: "estimate.tooltip.durationPlanned",
-  durationEstimated: "estimate.tooltip.durationEstimated",
-  daysToEnd: "estimate.tooltip.daysToEnd",
-  behindSchedule: "estimate.tooltip.behindSchedule",
-};
-
 function formatDayIndex(dayIndex: number | null): string {
   if (dayIndex == null) return "—";
   return dayRangeFormatter.format(new Date(fromDayIndex(dayIndex)));
-}
-
-function formatPercent(value: number): string {
-  return `${value.toFixed(1)}%`;
 }
 
 function buildCsv(rows: string[][]): string {
@@ -410,6 +433,8 @@ const RESOURCE_TYPE_OPTIONS: Array<{ value: ResourceLineType; labelKey: string }
   { value: "overhead", labelKey: "estimate.resource.type.overhead" },
   { value: "other", labelKey: "estimate.resource.type.other" },
 ];
+
+const RESOURCE_LINE_TYPES = new Set<ResourceLineType>(RESOURCE_TYPE_OPTIONS.map((option) => option.value));
 
 const RESOURCE_CREATE_OPTIONS: Array<{ labelKey: string; value: ResourceLineType }> = [
   { labelKey: "estimate.resource.createOption.material", value: "material" },
@@ -566,6 +591,8 @@ function WorkTableFrame({
   const tableRef = useRef<HTMLTableElement | null>(null);
   const mirrorScrollRef = useRef<HTMLDivElement | null>(null);
   const [scrollState, setScrollState] = useState({
+    scrollLeft: 0,
+    maxLeft: 0,
     hasOverflow: false,
     canScrollLeft: false,
     canScrollRight: false,
@@ -581,15 +608,18 @@ function WorkTableFrame({
     const hasOverflow = scrollWidth > clientWidth + edgeSlack;
     const canScrollLeft = scrollLeft > edgeSlack;
     const canScrollRight = scrollLeft < maxLeft - edgeSlack;
+    const normalizedScrollLeft = Math.min(Math.max(scrollLeft, 0), maxLeft);
     setScrollState((current) => {
       if (
-        current.hasOverflow === hasOverflow
+        current.scrollLeft === normalizedScrollLeft
+        && current.maxLeft === maxLeft
+        && current.hasOverflow === hasOverflow
         && current.canScrollLeft === canScrollLeft
         && current.canScrollRight === canScrollRight
       ) {
         return current;
       }
-      return { hasOverflow, canScrollLeft, canScrollRight };
+      return { scrollLeft: normalizedScrollLeft, maxLeft, hasOverflow, canScrollLeft, canScrollRight };
     });
   }, []);
 
@@ -601,7 +631,7 @@ function WorkTableFrame({
     const mirror = mirrorScrollRef.current;
     const syncScroll = () => {
       updateScrollState();
-      if (mirror) mirror.scrollLeft = container.scrollLeft;
+      if (mirror && mirror.scrollLeft !== container.scrollLeft) mirror.scrollLeft = container.scrollLeft;
     };
 
     syncScroll();
@@ -618,11 +648,18 @@ function WorkTableFrame({
     };
   }, [updateScrollState]);
 
-  const scrollTable = useCallback((direction: "left" | "right") => {
+  const handleScrollSliderChange = useCallback((event: ChangeEvent<HTMLInputElement> | FormEvent<HTMLInputElement>) => {
     const container = tableRef.current?.parentElement as HTMLDivElement | null;
     if (!container) return;
-    const jump = Math.min(Math.round(container.clientWidth * 0.55), 420);
-    container.scrollBy({ left: direction === "right" ? jump : -jump, behavior: "smooth" });
+    const nextScrollLeft = Number(event.currentTarget.value);
+    container.scrollLeft = nextScrollLeft;
+    if (mirrorScrollRef.current) mirrorScrollRef.current.scrollLeft = nextScrollLeft;
+    setScrollState((current) => ({
+      ...current,
+      scrollLeft: Math.min(Math.max(nextScrollLeft, 0), current.maxLeft),
+      canScrollLeft: nextScrollLeft > 3,
+      canScrollRight: nextScrollLeft < current.maxLeft - 3,
+    }));
   }, []);
 
   const showEdgeHints = scrollState.hasOverflow;
@@ -634,10 +671,16 @@ function WorkTableFrame({
     () => columns.filter((col) => !col.hideOnMobile).reduce((sum, col) => sum + col.widthPx, 0),
     [columns],
   );
-  const effectiveMinWidth = isMobile ? mobileVisibleWidth : minWidthPx;
+  const columnWidth = useMemo(
+    () => columns.reduce((sum, col) => sum + col.widthPx, 0),
+    [columns],
+  );
+  const effectiveMinWidth = isMobile ? mobileVisibleWidth : Math.max(minWidthPx, columnWidth);
+  const sliderMax = Math.max(scrollState.maxLeft, 1);
+  const sliderValue = Math.min(scrollState.scrollLeft, sliderMax);
 
   return (
-    <div className="relative space-y-1.5 pl-0 md:pl-4">
+    <div className="relative space-y-1.5 pl-0">
       <div className="sticky top-14 z-30 flex items-stretch rounded-md bg-card/95 shadow-sm ring-1 ring-border/60 backdrop-blur">
         <div ref={mirrorScrollRef} className="min-w-0 flex-1 overflow-hidden">
           <div className="flex items-stretch" style={{ minWidth: effectiveMinWidth }}>
@@ -657,70 +700,18 @@ function WorkTableFrame({
             ))}
           </div>
         </div>
-        {showEdgeHints ? (
-          <div className="hidden md:flex shrink-0 items-center gap-1 border-l border-border/60 px-1">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border/60 bg-card/80 text-amber-600 shadow-sm hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                  aria-label={t("estimate.table.hiddenColumnsAria")}
-                >
-                  <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top" className="max-w-[min(280px,calc(100vw-2rem))] text-left text-xs leading-snug">
-                {t("estimate.table.hiddenColumnsTooltip")}
-              </TooltipContent>
-            </Tooltip>
-            <div className="flex shrink-0 items-center gap-1">
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                className="h-7 w-7 border-border/80 bg-card/90 shadow-sm"
-                disabled={!scrollState.canScrollLeft}
-                aria-label={t("estimate.table.scrollLeftAria")}
-                title={t("estimate.table.scrollLeftTitle")}
-                onClick={() => scrollTable("left")}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                className={cn(
-                  "h-7 w-7 border-border/80 bg-card/90 shadow-sm",
-                  scrollState.canScrollRight
-                  && !scrollState.canScrollLeft
-                  && "motion-safe:animate-pulse",
-                )}
-                disabled={!scrollState.canScrollRight}
-                aria-label={t("estimate.table.scrollRightAria")}
-                title={t("estimate.table.scrollRightTitle")}
-                onClick={() => scrollTable("right")}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        ) : null}
       </div>
 
       <div className="relative min-w-0">
         <Table
           ref={tableRef}
-          className={className}
+          className={cn(className, "[&_td]:pl-1")}
+          style={{ minWidth: effectiveMinWidth }}
           wrapperClassName={cn(
             "relative w-full",
-            "overflow-y-auto overflow-x-scroll",
-            "[scrollbar-width:thin]",
-            "[scrollbar-color:hsl(var(--muted-foreground)/0.4)_hsl(var(--muted)/0.35)]",
-            "[&::-webkit-scrollbar]:h-2",
-            "[&::-webkit-scrollbar-thumb]:rounded-full",
-            "[&::-webkit-scrollbar-thumb]:bg-muted-foreground/35",
-            "[&::-webkit-scrollbar-track]:bg-muted/30",
+            "overflow-y-auto overflow-x-auto",
+            "[scrollbar-width:none]",
+            "[&::-webkit-scrollbar]:hidden",
           )}
         >
           <colgroup>
@@ -748,6 +739,26 @@ function WorkTableFrame({
           />
         ) : null}
       </div>
+
+      <input
+        type="range"
+        min={0}
+        max={sliderMax}
+        step={1}
+        value={sliderValue}
+        onInput={handleScrollSliderChange}
+        onChange={handleScrollSliderChange}
+        aria-label={t("estimate.table.scrollRightAria")}
+        className={cn(
+          "block h-5 w-full cursor-pointer appearance-none rounded-full bg-transparent",
+          "disabled:cursor-default disabled:opacity-60",
+          "[&::-webkit-slider-runnable-track]:h-2 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-muted/55",
+          "[&::-webkit-slider-thumb]:-mt-1.5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-16 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border [&::-webkit-slider-thumb]:border-border/70 [&::-webkit-slider-thumb]:bg-foreground/75 [&::-webkit-slider-thumb]:shadow-sm",
+          "[&::-moz-range-track]:h-2 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-muted/55",
+          "[&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-16 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border [&::-moz-range-thumb]:border-border/70 [&::-moz-range-thumb]:bg-foreground/75",
+        )}
+        disabled={!scrollState.hasOverflow}
+      />
     </div>
   );
 }
@@ -761,27 +772,161 @@ function formatRelativeTime(iso: string | null, t: TFn): string | null {
   return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-function EstimateSyncStatusIndicator({ sync }: { sync: EstimateV2ProjectSyncState }) {
+function EstimateSyncStatusIndicator({
+  sync,
+  fallbackSavedAt,
+}: {
+  sync: EstimateV2ProjectSyncState;
+  /** Persistent "last saved" time (project.updatedAt) shown when there's no live
+   *  in-session save status yet — keeps "Сохранено …" visible on load. */
+  fallbackSavedAt?: string | null;
+}) {
   const { t } = useTranslation();
   const status = sync.draftSaveStatus ?? "idle";
+  const savedTime = formatRelativeTime(sync.draftSaveLastSucceededAt ?? fallbackSavedAt ?? null, t);
   const label = status === "saving" ? t("estimate.sync.saving")
     : status === "pending" ? t("estimate.sync.pending")
-    : status === "saved" ? t("estimate.sync.saved", { time: formatRelativeTime(sync.draftSaveLastSucceededAt, t) ?? "" })
     : status === "error" ? t("estimate.sync.error")
+    : savedTime ? t("estimate.sync.saved", { time: savedTime })
     : null;
 
   if (!label) return null;
 
   const colorClass = status === "error"
     ? "text-destructive"
-    : status === "saved"
-      ? "text-muted-foreground"
-      : "text-muted-foreground/70";
+    : status === "saving" || status === "pending"
+      ? "text-muted-foreground/70"
+      : "text-muted-foreground";
 
   return (
     <span className={`text-[11px] font-medium ${colorClass}`}>
       {label}
     </span>
+  );
+}
+
+const ESTIMATE_STATUS_RAIL_ICON: Record<EstimateExecutionStatus, LucideIcon> = {
+  planning: ClipboardList,
+  in_work: HardHat,
+  finished: House,
+  paused: Pause,
+};
+
+// The rail's flex-basis (set on its header wrapper) is kept above the
+// `estimate-rail` container-query breakpoint in index.css so the rail wraps to
+// its own full-width row *before* it would ever cramp inline — keeping the label
+// transition monotonic (full inline → full filled row → icons) with no flicker.
+function EstimateStatusRail({
+  status,
+  canEdit,
+  isTransitioningToInWork,
+  onChange,
+}: {
+  status: EstimateExecutionStatus;
+  canEdit: boolean;
+  isTransitioningToInWork: boolean;
+  onChange: (status: EstimateExecutionStatus) => void;
+}) {
+  const { t } = useTranslation();
+  const activeMainIndex = ESTIMATE_STATUS_RAIL_MAIN.indexOf(status);
+
+  const renderStep = (step: EstimateExecutionStatus, options?: { passed?: boolean }) => {
+    const passed = Boolean(options?.passed);
+    const active = step === status;
+    const isPause = step === "paused";
+    const canSelect = canEdit && !isTransitioningToInWork && step !== "planning" && !active;
+    const showLoader = isTransitioningToInWork && step === "in_work";
+    // The active step always shows its label; the secondary pause control is
+    // icon-only until active. Every other primary label is rendered but collapses
+    // to an icon via the `estimate-rail` container query when the rail is narrow
+    // (see index.css) — a pure-CSS responsive collapse that reacts to the rail's
+    // own width, including AI-sidebar changes, with no layout thrash.
+    const renderLabel = active || !isPause;
+    const labelCollapsible = renderLabel && !active;
+    // Passed steps read in their completed form ("В работе"), upcoming ones as the
+    // call to action ("В работу").
+    const label = t(estimateStatusRailLabelKey(step, passed ? step : status));
+    const tone = active
+      ? status === "finished"
+        ? "success"
+        : status === "paused"
+          ? "warning"
+          : "info"
+      : "info";
+    const StepIcon = showLoader
+      ? Loader2
+      : step === "planning" && passed
+        ? Check
+        : ESTIMATE_STATUS_RAIL_ICON[step];
+
+    const pillClassName = cn(
+      "group inline-flex shrink-0 items-center rounded-full transition-colors",
+      active ? "gap-2 py-1 pl-1 pr-3" : "gap-1.5 p-1",
+      active && (tone === "success" ? "bg-success/10" : tone === "warning" ? "bg-warning/10" : "bg-info/10"),
+      canSelect && "cursor-pointer hover:bg-muted/60",
+    );
+    const nodeClassName = cn(
+      "grid h-7 w-7 shrink-0 place-items-center rounded-full transition-colors",
+      active
+        ? cn(
+            "shadow-sm",
+            tone === "success"
+              ? "bg-success text-success-foreground"
+              : tone === "warning"
+                ? "bg-warning text-warning-foreground"
+                : "bg-info text-info-foreground",
+          )
+        : passed
+          ? "bg-info/15 text-info"
+          : "border border-border bg-card text-muted-foreground group-hover:border-foreground/40 group-hover:text-foreground",
+    );
+    const labelClassName = cn(
+      "whitespace-nowrap text-[13px] leading-none transition-colors",
+      active ? "font-semibold text-foreground" : "font-medium text-muted-foreground group-hover:text-foreground",
+      labelCollapsible && "estimate-rail-label pr-1",
+    );
+
+    const inner = (
+      <>
+        <span className={nodeClassName}>
+          <StepIcon className={cn("h-3.5 w-3.5", showLoader && "animate-spin")} />
+        </span>
+        {renderLabel ? <span className={labelClassName}>{label}</span> : null}
+      </>
+    );
+
+    return canSelect ? (
+      <button type="button" onClick={() => onChange(step)} className={pillClassName} aria-label={label} title={label}>
+        {inner}
+      </button>
+    ) : (
+      <span className={pillClassName} aria-current={active ? "step" : undefined} aria-label={label} title={label}>
+        {inner}
+      </span>
+    );
+  };
+
+  return (
+    <div className="w-full min-w-0 py-1 [container-name:estimate-rail] [container-type:inline-size]">
+      <div className="flex min-w-0 flex-nowrap items-center gap-1.5">
+        {ESTIMATE_STATUS_RAIL_MAIN.map((step, index) => (
+          <Fragment key={step}>
+            {renderStep(step, { passed: activeMainIndex > index })}
+            {index < ESTIMATE_STATUS_RAIL_MAIN.length - 1 ? (
+              <span
+                aria-hidden
+                className={cn(
+                  "h-0.5 min-w-[12px] flex-1 rounded-full transition-colors",
+                  activeMainIndex > index ? "bg-info/50" : "bg-border",
+                )}
+              />
+            ) : null}
+          </Fragment>
+        ))}
+        <span aria-hidden className="mx-0.5 h-6 w-px shrink-0 bg-border" />
+        {renderStep(ESTIMATE_STATUS_RAIL_PAUSED)}
+      </div>
+    </div>
   );
 }
 
@@ -820,6 +965,23 @@ export default function ProjectEstimate() {
     isLoading: isEstimateLoading,
   } = useEstimateV2Project(pid);
 
+  const [constructorOpen, setConstructorOpen] = useState(false);
+  const constructorVersionQuery = useCurrentEstimateVersionId(pid, constructorOpen && workspaceMode.kind === "supabase");
+  // Canonical-library typeahead only works against the Supabase backend; gate it
+  // off in demo/local mode so editing names never fires search_canonical_library.
+  const canonicalSearchEnabled = workspaceMode.kind === "supabase";
+  const constructorProfileId = workspaceMode.kind === "supabase" ? workspaceMode.profileId : (currentUser.id || "");
+  const [constructorTarget, setConstructorTarget] = useState<{ stageId?: string; workId?: string } | null>(null);
+  const [constructorTab, setConstructorTab] = useState<"estimates" | "catalog">("estimates");
+  const openConstructor = (
+    target: { stageId?: string; workId?: string } | null,
+    tab: "estimates" | "catalog",
+  ) => {
+    setConstructorTarget(target);
+    setConstructorTab(tab);
+    setConstructorOpen(true);
+  };
+
   const currentMembership = members.find((member) => member.user_id === currentUser.id) ?? null;
   const canSubmitByMembership = currentMembership?.role === "owner" || currentMembership?.role === "co_owner";
   const projectMode = estimateProject.projectMode;
@@ -840,24 +1002,23 @@ export default function ProjectEstimate() {
     && !isEstimateLoading;
   const showEstimateInternalPricing = estimateFinanceMode === "detail";
   const showEstimateMarkup = estimateFinanceMode === "detail" && isContractorMode;
-  const showEstimateCommercialSummary = estimateFinanceMode === "detail" && isContractorMode;
 
   const [activeTab, setActiveTab] = useState("estimate");
   const [approvalModalOpen, setApprovalModalOpen] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [resourceModalLineId, setResourceModalLineId] = useState<string | null>(null);
   const [missingDatesWorkIds, setMissingDatesWorkIds] = useState<string[]>([]);
   const [isTransitioningToInWork, setIsTransitioningToInWork] = useState(false);
   const [incompleteTaskBlocks, setIncompleteTaskBlocks] = useState<Array<{ taskId: string | null; title: string }>>([]);
   const [bulkFinishedTasks, setBulkFinishedTasks] = useState<Task[] | null>(null);
   const [collapsedStageIds, setCollapsedStageIds] = useState<Set<string>>(new Set());
   const estimateHasSavedContent = stages.length > 0 || works.length > 0 || lines.length > 0 || versions.length > 0;
+  const { data: tierQuota } = useTierQuota();
   const [estimateEditorStarted, setEstimateEditorStarted] = useState(estimateHasSavedContent);
   const previousProjectIdRef = useRef(pid);
   const [pendingStageTitleEditId, setPendingStageTitleEditId] = useState<string | null>(null);
   const [pendingWorkTitleEditId, setPendingWorkTitleEditId] = useState<string | null>(null);
   const [pendingLineTitleEditId, setPendingLineTitleEditId] = useState<string | null>(null);
-  const [detailedCostOverviewOpen, setDetailedCostOverviewOpen] = useState(false);
-  const [financialResourcesExpanded, setFinancialResourcesExpanded] = useState(false);
   const [customUnitDraftByLineId, setCustomUnitDraftByLineId] = useState<Record<string, string>>({});
   const [customUnitInputLineIds, setCustomUnitInputLineIds] = useState<Set<string>>(new Set());
   const [pendingDelete, setPendingDelete] = useState<PendingDeleteState | null>(null);
@@ -874,6 +1035,33 @@ export default function ProjectEstimate() {
     previousProjectIdRef.current = pid;
     setEstimateEditorStarted(estimateHasSavedContent);
   }, [estimateHasSavedContent, pid]);
+
+  // ─── Analytics: empty-estimate marker.
+  // Fires once per project_id when the user views an estimate that has no
+  // stages / works / lines / versions yet. Used as the funnel denominator
+  // for activation: estimate_created_empty → estimate_first_resource_added.
+  const firedEstimateCreatedEmptyForPidRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!pid) return;
+    if (estimateHasSavedContent) return;
+    if (firedEstimateCreatedEmptyForPidRef.current.has(pid)) return;
+    firedEstimateCreatedEmptyForPidRef.current.add(pid);
+    trackEvent("estimate_created_empty", { project_id: pid });
+  }, [pid, estimateHasSavedContent]);
+
+  // ─── Analytics: activation marker.
+  // Fires once per project_id the moment the estimate contains at least
+  // one resource line with a non-zero unit price. This is the canonical
+  // activation event — see project_analytics_migration memory.
+  const firedEstimateFirstResourceForPidRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!pid) return;
+    if (firedEstimateFirstResourceForPidRef.current.has(pid)) return;
+    const hasPricedLine = lines.some((line) => (line.costUnitCents ?? 0) > 0);
+    if (!hasPricedLine) return;
+    firedEstimateFirstResourceForPidRef.current.add(pid);
+    trackEvent("estimate_first_resource_added", { project_id: pid });
+  }, [pid, lines]);
 
   useEffect(() => {
     if (!pendingStageTitleEditId) return;
@@ -1431,6 +1619,19 @@ export default function ProjectEstimate() {
     }, 0);
   }, [tasks, works]);
 
+  const taskCompletion = useMemo(() => {
+    const taskById = new Map(tasks.map((task) => [task.id, task]));
+    let total = 0;
+    let done = 0;
+    works.forEach((work) => {
+      if (!work.taskId) return;
+      total += 1;
+      const task = taskById.get(work.taskId);
+      if (task && task.status === "done") done += 1;
+    });
+    return { done, total, pct: total > 0 ? (done / total) * 100 : null };
+  }, [tasks, works]);
+
   const combinedPlanFact = useMemo(
     () => combinePlanFact(
       plannedRollups,
@@ -1452,15 +1653,6 @@ export default function ProjectEstimate() {
       ))
     ),
     [hrPayments.length, orders],
-  );
-
-  const resourcesTotalCents = useMemo(
-    () => totals.breakdownByType.material
-      + totals.breakdownByType.tool
-      + totals.breakdownByType.labor
-      + totals.breakdownByType.subcontractor
-      + totals.breakdownByType.other,
-    [totals.breakdownByType],
   );
 
   const todayDay = toDayIndex(new Date());
@@ -1522,6 +1714,71 @@ export default function ProjectEstimate() {
     };
   }, [baselineRange, currentRange, estimateProject.estimateStatus, incompleteLinkedTaskCount, todayDay]);
 
+  const financeView = useMemo<EstimateFinanceView>(() => {
+    const utilizationPct = totals.costTotalCents > 0
+      ? (combinedPlanFact.fact.spentCents / totals.costTotalCents) * 100
+      : null;
+    const eac = computeEac({
+      costTotalCents: totals.costTotalCents,
+      spentCents: combinedPlanFact.fact.spentCents,
+      completionPct: taskCompletion.pct,
+    });
+    const finishedAccuracy = hasActualFinancialData
+      ? computeFinishedAccuracy({
+        costTotalCents: totals.costTotalCents,
+        spentCents: combinedPlanFact.fact.spentCents,
+        revenueExVatCents: totals.taxableBaseCents,
+        plannedMarginPct: profitabilityPct,
+        durationPlannedDays: timingMetrics.durationPlannedDays,
+        durationEstimatedDays: timingMetrics.durationEstimatedDays,
+      })
+      : null;
+    return {
+      revenueExVatCents: totals.taxableBaseCents,
+      costTotalCents: totals.costTotalCents,
+      profitExVatCents,
+      profitabilityPct,
+      hasActualFinancialData,
+      spentCents: combinedPlanFact.fact.spentCents,
+      utilizationPct,
+      overspendCents: combinedPlanFact.fact.spentCents - totals.costTotalCents,
+      completion: taskCompletion,
+      toBePaidPlannedCents: combinedPlanFact.fact.toBePaidPlannedCents,
+      daysToEnd: timingMetrics.daysToEnd,
+      behindScheduleDays: timingMetrics.behindScheduleDays,
+      planningRangeLabel,
+      planningDurationDays,
+      markupTotalCents: totals.markupTotalCents,
+      subtotalBeforeDiscountCents: totals.subtotalBeforeDiscountCents,
+      discountTotalCents: totals.discountTotalCents,
+      taxAmountCents: totals.taxAmountCents,
+      totalIncVatCents: totals.totalCents,
+      plannedCostByTypeCents: totals.breakdownByType,
+      spentByTypeCents: combinedPlanFact.fact.spentByTypeCents,
+      unattributedSpendCents: combinedPlanFact.fact.unattributedSpendCents,
+      eac,
+      finishedAccuracy,
+      operationalUpperBlock,
+      rpcSummaryTotalIncVatCents,
+      uiTotalIncVatCents,
+      taxBps: estimateProject.taxBps,
+    };
+  }, [
+    totals,
+    profitExVatCents,
+    profitabilityPct,
+    hasActualFinancialData,
+    combinedPlanFact,
+    taskCompletion,
+    timingMetrics,
+    planningRangeLabel,
+    planningDurationDays,
+    operationalUpperBlock,
+    rpcSummaryTotalIncVatCents,
+    uiTotalIncVatCents,
+    estimateProject.taxBps,
+  ]);
+
   const ctaState = resolveProjectEstimateCtaState({
     projectMode,
     isOwner: canSubmitToClient,
@@ -1538,37 +1795,6 @@ export default function ProjectEstimate() {
     latestApproved
     && (!latestProposed || latestApproved.number >= latestProposed.number),
   );
-  const financialBreakdownTypeRows: Array<{ label: string; amountCents: number }> = [
-    { label: t("estimate.breakdown.materialCost"), amountCents: totals.breakdownByType.material },
-    { label: t("estimate.breakdown.toolCost"), amountCents: totals.breakdownByType.tool },
-    { label: t("estimate.breakdown.laborCost"), amountCents: totals.breakdownByType.labor },
-    { label: t("estimate.breakdown.subcontractorCost"), amountCents: totals.breakdownByType.subcontractor },
-    { label: t("estimate.breakdown.otherCost"), amountCents: totals.breakdownByType.other },
-  ];
-  const financialBreakdownSummaryRows: Array<{ label: string; amountCents: number; emphasized?: boolean }> = [
-    ...(isContractorMode ? [{ label: t("estimate.breakdown.markup"), amountCents: totals.markupTotalCents }] : []),
-    { label: t("estimate.breakdown.subtotalExVat"), amountCents: totals.subtotalBeforeDiscountCents },
-    { label: t("estimate.breakdown.discount"), amountCents: totals.discountTotalCents },
-    { label: t("estimate.breakdown.vatAmount"), amountCents: totals.taxAmountCents },
-    { label: t("estimate.breakdown.totalIncVat"), amountCents: totals.totalCents, emphasized: true },
-  ];
-  const planVsActualRows = (["material", "tool", "labor", "subcontractor", "other"] as const).map((type) => ({
-    label: t(semanticLabelKeyForType(type)),
-    planned: money(combinedPlanFact.planned.plannedCostByTypeCents[type], estimateProject.currency),
-    actual: hasActualFinancialData ? money(combinedPlanFact.fact.spentByTypeCents[type], estimateProject.currency) : "—",
-  }));
-
-  useEffect(() => {
-    if (estimateProject.estimateStatus === "in_work") return;
-    setDetailedCostOverviewOpen(false);
-  }, [estimateProject.estimateStatus]);
-
-  useEffect(() => {
-    if (canViewSensitiveDetail) return;
-    setDetailedCostOverviewOpen(false);
-    setFinancialResourcesExpanded(false);
-  }, [canViewSensitiveDetail]);
-
   const handleEstimateStatusChange = async (
     nextStatus: EstimateExecutionStatus,
     options?: { skipSetup?: boolean; projectTasks?: Task[] },
@@ -2083,6 +2309,16 @@ export default function ProjectEstimate() {
   };
 
   const handleStartEstimate = () => {
+    // Proactive tier gate: a Free user is capped at 1 estimate total. Block
+    // creating another and surface the paywall (the backend trigger also blocks).
+    if (
+      tierQuota &&
+      tierQuota.estimates_limit >= 0 &&
+      tierQuota.estimates_used >= tierQuota.estimates_limit
+    ) {
+      showTierLimitPaywallByType("estimates_total", t);
+      return;
+    }
     setEstimateEditorStarted(true);
     setActiveTab("estimate");
   };
@@ -2193,6 +2429,54 @@ export default function ProjectEstimate() {
       assessment,
       step: assessment.initialStep,
     });
+  };
+
+  const openResourceModal = (lineId: string) => setResourceModalLineId(lineId);
+  const resourceModalLine = resourceModalLineId ? lineById.get(resourceModalLineId) ?? null : null;
+
+  // Fill a resource line from a canonical-library suggestion (links the line to
+  // the article so the row indicator + resource modal light up). Resource-level
+  // apply is client-side and silent (no revert toast), per spec.
+  const applyResourceSuggestion = (lineId: string, suggestion: CanonicalSuggestion) => {
+    const partial: Partial<EstimateV2ResourceLine> = {
+      title: suggestion.name,
+      systemResourceArticleId: suggestion.id,
+    };
+    if (suggestion.unit) partial.unit = suggestion.unit;
+    if (RESOURCE_LINE_TYPES.has(suggestion.badgeType as ResourceLineType)) {
+      partial.type = suggestion.badgeType as ResourceLineType;
+    }
+    updateLine(pid, lineId, partial);
+  };
+
+  // Add a catalog leaf as a new resource line on the constructor's target work (client-side;
+  // the system_resource_article_id FK persists via the normal save path). Backs the
+  // Конструктор Каталоги tab's leaf-click.
+  const handleAddCatalogResource = (resource: CatalogResource) => {
+    const stageId = constructorTarget?.stageId;
+    const workId = constructorTarget?.workId;
+    if (!stageId || !workId) return;
+    const type = RESOURCE_LINE_TYPES.has(resource.defaultResourceType as ResourceLineType)
+      ? (resource.defaultResourceType as ResourceLineType)
+      : "material";
+    const created = createLine(pid, {
+      stageId,
+      workId,
+      title: resource.name,
+      type,
+      unit: resource.unitDisplay ?? getUnitOptionsForType(type)[0] ?? "pcs",
+      qtyMilli: 1_000,
+      costUnitCents: 0,
+      systemResourceArticleId: resource.id,
+    });
+    if (!created) return;
+    trackEvent("estimate_line_created", {
+      project_id: pid,
+      stage_id: stageId,
+      work_id: workId,
+      resource_type: type,
+    });
+    toast({ title: t("estimate.constructor.catalogAdded", { name: resource.name }) });
   };
 
   const openWorkDelete = (workId: string) => {
@@ -2306,30 +2590,12 @@ export default function ProjectEstimate() {
         ]}
       />
       <div className="space-y-3 md:rounded-card md:border md:border-border md:bg-card md:p-sp-2">
-        <div className="flex flex-wrap items-start justify-between gap-3 lg:flex-nowrap">
-          <div className="min-w-0 flex-1 space-y-2">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+          <div className="min-w-0 max-w-full space-y-1.5">
             <h2 className="truncate text-xl font-semibold text-foreground">{project.title}</h2>
             {showEstimateWorkspace && (
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">{t("estimate.header.statusLabel")}</span>
-                <Select
-                  value={estimateProject.estimateStatus}
-                  onValueChange={(value) => handleEstimateStatusChange(value as EstimateExecutionStatus)}
-                  disabled={!canEditEstimate || isTransitioningToInWork}
-                >
-                  <SelectTrigger className={`h-8 w-auto min-w-[116px] rounded-md border px-3 text-xs font-semibold shadow-none ${estimateStatusClassName(estimateProject.estimateStatus)}`}>
-                    <span className="flex items-center gap-1.5">
-                      <span>{t(estimateStatusLabelKey(estimateProject.estimateStatus))}</span>
-                      {isTransitioningToInWork ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
-                    </span>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="in_work">{t("estimate.status.inWork")}</SelectItem>
-                    <SelectItem value="paused">{t("estimate.status.paused")}</SelectItem>
-                    <SelectItem value="finished">{t("estimate.status.finished")}</SelectItem>
-                  </SelectContent>
-                </Select>
-
+              <div className="flex min-h-5 flex-wrap items-center gap-2">
+                <EstimateSyncStatusIndicator sync={estimateSync} fallbackSavedAt={estimateProject.updatedAt} />
                 {SHOW_ESTIMATE_VERSION_UI ? (
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -2347,457 +2613,36 @@ export default function ProjectEstimate() {
                     </TooltipContent>
                   </Tooltip>
                 ) : null}
-                <EstimateSyncStatusIndicator sync={estimateSync} />
               </div>
             )}
           </div>
 
           {showEstimateWorkspace && (
-            <div className="flex w-full min-w-0 flex-col items-start gap-1 lg:w-auto lg:items-end">
-              <div className="flex w-full flex-wrap items-center gap-2 lg:justify-end">
-                {canExportEstimateCsv && (
-                  <Button variant="outline" size="sm" onClick={() => setExportModalOpen(true)}>
-                    <Download className="mr-1 h-4 w-4" /> {t("estimate.header.export")}
-                  </Button>
-                )}
-
-                {ctaState.showApprove && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="border-accent/30 text-accent hover:bg-accent/10"
-                    onClick={() => setApprovalModalOpen(true)}
-                    disabled={ctaState.approveDisabled}
-                    title={ctaState.approveDisabledReason ?? undefined}
-                  >
-                    {t("estimate.header.approve")}
-                  </Button>
-                )}
-              </div>
-
-              {(!canEditEstimate || (ctaState.showApprove && ctaState.approveDisabledReason)) && (
-                <div className="flex flex-wrap gap-x-3 gap-y-1 text-caption text-muted-foreground lg:justify-end">
-                  {!canEditEstimate && <span>{t("estimate.header.ownerOnly")}</span>}
-                  {ctaState.showApprove && ctaState.approveDisabledReason && <span>{ctaState.approveDisabledReason}</span>}
-                </div>
+            <div className="min-w-0 flex-1 basis-[540px] space-y-1">
+              <EstimateStatusRail
+                status={estimateProject.estimateStatus}
+                canEdit={canEditEstimate}
+                isTransitioningToInWork={isTransitioningToInWork}
+                onChange={handleEstimateStatusChange}
+              />
+              {!canEditEstimate && (
+                <div className="text-caption text-muted-foreground">{t("estimate.header.ownerOnly")}</div>
               )}
             </div>
           )}
         </div>
 
-        {showEstimateWorkspace && (isInWork ? (
-          <div className="rounded-lg border border-border p-3">
-            <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4">
-                  {estimateFinanceMode === "detail" && (
-                    <>
-                      <p className="col-span-2 text-sm font-semibold text-foreground md:col-span-3 lg:col-span-4">{t("estimate.summary.financial")}</p>
-                      <div className="rounded-md bg-muted/30 px-2.5 py-2">
-                        <p className="text-[11px] text-muted-foreground">{t("estimate.summary.plannedTotal")}</p>
-                        <p className="text-sm font-semibold tabular-nums text-foreground">
-                          {money(combinedPlanFact.planned.plannedBudgetCents, estimateProject.currency)}
-                        </p>
-                      </div>
-                      <div className="rounded-md bg-muted/30 px-2.5 py-2">
-                        <p className="text-[11px] text-muted-foreground">{t("estimate.summary.actualSpent")}</p>
-                        <p className="text-sm font-semibold tabular-nums text-foreground">
-                          {hasActualFinancialData ? money(combinedPlanFact.fact.spentCents, estimateProject.currency) : "—"}
-                        </p>
-                      </div>
-                      <div className="rounded-md bg-muted/30 px-2.5 py-2">
-                        <p className="text-[11px] text-muted-foreground">{t("estimate.summary.overUnder")}</p>
-                        <p className={`text-sm font-semibold tabular-nums ${
-                          hasActualFinancialData
-                            && combinedPlanFact.fact.spentCents - combinedPlanFact.planned.plannedBudgetCents > 0
-                              ? "text-destructive"
-                              : "text-foreground"
-                        }`}>
-                          {hasActualFinancialData
-                            ? money(combinedPlanFact.fact.spentCents - combinedPlanFact.planned.plannedBudgetCents, estimateProject.currency)
-                            : "—"}
-                        </p>
-                        {hasActualFinancialData
-                          && combinedPlanFact.fact.spentCents - combinedPlanFact.planned.plannedBudgetCents > 0 && (
-                            <p className="text-[11px] font-medium text-destructive">{t("estimate.budgetExceeded")}</p>
-                          )}
-                      </div>
-                      <div className="rounded-md bg-muted/30 px-2.5 py-2">
-                        <p className="text-[11px] text-muted-foreground">{t("estimate.summary.toBePaid")}</p>
-                        <p className="text-sm font-semibold tabular-nums text-foreground">
-                          {money(combinedPlanFact.fact.toBePaidPlannedCents, estimateProject.currency)}
-                        </p>
-                      </div>
-                    </>
-                  )}
-                  {useReadOnlySummaryPricing && operationalUpperBlock && (
-                    <>
-                      <p className="col-span-2 text-sm font-semibold text-foreground md:col-span-3 lg:col-span-4">{t("estimate.summary.financial")}</p>
-                      {operationalUpperBlock.clientTotalCents != null && (
-                        <div className="rounded-md bg-muted/30 px-2.5 py-2">
-                          <p className="text-[11px] text-muted-foreground">{t("estimate.summary.clientTotalExVat")}</p>
-                          <p className="text-sm font-semibold tabular-nums text-foreground">
-                            {money(operationalUpperBlock.clientTotalCents, estimateProject.currency)}
-                          </p>
-                        </div>
-                      )}
-                      <div className="rounded-md bg-muted/30 px-2.5 py-2">
-                        <p className="text-[11px] text-muted-foreground">{t("estimate.summary.vatRate")}</p>
-                        <p className="text-sm font-semibold tabular-nums text-foreground">
-                          {fromBpsToPercent(operationalUpperBlock.vatBps ?? estimateProject.taxBps)}%
-                        </p>
-                      </div>
-                      {operationalUpperBlock.discountBps != null && operationalUpperBlock.discountBps > 0 && (
-                        <div className="rounded-md bg-muted/30 px-2.5 py-2">
-                          <p className="text-[11px] text-muted-foreground">{t("estimate.summary.discountMax")}</p>
-                          <p className="text-sm font-semibold tabular-nums text-foreground">
-                            {fromBpsToPercent(operationalUpperBlock.discountBps)}%
-                          </p>
-                        </div>
-                      )}
-                      {rpcSummaryTotalIncVatCents != null && (
-                        <div className="rounded-md bg-muted/30 px-2.5 py-2">
-                          <p className="text-[11px] text-muted-foreground">{t("estimate.summary.totalIncVat")}</p>
-                          <p className="text-sm font-semibold tabular-nums text-foreground">
-                            {money(rpcSummaryTotalIncVatCents, estimateProject.currency)}
-                          </p>
-                        </div>
-                      )}
-                      {operationalUpperBlock.resourceCostBreakdownClientSafeOnly
-                        && Object.keys(operationalUpperBlock.resourceCostBreakdownClientSafeOnly).length > 0 && (
-                        <div className="col-span-2 rounded-md bg-muted/30 px-2.5 py-2 md:col-span-3 lg:col-span-4">
-                          <p className="text-[11px] text-muted-foreground">{t("estimate.summary.byResourceTypeClient")}</p>
-                          <div className="mt-1 space-y-1">
-                            {Object.entries(operationalUpperBlock.resourceCostBreakdownClientSafeOnly).map(([key, cents]) => (
-                              <div key={key} className="flex justify-between text-sm">
-                                <span className="text-muted-foreground">{labelForRpcResourceTypeKey(key, t)}</span>
-                                <span className="font-medium tabular-nums text-foreground">{money(cents, estimateProject.currency)}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  )}
-                  <p className="col-span-2 text-sm font-semibold text-foreground md:col-span-3 lg:col-span-4">{t("estimate.summary.timing")}</p>
-                  <div className="rounded-md bg-muted/30 px-2.5 py-2">
-                    <p className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                      {t("estimate.summary.daysToEnd")}
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button type="button" className="text-muted-foreground hover:text-foreground">
-                            <Info className="h-3 w-3" />
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent>{t(TIMING_TOOLTIP_KEYS.daysToEnd)}</TooltipContent>
-                      </Tooltip>
-                    </p>
-                    <p className="text-sm font-semibold tabular-nums text-foreground">
-                      {timingMetrics.daysToEnd == null ? "—" : t("estimate.summary.dayUnit", { count: timingMetrics.daysToEnd })}
-                    </p>
-                  </div>
-                  <div className="rounded-md bg-muted/30 px-2.5 py-2">
-                    <p className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                      {t("estimate.summary.behindSchedule")}
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button type="button" className="text-muted-foreground hover:text-foreground">
-                            <Info className="h-3 w-3" />
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent>{t(TIMING_TOOLTIP_KEYS.behindSchedule)}</TooltipContent>
-                      </Tooltip>
-                    </p>
-                    <p className="text-sm font-semibold tabular-nums text-foreground">{t("estimate.summary.dayUnit", { count: timingMetrics.behindScheduleDays })}</p>
-                  </div>
-                  <div className="rounded-md bg-muted/30 px-2.5 py-2">
-                    <p className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                      {t("estimate.summary.durationPlanned")}
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button type="button" className="text-muted-foreground hover:text-foreground">
-                            <Info className="h-3 w-3" />
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent>{t(TIMING_TOOLTIP_KEYS.durationPlanned)}</TooltipContent>
-                      </Tooltip>
-                    </p>
-                    <p className="text-sm font-semibold tabular-nums text-foreground">
-                      {timingMetrics.durationPlannedDays == null ? "—" : t("estimate.summary.dayUnit", { count: timingMetrics.durationPlannedDays })}
-                    </p>
-                  </div>
-                  <div className="rounded-md bg-muted/30 px-2.5 py-2">
-                    <p className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                      {t("estimate.summary.durationEstimated")}
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button type="button" className="text-muted-foreground hover:text-foreground">
-                            <Info className="h-3 w-3" />
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent>{t(TIMING_TOOLTIP_KEYS.durationEstimated)}</TooltipContent>
-                      </Tooltip>
-                    </p>
-                    <p className="text-sm font-semibold tabular-nums text-foreground">
-                      {timingMetrics.durationEstimatedDays == null ? "—" : t("estimate.summary.dayUnit", { count: timingMetrics.durationEstimatedDays })}
-                    </p>
-                  </div>
-                </div>
-
-                {canViewSensitiveDetail && (
-                  <div className="border-t border-border/60 pt-3">
-                  <Collapsible open={detailedCostOverviewOpen} onOpenChange={setDetailedCostOverviewOpen}>
-                    <div className="rounded-lg border border-border/70">
-                      <CollapsibleTrigger asChild>
-                        <button
-                          type="button"
-                          className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-muted/20"
-                        >
-                          <span className="inline-flex items-center gap-2 text-sm font-semibold text-foreground">
-                            {detailedCostOverviewOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                            {t("estimate.costOverview.title")}
-                          </span>
-                          <span className="text-caption tabular-nums text-muted-foreground">
-                            {money(totals.totalCents, estimateProject.currency)}
-                          </span>
-                        </button>
-                      </CollapsibleTrigger>
-
-                      <CollapsibleContent className="border-t border-border/60 px-3 py-3">
-                        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-                          <div className="space-y-2 rounded-md border border-border/60 bg-background/30 p-3">
-                            <p className="text-sm font-semibold text-foreground">{t("estimate.costOverview.financialBreakdown")}</p>
-                            <div className="space-y-2">
-                              <button
-                                type="button"
-                                className="flex w-full items-center justify-between gap-3 rounded-md border border-border/60 px-3 py-2 text-left text-sm hover:bg-muted/30"
-                                onClick={() => setFinancialResourcesExpanded((current) => !current)}
-                              >
-                                <span className="inline-flex items-center gap-1 text-muted-foreground">
-                                  {financialResourcesExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                                  {t("estimate.costOverview.resources")}
-                                </span>
-                                <span className="font-medium tabular-nums text-foreground">{money(resourcesTotalCents, estimateProject.currency)}</span>
-                              </button>
-                              {financialResourcesExpanded && (
-                                <div className="space-y-2 pl-3">
-                                  {financialBreakdownTypeRows.map((row) => (
-                                    <div key={row.label} className="flex items-center justify-between gap-3 rounded-md border border-border/60 px-3 py-2 text-sm">
-                                      <span className="text-muted-foreground">{row.label}</span>
-                                      <span className="font-medium tabular-nums text-foreground">
-                                        {money(row.amountCents, estimateProject.currency)}
-                                      </span>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                              {financialBreakdownSummaryRows.map((row) => (
-                                <div
-                                  key={row.label}
-                                  className={`flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm ${
-                                    row.emphasized ? "border-border/70 bg-muted/30" : "border-border/60"
-                                  }`}
-                                >
-                                  <span className={row.emphasized ? "font-medium text-foreground" : "text-muted-foreground"}>
-                                    {row.label}
-                                  </span>
-                                  <span className={`${row.emphasized ? "font-semibold" : "font-medium"} tabular-nums text-foreground`}>
-                                    {money(row.amountCents, estimateProject.currency)}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-
-                          <div className="space-y-2 rounded-md border border-border/60 bg-background/30 p-3">
-                            <p className="text-sm font-semibold text-foreground">{t("estimate.costOverview.planVsActual")}</p>
-                            <div className="grid grid-cols-[minmax(0,1fr)_minmax(112px,auto)_minmax(112px,auto)] gap-3 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                              <span>{t("estimate.costOverview.col.category")}</span>
-                              <span className="text-right">{t("estimate.costOverview.col.planned")}</span>
-                              <span className="text-right">{t("estimate.costOverview.col.actual")}</span>
-                            </div>
-                            <div className="space-y-2">
-                              {planVsActualRows.map((row) => (
-                                <div key={row.label} className="grid grid-cols-[minmax(0,1fr)_minmax(112px,auto)_minmax(112px,auto)] items-center gap-3 rounded-md border border-border/60 px-3 py-2 text-sm">
-                                  <span className="text-muted-foreground">{row.label}</span>
-                                  <span className="text-right font-medium tabular-nums text-foreground">{row.planned}</span>
-                                  <span className="text-right font-medium tabular-nums text-foreground">{row.actual}</span>
-                                </div>
-                              ))}
-                              <div className="grid grid-cols-[minmax(0,1fr)_minmax(112px,auto)_minmax(112px,auto)] items-center gap-3 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-sm">
-                                <span className="font-medium text-foreground">{t("estimate.costOverview.total")}</span>
-                                <span className="text-right font-semibold tabular-nums text-foreground">
-                                  {money(combinedPlanFact.planned.plannedBudgetCents, estimateProject.currency)}
-                                </span>
-                                <span className="text-right font-semibold tabular-nums text-foreground">
-                                  {hasActualFinancialData ? money(combinedPlanFact.fact.spentCents, estimateProject.currency) : "—"}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </CollapsibleContent>
-                    </div>
-                  </Collapsible>
-                  </div>
-                )}
-              </div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-            <div className="rounded-lg border border-border p-3">
-              <p className="text-sm font-semibold text-foreground">{t("estimate.summary.timing")}</p>
-              <div className="mt-2 grid grid-cols-2 gap-2 text-caption">
-                <div className="rounded-md border border-border/70 p-2">
-                  <p className="text-muted-foreground">{t("estimate.planning.durationRange")}</p>
-                  <p className="text-sm font-medium text-foreground">{planningRangeLabel}</p>
-                </div>
-                <div className="rounded-md border border-border/70 p-2">
-                  <p className="text-muted-foreground">{t("estimate.planning.durationDays")}</p>
-                  <p className="text-sm font-medium text-foreground">{planningDurationDays == null ? "—" : t("estimate.summary.dayUnit", { count: planningDurationDays })}</p>
-                </div>
-                <div className="rounded-md border border-border/70 p-2">
-                  <p className="text-muted-foreground">{t("estimate.summary.daysToEnd")}</p>
-                  <p className="text-sm font-medium text-foreground">
-                    {timingMetrics.daysToEnd == null ? "—" : t("estimate.summary.dayUnit", { count: timingMetrics.daysToEnd })}
-                  </p>
-                </div>
-                <div className="rounded-md border border-border/70 p-2">
-                  <p className="text-muted-foreground">{t("estimate.summary.behindSchedule")}</p>
-                  <p className="text-sm font-medium text-foreground">{t("estimate.summary.dayUnit", { count: timingMetrics.behindScheduleDays })}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-lg border border-border p-3">
-              <p className="text-sm font-semibold text-foreground">{t("estimate.summary.financial")}</p>
-              {estimateFinanceMode === "none" ? (
-                <p className="mt-2 text-caption text-muted-foreground">
-                  {t("estimate.planning.financeHidden")}
-                </p>
-              ) : useReadOnlySummaryPricing && operationalUpperBlock ? (
-                <div className="mt-2 space-y-2 text-caption">
-                  {operationalUpperBlock.clientTotalCents != null && (
-                    <div className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
-                      <span className="text-muted-foreground">{t("estimate.summary.clientTotalExVat")}</span>
-                      <span className="font-medium tabular-nums text-foreground">
-                        {money(operationalUpperBlock.clientTotalCents, estimateProject.currency)}
-                      </span>
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
-                    <span className="text-muted-foreground">{t("estimate.summary.vatRate")}</span>
-                    <span className="font-medium tabular-nums text-foreground">
-                      {fromBpsToPercent(operationalUpperBlock.vatBps ?? estimateProject.taxBps)}%
-                    </span>
-                  </div>
-                  {operationalUpperBlock.discountBps != null && operationalUpperBlock.discountBps > 0 && (
-                    <div className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
-                      <span className="text-muted-foreground">{t("estimate.summary.discountMax")}</span>
-                      <span className="font-medium tabular-nums text-foreground">
-                        {fromBpsToPercent(operationalUpperBlock.discountBps)}%
-                      </span>
-                    </div>
-                  )}
-                  {operationalUpperBlock.resourceCostBreakdownClientSafeOnly
-                    && Object.keys(operationalUpperBlock.resourceCostBreakdownClientSafeOnly).length > 0 && (
-                    <div className="space-y-1 rounded-md border border-border/70 px-2 py-2">
-                      <span className="text-muted-foreground">{t("estimate.summary.byResourceTypeClient")}</span>
-                      {Object.entries(operationalUpperBlock.resourceCostBreakdownClientSafeOnly).map(([key, cents]) => (
-                        <div key={key} className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">{labelForRpcResourceTypeKey(key, t)}</span>
-                          <span className="tabular-nums text-foreground">{money(cents, estimateProject.currency)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between rounded-md border border-border/70 bg-muted/30 px-2 py-1">
-                    <span className="font-medium text-foreground">{t("estimate.summary.totalIncVat")}</span>
-                    <span className="font-semibold tabular-nums text-foreground">
-                      {money(uiTotalIncVatCents, estimateProject.currency)}
-                    </span>
-                  </div>
-                </div>
-              ) : !canViewSensitiveDetail ? (
-                <div className="mt-2 rounded-md border border-border/70 p-2">
-                  <p className="text-xs text-muted-foreground">{t("estimate.summary.totalIncVat")}</p>
-                  <p className="text-2xl font-semibold text-foreground">{money(uiTotalIncVatCents, estimateProject.currency)}</p>
-                </div>
-              ) : (
-                <div className="mt-2 space-y-1 text-caption">
-                  <button
-                    type="button"
-                    className="flex w-full items-center justify-between rounded-md border border-border/70 px-2 py-1 text-left hover:bg-muted/30"
-                    onClick={() => setFinancialResourcesExpanded((current) => !current)}
-                  >
-                    <span className="inline-flex items-center gap-1 text-muted-foreground">
-                      {financialResourcesExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                      {t("estimate.costOverview.resources")}
-                    </span>
-                    <span className="font-medium tabular-nums text-foreground">{money(resourcesTotalCents, estimateProject.currency)}</span>
-                  </button>
-                  {financialResourcesExpanded && (
-                    <div className="space-y-1 pl-5">
-                      <div className="flex items-center justify-between rounded-md border border-border/60 px-2 py-1">
-                        <span className="text-muted-foreground">{t("estimate.breakdown.materialCost")}</span>
-                        <span className="tabular-nums text-foreground">{money(totals.breakdownByType.material, estimateProject.currency)}</span>
-                      </div>
-                      <div className="flex items-center justify-between rounded-md border border-border/60 px-2 py-1">
-                        <span className="text-muted-foreground">{t("estimate.breakdown.toolCost")}</span>
-                        <span className="tabular-nums text-foreground">{money(totals.breakdownByType.tool, estimateProject.currency)}</span>
-                      </div>
-                      <div className="flex items-center justify-between rounded-md border border-border/60 px-2 py-1">
-                        <span className="text-muted-foreground">{t("estimate.breakdown.laborCost")}</span>
-                        <span className="tabular-nums text-foreground">{money(totals.breakdownByType.labor, estimateProject.currency)}</span>
-                      </div>
-                      <div className="flex items-center justify-between rounded-md border border-border/60 px-2 py-1">
-                        <span className="text-muted-foreground">{t("estimate.breakdown.subcontractorCost")}</span>
-                        <span className="tabular-nums text-foreground">{money(totals.breakdownByType.subcontractor, estimateProject.currency)}</span>
-                      </div>
-                      <div className="flex items-center justify-between rounded-md border border-border/60 px-2 py-1">
-                        <span className="text-muted-foreground">{t("estimate.breakdown.otherCost")}</span>
-                        <span className="tabular-nums text-foreground">{money(totals.breakdownByType.other, estimateProject.currency)}</span>
-                      </div>
-                    </div>
-                  )}
-                  {showEstimateCommercialSummary && (
-                    <div className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
-                      <span className="text-muted-foreground">{t("estimate.breakdown.markup")}</span>
-                      <span className="tabular-nums text-foreground">{money(totals.markupTotalCents, estimateProject.currency)}</span>
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
-                    <span className="text-muted-foreground">{t("estimate.breakdown.subtotalExVat")}</span>
-                    <span className="tabular-nums text-foreground">{money(totals.subtotalBeforeDiscountCents, estimateProject.currency)}</span>
-                  </div>
-                  <div className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
-                    <span className="text-muted-foreground">{t("estimate.breakdown.discount")}</span>
-                    <span className="tabular-nums text-foreground">{money(totals.discountTotalCents, estimateProject.currency)}</span>
-                  </div>
-                  <div className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
-                    <span className="text-muted-foreground">{t("estimate.breakdown.vatAmount")}</span>
-                    <span className="tabular-nums text-foreground">{money(totals.taxAmountCents, estimateProject.currency)}</span>
-                  </div>
-                  <div className="flex items-center justify-between rounded-md border border-border/70 bg-muted/30 px-2 py-1">
-                    <span className="font-medium text-foreground">{t("estimate.breakdown.totalIncVat")}</span>
-                    <span className="font-semibold tabular-nums text-foreground">{money(totals.totalCents, estimateProject.currency)}</span>
-                  </div>
-                  {showEstimateCommercialSummary && (
-                    <div className="mt-2 grid grid-cols-2 gap-2">
-                      <div className="rounded-md border border-border/70 p-2">
-                        <p className="text-muted-foreground">{t("estimate.planning.profitExVat")}</p>
-                        <p className="text-sm font-medium text-foreground">{money(profitExVatCents, estimateProject.currency)}</p>
-                      </div>
-                      <div className="rounded-md border border-border/70 p-2">
-                        <p className="text-muted-foreground">{t("estimate.planning.profitabilityPct")}</p>
-                        <p className="text-sm font-medium text-foreground">{profitabilityPct == null ? "—" : formatPercent(profitabilityPct)}</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
+        {showEstimateWorkspace && (
+          <EstimateFinanceHeader
+            status={estimateProject.estimateStatus}
+            financeMode={estimateFinanceMode}
+            useReadOnlySummaryPricing={useReadOnlySummaryPricing}
+            currency={estimateProject.currency}
+            isContractorMode={isContractorMode}
+            view={financeView}
+            resourceKeyLabel={(key) => labelForRpcResourceTypeKey(key, t)}
+          />
+        )}
 
         {showEstimateWorkspace && <VersionBanner
           hasPending={pendingProposed && Boolean(latestProposed)}
@@ -2815,24 +2660,68 @@ export default function ProjectEstimate() {
         </VersionBanner>}
 
         <Tabs value={activeTab} onValueChange={handleTabChange}>
-          <TabsList className="h-auto w-full justify-start gap-1 bg-transparent p-0 flex-nowrap overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <TabsTrigger value="estimate">{t("estimate.tabs.estimate")}</TabsTrigger>
-            <TabsTrigger value="work_schedule" disabled={!showEstimateWorkspace}>{t("estimate.tabs.workSchedule")}</TabsTrigger>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span>
-                  <TabsTrigger value="work_log" disabled={!showEstimateWorkspace}>
-                    {t("estimate.tabs.workLog")}
-                  </TabsTrigger>
-                </span>
-              </TooltipTrigger>
-              {!showEstimateWorkspace && (
-                <TooltipContent>
-                  {t("estimate.tabs.workLogDisabledTooltip")}
-                </TooltipContent>
-              )}
-            </Tooltip>
-          </TabsList>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <TabsList className="h-auto w-full justify-start gap-1 bg-transparent p-0 flex-nowrap overflow-x-auto whitespace-nowrap sm:w-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <TabsTrigger value="estimate">{t("estimate.tabs.estimate")}</TabsTrigger>
+              <TabsTrigger value="work_schedule" disabled={!showEstimateWorkspace}>{t("estimate.tabs.workSchedule")}</TabsTrigger>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span>
+                    <TabsTrigger value="work_log" disabled={!showEstimateWorkspace}>
+                      {t("estimate.tabs.workLog")}
+                    </TabsTrigger>
+                  </span>
+                </TooltipTrigger>
+                {!showEstimateWorkspace && (
+                  <TooltipContent>
+                    {t("estimate.tabs.workLogDisabledTooltip")}
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            </TabsList>
+
+            {showEstimateWorkspace && (
+              <div className="flex min-w-0 flex-col items-end gap-1">
+                <div className="flex flex-wrap items-center justify-end gap-1">
+                  {canExportEstimateCsv && (
+                    <button
+                      type="button"
+                      className={ESTIMATE_TAB_ACTION_CLASSNAME}
+                      onClick={() => setExportModalOpen(true)}
+                    >
+                      <Download /> {t("estimate.header.export")}
+                    </button>
+                  )}
+
+                  {canEditEstimate && (
+                    <button
+                      type="button"
+                      className={ESTIMATE_TAB_ACTION_CLASSNAME}
+                      onClick={() => openConstructor(null, "estimates")}
+                    >
+                      <Wrench /> {t("estimate.header.constructor")}
+                    </button>
+                  )}
+
+                  {ctaState.showApprove && (
+                    <button
+                      type="button"
+                      className={cn(ESTIMATE_TAB_ACTION_CLASSNAME, "text-accent hover:bg-accent/10 hover:text-accent")}
+                      onClick={() => setApprovalModalOpen(true)}
+                      disabled={ctaState.approveDisabled}
+                      title={ctaState.approveDisabledReason ?? undefined}
+                    >
+                      {t("estimate.header.approve")}
+                    </button>
+                  )}
+                </div>
+
+                {ctaState.showApprove && ctaState.approveDisabledReason && (
+                  <div className="text-right text-caption text-muted-foreground">{ctaState.approveDisabledReason}</div>
+                )}
+              </div>
+            )}
+          </div>
 
           <TabsContent value="estimate" className="mt-3 space-y-3">
             {!showEstimateWorkspace ? (
@@ -2883,8 +2772,10 @@ export default function ProjectEstimate() {
                           <span className="w-6 shrink-0 text-sm font-semibold text-muted-foreground tabular-nums md:w-7">
                             {stageNumber}
                           </span>
-                          <InlineEditableText
+                          <LibraryNameInput
                             value={stage.title}
+                            kind="stage"
+                            searchEnabled={canonicalSearchEnabled}
                             readOnly={!canEditEstimate}
                             startInEditMode={pendingStageTitleEditId === stage.id}
                             onCommit={(nextValue) => updateStage(pid, stage.id, { title: nextValue || stage.title })}
@@ -2943,7 +2834,7 @@ export default function ProjectEstimate() {
                               + (canEditEstimate ? 1 : 0);
 
                             const workTableColumns: WorkTableColumnDef[] = [
-                              { key: "resource", title: t("estimate.table.col.resource"), widthPx: 180, sticky: true },
+                              { key: "resource", title: t("estimate.table.col.resource"), widthPx: 252, sticky: true },
                               ...(showAssignmentColumn
                                 ? [{
                                     key: "assigned",
@@ -2953,23 +2844,23 @@ export default function ProjectEstimate() {
                                         <span>{t("estimate.table.col.assigned")}</span>
                                       </span>
                                     ),
-                                    widthPx: 88,
+                                    widthPx: 116,
                                   } as WorkTableColumnDef]
                                 : []),
-                              { key: "qty", title: t("estimate.table.col.qty"), widthPx: 92 },
-                              { key: "unit", title: t("estimate.table.col.unit"), widthPx: 168 },
+                              { key: "qty", title: t("estimate.table.col.qty"), widthPx: 72 },
+                              { key: "unit", title: t("estimate.table.col.unit"), widthPx: 132 },
                               ...(showEstimateInternalPricing
                                 ? [
                                     { key: "costUnit", title: t("estimate.table.col.costUnit"), widthPx: 120, align: "right" } as WorkTableColumnDef,
-                                    { key: "costTotal", title: t("estimate.table.col.costTotal"), widthPx: 120, align: "right" } as WorkTableColumnDef,
-                                    { key: "vatPct", title: t("estimate.table.col.vatPct"), widthPx: 92, align: "right" } as WorkTableColumnDef,
+                                    { key: "costTotal", title: t("estimate.table.col.costTotal"), widthPx: 126, align: "right" } as WorkTableColumnDef,
+                                    { key: "vatPct", title: t("estimate.table.col.vatPct"), widthPx: 78, align: "right" } as WorkTableColumnDef,
                                   ]
                                 : []),
                               ...(showEstimateMarkup
                                 ? [{ key: "markupPct", title: t("estimate.table.col.markupPct"), widthPx: 92, align: "right" } as WorkTableColumnDef]
                                 : []),
                               ...(showEstimateInternalPricing
-                                ? [{ key: "discountPct", title: t("estimate.table.col.discountPct"), widthPx: 92, align: "right" } as WorkTableColumnDef]
+                                ? [{ key: "discountPct", title: t("estimate.table.col.discountPct"), widthPx: 88, align: "right" } as WorkTableColumnDef]
                                 : []),
                               ...(showClientPricingColumns
                                 ? [
@@ -2981,7 +2872,7 @@ export default function ProjectEstimate() {
                                 ? [{ key: "discountedClient", title: t("estimate.table.col.discountedClient"), widthPx: 140, align: "right" } as WorkTableColumnDef]
                                 : []),
                               ...(canEditEstimate
-                                ? [{ key: "actions", title: "", widthPx: 40 } as WorkTableColumnDef]
+                                ? [{ key: "actions", title: "", widthPx: 36 } as WorkTableColumnDef]
                                 : []),
                             ];
 
@@ -2990,8 +2881,10 @@ export default function ProjectEstimate() {
                                 <div className="flex flex-wrap items-start justify-between gap-2 pl-0 md:pl-2">
                                   <div className="flex min-w-0 flex-1 items-center gap-2">
                                     <span className="w-12 shrink-0 text-xs font-medium text-muted-foreground tabular-nums">{workNumber}</span>
-                                    <InlineEditableText
+                                    <LibraryNameInput
                                       value={work.title}
+                                      kind="work"
+                                      searchEnabled={canonicalSearchEnabled}
                                       readOnly={!canEditEstimate}
                                       startInEditMode={pendingWorkTitleEditId === work.id}
                                       onCommit={(nextValue) => updateWork(pid, work.id, { title: nextValue || work.title })}
@@ -3034,7 +2927,7 @@ export default function ProjectEstimate() {
                                         const shouldShowCustomInput = isCustomUnit || customUnitInputLineIds.has(line.id);
                                         return (
                                           <TableRow key={line.id} className={cn("border-b border-border/40 last:border-b-0 md:border-b-0", changedLineIds.has(line.id) ? "bg-warning/10" : "")}>
-                                            <TableCell className="sticky left-0 z-20 w-[180px] border-r border-border bg-card py-1.5 pr-2 align-top shadow-[6px_0_10px_-10px_hsl(var(--foreground)/0.35)]">
+                                            <TableCell className="sticky left-0 z-20 w-[252px] border-r border-border bg-card py-1.5 pr-1 align-top shadow-[6px_0_10px_-10px_hsl(var(--foreground)/0.35)] focus-within:z-40">
                                               <div className="flex min-w-0 items-start gap-2">
                                                 {canEditEstimate ? (
                                                   <DropdownMenu>
@@ -3063,19 +2956,47 @@ export default function ProjectEstimate() {
                                                     <ResourceTypeBadge type={line.type} iconOnly />
                                                   </span>
                                                 )}
-                                                <InlineEditableText
-                                                  value={line.title}
-                                                  readOnly={!canEditEstimate}
-                                                  startInEditMode={pendingLineTitleEditId === line.id}
-                                                  onCommit={(nextValue) => updateLine(pid, line.id, { title: nextValue || line.title })}
-                                                  className="min-w-0 flex-1"
-                                                  displayClassName="whitespace-normal break-words leading-5 line-clamp-2 font-medium"
-                                                />
+                                                <div
+                                                  className={cn(
+                                                    "flex min-w-0 flex-1 items-start gap-1",
+                                                    line.systemResourceArticleId && "group/libname",
+                                                  )}
+                                                >
+                                                  <LibraryNameInput
+                                                    value={line.title}
+                                                    kind="resource"
+                                                    searchEnabled={canonicalSearchEnabled}
+                                                    readOnly={!canEditEstimate}
+                                                    startInEditMode={pendingLineTitleEditId === line.id}
+                                                    onCommit={(nextValue) => updateLine(pid, line.id, { title: nextValue || line.title, systemResourceArticleId: null })}
+                                                    onApplySuggestion={(suggestion) => applyResourceSuggestion(line.id, suggestion)}
+                                                    className="min-w-0 flex-1"
+                                                    displayClassName={cn(
+                                                      "whitespace-normal break-words leading-5 line-clamp-2 font-medium",
+                                                      line.systemResourceArticleId &&
+                                                        "group-hover/libname:underline group-hover/libname:underline-offset-4",
+                                                    )}
+                                                  />
+                                                  {line.systemResourceArticleId ? (
+                                                    <button
+                                                      type="button"
+                                                      title={t("estimate.library.openTooltip")}
+                                                      aria-label={t("estimate.library.openTooltip")}
+                                                      onClick={(event) => {
+                                                        event.stopPropagation();
+                                                        openResourceModal(line.id);
+                                                      }}
+                                                      className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-[3px] text-muted-foreground opacity-60 transition-opacity hover:opacity-100 group-hover/libname:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                                    >
+                                                      <ExternalLink className="h-3.5 w-3.5" />
+                                                    </button>
+                                                  ) : null}
+                                                </div>
                                               </div>
                                             </TableCell>
 
                                             {showAssignmentColumn && (
-                                              <TableCell className="w-[88px] py-1.5 pr-2 align-top">
+                                              <TableCell className="w-[116px] py-1.5 pr-1 align-top">
                                                 {isAssignableResourceType(line.type) ? (
                                                   <AssigneeCell
                                                     assigneeId={line.assigneeId}
@@ -3089,12 +3010,12 @@ export default function ProjectEstimate() {
                                                     onCommit={(nextValue) => updateLine(pid, line.id, nextValue)}
                                                   />
                                                 ) : (
-                                                  <div className="flex h-7 items-center px-1 text-xs text-muted-foreground">—</div>
+                                                  <div className="h-7" />
                                                 )}
                                               </TableCell>
                                             )}
 
-                                            <TableCell className="w-[92px] py-1.5 pr-2 align-top">
+                                            <TableCell className="w-[72px] py-1.5 pr-1 align-top">
                                               <InlineEditableNumber
                                                 value={line.qtyMilli}
                                                 readOnly={!canEditEstimate}
@@ -3106,13 +3027,12 @@ export default function ProjectEstimate() {
                                               />
                                             </TableCell>
 
-                                            <TableCell className="w-[168px] py-1.5 pr-2 align-top">
+                                            <TableCell className="w-[132px] py-1.5 pr-1 text-left align-top">
                                               {canEditEstimate ? (
                                                 shouldShowCustomInput ? (
-                                                  <div className="inline-flex max-w-full items-center gap-1">
+                                                  <div className="inline-flex w-full max-w-full items-center justify-start gap-1 text-left">
                                                     <Input
-                                                      className="h-7 w-auto max-w-[calc(100%-1.75rem)] px-2 py-0 text-sm"
-                                                      size={Math.min(18, Math.max(3, (customDraft ?? "").length + 1))}
+                                                      className="h-7 min-w-0 flex-1 px-1 py-0 text-left text-sm"
                                                       value={customDraft}
                                                       placeholder=""
                                                       aria-label={t("estimate.table.unitAria")}
@@ -3136,10 +3056,10 @@ export default function ProjectEstimate() {
                                                           type="button"
                                                           variant="ghost"
                                                           size="icon"
-                                                          className="h-7 w-7 shrink-0 border border-transparent bg-transparent text-foreground shadow-none hover:bg-muted/60 focus-visible:ring-1 focus-visible:ring-ring/40"
+                                                          className="h-7 w-5 shrink-0 border border-transparent bg-transparent text-foreground shadow-none hover:bg-muted/60 focus-visible:ring-1 focus-visible:ring-ring/40"
                                                           aria-label={t("estimate.unit.presetAria")}
                                                         >
-                                                          <ChevronDown className="h-4 w-4 opacity-50" />
+                                                          <ChevronDown className="h-3.5 w-3.5 opacity-50" />
                                                         </Button>
                                                       </DropdownMenuTrigger>
                                                       <DropdownMenuContent align="end" className="max-h-60 overflow-y-auto">
@@ -3169,7 +3089,7 @@ export default function ProjectEstimate() {
                                                       updateLine(pid, line.id, { unit: nextValue });
                                                     }}
                                                   >
-                                                    <SelectTrigger className="h-7 w-full min-w-0 border-transparent bg-transparent px-1 py-0 text-sm shadow-none focus:ring-1 focus:ring-ring/40">
+                                                    <SelectTrigger className="h-7 w-full min-w-0 justify-start gap-1 border-transparent bg-transparent px-0 py-0 text-left text-sm shadow-none focus:ring-1 focus:ring-ring/40 [&>span]:min-w-0 [&>span]:flex-1 [&>span]:truncate [&>span]:text-left [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:shrink-0">
                                                       <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -3182,7 +3102,7 @@ export default function ProjectEstimate() {
                                                   </Select>
                                                 )
                                               ) : (
-                                                <div className="min-h-7 px-1 py-0.5 text-sm text-foreground">
+                                                <div className="min-h-7 px-1 py-0.5 text-left text-sm text-foreground">
                                                   {line.unit ? getUnitLabel(line.unit, t) : "—"}
                                                 </div>
                                               )}
@@ -3202,13 +3122,13 @@ export default function ProjectEstimate() {
                                             )}
 
                                             {showEstimateInternalPricing && (
-                                              <TableCell className="w-[120px] py-1.5 pr-2 text-right text-sm tabular-nums align-top">
+                                              <TableCell className="w-[126px] py-1.5 pr-2 text-right text-sm tabular-nums align-top">
                                                 {money(computed.costTotalCents, estimateProject.currency)}
                                               </TableCell>
                                             )}
 
                                             {showEstimateInternalPricing && (
-                                              <TableCell className="w-[92px] py-1.5 pr-2 align-top">
+                                              <TableCell className="w-[78px] py-1.5 pr-2 align-top">
                                                 {canEditEstimate ? (
                                                   <InlineEditableNumber
                                                     value={effectiveTaxForDisplay(line, estimateProject.taxBps)}
@@ -3226,7 +3146,7 @@ export default function ProjectEstimate() {
                                             )}
 
                                             {showEstimateMarkup && (
-                                              <TableCell className="w-[92px] py-1.5 pr-2 align-top">
+                                              <TableCell className="w-[88px] py-1.5 pr-2 align-top">
                                                 <InlineEditableNumber
                                                   value={effectiveMarkupForDisplay(line, estimateProject.markupBps)}
                                                   readOnly={!canEditEstimate}
@@ -3275,7 +3195,7 @@ export default function ProjectEstimate() {
                                             )}
 
                                             {canEditEstimate && (
-                                              <TableCell className="w-10 py-1.5 pr-0 align-top">
+                                              <TableCell className="w-9 py-1.5 pr-0 align-top">
                                                 <Button
                                                   size="icon"
                                                   variant="ghost"
@@ -3296,7 +3216,7 @@ export default function ProjectEstimate() {
                                         const typeLabel = row.typeLabel ?? t(semanticLabelKeyForType(row.type));
                                         return (
                                           <TableRow key={row.id} className="border-b border-border/40 last:border-b-0 md:border-b-0">
-                                            <TableCell className="sticky left-0 z-20 w-[180px] border-r border-border bg-card py-1.5 pr-2 align-top shadow-[6px_0_10px_-10px_hsl(var(--foreground)/0.35)]">
+                                            <TableCell className="sticky left-0 z-20 w-[252px] border-r border-border bg-card py-1.5 pr-1 align-top shadow-[6px_0_10px_-10px_hsl(var(--foreground)/0.35)]">
                                               <div className="flex min-w-0 items-start gap-2">
                                                 <span title={typeLabel}>
                                                   <ResourceTypeBadge
@@ -3312,25 +3232,25 @@ export default function ProjectEstimate() {
                                             </TableCell>
 
                                             {showAssignmentColumn && (
-                                              <TableCell className="w-[88px] py-1.5 pr-2 align-top">
+                                              <TableCell className="w-[116px] py-1.5 pr-1 align-top">
                                                 {isAssignableResourceType(row.type) && (row.assigneeName || row.assigneeEmail) ? (
                                                   <div className="flex min-h-7 items-center px-1 py-0.5 text-sm text-foreground">
                                                     {row.assigneeName || row.assigneeEmail}
                                                   </div>
                                                 ) : (
-                                                  <div className="flex min-h-7 items-center px-1 py-0.5 text-xs text-muted-foreground">—</div>
+                                                  <div className="min-h-7" />
                                                 )}
                                               </TableCell>
                                             )}
 
-                                            <TableCell className="w-[92px] py-1.5 pr-2 align-top">
+                                            <TableCell className="w-[72px] py-1.5 pr-1 align-top">
                                               <div className="min-h-7 px-1 py-0.5 text-sm text-foreground tabular-nums">
                                                 {row.qtyMilli != null ? qtyFromMilli(row.qtyMilli) : "—"}
                                               </div>
                                             </TableCell>
 
-                                            <TableCell className="w-[168px] py-1.5 pr-2 align-top">
-                                              <div className="min-h-7 px-1 py-0.5 text-sm text-foreground">
+                                            <TableCell className="w-[132px] py-1.5 pr-1 text-left align-top">
+                                              <div className="min-h-7 px-1 py-0.5 text-left text-sm text-foreground">
                                                 {row.unit || "—"}
                                               </div>
                                             </TableCell>
@@ -3340,7 +3260,7 @@ export default function ProjectEstimate() {
 
                                       {canEditEstimate && (
                                         <TableRow className="border-b-0 hover:bg-transparent">
-                                          <TableCell className="sticky left-0 z-20 w-[180px] border-r border-border bg-card py-1 pr-2 shadow-[6px_0_10px_-10px_hsl(var(--foreground)/0.35)]">
+                                          <TableCell className="sticky left-0 z-20 w-[252px] border-r border-border bg-card py-1 pr-1 shadow-[6px_0_10px_-10px_hsl(var(--foreground)/0.35)]">
                                             <div className="flex h-8 items-center rounded-md border border-dashed border-border/70 bg-background/40 px-2">
                                               <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
@@ -3377,6 +3297,19 @@ export default function ProjectEstimate() {
                                                       </DropdownMenuItem>
                                                     );
                                                   })}
+                                                  {canonicalSearchEnabled && (
+                                                    <>
+                                                      <DropdownMenuSeparator />
+                                                      <DropdownMenuItem
+                                                        onSelect={() =>
+                                                          openConstructor({ stageId: stage.id, workId: work.id }, "catalog")
+                                                        }
+                                                      >
+                                                        <Layers className="mr-2 h-4 w-4 text-muted-foreground" />
+                                                        {t("estimate.constructor.fromLibrary")}
+                                                      </DropdownMenuItem>
+                                                    </>
+                                                  )}
                                                 </DropdownMenuContent>
                                               </DropdownMenu>
                                             </div>
@@ -3392,7 +3325,7 @@ export default function ProjectEstimate() {
 
                           {canEditEstimate && (
                             <div className="rounded-md border border-dashed border-border/70 bg-background/40 px-2 py-1">
-                              <div className="flex h-7 items-center">
+                              <div className="flex h-7 items-center gap-1">
                                 <Button
                                   type="button"
                                   size="sm"
@@ -3403,6 +3336,18 @@ export default function ProjectEstimate() {
                                   <Plus className="h-3.5 w-3.5" />
                                   {t("estimate.work.addButton")}
                                 </Button>
+                                {canonicalSearchEnabled && (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-6 gap-1 px-2 text-xs text-muted-foreground"
+                                  onClick={() => openConstructor({ stageId: stage.id }, "estimates")}
+                                >
+                                  <Layers className="h-3.5 w-3.5" />
+                                  {t("estimate.constructor.fromLibrary")}
+                                </Button>
+                                )}
                               </div>
                             </div>
                           )}
@@ -3417,6 +3362,7 @@ export default function ProjectEstimate() {
 
             {canEditEstimate && (
               <div className="rounded-md border border-dashed border-border/70 bg-background/40 p-2">
+                <div className="flex items-center gap-1">
                 <Button
                   type="button"
                   size="sm"
@@ -3427,6 +3373,19 @@ export default function ProjectEstimate() {
                   <Plus className="h-3.5 w-3.5" />
                   {t("estimate.stage.addButton")}
                 </Button>
+                {canonicalSearchEnabled && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 gap-1 px-2 text-xs text-muted-foreground"
+                  onClick={() => openConstructor(null, "estimates")}
+                >
+                  <Layers className="h-3.5 w-3.5" />
+                  {t("estimate.constructor.fromLibrary")}
+                </Button>
+                )}
+                </div>
               </div>
             )}
             <div className="rounded-lg border border-border p-3">
@@ -3712,6 +3671,31 @@ export default function ProjectEstimate() {
           canShowInternal={canViewSensitiveDetail}
           onDownloadCsv={handleExportCsv}
           onEnsureShareLink={ensureShareLinkForExport}
+        />
+
+        <ResourceModal
+          open={resourceModalLine != null && Boolean(resourceModalLine.systemResourceArticleId)}
+          onOpenChange={(open) => {
+            if (!open) setResourceModalLineId(null);
+          }}
+          articleId={resourceModalLine?.systemResourceArticleId ?? null}
+          projectId={pid}
+          line={resourceModalLine}
+          lines={lines}
+          versions={versions}
+          canViewSensitiveDetail={canViewSensitiveDetail}
+        />
+
+        <EstimateConstructor
+          open={constructorOpen}
+          onOpenChange={setConstructorOpen}
+          projectId={pid}
+          estimateVersionId={constructorVersionQuery.data ?? null}
+          canApply={workspaceMode.kind === "supabase" && !constructorVersionQuery.isError}
+          profileId={constructorProfileId}
+          target={constructorTarget}
+          initialTab={constructorTab}
+          onAddCatalogResource={handleAddCatalogResource}
         />
       </div>
     </div>

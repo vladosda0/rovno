@@ -9,14 +9,17 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 ## Source Migrations
 
 - `supabase/migrations/20260306162500_estimates_core.sql`
-- `supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql`
 - `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql`
 - `supabase/migrations/20260306164000_hr_domain.sql`
 - `supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql`
 - `supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql`
 - `supabase/migrations/20260417120000_estimate_resource_line_assignee_profile.sql`
+- `supabase/migrations/20260602150100_instance_tables_library_fks.sql`
 - `supabase/migrations/20260418120000_estimate_resource_line_assignee_label.sql`
+- `supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql`
 - `supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql`
+- `supabase/migrations/20260611120100_get_portfolio_finance_snapshot.sql`
+- `supabase/migrations/20260622120000_tighten_price_comparison_finance_gate.sql`
 - `supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql`
 - `supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql`
 
@@ -34,9 +37,11 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 | `created_by` | `uuid` | no |   | no |
 | `created_at` | `timestamptz` | no | `now()` | no |
 | `updated_at` | `timestamptz` | no | `now()` | no |
+| `execution_status` | `text` | yes |   | no |
 
 Constraints:
 - unnamed check (expression `status in ('draft', 'approved', 'archived')`)
+- unnamed check (expression `execution_status is null or execution_status in ('planning', 'in_work', 'paused', 'finished')`)
 
 Indexes:
 - `idx_project_estimates_project_id` on (`project_id`)
@@ -78,6 +83,7 @@ Indexes:
 | `created_at` | `timestamptz` | no | `now()` | no |
 | `planned_start` | `timestamptz` | yes |   | no |
 | `planned_end` | `timestamptz` | yes |   | no |
+| `system_work_article_id` | `uuid` | yes |   | no |
 
 Constraints:
 - unnamed check (expression `sort_order > 0`)
@@ -86,6 +92,7 @@ Constraints:
 Indexes:
 - `idx_estimate_works_estimate_version_id` on (`estimate_version_id`)
 - `idx_estimate_works_project_stage_id` on (`project_stage_id`)
+- `idx_estimate_works_canonical` on (`system_work_article_id`), where `system_work_article_id is not null`
 
 Triggers:
 - `guard_estimate_work_stage_reassignment`: before update of project_stage_id, executes `public.guard_estimate_work_stage_reassignment()`
@@ -110,6 +117,7 @@ Triggers:
 | `discount_bps_override` | `integer` | yes |   | no |
 | `assignee_profile_id` | `uuid` | yes |   | no |
 | `assignee_label` | `text` | yes |   | no |
+| `system_resource_article_id` | `uuid` | yes |   | no |
 
 Constraints:
 - unnamed check (expression `quantity >= 0`)
@@ -125,6 +133,7 @@ Constraints:
 Indexes:
 - `idx_estimate_resource_lines_estimate_work_id` on (`estimate_work_id`)
 - `idx_estimate_resource_lines_assignee_profile_id` on (`assignee_profile_id`), where `assignee_profile_id is not null`
+- `idx_estimate_resource_lines_canonical` on (`system_resource_article_id`), where `system_resource_article_id is not null`
 
 ### public.estimate_dependencies
 
@@ -145,37 +154,6 @@ Indexes:
 - `idx_estimate_dependencies_estimate_version_id` on (`estimate_version_id`)
 - `idx_estimate_dependencies_from_work_id` on (`from_work_id`)
 - `idx_estimate_dependencies_to_work_id` on (`to_work_id`)
-
-### public.estimate_share_snapshots
-
-| Column | Type | Nullable | Default | Primary Key |
-| --- | --- | --- | --- | --- |
-| `share_token` | `text` | no |   | yes |
-| `project_id` | `uuid` | no |   | no |
-| `version_number` | `integer` | no |   | no |
-| `status` | `text` | no | `'proposed'` | no |
-| `share_approval_policy` | `text` | no | `'registered'` | no |
-| `share_approval_disabled_reason` | `text` | yes |   | no |
-| `snapshot` | `jsonb` | no |   | no |
-| `approval_stamp` | `jsonb` | yes |   | no |
-| `submitted` | `boolean` | no | `true` | no |
-| `archived` | `boolean` | no | `false` | no |
-| `created_by` | `uuid` | no |   | no |
-| `created_at` | `timestamptz` | no | `now()` | no |
-| `updated_at` | `timestamptz` | no | `now()` | no |
-
-Constraints:
-- unnamed check (expression `version_number >= 1`)
-- unnamed check (expression `status in ('proposed', 'approved')`)
-- unnamed check (expression `share_approval_policy in ('registered', 'disabled')`)
-- unnamed check (expression `share_approval_disabled_reason is null or share_approval_disabled_reason = 'no_participant_slot'`)
-
-Indexes:
-- `estimate_share_snapshots_project_id_idx` on (`project_id`)
-- `estimate_share_snapshots_active_project_idx` on (`project_id`, `version_number desc`), where `archived = false and submitted = true`
-
-Triggers:
-- `estimate_share_snapshots_set_updated_at`: before update, executes `public.set_updated_at()`
 
 ## Relations
 
@@ -198,8 +176,8 @@ Triggers:
 | `public.tasks(estimate_work_id)` | `public.estimate_works(id)` | `set null` | `supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql` |
 | `public.hr_items(estimate_resource_line_id)` | `public.estimate_resource_lines(id)` | `set null` | `supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql` |
 | `public.estimate_resource_lines(assignee_profile_id)` | `public.profiles(id)` | `set null` | `supabase/migrations/20260417120000_estimate_resource_line_assignee_profile.sql` |
-| `public.estimate_share_snapshots(project_id)` | `public.projects(id)` | `cascade` | `supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql` |
-| `public.estimate_share_snapshots(created_by)` | `public.profiles(id)` | `restrict` | `supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql` |
+| `public.estimate_works(system_work_article_id)` | `public.system_work_articles(id)` | `set null` | `supabase/migrations/20260602150100_instance_tables_library_fks.sql` |
+| `public.estimate_resource_lines(system_resource_article_id)` | `public.system_resource_articles(id)` | `set null` | `supabase/migrations/20260602150100_instance_tables_library_fks.sql` |
 
 ## Functions
 
@@ -208,7 +186,8 @@ Triggers:
 | `public.get_estimate_operational_summary(uuid, uuid, integer, integer)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260418120000_estimate_resource_line_assignee_label.sql` |
 | `public.get_shared_estimate_version(text)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql` |
 | `public.approve_estimate_version_by_share_token(text, jsonb)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql` |
-| `public.publish_estimate_share_snapshot(uuid, text, integer, jsonb, text, text)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql` |
+| `public.get_portfolio_finance_snapshot()` | `jsonb` | yes | `rpc` | `supabase/migrations/20260611120100_get_portfolio_finance_snapshot.sql` |
+| `public.get_resource_article_price_comparison(uuid, uuid)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260622120000_tighten_price_comparison_finance_gate.sql` |
 
 ## RLS and Grants
 
@@ -286,10 +265,4 @@ Triggers:
     with check: `exists ( select 1 from public.estimate_versions ev join public.project_estimates pe on pe.id = ev.estimate_id where ev.id = estimate_version_id and public.can_write_project_content(pe.project_id) )`
   - `estimate_dependencies_delete` for `delete` to `authenticated`
     using: `exists ( select 1 from public.estimate_versions ev join public.project_estimates pe on pe.id = ev.estimate_id where ev.id = estimate_version_id and public.can_write_project_content(pe.project_id) )`
-
-### public.estimate_share_snapshots
-
-- RLS enabled: yes
-- Authenticated grants: none
-- Policies: none
 

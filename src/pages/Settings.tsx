@@ -10,9 +10,14 @@ import { NotificationsPanel } from "@/components/settings/panels/NotificationsPa
 import { SecurityPanel } from "@/components/settings/panels/SecurityPanel";
 import { PrivacyPanel } from "@/components/settings/panels/PrivacyPanel";
 import { BillingPanel } from "@/components/settings/panels/BillingPanel";
+import { IntegrationsPanel } from "@/components/settings/panels/IntegrationsPanel";
+import { TELEGRAM_LINKING_ENABLED } from "@/data/messenger-links";
 
 const VALID_TABS = new Set<SettingsTab>([
-  "profile", "preferences", "notifications", "security", "privacy", "billing",
+  "profile", "preferences", "notifications",
+  // Telegram linking is gated until a prod bot exists (see TELEGRAM_LINKING_ENABLED).
+  ...(TELEGRAM_LINKING_ENABLED ? ["integrations" as const] : []),
+  "security", "privacy", "billing",
 ]);
 
 function getTabFromParam(param: string | null): SettingsTab {
@@ -42,6 +47,7 @@ export default function Settings() {
       case "profile": return <ProfilePanel />;
       case "preferences": return <PreferencesPanel />;
       case "notifications": return <NotificationsPanel />;
+      case "integrations": return <IntegrationsPanel />;
       case "security": return <SecurityPanel />;
       case "privacy": return <PrivacyPanel />;
       case "billing": return <BillingPanel />;

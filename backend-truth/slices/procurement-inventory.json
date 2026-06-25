@@ -116,6 +116,7 @@
         {
           "name": "idx_inventory_items_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -203,6 +204,7 @@
         {
           "name": "idx_inventory_locations_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -329,6 +331,7 @@
         {
           "name": "idx_inventory_balances_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -339,6 +342,7 @@
         {
           "name": "idx_inventory_balances_inventory_item_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "inventory_item_id"
           ],
@@ -349,6 +353,7 @@
         {
           "name": "idx_inventory_balances_inventory_location_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "inventory_location_id"
           ],
@@ -598,6 +603,7 @@
         {
           "name": "idx_procurement_items_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -608,6 +614,7 @@
         {
           "name": "idx_procurement_items_estimate_resource_line_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "estimate_resource_line_id"
           ],
@@ -618,6 +625,7 @@
         {
           "name": "idx_procurement_items_task_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "task_id"
           ],
@@ -628,6 +636,7 @@
         {
           "name": "idx_procurement_items_estimate_resource_line_id_unique",
           "unique": true,
+          "method": null,
           "expressions": [
             "estimate_resource_line_id"
           ],
@@ -783,6 +792,7 @@
         {
           "name": "idx_orders_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -948,6 +958,7 @@
         {
           "name": "idx_order_lines_order_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "order_id"
           ],
@@ -958,6 +969,7 @@
         {
           "name": "idx_order_lines_procurement_item_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "procurement_item_id"
           ],
@@ -1142,6 +1154,7 @@
         {
           "name": "idx_inventory_movements_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -1152,6 +1165,7 @@
         {
           "name": "idx_inventory_movements_inventory_item_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "inventory_item_id"
           ],
@@ -1162,6 +1176,7 @@
         {
           "name": "idx_inventory_movements_inventory_location_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "inventory_location_id"
           ],
@@ -1172,6 +1187,7 @@
         {
           "name": "idx_inventory_movements_order_line_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "order_line_id"
           ],
@@ -1182,6 +1198,7 @@
         {
           "name": "idx_inventory_movements_procurement_item_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "procurement_item_id"
           ],

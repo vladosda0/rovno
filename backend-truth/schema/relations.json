@@ -1861,6 +1861,150 @@
         "id"
       ],
       "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "payment_intents",
+      "fromColumns": [
+        "profile_id"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "payment_intents",
+      "fromColumns": [
+        "parent_intent_id"
+      ],
+      "toSchema": "public",
+      "toTable": "payment_intents",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "system_work_articles",
+      "fromColumns": [
+        "parent_stage_article_id"
+      ],
+      "toSchema": "public",
+      "toTable": "system_stage_articles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "restrict"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260602150100_instance_tables_library_fks.sql",
+      "sourceKind": "alter_table",
+      "fromSchema": "public",
+      "fromTable": "template_stages",
+      "fromColumns": [
+        "system_stage_article_id"
+      ],
+      "toSchema": "public",
+      "toTable": "system_stage_articles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260602150100_instance_tables_library_fks.sql",
+      "sourceKind": "alter_table",
+      "fromSchema": "public",
+      "fromTable": "template_works",
+      "fromColumns": [
+        "system_work_article_id"
+      ],
+      "toSchema": "public",
+      "toTable": "system_work_articles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260602150100_instance_tables_library_fks.sql",
+      "sourceKind": "alter_table",
+      "fromSchema": "public",
+      "fromTable": "project_stages",
+      "fromColumns": [
+        "system_stage_article_id"
+      ],
+      "toSchema": "public",
+      "toTable": "system_stage_articles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260602150100_instance_tables_library_fks.sql",
+      "sourceKind": "alter_table",
+      "fromSchema": "public",
+      "fromTable": "estimate_works",
+      "fromColumns": [
+        "system_work_article_id"
+      ],
+      "toSchema": "public",
+      "toTable": "system_work_articles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260602150100_instance_tables_library_fks.sql",
+      "sourceKind": "alter_table",
+      "fromSchema": "public",
+      "fromTable": "estimate_resource_lines",
+      "fromColumns": [
+        "system_resource_article_id"
+      ],
+      "toSchema": "public",
+      "toTable": "system_resource_articles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260604120000_create_card_bindings.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "card_bindings",
+      "fromColumns": [
+        "profile_id"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
     }
   ]
 }

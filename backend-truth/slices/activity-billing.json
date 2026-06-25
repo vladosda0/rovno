@@ -120,6 +120,7 @@
         {
           "name": "idx_activity_events_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -130,6 +131,7 @@
         {
           "name": "idx_activity_events_actor_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "actor_profile_id"
           ],
@@ -140,6 +142,7 @@
         {
           "name": "idx_activity_events_project_created_at",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id",
             "created_at desc"
@@ -276,6 +279,7 @@
         {
           "name": "idx_notifications_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "profile_id"
           ],
@@ -286,6 +290,7 @@
         {
           "name": "idx_notifications_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -296,6 +301,7 @@
         {
           "name": "idx_notifications_profile_is_read_created_at",
           "unique": false,
+          "method": null,
           "expressions": [
             "profile_id",
             "is_read",
@@ -435,12 +441,21 @@
           "usingIndex": null,
           "nullsNotDistinct": false,
           "sourceMigration": "supabase/migrations/20260306165000_billing_launch_tables.sql"
+        },
+        {
+          "type": "check",
+          "name": "billing_customers_provider_check",
+          "columns": [],
+          "expression": "provider in ('stripe', 'tbank')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260516120000_extend_billing_provider_to_tbank.sql"
         }
       ],
       "indexes": [
         {
           "name": "idx_billing_customers_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "profile_id"
           ],
@@ -658,6 +673,36 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "auto_renew",
+          "sqlType": "boolean",
+          "tsType": "boolean",
+          "nullable": false,
+          "defaultSql": "false",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "rebill_id",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "grace_until",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -712,12 +757,21 @@
           "usingIndex": null,
           "nullsNotDistinct": false,
           "sourceMigration": "supabase/migrations/20260306165000_billing_launch_tables.sql"
+        },
+        {
+          "type": "check",
+          "name": "subscriptions_provider_check",
+          "columns": [],
+          "expression": "provider in ('stripe', 'tbank')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260516120000_extend_billing_provider_to_tbank.sql"
         }
       ],
       "indexes": [
         {
           "name": "idx_subscriptions_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "profile_id"
           ],
@@ -728,6 +782,7 @@
         {
           "name": "idx_subscriptions_billing_customer_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "billing_customer_id"
           ],
@@ -738,12 +793,35 @@
         {
           "name": "idx_subscriptions_current_per_profile",
           "unique": true,
+          "method": null,
           "expressions": [
             "profile_id"
           ],
           "where": "is_current = true",
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260306165000_billing_launch_tables.sql"
+        },
+        {
+          "name": "idx_subscriptions_rebill_id",
+          "unique": false,
+          "method": null,
+          "expressions": [
+            "rebill_id"
+          ],
+          "where": "rebill_id is not null",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260516120200_alter_subscriptions_recurrent.sql"
+        },
+        {
+          "name": "idx_subscriptions_grace_until",
+          "unique": false,
+          "method": null,
+          "expressions": [
+            "grace_until"
+          ],
+          "where": "grace_until is not null",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260516120200_alter_subscriptions_recurrent.sql"
         }
       ],
       "triggers": [

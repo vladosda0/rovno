@@ -281,13 +281,30 @@ export async function finalizeWorkspaceDocumentUpload(
   type: string,
   title: string,
   description?: string,
-): Promise<void> {
-  const { error } = await rawSupabase.rpc("finalize_workspace_document_upload", {
+): Promise<{ workspaceDocumentId: string | null }> {
+  const { data, error } = await rawSupabase.rpc("finalize_workspace_document_upload", {
     p_upload_intent_id: uploadIntentId,
     p_type: type,
     p_title: title,
     p_description: description ?? null,
   });
+  if (error) throw error;
+  const rows = (data ?? []) as unknown as Array<{ workspace_document_id: string }>;
+  return { workspaceDocumentId: rows[0]?.workspace_document_id ?? null };
+}
+
+/**
+ * Flag a workspace document as awaiting public publication. Used by the
+ * catalog/template Public upload path so Session 6/7 ingest can pick it up.
+ * Allowed under the workspace_docs_owner_write RLS policy (owner edits own row).
+ */
+export async function markWorkspaceDocumentPendingPublic(
+  workspaceDocumentId: string,
+): Promise<void> {
+  const { error } = await rawSupabase
+    .from("workspace_documents")
+    .update({ pending_public_publication: true })
+    .eq("id", workspaceDocumentId);
   if (error) throw error;
 }
 
@@ -339,10 +356,14 @@ export async function uploadFileToBucket(
   bucket: string,
   objectPath: string,
   file: File,
+  options?: { upsert?: boolean },
 ): Promise<void> {
   const { error } = await rawSupabase.storage
     .from(bucket)
-    .upload(objectPath, file, { upsert: false, contentType: file.type || undefined });
+    .upload(objectPath, file, {
+      upsert: options?.upsert ?? false,
+      contentType: file.type || undefined,
+    });
   if (error) throw error;
 }
 

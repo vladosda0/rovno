@@ -15,6 +15,7 @@ import {
   getEstimateV2ProjectState,
 } from "@/data/estimate-v2-store";
 import { getEstimateV2FinanceProjectSummary } from "@/lib/estimate-v2/finance-read-model";
+import { formatCompactMoney } from "@/lib/estimate-v2/format-money";
 import { clearDemoSession, enterDemoSession, setAuthRole } from "@/lib/auth-state";
 
 function renderProjectDashboard(projectId: string) {
@@ -76,12 +77,11 @@ describe("ProjectDashboard", () => {
     if (!legacyEstimate?.versions[0] || !summary) {
       throw new Error("Expected seeded dashboard finance data");
     }
-    const plannedText = new Intl.NumberFormat("ru-RU", {
-      style: "currency",
-      currency: summary.currency,
-      maximumFractionDigits: 0,
-    }).format(summary.plannedBudgetCents / 100);
-    const plannedPattern = new RegExp(plannedText.replace(/\s/g, "\\s?"));
+    // The widget hero card now shows revenue (ex VAT) in compact form.
+    const revenueText = formatCompactMoney(summary.contractValueCents, summary.currency);
+    const revenuePattern = new RegExp(
+      revenueText.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\s/g, "\\s?"),
+    );
 
     const legacyVersion = legacyEstimate.versions[0];
     updateEstimateItems(
@@ -95,7 +95,7 @@ describe("ProjectDashboard", () => {
 
     renderProjectDashboard("project-1");
 
-    expect(screen.getByText(plannedPattern)).toBeInTheDocument();
+    expect(screen.getByText(revenuePattern)).toBeInTheDocument();
     expect(screen.queryByText("Urgent unpaid")).not.toBeInTheDocument();
   });
 

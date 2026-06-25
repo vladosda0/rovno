@@ -305,6 +305,7 @@ export type Database = {
           "discount_bps": number
           "created_at": string
           "updated_at": string
+          "system_stage_article_id": string | null
           }
           Insert: {
           "id"?: string
@@ -316,6 +317,7 @@ export type Database = {
           "discount_bps"?: number
           "created_at"?: string
           "updated_at"?: string
+          "system_stage_article_id"?: string | null
           }
           Update: {
           "id"?: string
@@ -327,6 +329,7 @@ export type Database = {
           "discount_bps"?: number
           "created_at"?: string
           "updated_at"?: string
+          "system_stage_article_id"?: string | null
           }
           Relationships: []
         }
@@ -568,6 +571,7 @@ export type Database = {
           "created_by": string
           "created_at": string
           "updated_at": string
+          "execution_status": string | null
           }
           Insert: {
           "id"?: string
@@ -578,6 +582,7 @@ export type Database = {
           "created_by": string
           "created_at"?: string
           "updated_at"?: string
+          "execution_status"?: string | null
           }
           Update: {
           "id"?: string
@@ -588,6 +593,7 @@ export type Database = {
           "created_by"?: string
           "created_at"?: string
           "updated_at"?: string
+          "execution_status"?: string | null
           }
           Relationships: []
         }
@@ -633,6 +639,7 @@ export type Database = {
           "created_at": string
           "planned_start": string | null
           "planned_end": string | null
+          "system_work_article_id": string | null
           }
           Insert: {
           "id"?: string
@@ -645,6 +652,7 @@ export type Database = {
           "created_at"?: string
           "planned_start"?: string | null
           "planned_end"?: string | null
+          "system_work_article_id"?: string | null
           }
           Update: {
           "id"?: string
@@ -657,6 +665,7 @@ export type Database = {
           "created_at"?: string
           "planned_start"?: string | null
           "planned_end"?: string | null
+          "system_work_article_id"?: string | null
           }
           Relationships: []
         }
@@ -678,6 +687,7 @@ export type Database = {
           "discount_bps_override": number | null
           "assignee_profile_id": string | null
           "assignee_label": string | null
+          "system_resource_article_id": string | null
           }
           Insert: {
           "id"?: string
@@ -696,6 +706,7 @@ export type Database = {
           "discount_bps_override"?: number | null
           "assignee_profile_id"?: string | null
           "assignee_label"?: string | null
+          "system_resource_article_id"?: string | null
           }
           Update: {
           "id"?: string
@@ -714,6 +725,7 @@ export type Database = {
           "discount_bps_override"?: number | null
           "assignee_profile_id"?: string | null
           "assignee_label"?: string | null
+          "system_resource_article_id"?: string | null
           }
           Relationships: []
         }
@@ -1240,7 +1252,7 @@ export type Database = {
           Row: {
           "id": string
           "profile_id": string
-          "provider": "stripe"
+          "provider": "stripe" | "tbank"
           "external_customer_id": string
           "email": string | null
           "full_name": string | null
@@ -1250,7 +1262,7 @@ export type Database = {
           Insert: {
           "id"?: string
           "profile_id": string
-          "provider": "stripe"
+          "provider": "stripe" | "tbank"
           "external_customer_id": string
           "email"?: string | null
           "full_name"?: string | null
@@ -1260,7 +1272,7 @@ export type Database = {
           Update: {
           "id"?: string
           "profile_id"?: string
-          "provider"?: "stripe"
+          "provider"?: "stripe" | "tbank"
           "external_customer_id"?: string
           "email"?: string | null
           "full_name"?: string | null
@@ -1274,7 +1286,7 @@ export type Database = {
           "id": string
           "profile_id": string
           "billing_customer_id": string
-          "provider": "stripe"
+          "provider": "stripe" | "tbank"
           "external_subscription_id": string
           "plan_code": string
           "status": "trialing" | "active" | "past_due" | "paused" | "canceled" | "incomplete" | "incomplete_expired"
@@ -1289,12 +1301,15 @@ export type Database = {
           "provider_synced_at": string | null
           "created_at": string
           "updated_at": string
+          "auto_renew": boolean
+          "rebill_id": string | null
+          "grace_until": string | null
           }
           Insert: {
           "id"?: string
           "profile_id": string
           "billing_customer_id": string
-          "provider": "stripe"
+          "provider": "stripe" | "tbank"
           "external_subscription_id": string
           "plan_code": string
           "status": "trialing" | "active" | "past_due" | "paused" | "canceled" | "incomplete" | "incomplete_expired"
@@ -1309,12 +1324,15 @@ export type Database = {
           "provider_synced_at"?: string | null
           "created_at"?: string
           "updated_at"?: string
+          "auto_renew"?: boolean
+          "rebill_id"?: string | null
+          "grace_until"?: string | null
           }
           Update: {
           "id"?: string
           "profile_id"?: string
           "billing_customer_id"?: string
-          "provider"?: "stripe"
+          "provider"?: "stripe" | "tbank"
           "external_subscription_id"?: string
           "plan_code"?: string
           "status"?: "trialing" | "active" | "past_due" | "paused" | "canceled" | "incomplete" | "incomplete_expired"
@@ -1329,6 +1347,9 @@ export type Database = {
           "provider_synced_at"?: string | null
           "created_at"?: string
           "updated_at"?: string
+          "auto_renew"?: boolean
+          "rebill_id"?: string | null
+          "grace_until"?: string | null
           }
           Relationships: []
         }
@@ -1472,6 +1493,7 @@ export type Database = {
           "recent_turns": Json
           "rolling_summary": string | null
           "updated_at": string
+          "derived_chat_key": string
           }
           Insert: {
           "chat_id"?: string
@@ -1480,6 +1502,7 @@ export type Database = {
           "recent_turns"?: Json
           "rolling_summary"?: string | null
           "updated_at"?: string
+          "derived_chat_key": string
           }
           Update: {
           "chat_id"?: string
@@ -1488,6 +1511,7 @@ export type Database = {
           "recent_turns"?: Json
           "rolling_summary"?: string | null
           "updated_at"?: string
+          "derived_chat_key"?: string
           }
           Relationships: []
         }
@@ -1796,6 +1820,7 @@ export type Database = {
           "parameter_definitions": Json
           "created_at": string
           "updated_at": string
+          "system_stage_article_id": string | null
           }
           Insert: {
           "id"?: string
@@ -1807,6 +1832,7 @@ export type Database = {
           "parameter_definitions"?: Json
           "created_at"?: string
           "updated_at"?: string
+          "system_stage_article_id"?: string | null
           }
           Update: {
           "id"?: string
@@ -1818,6 +1844,7 @@ export type Database = {
           "parameter_definitions"?: Json
           "created_at"?: string
           "updated_at"?: string
+          "system_stage_article_id"?: string | null
           }
           Relationships: []
         }
@@ -1831,6 +1858,7 @@ export type Database = {
           "parameter_definitions": Json
           "created_at": string
           "updated_at": string
+          "system_work_article_id": string | null
           }
           Insert: {
           "id"?: string
@@ -1841,6 +1869,7 @@ export type Database = {
           "parameter_definitions"?: Json
           "created_at"?: string
           "updated_at"?: string
+          "system_work_article_id"?: string | null
           }
           Update: {
           "id"?: string
@@ -1851,6 +1880,7 @@ export type Database = {
           "parameter_definitions"?: Json
           "created_at"?: string
           "updated_at"?: string
+          "system_work_article_id"?: string | null
           }
           Relationships: []
         }
@@ -1919,6 +1949,7 @@ export type Database = {
           "created_by": string | null
           "created_at": string
           "updated_at": string
+          "inn": string | null
           }
           Insert: {
           "id"?: string
@@ -1936,6 +1967,7 @@ export type Database = {
           "created_by"?: string | null
           "created_at"?: string
           "updated_at"?: string
+          "inn"?: string | null
           }
           Update: {
           "id"?: string
@@ -1953,6 +1985,7 @@ export type Database = {
           "created_by"?: string | null
           "created_at"?: string
           "updated_at"?: string
+          "inn"?: string | null
           }
           Relationships: []
         }
@@ -2031,6 +2064,231 @@ export type Database = {
           }
           Relationships: []
         }
+        "payment_intents": {
+          Row: {
+          "id": string
+          "profile_id": string
+          "provider": "tbank"
+          "external_payment_id": string | null
+          "order_id": string
+          "plan_code": string
+          "amount_kopecks": number
+          "currency": string
+          "status": "pending" | "new" | "authorized" | "confirmed" | "rejected" | "cancelled" | "refunded" | "partial_refund"
+          "amount_refunded_kopecks": number
+          "rebill_id": string | null
+          "is_recurrent_setup": boolean
+          "is_recurrent_charge": boolean
+          "parent_intent_id": string | null
+          "receipt": Json | null
+          "last_notification": Json | null
+          "idempotency_key": string | null
+          "error_code": string | null
+          "error_message": string | null
+          "authorized_at": string | null
+          "confirmed_at": string | null
+          "cancelled_at": string | null
+          "created_at": string
+          "updated_at": string
+          "consent_accepted_at": string | null
+          "consent_version": string | null
+          }
+          Insert: {
+          "id"?: string
+          "profile_id": string
+          "provider": "tbank"
+          "external_payment_id"?: string | null
+          "order_id": string
+          "plan_code": string
+          "amount_kopecks": number
+          "currency"?: string
+          "status"?: "pending" | "new" | "authorized" | "confirmed" | "rejected" | "cancelled" | "refunded" | "partial_refund"
+          "amount_refunded_kopecks"?: number
+          "rebill_id"?: string | null
+          "is_recurrent_setup"?: boolean
+          "is_recurrent_charge"?: boolean
+          "parent_intent_id"?: string | null
+          "receipt"?: Json | null
+          "last_notification"?: Json | null
+          "idempotency_key"?: string | null
+          "error_code"?: string | null
+          "error_message"?: string | null
+          "authorized_at"?: string | null
+          "confirmed_at"?: string | null
+          "cancelled_at"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          "consent_accepted_at"?: string | null
+          "consent_version"?: string | null
+          }
+          Update: {
+          "id"?: string
+          "profile_id"?: string
+          "provider"?: "tbank"
+          "external_payment_id"?: string | null
+          "order_id"?: string
+          "plan_code"?: string
+          "amount_kopecks"?: number
+          "currency"?: string
+          "status"?: "pending" | "new" | "authorized" | "confirmed" | "rejected" | "cancelled" | "refunded" | "partial_refund"
+          "amount_refunded_kopecks"?: number
+          "rebill_id"?: string | null
+          "is_recurrent_setup"?: boolean
+          "is_recurrent_charge"?: boolean
+          "parent_intent_id"?: string | null
+          "receipt"?: Json | null
+          "last_notification"?: Json | null
+          "idempotency_key"?: string | null
+          "error_code"?: string | null
+          "error_message"?: string | null
+          "authorized_at"?: string | null
+          "confirmed_at"?: string | null
+          "cancelled_at"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          "consent_accepted_at"?: string | null
+          "consent_version"?: string | null
+          }
+          Relationships: []
+        }
+        "system_stage_articles": {
+          Row: {
+          "id": string
+          "name": string
+          "description": string
+          "default_sort_hint": number
+          "category_tag": string
+          "source": string
+          "source_version": string | null
+          "archived": boolean
+          "created_at": string
+          "updated_at": string
+          }
+          Insert: {
+          "id"?: string
+          "name": string
+          "description"?: string
+          "default_sort_hint"?: number
+          "category_tag"?: string
+          "source"?: string
+          "source_version"?: string | null
+          "archived"?: boolean
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Update: {
+          "id"?: string
+          "name"?: string
+          "description"?: string
+          "default_sort_hint"?: number
+          "category_tag"?: string
+          "source"?: string
+          "source_version"?: string | null
+          "archived"?: boolean
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Relationships: []
+        }
+        "system_work_articles": {
+          Row: {
+          "id": string
+          "parent_stage_article_id": string
+          "name": string
+          "description": string
+          "default_unit": string
+          "default_qty": number
+          "default_sort_hint": number
+          "default_resource_type": "labor" | "subcontractor" | "other"
+          "source": string
+          "source_version": string | null
+          "archived": boolean
+          "created_at": string
+          "updated_at": string
+          }
+          Insert: {
+          "id"?: string
+          "parent_stage_article_id": string
+          "name": string
+          "description"?: string
+          "default_unit": string
+          "default_qty"?: number
+          "default_sort_hint"?: number
+          "default_resource_type"?: "labor" | "subcontractor" | "other"
+          "source"?: string
+          "source_version"?: string | null
+          "archived"?: boolean
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Update: {
+          "id"?: string
+          "parent_stage_article_id"?: string
+          "name"?: string
+          "description"?: string
+          "default_unit"?: string
+          "default_qty"?: number
+          "default_sort_hint"?: number
+          "default_resource_type"?: "labor" | "subcontractor" | "other"
+          "source"?: string
+          "source_version"?: string | null
+          "archived"?: boolean
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Relationships: []
+        }
+        "card_bindings": {
+          Row: {
+          "id": string
+          "profile_id": string
+          "provider": "tbank"
+          "request_key": string
+          "status": "pending" | "active" | "inactive" | "rejected"
+          "check_type": string | null
+          "rebill_id": string | null
+          "card_id": string | null
+          "pan_masked": string | null
+          "bound_at": string | null
+          "last_notification": Json | null
+          "error_code": string | null
+          "created_at": string
+          "updated_at": string
+          }
+          Insert: {
+          "id"?: string
+          "profile_id": string
+          "provider"?: "tbank"
+          "request_key": string
+          "status"?: "pending" | "active" | "inactive" | "rejected"
+          "check_type"?: string | null
+          "rebill_id"?: string | null
+          "card_id"?: string | null
+          "pan_masked"?: string | null
+          "bound_at"?: string | null
+          "last_notification"?: Json | null
+          "error_code"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Update: {
+          "id"?: string
+          "profile_id"?: string
+          "provider"?: "tbank"
+          "request_key"?: string
+          "status"?: "pending" | "active" | "inactive" | "rejected"
+          "check_type"?: string | null
+          "rebill_id"?: string | null
+          "card_id"?: string | null
+          "pan_masked"?: string | null
+          "bound_at"?: string | null
+          "last_notification"?: Json | null
+          "error_code"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Relationships: []
+        }
     }
     Views: {
       [_ in never]: never
@@ -2040,11 +2298,32 @@ export type Database = {
           Args: Record<PropertyKey, never>
           Returns: Json
         }
+        "_ai_chat_key_namespace": {
+          Args: Record<PropertyKey, never>
+          Returns: string
+        }
+        "_ai_chat_key_uuid_v5": {
+          Args: {
+          "p_namespace": string
+          "p_name": string
+          }
+          Returns: string
+        }
         "accept_project_invite": {
           Args: {
           "p_invite_token": string
           }
           Returns: Database['public']['Tables']["project_invites"]['Row']
+        }
+        "add_library_work_to_estimate": {
+          Args: {
+          "p_estimate_version_id": string
+          "p_project_stage_id": string
+          "p_template_work_id": string
+          "p_sort_position": unknown
+          "p_excluded_template_resource_line_ids": unknown
+          }
+          Returns: Json
         }
         "ai_access_rank": {
           Args: {
@@ -2073,6 +2352,12 @@ export type Database = {
           Args: {
           "p_share_token": string
           "p_payload": Json
+          }
+          Returns: Json
+        }
+        "browse_canonical_catalog": {
+          Args: {
+          "p_subcategory": unknown
           }
           Returns: Json
         }
@@ -2148,6 +2433,14 @@ export type Database = {
           Args: {
           "p_org_id": string
           "p_name": string
+          }
+          Returns: Json
+        }
+        "create_org_with_contractor_profile": {
+          Args: {
+          "p_org_name": string
+          "p_org_slug": string
+          "p_profile_data": Json
           }
           Returns: Json
         }
@@ -2238,6 +2531,10 @@ export type Database = {
           }
           Returns: Json
         }
+        "get_card_on_file": {
+          Args: Record<PropertyKey, never>
+          Returns: unknown
+        }
         "get_documents_ai_metadata_evidence": {
           Args: {
           "p_project_id": string
@@ -2269,6 +2566,10 @@ export type Database = {
           }
           Returns: Json
         }
+        "get_portfolio_finance_snapshot": {
+          Args: Record<PropertyKey, never>
+          Returns: Json
+        }
         "get_procurement_ai_operational_evidence": {
           Args: {
           "p_project_id": string
@@ -2298,6 +2599,19 @@ export type Database = {
           "p_project_id": string
           "p_limit": unknown
           "p_offset": unknown
+          }
+          Returns: Json
+        }
+        "get_resource_article_detail": {
+          Args: {
+          "p_article_id": string
+          }
+          Returns: Json
+        }
+        "get_resource_article_price_comparison": {
+          Args: {
+          "p_article_id": string
+          "p_exclude_project_id": unknown
           }
           Returns: Json
         }
@@ -2355,6 +2669,12 @@ export type Database = {
           "p_actor": string
           }
           Returns: boolean
+        }
+        "list_canonical_stages_with_works": {
+          Args: {
+          "p_template_id": unknown
+          }
+          Returns: Json
         }
         "list_estimate_templates": {
           Args: {
@@ -2453,11 +2773,38 @@ export type Database = {
           }
           Returns: Json
         }
+        "resolve_ai_chat_key": {
+          Args: {
+          "p_profile_id": string
+          "p_project_id": string
+          }
+          Returns: string
+        }
+        "search_canonical_library": {
+          Args: {
+          "p_query": string
+          "p_kind": string
+          }
+          Returns: Json
+        }
         "set_active_org_context": {
           Args: {
           "p_org_id": string
           }
           Returns: unknown
+        }
+        "submit_contractor_profile_for_moderation": {
+          Args: {
+          "p_org_id": string
+          }
+          Returns: Json
+        }
+        "upsert_contractor_profile_for_org": {
+          Args: {
+          "p_org_id": string
+          "p_profile_data": Json
+          }
+          Returns: Json
         }
     }
     Enums: {

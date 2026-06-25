@@ -6,6 +6,7 @@ export type AcceptProjectInviteErrorCode =
   | "invite_email_mismatch"
   | "invite_invalid_or_unavailable"
   | "auth_required"
+  | "project_owner_over_limit"
   | "unknown";
 
 export interface AcceptProjectInviteError {
@@ -48,6 +49,21 @@ function mapAcceptInviteError(error: PostgrestError | Error | null): AcceptProje
     return {
       code: "auth_required",
       message: "You need to sign in before accepting this invite.",
+      rawError: error,
+    };
+  }
+
+  // Backend trigger: enforce_project_member_limits raises P0001 with one of
+  // these exception names when the owner's tier seat limit is reached. The
+  // invitee can't fix this from their account, so the message is owner-framed.
+  if (
+    normalized.includes("project_editor_limit_exceeded")
+    || normalized.includes("project_viewer_limit_exceeded")
+  ) {
+    return {
+      code: "project_owner_over_limit",
+      message:
+        "The project owner is at their plan's member limit. They need to upgrade or remove a member before you can join.",
       rawError: error,
     };
   }

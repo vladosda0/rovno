@@ -27,7 +27,7 @@ function minimalContextPack(overrides?: Partial<AIContextPack>): AIContextPack {
     tasks: null,
     estimate: null,
     procurement: null,
-    user: { role: "owner", credits: 100 },
+    user: { role: "owner" },
     members: 2,
     recentEvents: [],
     _meta: { hiddenDomains: [] },

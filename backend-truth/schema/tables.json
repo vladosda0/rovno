@@ -195,6 +195,7 @@
         {
           "name": "idx_profiles_email_unique",
           "unique": true,
+          "method": null,
           "expressions": [
             "lower(email)"
           ],
@@ -762,6 +763,7 @@
         {
           "name": "idx_projects_owner_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "owner_profile_id"
           ],
@@ -772,6 +774,7 @@
         {
           "name": "idx_projects_archived_at",
           "unique": false,
+          "method": null,
           "expressions": [
             "archived_at"
           ],
@@ -1034,6 +1037,7 @@
         {
           "name": "idx_project_members_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -1044,6 +1048,7 @@
         {
           "name": "idx_project_members_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "profile_id"
           ],
@@ -1361,6 +1366,7 @@
         {
           "name": "idx_project_invites_active_email",
           "unique": true,
+          "method": null,
           "expressions": [
             "project_id",
             "lower(email)"
@@ -1372,6 +1378,7 @@
         {
           "name": "idx_project_invites_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -1382,6 +1389,7 @@
         {
           "name": "idx_project_invites_invited_by",
           "unique": false,
+          "method": null,
           "expressions": [
             "invited_by"
           ],
@@ -1502,6 +1510,23 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "system_stage_article_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "system_stage_articles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
         }
       ],
       "constraints": [
@@ -1549,6 +1574,7 @@
         {
           "name": "idx_project_stages_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -1559,6 +1585,7 @@
         {
           "name": "idx_project_stages_sort_order",
           "unique": true,
+          "method": null,
           "expressions": [
             "project_id",
             "sort_order"
@@ -1566,6 +1593,17 @@
           "where": null,
           "attachedConstraintName": "project_stages_project_id_sort_order_key",
           "sourceMigration": "supabase/migrations/20260306161500_project_planning_tasks_and_comments.sql"
+        },
+        {
+          "name": "idx_project_stages_canonical",
+          "unique": false,
+          "method": null,
+          "expressions": [
+            "system_stage_article_id"
+          ],
+          "where": "system_stage_article_id is not null",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260602150100_instance_tables_library_fks.sql"
         }
       ],
       "triggers": [
@@ -1779,6 +1817,7 @@
         {
           "name": "idx_tasks_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -1789,6 +1828,7 @@
         {
           "name": "idx_tasks_stage_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "stage_id"
           ],
@@ -1799,6 +1839,7 @@
         {
           "name": "idx_tasks_assignee_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "assignee_profile_id"
           ],
@@ -1809,6 +1850,7 @@
         {
           "name": "idx_tasks_estimate_work_id_unique",
           "unique": true,
+          "method": null,
           "expressions": [
             "estimate_work_id"
           ],
@@ -1911,6 +1953,7 @@
         {
           "name": "idx_task_comments_task_id_created_at_desc",
           "unique": false,
+          "method": null,
           "expressions": [
             "task_id",
             "created_at desc"
@@ -2053,6 +2096,7 @@
         {
           "name": "idx_storage_objects_uploaded_by",
           "unique": false,
+          "method": null,
           "expressions": [
             "uploaded_by"
           ],
@@ -2271,6 +2315,7 @@
         {
           "name": "idx_documents_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -2281,6 +2326,7 @@
         {
           "name": "idx_documents_linked_workspace_document_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "linked_workspace_document_id"
           ],
@@ -2291,6 +2337,7 @@
         {
           "name": "idx_documents_linked_org_document_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "linked_org_document_id"
           ],
@@ -2443,6 +2490,7 @@
         {
           "name": "idx_document_versions_document_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "document_id"
           ],
@@ -2453,6 +2501,7 @@
         {
           "name": "idx_document_versions_current_per_document",
           "unique": true,
+          "method": null,
           "expressions": [
             "document_id"
           ],
@@ -2623,6 +2672,7 @@
         {
           "name": "idx_project_media_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -2633,6 +2683,7 @@
         {
           "name": "idx_project_media_storage_object_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "storage_object_id"
           ],
@@ -2643,6 +2694,7 @@
         {
           "name": "idx_project_media_task_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "task_id"
           ],
@@ -2653,6 +2705,7 @@
         {
           "name": "idx_project_media_task_id_is_final",
           "unique": false,
+          "method": null,
           "expressions": [
             "task_id",
             "is_final"
@@ -2771,6 +2824,16 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "execution_status",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -2783,12 +2846,23 @@
           "expression": "status in ('draft', 'approved', 'archived')",
           "usingIndex": null,
           "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "execution_status"
+          ],
+          "expression": "execution_status is null\n    or execution_status in ('planning', 'in_work', 'paused', 'finished')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260611120000_project_estimates_execution_status.sql"
         }
       ],
       "indexes": [
         {
           "name": "idx_project_estimates_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -2926,6 +3000,7 @@
         {
           "name": "idx_estimate_versions_estimate_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "estimate_id"
           ],
@@ -2936,6 +3011,7 @@
         {
           "name": "idx_estimate_versions_current_per_estimate",
           "unique": true,
+          "method": null,
           "expressions": [
             "estimate_id"
           ],
@@ -3064,6 +3140,23 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "system_work_article_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "system_work_articles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
         }
       ],
       "constraints": [
@@ -3092,6 +3185,7 @@
         {
           "name": "idx_estimate_works_estimate_version_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "estimate_version_id"
           ],
@@ -3102,12 +3196,24 @@
         {
           "name": "idx_estimate_works_project_stage_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_stage_id"
           ],
           "where": null,
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        },
+        {
+          "name": "idx_estimate_works_canonical",
+          "unique": false,
+          "method": null,
+          "expressions": [
+            "system_work_article_id"
+          ],
+          "where": "system_work_article_id is not null",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260602150100_instance_tables_library_fks.sql"
         }
       ],
       "triggers": [
@@ -3299,6 +3405,23 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "system_resource_article_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "system_resource_articles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
         }
       ],
       "constraints": [
@@ -3397,6 +3520,7 @@
         {
           "name": "idx_estimate_resource_lines_estimate_work_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "estimate_work_id"
           ],
@@ -3407,12 +3531,24 @@
         {
           "name": "idx_estimate_resource_lines_assignee_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "assignee_profile_id"
           ],
           "where": "assignee_profile_id is not null",
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260417120000_estimate_resource_line_assignee_profile.sql"
+        },
+        {
+          "name": "idx_estimate_resource_lines_canonical",
+          "unique": false,
+          "method": null,
+          "expressions": [
+            "system_resource_article_id"
+          ],
+          "where": "system_resource_article_id is not null",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260602150100_instance_tables_library_fks.sql"
         }
       ],
       "triggers": []
@@ -3530,6 +3666,7 @@
         {
           "name": "idx_estimate_dependencies_estimate_version_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "estimate_version_id"
           ],
@@ -3540,6 +3677,7 @@
         {
           "name": "idx_estimate_dependencies_from_work_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "from_work_id"
           ],
@@ -3550,6 +3688,7 @@
         {
           "name": "idx_estimate_dependencies_to_work_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "to_work_id"
           ],
@@ -3658,6 +3797,7 @@
         {
           "name": "idx_inventory_items_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -3745,6 +3885,7 @@
         {
           "name": "idx_inventory_locations_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -3871,6 +4012,7 @@
         {
           "name": "idx_inventory_balances_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -3881,6 +4023,7 @@
         {
           "name": "idx_inventory_balances_inventory_item_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "inventory_item_id"
           ],
@@ -3891,6 +4034,7 @@
         {
           "name": "idx_inventory_balances_inventory_location_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "inventory_location_id"
           ],
@@ -4140,6 +4284,7 @@
         {
           "name": "idx_procurement_items_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -4150,6 +4295,7 @@
         {
           "name": "idx_procurement_items_estimate_resource_line_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "estimate_resource_line_id"
           ],
@@ -4160,6 +4306,7 @@
         {
           "name": "idx_procurement_items_task_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "task_id"
           ],
@@ -4170,6 +4317,7 @@
         {
           "name": "idx_procurement_items_estimate_resource_line_id_unique",
           "unique": true,
+          "method": null,
           "expressions": [
             "estimate_resource_line_id"
           ],
@@ -4325,6 +4473,7 @@
         {
           "name": "idx_orders_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -4490,6 +4639,7 @@
         {
           "name": "idx_order_lines_order_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "order_id"
           ],
@@ -4500,6 +4650,7 @@
         {
           "name": "idx_order_lines_procurement_item_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "procurement_item_id"
           ],
@@ -4684,6 +4835,7 @@
         {
           "name": "idx_inventory_movements_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -4694,6 +4846,7 @@
         {
           "name": "idx_inventory_movements_inventory_item_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "inventory_item_id"
           ],
@@ -4704,6 +4857,7 @@
         {
           "name": "idx_inventory_movements_inventory_location_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "inventory_location_id"
           ],
@@ -4714,6 +4868,7 @@
         {
           "name": "idx_inventory_movements_order_line_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "order_line_id"
           ],
@@ -4724,6 +4879,7 @@
         {
           "name": "idx_inventory_movements_procurement_item_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "procurement_item_id"
           ],
@@ -4905,6 +5061,7 @@
         {
           "name": "idx_task_checklist_items_task_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "task_id"
           ],
@@ -4915,6 +5072,7 @@
         {
           "name": "idx_task_checklist_items_procurement_item_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "procurement_item_id"
           ],
@@ -4925,6 +5083,7 @@
         {
           "name": "idx_task_checklist_items_estimate_resource_line_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "estimate_resource_line_id"
           ],
@@ -4935,6 +5094,7 @@
         {
           "name": "idx_task_checklist_items_estimate_work_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "estimate_work_id"
           ],
@@ -5218,6 +5378,7 @@
         {
           "name": "idx_hr_items_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -5228,6 +5389,7 @@
         {
           "name": "idx_hr_items_project_stage_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_stage_id"
           ],
@@ -5238,6 +5400,7 @@
         {
           "name": "idx_hr_items_estimate_work_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "estimate_work_id"
           ],
@@ -5248,6 +5411,7 @@
         {
           "name": "idx_hr_items_task_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "task_id"
           ],
@@ -5258,6 +5422,7 @@
         {
           "name": "idx_hr_items_estimate_resource_line_id_unique",
           "unique": true,
+          "method": null,
           "expressions": [
             "estimate_resource_line_id"
           ],
@@ -5373,6 +5538,7 @@
         {
           "name": "idx_hr_item_assignees_hr_item_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "hr_item_id"
           ],
@@ -5383,6 +5549,7 @@
         {
           "name": "idx_hr_item_assignees_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "profile_id"
           ],
@@ -5553,6 +5720,7 @@
         {
           "name": "idx_hr_payments_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -5563,6 +5731,7 @@
         {
           "name": "idx_hr_payments_hr_item_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "hr_item_id"
           ],
@@ -5573,6 +5742,7 @@
         {
           "name": "idx_hr_payments_paid_to_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "paid_to_profile_id"
           ],
@@ -5688,6 +5858,7 @@
         {
           "name": "idx_activity_events_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -5698,6 +5869,7 @@
         {
           "name": "idx_activity_events_actor_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "actor_profile_id"
           ],
@@ -5708,6 +5880,7 @@
         {
           "name": "idx_activity_events_project_created_at",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id",
             "created_at desc"
@@ -5844,6 +6017,7 @@
         {
           "name": "idx_notifications_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "profile_id"
           ],
@@ -5854,6 +6028,7 @@
         {
           "name": "idx_notifications_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -5864,6 +6039,7 @@
         {
           "name": "idx_notifications_profile_is_read_created_at",
           "unique": false,
+          "method": null,
           "expressions": [
             "profile_id",
             "is_read",
@@ -6003,12 +6179,21 @@
           "usingIndex": null,
           "nullsNotDistinct": false,
           "sourceMigration": "supabase/migrations/20260306165000_billing_launch_tables.sql"
+        },
+        {
+          "type": "check",
+          "name": "billing_customers_provider_check",
+          "columns": [],
+          "expression": "provider in ('stripe', 'tbank')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260516120000_extend_billing_provider_to_tbank.sql"
         }
       ],
       "indexes": [
         {
           "name": "idx_billing_customers_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "profile_id"
           ],
@@ -6226,6 +6411,36 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "auto_renew",
+          "sqlType": "boolean",
+          "tsType": "boolean",
+          "nullable": false,
+          "defaultSql": "false",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "rebill_id",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "grace_until",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -6280,12 +6495,21 @@
           "usingIndex": null,
           "nullsNotDistinct": false,
           "sourceMigration": "supabase/migrations/20260306165000_billing_launch_tables.sql"
+        },
+        {
+          "type": "check",
+          "name": "subscriptions_provider_check",
+          "columns": [],
+          "expression": "provider in ('stripe', 'tbank')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260516120000_extend_billing_provider_to_tbank.sql"
         }
       ],
       "indexes": [
         {
           "name": "idx_subscriptions_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "profile_id"
           ],
@@ -6296,6 +6520,7 @@
         {
           "name": "idx_subscriptions_billing_customer_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "billing_customer_id"
           ],
@@ -6306,12 +6531,35 @@
         {
           "name": "idx_subscriptions_current_per_profile",
           "unique": true,
+          "method": null,
           "expressions": [
             "profile_id"
           ],
           "where": "is_current = true",
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260306165000_billing_launch_tables.sql"
+        },
+        {
+          "name": "idx_subscriptions_rebill_id",
+          "unique": false,
+          "method": null,
+          "expressions": [
+            "rebill_id"
+          ],
+          "where": "rebill_id is not null",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260516120200_alter_subscriptions_recurrent.sql"
+        },
+        {
+          "name": "idx_subscriptions_grace_until",
+          "unique": false,
+          "method": null,
+          "expressions": [
+            "grace_until"
+          ],
+          "where": "grace_until is not null",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260516120200_alter_subscriptions_recurrent.sql"
         }
       ],
       "triggers": [
@@ -6565,6 +6813,7 @@
         {
           "name": "idx_project_media_upload_intents_task_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "task_id"
           ],
@@ -6575,6 +6824,7 @@
         {
           "name": "idx_project_media_upload_intents_task_id_is_final",
           "unique": false,
+          "method": null,
           "expressions": [
             "task_id",
             "is_final"
@@ -6945,6 +7195,16 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "derived_chat_key",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -6962,6 +7222,7 @@
         {
           "name": "idx_project_ai_chat_sessions_project_profile",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id",
             "profile_id"
@@ -6969,6 +7230,17 @@
           "where": null,
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql"
+        },
+        {
+          "name": "uq_project_ai_chat_sessions_derived_chat_key",
+          "unique": true,
+          "method": null,
+          "expressions": [
+            "derived_chat_key"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260513140000_p0_derived_chat_key_for_ai_sessions.sql"
         }
       ],
       "triggers": []
@@ -7091,6 +7363,7 @@
         {
           "name": "idx_organizations_owner_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "owner_profile_id"
           ],
@@ -7232,6 +7505,7 @@
         {
           "name": "idx_org_members_org_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "org_id"
           ],
@@ -7242,6 +7516,7 @@
         {
           "name": "idx_org_members_profile_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "profile_id"
           ],
@@ -7452,6 +7727,7 @@
         {
           "name": "idx_org_documents_org_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "org_id"
           ],
@@ -7462,6 +7738,7 @@
         {
           "name": "idx_org_documents_folder",
           "unique": false,
+          "method": null,
           "expressions": [
             "folder_id"
           ],
@@ -7595,6 +7872,7 @@
         {
           "name": "idx_org_document_versions_doc_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "org_document_id"
           ],
@@ -7741,6 +8019,7 @@
         {
           "name": "idx_org_document_upload_intents_org",
           "unique": false,
+          "method": null,
           "expressions": [
             "org_id"
           ],
@@ -7929,6 +8208,7 @@
         {
           "name": "idx_system_resource_articles_rovno_sku",
           "unique": false,
+          "method": null,
           "expressions": [
             "rovno_sku"
           ],
@@ -7939,6 +8219,7 @@
         {
           "name": "idx_system_resource_articles_name",
           "unique": false,
+          "method": null,
           "expressions": [
             "name"
           ],
@@ -7949,6 +8230,7 @@
         {
           "name": "idx_system_resource_articles_category_path",
           "unique": false,
+          "method": null,
           "expressions": [
             "category_path text_pattern_ops"
           ],
@@ -7959,6 +8241,7 @@
         {
           "name": "idx_system_resource_articles_source_version",
           "unique": false,
+          "method": null,
           "expressions": [
             "source_version"
           ],
@@ -7969,12 +8252,35 @@
         {
           "name": "idx_system_resource_articles_archived",
           "unique": false,
+          "method": null,
           "expressions": [
             "archived"
           ],
           "where": "archived = false",
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260511120000_system_resource_articles_and_unit_conversions.sql"
+        },
+        {
+          "name": "idx_system_resource_articles_name_trgm",
+          "unique": false,
+          "method": "gin",
+          "expressions": [
+            "name gin_trgm_ops"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260613120000_enable_pg_trgm_and_article_name_search_indexes.sql"
+        },
+        {
+          "name": "idx_system_resource_articles_canonical_name_trgm",
+          "unique": false,
+          "method": "gin",
+          "expressions": [
+            "canonical_name gin_trgm_ops"
+          ],
+          "where": "canonical_name is not null",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260613120000_enable_pg_trgm_and_article_name_search_indexes.sql"
         }
       ],
       "triggers": [
@@ -8254,6 +8560,7 @@
         {
           "name": "idx_estimate_templates_owner",
           "unique": false,
+          "method": null,
           "expressions": [
             "owner_kind",
             "owner_id"
@@ -8265,6 +8572,7 @@
         {
           "name": "idx_estimate_templates_scope",
           "unique": false,
+          "method": null,
           "expressions": [
             "scope"
           ],
@@ -8275,6 +8583,7 @@
         {
           "name": "idx_estimate_templates_published",
           "unique": false,
+          "method": null,
           "expressions": [
             "published_to_public"
           ],
@@ -8285,6 +8594,7 @@
         {
           "name": "estimate_templates_system_singleton",
           "unique": true,
+          "method": null,
           "expressions": [
             "owner_kind"
           ],
@@ -8405,6 +8715,23 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "system_stage_article_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "system_stage_articles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
         }
       ],
       "constraints": [
@@ -8438,12 +8765,24 @@
         {
           "name": "idx_template_stages_template",
           "unique": false,
+          "method": null,
           "expressions": [
             "estimate_template_id"
           ],
           "where": null,
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        },
+        {
+          "name": "idx_template_stages_canonical",
+          "unique": false,
+          "method": null,
+          "expressions": [
+            "system_stage_article_id"
+          ],
+          "where": "system_stage_article_id is not null",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260602150100_instance_tables_library_fks.sql"
         }
       ],
       "triggers": [
@@ -8548,6 +8887,23 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "system_work_article_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "system_work_articles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
         }
       ],
       "constraints": [
@@ -8573,12 +8929,24 @@
         {
           "name": "idx_template_works_stage",
           "unique": false,
+          "method": null,
           "expressions": [
             "template_stage_id"
           ],
           "where": null,
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260512132310_estimate_templates_schema.sql"
+        },
+        {
+          "name": "idx_template_works_canonical",
+          "unique": false,
+          "method": null,
+          "expressions": [
+            "system_work_article_id"
+          ],
+          "where": "system_work_article_id is not null",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260602150100_instance_tables_library_fks.sql"
         }
       ],
       "triggers": [
@@ -8815,6 +9183,7 @@
         {
           "name": "idx_template_resource_lines_work",
           "unique": false,
+          "method": null,
           "expressions": [
             "template_work_id"
           ],
@@ -8825,6 +9194,7 @@
         {
           "name": "idx_template_resource_lines_article",
           "unique": false,
+          "method": null,
           "expressions": [
             "system_resource_article_id"
           ],
@@ -9019,6 +9389,16 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "inn",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -9055,6 +9435,7 @@
         {
           "name": "idx_contractor_profiles_one_per_org",
           "unique": true,
+          "method": null,
           "expressions": [
             "org_id"
           ],
@@ -9065,6 +9446,7 @@
         {
           "name": "idx_contractor_profiles_status",
           "unique": false,
+          "method": null,
           "expressions": [
             "status"
           ],
@@ -9075,6 +9457,7 @@
         {
           "name": "idx_contractor_profiles_published",
           "unique": false,
+          "method": null,
           "expressions": [
             "status"
           ],
@@ -9290,6 +9673,7 @@
         {
           "name": "estimate_share_snapshots_project_id_idx",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -9300,6 +9684,7 @@
         {
           "name": "estimate_share_snapshots_active_project_idx",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id",
             "version_number desc"
@@ -9416,6 +9801,7 @@
         {
           "name": "idx_org_document_folders_org",
           "unique": false,
+          "method": null,
           "expressions": [
             "org_id"
           ],
@@ -9426,6 +9812,7 @@
         {
           "name": "idx_org_document_folders_org_lower_name",
           "unique": true,
+          "method": null,
           "expressions": [
             "org_id",
             "lower(name)"
@@ -9451,6 +9838,1051 @@
           "functionName": "set_updated_at",
           "functionSignature": "public.set_updated_at()",
           "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "payment_intents",
+      "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql",
+      "columns": [
+        {
+          "name": "id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "gen_random_uuid()",
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "profile_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "profiles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "cascade"
+          }
+        },
+        {
+          "name": "provider",
+          "sqlType": "text",
+          "tsType": "\"tbank\"",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "external_payment_id",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "order_id",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "plan_code",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "amount_kopecks",
+          "sqlType": "bigint",
+          "tsType": "number",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "currency",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "'RUB'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "status",
+          "sqlType": "text",
+          "tsType": "\"pending\" | \"new\" | \"authorized\" | \"confirmed\" | \"rejected\" | \"cancelled\" | \"refunded\" | \"partial_refund\"",
+          "nullable": false,
+          "defaultSql": "'pending'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "amount_refunded_kopecks",
+          "sqlType": "bigint",
+          "tsType": "number",
+          "nullable": false,
+          "defaultSql": "0",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "rebill_id",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "is_recurrent_setup",
+          "sqlType": "boolean",
+          "tsType": "boolean",
+          "nullable": false,
+          "defaultSql": "false",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "is_recurrent_charge",
+          "sqlType": "boolean",
+          "tsType": "boolean",
+          "nullable": false,
+          "defaultSql": "false",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "parent_intent_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "payment_intents",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
+        },
+        {
+          "name": "receipt",
+          "sqlType": "jsonb",
+          "tsType": "Json",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "last_notification",
+          "sqlType": "jsonb",
+          "tsType": "Json",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "idempotency_key",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": true,
+          "references": null
+        },
+        {
+          "name": "error_code",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "error_message",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "authorized_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "confirmed_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "cancelled_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "updated_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "consent_accepted_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "consent_version",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "provider"
+          ],
+          "expression": "provider in ('tbank')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "amount_kopecks"
+          ],
+          "expression": "amount_kopecks > 0",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "currency"
+          ],
+          "expression": "currency = 'RUB'",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "status"
+          ],
+          "expression": "status in (\n    'pending',\n    'new',\n    'authorized',\n    'confirmed',\n    'rejected',\n    'cancelled',\n    'refunded',\n    'partial_refund'\n  )",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "amount_refunded_kopecks"
+          ],
+          "expression": "amount_refunded_kopecks >= 0",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+        },
+        {
+          "type": "check",
+          "name": "payment_intents_recurrent_kind_check",
+          "columns": [],
+          "expression": "not (is_recurrent_setup and is_recurrent_charge)",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+        },
+        {
+          "type": "check",
+          "name": "payment_intents_parent_intent_consistency_check",
+          "columns": [],
+          "expression": "case\n      when is_recurrent_charge then parent_intent_id is not null\n      else parent_intent_id is null\n    end",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_payment_intents_profile",
+          "unique": false,
+          "method": null,
+          "expressions": [
+            "profile_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+        },
+        {
+          "name": "uq_payment_intents_external_payment_id",
+          "unique": true,
+          "method": null,
+          "expressions": [
+            "external_payment_id"
+          ],
+          "where": "external_payment_id is not null",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+        },
+        {
+          "name": "uq_payment_intents_order_per_provider",
+          "unique": true,
+          "method": null,
+          "expressions": [
+            "provider",
+            "order_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+        },
+        {
+          "name": "idx_payment_intents_status",
+          "unique": false,
+          "method": null,
+          "expressions": [
+            "status"
+          ],
+          "where": "status in ('pending', 'new', 'authorized')",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+        },
+        {
+          "name": "idx_payment_intents_parent",
+          "unique": false,
+          "method": null,
+          "expressions": [
+            "parent_intent_id"
+          ],
+          "where": "parent_intent_id is not null",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "set_payment_intents_updated_at",
+          "activation": "before update",
+          "functionSchema": "public",
+          "functionName": "set_updated_at",
+          "functionSignature": "public.set_updated_at()",
+          "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "system_stage_articles",
+      "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql",
+      "columns": [
+        {
+          "name": "id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "gen_random_uuid()",
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "name",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "description",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "''",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "default_sort_hint",
+          "sqlType": "integer",
+          "tsType": "number",
+          "nullable": false,
+          "defaultSql": "100",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "category_tag",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "'general'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "source",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "'rovno_seed'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "source_version",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "archived",
+          "sqlType": "boolean",
+          "tsType": "boolean",
+          "nullable": false,
+          "defaultSql": "false",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "updated_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": "system_stage_articles_name_nonempty",
+          "columns": [],
+          "expression": "length(trim(name)) > 0",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_system_stage_articles_name_unique_active",
+          "unique": true,
+          "method": null,
+          "expressions": [
+            "name"
+          ],
+          "where": "archived = false",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+        },
+        {
+          "name": "idx_system_stage_articles_sort",
+          "unique": false,
+          "method": null,
+          "expressions": [
+            "default_sort_hint"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+        },
+        {
+          "name": "idx_system_stage_articles_archived",
+          "unique": false,
+          "method": null,
+          "expressions": [
+            "archived"
+          ],
+          "where": "archived = false",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+        },
+        {
+          "name": "idx_system_stage_articles_name_trgm",
+          "unique": false,
+          "method": "gin",
+          "expressions": [
+            "name gin_trgm_ops"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260613120000_enable_pg_trgm_and_article_name_search_indexes.sql"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "set_system_stage_articles_updated_at",
+          "activation": "before update",
+          "functionSchema": "public",
+          "functionName": "set_updated_at",
+          "functionSignature": "public.set_updated_at()",
+          "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "system_work_articles",
+      "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql",
+      "columns": [
+        {
+          "name": "id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "gen_random_uuid()",
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "parent_stage_article_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "system_stage_articles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "restrict"
+          }
+        },
+        {
+          "name": "name",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "description",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "''",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "default_unit",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "default_qty",
+          "sqlType": "numeric(14,3)",
+          "tsType": "number",
+          "nullable": false,
+          "defaultSql": "1",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "default_sort_hint",
+          "sqlType": "integer",
+          "tsType": "number",
+          "nullable": false,
+          "defaultSql": "100",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "default_resource_type",
+          "sqlType": "text",
+          "tsType": "\"labor\" | \"subcontractor\" | \"other\"",
+          "nullable": false,
+          "defaultSql": "'labor'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "source",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "'rovno_seed'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "source_version",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "archived",
+          "sqlType": "boolean",
+          "tsType": "boolean",
+          "nullable": false,
+          "defaultSql": "false",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "updated_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "default_qty"
+          ],
+          "expression": "default_qty >= 0",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "default_resource_type"
+          ],
+          "expression": "default_resource_type in ('labor','subcontractor','other')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+        },
+        {
+          "type": "check",
+          "name": "system_work_articles_name_nonempty",
+          "columns": [],
+          "expression": "length(trim(name)) > 0",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+        },
+        {
+          "type": "check",
+          "name": "system_work_articles_default_unit_nonempty",
+          "columns": [],
+          "expression": "length(trim(default_unit)) > 0",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_system_work_articles_stage",
+          "unique": false,
+          "method": null,
+          "expressions": [
+            "parent_stage_article_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+        },
+        {
+          "name": "idx_system_work_articles_stage_sort",
+          "unique": false,
+          "method": null,
+          "expressions": [
+            "parent_stage_article_id",
+            "default_sort_hint"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+        },
+        {
+          "name": "idx_system_work_articles_archived",
+          "unique": false,
+          "method": null,
+          "expressions": [
+            "archived"
+          ],
+          "where": "archived = false",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+        },
+        {
+          "name": "idx_system_work_articles_name_trgm",
+          "unique": false,
+          "method": "gin",
+          "expressions": [
+            "name gin_trgm_ops"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260613120000_enable_pg_trgm_and_article_name_search_indexes.sql"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "set_system_work_articles_updated_at",
+          "activation": "before update",
+          "functionSchema": "public",
+          "functionName": "set_updated_at",
+          "functionSignature": "public.set_updated_at()",
+          "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "card_bindings",
+      "sourceMigration": "supabase/migrations/20260604120000_create_card_bindings.sql",
+      "columns": [
+        {
+          "name": "id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "gen_random_uuid()",
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "profile_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "profiles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "cascade"
+          }
+        },
+        {
+          "name": "provider",
+          "sqlType": "text",
+          "tsType": "\"tbank\"",
+          "nullable": false,
+          "defaultSql": "'tbank'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "request_key",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": true,
+          "references": null
+        },
+        {
+          "name": "status",
+          "sqlType": "text",
+          "tsType": "\"pending\" | \"active\" | \"inactive\" | \"rejected\"",
+          "nullable": false,
+          "defaultSql": "'pending'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "check_type",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "rebill_id",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "card_id",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "pan_masked",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "bound_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "last_notification",
+          "sqlType": "jsonb",
+          "tsType": "Json",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "error_code",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "updated_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "provider"
+          ],
+          "expression": "provider in ('tbank')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260604120000_create_card_bindings.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "status"
+          ],
+          "expression": "status in (\n    'pending',\n    'active',\n    'inactive',\n    'rejected'\n  )",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260604120000_create_card_bindings.sql"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_card_bindings_profile",
+          "unique": false,
+          "method": null,
+          "expressions": [
+            "profile_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260604120000_create_card_bindings.sql"
+        },
+        {
+          "name": "idx_card_bindings_active",
+          "unique": false,
+          "method": null,
+          "expressions": [
+            "profile_id",
+            "bound_at desc"
+          ],
+          "where": "status = 'active'",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260604120000_create_card_bindings.sql"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "set_card_bindings_updated_at",
+          "activation": "before update",
+          "functionSchema": "public",
+          "functionName": "set_updated_at",
+          "functionSignature": "public.set_updated_at()",
+          "sourceMigration": "supabase/migrations/20260604120000_create_card_bindings.sql"
         }
       ]
     }

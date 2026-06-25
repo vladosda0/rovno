@@ -34,7 +34,6 @@ export function OverviewTab() {
   const projects = useProjects();
   const user = useCurrentUser();
   const allTasks = store.getAllTasks();
-  const totalCredits = user.credits_free + user.credits_paid;
 
   const upcomingTasks = allTasks
     .filter((t) => t.status === "in_progress" || t.status === "not_started")
@@ -207,38 +206,6 @@ export function OverviewTab() {
 
         {/* Right column */}
         <div className="space-y-4 sm:space-y-6">
-          {/* Credits */}
-          <Card>
-            <CardContent className="p-4 sm:p-6">
-              <div className="mb-3 flex items-center justify-between sm:mb-4">
-                <h3 className="text-body font-semibold text-foreground">{t("overview.credits")}</h3>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 shrink-0 text-accent"
-                  onClick={() => navigate("/settings?tab=billing")}
-                  aria-label="Manage billing"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-              <div className="flex items-baseline gap-2 mb-1">
-                <span className="text-h3 font-bold text-foreground">{totalCredits}</span>
-                <span className="text-caption text-muted-foreground">{t("overview.credits.remaining")}</span>
-              </div>
-              <p className="mb-3 text-caption text-muted-foreground sm:mb-4">
-                {t("overview.credits.dailyPaid", { free: user.credits_free, paid: user.credits_paid })}
-              </p>
-              {totalCredits === 0 && (
-                <div className="p-2 rounded-lg bg-destructive/10 text-destructive text-caption mb-2">
-                  <AlertTriangle className="h-3.5 w-3.5 inline mr-1" />
-                  {t("overview.credits.empty")}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
           {/* Documents needing attention */}
           <Card>
             <CardContent className="p-4 sm:p-6">

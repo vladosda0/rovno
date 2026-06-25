@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../../backend-truth/generated/supabase-types";
 import { computeLineTotals } from "@/lib/estimate-v2/pricing";
-import type { EstimateV2Snapshot, ResourceLineType } from "@/types/estimate-v2";
+import type { EstimateExecutionStatus, EstimateV2Snapshot, ResourceLineType } from "@/types/estimate-v2";
 import { parsePersistedEstimateResourceType, resourceLineTypeToPersisted } from "@/lib/estimate-v2/resource-type-contract";
 
 type TypedSupabaseClient = SupabaseClient<Database>;
@@ -40,9 +40,9 @@ type ProjectStageInsert = Database["public"]["Tables"]["project_stages"]["Insert
 
 const PROJECT_ESTIMATE_SELECT = "id, project_id, title, description, status, created_by, created_at, updated_at";
 const ESTIMATE_VERSION_SELECT = "id, estimate_id, version_number, is_current, created_by, created_at";
-const PROJECT_STAGE_SELECT = "id, project_id, title, description, sort_order, status, discount_bps, created_at, updated_at";
-const ESTIMATE_WORK_SELECT = "id, estimate_version_id, project_stage_id, title, description, sort_order, planned_cost_cents, planned_start, planned_end, created_at";
-const ESTIMATE_RESOURCE_LINE_SELECT = "id, estimate_work_id, resource_type, title, quantity, unit, unit_price_cents, total_price_cents, client_unit_price_cents, client_total_price_cents, markup_bps, discount_bps_override, assignee_profile_id, assignee_label, created_at";
+const PROJECT_STAGE_SELECT = "id, project_id, title, description, sort_order, status, discount_bps, system_stage_article_id, created_at, updated_at";
+const ESTIMATE_WORK_SELECT = "id, estimate_version_id, project_stage_id, title, description, sort_order, planned_cost_cents, planned_start, planned_end, system_work_article_id, created_at";
+const ESTIMATE_RESOURCE_LINE_SELECT = "id, estimate_work_id, resource_type, title, quantity, unit, unit_price_cents, total_price_cents, client_unit_price_cents, client_total_price_cents, markup_bps, discount_bps_override, assignee_profile_id, assignee_label, system_resource_article_id, created_at";
 const ESTIMATE_DEPENDENCY_SELECT = "id, estimate_version_id, from_work_id, to_work_id, dependency_type, lag_days, created_at";
 
 export interface EnsureProjectEstimateRootInput {
@@ -278,6 +278,44 @@ export async function ensureEstimateCurrentVersion(
   return { ok: true, row: inserted };
 }
 
+/**
+ * Ensures the server project_estimates root + current estimate_versions row exist for a
+ * project (creating them when missing) and returns the current version id. Uses the SAME
+ * deterministic ids as saveCurrentEstimateDraft (resolveEstimateDraftRemoteIds), so a later
+ * autosave reuses this exact version instead of conflicting. Lets the EstimateConstructor
+ * bootstrap a brand-new (empty) estimate before applying a template stage.
+ */
+export async function ensureRemoteEstimateCurrentVersionId(
+  projectId: string,
+  snapshot: EstimateV2Snapshot,
+  profileId: string,
+): Promise<string> {
+  const supabase = await loadSupabaseClient();
+  const existingDraft = await loadCurrentEstimateDraft(projectId);
+  const resolvedIds = resolveEstimateDraftRemoteIds({ projectId, snapshot, existingDraft });
+
+  const estimateResult = await ensureProjectEstimateRoot(supabase, {
+    projectId,
+    estimateId: resolvedIds.estimateId,
+    title: snapshot.project.title,
+    createdBy: profileId,
+  });
+  if (!estimateResult.ok) {
+    throw new Error(`Unable to ensure estimate root: ${estimateResult.reason}`);
+  }
+
+  const versionResult = await ensureEstimateCurrentVersion(supabase, {
+    estimateId: estimateResult.row.id,
+    versionId: resolvedIds.versionId,
+    createdBy: profileId,
+  });
+  if (!versionResult.ok) {
+    throw new Error(`Unable to ensure estimate current version: ${versionResult.reason}`);
+  }
+
+  return versionResult.row.id;
+}
+
 export async function updateProjectEstimateRootStatus(
   supabase: TypedSupabaseClient,
   input: UpdateProjectEstimateRootStatusInput,
@@ -290,6 +328,32 @@ export async function updateProjectEstimateRootStatus(
     .from("project_estimates")
     .update(patch)
     .eq("id", input.estimateId);
+
+  if (error) {
+    throw error;
+  }
+}
+
+/**
+ * Mirror the app's execution status (planning|in_work|paused|finished) onto the estimate
+ * root so the portfolio rollup (get_portfolio_finance_snapshot) can bucket projects by it.
+ * Self-loads the client; a no-row update (root not synced yet) is a harmless no-op.
+ * Only the in_work value has a server-side reader fallback (root status='approved');
+ * paused/finished depend on this write converging (see the hydration reconciliation).
+ */
+export async function updateProjectEstimateExecutionStatus(
+  estimateId: string,
+  executionStatus: EstimateExecutionStatus,
+): Promise<void> {
+  const supabase = await loadSupabaseClient();
+  const patch: ProjectEstimateUpdate = {
+    execution_status: executionStatus,
+  };
+
+  const { error } = await supabase
+    .from("project_estimates")
+    .update(patch)
+    .eq("id", estimateId);
 
   if (error) {
     throw error;
@@ -650,6 +714,22 @@ export async function loadEstimateOperationalSummary(
   return parseEstimateOperationalSummaryPayload(data);
 }
 
+/**
+ * Resolves the live project_stages.id for a (possibly local, not-yet-hydrated) stage id,
+ * using the SAME local->remote mapping as saveCurrentEstimateDraft. Callers must persist the
+ * stage first (flush the draft) so the resolved server row exists. Returns null if the stage
+ * isn't in the snapshot.
+ */
+export async function resolveRemoteEstimateStageId(
+  projectId: string,
+  snapshot: Pick<EstimateV2Snapshot, "project" | "stages" | "works" | "lines" | "dependencies">,
+  localStageId: string,
+): Promise<string | null> {
+  const existingDraft = await loadCurrentEstimateDraft(projectId);
+  const resolved = resolveEstimateDraftRemoteIds({ projectId, snapshot, existingDraft });
+  return resolved.stageIdByLocalStageId[localStageId] ?? null;
+}
+
 export function resolveEstimateDraftRemoteIds(input: {
   projectId: string;
   snapshot: Pick<EstimateV2Snapshot, "project" | "stages" | "works" | "lines" | "dependencies">;
@@ -896,6 +976,7 @@ export async function saveCurrentEstimateDraft(
       discount_bps_override: line.discountBpsOverride ?? null,
       assignee_profile_id: assigneeProfileId,
       assignee_label: assigneeLabel,
+      system_resource_article_id: line.systemResourceArticleId ?? null,
     } as EstimateResourceLineInsert;
   });
 

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useWorkspaceProjectsSensitiveDetailMap } from "@/hooks/use-home-sensitive-detail-map";
 import { useProcurementV2, useHRItems, useHRPayments } from "@/hooks/use-mock-data";
 import { useOrders } from "@/hooks/use-order-data";
 import { subscribeHR } from "@/data/hr-store";
@@ -18,15 +17,13 @@ import { fetchSharedEstimateVersion } from "@/data/estimate-share-source";
 import {
   buildEstimateV2FinanceProjectSummary,
   getEstimateV2FinanceProjectSummary,
-  applySensitiveDetailToEstimateV2FinanceSnapshot,
-  getEstimateV2FinanceSnapshot,
   resolveEstimateV2FinanceProjectMeta,
   type EstimateV2FinanceProjectSummary,
-  type EstimateV2FinanceSnapshot,
+  type EstimateV2FinanceTaskSlice,
 } from "@/lib/estimate-v2/finance-read-model";
 import { computeFactFromDataSources } from "@/lib/estimate-v2/rollups";
 import * as store from "@/data/store";
-import { useWorkspaceMode, useWorkspaceProjects } from "@/hooks/use-workspace-source";
+import { useWorkspaceMode } from "@/hooks/use-workspace-source";
 import type { Project } from "@/types/entities";
 import type { EstimateV2Version } from "@/types/estimate-v2";
 
@@ -221,7 +218,7 @@ export function useEstimateV2FinanceProjectSummary(
 export function useEstimateV2FinanceProjectSummaryFromWorkspace(
   projectId: string,
   projectInput: Pick<Project, "id" | "title"> | null | undefined,
-  options: { hrReadsEnabled: boolean },
+  options: { hrReadsEnabled: boolean; tasks?: EstimateV2FinanceTaskSlice[] },
 ): EstimateV2FinanceProjectSummary | null {
   const procurementItems = useProcurementV2(projectId);
   const orders = useOrders(projectId);
@@ -251,68 +248,16 @@ export function useEstimateV2FinanceProjectSummaryFromWorkspace(
       hrItems,
       hrPayments,
     });
-    return buildEstimateV2FinanceProjectSummary(project.id, project.title, state, fact);
+    return buildEstimateV2FinanceProjectSummary(project.id, project.title, state, fact, options.tasks);
   }, [
     revision,
     projectId,
     projectInput,
     options.hrReadsEnabled,
+    options.tasks,
     procurementItems,
     orders,
     hrItems,
     hrPayments,
   ]);
-}
-
-const EMPTY_HOME_FINANCE_SNAPSHOT: EstimateV2FinanceSnapshot = {
-  projects: [],
-  totals: { plannedBudgetCents: 0, spentCents: 0, toBePaidCents: 0, varianceCents: 0 },
-};
-
-export function useEstimateV2FinanceSnapshot(): {
-  snapshot: EstimateV2FinanceSnapshot;
-  sensitiveDetailLoading: boolean;
-} {
-  const workspaceMode = useWorkspaceMode();
-  const workspaceHookProjects = useWorkspaceProjects();
-  const projects =
-    workspaceMode.kind === "demo" || workspaceMode.kind === "local"
-      ? store.getProjects()
-      : workspaceHookProjects;
-
-  const { canViewSensitiveDetailByProjectId, isLoading: sensitiveDetailLoading } =
-    useWorkspaceProjectsSensitiveDetailMap();
-
-  const getter = useCallback(
-    () => getEstimateV2FinanceSnapshot(projects),
-    [projects],
-  );
-  const [raw, setRaw] = useState(getter);
-
-  useEffect(() => {
-    const update = () => setRaw(getter());
-    const unsubs = [
-      subscribeEstimateV2(update),
-      store.subscribe(update),
-      subscribeProcurement(update),
-      subscribeOrders(update),
-      subscribeHR(update),
-    ];
-    return () => unsubs.forEach((unsub) => unsub());
-  }, [getter]);
-
-  useEffect(() => {
-    setRaw(getter());
-  }, [getter]);
-
-  const snapshot = useMemo(() => {
-    if (sensitiveDetailLoading) {
-      return EMPTY_HOME_FINANCE_SNAPSHOT;
-    }
-    return applySensitiveDetailToEstimateV2FinanceSnapshot(raw, (projectId) =>
-      canViewSensitiveDetailByProjectId.get(projectId) ?? false,
-    );
-  }, [raw, sensitiveDetailLoading, canViewSensitiveDetailByProjectId]);
-
-  return { snapshot, sensitiveDetailLoading };
 }

@@ -148,6 +148,26 @@
           "table": "public.org_document_folders",
           "triggerName": "set_org_document_folders_updated_at",
           "activation": "before update"
+        },
+        {
+          "table": "public.payment_intents",
+          "triggerName": "set_payment_intents_updated_at",
+          "activation": "before update"
+        },
+        {
+          "table": "public.system_stage_articles",
+          "triggerName": "set_system_stage_articles_updated_at",
+          "activation": "before update"
+        },
+        {
+          "table": "public.system_work_articles",
+          "triggerName": "set_system_work_articles_updated_at",
+          "activation": "before update"
+        },
+        {
+          "table": "public.card_bindings",
+          "triggerName": "set_card_bindings_updated_at",
+          "activation": "before update"
         }
       ]
     },
@@ -482,7 +502,7 @@
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
+      "sourceMigration": "supabase/migrations/20260602075944_can_access_storage_object_workspace_org.sql",
       "triggerUsages": []
     },
     {
@@ -1467,7 +1487,7 @@
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260415100000_wave5_ai_chat_session_continuity.sql",
+      "sourceMigration": "supabase/migrations/20260513150000_p0_chat_session_handlers_use_derived_key.sql",
       "triggerUsages": []
     },
     {
@@ -1502,7 +1522,7 @@
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260416100000_wave9_closeout_hardening.sql",
+      "sourceMigration": "supabase/migrations/20260513150000_p0_chat_session_handlers_use_derived_key.sql",
       "triggerUsages": []
     },
     {
@@ -2175,7 +2195,7 @@
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql",
+      "sourceMigration": "supabase/migrations/20260602150200_apply_template_propagate_library_fks.sql",
       "triggerUsages": []
     },
     {
@@ -2266,6 +2286,70 @@
       "searchPath": "public",
       "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "_ai_chat_key_namespace",
+      "signature": "public._ai_chat_key_namespace()",
+      "args": [],
+      "returnType": "uuid",
+      "language": "sql",
+      "volatility": "immutable",
+      "securityDefiner": false,
+      "searchPath": null,
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260513140000_p0_derived_chat_key_for_ai_sessions.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "_ai_chat_key_uuid_v5",
+      "signature": "public._ai_chat_key_uuid_v5(uuid, text)",
+      "args": [
+        {
+          "name": "p_namespace",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_name",
+          "type": "text",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "uuid",
+      "language": "plpgsql",
+      "volatility": "immutable",
+      "securityDefiner": false,
+      "searchPath": "public, extensions, pg_catalog",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260514150000_p0_fix_uuid_v5_search_path_for_pgcrypto_digest.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "resolve_ai_chat_key",
+      "signature": "public.resolve_ai_chat_key(uuid, uuid)",
+      "args": [
+        {
+          "name": "p_profile_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "uuid",
+      "language": "sql",
+      "volatility": "immutable",
+      "securityDefiner": false,
+      "searchPath": "public, extensions, pg_catalog",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260514150000_p0_fix_uuid_v5_search_path_for_pgcrypto_digest.sql",
       "triggerUsages": []
     },
     {
@@ -2401,6 +2485,259 @@
       "searchPath": "public",
       "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "create_org_with_contractor_profile",
+      "signature": "public.create_org_with_contractor_profile(text, text, jsonb)",
+      "args": [
+        {
+          "name": "p_org_name",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_org_slug",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_profile_data",
+          "type": "jsonb",
+          "identityType": "jsonb"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260521140100_create_org_with_contractor_profile.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "upsert_contractor_profile_for_org",
+      "signature": "public.upsert_contractor_profile_for_org(uuid, jsonb)",
+      "args": [
+        {
+          "name": "p_org_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_profile_data",
+          "type": "jsonb",
+          "identityType": "jsonb"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260521140200_upsert_contractor_profile_preserve_fields.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "submit_contractor_profile_for_moderation",
+      "signature": "public.submit_contractor_profile_for_moderation(uuid)",
+      "args": [
+        {
+          "name": "p_org_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260521140100_create_org_with_contractor_profile.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "get_card_on_file",
+      "signature": "public.get_card_on_file()",
+      "args": [],
+      "returnType": "table (last4 text, brand text)",
+      "language": "sql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260604120100_get_card_on_file_prefer_binding.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "get_portfolio_finance_snapshot",
+      "signature": "public.get_portfolio_finance_snapshot()",
+      "args": [],
+      "returnType": "jsonb",
+      "language": "sql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260611120100_get_portfolio_finance_snapshot.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "search_canonical_library",
+      "signature": "public.search_canonical_library(text, text)",
+      "args": [
+        {
+          "name": "p_query",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_kind",
+          "type": "text",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260613120100_search_canonical_library.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "list_canonical_stages_with_works",
+      "signature": "public.list_canonical_stages_with_works(uuid)",
+      "args": [
+        {
+          "name": "p_template_id",
+          "type": "uuid default null",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260613120200_list_canonical_stages_with_works.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "get_resource_article_detail",
+      "signature": "public.get_resource_article_detail(uuid)",
+      "args": [
+        {
+          "name": "p_article_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260613120300_get_resource_article_detail.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "browse_canonical_catalog",
+      "signature": "public.browse_canonical_catalog(text)",
+      "args": [
+        {
+          "name": "p_subcategory",
+          "type": "text default null",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260613120500_browse_canonical_catalog.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "get_resource_article_price_comparison",
+      "signature": "public.get_resource_article_price_comparison(uuid, uuid)",
+      "args": [
+        {
+          "name": "p_article_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_exclude_project_id",
+          "type": "uuid default null",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260622120000_tighten_price_comparison_finance_gate.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "add_library_work_to_estimate",
+      "signature": "public.add_library_work_to_estimate(uuid, uuid, uuid, integer, uuid[])",
+      "args": [
+        {
+          "name": "p_estimate_version_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_project_stage_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_template_work_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_sort_position",
+          "type": "integer default null",
+          "identityType": "integer"
+        },
+        {
+          "name": "p_excluded_template_resource_line_ids",
+          "type": "uuid[] default '{}'",
+          "identityType": "uuid[]"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260624120000_add_library_work_resource_exclusions.sql",
       "triggerUsages": []
     }
   ]

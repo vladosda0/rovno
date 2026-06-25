@@ -13,7 +13,6 @@ import {
   createLine,
   getEstimateV2ProjectState,
 } from "@/data/estimate-v2-store";
-import { getEstimateV2FinanceSnapshot } from "@/lib/estimate-v2/finance-read-model";
 import { clearDemoSession, enterDemoSession, setAuthRole } from "@/lib/auth-state";
 
 function renderFinanceTab() {
@@ -34,7 +33,7 @@ function renderFinanceTab() {
   );
 }
 
-describe("FinanceTab", () => {
+describe("FinanceTab portfolio", () => {
   beforeEach(() => {
     sessionStorage.clear();
     __unsafeResetStoreForTests();
@@ -44,7 +43,7 @@ describe("FinanceTab", () => {
     setAuthRole("owner");
   });
 
-  it("renders finance totals from estimate-v2 summaries instead of the legacy estimate store", () => {
+  it("renders the portfolio scorecard, pipeline, and project list from estimate-v2 summaries", () => {
     const state = getEstimateV2ProjectState("project-1");
     const work = state.works[0];
     if (!work) {
@@ -60,42 +59,38 @@ describe("FinanceTab", () => {
       costUnitCents: 125_000,
     });
 
-    const expectedBudgetText = new Intl.NumberFormat("ru-RU", {
-      style: "currency",
-      currency: "RUB",
-      maximumFractionDigits: 0,
-    }).format(getEstimateV2FinanceSnapshot([{ id: "project-1", title: "Project One" }]).totals.plannedBudgetCents / 100);
-    const expectedBudgetPattern = new RegExp(expectedBudgetText.replace(/\s/g, "\\s?"));
+    // Legacy estimate store inflated — the portfolio must ignore it (estimate-v2 truth).
     const inflatedLegacyText = new Intl.NumberFormat("ru-RU", {
       style: "currency",
       currency: "RUB",
       maximumFractionDigits: 0,
     }).format(99_999_999);
-
     const legacyEstimate = getEstimate("project-1");
-    if (!legacyEstimate?.versions[0]) {
-      throw new Error("Expected seeded legacy estimate version");
+    if (legacyEstimate?.versions[0]) {
+      updateEstimateItems(
+        legacyEstimate.versions[0].id,
+        legacyEstimate.versions[0].items.map((item) => ({
+          ...item,
+          planned_cost: 99_999_999,
+          paid_cost: 88_888_888,
+        })),
+      );
     }
-
-    const legacyVersion = legacyEstimate.versions[0];
-    updateEstimateItems(
-      legacyVersion.id,
-      legacyVersion.items.map((item) => ({
-        ...item,
-        planned_cost: 99_999_999,
-        paid_cost: 88_888_888,
-      })),
-    );
 
     renderFinanceTab();
 
-    expect(screen.getByText("Budget by Project")).toBeInTheDocument();
-    expect(screen.getAllByText(expectedBudgetPattern).length).toBeGreaterThan(0);
+    // Scorecard + pipeline + list shells are present.
+    expect(screen.getByText("Contracts")).toBeInTheDocument();
+    expect(screen.getByText("Portfolio margin")).toBeInTheDocument();
+    expect(screen.getByText("Pipeline")).toBeInTheDocument();
+    expect(screen.getByText("Projects")).toBeInTheDocument();
+    // The seeded project appears in the list.
     expect(screen.getByText("Ремонт квартиры")).toBeInTheDocument();
+    // The inflated legacy figure never surfaces.
     expect(screen.queryByText(inflatedLegacyText)).not.toBeInTheDocument();
   });
 
-  it("hides monetary totals for simulated viewer on Home (sensitive-detail gate)", async () => {
+  it("redacts project finance detail for a non-detail viewer (sensitive-detail gate)", async () => {
     setAuthRole("viewer");
 
     const state = getEstimateV2ProjectState("project-1");
@@ -116,7 +111,9 @@ describe("FinanceTab", () => {
     renderFinanceTab();
 
     await waitFor(() => {
-      expect(screen.queryByText(/Budget:\s/)).not.toBeInTheDocument();
+      expect(screen.getAllByText("Financial details hidden").length).toBeGreaterThan(0);
     });
+    // No per-project margin/spend detail leaks for a redacted viewer.
+    expect(screen.queryByText(/Margin:\s/)).not.toBeInTheDocument();
   });
 });

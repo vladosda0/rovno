@@ -13,12 +13,13 @@
     "supabase/migrations/20260317120000_storage_upload_intents.sql",
     "supabase/migrations/20260320110000_task_final_media_contract.sql",
     "supabase/migrations/20260506120200_org_documents_and_doc_links.sql",
-    "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
+    "supabase/migrations/20260602075944_can_access_storage_object_workspace_org.sql",
     "supabase/migrations/20260317133000_storage_bucket_config_table.sql",
     "supabase/migrations/20260317121000_storage_upload_rpcs.sql",
     "supabase/migrations/20260407190000_track4_upload_visibility_class.sql",
     "supabase/migrations/20260415130000_wave7_documents_media_ai_metadata_evidence.sql",
     "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
+    "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
     "supabase/migrations/20260326213000_internal_visibility_write_boundary.sql",
     "supabase/migrations/20260408100000_document_versions_insert_internal_visibility_parity.sql"
   ],
@@ -154,6 +155,7 @@
         {
           "name": "idx_storage_objects_uploaded_by",
           "unique": false,
+          "method": null,
           "expressions": [
             "uploaded_by"
           ],
@@ -372,6 +374,7 @@
         {
           "name": "idx_documents_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -382,6 +385,7 @@
         {
           "name": "idx_documents_linked_workspace_document_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "linked_workspace_document_id"
           ],
@@ -392,6 +396,7 @@
         {
           "name": "idx_documents_linked_org_document_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "linked_org_document_id"
           ],
@@ -544,6 +549,7 @@
         {
           "name": "idx_document_versions_document_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "document_id"
           ],
@@ -554,6 +560,7 @@
         {
           "name": "idx_document_versions_current_per_document",
           "unique": true,
+          "method": null,
           "expressions": [
             "document_id"
           ],
@@ -724,6 +731,7 @@
         {
           "name": "idx_project_media_project_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "project_id"
           ],
@@ -734,6 +742,7 @@
         {
           "name": "idx_project_media_storage_object_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "storage_object_id"
           ],
@@ -744,6 +753,7 @@
         {
           "name": "idx_project_media_task_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "task_id"
           ],
@@ -754,6 +764,7 @@
         {
           "name": "idx_project_media_task_id_is_final",
           "unique": false,
+          "method": null,
           "expressions": [
             "task_id",
             "is_final"
@@ -1014,6 +1025,7 @@
         {
           "name": "idx_project_media_upload_intents_task_id",
           "unique": false,
+          "method": null,
           "expressions": [
             "task_id"
           ],
@@ -1024,6 +1036,7 @@
         {
           "name": "idx_project_media_upload_intents_task_id_is_final",
           "unique": false,
+          "method": null,
           "expressions": [
             "task_id",
             "is_final"
@@ -1588,7 +1601,7 @@
       "volatility": "stable",
       "securityDefiner": true,
       "searchPath": "public",
-      "sourceMigration": "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
+      "sourceMigration": "supabase/migrations/20260602075944_can_access_storage_object_workspace_org.sql",
       "authenticatedExecute": true,
       "triggerUsages": []
     },

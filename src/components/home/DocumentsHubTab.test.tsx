@@ -48,8 +48,8 @@ vi.mock("@/hooks/use-orgs", () => ({
   useActiveOrg: () => null,
   useUserOrganizations: () => ({ data: [] }),
 }));
-vi.mock("@/components/home/UploadDocumentDialog", () => ({
-  UploadDocumentDialog: () => null,
+vi.mock("@/components/upload/MultiStepUploadModal", () => ({
+  MultiStepUploadModal: () => null,
 }));
 
 import { DocumentsHubTab } from "@/components/home/DocumentsHubTab";

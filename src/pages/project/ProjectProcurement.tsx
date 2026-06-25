@@ -18,7 +18,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
@@ -74,6 +73,8 @@ import {
   computeProcurementHeaderKpis,
   computeLastReceivedAt,
   computeInStockByLocation,
+  computeProjectLastReceivedAt,
+  computePurchasePriceVariance,
   computeRemainingRequestedQty,
   computeTabChipTotals,
   isEstimateLinkedProcurementItem,
@@ -84,6 +85,10 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { OrderModal } from "@/components/procurement/OrderModal";
 import { OrderDetailModal } from "@/components/procurement/OrderDetailModal";
+import {
+  ProcurementFinanceHeader,
+  type ProcurementFinanceView,
+} from "@/components/procurement/ProcurementFinanceHeader";
 import { ItemTypePicker } from "@/components/procurement/ItemTypePicker";
 import { LocationPicker } from "@/components/procurement/LocationPicker";
 import { ResourceTypeBadge } from "@/components/estimate-v2/ResourceTypeBadge";
@@ -592,32 +597,54 @@ export default function ProjectProcurement() {
     [pid, items, orders],
   );
 
-  const usedBudgetMetric = headerKpis.used;
-  const budgetProgressPct = useMemo(() => {
-    if (usedBudgetMetric === null || normalizedBudget <= 0) return 0;
-    return Math.min((usedBudgetMetric / normalizedBudget) * 100, 100);
-  }, [usedBudgetMetric, normalizedBudget]);
-
-  const remainingBudgetMetric = useMemo(() => {
-    if (usedBudgetMetric === null) return null;
-    return normalizedBudget - usedBudgetMetric;
-  }, [normalizedBudget, usedBudgetMetric]);
-
   const chipTotals = useMemo(
     () => computeTabChipTotals(pid, items, orders, stockRows),
     [pid, items, orders, stockRows],
   );
 
-  const headerDataStateHint = useMemo(() => {
-    if (!headerKpis.hasLinkedItems) return t("procurement.hint.noLinkedItems");
-    if (headerKpis.missingPlannedPriceCount > 0) {
-      return t("procurement.hint.missingPlannedPrice", { count: headerKpis.missingPlannedPriceCount });
-    }
-    if (headerKpis.missingOrderPriceCount > 0) {
-      return t("procurement.hint.missingOrderPrice", { count: headerKpis.missingOrderPriceCount });
-    }
-    return null;
-  }, [headerKpis, t]);
+  // Single major→cents conversion boundary: the fulfillment lib works in rubles,
+  // the finance header (shared formatters) in cents.
+  const procurementFinanceView = useMemo<ProcurementFinanceView>(() => {
+    const toCents = (value: number) => Math.round(value * 100);
+    const toCentsOrNull = (value: number | null) => (value === null ? null : toCents(value));
+    const used = headerKpis.used;
+    const nameById = new Map(items.map((item) => [item.id, item.name]));
+    const ppv = computePurchasePriceVariance(pid, items, orders);
+    const inStockGroups = computeInStockByLocation(pid, items, orders, locations);
+    // One in-stock source for the card AND the by-location breakdown (and the tab
+    // table): event-replay valuation at per-item prices. The snapshot-based chip
+    // total stays a count-only signal on the tab button.
+    const inStockValue = inStockGroups.reduce((sum, group) => sum + group.totalValue, 0);
+
+    return {
+      budgetCents: toCents(normalizedBudget),
+      receivedCents: toCentsOrNull(headerKpis.received),
+      inTransitCents: toCentsOrNull(headerKpis.committed),
+      usedCents: toCentsOrNull(used),
+      remainingBudgetCents: used === null ? null : toCents(normalizedBudget - used),
+      toOrderCents: toCents(chipTotals.requested.total),
+      inStockValueCents: toCents(inStockValue),
+      hasLinkedItems: headerKpis.hasLinkedItems,
+      missingPlannedPriceCount: headerKpis.missingPlannedPriceCount,
+      missingOrderPriceCount: headerKpis.missingOrderPriceCount,
+      ppv: {
+        deltaCents: toCents(ppv.deltaTotal),
+        pct: ppv.pct,
+        lines: ppv.lines.slice(0, 5).map((line) => ({
+          procurementItemId: line.procurementItemId,
+          name: nameById.get(line.procurementItemId) ?? line.procurementItemId,
+          deltaCents: toCents(line.deltaTotal),
+        })),
+      },
+      inStockByLocation: inStockGroups.map((group) => ({
+        locationId: group.locationId,
+        locationName: group.locationName,
+        totalValueCents: toCents(group.totalValue),
+        itemCount: group.items.length,
+      })),
+      lastReceivedAt: computeProjectLastReceivedAt(pid, orders),
+    };
+  }, [chipTotals, headerKpis, items, locations, normalizedBudget, orders, pid]);
 
   const itemById = useMemo(
     () => new Map(items.map((item) => [item.id, item])),
@@ -1582,7 +1609,6 @@ export default function ProjectProcurement() {
     }, "immediate");
   };
 
-  const formatMetric = (value: number | null) => (value === null ? dash : fmtCost(value));
   const selectionCount = effectiveActiveTab === "requested"
     ? selectedRequestedIds.size
     : effectiveActiveTab === "ordered"
@@ -1733,63 +1759,10 @@ export default function ProjectProcurement() {
         </div>
 
         {canManageProcurement && (
-          <>
-            <div className="grid grid-cols-2 xl:grid-cols-4 gap-2">
-              {[
-                { key: "planned", label: t("procurement.kpi.planned"), value: formatMetric(headerKpis.planned), hint: t("procurement.kpi.plannedHint") },
-                { key: "committed", label: t("procurement.kpi.committed"), value: formatMetric(headerKpis.committed), hint: t("procurement.kpi.committedHint") },
-                { key: "received", label: t("procurement.kpi.received"), value: formatMetric(headerKpis.received), hint: t("procurement.kpi.receivedHint") },
-                { key: "variance", label: t("procurement.kpi.variance"), value: formatMetric(headerKpis.variance), hint: t("procurement.kpi.varianceHint") },
-              ].map((kpi) => (
-                <div key={kpi.key} className="rounded-lg border border-border bg-background/60 p-3 min-h-[96px] flex flex-col justify-between">
-                  <p className="text-xs text-muted-foreground">{kpi.label}</p>
-                  <p className="text-lg font-semibold text-foreground tabular-nums">{kpi.value}</p>
-                  <p className="text-[11px] text-muted-foreground">{kpi.hint}</p>
-                </div>
-              ))}
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-[minmax(220px,280px)_1fr] gap-3">
-              <div className="rounded-lg border border-border bg-background/60 p-3">
-                <label className="text-xs text-muted-foreground">{t("procurement.budget.label")}</label>
-                <Input
-                  type="text"
-                  readOnly
-                  value={fmtCost(normalizedBudget)}
-                  className="h-9 mt-1"
-                />
-              </div>
-
-              <div className="rounded-lg border border-border bg-background/60 p-3 space-y-2">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs text-muted-foreground">{t("procurement.budget.used")}</p>
-                    <p className="text-base font-semibold text-foreground tabular-nums">
-                      {formatMetric(usedBudgetMetric)}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs text-muted-foreground">{t("procurement.budget.remaining")}</p>
-                    <p className={cn(
-                      "text-base font-semibold tabular-nums",
-                      remainingBudgetMetric !== null && remainingBudgetMetric < 0 ? "text-destructive" : "text-foreground",
-                    )}
-                    >
-                      {formatMetric(remainingBudgetMetric)}
-                    </p>
-                  </div>
-                </div>
-                <Progress value={budgetProgressPct} className="h-2 bg-muted/60 [&>div]:rounded-full" />
-                <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
-                  <span>{t("procurement.budget.usedFormula")}</span>
-                  <span>{Math.round(budgetProgressPct)}%</span>
-                </div>
-                {headerDataStateHint && (
-                  <p className="text-[11px] text-muted-foreground">{headerDataStateHint}</p>
-                )}
-              </div>
-            </div>
-          </>
+          <ProcurementFinanceHeader
+            view={procurementFinanceView}
+            currency={estimateState.project.currency}
+          />
         )}
       </div>
 

@@ -118,7 +118,33 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql`
 - `supabase/migrations/20260513110100_estimate_share_snapshots_and_rpcs.sql`
 - `supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql`
+- `supabase/migrations/20260513140000_p0_derived_chat_key_for_ai_sessions.sql`
+- `supabase/migrations/20260513150000_p0_chat_session_handlers_use_derived_key.sql`
 - `supabase/migrations/20260514120000_org_document_folders.sql`
+- `supabase/migrations/20260514150000_p0_fix_uuid_v5_search_path_for_pgcrypto_digest.sql`
+- `supabase/migrations/20260516120000_extend_billing_provider_to_tbank.sql`
+- `supabase/migrations/20260516120100_create_payment_intents.sql`
+- `supabase/migrations/20260516120200_alter_subscriptions_recurrent.sql`
+- `supabase/migrations/20260521140100_create_org_with_contractor_profile.sql`
+- `supabase/migrations/20260521140200_upsert_contractor_profile_preserve_fields.sql`
+- `supabase/migrations/20260602075944_can_access_storage_object_workspace_org.sql`
+- `supabase/migrations/20260602150000_canonical_library_stages_and_works.sql`
+- `supabase/migrations/20260602150100_instance_tables_library_fks.sql`
+- `supabase/migrations/20260602150200_apply_template_propagate_library_fks.sql`
+- `supabase/migrations/20260604120000_create_card_bindings.sql`
+- `supabase/migrations/20260604120100_get_card_on_file_prefer_binding.sql`
+- `supabase/migrations/20260605130000_payment_intents_consent.sql`
+- `supabase/migrations/20260611120000_project_estimates_execution_status.sql`
+- `supabase/migrations/20260611120100_get_portfolio_finance_snapshot.sql`
+- `supabase/migrations/20260613120000_enable_pg_trgm_and_article_name_search_indexes.sql`
+- `supabase/migrations/20260613120100_search_canonical_library.sql`
+- `supabase/migrations/20260613120200_list_canonical_stages_with_works.sql`
+- `supabase/migrations/20260613120300_get_resource_article_detail.sql`
+- `supabase/migrations/20260613120400_add_library_work_to_estimate.sql`
+- `supabase/migrations/20260613120500_browse_canonical_catalog.sql`
+- `supabase/migrations/20260613120600_get_resource_article_price_comparison.sql`
+- `supabase/migrations/20260622120000_tighten_price_comparison_finance_gate.sql`
+- `supabase/migrations/20260624120000_add_library_work_resource_exclusions.sql`
 
 ## Exclusions
 
@@ -134,6 +160,7 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 ## Platform Dependencies
 
 - Extension `pgcrypto` from `supabase/migrations/20260306160000_extensions_and_base_helpers.sql`
+- Extension `pg_trgm` from `supabase/migrations/20260613120000_enable_pg_trgm_and_article_name_search_indexes.sql`
 
 ## Derived Contract Bundles
 

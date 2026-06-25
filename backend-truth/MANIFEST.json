@@ -377,8 +377,112 @@
       "sha256": "fc933ee37f8aeecdc349669b774a077b81a97aeb84d6980c2e3e37b45b3b42fc"
     },
     {
+      "path": "supabase/migrations/20260513140000_p0_derived_chat_key_for_ai_sessions.sql",
+      "sha256": "a1cc9ddd18c639ea84bf44ff9e72bbafe3a0d1baa72edd29c21691d4b13a636e"
+    },
+    {
+      "path": "supabase/migrations/20260513150000_p0_chat_session_handlers_use_derived_key.sql",
+      "sha256": "df8fda5591b966427b258b5c65aa5028ca7c68a554e23d6d65829ca4e673a35e"
+    },
+    {
       "path": "supabase/migrations/20260514120000_org_document_folders.sql",
       "sha256": "13fdd3ff194ea028f650b17bc75d9a0463919775deb8eb0f9100758345d9e0df"
+    },
+    {
+      "path": "supabase/migrations/20260514150000_p0_fix_uuid_v5_search_path_for_pgcrypto_digest.sql",
+      "sha256": "e4def10b5e1fcee6f90685d270aaed9334e015fc8f73f224984e6239788a888c"
+    },
+    {
+      "path": "supabase/migrations/20260516120000_extend_billing_provider_to_tbank.sql",
+      "sha256": "071c12fd634cc9e225aeaca710f22699dfd53dd6701613a6b88158a47afccb8f"
+    },
+    {
+      "path": "supabase/migrations/20260516120100_create_payment_intents.sql",
+      "sha256": "fb9ad2c600b33c337bb7108c5ad1cb785d5345c6a3e034e439876132ad2e80e2"
+    },
+    {
+      "path": "supabase/migrations/20260516120200_alter_subscriptions_recurrent.sql",
+      "sha256": "fe112ff1f5963913c2bdb2fbb5603262dbffd70d06e3d11d121f160343b5b211"
+    },
+    {
+      "path": "supabase/migrations/20260521140100_create_org_with_contractor_profile.sql",
+      "sha256": "0a48436994931906af66530202568034808246fe41f0a91274ddf27c253d8416"
+    },
+    {
+      "path": "supabase/migrations/20260521140200_upsert_contractor_profile_preserve_fields.sql",
+      "sha256": "9e56cea474507ee72f3396f9a979fad7aa7851ba1dfb74a17f57a4e1270143fb"
+    },
+    {
+      "path": "supabase/migrations/20260602075944_can_access_storage_object_workspace_org.sql",
+      "sha256": "6a7d4cdfc626baa9add7c9d0eacd8514defe01f24ab53929d51870f91691232c"
+    },
+    {
+      "path": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql",
+      "sha256": "05cc3f143d72339e84b610d8de0d6e04d3cd655cfa3a2bc8eb4a82a903945642"
+    },
+    {
+      "path": "supabase/migrations/20260602150100_instance_tables_library_fks.sql",
+      "sha256": "1cd22137aa33ef1ceeec8c5cc9ed265927640e6afec3d6270d55d3b911fd639d"
+    },
+    {
+      "path": "supabase/migrations/20260602150200_apply_template_propagate_library_fks.sql",
+      "sha256": "799a09ee4cf6a65008481b6d0eefc7bb9913c18e67e749113ed6b84c4f371e62"
+    },
+    {
+      "path": "supabase/migrations/20260604120000_create_card_bindings.sql",
+      "sha256": "58bd90bac9e50ca00fa6a85fae35a97161067961266a968852adff7948e48536"
+    },
+    {
+      "path": "supabase/migrations/20260604120100_get_card_on_file_prefer_binding.sql",
+      "sha256": "ae538f9e7f904116643fe423bcd9e564f6a436377fa73cb89ec712f5e077206c"
+    },
+    {
+      "path": "supabase/migrations/20260605130000_payment_intents_consent.sql",
+      "sha256": "9d32582a5ee963ac31a5b6c432958fa3eed9a32ea8fc972d3f40ecf03ba8282e"
+    },
+    {
+      "path": "supabase/migrations/20260611120000_project_estimates_execution_status.sql",
+      "sha256": "69f1e331b79e05a719c0887cabe29a53e5fd074e0f0508b4212662511cea3646"
+    },
+    {
+      "path": "supabase/migrations/20260611120100_get_portfolio_finance_snapshot.sql",
+      "sha256": "0f847ef131b64fef084580e166f8a6e61fe07f35a7c62b046aa94beb1a59e5b2"
+    },
+    {
+      "path": "supabase/migrations/20260613120000_enable_pg_trgm_and_article_name_search_indexes.sql",
+      "sha256": "5c950618234cbffc69f4dc8b528817eef799a20a9b32385db77aed3fb618075c"
+    },
+    {
+      "path": "supabase/migrations/20260613120100_search_canonical_library.sql",
+      "sha256": "a47eebd6c372bc4124f9720cf72ddb1d4b8dd28656ab89d283b48db66040a525"
+    },
+    {
+      "path": "supabase/migrations/20260613120200_list_canonical_stages_with_works.sql",
+      "sha256": "097ff862f0ce96aab3aa9140135b79d2c4fb2725755c04aa6bbf08b9db1e137e"
+    },
+    {
+      "path": "supabase/migrations/20260613120300_get_resource_article_detail.sql",
+      "sha256": "5e323f04843ce9080e2694763eda8e03f775c81d743a9c150bc4ed8cc35f3f1b"
+    },
+    {
+      "path": "supabase/migrations/20260613120400_add_library_work_to_estimate.sql",
+      "sha256": "10c6e237d98f87b5ffe345fb89dbd4bd14fbf1fb7281c8171d7283ff93df8e73"
+    },
+    {
+      "path": "supabase/migrations/20260613120500_browse_canonical_catalog.sql",
+      "sha256": "54bfb0f4c3bd5f453f4e62499747b3ded88d349739eb4a4b64b78f447ee9aa00"
+    },
+    {
+      "path": "supabase/migrations/20260613120600_get_resource_article_price_comparison.sql",
+      "sha256": "ab53e3d887217881daf027fe3e024947f2687d97d0626f625e17c9493954a4ae"
+    },
+    {
+      "path": "supabase/migrations/20260622120000_tighten_price_comparison_finance_gate.sql",
+      "sha256": "b0603c6247008016fdb84274e8b7f75dad578721bdb134e587fec650ac689dbe"
+    },
+    {
+      "path": "supabase/migrations/20260624120000_add_library_work_resource_exclusions.sql",
+      "sha256": "71fedeb8e85f3a2f37f72130f924d55f08385f97476e3ce728cc439d259de99d"
     }
   ],
   "generated_artifacts": [
@@ -498,7 +602,33 @@
     "sql/20260512140000_template_check_constraints_and_apply_rpc_hardening.sql",
     "sql/20260513110100_estimate_share_snapshots_and_rpcs.sql",
     "sql/20260513120000_harden_share_rpcs_codex_followup.sql",
+    "sql/20260513140000_p0_derived_chat_key_for_ai_sessions.sql",
+    "sql/20260513150000_p0_chat_session_handlers_use_derived_key.sql",
     "sql/20260514120000_org_document_folders.sql",
+    "sql/20260514150000_p0_fix_uuid_v5_search_path_for_pgcrypto_digest.sql",
+    "sql/20260516120000_extend_billing_provider_to_tbank.sql",
+    "sql/20260516120100_create_payment_intents.sql",
+    "sql/20260516120200_alter_subscriptions_recurrent.sql",
+    "sql/20260521140100_create_org_with_contractor_profile.sql",
+    "sql/20260521140200_upsert_contractor_profile_preserve_fields.sql",
+    "sql/20260602075944_can_access_storage_object_workspace_org.sql",
+    "sql/20260602150000_canonical_library_stages_and_works.sql",
+    "sql/20260602150100_instance_tables_library_fks.sql",
+    "sql/20260602150200_apply_template_propagate_library_fks.sql",
+    "sql/20260604120000_create_card_bindings.sql",
+    "sql/20260604120100_get_card_on_file_prefer_binding.sql",
+    "sql/20260605130000_payment_intents_consent.sql",
+    "sql/20260611120000_project_estimates_execution_status.sql",
+    "sql/20260611120100_get_portfolio_finance_snapshot.sql",
+    "sql/20260613120000_enable_pg_trgm_and_article_name_search_indexes.sql",
+    "sql/20260613120100_search_canonical_library.sql",
+    "sql/20260613120200_list_canonical_stages_with_works.sql",
+    "sql/20260613120300_get_resource_article_detail.sql",
+    "sql/20260613120400_add_library_work_to_estimate.sql",
+    "sql/20260613120500_browse_canonical_catalog.sql",
+    "sql/20260613120600_get_resource_article_price_comparison.sql",
+    "sql/20260622120000_tighten_price_comparison_finance_gate.sql",
+    "sql/20260624120000_add_library_work_resource_exclusions.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -523,6 +653,11 @@
       "kind": "extension",
       "name": "pgcrypto",
       "sourceMigration": "supabase/migrations/20260306160000_extensions_and_base_helpers.sql"
+    },
+    {
+      "kind": "extension",
+      "name": "pg_trgm",
+      "sourceMigration": "supabase/migrations/20260613120000_enable_pg_trgm_and_article_name_search_indexes.sql"
     }
   ]
 }

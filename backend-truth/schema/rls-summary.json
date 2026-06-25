@@ -2449,6 +2449,79 @@
           "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
         }
       ]
+    },
+    {
+      "schema": "public",
+      "table": "payment_intents",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "select"
+      ],
+      "policies": [
+        {
+          "name": "payment_intents_self_select",
+          "schema": "public",
+          "table": "payment_intents",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "auth.uid() = profile_id",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "table": "system_stage_articles",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "select"
+      ],
+      "policies": [
+        {
+          "name": "system_stage_articles_select",
+          "schema": "public",
+          "table": "system_stage_articles",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "true",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "table": "system_work_articles",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "select"
+      ],
+      "policies": [
+        {
+          "name": "system_work_articles_select",
+          "schema": "public",
+          "table": "system_work_articles",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "true",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "table": "card_bindings",
+      "rlsEnabled": true,
+      "authenticatedGrants": [],
+      "policies": []
     }
   ]
 }

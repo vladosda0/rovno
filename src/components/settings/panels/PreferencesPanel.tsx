@@ -18,7 +18,7 @@ import type {
   ProfileWeekStart,
 } from "@/data/workspace-source";
 import { MVP_SHOW_AI_AUTOMATION_MODE_UI } from "@/lib/mvp-ai-automation-ui";
-import { type AppLanguage, getStoredLanguage, setStoredLanguage } from "@/i18n";
+import { type AppLanguage, getStoredLanguage, setAppLanguage } from "@/i18n";
 
 const INTERFACE_LANGUAGES: Array<{ value: AppLanguage; labelKey: string }> = [
   { value: "ru", labelKey: "preferences.language.ru" },
@@ -51,7 +51,7 @@ const AUTOMATION_LEVELS = [
 ];
 
 export function PreferencesPanel() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { preferences, isLoading } = useWorkspaceProfilePreferencesState();
   const updatePreferences = useUpdateWorkspaceProfilePreferences();
   const [interfaceLanguage, setInterfaceLanguage] = useState<AppLanguage>(() => getStoredLanguage());
@@ -63,10 +63,9 @@ export function PreferencesPanel() {
   const [automationLevel, setAutomationLevel] = useState("manual");
 
   const handleInterfaceLanguageChange = (next: string) => {
-    const lang = next === "en" ? "en" : "ru";
+    const lang: AppLanguage = next === "en" ? "en" : "ru";
     setInterfaceLanguage(lang);
-    setStoredLanguage(lang);
-    void i18n.changeLanguage(lang);
+    setAppLanguage(lang);
     toast({ title: t("preferences.languageChangedToast") });
   };
 

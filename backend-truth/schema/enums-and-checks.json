@@ -554,6 +554,16 @@
     },
     {
       "schema": "public",
+      "table": "project_estimates",
+      "column": "execution_status",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "execution_status is null\n    or execution_status in ('planning', 'in_work', 'paused', 'finished')",
+      "sourceMigration": "supabase/migrations/20260611120000_project_estimates_execution_status.sql"
+    },
+    {
+      "schema": "public",
       "table": "estimate_versions",
       "column": "client_vat_bps",
       "constraintName": null,
@@ -908,6 +918,19 @@
     },
     {
       "schema": "public",
+      "table": "billing_customers",
+      "column": "provider",
+      "constraintName": "billing_customers_provider_check",
+      "kind": "enum_like",
+      "allowedValues": [
+        "stripe",
+        "tbank"
+      ],
+      "expression": "provider in ('stripe', 'tbank')",
+      "sourceMigration": "supabase/migrations/20260516120000_extend_billing_provider_to_tbank.sql"
+    },
+    {
+      "schema": "public",
       "table": "subscriptions",
       "column": "provider",
       "constraintName": null,
@@ -960,6 +983,19 @@
       "allowedValues": null,
       "expression": "amount_cents is null or amount_cents >= 0",
       "sourceMigration": "supabase/migrations/20260306165000_billing_launch_tables.sql"
+    },
+    {
+      "schema": "public",
+      "table": "subscriptions",
+      "column": "provider",
+      "constraintName": "subscriptions_provider_check",
+      "kind": "enum_like",
+      "allowedValues": [
+        "stripe",
+        "tbank"
+      ],
+      "expression": "provider in ('stripe', 'tbank')",
+      "sourceMigration": "supabase/migrations/20260516120000_extend_billing_provider_to_tbank.sql"
     },
     {
       "schema": "public",
@@ -1497,6 +1533,168 @@
       "allowedValues": null,
       "expression": "char_length(trim(name)) between 1 and 80",
       "sourceMigration": "supabase/migrations/20260514120000_org_document_folders.sql"
+    },
+    {
+      "schema": "public",
+      "table": "payment_intents",
+      "column": "provider",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "tbank"
+      ],
+      "expression": "provider in ('tbank')",
+      "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+    },
+    {
+      "schema": "public",
+      "table": "payment_intents",
+      "column": "amount_kopecks",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "amount_kopecks > 0",
+      "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+    },
+    {
+      "schema": "public",
+      "table": "payment_intents",
+      "column": "currency",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "currency = 'RUB'",
+      "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+    },
+    {
+      "schema": "public",
+      "table": "payment_intents",
+      "column": "status",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "pending",
+        "new",
+        "authorized",
+        "confirmed",
+        "rejected",
+        "cancelled",
+        "refunded",
+        "partial_refund"
+      ],
+      "expression": "status in (\n    'pending',\n    'new',\n    'authorized',\n    'confirmed',\n    'rejected',\n    'cancelled',\n    'refunded',\n    'partial_refund'\n  )",
+      "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+    },
+    {
+      "schema": "public",
+      "table": "payment_intents",
+      "column": "amount_refunded_kopecks",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "amount_refunded_kopecks >= 0",
+      "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+    },
+    {
+      "schema": "public",
+      "table": "payment_intents",
+      "column": null,
+      "constraintName": "payment_intents_recurrent_kind_check",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "not (is_recurrent_setup and is_recurrent_charge)",
+      "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+    },
+    {
+      "schema": "public",
+      "table": "payment_intents",
+      "column": null,
+      "constraintName": "payment_intents_parent_intent_consistency_check",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "case\n      when is_recurrent_charge then parent_intent_id is not null\n      else parent_intent_id is null\n    end",
+      "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+    },
+    {
+      "schema": "public",
+      "table": "system_stage_articles",
+      "column": null,
+      "constraintName": "system_stage_articles_name_nonempty",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "length(trim(name)) > 0",
+      "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+    },
+    {
+      "schema": "public",
+      "table": "system_work_articles",
+      "column": "default_qty",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "default_qty >= 0",
+      "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+    },
+    {
+      "schema": "public",
+      "table": "system_work_articles",
+      "column": "default_resource_type",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "labor",
+        "subcontractor",
+        "other"
+      ],
+      "expression": "default_resource_type in ('labor','subcontractor','other')",
+      "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+    },
+    {
+      "schema": "public",
+      "table": "system_work_articles",
+      "column": null,
+      "constraintName": "system_work_articles_name_nonempty",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "length(trim(name)) > 0",
+      "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+    },
+    {
+      "schema": "public",
+      "table": "system_work_articles",
+      "column": null,
+      "constraintName": "system_work_articles_default_unit_nonempty",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "length(trim(default_unit)) > 0",
+      "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+    },
+    {
+      "schema": "public",
+      "table": "card_bindings",
+      "column": "provider",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "tbank"
+      ],
+      "expression": "provider in ('tbank')",
+      "sourceMigration": "supabase/migrations/20260604120000_create_card_bindings.sql"
+    },
+    {
+      "schema": "public",
+      "table": "card_bindings",
+      "column": "status",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "pending",
+        "active",
+        "inactive",
+        "rejected"
+      ],
+      "expression": "status in (\n    'pending',\n    'active',\n    'inactive',\n    'rejected'\n  )",
+      "sourceMigration": "supabase/migrations/20260604120000_create_card_bindings.sql"
     }
   ]
 }

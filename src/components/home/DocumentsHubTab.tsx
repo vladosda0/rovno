@@ -10,8 +10,9 @@ import {
   type LeafSlug,
 } from "@/components/home/documents-hub/DocumentsLeftNav";
 import { MobileSectionNav } from "@/components/home/documents-hub/MobileSectionNav";
-import { useActiveOrg, useUserOrganizations } from "@/hooks/use-orgs";
-import { UploadDocumentDialog } from "@/components/home/UploadDocumentDialog";
+import { MultiStepUploadModal } from "@/components/upload/MultiStepUploadModal";
+import type { UploadType } from "@/components/upload/types";
+import { leafForUploadResult } from "@/components/upload/upload-destination";
 
 const MyAllDocsLeaf = lazy(() =>
   import("@/components/home/documents-hub/leaves/MyAllDocsLeaf").then((m) => ({ default: m.MyAllDocsLeaf })),
@@ -71,44 +72,24 @@ const LEAF_RENDERERS: Record<LeafSlug, React.ComponentType> = {
 
 const SUB_TAB_PARAM = "docTab";
 
-function isMyOrOrgAll(slug: string): boolean {
-  return slug === "my-all" || slug === "org-all";
+/** Upload type to pre-select when opening the modal from a given leaf's CTA. */
+function presetForLeaf(slug: string): UploadType {
+  if (slug === "org-estimates" || slug === "estimates") return "estimate_template";
+  if (slug === "catalogs" || slug === "org-catalogs") return "catalog";
+  if (slug === "org-contractor-card") return "visitka";
+  return "document";
 }
 
-function ctaForLeaf(slug: string): { labelKey: string; tooltipKey?: string; mode: "upload" | "disabled" } {
-  if (isMyOrOrgAll(slug) || slug === "my-notes" || slug === "my-media" || slug === "org-media") {
-    return { labelKey: "home.documentsHub.cta.addDocument", mode: "upload" };
-  }
-  if (slug === "org-estimates" || slug === "estimates") {
-    return {
-      labelKey: "home.documentsHub.cta.createTemplate",
-      tooltipKey: "home.documentsHub.cta.createTemplateDisabled",
-      mode: "disabled",
-    };
-  }
-  if (slug === "catalogs" || slug === "org-catalogs") {
-    return {
-      labelKey: "home.documentsHub.cta.addCatalog",
-      tooltipKey: "home.documentsHub.cta.addCatalogDisabled",
-      mode: "disabled",
-    };
-  }
-  if (slug === "org-contractor-card") {
-    return {
-      labelKey: "home.documentsHub.cta.createVisitka",
-      tooltipKey: "home.documentsHub.cta.createVisitkaDisabled",
-      mode: "disabled",
-    };
-  }
-  return { labelKey: "home.documentsHub.cta.addDocument", mode: "upload" };
+function ctaLabelForLeaf(slug: string): string {
+  if (slug === "org-estimates" || slug === "estimates") return "home.documentsHub.cta.createTemplate";
+  if (slug === "catalogs" || slug === "org-catalogs") return "home.documentsHub.cta.addCatalog";
+  if (slug === "org-contractor-card") return "home.documentsHub.cta.createVisitka";
+  return "home.documentsHub.cta.addDocument";
 }
 
 export function DocumentsHubTab() {
   const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeOrg = useActiveOrg();
-  const { data: orgs } = useUserOrganizations();
-  const userCanManageAnyOrg = (orgs ?? []).some((o) => o.role === "owner" || o.role === "admin");
 
   const [activeLeaf, setActiveLeaf] = useState<LeafSlug>(() => {
     const param = searchParams.get(SUB_TAB_PARAM);
@@ -147,46 +128,30 @@ export function DocumentsHubTab() {
   );
 
   const ActiveSection = LEAF_RENDERERS[activeLeaf] ?? MyAllDocsLeaf;
-  const cta = ctaForLeaf(activeLeaf);
+  const ctaLabel = t(ctaLabelForLeaf(activeLeaf));
+  const presetType = presetForLeaf(activeLeaf);
 
-  // Hide org-only create-template CTA from users who cannot manage any org.
-  const showCta = (() => {
-    if (cta.mode === "upload") return true;
-    if (cta.labelKey === "home.documentsHub.cta.createTemplate") {
-      return userCanManageAnyOrg;
-    }
-    return true;
-  })();
+  const handleCtaClick = () => setUploadOpen(true);
 
-  const handleCtaClick = () => {
-    if (cta.mode === "upload") setUploadOpen(true);
-  };
-
-  const ctaButtonDesktop = showCta ? (
-    <Button
-      className="w-full justify-start gap-2"
-      size="default"
-      onClick={handleCtaClick}
-      disabled={cta.mode === "disabled"}
-      title={cta.tooltipKey ? t(cta.tooltipKey) : undefined}
-    >
+  const ctaButtonDesktop = (
+    <Button className="w-full justify-start gap-2" size="default" onClick={handleCtaClick}>
       <Plus className="h-4 w-4" />
-      {t(cta.labelKey)}
+      {ctaLabel}
     </Button>
-  ) : null;
+  );
 
   // Mobile FAB: round button fixed at the bottom-right of the viewport. Hidden
   // on desktop where the inline left-nav CTA covers the same action.
-  const ctaFabMobile = showCta && cta.mode !== "disabled" ? (
+  const ctaFabMobile = (
     <Button
       className="md:hidden fixed bottom-4 right-4 z-30 h-14 w-14 rounded-full shadow-lg"
       size="icon"
       onClick={handleCtaClick}
-      aria-label={t(cta.labelKey)}
+      aria-label={ctaLabel}
     >
       <Plus className="h-6 w-6" />
     </Button>
-  ) : null;
+  );
 
   const fallback = (
     <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
@@ -206,7 +171,7 @@ export function DocumentsHubTab() {
         <DocumentsLeftNav
           activeSlug={activeLeaf}
           onSelect={handleSelect}
-          cta={ctaButtonDesktop ?? undefined}
+          cta={ctaButtonDesktop}
         />
       </aside>
       <main className="min-w-0 flex-1 px-4 pt-3 pb-20 sm:px-6 md:pb-6 space-y-3">
@@ -216,7 +181,16 @@ export function DocumentsHubTab() {
         </Suspense>
       </main>
 
-      <UploadDocumentDialog open={uploadOpen} onOpenChange={setUploadOpen} />
+      <MultiStepUploadModal
+        open={uploadOpen}
+        onOpenChange={setUploadOpen}
+        presetType={presetType}
+        onComplete={(result) => {
+          // After upload, jump to the leaf where the file landed.
+          const leaf = leafForUploadResult(result);
+          if (leaf && VALID_LEAVES.has(leaf)) handleSelect(leaf as LeafSlug);
+        }}
+      />
       {ctaFabMobile}
     </div>
   );

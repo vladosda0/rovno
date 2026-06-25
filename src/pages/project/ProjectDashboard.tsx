@@ -51,6 +51,7 @@ export default function ProjectDashboard() {
   const hrReadsEnabled = projectDomainAllowsView(getProjectDomainAccess(perm.seam, "hr"));
   const financeSummary = useEstimateV2FinanceProjectSummaryFromWorkspace(projectId, project ?? null, {
     hrReadsEnabled,
+    tasks,
   });
   const estimateProject = useEstimateV2Project(projectId);
   const hasEstimate =
@@ -202,7 +203,12 @@ export default function ProjectDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-6 gap-sp-2 items-stretch">
         <TaskSummaryWidget tasks={tasks} projectId={projectId} className="lg:col-span-4 h-full" />
         {canViewSensitiveDetail && (
-          <BudgetWidget summary={financeSummary} projectId={projectId} className="lg:col-span-2 h-full" />
+          <BudgetWidget
+            summary={financeSummary}
+            projectId={projectId}
+            isLoading={estimateProject.isLoading}
+            className="lg:col-span-2 h-full"
+          />
         )}
       </div>
 

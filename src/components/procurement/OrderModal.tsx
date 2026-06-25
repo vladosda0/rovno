@@ -36,6 +36,25 @@ import {
   resourceLineTypeToPersisted,
 } from "@/lib/estimate-v2/resource-type-contract";
 
+/**
+ * Supplier names are free-text and can be a natural person (ИП), so the raw
+ * name must not leave the client as an analytics property (152-ФЗ). We send a
+ * stable, non-reversible fingerprint instead: the first 8 hex chars of the
+ * SHA-256 of the trimmed name. Enough to group orders by supplier in funnels
+ * without ever transmitting the name. Returns null for an empty name or when
+ * SubtleCrypto is unavailable (e.g. a non-secure context).
+ */
+async function hashSupplierName(name: string | null | undefined): Promise<string | null> {
+  const trimmed = name?.trim();
+  if (!trimmed) return null;
+  if (typeof crypto === "undefined" || !crypto.subtle) return null;
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(trimmed));
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("")
+    .slice(0, 8);
+}
+
 interface OrderModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -370,12 +389,13 @@ export function OrderModal({
       });
 
       let finalOrderId = created.id;
+      const supplierHash = await hashSupplierName(supplierName);
       if (action === "place") {
         const placed = await source.placeSupplierOrder(created.id);
         finalOrderId = placed.id;
-        trackEvent("procurement_order_placed", { project_id: projectId, kind: "supplier", supplier_name: supplierName || null, line_count: positiveLines.length });
+        trackEvent("procurement_order_placed", { project_id: projectId, kind: "supplier", supplier_hash: supplierHash, line_count: positiveLines.length });
       } else {
-        trackEvent("procurement_order_draft_created", { project_id: projectId, kind: "supplier", supplier_name: supplierName || null, line_count: positiveLines.length });
+        trackEvent("procurement_order_draft_created", { project_id: projectId, kind: "supplier", supplier_hash: supplierHash, line_count: positiveLines.length });
       }
 
       if (supabaseMode) {
