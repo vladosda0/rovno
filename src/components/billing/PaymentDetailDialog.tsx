@@ -115,9 +115,10 @@ export function PaymentDetailDialog({ payment, userEmail, trigger }: PaymentDeta
 
           <TabsContent value="refund" className="pt-sp-2">
             {payment.status !== "confirmed" ? (
-              // The history now lists refunded rows too. A payment that is no
-              // longer 'confirmed' has already been (fully or partially)
-              // refunded, so we never offer another refund request for it.
+              // The history lists confirmed + refunded rows, so a non-confirmed
+              // row here is a full refund: never offer another refund request for
+              // it. (partial_refund is excluded from the history for now — see
+              // PaymentHistory; its remainder-refund UX is a separate follow-up.)
               <p className="text-body-sm text-muted-foreground">
                 {t("billing.refund.alreadyRefunded")}
               </p>

@@ -1114,7 +1114,6 @@
   "billing.refund.partialCta": "Запросить частичный возврат",
   "billing.refund.alreadyRefunded": "Этот платёж уже возвращён.",
   "billing.payment.statusRefunded": "Возвращён",
-  "billing.payment.statusPartialRefund": "Частичный возврат",
   "billing.payment.detailTitle": "Платёж",
   "billing.payment.tabReceipt": "Чек",
   "billing.payment.tabRefund": "Возврат",

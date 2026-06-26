@@ -1102,7 +1102,6 @@
   "billing.refund.partialCta": "Request partial refund",
   "billing.refund.alreadyRefunded": "This payment has already been refunded.",
   "billing.payment.statusRefunded": "Refunded",
-  "billing.payment.statusPartialRefund": "Partial refund",
   "billing.payment.detailTitle": "Payment",
   "billing.payment.tabReceipt": "Receipt",
   "billing.payment.tabRefund": "Refund",
