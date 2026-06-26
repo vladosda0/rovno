@@ -24,9 +24,22 @@ export function PaymentHistory() {
     queryFn: async (): Promise<PaymentIntentRow[]> => {
       const { data, error } = await rawSupabase
         .from("payment_intents")
+        // Show completed money movements: a successful payment AND its later
+        // full refund are the SAME row whose status flips confirmed -> refunded.
+        // Filtering to 'confirmed' alone hid refunded payments entirely, so a
+        // "paid then refunded" user saw an empty history. Failed attempts
+        // (rejected/cancelled) stay excluded as retry noise. partial_refund is
+        // intentionally excluded for now: its correct UX (show the refunded
+        // amount + allow refunding the remaining balance) is a separate follow-up,
+        // and until then a partial row must not render as a plain full refund.
         .select(COLUMNS)
-        .eq("status", "confirmed")
-        .order("confirmed_at", { ascending: false })
+        .in("status", ["confirmed", "refunded"])
+        // Order by created_at (always set), not confirmed_at: a refunded row from
+        // an out-of-order REFUNDED-before-CONFIRMED callback has confirmed_at NULL,
+        // and Postgres DESC defaults to NULLS FIRST, which would float it to the
+        // top as if newest. created_at also matches the displayed-date fallback
+        // (confirmed_at ?? created_at) below.
+        .order("created_at", { ascending: false })
         .limit(12);
       if (error) throw error;
       return (data ?? []) as PaymentIntentRow[];
@@ -51,12 +64,13 @@ export function PaymentHistory() {
       {data.map((row) => {
         const name = PLANS[row.plan_code as keyof typeof PLANS]?.display_name ?? row.plan_code;
         const when = row.confirmed_at ?? row.created_at;
+        const isRefunded = row.status === "refunded";
         return (
           <li key={row.id}>
             {/* The whole row opens the payment detail + refund-request dialog.
                 "Request refund" is no longer a standalone control in the list;
-                it lives inside the dialog (all listed rows are 'confirmed', so
-                every payment is refundable). */}
+                it lives inside the dialog, which only offers a refund for rows
+                still in 'confirmed' (refunded rows show an info note instead). */}
             <PaymentDetailDialog
               payment={row}
               userEmail={user?.email ?? ""}
@@ -72,7 +86,13 @@ export function PaymentHistory() {
                   <span className="shrink-0 font-medium tabular-nums text-foreground">
                     {formatRubFromKopecks(row.amount_kopecks)}
                   </span>
-                  <Check className="h-4 w-4 shrink-0 text-success" />
+                  {isRefunded ? (
+                    <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-caption font-medium text-muted-foreground">
+                      {t("billing.payment.statusRefunded")}
+                    </span>
+                  ) : (
+                    <Check className="h-4 w-4 shrink-0 text-success" />
+                  )}
                   <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                 </button>
               }
