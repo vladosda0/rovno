@@ -32,6 +32,12 @@ export default function Checkout() {
   const plan = isValidPlan ? getPlan(planCode) : null;
   const allowed = BILLING_ENABLED && isValidPlan;
 
+  // "Back to pricing" target. An authenticated user returns to their billing
+  // settings (plans + usage). A guest — who can reach checkout via a pasted or
+  // shared link, since the route has no auth guard — must go to the landing
+  // pricing section instead; /settings would just bounce them to a guest view.
+  const backHref = authStatus === "authenticated" ? "/settings?tab=billing" : "/#pricing";
+
   // M2: never let a user with an active subscription buy the SAME or a LOWER tier
   // again (double charge). An upgrade (higher tier) is the exception — it is
   // allowed through, and tbank-init-payment charges only the catalogue
@@ -111,6 +117,17 @@ export default function Checkout() {
     }
   }, [allowed, navigate]);
 
+  // A guest who reached checkout via a pasted/shared link can't pay —
+  // tbank-init-payment binds the subscription to the JWT profile and rejects an
+  // anonymous caller with 401. Send them to sign up first (mirroring the
+  // PricingBlock flow), preserving this checkout as the post-auth destination,
+  // so they never see a payment form they can't use.
+  useEffect(() => {
+    if (!allowed || authStatus !== "guest") return;
+    const next = `/billing/checkout?plan=${planCode}`;
+    navigate(`/auth/signup?next=${encodeURIComponent(next)}`, { replace: true });
+  }, [allowed, authStatus, planCode, navigate]);
+
   // Funnel (M1): fire ONCE when the payable checkout is actually shown. Kept out
   // of the consent-gated init effect so it isn't re-emitted on every consent
   // toggle / retry. (A distinct consent-tick analytics event is deferred to the
@@ -189,6 +206,9 @@ export default function Checkout() {
   }, [statusQuery.data, navigate]);
 
   if (!allowed || !plan) return null;
+  // Guest is being redirected to sign-up by the effect above; render nothing
+  // (and don't fire the payment form) for the frame before navigation lands.
+  if (authStatus === "guest") return null;
   if (subLoading) {
     return (
       <div className="mx-auto w-full max-w-xl px-sp-3 py-sp-4">
@@ -219,7 +239,7 @@ export default function Checkout() {
   return (
     <div className="mx-auto w-full max-w-xl px-sp-3 py-sp-4">
       <Button variant="ghost" size="sm" asChild className="mb-sp-3 -ml-2">
-        <Link to="/#pricing">
+        <Link to={backHref}>
           <ChevronLeft className="mr-1 h-4 w-4" />
           {t("billing.checkout.back")}
         </Link>
