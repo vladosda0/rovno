@@ -10,7 +10,7 @@ import {
   subscribeInventory,
   type InventoryStockRow,
 } from "@/data/inventory-store";
-import { useWorkspaceMode, useWorkspaceProjects } from "@/hooks/use-workspace-source";
+import { useWorkspaceMode, useWorkspaceProjectsState } from "@/hooks/use-workspace-source";
 import type { InventoryLocation, Project } from "@/types/entities";
 
 const INVENTORY_QUERY_STALE_TIME_MS = 60_000;
@@ -142,7 +142,8 @@ const EMPTY_HOME_INVENTORY_PROJECTS: HomeInventoryProjectSnapshot[] = [];
 export function useHomeInventorySnapshot(): HomeInventorySnapshot {
   const mode = useWorkspaceMode();
   const supabaseMode = mode.kind === "supabase" ? mode : null;
-  const workspaceHookProjects = useWorkspaceProjects();
+  const { projects: workspaceHookProjects, isLoading: workspaceProjectsLoading } =
+    useWorkspaceProjectsState();
 
   /** Align with the sensitive-detail map: demo/local use the browser store, not an empty Supabase project list. */
   const browserMode = mode.kind === "demo" || mode.kind === "local";
@@ -188,7 +189,7 @@ export function useHomeInventorySnapshot(): HomeInventorySnapshot {
     };
   }
 
-  if (stockQueries.some((query) => query.isPending)) {
+  if (workspaceProjectsLoading || stockQueries.some((query) => query.isPending)) {
     return { projects: EMPTY_HOME_INVENTORY_PROJECTS, isLoading: true, totalRows: 0 };
   }
 

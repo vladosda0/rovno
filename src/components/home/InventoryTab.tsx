@@ -77,7 +77,7 @@ export function InventoryTab() {
             </div>
             <div className="divide-y divide-border px-4 pb-4 sm:px-6 sm:pb-6">
               {project.rows.map((row) => (
-                <div key={`${row.locationId}::${row.inventoryKey}`} className="flex items-center gap-3 py-2">
+                <div key={`${row.locationId}::${row.inventoryItemId ?? row.inventoryKey}`} className="flex items-center gap-3 py-2">
                   <Package className="h-4 w-4 text-muted-foreground shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-body-sm text-foreground truncate">{row.title ?? row.inventoryKey}</p>
