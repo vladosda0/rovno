@@ -114,7 +114,15 @@ export function PaymentDetailDialog({ payment, userEmail, trigger }: PaymentDeta
           </TabsContent>
 
           <TabsContent value="refund" className="pt-sp-2">
-            {withinWindow || partialMode ? (
+            {payment.status !== "confirmed" ? (
+              // The history lists confirmed + refunded rows, so a non-confirmed
+              // row here is a full refund: never offer another refund request for
+              // it. (partial_refund is excluded from the history for now — see
+              // PaymentHistory; its remainder-refund UX is a separate follow-up.)
+              <p className="text-body-sm text-muted-foreground">
+                {t("billing.refund.alreadyRefunded")}
+              </p>
+            ) : withinWindow || partialMode ? (
               <RefundRequestForm
                 payment={payment}
                 partial={!withinWindow}

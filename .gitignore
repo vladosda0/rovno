@@ -48,3 +48,11 @@ supabase/.temp/
 HANDOFF.md
 STATUS.md
 handoff-*.md
+HANDOFF_*.md
+
+# Local-only spec / audit / review scratch docs — never tracked
+*_SPEC.md
+*-spec.md
+AUDIT_*.md
+REVIEW_*.md
+CODE_REVIEW_*.md

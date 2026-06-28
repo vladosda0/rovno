@@ -19,15 +19,13 @@ interface TBankPaymentFormProps {
   onFailed?: () => void;
 }
 
-// Embeds T-Bank's real web-acquiring widgets via integration.js: quick-pay buttons
-// (features.payment) and the inline card form (features.iframe), initialised once for
-// the page. Both features embed the same hosted PaymentURL inline instead of
-// redirecting. Best-effort: if the script / VITE_TBANK_TERMINAL_KEY / init fails, it
-// renders a fallback note and the caller's hosted-page link takes over; payment-status
+// Embeds T-Bank's real web-acquiring iframe via integration.js, initialised once
+// for the page. The iframe includes the supported payment methods itself.
+// Best-effort: if the script / VITE_TBANK_TERMINAL_KEY / init fails, it renders
+// a fallback note and the caller's hosted-page link takes over; payment-status
 // polling still completes the flow.
 export function TBankPaymentForm({ paymentUrl, onReady, onStatus, onFailed }: TBankPaymentFormProps) {
   const { t, i18n } = useTranslation();
-  const quickPayRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
 
@@ -48,7 +46,7 @@ export function TBankPaymentForm({ paymentUrl, onReady, onStatus, onFailed }: TB
     }
     loadTbankIntegration()
       .then((integration) => {
-        if (!active || !quickPayRef.current || !cardRef.current) return undefined;
+        if (!active || !cardRef.current) return undefined;
         const paymentStartCallback = () => Promise.resolve(paymentUrl);
         // Treat any status event as "ready" too (clears the hosted-page fallback timer),
         // and pass the status callback in both the top-level and nested `status` shape so
@@ -68,7 +66,6 @@ export function TBankPaymentForm({ paymentUrl, onReady, onStatus, onFailed }: TB
             terminalKey,
             product: "eacq",
             features: {
-              payment: { container: quickPayRef.current, config, paymentStartCallback },
               iframe: { container: cardRef.current, config, paymentStartCallback },
             },
           })
@@ -92,17 +89,10 @@ export function TBankPaymentForm({ paymentUrl, onReady, onStatus, onFailed }: TB
   }
 
   return (
-    <div className="space-y-sp-2">
-      <p className="text-body-sm font-medium text-foreground">
-        {t("billing.checkout.quickPayTitle")}
-      </p>
-      <div ref={quickPayRef} data-testid="tbank-quickpay" />
-      <p className="text-caption text-muted-foreground">{t("billing.checkout.orCard")}</p>
-      <div
-        ref={cardRef}
-        data-testid="tbank-iframe"
-        className="min-h-[220px] rounded-card border border-border bg-background/40"
-      />
-    </div>
+    <div
+      ref={cardRef}
+      data-testid="tbank-iframe"
+      className="min-h-[220px] rounded-card border border-border bg-background/40"
+    />
   );
 }

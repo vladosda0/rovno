@@ -26,7 +26,7 @@ export function CheckoutBlocked({ planName, periodEndsLabel, manageHref }: Check
           <Link to={manageHref}>{t("billing.checkout.alreadySubscribed.cta")}</Link>
         </Button>
         <Button asChild variant="outline">
-          <Link to="/#pricing">{t("billing.checkout.back")}</Link>
+          <Link to="/settings?tab=billing">{t("billing.checkout.back")}</Link>
         </Button>
       </div>
     </div>
