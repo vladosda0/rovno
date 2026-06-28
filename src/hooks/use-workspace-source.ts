@@ -234,7 +234,7 @@ export function useUpdateWorkspaceProfileContactInfo() {
   });
 }
 
-export function useWorkspaceProjects(): Project[] {
+export function useWorkspaceProjectsState(): { projects: Project[]; isLoading: boolean } {
   const mode = useWorkspaceModeState();
   const supabaseMode = mode.kind === "supabase" ? mode : null;
   const projectsQuery = useQuery({
@@ -250,10 +250,17 @@ export function useWorkspaceProjects(): Project[] {
   });
 
   if (mode.kind === "demo" || mode.kind === "local") {
-    return store.getProjects();
+    return { projects: store.getProjects(), isLoading: false };
   }
 
-  return projectsQuery.data ?? [];
+  return {
+    projects: projectsQuery.data ?? [],
+    isLoading: Boolean(supabaseMode) && projectsQuery.isPending,
+  };
+}
+
+export function useWorkspaceProjects(): Project[] {
+  return useWorkspaceProjectsState().projects;
 }
 
 export function useWorkspaceProjectState(projectId: string): {

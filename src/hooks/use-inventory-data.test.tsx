@@ -3,9 +3,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as inventoryStore from "@/data/inventory-store";
 import * as inventorySource from "@/data/inventory-source";
-import { useInventoryStock, useLocations } from "@/hooks/use-inventory-data";
+import { useHomeInventorySnapshot, useInventoryStock, useLocations } from "@/hooks/use-inventory-data";
 import { authenticateRuntimeAuth } from "@/test/runtime-auth";
-import type { InventoryLocation } from "@/types/entities";
+import type { InventoryLocation, Project } from "@/types/entities";
+import * as store from "@/data/store";
+import * as workspaceSource from "@/data/workspace-source";
 
 function createQueryClient() {
   return new QueryClient({
@@ -132,5 +134,91 @@ describe("inventory read hooks", () => {
     expect(screen.getByTestId("stock-qtys")).toHaveTextContent("5");
     expect(source.getProjectLocations).toHaveBeenCalledWith("project-1");
     expect(source.getProjectStock).toHaveBeenCalledWith("project-1");
+  });
+});
+
+function SnapshotProbe() {
+  const snapshot = useHomeInventorySnapshot();
+  return (
+    <div>
+      <span data-testid="snap-loading">{String(snapshot.isLoading)}</span>
+      <span data-testid="snap-total">{snapshot.totalRows}</span>
+      <span data-testid="snap-projects">
+        {snapshot.projects.map((entry) => `${entry.projectTitle}:${entry.rows.length}`).join("|")}
+      </span>
+    </div>
+  );
+}
+
+describe("useHomeInventorySnapshot", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it("groups per-project stock from the browser store in demo/local mode", () => {
+    const queryClient = createQueryClient();
+    vi.spyOn(store, "getProjects").mockReturnValue([
+      { id: "p1", title: "Alpha" },
+      { id: "p2", title: "Beta" },
+    ] as unknown as Project[]);
+    vi.spyOn(inventoryStore, "listStockByProject").mockImplementation((projectId) =>
+      projectId === "p1"
+        ? [
+            { projectId: "p1", locationId: "l1", inventoryKey: "cable|m", qty: 3 },
+            { projectId: "p1", locationId: "l1", inventoryKey: "pipe|m", qty: 5 },
+          ]
+        : [],
+    );
+    vi.spyOn(inventoryStore, "subscribeInventory").mockReturnValue(() => {});
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <SnapshotProbe />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByTestId("snap-loading")).toHaveTextContent("false");
+    expect(screen.getByTestId("snap-total")).toHaveTextContent("2");
+    expect(screen.getByTestId("snap-projects")).toHaveTextContent("Alpha:2|Beta:0");
+  });
+
+  it("fans out per-project stock in supabase mode, reports loading, and aligns rows by project", async () => {
+    vi.stubEnv("VITE_WORKSPACE_SOURCE", "supabase");
+    authenticateRuntimeAuth();
+    const queryClient = createQueryClient();
+
+    vi.spyOn(workspaceSource, "getWorkspaceSource").mockResolvedValue({
+      getProjects: vi.fn(async () => [
+        { id: "p1", title: "Alpha" },
+        { id: "p2", title: "Beta" },
+      ]),
+    } as unknown as Awaited<ReturnType<typeof workspaceSource.getWorkspaceSource>>);
+
+    const getProjectStock = vi.fn(async (projectId: string) =>
+      projectId === "p1"
+        ? [{ projectId: "p1", locationId: "l1", inventoryKey: "cable|m", qty: 4 }]
+        : [],
+    );
+    vi.spyOn(inventorySource, "getInventorySource").mockResolvedValue({
+      mode: "supabase",
+      getProjectLocations: vi.fn(),
+      createProjectLocation: vi.fn(),
+      getProjectStock,
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <SnapshotProbe />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByTestId("snap-loading")).toHaveTextContent("true");
+
+    await waitFor(() => {
+      expect(screen.getByTestId("snap-loading")).toHaveTextContent("false");
+    });
+    expect(screen.getByTestId("snap-total")).toHaveTextContent("1");
+    expect(screen.getByTestId("snap-projects")).toHaveTextContent("Alpha:1|Beta:0");
   });
 });
