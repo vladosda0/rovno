@@ -77,6 +77,25 @@ export interface ReceiveSupplierOrderInput {
   lines: Array<{ lineId: string; qty: number }>;
 }
 
+export interface PlaceStockTransferLineInput {
+  procurementItemId: string;
+  title: string;
+  qty: number;
+  unit: string;
+  spec?: string | null;
+  plannedUnitPrice?: number | null;
+  actualUnitPrice?: number | null;
+}
+
+export interface PlaceStockTransferInput {
+  projectId: string;
+  fromLocationId: string;
+  toLocationId: string;
+  deliveryDeadline?: string | null;
+  note?: string | null;
+  lines: PlaceStockTransferLineInput[];
+}
+
 export interface OrdersSource {
   mode: WorkspaceMode["kind"];
   getProjectOrders: (
@@ -92,6 +111,7 @@ export interface OrdersSource {
   createDraftSupplierOrder: (input: CreateSupplierDraftOrderInput) => Promise<OrderWithLines>;
   placeSupplierOrder: (orderId: string) => Promise<OrderWithLines>;
   receiveSupplierOrder: (orderId: string, input: ReceiveSupplierOrderInput) => Promise<OrderWithLines>;
+  placeStockTransfer: (input: PlaceStockTransferInput) => Promise<OrderWithLines>;
 }
 
 function createBrowserOrdersSource(mode: "demo" | "local"): OrdersSource {
@@ -137,6 +157,33 @@ function createBrowserOrdersSource(mode: "demo" | "local"): OrdersSource {
     },
     async receiveSupplierOrder(orderId: string, input: ReceiveSupplierOrderInput) {
       const result = receiveOrder(orderId, input);
+      if (!result.ok) {
+        throw new Error(result.error);
+      }
+      return result.order;
+    },
+    async placeStockTransfer(input: PlaceStockTransferInput) {
+      const created = createDraftOrder({
+        projectId: input.projectId,
+        kind: "stock",
+        supplierName: null,
+        deliverToLocationId: input.toLocationId,
+        fromLocationId: input.fromLocationId,
+        toLocationId: input.toLocationId,
+        dueDate: null,
+        deliveryDeadline: input.deliveryDeadline ?? null,
+        invoiceAttachment: null,
+        note: input.note ?? null,
+        lines: input.lines.map((line) => ({
+          procurementItemId: line.procurementItemId,
+          qty: line.qty,
+          unit: line.unit,
+          plannedUnitPrice: line.plannedUnitPrice ?? null,
+          actualUnitPrice: line.actualUnitPrice ?? null,
+        })),
+      });
+
+      const result = placeOrder(created.id);
       if (!result.ok) {
         throw new Error(result.error);
       }
@@ -1011,6 +1058,177 @@ export function createSupabaseOrdersSource(
 
       if (updateError) {
         throw updateError;
+      }
+
+      return loadOrderOrThrow(supabase, orderId);
+    },
+    async placeStockTransfer(input: PlaceStockTransferInput) {
+      const lines = input.lines.filter((line) => line.qty > 0);
+      if (lines.length === 0) {
+        throw new Error("Transfer has no lines");
+      }
+
+      const fromLocationId = input.fromLocationId.trim();
+      const toLocationId = input.toLocationId.trim();
+      if (!fromLocationId || !toLocationId) {
+        throw new Error("Both warehouses are required");
+      }
+      if (fromLocationId === toLocationId) {
+        throw new Error("Source and destination warehouses must differ");
+      }
+
+      const now = new Date().toISOString();
+      const orderInsert: OrderInsert = {
+        project_id: input.projectId,
+        supplier_name: "",
+        supplier_contact: null,
+        status: "received",
+        ordered_at: now,
+        delivery_due_at: input.deliveryDeadline ?? null,
+        created_by: profileId,
+      };
+
+      const { data: insertedOrder, error: orderError } = await supabase
+        .from("orders")
+        .insert(orderInsert)
+        .select("*")
+        .single();
+
+      if (orderError) {
+        throw orderError;
+      }
+
+      const orderId = insertedOrder.id;
+      try {
+        const lineRows: OrderLineInsert[] = lines.map((line) => {
+          const unitPriceCents = quantityToPriceCents(line.actualUnitPrice ?? null);
+          return {
+            order_id: orderId,
+            procurement_item_id: line.procurementItemId,
+            title: line.title.trim() || "Untitled item",
+            quantity: line.qty,
+            unit: line.unit || null,
+            unit_price_cents: unitPriceCents,
+            total_price_cents: unitPriceCents == null
+              ? null
+              : Math.round(unitPriceCents * line.qty),
+          };
+        });
+
+        const { data: insertedLines, error: linesError } = await supabase
+          .from("order_lines")
+          .insert(lineRows)
+          .select("*");
+
+        if (linesError) {
+          throw linesError;
+        }
+
+        const orderLineRows = insertedLines ?? [];
+        if (orderLineRows.length !== lines.length) {
+          throw new Error("Failed to persist transfer lines");
+        }
+
+        const { data: inventoryItemRows, error: inventoryItemsError } = await supabase
+          .from("inventory_items")
+          .select("*")
+          .eq("project_id", input.projectId)
+          .order("created_at", { ascending: true });
+
+        if (inventoryItemsError) {
+          throw inventoryItemsError;
+        }
+
+        const inventoryItemByMatchKey = new Map<string, InventoryItemRow>();
+        (inventoryItemRows ?? []).forEach((row) => {
+          inventoryItemByMatchKey.set(inventoryItemMatchKey({
+            title: row.title,
+            unit: row.unit,
+            notes: row.notes,
+          }), row);
+        });
+
+        const movementRows: InventoryMovementInsert[] = [];
+        for (let index = 0; index < lines.length; index += 1) {
+          const line = lines[index];
+          const orderLineRow = orderLineRows[index];
+          // Pair movements to their order line by identity, not just position:
+          // fail loud (and trigger orphan cleanup) if the inserted-row order ever
+          // diverges from `lines`, rather than silently moving the wrong item.
+          if (orderLineRow.procurement_item_id !== line.procurementItemId) {
+            throw new Error("Transfer line does not match its inserted order line");
+          }
+          const inventoryTitle = line.title.trim() || "Untitled item";
+          const inventoryUnit = line.unit?.trim() ?? "";
+          if (!inventoryUnit) {
+            throw new Error(`Unit is required for ${inventoryTitle}`);
+          }
+          const inventoryNotes = line.spec ?? null;
+          const matchKey = inventoryItemMatchKey({
+            title: inventoryTitle,
+            unit: inventoryUnit,
+            notes: inventoryNotes,
+          });
+
+          let inventoryItem = inventoryItemByMatchKey.get(matchKey) ?? null;
+          if (!inventoryItem) {
+            const insert: InventoryItemInsert = {
+              project_id: input.projectId,
+              title: inventoryTitle,
+              unit: inventoryUnit,
+              notes: inventoryNotes,
+            };
+            const { data: createdInventoryItem, error } = await supabase
+              .from("inventory_items")
+              .insert(insert)
+              .select("*")
+              .single();
+
+            if (error) {
+              throw error;
+            }
+
+            inventoryItem = createdInventoryItem;
+            inventoryItemByMatchKey.set(matchKey, inventoryItem);
+          }
+
+          movementRows.push({
+            project_id: input.projectId,
+            inventory_item_id: inventoryItem.id,
+            inventory_location_id: fromLocationId,
+            order_line_id: orderLineRow.id,
+            procurement_item_id: orderLineRow.procurement_item_id ?? line.procurementItemId,
+            movement_type: "transfer",
+            delta_qty: -line.qty,
+            notes: null,
+            created_by: profileId,
+          });
+          movementRows.push({
+            project_id: input.projectId,
+            inventory_item_id: inventoryItem.id,
+            inventory_location_id: toLocationId,
+            order_line_id: orderLineRow.id,
+            procurement_item_id: orderLineRow.procurement_item_id ?? line.procurementItemId,
+            movement_type: "transfer",
+            delta_qty: line.qty,
+            notes: null,
+            created_by: profileId,
+          });
+        }
+
+        const { error: movementError } = await supabase
+          .from("inventory_movements")
+          .insert(movementRows);
+
+        if (movementError) {
+          throw movementError;
+        }
+      } catch (error) {
+        // Orphan cleanup: a negative-balance abort (or any failure after the order row
+        // exists) must not leave a ghost "received" order. Deleting the order cascades
+        // its lines; best-effort so the original error still surfaces.
+        await supabase.from("orders").delete().eq("id", orderId);
+        throw error;
       }
 
       return loadOrderOrThrow(supabase, orderId);
