@@ -36,7 +36,9 @@ const LOGO_MENU_TRIGGER_CLASS =
 
 /** Demo mode shows a fixed showcase AI-chat quota; intentionally a mock value,
  * gated strictly on demo mode so it never leaks to real (supabase/guest) users. */
-const DEMO_CHAT_USAGE = { used: 8, limit: 50 };
+// Demo-only showcase quota (intentionally bypasses selectAiUsage; gated strictly
+// to workspace mode "demo" so it can never render for real or guest users).
+const DEMO_CHAT_USAGE: { used: number; limit: number } = { used: 8, limit: 50 };
 
 interface TopBarProps {
   aiSidebarCollapsed: boolean;

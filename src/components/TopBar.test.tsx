@@ -127,4 +127,46 @@ describe("TopBar", () => {
     expect(screen.getByText("42 of 50 left")).toBeInTheDocument();
     expect(screen.queryByText("Sign in to see usage")).not.toBeInTheDocument();
   });
+
+  it("clamps an over-quota chat slot to zero remaining", async () => {
+    rpc.mockResolvedValue({
+      data: [{ ai_chat_used: 60, ai_chat_limit: 50 }],
+      error: null,
+    });
+    authenticateRuntimeAuth();
+    renderTopBar();
+
+    await openLogoMenu();
+
+    // remaining = max(50 - 60, 0) = 0; no NaN.
+    expect(await screen.findByText("0 of 50 left")).toBeInTheDocument();
+  });
+
+  it("hides the card for an authenticated user with a zero chat limit", async () => {
+    rpc.mockResolvedValue({
+      data: [{ ai_chat_used: 0, ai_chat_limit: 0 }],
+      error: null,
+    });
+    authenticateRuntimeAuth();
+    renderTopBar();
+
+    await openLogoMenu();
+
+    // limit === 0 renders no card (and never reaches the /limit division).
+    expect(screen.queryByText(/of \d+ left/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Unlimited")).not.toBeInTheDocument();
+    // Authenticated, so no guest nudge either.
+    expect(screen.queryByText("Sign in to see usage")).not.toBeInTheDocument();
+  });
+
+  it("hides the card for an authenticated user whose quota has not loaded", async () => {
+    rpc.mockResolvedValue({ data: null, error: null });
+    authenticateRuntimeAuth();
+    renderTopBar();
+
+    await openLogoMenu();
+
+    expect(screen.queryByText(/of \d+ left/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Sign in to see usage")).not.toBeInTheDocument();
+  });
 });
