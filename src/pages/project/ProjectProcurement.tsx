@@ -14,6 +14,7 @@ import {
   Search,
   ShoppingCart,
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -1558,6 +1559,10 @@ export default function ProjectProcurement() {
   };
 
   const handleRequestMore = (row: InStockTableRow) => {
+    // Manual task authoring has no Supabase write path yet (tasks are projected from the estimate),
+    // so this action is disabled + marked "coming soon" in supabase mode. Guard here too in case the
+    // handler is reached, to avoid the misleading "task created" toast over a write that never persists.
+    if (isSupabaseMode) return;
     const now = new Date().toISOString();
     const task: Task = {
       id: `task-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -1857,11 +1862,13 @@ export default function ProjectProcurement() {
                 disabled={
                   (effectiveActiveTab === "requested" ? orderControl.disabled
                     : effectiveActiveTab === "ordered" ? receiveControl.disabled
-                      : useFromStockEffectiveDisabled)
+                      : useFromStockEffectiveDisabled || isSupabaseMode)
                   || shouldBlockProcurementLaunchActions
                 }
                 title={
-                  effectiveActiveTab === "in_stock" ? useFromStockEffectiveReason : undefined
+                  effectiveActiveTab === "in_stock"
+                    ? (isSupabaseMode ? t("common.comingSoon") : useFromStockEffectiveReason)
+                    : undefined
                 }
               >
                 {selectionPrimaryLabel}
@@ -2538,8 +2545,8 @@ export default function ProjectProcurement() {
                               size="sm"
                               className="h-7"
                               onClick={() => openUseFromStockModal([row])}
-                              disabled={useFromStockEffectiveDisabled}
-                              title={useFromStockEffectiveReason}
+                              disabled={useFromStockEffectiveDisabled || isSupabaseMode}
+                              title={isSupabaseMode ? t("common.comingSoon") : useFromStockEffectiveReason}
                             >
                               {t("procurement.action.use")}
                             </Button>
@@ -2549,10 +2556,16 @@ export default function ProjectProcurement() {
                               variant="ghost"
                               className="h-7"
                               onClick={() => handleRequestMore(row)}
-                              disabled={!canManageProcurement}
+                              disabled={!canManageProcurement || isSupabaseMode}
+                              title={isSupabaseMode ? t("common.comingSoon") : undefined}
                             >
                               {t("procurement.action.requestMore")}
                             </Button>
+                            {isSupabaseMode && (
+                              <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-normal">
+                                {t("common.comingSoon")}
+                              </Badge>
+                            )}
                           </div>
                         </td>
                       )}
