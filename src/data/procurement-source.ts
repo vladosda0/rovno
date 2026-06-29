@@ -1,7 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getLatestHeroTransitionEvent } from "@/data/activity-source";
 import { loadEstimateV2HeroTransitionCache } from "@/data/estimate-v2-transition-cache";
-import { getProcurementItems } from "@/data/procurement-store";
+import {
+  archiveProcurementItem,
+  getProcurementItems,
+  updateProcurementItem,
+} from "@/data/procurement-store";
 import { buildReceivedQtyByOrderLineId } from "@/data/orders-source";
 import type { WorkspaceMode } from "@/data/workspace-source";
 import { resolveWorkspaceMode } from "@/data/workspace-source";
@@ -25,6 +29,7 @@ export { parseProcurementOperationalSummaryPayload } from "@/data/procurement-op
 
 type ProcurementItemRow = ProcurementDatabase["public"]["Tables"]["procurement_items"]["Row"];
 type ProcurementItemInsert = ProcurementDatabase["public"]["Tables"]["procurement_items"]["Insert"];
+type ProcurementItemUpdate = ProcurementDatabase["public"]["Tables"]["procurement_items"]["Update"];
 type OrderRow = ProcurementDatabase["public"]["Tables"]["orders"]["Row"];
 type OrderLineRow = ProcurementDatabase["public"]["Tables"]["order_lines"]["Row"];
 type InventoryMovementRow = ProcurementDatabase["public"]["Tables"]["inventory_movements"]["Row"];
@@ -49,6 +54,11 @@ export interface ProcurementSource {
     projectId: string,
     financeLoadAccess?: FinanceRowLoadAccess,
   ) => Promise<ProcurementItemV2[]>;
+  updateProjectProcurementItem: (
+    itemId: string,
+    patch: Partial<ProcurementItemV2>,
+  ) => Promise<void>;
+  cancelProcurementItem: (itemId: string) => Promise<void>;
 }
 
 export interface HeroProcurementItemUpsertInput {
@@ -129,6 +139,12 @@ function createBrowserProcurementSource(mode: "demo" | "local"): ProcurementSour
     mode,
     async getProjectProcurementItems(projectId: string) {
       return getProcurementItems(projectId);
+    },
+    async updateProjectProcurementItem(itemId: string, patch: Partial<ProcurementItemV2>) {
+      updateProcurementItem(itemId, patch);
+    },
+    async cancelProcurementItem(itemId: string) {
+      archiveProcurementItem(itemId);
     },
   };
 }
@@ -367,19 +383,21 @@ export function shapeProcurementItemsWithOrderContext(
         name: row.title,
         spec: row.description ?? null,
         unit: row.unit ?? "",
-        requiredByDate: null,
+        requiredByDate: row.required_by_date ?? null,
         requiredQty: row.quantity,
         orderedQty: relatedLines.reduce((sum, line) => sum + line.quantity, 0),
         receivedQty: relatedLines.reduce((sum, line) => sum + (receivedQtyByOrderLineId.get(line.id) ?? 0), 0),
         plannedUnitPrice: row.planned_unit_price_cents != null
           ? row.planned_unit_price_cents / 100
           : null,
-        actualUnitPrice: latestLineWithPrice?.unit_price_cents != null
-          ? latestLineWithPrice.unit_price_cents / 100
-          : null,
+        actualUnitPrice: row.actual_unit_price_cents != null
+          ? row.actual_unit_price_cents / 100
+          : latestLineWithPrice?.unit_price_cents != null
+            ? latestLineWithPrice.unit_price_cents / 100
+            : null,
         supplier: latestRelatedOrder?.supplier_name ?? null,
-        supplierPreferred: null,
-        locationPreferredId: null,
+        supplierPreferred: row.supplier_preferred ?? null,
+        locationPreferredId: row.location_preferred_id ?? null,
         lockedFromEstimate: Boolean(row.estimate_resource_line_id),
         sourceEstimateItemId: null,
         sourceEstimateV2LineId: row.estimate_resource_line_id ?? null,
@@ -387,7 +405,7 @@ export function shapeProcurementItemsWithOrderContext(
         orphanedAt: null,
         orphanedReason: null,
         linkUrl: null,
-        notes: null,
+        notes: row.notes ?? null,
         attachments: [],
         createdFrom: row.estimate_resource_line_id
           ? "estimate"
@@ -710,6 +728,65 @@ export async function deleteHeroProcurementItems(
   }
 }
 
+/**
+ * Map a partial UI patch onto a `procurement_items` UPDATE row. Only fields present
+ * in the patch are written. `plannedUnitPrice` and `attachments` are intentionally
+ * never written (planned price is estimate-derived and read-only in the editor;
+ * attachments have no backing column and stay client-only).
+ */
+function buildProcurementItemUpdateRow(patch: Partial<ProcurementItemV2>): ProcurementItemUpdate {
+  const updateRow: ProcurementItemUpdate = {};
+  if ("name" in patch) updateRow.title = patch.name ?? "";
+  if ("spec" in patch) updateRow.description = patch.spec ?? null;
+  if ("requiredQty" in patch) updateRow.quantity = patch.requiredQty ?? 0;
+  if ("categoryId" in patch) updateRow.category = patch.categoryId ?? null;
+  if ("unit" in patch) updateRow.unit = patch.unit ?? null;
+  if ("notes" in patch) updateRow.notes = patch.notes ?? null;
+  if ("requiredByDate" in patch) {
+    updateRow.required_by_date = patch.requiredByDate ? patch.requiredByDate.slice(0, 10) : null;
+  }
+  if ("supplierPreferred" in patch) updateRow.supplier_preferred = patch.supplierPreferred ?? null;
+  if ("locationPreferredId" in patch) updateRow.location_preferred_id = patch.locationPreferredId ?? null;
+  if ("actualUnitPrice" in patch) {
+    updateRow.actual_unit_price_cents = patch.actualUnitPrice != null
+      ? Math.round(patch.actualUnitPrice * 100)
+      : null;
+  }
+  return updateRow;
+}
+
+const PERSISTABLE_PROCUREMENT_ITEM_KEYS: (keyof ProcurementItemV2)[] = [
+  "name",
+  "spec",
+  "requiredQty",
+  "categoryId",
+  "unit",
+  "notes",
+  "requiredByDate",
+  "supplierPreferred",
+  "locationPreferredId",
+  "actualUnitPrice",
+];
+
+// Build a patch of only the fields the user actually changed, restricted to the columns the
+// supabase UPDATE can persist. Saving the full draft is unsafe: a write-capable but finance-
+// restricted member loads the detail fields as null (the operational-summary RPC omits them),
+// so a full-object Save would null out detail fields an owner set and this member cannot even
+// see. Diffing against the loaded item leaves untouched fields untouched, and an unedited
+// derived actualUnitPrice is never promoted into the manual override column.
+export function diffProcurementItemPatch(
+  original: ProcurementItemV2,
+  draft: Partial<ProcurementItemV2>,
+): Partial<ProcurementItemV2> {
+  const patch: Partial<ProcurementItemV2> = {};
+  for (const key of PERSISTABLE_PROCUREMENT_ITEM_KEYS) {
+    if (key in draft && !Object.is(draft[key], original[key])) {
+      (patch as Record<string, unknown>)[key] = draft[key];
+    }
+  }
+  return patch;
+}
+
 function createSupabaseProcurementSource(
   supabase: TypedSupabaseClient,
 ): ProcurementSource {
@@ -821,6 +898,47 @@ function createSupabaseProcurementSource(
         movementRows,
         estimateResourceLineTypeById,
       });
+    },
+    async updateProjectProcurementItem(itemId: string, patch: Partial<ProcurementItemV2>) {
+      const updateRow = buildProcurementItemUpdateRow(patch);
+
+      // Recompute the persisted planned total when the quantity changes. Read the current
+      // row first so the total stays consistent even when the patch omits the planned price.
+      if (updateRow.quantity != null) {
+        const { data: currentRow, error: currentError } = await supabase
+          .from("procurement_items")
+          .select("planned_unit_price_cents, quantity")
+          .eq("id", itemId)
+          .single();
+
+        if (currentError) {
+          throw currentError;
+        }
+
+        const plannedUnitPriceCents = currentRow?.planned_unit_price_cents ?? null;
+        updateRow.planned_total_price_cents = plannedUnitPriceCents != null
+          ? Math.round(plannedUnitPriceCents * updateRow.quantity)
+          : null;
+      }
+
+      const { error } = await supabase
+        .from("procurement_items")
+        .update(updateRow)
+        .eq("id", itemId);
+
+      if (error) {
+        throw error;
+      }
+    },
+    async cancelProcurementItem(itemId: string) {
+      const { error } = await supabase
+        .from("procurement_items")
+        .update({ status: "cancelled" })
+        .eq("id", itemId);
+
+      if (error) {
+        throw error;
+      }
     },
   };
 }
