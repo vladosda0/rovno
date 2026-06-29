@@ -487,6 +487,10 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260624120000_add_library_work_resource_exclusions.sql",
       "sha256": "71fedeb8e85f3a2f37f72130f924d55f08385f97476e3ce728cc439d259de99d"
+    },
+    {
+      "path": "supabase/migrations/20260629120000_add_procurement_item_detail_columns.sql",
+      "sha256": "0379a275023be62dfb9abf06dbb1410408e5f90bf298cdd6a7000c7f82fc23da"
     }
   ],
   "generated_artifacts": [
@@ -633,6 +637,7 @@ export const manifest = {
     "sql/20260613120600_get_resource_article_price_comparison.sql",
     "sql/20260622120000_tighten_price_comparison_finance_gate.sql",
     "sql/20260624120000_add_library_work_resource_exclusions.sql",
+    "sql/20260629120000_add_procurement_item_detail_columns.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -4904,6 +4909,63 @@ export const tables = {
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "notes",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "required_by_date",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "supplier_preferred",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "location_preferred_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "inventory_locations",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
+        },
+        {
+          "name": "actual_unit_price_cents",
+          "sqlType": "bigint",
+          "tsType": "number",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -4946,6 +5008,16 @@ export const tables = {
           "expression": "status in ('requested', 'ordered', 'partially_received', 'received', 'cancelled')",
           "usingIndex": null,
           "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "actual_unit_price_cents"
+          ],
+          "expression": "actual_unit_price_cents is null or actual_unit_price_cents >= 0",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260629120000_add_procurement_item_detail_columns.sql"
         }
       ],
       "indexes": [
@@ -4992,6 +5064,17 @@ export const tables = {
           "where": "estimate_resource_line_id is not null",
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql"
+        },
+        {
+          "name": "idx_procurement_items_location_preferred_id",
+          "unique": false,
+          "method": null,
+          "expressions": [
+            "location_preferred_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260629120000_add_procurement_item_detail_columns.sql"
         }
       ],
       "triggers": [
@@ -13564,6 +13647,22 @@ export const relations = {
         "id"
       ],
       "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260629120000_add_procurement_item_detail_columns.sql",
+      "sourceKind": "alter_table",
+      "fromSchema": "public",
+      "fromTable": "procurement_items",
+      "fromColumns": [
+        "location_preferred_id"
+      ],
+      "toSchema": "public",
+      "toTable": "inventory_locations",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
     }
   ]
 } as const;
@@ -14329,6 +14428,16 @@ export const checks = {
       ],
       "expression": "status in ('requested', 'ordered', 'partially_received', 'received', 'cancelled')",
       "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+    },
+    {
+      "schema": "public",
+      "table": "procurement_items",
+      "column": "actual_unit_price_cents",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "actual_unit_price_cents is null or actual_unit_price_cents >= 0",
+      "sourceMigration": "supabase/migrations/20260629120000_add_procurement_item_detail_columns.sql"
     },
     {
       "schema": "public",
@@ -23631,6 +23740,7 @@ export const sourceTrace = {
       "sourceMigrations": [
         "supabase/migrations/20260306163000_inventory_foundation.sql",
         "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
+        "supabase/migrations/20260629120000_add_procurement_item_detail_columns.sql",
         "supabase/migrations/20260509082719_fix_inventory_balances_trigger_on_project_cascade.sql",
         "supabase/migrations/20260406183000_procurement_operational_summary_requested_and_ordered_line_types.sql",
         "supabase/migrations/20260419120000_session3c_procurement_ai_in_stock_evidence.sql",
@@ -23779,6 +23889,11 @@ export const sourceTrace = {
           "from": "public.task_checklist_items",
           "to": "public.procurement_items",
           "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+        },
+        {
+          "from": "public.procurement_items",
+          "to": "public.inventory_locations",
+          "sourceMigration": "supabase/migrations/20260629120000_add_procurement_item_detail_columns.sql"
         }
       ]
     },
@@ -24081,6 +24196,7 @@ export const slices = {
       "sourceMigrations": [
         "supabase/migrations/20260306163000_inventory_foundation.sql",
         "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
+        "supabase/migrations/20260629120000_add_procurement_item_detail_columns.sql",
         "supabase/migrations/20260509082719_fix_inventory_balances_trigger_on_project_cascade.sql",
         "supabase/migrations/20260406183000_procurement_operational_summary_requested_and_ordered_line_types.sql",
         "supabase/migrations/20260419120000_session3c_procurement_ai_in_stock_evidence.sql",

@@ -7,6 +7,8 @@ import {
   type ProfileContactInfo,
   type ProfileContactInfoPatch,
   type ProfileIdentityPatch,
+  type NotificationPreferences,
+  type NotificationPreferencesPatch,
   type ProfilePreferences,
   type ProfilePreferencesPatch,
   type WorkspaceMode,
@@ -38,6 +40,7 @@ export const workspaceQueryKeys = {
   mode: () => ["workspace", "mode"] as const,
   currentUser: (profileId: string) => ["workspace", "current-user", profileId] as const,
   profilePreferences: (profileId: string) => ["workspace", "profile-preferences", profileId] as const,
+  notificationPreferences: (profileId: string) => ["workspace", "notification-preferences", profileId] as const,
   profileContactInfo: (profileId: string) => ["workspace", "profile-contact-info", profileId] as const,
   projects: (profileId: string) => ["workspace", "projects", profileId] as const,
   project: (profileId: string, projectId: string) => ["workspace", "project", profileId, projectId] as const,
@@ -169,6 +172,54 @@ export function useUpdateWorkspaceProfilePreferences() {
   });
 }
 
+export function useWorkspaceNotificationPreferencesState(): {
+  preferences: NotificationPreferences | undefined;
+  isLoading: boolean;
+} {
+  const mode = useWorkspaceModeState();
+  const supabaseMode = mode.kind === "supabase" ? mode : null;
+  const queryProfileId = supabaseMode?.profileId ?? mode.kind;
+  const preferencesQuery = useQuery({
+    queryKey: workspaceQueryKeys.notificationPreferences(queryProfileId),
+    queryFn: async () => {
+      const source = await getWorkspaceSource(
+        mode.kind === "local" || mode.kind === "demo" || mode.kind === "supabase" ? mode : undefined,
+      );
+      return source.getNotificationPreferences();
+    },
+    enabled: mode.kind === "local" || mode.kind === "demo" || mode.kind === "supabase",
+    staleTime: WORKSPACE_QUERY_STALE_TIME_MS,
+  });
+
+  if (mode.kind === "pending-supabase") {
+    return { preferences: undefined, isLoading: true };
+  }
+
+  return {
+    preferences: preferencesQuery.data,
+    isLoading: preferencesQuery.isPending,
+  };
+}
+
+export function useUpdateWorkspaceNotificationPreferences() {
+  const mode = useWorkspaceModeState();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (patch: NotificationPreferencesPatch) => {
+      if (mode.kind !== "local" && mode.kind !== "demo" && mode.kind !== "supabase") {
+        throw new Error("Notification preferences are not available yet.");
+      }
+      const source = await getWorkspaceSource(mode);
+      return source.updateNotificationPreferences(patch);
+    },
+    onSuccess: (preferences) => {
+      const profileId = mode.kind === "supabase" ? mode.profileId : mode.kind;
+      queryClient.setQueryData(workspaceQueryKeys.notificationPreferences(profileId), preferences);
+      void queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.notificationPreferences(profileId) });
+    },
+  });
+}
+
 export function useWorkspaceProfileContactInfoState(): {
   contactInfo: ProfileContactInfo | undefined;
   isLoading: boolean;
@@ -234,7 +285,7 @@ export function useUpdateWorkspaceProfileContactInfo() {
   });
 }
 
-export function useWorkspaceProjects(): Project[] {
+export function useWorkspaceProjectsState(): { projects: Project[]; isLoading: boolean } {
   const mode = useWorkspaceModeState();
   const supabaseMode = mode.kind === "supabase" ? mode : null;
   const projectsQuery = useQuery({
@@ -250,10 +301,17 @@ export function useWorkspaceProjects(): Project[] {
   });
 
   if (mode.kind === "demo" || mode.kind === "local") {
-    return store.getProjects();
+    return { projects: store.getProjects(), isLoading: false };
   }
 
-  return projectsQuery.data ?? [];
+  return {
+    projects: projectsQuery.data ?? [],
+    isLoading: Boolean(supabaseMode) && projectsQuery.isPending,
+  };
+}
+
+export function useWorkspaceProjects(): Project[] {
+  return useWorkspaceProjectsState().projects;
 }
 
 export function useWorkspaceProjectState(projectId: string): {

@@ -7,12 +7,10 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { createDraftOrder, placeOrder } from "@/data/order-store";
 import { getOrdersSource } from "@/data/orders-source";
 import { trackEvent } from "@/lib/analytics";
-import { getStock } from "@/data/inventory-store";
 import { useProcurementV2 } from "@/hooks/use-mock-data";
-import { useLocations } from "@/hooks/use-inventory-data";
+import { useInventoryStock, useLocations } from "@/hooks/use-inventory-data";
 import { inventoryQueryKeys } from "@/hooks/use-inventory-data";
 import {
   orderPlacedSupplierOrdersQueryRoot,
@@ -26,7 +24,6 @@ import { fmtCost } from "@/lib/procurement-utils";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { LocationPicker } from "@/components/procurement/LocationPicker";
-import type { DraftOrderLineInput } from "@/data/order-store";
 import type { OrderKind, ProcurementItemType } from "@/types/entities";
 import { useWorkspaceMode } from "@/hooks/use-workspace-source";
 import { useEstimateV2Project } from "@/hooks/use-estimate-v2-data";
@@ -91,6 +88,7 @@ export function OrderModal({
   const baseItems = useProcurementV2(projectId);
   const orders = useOrders(projectId);
   const locations = useLocations(projectId);
+  const inventoryStock = useInventoryStock(projectId);
   const workspaceMode = useWorkspaceMode();
   const supabaseMode = workspaceMode.kind === "supabase" ? workspaceMode : null;
   const isSupabaseMode = workspaceMode.kind === "supabase";
@@ -229,9 +227,33 @@ export function OrderModal({
     () => locations.find((location) => location.isDefault)?.id ?? locations[0]?.id ?? "",
     [locations],
   );
+  /**
+   * Available qty at the source warehouse, keyed by inventoryKey. The key matches
+   * `toInventoryKey(item)` so the availability guard reads the SAME balance that the
+   * transfer mutates (the supabase transfer resolves its inventory_item by the same key).
+   */
+  const availableByInventoryKey = useMemo(() => {
+    const map = new Map<string, number>();
+    inventoryStock
+      .filter((row) => row.locationId === fromLocationId)
+      .forEach((row) => {
+        map.set(row.inventoryKey, (map.get(row.inventoryKey) ?? 0) + row.qty);
+      });
+    return map;
+  }, [inventoryStock, fromLocationId]);
 
+  // Seed the draft only on open and when the requested item SET changes, never on a
+  // background procurement refetch (which gives items/itemById fresh identities). Without
+  // this guard a sync mid-edit re-runs this effect and clobbers the qty/price the user typed.
+  const seededKeyRef = useRef<string | null>(null);
+  const seedKey = open ? initialItemIds.join(",") : null;
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      seededKeyRef.current = null;
+      return;
+    }
+    if (seededKeyRef.current === seedKey) return;
+
     const nextItemIds = initialItemIds.length > 0
       ? initialItemIds
       : items.map((item) => item.id);
@@ -261,7 +283,8 @@ export function OrderModal({
     setInvoiceAttachment(null);
     setNote("");
     setLines(nextLines);
-  }, [open, initialItemIds, itemById, items, orders, defaultLocationId, isSupabaseMode]);
+    seededKeyRef.current = seedKey;
+  }, [open, seedKey, initialItemIds, itemById, items, orders, defaultLocationId, isSupabaseMode]);
 
   const requestedRemainingByItemId = useMemo(() => (
     new Map(lines.map((line) => [line.procurementItemId, computeRemainingRequestedQty(itemById.get(line.procurementItemId), orders)]))
@@ -270,24 +293,19 @@ export function OrderModal({
   const orderedLines = useMemo(() => lines.filter((line) => line.qty > 0), [lines]);
   const hasOrderedLines = orderedLines.length > 0;
   const allOrderedLinesHaveValidActualPrices = orderedLines.every((line) => isValidActualUnitPrice(line.actualUnitPrice));
-  const canPlaceOrder = hasOrderedLines && allOrderedLinesHaveValidActualPrices;
+  // Actual price is required only for supplier orders; a stock transfer moves on-hand qty.
+  const canPlaceOrder = hasOrderedLines
+    && (kind === "stock" || allOrderedLinesHaveValidActualPrices);
 
   const saveOrder = async (action: "draft" | "place") => {
     if (orderActionInFlightRef.current) return;
     const positiveLines = lines.filter((line) => line.qty > 0);
-    const payloadLines: DraftOrderLineInput[] = positiveLines.map((line) => ({
-      procurementItemId: line.procurementItemId,
-      qty: line.qty,
-      unit: line.unit,
-      plannedUnitPrice: line.plannedUnitPrice,
-      actualUnitPrice: line.actualUnitPrice,
-    }));
 
-    if (payloadLines.length === 0) {
+    if (positiveLines.length === 0) {
       toast({ title: t("procurement.orderModal.toast.noLines"), description: t("procurement.orderModal.toast.noLinesDesc"), variant: "destructive" });
       return;
     }
-    if (action === "place" && !allOrderedLinesHaveValidActualPrices) {
+    if (action === "place" && kind === "supplier" && !allOrderedLinesHaveValidActualPrices) {
       toast({ title: t("procurement.orderModal.toast.actualPriceRequired"), description: t("procurement.orderModal.toast.actualPriceRequiredDesc"), variant: "destructive" });
       return;
     }
@@ -296,15 +314,19 @@ export function OrderModal({
       toast({ title: t("procurement.orderModal.toast.fromRequired"), variant: "destructive" });
       return;
     }
+    if (kind === "stock" && toLocationId === fromLocationId) {
+      toast({ title: t("procurement.orderModal.toast.sameLocation"), variant: "destructive" });
+      return;
+    }
 
     orderActionInFlightRef.current = action;
     setOrderActionInFlight(action);
     try {
     if (kind === "stock") {
-      for (const line of payloadLines) {
+      for (const line of positiveLines) {
         const item = itemById.get(line.procurementItemId);
         if (!item) continue;
-        const available = getStock(projectId, fromLocationId, toInventoryKey(item));
+        const available = availableByInventoryKey.get(toInventoryKey(item)) ?? 0;
         if (line.qty > available) {
           toast({
             title: t("procurement.orderModal.toast.notEnoughStock"),
@@ -314,49 +336,84 @@ export function OrderModal({
           return;
         }
       }
-    }
 
-    if (kind === "stock") {
-      const created = createDraftOrder({
-        projectId,
-        kind,
-        supplierName: null,
-        deliverToLocationId,
-        fromLocationId,
-        toLocationId,
-        dueDate: null,
-        deliveryDeadline: deliveryDeadline?.toISOString() ?? null,
-        invoiceAttachment: invoiceAttachment
-          ? {
-            id: `invoice-${Date.now()}`,
-            name: invoiceAttachment.name,
-            url: invoiceAttachment.url,
-            type: "file",
-            isLocal: true,
-            createdAt: new Date().toISOString(),
-          }
-          : null,
-        note: note || null,
-        lines: payloadLines,
-      });
+      try {
+        const source = await getOrdersSource(supabaseMode ?? undefined);
+        const created = await source.placeStockTransfer({
+          projectId,
+          fromLocationId,
+          toLocationId,
+          deliveryDeadline: deliveryDeadline?.toISOString() ?? null,
+          note: note || null,
+          lines: positiveLines.map((line) => {
+            const item = itemById.get(line.procurementItemId);
+            return {
+              procurementItemId: line.procurementItemId,
+              title: item?.name ?? t("procurement.orderModal.untitledItem"),
+              qty: line.qty,
+              unit: line.unit,
+              spec: item?.spec ?? null,
+              plannedUnitPrice: line.plannedUnitPrice,
+              actualUnitPrice: line.actualUnitPrice,
+            };
+          }),
+        });
 
-      if (action === "place") {
-        const placed = placeOrder(created.id);
-        if (!placed.ok) {
-          toast({ title: t("procurement.orderModal.toast.unablePlace"), description: placed.error, variant: "destructive" });
-          return;
+        trackEvent("procurement_order_placed", { project_id: projectId, kind: "stock", line_count: positiveLines.length });
+
+        if (supabaseMode) {
+          await Promise.all([
+            queryClient.invalidateQueries({
+              queryKey: orderProjectOrdersQueryRoot(supabaseMode.profileId, projectId),
+            }),
+            queryClient.invalidateQueries({
+              queryKey: orderPlacedSupplierOrdersQueryRoot(supabaseMode.profileId, projectId),
+            }),
+            queryClient.invalidateQueries({
+              queryKey: orderQueryKeys.placedSupplierOrdersAllProjects(supabaseMode.profileId),
+            }),
+            queryClient.invalidateQueries({
+              queryKey: orderQueryKeys.orderById(supabaseMode.profileId, created.id),
+            }),
+            queryClient.invalidateQueries({
+              queryKey: procurementProjectItemsQueryRoot(supabaseMode.profileId, projectId),
+            }),
+            queryClient.invalidateQueries({
+              queryKey: inventoryQueryKeys.projectLocations(supabaseMode.profileId, projectId),
+            }),
+            queryClient.invalidateQueries({
+              queryKey: inventoryQueryKeys.projectStock(supabaseMode.profileId, projectId),
+            }),
+          ]);
         }
-        trackEvent("procurement_order_placed", { project_id: projectId, kind: "stock", line_count: payloadLines.length });
+
         toast({ title: t("procurement.orderModal.toast.stockCompleted") });
         onCompleted?.(created.id);
         onOpenChange(false);
-        return;
+      } catch (error) {
+        const rawMessage =
+          error instanceof Error
+            ? error.message
+            : typeof (error as { message?: unknown }).message === "string"
+              ? (error as { message: string }).message
+              : "";
+        // A concurrent stock change can make the backend abort the paired transfer
+        // with "Inventory balance cannot go negative ...". Surface the friendly
+        // not-enough-stock message instead of the raw Postgres error (with UUIDs).
+        if (rawMessage.includes("cannot go negative")) {
+          toast({
+            title: t("procurement.orderModal.toast.notEnoughStock"),
+            description: t("procurement.orderModal.toast.stockChangedDesc"),
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: t("procurement.orderModal.toast.unablePlace"),
+            description: rawMessage || t("procurement.orderModal.toast.unablePlaceFallback"),
+            variant: "destructive",
+          });
+        }
       }
-
-      trackEvent("procurement_order_draft_created", { project_id: projectId, kind: "stock", line_count: payloadLines.length });
-      toast({ title: t("procurement.orderModal.toast.draftSaved") });
-      onCompleted?.(created.id);
-      onOpenChange(false);
       return;
     }
 
@@ -610,7 +667,7 @@ export function OrderModal({
                   const item = itemById.get(line.procurementItemId);
                   if (!item) return null;
                   const available = kind === "stock"
-                    ? getStock(projectId, fromLocationId, toInventoryKey(item))
+                    ? availableByInventoryKey.get(toInventoryKey(item)) ?? 0
                     : 0;
                   const requestedRemaining = requestedRemainingByItemId.get(line.procurementItemId) ?? 0;
                   const remainingAfterThisOrder = Math.max(requestedRemaining - line.qty, 0);
@@ -618,7 +675,7 @@ export function OrderModal({
                   const underOrderMessage = deliveryDeadline
                     ? t("procurement.orderModal.underOrderBy", { count: remainingAfterThisOrder, date: deliveryDeadline.toLocaleDateString() })
                     : t("procurement.orderModal.underOrder", { count: remainingAfterThisOrder });
-                  const actualPriceInvalid = line.qty > 0 && !isValidActualUnitPrice(line.actualUnitPrice);
+                  const actualPriceInvalid = kind === "supplier" && line.qty > 0 && !isValidActualUnitPrice(line.actualUnitPrice);
                   const showFeedback = showUnderOrderWarning || actualPriceInvalid;
 
                   return (

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as inventorySource from "@/data/inventory-source";
@@ -199,6 +199,73 @@ describe("OrderModal", () => {
 
     fireEvent.change(qtyInput, { target: { value: "10" } });
     expect(screen.queryByText(/more materials requested/)).not.toBeInTheDocument();
+  });
+
+  it("enables Place order for a stock transfer without an actual price", () => {
+    renderOpenModal();
+    // Supplier flow requires a valid actual price, so Place order starts disabled.
+    expect(screen.getByRole("button", { name: "Place order" })).toBeDisabled();
+    expect(screen.getByText("Actual price required")).toBeInTheDocument();
+
+    // Switching to the Stock (warehouse transfer) flow makes the actual price optional.
+    fireEvent.click(screen.getByRole("button", { name: "Stock" }));
+    expect(screen.queryByText("Actual price required")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Place order" })).toBeEnabled();
+  });
+
+  it("does not clobber a typed qty when a background procurement update changes the items identity", () => {
+    const { projectId, itemId, itemName } = createTestItem(10);
+    const queryClient = createQueryClient();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <OrderModal open onOpenChange={vi.fn()} projectId={projectId} initialItemIds={[itemId]} />
+      </QueryClientProvider>,
+    );
+    const getQty = () =>
+      within(screen.getByText(itemName).closest("tr")!).getAllByRole("spinbutton")[0] as HTMLInputElement;
+
+    // User types a qty into the line.
+    fireEvent.change(getQty(), { target: { value: "7" } });
+    expect(getQty().value).toBe("7");
+
+    // A background procurement update (mimicking a sync refetch) gives the items array a fresh
+    // identity. The seeding effect re-runs on the dep change but must NOT re-seed and wipe input.
+    act(() => {
+      addProcurementItem({
+        id: `${itemId}-sibling`,
+        projectId,
+        stageId: null,
+        categoryId: null,
+        type: "material",
+        name: "Sibling material",
+        spec: null,
+        unit: "pcs",
+        requiredByDate: null,
+        requiredQty: 5,
+        orderedQty: 0,
+        receivedQty: 0,
+        plannedUnitPrice: 100,
+        actualUnitPrice: null,
+        supplier: null,
+        supplierPreferred: null,
+        locationPreferredId: null,
+        lockedFromEstimate: false,
+        sourceEstimateItemId: null,
+        sourceEstimateV2LineId: "estimate-line-2",
+        orphaned: false,
+        orphanedAt: null,
+        orphanedReason: null,
+        linkUrl: null,
+        notes: null,
+        attachments: [],
+        createdFrom: "estimate",
+        linkedTaskIds: [],
+        archived: false,
+      });
+    });
+
+    // The typed qty survives (the seedKey guard blocks a re-seed on a background refetch).
+    expect(getQty().value).toBe("7");
   });
 
 });

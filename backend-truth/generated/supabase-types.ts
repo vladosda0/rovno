@@ -860,6 +860,11 @@ export type Database = {
           "created_by": string
           "created_at": string
           "updated_at": string
+          "notes": string | null
+          "required_by_date": string | null
+          "supplier_preferred": string | null
+          "location_preferred_id": string | null
+          "actual_unit_price_cents": number | null
           }
           Insert: {
           "id"?: string
@@ -877,6 +882,11 @@ export type Database = {
           "created_by": string
           "created_at"?: string
           "updated_at"?: string
+          "notes"?: string | null
+          "required_by_date"?: string | null
+          "supplier_preferred"?: string | null
+          "location_preferred_id"?: string | null
+          "actual_unit_price_cents"?: number | null
           }
           Update: {
           "id"?: string
@@ -894,6 +904,11 @@ export type Database = {
           "created_by"?: string
           "created_at"?: string
           "updated_at"?: string
+          "notes"?: string | null
+          "required_by_date"?: string | null
+          "supplier_preferred"?: string | null
+          "location_preferred_id"?: string | null
+          "actual_unit_price_cents"?: number | null
           }
           Relationships: []
         }

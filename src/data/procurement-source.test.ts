@@ -14,16 +14,24 @@ type MockProcurementItemRow = {
   unit: string | null;
   planned_unit_price_cents: number | null;
   planned_total_price_cents: number | null;
+  notes: string | null;
+  required_by_date: string | null;
+  supplier_preferred: string | null;
+  location_preferred_id: string | null;
+  actual_unit_price_cents: number | null;
   status: "requested" | "ordered" | "cancelled";
   created_by: string;
   created_at: string;
   updated_at: string;
 };
 
+const PROCUREMENT_PLANNED_TOTAL_SELECT = "planned_unit_price_cents, quantity";
+
 const state = vi.hoisted(() => ({
   procurementRows: [] as MockProcurementItemRow[],
   upsertProcurementItemsMock: vi.fn(),
   unlinkProcurementItemsMock: vi.fn(),
+  updateProcurementItemMock: vi.fn(),
   loadEstimateV2HeroTransitionCacheMock: vi.fn(),
   getLatestHeroTransitionEventMock: vi.fn(),
 }));
@@ -37,6 +45,28 @@ vi.mock("@/integrations/supabase/client", () => ({
 
       return {
         select(selection: string) {
+          if (selection === PROCUREMENT_PLANNED_TOTAL_SELECT) {
+            return {
+              eq(field: string, itemId: string) {
+                if (field !== "id") {
+                  throw new Error(`Unexpected planned-total eq field: ${field}`);
+                }
+
+                return {
+                  single() {
+                    const row = state.procurementRows.find((candidate) => candidate.id === itemId) ?? null;
+                    return Promise.resolve({
+                      data: row
+                        ? { planned_unit_price_cents: row.planned_unit_price_cents, quantity: row.quantity }
+                        : null,
+                      error: null,
+                    });
+                  },
+                };
+              },
+            };
+          }
+
           if (selection !== PROCUREMENT_LINEAGE_SELECT) {
             throw new Error(`Unexpected procurement_items select: ${selection}`);
           }
@@ -102,6 +132,25 @@ vi.mock("@/integrations/supabase/client", () => ({
               state.unlinkProcurementItemsMock(patch, field, ids);
               return Promise.resolve({ error: null });
             },
+            eq(field: string, itemId: string) {
+              if (field !== "id") {
+                throw new Error(`Unexpected update eq field: ${field}`);
+              }
+              state.updateProcurementItemMock(patch, itemId);
+              return {
+                select(selection: string) {
+                  if (selection !== "id") {
+                    throw new Error(`Unexpected update select: ${selection}`);
+                  }
+                  return Promise.resolve({
+                    data: state.procurementRows
+                      .filter((row) => row.id === itemId)
+                      .map((row) => ({ id: row.id })),
+                    error: null,
+                  });
+                },
+              };
+            },
           };
         },
       };
@@ -118,10 +167,13 @@ vi.mock("@/data/activity-source", () => ({
 }));
 
 import {
+  diffProcurementItemPatch,
+  getProcurementSource,
   mapProcurementOperationalSummaryToItems,
   shapeProcurementItemsWithOrderContext,
   syncProjectProcurementFromEstimate,
 } from "@/data/procurement-source";
+import type { ProcurementItemV2 } from "@/types/entities";
 
 function procurementItemRow(
   overrides: Partial<Parameters<typeof shapeProcurementItemsWithOrderContext>[0]["itemRows"][number]> = {},
@@ -138,6 +190,11 @@ function procurementItemRow(
     unit: "m",
     planned_unit_price_cents: 1125,
     planned_total_price_cents: 13500,
+    notes: null,
+    required_by_date: null,
+    supplier_preferred: null,
+    location_preferred_id: null,
+    actual_unit_price_cents: null,
     status: "ordered" as const,
     created_by: "profile-1",
     created_at: "2026-03-01T00:00:00.000Z",
@@ -205,6 +262,7 @@ describe("procurement-source helpers", () => {
     state.procurementRows = [];
     state.upsertProcurementItemsMock.mockReset();
     state.unlinkProcurementItemsMock.mockReset();
+    state.updateProcurementItemMock.mockReset();
     state.loadEstimateV2HeroTransitionCacheMock.mockReset();
     state.getLatestHeroTransitionEventMock.mockReset();
     state.loadEstimateV2HeroTransitionCacheMock.mockReturnValue(null);
@@ -487,5 +545,160 @@ describe("procurement-source helpers", () => {
       ],
       { onConflict: "id" },
     );
+  });
+
+  it("updateProjectProcurementItem maps editable fields onto the procurement_items row", async () => {
+    state.procurementRows = [
+      procurementItemRow({
+        id: "pi-edit",
+        planned_unit_price_cents: 1000,
+        quantity: 4,
+      }),
+    ];
+
+    const source = await getProcurementSource({ kind: "supabase", profileId: "profile-1" });
+    await source.updateProjectProcurementItem("pi-edit", {
+      name: "Updated cable",
+      spec: "NYM 5x2.5",
+      requiredQty: 10,
+      categoryId: "plumbing",
+      unit: "kg",
+      notes: "handle with care",
+      requiredByDate: "2026-07-15T00:00:00.000Z",
+      supplierPreferred: "BuildMart",
+      locationPreferredId: "loc-1",
+      actualUnitPrice: 12.5,
+    });
+
+    expect(state.updateProcurementItemMock).toHaveBeenCalledTimes(1);
+    const [patch, itemId] = state.updateProcurementItemMock.mock.calls[0];
+    expect(itemId).toBe("pi-edit");
+    expect(patch).toEqual({
+      title: "Updated cable",
+      description: "NYM 5x2.5",
+      quantity: 10,
+      category: "plumbing",
+      unit: "kg",
+      notes: "handle with care",
+      required_by_date: "2026-07-15",
+      supplier_preferred: "BuildMart",
+      location_preferred_id: "loc-1",
+      actual_unit_price_cents: 1250,
+      // recomputed from current planned_unit_price_cents (1000) * new quantity (10)
+      planned_total_price_cents: 10000,
+    });
+  });
+
+  it("updateProjectProcurementItem nulls planned_total when the current planned unit price is missing", async () => {
+    state.procurementRows = [
+      procurementItemRow({
+        id: "pi-no-planned",
+        planned_unit_price_cents: null,
+        quantity: 4,
+      }),
+    ];
+
+    const source = await getProcurementSource({ kind: "supabase", profileId: "profile-1" });
+    await source.updateProjectProcurementItem("pi-no-planned", { requiredQty: 8 });
+
+    const [patch] = state.updateProcurementItemMock.mock.calls[0];
+    expect(patch).toEqual({
+      quantity: 8,
+      planned_total_price_cents: null,
+    });
+  });
+
+  it("updateProjectProcurementItem skips planned price and attachments, writing only provided fields", async () => {
+    state.procurementRows = [procurementItemRow({ id: "pi-partial" })];
+
+    const source = await getProcurementSource({ kind: "supabase", profileId: "profile-1" });
+    await source.updateProjectProcurementItem("pi-partial", {
+      notes: null,
+      actualUnitPrice: null,
+      plannedUnitPrice: 99,
+      attachments: [],
+    });
+
+    const [patch] = state.updateProcurementItemMock.mock.calls[0];
+    expect(patch).toEqual({
+      notes: null,
+      actual_unit_price_cents: null,
+    });
+  });
+
+  it("cancelProcurementItem sets status to cancelled", async () => {
+    state.procurementRows = [procurementItemRow({ id: "pi-cancel" })];
+
+    const source = await getProcurementSource({ kind: "supabase", profileId: "profile-1" });
+    await source.cancelProcurementItem("pi-cancel");
+
+    expect(state.updateProcurementItemMock).toHaveBeenCalledWith({ status: "cancelled" }, "pi-cancel");
+  });
+
+  it("updateProjectProcurementItem throws when the id matches no procurement_items row (synthetic item / RLS block)", async () => {
+    state.procurementRows = [procurementItemRow({ id: "pi-real" })];
+
+    const source = await getProcurementSource({ kind: "supabase", profileId: "profile-1" });
+
+    // A synthetic operational-summary item is keyed on an order_line_id, not a procurement_items.id;
+    // the UPDATE matches zero rows and must surface an error rather than a silent success.
+    await expect(source.updateProjectProcurementItem("order-line-99", { notes: "x" })).rejects.toThrow();
+  });
+
+  it("cancelProcurementItem throws when the id matches no procurement_items row", async () => {
+    state.procurementRows = [procurementItemRow({ id: "pi-real" })];
+
+    const source = await getProcurementSource({ kind: "supabase", profileId: "profile-1" });
+
+    await expect(source.cancelProcurementItem("order-line-99")).rejects.toThrow();
+  });
+
+  it("diffProcurementItemPatch omits unchanged detail fields so a finance-restricted Save cannot null them", () => {
+    // A write-capable, finance-restricted member loads the detail fields as null (the operational
+    // summary RPC omits them); their draft is a copy of that item with only a visible field edited.
+    const loaded = {
+      id: "pi-1",
+      name: "Cable",
+      spec: "NYM",
+      requiredQty: 10,
+      categoryId: "electrical",
+      unit: "m",
+      notes: null,
+      requiredByDate: null,
+      supplierPreferred: null,
+      locationPreferredId: null,
+      plannedUnitPrice: 11.25,
+      actualUnitPrice: null,
+    } as ProcurementItemV2;
+    const draft: Partial<ProcurementItemV2> = { ...loaded, name: "Cable (renamed)" };
+
+    const patch = diffProcurementItemPatch(loaded, draft);
+
+    expect(patch).toEqual({ name: "Cable (renamed)" });
+    expect("notes" in patch).toBe(false);
+    expect("supplierPreferred" in patch).toBe(false);
+    expect("locationPreferredId" in patch).toBe(false);
+    expect("actualUnitPrice" in patch).toBe(false);
+  });
+
+  it("diffProcurementItemPatch does not promote an unedited derived actualUnitPrice, but includes an edited one", () => {
+    const loaded = {
+      id: "pi-2",
+      name: "Cable",
+      requiredQty: 10,
+      categoryId: null,
+      unit: "m",
+      notes: null,
+      requiredByDate: null,
+      supplierPreferred: null,
+      locationPreferredId: null,
+      plannedUnitPrice: 10,
+      actualUnitPrice: 50, // derived from the latest order line on read
+    } as ProcurementItemV2;
+
+    // Opening + saving without touching the price must not write the derived value to the manual column.
+    expect(diffProcurementItemPatch(loaded, { ...loaded })).toEqual({});
+    // Editing the price does write it.
+    expect(diffProcurementItemPatch(loaded, { ...loaded, actualUnitPrice: 75 })).toEqual({ actualUnitPrice: 75 });
   });
 });

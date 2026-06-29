@@ -14,6 +14,7 @@ import {
   Search,
   ShoppingCart,
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -44,7 +45,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { EmptyState } from "@/components/EmptyState";
 import { ProjectWorkflowEmptyState } from "@/components/ProjectWorkflowEmptyState";
 import { StatusBadge } from "@/components/StatusBadge";
-import { useProject, useProcurementV2 } from "@/hooks/use-mock-data";
+import { useProject } from "@/hooks/use-mock-data";
 import { useOrders } from "@/hooks/use-order-data";
 import { useInventoryStock, useLocations } from "@/hooks/use-inventory-data";
 import {
@@ -66,6 +67,7 @@ import {
   registerEstimateV2ProjectAccessContext,
 } from "@/data/estimate-v2-store";
 import { getOrdersSource } from "@/data/orders-source";
+import { diffProcurementItemPatch, getProcurementSource } from "@/data/procurement-source";
 import { consumeStockFromInventory, updateOrder } from "@/data/order-store";
 import { addEvent, addTask, getCurrentUser, getTask, getUserById } from "@/data/store";
 import {
@@ -100,7 +102,7 @@ import {
   orderProjectOrdersQueryRoot,
   orderQueryKeys,
 } from "@/hooks/use-order-data";
-import { procurementProjectItemsQueryRoot, procurementQueryKeys } from "@/hooks/use-procurement-source";
+import { procurementProjectItemsQueryRoot, procurementQueryKeys, useProjectProcurementItemsState } from "@/hooks/use-procurement-source";
 import { useWorkspaceCurrentUserState, useWorkspaceMode } from "@/hooks/use-workspace-source";
 import { computeProjectTotals } from "@/lib/estimate-v2/pricing";
 import type {
@@ -185,16 +187,37 @@ function writeListState(projectId: string, state: ProcurementListState) {
   window.sessionStorage.setItem(listStateKey(projectId), JSON.stringify(state));
 }
 
+// Parse a stored required-by date. A bare YYYY-MM-DD (what the picker writes) must be read as a
+// LOCAL date so write and read agree in every timezone; a full ISO timestamp (estimate-synced
+// dates) keeps its instant semantics.
+function parseProcurementDate(value: string): Date {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split("-").map(Number);
+    return new Date(year, month - 1, day);
+  }
+  return new Date(value);
+}
+
 function formatDate(value: string | null | undefined, dash: string): string {
   if (!value) return dash;
-  const parsed = new Date(value);
+  const parsed = parseProcurementDate(value);
   if (Number.isNaN(parsed.getTime())) return dash;
   return parsed.toLocaleDateString();
 }
 
+// Format a picked calendar date as a local YYYY-MM-DD string. Using toISOString() here would
+// convert local midnight to UTC and roll the date back a day for UTC-positive users (the primary
+// market is UTC+3), so the persisted required-by date would land one day early.
+function toLocalDateString(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function isOverdue(value?: string | null): boolean {
   if (!value) return false;
-  const parsed = new Date(value);
+  const parsed = parseProcurementDate(value);
   if (Number.isNaN(parsed.getTime())) return false;
   const now = new Date();
   now.setHours(0, 0, 0, 0);
@@ -265,7 +288,7 @@ export default function ProjectProcurement() {
 
   const savedListState = useMemo(() => readListState(pid), [pid]);
 
-  const baseItems = useProcurementV2(pid);
+  const { items: baseItems, isLoading: isProcurementItemsLoading } = useProjectProcurementItemsState(pid);
   const orders = useOrders(pid);
   const hasPlacedSupplierOrderLines = useMemo(
     () => orders.some((o) => o.kind === "supplier" && o.status === "placed" && o.lines.length > 0),
@@ -295,6 +318,12 @@ export default function ProjectProcurement() {
 
   const showProcurementActions = orderControl.visible || receiveControl.visible || useFromStockControl.visible;
   const canEdit = canManageProcurement;
+  // Persisting item edits writes to procurement_items, whose SELECT RLS requires sensitive-detail
+  // finance visibility. A write-capable but finance-restricted member loads items via the redacted
+  // operational-summary RPC and cannot read the row back, so a direct write would either false-fail
+  // (the post-write read returns no row) or persist values they cannot verify. In supabase mode,
+  // gate the detail Save/Archive on the same sensitive-detail access the read path requires.
+  const canPersistProcurementDetail = canEdit && (!isSupabaseMode || canViewSensitiveDetail);
   const canLaunchOrderFlows = canManageProcurement
     && (canViewSensitiveDetail || canViewOperationalFinanceSummary);
   const canUseFromStock = canManageProcurement;
@@ -506,6 +535,7 @@ export default function ProjectProcurement() {
   const [receiveModalLocationByKey, setReceiveModalLocationByKey] = useState<Record<string, string>>({});
   const [receiveItemsConfirmInFlight, setReceiveItemsConfirmInFlight] = useState(false);
   const receiveItemsConfirmInFlightRef = useRef(false);
+  const detailMutationInFlightRef = useRef(false);
   const [useFromStockOpen, setUseFromStockOpen] = useState(false);
   const [useFromStockTargets, setUseFromStockTargets] = useState<InStockTableRow[]>([]);
   const [useFromStockQtyByKey, setUseFromStockQtyByKey] = useState<Record<string, string>>({});
@@ -1128,6 +1158,9 @@ export default function ProjectProcurement() {
 
   const persistDraftNowIfChanged = useCallback((draft?: Partial<ProcurementItemV2>) => {
     if (!detailItem) return;
+    // Supabase users persist via the explicit Save button (one awaited UPDATE); the
+    // in-memory autosave (onBlur/close/unmount/debounce) must never touch the store for them.
+    if (supabaseMode) return;
     const nextDraft = draft ?? draftRef.current;
     const nextSignature = computeDraftSignature(nextDraft);
     if (nextSignature === lastPersistedSignatureRef.current) return;
@@ -1139,7 +1172,7 @@ export default function ProjectProcurement() {
 
     updateProcurementItem(detailItem.id, payload);
     lastPersistedSignatureRef.current = nextSignature;
-  }, [detailItem, computeDraftSignature]);
+  }, [detailItem, supabaseMode, computeDraftSignature]);
 
   const scheduleDraftPersist = useCallback((draft: Partial<ProcurementItemV2>) => {
     clearAutosaveTimer();
@@ -1526,6 +1559,10 @@ export default function ProjectProcurement() {
   };
 
   const handleRequestMore = (row: InStockTableRow) => {
+    // Manual task authoring has no Supabase write path yet (tasks are projected from the estimate),
+    // so this action is disabled + marked "coming soon" in supabase mode. Guard here too in case the
+    // handler is reached, to avoid the misleading "task created" toast over a write that never persists.
+    if (isSupabaseMode) return;
     const now = new Date().toISOString();
     const task: Task = {
       id: `task-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -1676,7 +1713,13 @@ export default function ProjectProcurement() {
     );
   }
 
-  if (items.length === 0 && visibleInStockRows.length === 0 && !hasPlacedSupplierOrderLines) {
+  if (
+    items.length === 0
+    && visibleInStockRows.length === 0
+    && !hasPlacedSupplierOrderLines
+    && !isProcurementItemsLoading
+    && !isProcurementSyncing
+  ) {
     return (
       <EmptyState
         icon={ShoppingCart}
@@ -1819,11 +1862,13 @@ export default function ProjectProcurement() {
                 disabled={
                   (effectiveActiveTab === "requested" ? orderControl.disabled
                     : effectiveActiveTab === "ordered" ? receiveControl.disabled
-                      : useFromStockEffectiveDisabled)
+                      : useFromStockEffectiveDisabled || isSupabaseMode)
                   || shouldBlockProcurementLaunchActions
                 }
                 title={
-                  effectiveActiveTab === "in_stock" ? useFromStockEffectiveReason : undefined
+                  effectiveActiveTab === "in_stock"
+                    ? (isSupabaseMode ? t("common.comingSoon") : useFromStockEffectiveReason)
+                    : undefined
                 }
               >
                 {selectionPrimaryLabel}
@@ -1845,7 +1890,7 @@ export default function ProjectProcurement() {
       {effectiveActiveTab === "requested" && (
         <div className="glass rounded-card p-2 space-y-2">
           {requestedItems.length === 0 ? (
-            isProcurementSyncing ? (
+            items.length === 0 && (isProcurementItemsLoading || isProcurementSyncing) ? (
               <div className="space-y-2" aria-hidden>
                 {[0, 1, 2, 3].map((i) => (
                   <Skeleton key={i} className="h-14 w-full" />
@@ -2067,7 +2112,7 @@ export default function ProjectProcurement() {
       {effectiveActiveTab === "ordered" && (
         <div className="glass rounded-card p-2 space-y-2">
           {activeAndReceivedSupplierOrders.length === 0 ? (
-            isProcurementSyncing ? (
+            items.length === 0 && (isProcurementItemsLoading || isProcurementSyncing) ? (
               <div className="space-y-2" aria-hidden>
                 {[0, 1, 2, 3].map((i) => (
                   <Skeleton key={i} className="h-14 w-full" />
@@ -2445,7 +2490,7 @@ export default function ProjectProcurement() {
       {effectiveActiveTab === "in_stock" && (
         <div className="glass rounded-card p-2 space-y-2">
           {visibleInStockRows.length === 0 ? (
-            isProcurementSyncing ? (
+            items.length === 0 && (isProcurementItemsLoading || isProcurementSyncing) ? (
               <div className="space-y-2" aria-hidden>
                 {[0, 1, 2, 3].map((i) => (
                   <Skeleton key={i} className="h-14 w-full" />
@@ -2500,8 +2545,8 @@ export default function ProjectProcurement() {
                               size="sm"
                               className="h-7"
                               onClick={() => openUseFromStockModal([row])}
-                              disabled={useFromStockEffectiveDisabled}
-                              title={useFromStockEffectiveReason}
+                              disabled={useFromStockEffectiveDisabled || isSupabaseMode}
+                              title={isSupabaseMode ? t("common.comingSoon") : useFromStockEffectiveReason}
                             >
                               {t("procurement.action.use")}
                             </Button>
@@ -2511,10 +2556,16 @@ export default function ProjectProcurement() {
                               variant="ghost"
                               className="h-7"
                               onClick={() => handleRequestMore(row)}
-                              disabled={!canManageProcurement}
+                              disabled={!canManageProcurement || isSupabaseMode}
+                              title={isSupabaseMode ? t("common.comingSoon") : undefined}
                             >
                               {t("procurement.action.requestMore")}
                             </Button>
+                            {isSupabaseMode && (
+                              <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-normal">
+                                {t("common.comingSoon")}
+                              </Badge>
+                            )}
                           </div>
                         </td>
                       )}
@@ -2925,7 +2976,9 @@ export default function ProjectProcurement() {
                     <div className="mt-1">
                       <ItemTypePicker
                         value={(editForm.type ?? "other") as ProcurementItemType}
-                        disabled={!canEdit || activeTab === "ordered" || !!detailItem.lockedFromEstimate}
+                        // No procurement_items type column exists; in supabase mode the type is derived
+                        // from the estimate on read, so editing it here would Save-toast then silently revert.
+                        disabled={!canEdit || activeTab === "ordered" || !!detailItem.lockedFromEstimate || isSupabaseMode}
                         onChange={(nextType) => patchEditForm((prev) => ({ ...prev, type: nextType }), "immediate")}
                       />
                     </div>
@@ -2947,8 +3000,8 @@ export default function ProjectProcurement() {
                         <PopoverContent className="w-auto p-0" align="start">
                           <Calendar
                             mode="single"
-                            selected={editForm.requiredByDate ? new Date(editForm.requiredByDate) : undefined}
-                            onSelect={(nextDate) => patchEditForm((prev) => ({ ...prev, requiredByDate: nextDate ? nextDate.toISOString() : null }), "immediate")}
+                            selected={editForm.requiredByDate ? parseProcurementDate(editForm.requiredByDate) : undefined}
+                            onSelect={(nextDate) => patchEditForm((prev) => ({ ...prev, requiredByDate: nextDate ? toLocalDateString(nextDate) : null }), "immediate")}
                             initialFocus
                           />
                         </PopoverContent>
@@ -3207,27 +3260,80 @@ export default function ProjectProcurement() {
 
           <DialogFooter className="border-t border-border px-4 py-3 sm:px-6">
             <Button type="button" variant="outline" onClick={closeDetail}>{t("common.close")}</Button>
-            {detailItem && canEdit && (
+            {detailItem && canPersistProcurementDetail && (
               <Button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   clearAutosaveTimer();
-                  persistDraftNowIfChanged(draftRef.current);
-                  toast({ title: t("procurement.toast.saved") });
+                  if (!supabaseMode) {
+                    persistDraftNowIfChanged(draftRef.current);
+                    toast({ title: t("procurement.toast.saved") });
+                    return;
+                  }
+                  if (detailMutationInFlightRef.current) return;
+                  // Persist only the fields the user actually changed, not the whole draft, so a
+                  // finance-restricted member (whose detail fields load as null) cannot null out
+                  // values they cannot see, and an unedited derived price is not promoted to manual.
+                  const patch = diffProcurementItemPatch(detailItem, draftRef.current);
+                  if (Object.keys(patch).length === 0) {
+                    toast({ title: t("procurement.toast.saved") });
+                    return;
+                  }
+                  detailMutationInFlightRef.current = true;
+                  try {
+                    const source = await getProcurementSource(supabaseMode);
+                    await source.updateProjectProcurementItem(detailItem.id, patch);
+                    await queryClient.invalidateQueries({
+                      queryKey: procurementProjectItemsQueryRoot(supabaseMode.profileId, pid),
+                    });
+                    toast({ title: t("procurement.toast.saved") });
+                  } catch (error) {
+                    console.error("Failed to persist procurement item edit", error);
+                    toast({
+                      title: t("procurement.toast.saveFailed"),
+                      description: t("procurement.toast.receiveFallback"),
+                      variant: "destructive",
+                    });
+                  } finally {
+                    detailMutationInFlightRef.current = false;
+                  }
                 }}
               >
                 {t("procurement.action.save")}
               </Button>
             )}
-            {detailItem && canEdit && !detailItem.lockedFromEstimate && (
+            {detailItem && canPersistProcurementDetail && !detailItem.lockedFromEstimate && (
               <Button
                 type="button"
                 variant="ghost"
                 className="text-destructive hover:text-destructive"
-                onClick={() => {
-                  archiveProcurementItem(detailItem.id);
-                  toast({ title: t("procurement.toast.itemArchived") });
-                  closeDetail();
+                onClick={async () => {
+                  if (!supabaseMode) {
+                    archiveProcurementItem(detailItem.id);
+                    toast({ title: t("procurement.toast.itemArchived") });
+                    closeDetail();
+                    return;
+                  }
+                  if (detailMutationInFlightRef.current) return;
+                  detailMutationInFlightRef.current = true;
+                  try {
+                    const source = await getProcurementSource(supabaseMode);
+                    await source.cancelProcurementItem(detailItem.id);
+                    await queryClient.invalidateQueries({
+                      queryKey: procurementProjectItemsQueryRoot(supabaseMode.profileId, pid),
+                    });
+                    toast({ title: t("procurement.toast.itemArchived") });
+                    closeDetail();
+                  } catch (error) {
+                    console.error("Failed to archive procurement item", error);
+                    toast({
+                      title: t("procurement.toast.archiveFailed"),
+                      description: t("procurement.toast.receiveFallback"),
+                      variant: "destructive",
+                    });
+                  } finally {
+                    detailMutationInFlightRef.current = false;
+                  }
                 }}
               >
                 {t("procurement.action.archive")}

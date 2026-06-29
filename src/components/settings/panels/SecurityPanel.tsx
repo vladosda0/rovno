@@ -1,42 +1,66 @@
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { SettingsSection } from "@/components/settings/SettingsSection";
-import { Monitor, Smartphone, Globe } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
+import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
+import { Monitor } from "lucide-react";
 
-const MOCK_SESSIONS = [
-  { id: "1", deviceKey: "security.mock.session1.device", locationKey: "security.mock.session1.location", lastActiveKey: "security.mock.session1.lastActive", icon: Monitor, current: true },
-  { id: "2", deviceKey: "security.mock.session2.device", locationKey: "security.mock.session2.location", lastActiveKey: "security.mock.session2.lastActive", icon: Smartphone, current: false },
-  { id: "3", deviceKey: "security.mock.session3.device", locationKey: "security.mock.session3.location", lastActiveKey: "security.mock.session3.lastActive", icon: Globe, current: false },
-];
+function parseCurrentDevice(): string {
+  const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+
+  let browser = "Browser";
+  // iOS third-party browsers run on WebKit and advertise their own tokens
+  // (CriOS/FxiOS/EdgiOS), not Chrome//Firefox//Edg/ — detect those first.
+  if (/EdgiOS\//.test(ua)) browser = "Edge";
+  else if (/CriOS\//.test(ua)) browser = "Chrome";
+  else if (/FxiOS\//.test(ua)) browser = "Firefox";
+  else if (/Edg\//.test(ua)) browser = "Edge";
+  else if (/Firefox\//.test(ua)) browser = "Firefox";
+  else if (/Chrome\//.test(ua) && !/Chromium\//.test(ua)) browser = "Chrome";
+  else if (/Safari\//.test(ua) && /Version\//.test(ua)) browser = "Safari";
+
+  let os = "";
+  if (/iPhone|iPad|iPod/.test(ua)) os = "iOS";
+  else if (/Android/.test(ua)) os = "Android";
+  else if (/Mac OS X/.test(ua)) os = "macOS";
+  else if (/Windows/.test(ua)) os = "Windows";
+  else if (/Linux/.test(ua)) os = "Linux";
+
+  return os ? `${browser} on ${os}` : browser;
+}
 
 export function SecurityPanel() {
   const { t } = useTranslation();
+  const { status } = useRuntimeAuth();
+  const currentDevice = useMemo(() => parseCurrentDevice(), []);
   return (
     <div className="space-y-sp-3">
       <SettingsSection title={t("security.sessions.title")} description={t("security.sessions.description")}>
         <div className="space-y-sp-2">
-          {MOCK_SESSIONS.map((session) => (
-            <div key={session.id} className="rounded-panel bg-muted/40 p-1.5 px-sp-2">
+          {status === "authenticated" && (
+            <div className="rounded-panel bg-muted/40 p-1.5 px-sp-2">
               <div className="flex items-start gap-2">
-                <session.icon className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                <Monitor className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
                 <div className="flex-1 min-w-0 space-y-0.5">
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-body-sm font-medium text-foreground">{t(session.deviceKey)}</p>
-                    {session.current && <Badge variant="secondary" className="text-[10px]">{t("security.sessions.current")}</Badge>}
+                    <p className="text-body-sm font-medium text-foreground">{currentDevice}</p>
+                    <Badge variant="secondary" className="text-[10px]">{t("security.sessions.current")}</Badge>
                   </div>
-                  <p className="text-caption text-muted-foreground">{t(session.locationKey)} · {t(session.lastActiveKey)}</p>
+                  <p className="text-caption text-muted-foreground">{t("security.sessions.currentActive")}</p>
                 </div>
               </div>
             </div>
-          ))}
-        </div>
-        <div className="flex flex-wrap gap-sp-2 pt-sp-1">
-          <Button variant="outline" className="w-full sm:w-auto" onClick={() => toast({ title: t("security.sessions.signedOutToast") })}>
-            {t("security.sessions.signOutOthers")}
-          </Button>
+          )}
+          <div className="rounded-panel bg-muted/40 p-1.5 px-sp-2">
+            <div className="space-y-0.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-body-sm font-medium text-foreground">{t("security.sessions.multiDevice")}</p>
+                <Badge variant="secondary" className="text-[10px]">{t("security.sessions.comingSoon")}</Badge>
+              </div>
+              <p className="text-caption text-muted-foreground">{t("security.sessions.multiDeviceNote")}</p>
+            </div>
+          </div>
         </div>
       </SettingsSection>
 

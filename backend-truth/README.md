@@ -145,6 +145,7 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20260613120600_get_resource_article_price_comparison.sql`
 - `supabase/migrations/20260622120000_tighten_price_comparison_finance_gate.sql`
 - `supabase/migrations/20260624120000_add_library_work_resource_exclusions.sql`
+- `supabase/migrations/20260629120000_add_procurement_item_detail_columns.sql`
 
 ## Exclusions
 

@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   getProcurementItems,
@@ -39,7 +39,9 @@ function useStoreValue<T>(getter: () => T, enabled: boolean, fallback: T): T {
   return enabled ? value : fallback;
 }
 
-export function useProjectProcurementItems(projectId: string): ProcurementItemV2[] {
+export function useProjectProcurementItemsState(
+  projectId: string,
+): { items: ProcurementItemV2[]; isLoading: boolean } {
   const mode = useWorkspaceMode();
   const estimateSync = useEstimateV2ProjectSync(projectId);
   const supabaseMode = mode.kind === "supabase" ? mode : null;
@@ -53,10 +55,7 @@ export function useProjectProcurementItems(projectId: string): ProcurementItemV2
   );
   const itemsQuery = useQuery({
     queryKey: supabaseMode
-      ? [
-        ...procurementQueryKeys.projectItems(supabaseMode.profileId, projectId, financeAccess),
-        estimateSync.domains.procurement.projectedRevision ?? "initial",
-      ]
+      ? [...procurementQueryKeys.projectItems(supabaseMode.profileId, projectId, financeAccess)]
       : [...procurementQueryKeys.projectItems("browser", projectId, "full")],
     queryFn: async () => {
       const source = await getProcurementSource(supabaseMode ?? undefined);
@@ -66,9 +65,33 @@ export function useProjectProcurementItems(projectId: string): ProcurementItemV2
     staleTime: PROCUREMENT_QUERY_STALE_TIME_MS,
   });
 
+  // Keep the query key stable across projection advances so cached data does not
+  // collapse to empty (isPending) on every sync, which remounts the list and blanks
+  // open editors. Instead, when the sync's projectedRevision advances, invalidate the
+  // procurement root: with a stable key this is a background refetch (isFetching) that
+  // keeps the previous data mounted. Freshness is unchanged (every projection still refetches).
+  const queryClient = useQueryClient();
+  const projectedRevision = estimateSync.domains.procurement.projectedRevision ?? null;
+  const invalidateProfileId = supabaseMode?.profileId ?? null;
+  useEffect(() => {
+    if (!invalidateProfileId || !projectId) return;
+    queryClient.invalidateQueries({
+      queryKey: procurementProjectItemsQueryRoot(invalidateProfileId, projectId),
+    });
+  }, [queryClient, invalidateProfileId, projectId, projectedRevision]);
+
   if (mode.kind === "demo" || mode.kind === "local") {
-    return browserItems;
+    return { items: browserItems, isLoading: false };
   }
 
-  return itemsQuery.data ?? EMPTY_PROCUREMENT_ITEMS;
+  if (!supabaseMode) {
+    // guest has no workspace data; pending-supabase is still resolving auth.
+    return { items: EMPTY_PROCUREMENT_ITEMS, isLoading: mode.kind === "pending-supabase" };
+  }
+
+  return { items: itemsQuery.data ?? EMPTY_PROCUREMENT_ITEMS, isLoading: itemsQuery.isPending };
+}
+
+export function useProjectProcurementItems(projectId: string): ProcurementItemV2[] {
+  return useProjectProcurementItemsState(projectId).items;
 }

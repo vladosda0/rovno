@@ -18,6 +18,8 @@ type MockDatabase = {
   tables: {
     [K in TableName]: Array<Database["public"]["Tables"][K]["Row"]>;
   };
+  /** When set, an `insert` into one of these tables rejects with the given error (failure injection). */
+  failInsertOn?: Partial<Record<TableName, Error>>;
 };
 
 type Filter =
@@ -123,7 +125,7 @@ function hydrateInsertRow<TTable extends TableName>(
 }
 
 class MockQueryBuilder<TTable extends TableName> implements PromiseLike<{ data: unknown; error: Error | null }> {
-  private action: "select" | "insert" | "update" | null = null;
+  private action: "select" | "insert" | "update" | "delete" | null = null;
 
   private filters: Filter[] = [];
 
@@ -157,6 +159,11 @@ class MockQueryBuilder<TTable extends TableName> implements PromiseLike<{ data: 
   update(payload: unknown) {
     this.action = "update";
     this.payload = payload;
+    return this;
+  }
+
+  delete() {
+    this.action = "delete";
     return this;
   }
 
@@ -214,6 +221,10 @@ class MockQueryBuilder<TTable extends TableName> implements PromiseLike<{ data: 
     }
 
     if (this.action === "insert") {
+      const injectedError = this.database.failInsertOn?.[this.table];
+      if (injectedError) {
+        return { data: null, error: injectedError };
+      }
       const nextRows = (Array.isArray(this.payload) ? this.payload : [this.payload])
         .map((row) => hydrateInsertRow(this.database, this.table, row as Record<string, unknown>));
       rows.push(...nextRows);
@@ -223,6 +234,30 @@ class MockQueryBuilder<TTable extends TableName> implements PromiseLike<{ data: 
           : null,
         error: null,
       };
+    }
+
+    if (this.action === "delete") {
+      const doomed = applyFilters(rows, this.filters);
+      const doomedIds = new Set(doomed.map((row) => row.id as string));
+      this.database.tables[this.table] = (rows as Array<{ id: string }>)
+        .filter((row) => !doomedIds.has(row.id)) as never;
+
+      // Mirror the FK ON DELETE CASCADE: removing an order removes its lines, and
+      // removing those lines removes their inventory movements.
+      if (this.table === "orders") {
+        const orderLines = this.database.tables.order_lines;
+        const removedLineIds = new Set(
+          orderLines.filter((line) => doomedIds.has(line.order_id)).map((line) => line.id),
+        );
+        this.database.tables.order_lines = orderLines.filter(
+          (line) => !doomedIds.has(line.order_id),
+        );
+        this.database.tables.inventory_movements = this.database.tables.inventory_movements.filter(
+          (movement) => !(movement.order_line_id && removedLineIds.has(movement.order_line_id)),
+        );
+      }
+
+      return { data: null, error: null };
     }
 
     if (this.action === "update") {
@@ -689,6 +724,194 @@ describe("supabase order writes", () => {
     expect(database.tables.inventory_movements).toHaveLength(3);
     expect(fullyReceived.status).toBe("received");
     expect(fullyReceived.lines.find((line) => line.id === "line-2")?.receivedQty).toBe(5);
+  });
+});
+
+describe("supabase stock transfers", () => {
+  let database: MockDatabase;
+
+  beforeEach(() => {
+    database = {
+      nextId: 0,
+      tables: {
+        orders: [],
+        order_lines: [],
+        inventory_movements: [],
+        procurement_items: [
+          procurementItemRow({
+            id: "proc-1",
+            title: "Copper cable",
+            description: "3x2.5",
+            unit: "m",
+          }),
+          procurementItemRow({
+            id: "proc-2",
+            title: "Drywall screws",
+            description: "Box",
+            unit: "pcs",
+          }),
+        ],
+        inventory_items: [
+          {
+            id: "inventory-item-existing",
+            project_id: "project-1",
+            title: "Copper cable",
+            sku: null,
+            unit: "m",
+            notes: "3x2.5",
+            created_at: "2026-03-01T00:00:00.000Z",
+            updated_at: "2026-03-02T00:00:00.000Z",
+          },
+        ],
+      },
+    };
+  });
+
+  it("writes a received order, paired transfer movements, and reuses/creates inventory items", async () => {
+    const source = createSupabaseOrdersSource(
+      createMockSupabase(database) as never,
+      "profile-1",
+    );
+
+    const created = await source.placeStockTransfer({
+      projectId: "project-1",
+      fromLocationId: "location-a",
+      toLocationId: "location-b",
+      deliveryDeadline: "2026-03-20T00:00:00.000Z",
+      lines: [
+        {
+          procurementItemId: "proc-1",
+          title: "Copper cable",
+          qty: 3,
+          unit: "m",
+          spec: "3x2.5",
+        },
+        {
+          procurementItemId: "proc-2",
+          title: "Drywall screws",
+          qty: 4,
+          unit: "pcs",
+          spec: "Box",
+        },
+      ],
+    });
+
+    expect(database.tables.orders).toHaveLength(1);
+    expect(database.tables.orders[0]).toMatchObject({
+      project_id: "project-1",
+      supplier_name: "",
+      status: "received",
+      created_by: "profile-1",
+      delivery_due_at: "2026-03-20T00:00:00.000Z",
+    });
+    expect(database.tables.orders[0].ordered_at).toBeTruthy();
+    expect(database.tables.order_lines).toHaveLength(2);
+
+    // The "Copper cable" line reuses the existing inventory item; "Drywall screws" creates one.
+    expect(database.tables.inventory_items).toHaveLength(2);
+    const createdInventoryItem = database.tables.inventory_items[1];
+    expect(createdInventoryItem).toMatchObject({
+      project_id: "project-1",
+      title: "Drywall screws",
+      unit: "pcs",
+      notes: "Box",
+    });
+
+    const copperLineId = database.tables.order_lines.find((line) => line.procurement_item_id === "proc-1")?.id;
+    const screwLineId = database.tables.order_lines.find((line) => line.procurement_item_id === "proc-2")?.id;
+
+    // Two paired movements per line: -qty at the source, +qty at the destination.
+    expect(database.tables.inventory_movements).toHaveLength(4);
+    const copperMovements = database.tables.inventory_movements.filter(
+      (movement) => movement.order_line_id === copperLineId,
+    );
+    expect(copperMovements).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          inventory_item_id: "inventory-item-existing",
+          inventory_location_id: "location-a",
+          movement_type: "transfer",
+          delta_qty: -3,
+          procurement_item_id: "proc-1",
+          created_by: "profile-1",
+        }),
+        expect.objectContaining({
+          inventory_item_id: "inventory-item-existing",
+          inventory_location_id: "location-b",
+          movement_type: "transfer",
+          delta_qty: 3,
+          procurement_item_id: "proc-1",
+          created_by: "profile-1",
+        }),
+      ]),
+    );
+
+    const screwMovements = database.tables.inventory_movements.filter(
+      (movement) => movement.order_line_id === screwLineId,
+    );
+    expect(screwMovements).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          inventory_item_id: createdInventoryItem.id,
+          inventory_location_id: "location-a",
+          movement_type: "transfer",
+          delta_qty: -4,
+        }),
+        expect.objectContaining({
+          inventory_item_id: createdInventoryItem.id,
+          inventory_location_id: "location-b",
+          movement_type: "transfer",
+          delta_qty: 4,
+        }),
+      ]),
+    );
+
+    expect(created.kind).toBe("stock");
+    expect(created.status).toBe("received");
+    expect(created.fromLocationId).toBe("location-a");
+    expect(created.toLocationId).toBe("location-b");
+  });
+
+  it("rejects same source/destination warehouse without writing anything", async () => {
+    const source = createSupabaseOrdersSource(
+      createMockSupabase(database) as never,
+      "profile-1",
+    );
+
+    await expect(
+      source.placeStockTransfer({
+        projectId: "project-1",
+        fromLocationId: "location-a",
+        toLocationId: "location-a",
+        lines: [{ procurementItemId: "proc-1", title: "Copper cable", qty: 3, unit: "m", spec: "3x2.5" }],
+      }),
+    ).rejects.toThrow();
+
+    expect(database.tables.orders).toHaveLength(0);
+    expect(database.tables.order_lines).toHaveLength(0);
+    expect(database.tables.inventory_movements).toHaveLength(0);
+  });
+
+  it("deletes the orphan order when the movement insert fails (no ghost received order)", async () => {
+    database.failInsertOn = { inventory_movements: new Error("inventory_balances negative") };
+    const source = createSupabaseOrdersSource(
+      createMockSupabase(database) as never,
+      "profile-1",
+    );
+
+    await expect(
+      source.placeStockTransfer({
+        projectId: "project-1",
+        fromLocationId: "location-a",
+        toLocationId: "location-b",
+        lines: [{ procurementItemId: "proc-1", title: "Copper cable", qty: 99, unit: "m", spec: "3x2.5" }],
+      }),
+    ).rejects.toThrow("inventory_balances negative");
+
+    // Orphan cleanup ran: the order row (and its cascaded lines) are gone, no movements landed.
+    expect(database.tables.orders).toHaveLength(0);
+    expect(database.tables.order_lines).toHaveLength(0);
+    expect(database.tables.inventory_movements).toHaveLength(0);
   });
 });
 
