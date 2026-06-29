@@ -50,7 +50,11 @@ const NotFound = lazy(() => import("@/pages/NotFound"));
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      // Alt-tabbing back into a half-filled form must not refetch-and-reset it.
+      // Disabled app-wide on purpose: alt-tabbing back into a half-filled form (or any page)
+      // must not refetch-and-reset it, which was a source of visible reload churn. Freshness is
+      // preserved via explicit invalidateQueries after mutations + per-query staleTime/refetchInterval
+      // (e.g. payment status and tier quota poll on their own). A query that genuinely needs
+      // refresh-on-focus should opt back in locally with refetchOnWindowFocus: true.
       refetchOnWindowFocus: false,
     },
   },
