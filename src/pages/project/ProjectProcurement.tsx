@@ -317,6 +317,12 @@ export default function ProjectProcurement() {
 
   const showProcurementActions = orderControl.visible || receiveControl.visible || useFromStockControl.visible;
   const canEdit = canManageProcurement;
+  // Persisting item edits writes to procurement_items, whose SELECT RLS requires sensitive-detail
+  // finance visibility. A write-capable but finance-restricted member loads items via the redacted
+  // operational-summary RPC and cannot read the row back, so a direct write would either false-fail
+  // (the post-write read returns no row) or persist values they cannot verify. In supabase mode,
+  // gate the detail Save/Archive on the same sensitive-detail access the read path requires.
+  const canPersistProcurementDetail = canEdit && (!isSupabaseMode || canViewSensitiveDetail);
   const canLaunchOrderFlows = canManageProcurement
     && (canViewSensitiveDetail || canViewOperationalFinanceSummary);
   const canUseFromStock = canManageProcurement;
@@ -3235,7 +3241,7 @@ export default function ProjectProcurement() {
 
           <DialogFooter className="border-t border-border px-4 py-3 sm:px-6">
             <Button type="button" variant="outline" onClick={closeDetail}>{t("common.close")}</Button>
-            {detailItem && canEdit && (
+            {detailItem && canPersistProcurementDetail && (
               <Button
                 type="button"
                 onClick={async () => {
@@ -3263,9 +3269,10 @@ export default function ProjectProcurement() {
                     });
                     toast({ title: t("procurement.toast.saved") });
                   } catch (error) {
+                    console.error("Failed to persist procurement item edit", error);
                     toast({
                       title: t("procurement.toast.saveFailed"),
-                      description: error instanceof Error ? error.message : t("procurement.toast.receiveFallback"),
+                      description: t("procurement.toast.receiveFallback"),
                       variant: "destructive",
                     });
                   } finally {
@@ -3276,7 +3283,7 @@ export default function ProjectProcurement() {
                 {t("procurement.action.save")}
               </Button>
             )}
-            {detailItem && canEdit && !detailItem.lockedFromEstimate && (
+            {detailItem && canPersistProcurementDetail && !detailItem.lockedFromEstimate && (
               <Button
                 type="button"
                 variant="ghost"
@@ -3299,9 +3306,10 @@ export default function ProjectProcurement() {
                     toast({ title: t("procurement.toast.itemArchived") });
                     closeDetail();
                   } catch (error) {
+                    console.error("Failed to archive procurement item", error);
                     toast({
                       title: t("procurement.toast.archiveFailed"),
-                      description: error instanceof Error ? error.message : t("procurement.toast.receiveFallback"),
+                      description: t("procurement.toast.receiveFallback"),
                       variant: "destructive",
                     });
                   } finally {
