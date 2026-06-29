@@ -11,6 +11,7 @@
   "sourceMigrations": [
     "supabase/migrations/20260306163000_inventory_foundation.sql",
     "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
+    "supabase/migrations/20260629120000_add_procurement_item_detail_columns.sql",
     "supabase/migrations/20260509082719_fix_inventory_balances_trigger_on_project_cascade.sql",
     "supabase/migrations/20260406183000_procurement_operational_summary_requested_and_ordered_line_types.sql",
     "supabase/migrations/20260419120000_session3c_procurement_ai_in_stock_evidence.sql",
@@ -555,6 +556,63 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "notes",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "required_by_date",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "supplier_preferred",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "location_preferred_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "inventory_locations",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
+        },
+        {
+          "name": "actual_unit_price_cents",
+          "sqlType": "bigint",
+          "tsType": "number",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -597,6 +655,16 @@
           "expression": "status in ('requested', 'ordered', 'partially_received', 'received', 'cancelled')",
           "usingIndex": null,
           "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "actual_unit_price_cents"
+          ],
+          "expression": "actual_unit_price_cents is null or actual_unit_price_cents >= 0",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260629120000_add_procurement_item_detail_columns.sql"
         }
       ],
       "indexes": [
@@ -643,6 +711,17 @@
           "where": "estimate_resource_line_id is not null",
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql"
+        },
+        {
+          "name": "idx_procurement_items_location_preferred_id",
+          "unique": false,
+          "method": null,
+          "expressions": [
+            "location_preferred_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260629120000_add_procurement_item_detail_columns.sql"
         }
       ],
       "triggers": [
@@ -1535,6 +1614,22 @@
       ],
       "toSchema": "public",
       "toTable": "procurement_items",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260629120000_add_procurement_item_detail_columns.sql",
+      "sourceKind": "alter_table",
+      "fromSchema": "public",
+      "fromTable": "procurement_items",
+      "fromColumns": [
+        "location_preferred_id"
+      ],
+      "toSchema": "public",
+      "toTable": "inventory_locations",
       "toColumns": [
         "id"
       ],

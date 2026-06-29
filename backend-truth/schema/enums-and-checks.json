@@ -762,6 +762,16 @@
     },
     {
       "schema": "public",
+      "table": "procurement_items",
+      "column": "actual_unit_price_cents",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "actual_unit_price_cents is null or actual_unit_price_cents >= 0",
+      "sourceMigration": "supabase/migrations/20260629120000_add_procurement_item_detail_columns.sql"
+    },
+    {
+      "schema": "public",
       "table": "orders",
       "column": "status",
       "constraintName": null,

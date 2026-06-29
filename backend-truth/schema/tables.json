@@ -4236,6 +4236,63 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "notes",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "required_by_date",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "supplier_preferred",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "location_preferred_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "inventory_locations",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
+        },
+        {
+          "name": "actual_unit_price_cents",
+          "sqlType": "bigint",
+          "tsType": "number",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -4278,6 +4335,16 @@
           "expression": "status in ('requested', 'ordered', 'partially_received', 'received', 'cancelled')",
           "usingIndex": null,
           "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "actual_unit_price_cents"
+          ],
+          "expression": "actual_unit_price_cents is null or actual_unit_price_cents >= 0",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260629120000_add_procurement_item_detail_columns.sql"
         }
       ],
       "indexes": [
@@ -4324,6 +4391,17 @@
           "where": "estimate_resource_line_id is not null",
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260330160000_wave2_hr_lineage_and_projection_uniqueness.sql"
+        },
+        {
+          "name": "idx_procurement_items_location_preferred_id",
+          "unique": false,
+          "method": null,
+          "expressions": [
+            "location_preferred_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260629120000_add_procurement_item_detail_columns.sql"
         }
       ],
       "triggers": [

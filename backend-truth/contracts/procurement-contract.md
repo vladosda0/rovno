@@ -10,6 +10,7 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 
 - `supabase/migrations/20260306163000_inventory_foundation.sql`
 - `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql`
+- `supabase/migrations/20260629120000_add_procurement_item_detail_columns.sql`
 - `supabase/migrations/20260509082719_fix_inventory_balances_trigger_on_project_cascade.sql`
 - `supabase/migrations/20260406183000_procurement_operational_summary_requested_and_ordered_line_types.sql`
 - `supabase/migrations/20260419120000_session3c_procurement_ai_in_stock_evidence.sql`
@@ -92,18 +93,25 @@ Triggers:
 | `created_by` | `uuid` | no |   | no |
 | `created_at` | `timestamptz` | no | `now()` | no |
 | `updated_at` | `timestamptz` | no | `now()` | no |
+| `notes` | `text` | yes |   | no |
+| `required_by_date` | `text` | yes |   | no |
+| `supplier_preferred` | `text` | yes |   | no |
+| `location_preferred_id` | `uuid` | yes |   | no |
+| `actual_unit_price_cents` | `bigint` | yes |   | no |
 
 Constraints:
 - unnamed check (expression `quantity >= 0`)
 - unnamed check (expression `planned_unit_price_cents is null or planned_unit_price_cents >= 0`)
 - unnamed check (expression `planned_total_price_cents is null or planned_total_price_cents >= 0`)
 - unnamed check (expression `status in ('requested', 'ordered', 'partially_received', 'received', 'cancelled')`)
+- unnamed check (expression `actual_unit_price_cents is null or actual_unit_price_cents >= 0`)
 
 Indexes:
 - `idx_procurement_items_project_id` on (`project_id`)
 - `idx_procurement_items_estimate_resource_line_id` on (`estimate_resource_line_id`)
 - `idx_procurement_items_task_id` on (`task_id`)
 - `idx_procurement_items_estimate_resource_line_id_unique` on (`estimate_resource_line_id`), unique, where `estimate_resource_line_id is not null`
+- `idx_procurement_items_location_preferred_id` on (`location_preferred_id`)
 
 Triggers:
 - `set_procurement_items_updated_at`: before update, executes `public.set_updated_at()`
@@ -208,6 +216,7 @@ Triggers:
 | `public.inventory_movements(procurement_item_id)` | `public.procurement_items(id)` | `set null` | `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql` |
 | `public.inventory_movements(created_by)` | `public.profiles(id)` | `set null` | `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql` |
 | `public.task_checklist_items(procurement_item_id)` | `public.procurement_items(id)` | `set null` | `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql` |
+| `public.procurement_items(location_preferred_id)` | `public.inventory_locations(id)` | `set null` | `supabase/migrations/20260629120000_add_procurement_item_detail_columns.sql` |
 
 ## Functions
 
