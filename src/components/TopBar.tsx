@@ -26,6 +26,7 @@ import { toast } from "@/hooks/use-toast";
 import { useCurrentUser, useProjects, useWorkspaceMode } from "@/hooks/use-mock-data";
 import { supabase } from "@/integrations/supabase/client";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
+import { selectAiUsage, useTierQuota } from "@/hooks/useTierQuota";
 import { clearDemoSession, clearStoredAuthProfile, setAuthRole } from "@/lib/auth-state";
 import { clearAiSidebarSessionPreference } from "@/lib/ai-sidebar-session";
 
@@ -33,41 +34,11 @@ import { clearAiSidebarSessionPreference } from "@/lib/ai-sidebar-session";
 const LOGO_MENU_TRIGGER_CLASS =
   "h-8 gap-2 px-2 shrink-0 hover:bg-muted hover:text-foreground data-[state=open]:bg-muted data-[state=open]:text-foreground";
 
-interface MockCredits {
-  dailyTotal: number;
-  paidTotal: number;
-  dailyUsed: number;
-  paidUsed: number;
-}
-
-const DEFAULT_CREDITS: MockCredits = {
-  dailyTotal: 5,
-  paidTotal: 250,
-  dailyUsed: 0,
-  paidUsed: 0,
-};
-
-function consumeCredit(credits: MockCredits, amount = 1): MockCredits {
-  const spend = Number.isInteger(amount) && amount > 0 ? amount : 1;
-  const dailyRemaining = Math.max(credits.dailyTotal - credits.dailyUsed, 0);
-  const paidRemaining = Math.max(credits.paidTotal - credits.paidUsed, 0);
-
-  if (dailyRemaining > 0) {
-    return {
-      ...credits,
-      dailyUsed: Math.min(credits.dailyUsed + spend, credits.dailyTotal),
-    };
-  }
-
-  if (paidRemaining > 0) {
-    return {
-      ...credits,
-      paidUsed: Math.min(credits.paidUsed + spend, credits.paidTotal),
-    };
-  }
-
-  return credits;
-}
+/** Demo mode shows a fixed showcase AI-chat quota; intentionally a mock value,
+ * gated strictly on demo mode so it never leaks to real (supabase/guest) users. */
+// Demo-only showcase quota (intentionally bypasses selectAiUsage; gated strictly
+// to workspace mode "demo" so it can never render for real or guest users).
+const DEMO_CHAT_USAGE: { used: number; limit: number } = { used: 8, limit: 50 };
 
 interface TopBarProps {
   aiSidebarCollapsed: boolean;
@@ -111,19 +82,108 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOp
   const showRoleSwitcher = workspaceMode.kind === "demo" || workspaceMode.kind === "local";
   const currentProject = projects.find((project) => project.id === projectId);
   const projectName = currentProject?.title ?? t("nav.projectFallback");
-  const [credits, setCredits] = useState<MockCredits>(DEFAULT_CREDITS);
+  const { data: quota } = useTierQuota();
+  const isDemo = workspaceMode.kind === "demo";
   const [roleDialogOpen, setRoleDialogOpen] = useState(false);
   const displayName = user.name || user.email || (runtimeAuth.status === "authenticated" ? t("nav.displayName.workspace") : t("nav.displayName.guest"));
   const initials = displayName.split(" ").map((word) => word[0]).join("").slice(0, 2).toUpperCase();
 
-  const dailyRemaining = Math.max(credits.dailyTotal - credits.dailyUsed, 0);
-  const paidRemaining = Math.max(credits.paidTotal - credits.paidUsed, 0);
-  const totalRemaining = dailyRemaining + paidRemaining;
-  const maxCredits = credits.paidTotal + credits.dailyTotal;
-  const paidRemainingPct = maxCredits > 0 ? Math.max((paidRemaining / maxCredits) * 100, 0) : 0;
-  const dailyRemainingPct = maxCredits > 0 ? Math.max((dailyRemaining / maxCredits) * 100, 0) : 0;
   const handleCreditsCardClick = () => {
     navigate("/settings?tab=billing");
+  };
+
+  // The AI-chat quota card. Demo mode shows a fixed showcase quota; a real
+  // (supabase) user shows their live chat slot; guests get a sign-in nudge.
+  // While authenticated but the quota hasn't loaded, render nothing.
+  const renderCreditsCard = () => {
+    const chat = isDemo
+      ? DEMO_CHAT_USAGE
+      : quota
+        ? selectAiUsage(quota, "chat")
+        : null;
+
+    // Mirror UsageMeter: a negative limit means an unlimited slot; limit === 0
+    // (unknown/zero plan) renders no card. Otherwise show the finite remaining.
+    if ((isDemo || runtimeAuth.status === "authenticated") && chat && chat.limit !== 0) {
+      const unlimited = chat.limit < 0;
+      const remaining = unlimited ? 0 : Math.max(chat.limit - chat.used, 0);
+      const remainingPct = unlimited ? 100 : Math.round((remaining / chat.limit) * 100);
+      const low = !unlimited && remainingPct < 20;
+      return (
+        <>
+          <div className="px-2 py-1.5">
+            <div
+              className="rounded-md border border-border bg-muted/30 p-2.5 cursor-pointer hover:bg-muted/40 transition-colors"
+              role="button"
+              tabIndex={0}
+              onClick={handleCreditsCardClick}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  handleCreditsCardClick();
+                }
+              }}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-caption font-semibold text-foreground">{t("nav.credits")}</span>
+                <span className="inline-flex items-center gap-1 text-body-sm font-semibold text-foreground">
+                  {unlimited ? "∞" : remaining}
+                  <ChevronDown className="h-3.5 w-3.5 -rotate-90 text-muted-foreground" />
+                </span>
+              </div>
+
+              <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                <div
+                  className={cn("h-full transition-all", low ? "bg-warning" : "bg-accent")}
+                  style={{ width: `${remainingPct}%` }}
+                />
+              </div>
+
+              <p className="mt-1.5 text-[11px] text-muted-foreground">
+                {unlimited
+                  ? t("quota.meter.unlimited")
+                  : t("quota.meter.remaining", { remaining, limit: chat.limit })}
+              </p>
+            </div>
+          </div>
+          <DropdownMenuSeparator />
+        </>
+      );
+    }
+
+    // Authenticated (quota still loading/absent or zero allowance) or auth still
+    // resolving (pending-supabase): hide the card rather than nudging a
+    // logged-in user to sign in. Only a genuine guest sees the nudge below.
+    if (runtimeAuth.status !== "guest") {
+      return null;
+    }
+
+    // Guest / local / logged-out: nudge to sign in instead of showing a balance.
+    return (
+      <>
+        <div className="px-2 py-1.5">
+          <div
+            className="rounded-md border border-border bg-muted/30 p-2.5 cursor-pointer hover:bg-muted/40 transition-colors"
+            role="button"
+            tabIndex={0}
+            onClick={() => navigate("/auth/login")}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                navigate("/auth/login");
+              }
+            }}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-caption font-semibold text-foreground">{t("nav.credits")}</span>
+              <ChevronDown className="h-3.5 w-3.5 -rotate-90 text-muted-foreground" />
+            </div>
+            <p className="mt-1.5 text-[11px] text-muted-foreground">{t("nav.credits.signInToSee")}</p>
+          </div>
+        </div>
+        <DropdownMenuSeparator />
+      </>
+    );
   };
 
   const renderRoleSwitcher = () => (
@@ -156,7 +216,6 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOp
         throw error;
       }
 
-      setCredits(DEFAULT_CREDITS);
       clearDemoSession();
       clearAiSidebarSessionPreference();
       clearStoredAuthProfile();
@@ -242,41 +301,7 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOp
               </DropdownMenuItem>
               <DropdownMenuSeparator />
 
-              <div className="px-2 py-1.5">
-                <div
-                  className="rounded-md border border-border bg-muted/30 p-2.5 cursor-pointer hover:bg-muted/40 transition-colors"
-                  role="button"
-                  tabIndex={0}
-                  onClick={handleCreditsCardClick}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      handleCreditsCardClick();
-                    }
-                  }}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-caption font-semibold text-foreground">{t("nav.credits")}</span>
-                    <span className="inline-flex items-center gap-1 text-body-sm font-semibold text-foreground">
-                      {totalRemaining}
-                      <ChevronDown className="h-3.5 w-3.5 -rotate-90 text-muted-foreground" />
-                    </span>
-                  </div>
-
-                  <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted flex">
-                    {credits.paidTotal > 0 && paidRemaining > 0 && (
-                      <div className="h-full bg-success/70 transition-all" style={{ width: `${paidRemainingPct}%` }} />
-                    )}
-                    {dailyRemaining > 0 && (
-                      <div className="h-full bg-info/70 transition-all" style={{ width: `${dailyRemainingPct}%` }} />
-                    )}
-                  </div>
-
-                  <p className="mt-1.5 text-[11px] text-muted-foreground">{dailyRemaining > 0 ? t("nav.credits.daily") : t("nav.credits.paid")}</p>
-                </div>
-              </div>
-
-              <DropdownMenuSeparator />
+              {renderCreditsCard()}
 
               <DropdownMenuItem asChild>
                 <Link to="/settings">
@@ -382,41 +407,7 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOp
               </DropdownMenuItem>
               <DropdownMenuSeparator />
 
-              <div className="px-2 py-1.5">
-                <div
-                  className="rounded-md border border-border bg-muted/30 p-2.5 cursor-pointer hover:bg-muted/40 transition-colors"
-                  role="button"
-                  tabIndex={0}
-                  onClick={handleCreditsCardClick}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      handleCreditsCardClick();
-                    }
-                  }}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-caption font-semibold text-foreground">{t("nav.credits")}</span>
-                    <span className="inline-flex items-center gap-1 text-body-sm font-semibold text-foreground">
-                      {totalRemaining}
-                      <ChevronDown className="h-3.5 w-3.5 -rotate-90 text-muted-foreground" />
-                    </span>
-                  </div>
-
-                  <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted flex">
-                    {credits.paidTotal > 0 && paidRemaining > 0 && (
-                      <div className="h-full bg-success/70 transition-all" style={{ width: `${paidRemainingPct}%` }} />
-                    )}
-                    {dailyRemaining > 0 && (
-                      <div className="h-full bg-info/70 transition-all" style={{ width: `${dailyRemainingPct}%` }} />
-                    )}
-                  </div>
-
-                  <p className="mt-1.5 text-[11px] text-muted-foreground">{dailyRemaining > 0 ? t("nav.credits.daily") : t("nav.credits.paid")}</p>
-                </div>
-              </div>
-
-              <DropdownMenuSeparator />
+              {renderCreditsCard()}
 
               <DropdownMenuItem asChild>
                 <Link to="/settings">
