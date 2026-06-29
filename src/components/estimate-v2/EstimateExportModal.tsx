@@ -1,6 +1,18 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Copy, FileDown, FileText, Info, Loader2, Printer, Share2, X } from "lucide-react";
+import {
+  Copy,
+  FileDown,
+  FileText,
+  Info,
+  Loader2,
+  Maximize2,
+  Printer,
+  Share2,
+  X,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -22,11 +34,12 @@ import {
 } from "@/lib/estimate-export-data";
 import { printHtmlDocument } from "@/lib/print-html";
 import {
-  EstimateDocument,
+  PaginatedEstimateDocument,
   getOrientationForVariant,
-  renderEstimateDocumentToHtml,
+  renderEstimatePagesToHtml,
   type EstimateDocumentLabels,
 } from "@/components/estimate-v2/EstimateDocument";
+import { getPageGeometry, mmToPx } from "@/components/estimate-v2/estimate-pagination";
 import { EstimateExportForm } from "@/components/estimate-v2/EstimateExportForm";
 import { useClientInfo, useOrgCard, useSetClientInfo, useSetOrgCard } from "@/hooks/use-org-card";
 import { useActiveOrg } from "@/hooks/use-orgs";
@@ -185,6 +198,48 @@ export function EstimateExportModal({
     setShareState((current) => (current.phase === "idle" ? current : { phase: "idle" }));
   }, [variant]);
 
+  // --- Preview zoom + pagination ---
+  const previewScrollRef = useRef<HTMLDivElement>(null);
+  // zoomPct === null means "fit to width" (auto, follows the pane size).
+  const [zoomPct, setZoomPct] = useState<number | null>(null);
+  const [fitPct, setFitPct] = useState(70);
+  const [pageCount, setPageCount] = useState(1);
+  // Cache the preview's computed page layout, stamped with the variant it was
+  // computed for. Print only reuses it when the stamp matches the current
+  // variant, so a fast variant switch can never print the old orientation's
+  // pagination (the stamp won't match until the re-measure lands).
+  const latestPagesRef = useRef<{ variant: ExportVariant; pages: string[][] } | null>(null);
+  const variantRef = useRef(variant);
+  variantRef.current = variant;
+
+  const handlePagesChange = useCallback((pages: string[][]) => {
+    latestPagesRef.current = { variant: variantRef.current, pages };
+    setPageCount(Math.max(1, pages.length));
+  }, []);
+
+  // Recompute the fit-to-width scale from the preview pane size.
+  useEffect(() => {
+    if (!open) return;
+    const el = previewScrollRef.current;
+    if (!el) return;
+    const sheetWidthPx = mmToPx(getPageGeometry(getOrientationForVariant(variant)).pageWidthMm);
+    const recompute = () => {
+      const avail = el.clientWidth - 32; // account for the p-4 padding on both sides
+      if (avail <= 0) return;
+      const pct = Math.round((avail / sheetWidthPx) * 100);
+      setFitPct(Math.min(140, Math.max(25, pct)));
+    };
+    recompute();
+    const ro = new ResizeObserver(recompute);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [open, variant]);
+
+  // Reset to fit-to-width when reopening or switching variant/orientation.
+  useEffect(() => {
+    setZoomPct(null);
+  }, [open, variant]);
+
   if (!payload) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -201,8 +256,9 @@ export function EstimateExportModal({
   const showRequisites = variantShowsRequisites(variant);
   const variantSupportsShare = variantCanShare(variant);
   const orientation = getOrientationForVariant(variant);
-  const previewWidthMm = orientation === "landscape" ? "297mm" : "210mm";
-  const previewScale = orientation === "landscape" ? 0.5 : 0.7;
+  const effectiveZoomPct = zoomPct ?? fitPct;
+  const adjustZoom = (delta: number) =>
+    setZoomPct((prev) => Math.min(200, Math.max(25, (prev ?? fitPct) + delta)));
 
   const signingReady =
     variant !== "client_signing"
@@ -229,7 +285,7 @@ export function EstimateExportModal({
       return;
     }
     await persistSigningDraft();
-    const html = renderEstimateDocumentToHtml(
+    const html = renderEstimatePagesToHtml(
       {
         payload,
         variant,
@@ -238,6 +294,7 @@ export function EstimateExportModal({
         labels,
         orientation,
       },
+      latestPagesRef.current?.variant === variant ? latestPagesRef.current.pages : null,
       `${labels.title} – ${payload.projectTitle}`,
     );
     if (mode === "pdf") {
@@ -349,27 +406,65 @@ export function EstimateExportModal({
           </div>
 
           <div className="flex min-h-0 flex-col overflow-hidden bg-muted/30">
-            <div className="border-b border-border bg-background px-4 py-2 text-caption text-muted-foreground">
-              {t("estimate.export.preview.label")}
-            </div>
-            <div className="min-h-0 flex-1 overflow-auto p-4">
-              <div
-                className="origin-top-left shadow-md"
-                style={{
-                  width: previewWidthMm,
-                  transform: `scale(${previewScale})`,
-                  transformOrigin: "top left",
-                }}
-              >
-                <EstimateDocument
-                  payload={payload}
-                  variant={variant}
-                  orgCard={variant === "client_signing" ? orgCardDraft : null}
-                  clientInfo={variant === "client_signing" ? clientInfoDraft : null}
-                  labels={labels}
-                  orientation={orientation}
-                />
+            <div className="flex items-center justify-between gap-2 border-b border-border bg-background px-4 py-1.5">
+              <span className="text-caption text-muted-foreground">
+                {t("estimate.export.preview.label")}
+              </span>
+              <div className="flex items-center gap-0.5">
+                <span className="mr-1 hidden text-caption tabular-nums text-muted-foreground sm:inline">
+                  {t("estimate.export.preview.pages", { count: pageCount })}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => adjustZoom(-10)}
+                  aria-label={t("estimate.export.preview.zoomOut")}
+                >
+                  <ZoomOut className="h-4 w-4" />
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => setZoomPct(null)}
+                  className="min-w-[3rem] rounded px-1 text-caption tabular-nums text-muted-foreground hover:bg-muted"
+                  title={t("estimate.export.preview.fit")}
+                >
+                  {effectiveZoomPct}%
+                </button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => adjustZoom(10)}
+                  aria-label={t("estimate.export.preview.zoomIn")}
+                >
+                  <ZoomIn className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => setZoomPct(null)}
+                  aria-label={t("estimate.export.preview.fit")}
+                >
+                  <Maximize2 className="h-4 w-4" />
+                </Button>
               </div>
+            </div>
+            <div ref={previewScrollRef} className="min-h-0 flex-1 overflow-auto p-4">
+              <PaginatedEstimateDocument
+                payload={payload}
+                variant={variant}
+                orgCard={variant === "client_signing" ? orgCardDraft : null}
+                clientInfo={variant === "client_signing" ? clientInfoDraft : null}
+                labels={labels}
+                orientation={orientation}
+                zoom={effectiveZoomPct / 100}
+                onPagesChange={handlePagesChange}
+              />
             </div>
           </div>
         </div>
