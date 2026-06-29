@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { TopBar } from "@/components/TopBar";
@@ -151,8 +151,16 @@ describe("TopBar", () => {
     renderTopBar();
 
     await openLogoMenu();
+    // Let the get_current_usage query resolve and commit, so we assert against the
+    // LOADED state (limit 0), not the transient pre-load hidden state. Without this
+    // the assertion is vacuous (the card is hidden during load regardless of the guard).
+    await waitFor(() => expect(rpc).toHaveBeenCalled());
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
 
-    // limit === 0 renders no card (and never reaches the /limit division).
+    // limit === 0 renders no card (and never reaches the /limit division → no "0 of 0"/NaN bar).
     expect(screen.queryByText(/of \d+ left/)).not.toBeInTheDocument();
     expect(screen.queryByText("Unlimited")).not.toBeInTheDocument();
     // Authenticated, so no guest nudge either.
