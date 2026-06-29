@@ -1,7 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { NotificationsPanel } from "@/components/settings/panels/NotificationsPanel";
+import { workspaceQueryKeys } from "@/hooks/use-workspace-source";
 
 function renderPanel() {
   const queryClient = new QueryClient({
@@ -10,11 +11,12 @@ function renderPanel() {
       mutations: { retry: false },
     },
   });
-  return render(
+  render(
     <QueryClientProvider client={queryClient}>
       <NotificationsPanel />
     </QueryClientProvider>,
   );
+  return queryClient;
 }
 
 describe("NotificationsPanel", () => {
@@ -88,5 +90,42 @@ describe("NotificationsPanel", () => {
       // Preserved across the save (panel never sends emailEnabled):
       expect(saved.emailEnabled).toBe(true);
     });
+  });
+
+  it("does not reseed unsaved edits when a background refetch returns different server data", async () => {
+    localStorage.setItem("notification-preferences", JSON.stringify({
+      inAppEnabled: true,
+      emailEnabled: false,
+      digestFrequency: "instant",
+      eventToggles: { task_assigned: true },
+    }));
+    const queryClient = renderPanel();
+    const inApp = () => screen.getAllByRole("switch")[0];
+
+    await waitFor(() => expect(inApp()).toHaveAttribute("data-state", "checked"));
+    // User turns the in-app channel OFF but has NOT saved yet.
+    fireEvent.click(inApp());
+    await waitFor(() => expect(inApp()).toHaveAttribute("data-state", "unchecked"));
+
+    // Server still has in-app ON but a DIFFERENT digest -> the refetched object
+    // is structurally different, so it gets a new reference and would re-run an
+    // unguarded seed effect (a same-shape refetch reuses the cached reference and
+    // never re-fires the effect, which is why an identical-data test is vacuous).
+    localStorage.setItem("notification-preferences", JSON.stringify({
+      inAppEnabled: true,
+      emailEnabled: false,
+      digestFrequency: "weekly",
+      eventToggles: { task_assigned: true },
+    }));
+    const key = workspaceQueryKeys.notificationPreferences("local");
+    await act(async () => {
+      await queryClient.refetchQueries({ queryKey: key });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    // The refetch landed (so the seed effect had its chance to run)...
+    expect((queryClient.getQueryData(key) as { digestFrequency?: string }).digestFrequency).toBe("weekly");
+    // ...and hydrate-once held: the unsaved in-app edit survived.
+    expect(inApp()).toHaveAttribute("data-state", "unchecked");
   });
 });
