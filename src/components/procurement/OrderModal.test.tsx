@@ -201,4 +201,16 @@ describe("OrderModal", () => {
     expect(screen.queryByText(/more materials requested/)).not.toBeInTheDocument();
   });
 
+  it("enables Place order for a stock transfer without an actual price", () => {
+    renderOpenModal();
+    // Supplier flow requires a valid actual price, so Place order starts disabled.
+    expect(screen.getByRole("button", { name: "Place order" })).toBeDisabled();
+    expect(screen.getByText("Actual price required")).toBeInTheDocument();
+
+    // Switching to the Stock (warehouse transfer) flow makes the actual price optional.
+    fireEvent.click(screen.getByRole("button", { name: "Stock" }));
+    expect(screen.queryByText("Actual price required")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Place order" })).toBeEnabled();
+  });
+
 });
