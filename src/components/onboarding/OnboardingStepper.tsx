@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Zap, Bot, Wrench, Eye, Plus, Trash2, Building2 } from "lucide-react";
 import { MVP_SHOW_AI_AUTOMATION_MODE_UI } from "@/lib/mvp-ai-automation-ui";
 import { getPlanningSource } from "@/data/planning-source";
-import { getWorkspaceSource, resolveWorkspaceMode } from "@/data/workspace-source";
+import { getWorkspaceSource, resolveWorkspaceMode, type ProfileUnits } from "@/data/workspace-source";
 import { useWorkspaceMode } from "@/hooks/use-mock-data";
 import { workspaceQueryKeys } from "@/hooks/use-workspace-source";
 import { planningQueryKeys } from "@/hooks/use-planning-source";
@@ -138,6 +138,35 @@ export function OnboardingStepper({ onComplete, onProjectCreated }: OnboardingSt
         queryKey: planningQueryKeys.projectStages(resolvedMode.profileId, createdProjectId),
       });
     }
+  }
+
+  async function persistUnits() {
+    // Guest/unauthenticated have no profile_settings row to write; skip silently.
+    if (workspaceMode.kind === "guest") return;
+    const resolvedMode =
+      workspaceMode.kind === "pending-supabase" ? await resolveWorkspaceMode() : workspaceMode;
+    if (resolvedMode.kind === "guest") return;
+    const workspaceSource = await getWorkspaceSource(resolvedMode);
+    await workspaceSource.updateProfilePreferences({ units: units as ProfileUnits });
+    if (resolvedMode.kind === "supabase") {
+      await queryClient.invalidateQueries({
+        queryKey: workspaceQueryKeys.profilePreferences(resolvedMode.profileId),
+      });
+    }
+  }
+
+  async function handleContinueFromPreferences() {
+    // Persist the units choice before advancing, but never block onboarding on it.
+    try {
+      await persistUnits();
+    } catch {
+      toast({
+        title: t("preferences.saveFailedToast"),
+        description: t("preferences.saveFailedDescription"),
+        variant: "destructive",
+      });
+    }
+    setStep(2);
   }
 
   function finishOrAdvanceToOrgStep() {
@@ -316,7 +345,7 @@ export function OnboardingStepper({ onComplete, onProjectCreated }: OnboardingSt
               </Button>
             ) : null}
             <Button
-              onClick={() => setStep(2)}
+              onClick={() => void handleContinueFromPreferences()}
               className={showAutomationStep ? "flex-1 bg-accent text-accent-foreground hover:bg-accent/90" : "w-full bg-accent text-accent-foreground hover:bg-accent/90"}
             >
               {t("onboarding.continue")}
