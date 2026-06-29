@@ -927,6 +927,8 @@
   "notifications.digest.weekly": "Еженедельно",
   "notifications.save": "Сохранить настройки",
   "notifications.savedToast": "Настройки уведомлений сохранены",
+  "notifications.saveFailedToast": "Не удалось сохранить настройки уведомлений",
+  "notifications.saveFailedDescription": "Попробуй ещё раз.",
   "security.sessions.title": "Сессии",
   "security.sessions.description": "Устройство, с которого выполнен вход в аккаунт.",
   "security.sessions.current": "Текущая",
