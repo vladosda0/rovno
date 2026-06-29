@@ -186,9 +186,20 @@ function writeListState(projectId: string, state: ProcurementListState) {
   window.sessionStorage.setItem(listStateKey(projectId), JSON.stringify(state));
 }
 
+// Parse a stored required-by date. A bare YYYY-MM-DD (what the picker writes) must be read as a
+// LOCAL date so write and read agree in every timezone; a full ISO timestamp (estimate-synced
+// dates) keeps its instant semantics.
+function parseProcurementDate(value: string): Date {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split("-").map(Number);
+    return new Date(year, month - 1, day);
+  }
+  return new Date(value);
+}
+
 function formatDate(value: string | null | undefined, dash: string): string {
   if (!value) return dash;
-  const parsed = new Date(value);
+  const parsed = parseProcurementDate(value);
   if (Number.isNaN(parsed.getTime())) return dash;
   return parsed.toLocaleDateString();
 }
@@ -205,7 +216,7 @@ function toLocalDateString(date: Date): string {
 
 function isOverdue(value?: string | null): boolean {
   if (!value) return false;
-  const parsed = new Date(value);
+  const parsed = parseProcurementDate(value);
   if (Number.isNaN(parsed.getTime())) return false;
   const now = new Date();
   now.setHours(0, 0, 0, 0);
@@ -2964,7 +2975,7 @@ export default function ProjectProcurement() {
                         <PopoverContent className="w-auto p-0" align="start">
                           <Calendar
                             mode="single"
-                            selected={editForm.requiredByDate ? new Date(editForm.requiredByDate) : undefined}
+                            selected={editForm.requiredByDate ? parseProcurementDate(editForm.requiredByDate) : undefined}
                             onSelect={(nextDate) => patchEditForm((prev) => ({ ...prev, requiredByDate: nextDate ? toLocalDateString(nextDate) : null }), "immediate")}
                             initialFocus
                           />

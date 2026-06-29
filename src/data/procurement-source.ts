@@ -921,23 +921,34 @@ function createSupabaseProcurementSource(
           : null;
       }
 
-      const { error } = await supabase
+      const { data: updated, error } = await supabase
         .from("procurement_items")
         .update(updateRow)
-        .eq("id", itemId);
+        .eq("id", itemId)
+        .select("id");
 
       if (error) {
         throw error;
       }
+      // A zero-row update is a silent failure: the id is not a real procurement_items row (e.g. a
+      // synthetic operational-summary item keyed on an order line) or RLS blocked the write. Surface
+      // it so the caller shows an error toast instead of a misleading success.
+      if (!updated || updated.length === 0) {
+        throw new Error(`Procurement item ${itemId} was not updated (not found or not writable).`);
+      }
     },
     async cancelProcurementItem(itemId: string) {
-      const { error } = await supabase
+      const { data: cancelled, error } = await supabase
         .from("procurement_items")
         .update({ status: "cancelled" })
-        .eq("id", itemId);
+        .eq("id", itemId)
+        .select("id");
 
       if (error) {
         throw error;
+      }
+      if (!cancelled || cancelled.length === 0) {
+        throw new Error(`Procurement item ${itemId} was not archived (not found or not writable).`);
       }
     },
   };

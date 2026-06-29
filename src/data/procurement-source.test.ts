@@ -137,7 +137,19 @@ vi.mock("@/integrations/supabase/client", () => ({
                 throw new Error(`Unexpected update eq field: ${field}`);
               }
               state.updateProcurementItemMock(patch, itemId);
-              return Promise.resolve({ error: null });
+              return {
+                select(selection: string) {
+                  if (selection !== "id") {
+                    throw new Error(`Unexpected update select: ${selection}`);
+                  }
+                  return Promise.resolve({
+                    data: state.procurementRows
+                      .filter((row) => row.id === itemId)
+                      .map((row) => ({ id: row.id })),
+                    error: null,
+                  });
+                },
+              };
             },
           };
         },
@@ -621,6 +633,24 @@ describe("procurement-source helpers", () => {
     await source.cancelProcurementItem("pi-cancel");
 
     expect(state.updateProcurementItemMock).toHaveBeenCalledWith({ status: "cancelled" }, "pi-cancel");
+  });
+
+  it("updateProjectProcurementItem throws when the id matches no procurement_items row (synthetic item / RLS block)", async () => {
+    state.procurementRows = [procurementItemRow({ id: "pi-real" })];
+
+    const source = await getProcurementSource({ kind: "supabase", profileId: "profile-1" });
+
+    // A synthetic operational-summary item is keyed on an order_line_id, not a procurement_items.id;
+    // the UPDATE matches zero rows and must surface an error rather than a silent success.
+    await expect(source.updateProjectProcurementItem("order-line-99", { notes: "x" })).rejects.toThrow();
+  });
+
+  it("cancelProcurementItem throws when the id matches no procurement_items row", async () => {
+    state.procurementRows = [procurementItemRow({ id: "pi-real" })];
+
+    const source = await getProcurementSource({ kind: "supabase", profileId: "profile-1" });
+
+    await expect(source.cancelProcurementItem("order-line-99")).rejects.toThrow();
   });
 
   it("diffProcurementItemPatch omits unchanged detail fields so a finance-restricted Save cannot null them", () => {
