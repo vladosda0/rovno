@@ -101,6 +101,7 @@ const LABELS: EstimateDocumentLabels = {
     discount: "Скидка",
     unitPrice: "Цена за ед.",
     total: "Итого",
+    discountedTotal: "Со скидкой",
   },
   stageWordSingular: "Этап",
   workWordSingular: "Работа",
