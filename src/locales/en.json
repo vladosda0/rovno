@@ -915,6 +915,8 @@
   "notifications.digest.weekly": "Weekly",
   "notifications.save": "Save preferences",
   "notifications.savedToast": "Notification preferences saved",
+  "notifications.saveFailedToast": "Could not save notification preferences",
+  "notifications.saveFailedDescription": "Please try again.",
   "security.sessions.title": "Sessions",
   "security.sessions.description": "The device currently signed in to your account.",
   "security.sessions.current": "Current",

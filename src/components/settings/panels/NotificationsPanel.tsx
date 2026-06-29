@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -7,6 +7,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { SettingsSection } from "@/components/settings/SettingsSection";
 import { toast } from "@/hooks/use-toast";
+import {
+  useUpdateWorkspaceNotificationPreferences,
+  useWorkspaceNotificationPreferencesState,
+} from "@/hooks/use-workspace-source";
+import type { NotificationDigestFrequency } from "@/data/workspace-source";
 
 interface NotifToggle {
   labelKey: string;
@@ -47,19 +52,53 @@ const DEFAULT_GROUPS: { titleKey: string; items: NotifToggle[] }[] = [
   },
 ];
 
+/** Resolve the full toggle map: persisted value wins, otherwise the catalog default. */
+function resolveEventToggles(saved: Record<string, boolean> | undefined): Record<string, boolean> {
+  const resolved: Record<string, boolean> = {};
+  for (const group of DEFAULT_GROUPS) {
+    for (const item of group.items) {
+      resolved[item.key] = saved?.[item.key] ?? item.enabled;
+    }
+  }
+  return resolved;
+}
+
 export function NotificationsPanel() {
   const { t } = useTranslation();
-  const [channels, setChannels] = useState({ inApp: true });
-  const [groups, setGroups] = useState(DEFAULT_GROUPS);
-  const [digest, setDigest] = useState("instant");
+  const { preferences, isLoading } = useWorkspaceNotificationPreferencesState();
+  const updatePreferences = useUpdateWorkspaceNotificationPreferences();
+  const [inAppEnabled, setInAppEnabled] = useState(true);
+  const [eventToggles, setEventToggles] = useState<Record<string, boolean>>(() => resolveEventToggles(undefined));
+  const [digest, setDigest] = useState<NotificationDigestFrequency>("instant");
 
-  const toggleInApp = () => setChannels((prev) => ({ ...prev, inApp: !prev.inApp }));
+  useEffect(() => {
+    if (!preferences) return;
+    setInAppEnabled(preferences.inAppEnabled);
+    setEventToggles(resolveEventToggles(preferences.eventToggles));
+    setDigest(preferences.digestFrequency);
+  }, [preferences]);
 
-  const toggleItem = (groupIdx: number, itemIdx: number) => {
-    setGroups((prev) => prev.map((g, gi) => gi !== groupIdx ? g : {
-      ...g,
-      items: g.items.map((item, ii) => ii !== itemIdx ? item : { ...item, enabled: !item.enabled }),
-    }));
+  const toggleInApp = () => setInAppEnabled((prev) => !prev);
+
+  const toggleItem = (key: string) => {
+    setEventToggles((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const handleSave = async () => {
+    try {
+      await updatePreferences.mutateAsync({
+        inAppEnabled,
+        digestFrequency: digest,
+        eventToggles: resolveEventToggles(eventToggles),
+      });
+      toast({ title: t("notifications.savedToast") });
+    } catch {
+      toast({
+        title: t("notifications.saveFailedToast"),
+        description: t("notifications.saveFailedDescription"),
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -67,7 +106,7 @@ export function NotificationsPanel() {
       <SettingsSection title={t("notifications.channels.title")} description={t("notifications.channels.description")}>
         <div className="flex flex-wrap gap-sp-2">
           <div className="flex items-center gap-2">
-            <Switch checked={channels.inApp} onCheckedChange={toggleInApp} />
+            <Switch checked={inAppEnabled} onCheckedChange={toggleInApp} />
             <Label>{t("notifications.channels.inApp")}</Label>
           </div>
           <div className="flex items-center gap-2 opacity-50">
@@ -85,13 +124,13 @@ export function NotificationsPanel() {
 
       <SettingsSection title={t("notifications.events.title")} description={t("notifications.events.description")}>
         <div className="space-y-sp-2">
-          {groups.map((group, gi) => (
+          {DEFAULT_GROUPS.map((group) => (
             <div key={group.titleKey} className="rounded-card bg-background/60 p-sp-2 space-y-1.5">
               <p className="text-body-sm font-medium text-foreground">{t(group.titleKey)}</p>
-              {group.items.map((item, ii) => (
+              {group.items.map((item) => (
                 <div key={item.key} className="flex items-center justify-between gap-sp-2 py-1">
                   <span className="min-w-0 flex-1 text-caption text-muted-foreground">{t(item.labelKey)}</span>
-                  <Switch checked={item.enabled} onCheckedChange={() => toggleItem(gi, ii)} />
+                  <Switch checked={eventToggles[item.key] ?? item.enabled} onCheckedChange={() => toggleItem(item.key)} />
                 </div>
               ))}
             </div>
@@ -100,7 +139,7 @@ export function NotificationsPanel() {
       </SettingsSection>
 
       <SettingsSection title={t("notifications.digest.title")} description={t("notifications.digest.description")}>
-        <Select value={digest} onValueChange={setDigest}>
+        <Select value={digest} onValueChange={(value) => setDigest(value as NotificationDigestFrequency)}>
           <SelectTrigger className="w-full sm:w-48"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="instant">{t("notifications.digest.instant")}</SelectItem>
@@ -111,7 +150,13 @@ export function NotificationsPanel() {
       </SettingsSection>
 
       <div className="flex flex-wrap gap-sp-2 pt-sp-1">
-        <Button className="w-full sm:w-auto" onClick={() => toast({ title: t("notifications.savedToast") })}>{t("notifications.save")}</Button>
+        <Button
+          className="w-full sm:w-auto"
+          disabled={isLoading || updatePreferences.isPending}
+          onClick={() => void handleSave()}
+        >
+          {t("notifications.save")}
+        </Button>
       </div>
     </div>
   );
