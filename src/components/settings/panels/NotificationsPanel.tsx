@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -70,9 +70,14 @@ export function NotificationsPanel() {
   const [inAppEnabled, setInAppEnabled] = useState(true);
   const [eventToggles, setEventToggles] = useState<Record<string, boolean>>(() => resolveEventToggles(undefined));
   const [digest, setDigest] = useState<NotificationDigestFrequency>("instant");
+  const hydratedRef = useRef(false);
 
+  // Seed the form from the loaded preferences ONCE, on first availability. A
+  // later background refetch (window focus after staleTime) must not clobber the
+  // user's unsaved in-progress edits.
   useEffect(() => {
-    if (!preferences) return;
+    if (!preferences || hydratedRef.current) return;
+    hydratedRef.current = true;
     setInAppEnabled(preferences.inAppEnabled);
     setEventToggles(resolveEventToggles(preferences.eventToggles));
     setDigest(preferences.digestFrequency);
