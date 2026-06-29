@@ -242,8 +242,18 @@ export function OrderModal({
     return map;
   }, [inventoryStock, fromLocationId]);
 
+  // Seed the draft only on open and when the requested item SET changes, never on a
+  // background procurement refetch (which gives items/itemById fresh identities). Without
+  // this guard a sync mid-edit re-runs this effect and clobbers the qty/price the user typed.
+  const seededKeyRef = useRef<string | null>(null);
+  const seedKey = open ? initialItemIds.join(",") : null;
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      seededKeyRef.current = null;
+      return;
+    }
+    if (seededKeyRef.current === seedKey) return;
+
     const nextItemIds = initialItemIds.length > 0
       ? initialItemIds
       : items.map((item) => item.id);
@@ -273,7 +283,8 @@ export function OrderModal({
     setInvoiceAttachment(null);
     setNote("");
     setLines(nextLines);
-  }, [open, initialItemIds, itemById, items, orders, defaultLocationId, isSupabaseMode]);
+    seededKeyRef.current = seedKey;
+  }, [open, seedKey, initialItemIds, itemById, items, orders, defaultLocationId, isSupabaseMode]);
 
   const requestedRemainingByItemId = useMemo(() => (
     new Map(lines.map((line) => [line.procurementItemId, computeRemainingRequestedQty(itemById.get(line.procurementItemId), orders)]))

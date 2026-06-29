@@ -47,7 +47,14 @@ const Refund = lazy(() => import("@/pages/legal/Refund"));
 const Contacts = lazy(() => import("@/pages/legal/Contacts"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Alt-tabbing back into a half-filled form must not refetch-and-reset it.
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 const RouteFallback = () => {
   const { t } = useTranslation();

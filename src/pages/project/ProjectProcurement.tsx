@@ -44,7 +44,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { EmptyState } from "@/components/EmptyState";
 import { ProjectWorkflowEmptyState } from "@/components/ProjectWorkflowEmptyState";
 import { StatusBadge } from "@/components/StatusBadge";
-import { useProject, useProcurementV2 } from "@/hooks/use-mock-data";
+import { useProject } from "@/hooks/use-mock-data";
 import { useOrders } from "@/hooks/use-order-data";
 import { useInventoryStock, useLocations } from "@/hooks/use-inventory-data";
 import {
@@ -101,7 +101,7 @@ import {
   orderProjectOrdersQueryRoot,
   orderQueryKeys,
 } from "@/hooks/use-order-data";
-import { procurementProjectItemsQueryRoot, procurementQueryKeys } from "@/hooks/use-procurement-source";
+import { procurementProjectItemsQueryRoot, procurementQueryKeys, useProjectProcurementItemsState } from "@/hooks/use-procurement-source";
 import { useWorkspaceCurrentUserState, useWorkspaceMode } from "@/hooks/use-workspace-source";
 import { computeProjectTotals } from "@/lib/estimate-v2/pricing";
 import type {
@@ -287,7 +287,7 @@ export default function ProjectProcurement() {
 
   const savedListState = useMemo(() => readListState(pid), [pid]);
 
-  const baseItems = useProcurementV2(pid);
+  const { items: baseItems, isLoading: isProcurementItemsLoading } = useProjectProcurementItemsState(pid);
   const orders = useOrders(pid);
   const hasPlacedSupplierOrderLines = useMemo(
     () => orders.some((o) => o.kind === "supplier" && o.status === "placed" && o.lines.length > 0),
@@ -1708,7 +1708,13 @@ export default function ProjectProcurement() {
     );
   }
 
-  if (items.length === 0 && visibleInStockRows.length === 0 && !hasPlacedSupplierOrderLines) {
+  if (
+    items.length === 0
+    && visibleInStockRows.length === 0
+    && !hasPlacedSupplierOrderLines
+    && !isProcurementItemsLoading
+    && !isProcurementSyncing
+  ) {
     return (
       <EmptyState
         icon={ShoppingCart}
@@ -1877,7 +1883,7 @@ export default function ProjectProcurement() {
       {effectiveActiveTab === "requested" && (
         <div className="glass rounded-card p-2 space-y-2">
           {requestedItems.length === 0 ? (
-            isProcurementSyncing ? (
+            items.length === 0 && (isProcurementItemsLoading || isProcurementSyncing) ? (
               <div className="space-y-2" aria-hidden>
                 {[0, 1, 2, 3].map((i) => (
                   <Skeleton key={i} className="h-14 w-full" />
@@ -2099,7 +2105,7 @@ export default function ProjectProcurement() {
       {effectiveActiveTab === "ordered" && (
         <div className="glass rounded-card p-2 space-y-2">
           {activeAndReceivedSupplierOrders.length === 0 ? (
-            isProcurementSyncing ? (
+            items.length === 0 && (isProcurementItemsLoading || isProcurementSyncing) ? (
               <div className="space-y-2" aria-hidden>
                 {[0, 1, 2, 3].map((i) => (
                   <Skeleton key={i} className="h-14 w-full" />
@@ -2477,7 +2483,7 @@ export default function ProjectProcurement() {
       {effectiveActiveTab === "in_stock" && (
         <div className="glass rounded-card p-2 space-y-2">
           {visibleInStockRows.length === 0 ? (
-            isProcurementSyncing ? (
+            items.length === 0 && (isProcurementItemsLoading || isProcurementSyncing) ? (
               <div className="space-y-2" aria-hidden>
                 {[0, 1, 2, 3].map((i) => (
                   <Skeleton key={i} className="h-14 w-full" />
