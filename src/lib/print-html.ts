@@ -43,10 +43,30 @@ export function printHtmlDocument(htmlDocument: string, options?: { titleForDown
         setTimeout(cleanup, 200);
       };
       win.addEventListener("afterprint", onAfter);
-      win.focus();
-      win.print();
-      // Safety net in case afterprint never fires (some browsers).
-      setTimeout(cleanup, 60_000);
+      const fire = () => {
+        win.focus();
+        win.print();
+        // Safety net in case afterprint never fires (some browsers).
+        setTimeout(cleanup, 60_000);
+      };
+      // Wait for the document's webfonts before printing. Pagination is measured
+      // against the loaded font (Inter); printing before the font settles would
+      // render the PDF in a fallback face with different metrics, so the page
+      // breaks no longer line up and content can overflow a sheet. Cap the wait
+      // so a slow or blocked font load never hangs the print.
+      const fonts = win.document.fonts;
+      if (fonts && fonts.status !== "loaded") {
+        let fired = false;
+        const once = () => {
+          if (fired) return;
+          fired = true;
+          fire();
+        };
+        fonts.ready.then(once).catch(once);
+        setTimeout(once, 2000);
+      } else {
+        fire();
+      }
     } catch {
       cleanup();
     }
