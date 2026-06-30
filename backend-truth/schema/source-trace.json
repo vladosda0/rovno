@@ -1072,6 +1072,41 @@
       "name": "add_library_work_to_estimate",
       "signature": "public.add_library_work_to_estimate(uuid, uuid, uuid, integer, uuid[])",
       "sourceMigration": "supabase/migrations/20260624120000_add_library_work_resource_exclusions.sql"
+    },
+    {
+      "key": "public.normalize_inventory_text",
+      "schema": "public",
+      "name": "normalize_inventory_text",
+      "signature": "public.normalize_inventory_text(text)",
+      "sourceMigration": "supabase/migrations/20260630110000_inventory_canonical_identity.sql"
+    },
+    {
+      "key": "public.inventory_item_identity",
+      "schema": "public",
+      "name": "inventory_item_identity",
+      "signature": "public.inventory_item_identity(text, text, text)",
+      "sourceMigration": "supabase/migrations/20260630110000_inventory_canonical_identity.sql"
+    },
+    {
+      "key": "public.enforce_inventory_movement_project_integrity",
+      "schema": "public",
+      "name": "enforce_inventory_movement_project_integrity",
+      "signature": "public.enforce_inventory_movement_project_integrity()",
+      "sourceMigration": "supabase/migrations/20260630120000_cross_project_stock_transfer.sql"
+    },
+    {
+      "key": "public.can_use_project_stock",
+      "schema": "public",
+      "name": "can_use_project_stock",
+      "signature": "public.can_use_project_stock(uuid)",
+      "sourceMigration": "supabase/migrations/20260630120000_cross_project_stock_transfer.sql"
+    },
+    {
+      "key": "public.place_cross_project_stock_transfer",
+      "schema": "public",
+      "name": "place_cross_project_stock_transfer",
+      "signature": "public.place_cross_project_stock_transfer(uuid, uuid, uuid, uuid, jsonb)",
+      "sourceMigration": "supabase/migrations/20260630120000_cross_project_stock_transfer.sql"
     }
   ],
   "policies": [
@@ -3088,9 +3123,11 @@
         "supabase/migrations/20260306163000_inventory_foundation.sql",
         "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
         "supabase/migrations/20260629120000_add_procurement_item_detail_columns.sql",
+        "supabase/migrations/20260630120000_cross_project_stock_transfer.sql",
         "supabase/migrations/20260509082719_fix_inventory_balances_trigger_on_project_cascade.sql",
         "supabase/migrations/20260406183000_procurement_operational_summary_requested_and_ordered_line_types.sql",
         "supabase/migrations/20260419120000_session3c_procurement_ai_in_stock_evidence.sql",
+        "supabase/migrations/20260630110000_inventory_canonical_identity.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
@@ -3107,7 +3144,10 @@
         "public.apply_inventory_balance_delta",
         "public.sync_inventory_balances",
         "public.get_procurement_operational_summary",
-        "public.get_procurement_ai_operational_evidence"
+        "public.get_procurement_ai_operational_evidence",
+        "public.normalize_inventory_text",
+        "public.inventory_item_identity",
+        "public.place_cross_project_stock_transfer"
       ],
       "policies": [
         "public.inventory_items.inventory_items_select",
@@ -3241,6 +3281,16 @@
           "from": "public.procurement_items",
           "to": "public.inventory_locations",
           "sourceMigration": "supabase/migrations/20260629120000_add_procurement_item_detail_columns.sql"
+        },
+        {
+          "from": "public.orders",
+          "to": "public.projects",
+          "sourceMigration": "supabase/migrations/20260630120000_cross_project_stock_transfer.sql"
+        },
+        {
+          "from": "public.orders",
+          "to": "public.inventory_locations",
+          "sourceMigration": "supabase/migrations/20260630120000_cross_project_stock_transfer.sql"
         }
       ]
     },

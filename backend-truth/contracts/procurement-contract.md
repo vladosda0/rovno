@@ -11,9 +11,11 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 - `supabase/migrations/20260306163000_inventory_foundation.sql`
 - `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql`
 - `supabase/migrations/20260629120000_add_procurement_item_detail_columns.sql`
+- `supabase/migrations/20260630120000_cross_project_stock_transfer.sql`
 - `supabase/migrations/20260509082719_fix_inventory_balances_trigger_on_project_cascade.sql`
 - `supabase/migrations/20260406183000_procurement_operational_summary_requested_and_ordered_line_types.sql`
 - `supabase/migrations/20260419120000_session3c_procurement_ai_in_stock_evidence.sql`
+- `supabase/migrations/20260630110000_inventory_canonical_identity.sql`
 - `supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql`
 - `supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql`
 
@@ -31,9 +33,12 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 | `notes` | `text` | yes |   | no |
 | `created_at` | `timestamptz` | no | `now()` | no |
 | `updated_at` | `timestamptz` | no | `now()` | no |
+| `identity_key` | `text
+  generated always as (public.inventory_item_identity(title, notes, unit)) stored` | yes |   | no |
 
 Indexes:
 - `idx_inventory_items_project_id` on (`project_id`)
+- `idx_inventory_items_project_identity` on (`project_id`, `identity_key`)
 
 Triggers:
 - `set_inventory_items_updated_at`: before update, executes `public.set_updated_at()`
@@ -130,12 +135,20 @@ Triggers:
 | `created_by` | `uuid` | no |   | no |
 | `created_at` | `timestamptz` | no | `now()` | no |
 | `updated_at` | `timestamptz` | no | `now()` | no |
+| `transfer_group_id` | `uuid` | yes |   | no |
+| `counterparty_project_id` | `uuid` | yes |   | no |
+| `counterparty_location_id` | `uuid` | yes |   | no |
+| `transfer_direction` | `text` | yes |   | no |
 
 Constraints:
 - unnamed check (expression `status in ('draft', 'placed', 'partially_received', 'received', 'cancelled')`)
+- unnamed check (expression `transfer_direction in ('out', 'in')`)
 
 Indexes:
 - `idx_orders_project_id` on (`project_id`)
+- `idx_orders_transfer_group_id` on (`transfer_group_id`)
+- `idx_orders_counterparty_project_id` on (`counterparty_project_id`)
+- `idx_orders_counterparty_location_id` on (`counterparty_location_id`)
 
 Triggers:
 - `set_orders_updated_at`: before update, executes `public.set_updated_at()`
@@ -191,6 +204,7 @@ Indexes:
 
 Triggers:
 - `on_inventory_movements_sync_balances`: after insert or update or delete, executes `public.sync_inventory_balances()`
+- `enforce_inventory_movement_project_integrity_biu`: before insert or update, executes `public.enforce_inventory_movement_project_integrity()`
 
 ## Relations
 
@@ -217,6 +231,8 @@ Triggers:
 | `public.inventory_movements(created_by)` | `public.profiles(id)` | `set null` | `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql` |
 | `public.task_checklist_items(procurement_item_id)` | `public.procurement_items(id)` | `set null` | `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql` |
 | `public.procurement_items(location_preferred_id)` | `public.inventory_locations(id)` | `set null` | `supabase/migrations/20260629120000_add_procurement_item_detail_columns.sql` |
+| `public.orders(counterparty_project_id)` | `public.projects(id)` | `set null` | `supabase/migrations/20260630120000_cross_project_stock_transfer.sql` |
+| `public.orders(counterparty_location_id)` | `public.inventory_locations(id)` | `set null` | `supabase/migrations/20260630120000_cross_project_stock_transfer.sql` |
 
 ## Functions
 
@@ -226,6 +242,9 @@ Triggers:
 | `public.sync_inventory_balances()` | `trigger` | no | `trigger_helper` | `supabase/migrations/20260509082719_fix_inventory_balances_trigger_on_project_cascade.sql` |
 | `public.get_procurement_operational_summary(uuid, integer, integer)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260406183000_procurement_operational_summary_requested_and_ordered_line_types.sql` |
 | `public.get_procurement_ai_operational_evidence(uuid, integer, integer)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260419120000_session3c_procurement_ai_in_stock_evidence.sql` |
+| `public.normalize_inventory_text(text)` | `text` | no | `helper` | `supabase/migrations/20260630110000_inventory_canonical_identity.sql` |
+| `public.inventory_item_identity(text, text, text)` | `text` | no | `helper` | `supabase/migrations/20260630110000_inventory_canonical_identity.sql` |
+| `public.place_cross_project_stock_transfer(uuid, uuid, uuid, uuid, jsonb)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260630120000_cross_project_stock_transfer.sql` |
 
 ## RLS and Grants
 

@@ -3790,6 +3790,16 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "identity_key",
+          "sqlType": "text\n  generated always as (public.inventory_item_identity(title, notes, unit)) stored",
+          "tsType": "unknown",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [],
@@ -3804,6 +3814,18 @@
           "where": null,
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260306163000_inventory_foundation.sql"
+        },
+        {
+          "name": "idx_inventory_items_project_identity",
+          "unique": false,
+          "method": null,
+          "expressions": [
+            "project_id",
+            "identity_key"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260630110000_inventory_canonical_identity.sql"
         }
       ],
       "triggers": [
@@ -4533,6 +4555,60 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "transfer_group_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "counterparty_project_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "projects",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
+        },
+        {
+          "name": "counterparty_location_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "inventory_locations",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
+        },
+        {
+          "name": "transfer_direction",
+          "sqlType": "text",
+          "tsType": "\"out\" | \"in\"",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -4545,6 +4621,16 @@
           "expression": "status in ('draft', 'placed', 'partially_received', 'received', 'cancelled')",
           "usingIndex": null,
           "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "transfer_direction"
+          ],
+          "expression": "transfer_direction in ('out', 'in')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260630120000_cross_project_stock_transfer.sql"
         }
       ],
       "indexes": [
@@ -4558,6 +4644,39 @@
           "where": null,
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+        },
+        {
+          "name": "idx_orders_transfer_group_id",
+          "unique": false,
+          "method": null,
+          "expressions": [
+            "transfer_group_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260630120000_cross_project_stock_transfer.sql"
+        },
+        {
+          "name": "idx_orders_counterparty_project_id",
+          "unique": false,
+          "method": null,
+          "expressions": [
+            "counterparty_project_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260630120000_cross_project_stock_transfer.sql"
+        },
+        {
+          "name": "idx_orders_counterparty_location_id",
+          "unique": false,
+          "method": null,
+          "expressions": [
+            "counterparty_location_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260630120000_cross_project_stock_transfer.sql"
         }
       ],
       "triggers": [
@@ -4974,6 +5093,14 @@
           "functionName": "sync_inventory_balances",
           "functionSignature": "public.sync_inventory_balances()",
           "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+        },
+        {
+          "name": "enforce_inventory_movement_project_integrity_biu",
+          "activation": "before insert or update",
+          "functionSchema": "public",
+          "functionName": "enforce_inventory_movement_project_integrity",
+          "functionSignature": "public.enforce_inventory_movement_project_integrity()",
+          "sourceMigration": "supabase/migrations/20260630120000_cross_project_stock_transfer.sql"
         }
       ]
     },
