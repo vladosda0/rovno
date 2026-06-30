@@ -204,6 +204,14 @@ describe("renderEstimatePagesToHtml", () => {
     expect(html).not.toContain("<title><script>");
   });
 
+  it("loads the Inter webfont so print metrics match the Inter-measured preview", () => {
+    const props = buildProps([stage(1, 1, 1)]);
+    const html = renderEstimatePagesToHtml(props, null, "Смета");
+    expect(html).toContain("fonts.googleapis.com/css2?family=Inter");
+    // link must be in the head, before the body content
+    expect(html.indexOf("family=Inter")).toBeLessThan(html.indexOf("<body>"));
+  });
+
   it("rejects a stale layout that does not partition the current blocks", () => {
     const props = buildProps([stage(1, 1, 1), stage(2, 1, 1)]);
     // A layout referencing a phantom id (e.g. from a previous estimate/variant)

@@ -856,6 +856,15 @@ export function PaginatedEstimateDocument({
   );
 }
 
+// Load the same Inter webfont the app uses (src/index.css). The print iframe is
+// a separate document and would otherwise render in a fallback face, breaking
+// the pagination that was measured against Inter. Weights mirror index.css so
+// the browser serves the already-cached font with no extra round trip.
+const PRINT_FONT_LINKS =
+  '<link rel="preconnect" href="https://fonts.googleapis.com" />' +
+  '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />' +
+  '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" />';
+
 function buildPrintResetCss(geom: PageGeometry, orientation: DocumentOrientation): string {
   return `
     *, *::before, *::after { box-sizing: border-box; }
@@ -937,7 +946,7 @@ export function renderEstimatePagesToHtml(
   const allIds = blocks.map((b) => b.id);
   const effectivePages = pageLayoutMatchesBlocks(pages, allIds) ? (pages as string[][]) : [allIds];
   const body = renderToStaticMarkup(<PrintBody blocks={blocks} pages={effectivePages} />);
-  return `<!doctype html><html lang="ru"><head><meta charset="utf-8" /><title>${escapeHtml(documentTitle)}</title><style>${buildPrintResetCss(geom, orientation)}</style></head><body>${body}</body></html>`;
+  return `<!doctype html><html lang="ru"><head><meta charset="utf-8" />${PRINT_FONT_LINKS}<title>${escapeHtml(documentTitle)}</title><style>${buildPrintResetCss(geom, orientation)}</style></head><body>${body}</body></html>`;
 }
 
 /**

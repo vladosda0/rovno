@@ -233,7 +233,9 @@ export function EstimateExportModal({
     const ro = new ResizeObserver(recompute);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [open, variant]);
+    // `payload` is included so the observer attaches once the preview pane
+    // mounts (it only renders for a non-null payload).
+  }, [open, variant, payload]);
 
   // Reset to fit-to-width when reopening or switching variant/orientation.
   useEffect(() => {
