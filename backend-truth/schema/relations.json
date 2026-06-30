@@ -2021,6 +2021,38 @@
         "id"
       ],
       "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260630120000_cross_project_stock_transfer.sql",
+      "sourceKind": "alter_table",
+      "fromSchema": "public",
+      "fromTable": "orders",
+      "fromColumns": [
+        "counterparty_project_id"
+      ],
+      "toSchema": "public",
+      "toTable": "projects",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260630120000_cross_project_stock_transfer.sql",
+      "sourceKind": "alter_table",
+      "fromSchema": "public",
+      "fromTable": "orders",
+      "fromColumns": [
+        "counterparty_location_id"
+      ],
+      "toSchema": "public",
+      "toTable": "inventory_locations",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
     }
   ]
 }

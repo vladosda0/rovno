@@ -2739,6 +2739,136 @@
       "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260624120000_add_library_work_resource_exclusions.sql",
       "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "normalize_inventory_text",
+      "signature": "public.normalize_inventory_text(text)",
+      "args": [
+        {
+          "name": "p_text",
+          "type": "text",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "text",
+      "language": "sql",
+      "volatility": "immutable",
+      "securityDefiner": false,
+      "searchPath": "public, extensions, pg_catalog",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260630110000_inventory_canonical_identity.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "inventory_item_identity",
+      "signature": "public.inventory_item_identity(text, text, text)",
+      "args": [
+        {
+          "name": "p_title",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_notes",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_unit",
+          "type": "text",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "text",
+      "language": "sql",
+      "volatility": "immutable",
+      "securityDefiner": false,
+      "searchPath": "public, extensions, pg_catalog",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260630110000_inventory_canonical_identity.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "enforce_inventory_movement_project_integrity",
+      "signature": "public.enforce_inventory_movement_project_integrity()",
+      "args": [],
+      "returnType": "trigger",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260630120000_cross_project_stock_transfer.sql",
+      "triggerUsages": [
+        {
+          "table": "public.inventory_movements",
+          "triggerName": "enforce_inventory_movement_project_integrity_biu",
+          "activation": "before insert or update"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "can_use_project_stock",
+      "signature": "public.can_use_project_stock(uuid)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "boolean",
+      "language": "sql",
+      "volatility": "stable",
+      "securityDefiner": false,
+      "searchPath": null,
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260630120000_cross_project_stock_transfer.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "place_cross_project_stock_transfer",
+      "signature": "public.place_cross_project_stock_transfer(uuid, uuid, uuid, uuid, jsonb)",
+      "args": [
+        {
+          "name": "p_from_project",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_to_project",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_from_location",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_to_location",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_lines",
+          "type": "jsonb",
+          "identityType": "jsonb"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260630120000_cross_project_stock_transfer.sql",
+      "triggerUsages": []
     }
   ]
 }

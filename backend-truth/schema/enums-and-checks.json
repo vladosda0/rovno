@@ -788,6 +788,19 @@
     },
     {
       "schema": "public",
+      "table": "orders",
+      "column": "transfer_direction",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "out",
+        "in"
+      ],
+      "expression": "transfer_direction in ('out', 'in')",
+      "sourceMigration": "supabase/migrations/20260630120000_cross_project_stock_transfer.sql"
+    },
+    {
+      "schema": "public",
       "table": "order_lines",
       "column": "quantity",
       "constraintName": null,
