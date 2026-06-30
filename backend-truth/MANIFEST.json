@@ -487,6 +487,14 @@
     {
       "path": "supabase/migrations/20260629120000_add_procurement_item_detail_columns.sql",
       "sha256": "0379a275023be62dfb9abf06dbb1410408e5f90bf298cdd6a7000c7f82fc23da"
+    },
+    {
+      "path": "supabase/migrations/20260630110000_inventory_canonical_identity.sql",
+      "sha256": "fce82f0088cae15d8453c14989b0a332bc6b1d795e84827b5227df39433085e6"
+    },
+    {
+      "path": "supabase/migrations/20260630120000_cross_project_stock_transfer.sql",
+      "sha256": "83bc79a6e70eb1fa04336682be06065670699c8bf8f0d3ca2b1f0ad5c5890737"
     }
   ],
   "generated_artifacts": [
@@ -634,6 +642,8 @@
     "sql/20260622120000_tighten_price_comparison_finance_gate.sql",
     "sql/20260624120000_add_library_work_resource_exclusions.sql",
     "sql/20260629120000_add_procurement_item_detail_columns.sql",
+    "sql/20260630110000_inventory_canonical_identity.sql",
+    "sql/20260630120000_cross_project_stock_transfer.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],

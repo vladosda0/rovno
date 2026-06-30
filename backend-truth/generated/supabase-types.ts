@@ -769,6 +769,7 @@ export type Database = {
           "notes": string | null
           "created_at": string
           "updated_at": string
+          "identity_key": unknown | null
           }
           Insert: {
           "id"?: string
@@ -779,6 +780,7 @@ export type Database = {
           "notes"?: string | null
           "created_at"?: string
           "updated_at"?: string
+          "identity_key"?: unknown | null
           }
           Update: {
           "id"?: string
@@ -789,6 +791,7 @@ export type Database = {
           "notes"?: string | null
           "created_at"?: string
           "updated_at"?: string
+          "identity_key"?: unknown | null
           }
           Relationships: []
         }
@@ -924,6 +927,10 @@ export type Database = {
           "created_by": string
           "created_at": string
           "updated_at": string
+          "transfer_group_id": string | null
+          "counterparty_project_id": string | null
+          "counterparty_location_id": string | null
+          "transfer_direction": "out" | "in" | null
           }
           Insert: {
           "id"?: string
@@ -936,6 +943,10 @@ export type Database = {
           "created_by": string
           "created_at"?: string
           "updated_at"?: string
+          "transfer_group_id"?: string | null
+          "counterparty_project_id"?: string | null
+          "counterparty_location_id"?: string | null
+          "transfer_direction"?: "out" | "in" | null
           }
           Update: {
           "id"?: string
@@ -948,6 +959,10 @@ export type Database = {
           "created_by"?: string
           "created_at"?: string
           "updated_at"?: string
+          "transfer_group_id"?: string | null
+          "counterparty_project_id"?: string | null
+          "counterparty_location_id"?: string | null
+          "transfer_direction"?: "out" | "in" | null
           }
           Relationships: []
         }
@@ -2426,6 +2441,12 @@ export type Database = {
           }
           Returns: boolean
         }
+        "can_use_project_stock": {
+          Args: {
+          "p_project_id": string
+          }
+          Returns: boolean
+        }
         "can_view_internal_documents": {
           Args: {
           "p_project_id": string
@@ -2713,6 +2734,16 @@ export type Database = {
           "p_org_id": string
           }
           Returns: string
+        }
+        "place_cross_project_stock_transfer": {
+          Args: {
+          "p_from_project": string
+          "p_to_project": string
+          "p_from_location": string
+          "p_to_location": string
+          "p_lines": Json
+          }
+          Returns: Json
         }
         "prepare_document_upload": {
           Args: {
