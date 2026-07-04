@@ -211,9 +211,9 @@ function defaultTaskIdForEstimateWork(workId: string): string {
   return workId;
 }
 
-function sortEstimateLinesForChecklist(
-  lines: Array<Pick<EstimateV2ResourceLine, "id" | "type">>,
-): Array<Pick<EstimateV2ResourceLine, "id" | "type">> {
+function sortEstimateLinesForChecklist<T extends Pick<EstimateV2ResourceLine, "id" | "type">>(
+  lines: T[],
+): T[] {
   return [...lines].sort((left, right) => {
     const typeDiff = RESOURCE_TYPE_ORDER[left.type] - RESOURCE_TYPE_ORDER[right.type];
     if (typeDiff !== 0) return typeDiff;

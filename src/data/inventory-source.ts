@@ -74,7 +74,7 @@ export function mapInventoryBalanceRowsToStockRows(input: {
 
   return input.balanceRows
     .filter((row) => row.quantity > 0 && !!row.inventory_location_id)
-    .map((row) => {
+    .map((row): InventoryStockRow | null => {
       const inventoryItem = itemById.get(row.inventory_item_id);
       if (!inventoryItem || !row.inventory_location_id) {
         return null;

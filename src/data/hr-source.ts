@@ -841,7 +841,7 @@ export async function syncProjectHRFromEstimate(
           const row = existingProjectRowsById.get(hrItemId);
           return row?.estimate_resource_line_id == null ? hrItemId : null;
         })
-        .filter(Boolean),
+        .filter((hrItemId): hrItemId is string => hrItemId !== null),
     ),
   );
 
@@ -867,7 +867,7 @@ export async function syncProjectHRFromEstimate(
   });
 
   const rowsToUpsert = syncableLines
-    .map(({ line, work }) => {
+    .map(({ line, work }): HeroHRItemUpsertInput => {
       const existingRow = existingHrRowsByLocalLineId.get(line.id) ?? null;
       const hrItemId = existingRow?.id
         ?? hrItemIdByEstimateLineId.get(line.id)

@@ -144,7 +144,7 @@ export function AuthSimulator() {
 
       <div className="space-y-1.5">
         <label className="text-body-sm font-medium text-foreground">Simulated role</label>
-        <Select value={role} onValueChange={setRole}>
+        <Select value={role} onValueChange={(value) => setRole(value as AuthRole)}>
           <SelectTrigger>
             <SelectValue />
           </SelectTrigger>

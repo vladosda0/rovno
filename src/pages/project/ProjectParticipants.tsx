@@ -870,12 +870,15 @@ export default function ProjectParticipants() {
 
   const savePermissionsMutation = useMutation({
     mutationFn: async (input: { target: RoleTarget; form: PermissionFormState }) => {
-      if (input.target.kind === "member") {
+      // Const (not `input.target`): property-path narrowing does not survive into
+      // the find/map closures below, a narrowed const does.
+      const target = input.target;
+      if (target.kind === "member") {
         return updateWorkspaceProjectMemberRole(
           workspaceMode.kind === "pending-supabase" ? { kind: "local" } : workspaceMode,
           {
             projectId,
-            userId: input.target.userId,
+            userId: target.userId,
             role: input.form.role,
             aiAccess: input.form.aiAccess,
             viewerRegime: resolveViewerRegime(input.form.role, projectMode, input.form.viewerRegime),
@@ -886,11 +889,11 @@ export default function ProjectParticipants() {
         );
       }
 
-      const invite = invites.find((row) => row.id === input.target.inviteId);
+      const invite = invites.find((row) => row.id === target.inviteId);
       return updateWorkspaceProjectInvite(
         workspaceMode.kind === "pending-supabase" ? { kind: "local" } : workspaceMode,
         {
-          id: input.target.inviteId,
+          id: target.inviteId,
           projectId,
           role: input.form.role,
           aiAccess: input.form.aiAccess,
@@ -905,11 +908,12 @@ export default function ProjectParticipants() {
     onMutate: async (input) => {
       if (workspaceMode.kind !== "supabase") return undefined;
 
-      if (input.target.kind === "member") {
+      const target = input.target;
+      if (target.kind === "member") {
         await queryClient.cancelQueries({ queryKey: membersQueryKey });
         const previousMembers = queryClient.getQueryData<Member[]>(membersQueryKey) ?? [];
         queryClient.setQueryData<Member[]>(membersQueryKey, previousMembers.map((member) => (
-          member.project_id === projectId && member.user_id === input.target.userId
+          member.project_id === projectId && member.user_id === target.userId
             ? applyPermissionFormToMember(member, input.form, projectMode)
             : member
         )));
@@ -919,7 +923,7 @@ export default function ProjectParticipants() {
       await queryClient.cancelQueries({ queryKey: invitesQueryKey });
       const previousInvites = queryClient.getQueryData<WorkspaceProjectInvite[]>(invitesQueryKey) ?? [];
       queryClient.setQueryData<WorkspaceProjectInvite[]>(invitesQueryKey, previousInvites.map((invite) => (
-        invite.id === input.target.inviteId
+        invite.id === target.inviteId
           ? applyPermissionFormToInvite(invite, input.form, projectMode)
           : invite
       )));
@@ -1145,7 +1149,7 @@ export default function ProjectParticipants() {
                   ) : pendingInvites.map((invite) => {
                     const inviter = getUserById(invite.invited_by);
                     const record = permissionInviteRecords.find((entry) => entry.target.kind === "invite" && entry.target.inviteId === invite.id);
-                    const canEditInvite = Boolean(record) && canEditPermissionRecord(record);
+                    const canEditInvite = record != null && canEditPermissionRecord(record);
                     const showResendEmail = workspaceMode.kind === "supabase" && canManageAccess;
 
                     return (

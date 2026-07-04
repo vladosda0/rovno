@@ -136,6 +136,17 @@ export function resolveActionState(
   action: DocumentsMediaAction,
   overrides?: PermissionOverrides,
 ): ActionState;
+/**
+ * Generic-dispatch overload: `domain` as a union matches none of the specific
+ * overloads, so dynamic callers must cast `action as never` (nothing but a cast
+ * reaches `never`, so per-domain call sites keep full checking).
+ */
+export function resolveActionState(
+  role: MemberRole,
+  domain: ContractDomain,
+  action: never,
+  overrides?: PermissionOverrides,
+): ActionState;
 export function resolveActionState(
   role: MemberRole,
   domain: ContractDomain,
