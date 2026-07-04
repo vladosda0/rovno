@@ -484,7 +484,12 @@ export function computeTabChipTotals(
     total: requestedItems.reduce((sum, entry) => sum + (entry.item.plannedUnitPrice ?? 0) * entry.remaining, 0),
   };
 
-  const orderedOrders = orders.filter((order) => order.projectId === projectId && order.kind === "supplier" && order.status === "placed");
+  // Count placed supplier orders AND pending cross-project transfers (both sides) — an outgoing
+  // transfer is a real placed order in this project, so it belongs in the "ordered" tally.
+  const orderedOrders = orders.filter((order) =>
+    order.projectId === projectId
+    && order.status === "placed"
+    && (order.kind === "supplier" || order.transferDirection != null));
   const itemById = new Map(items.map((item) => [item.id, item]));
   const ordered: TabChipStat = {
     count: orderedOrders.length,

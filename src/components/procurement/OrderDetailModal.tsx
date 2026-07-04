@@ -6,8 +6,9 @@ import { cancelDraftOrder, voidOrder } from "@/data/order-store";
 import { useOrderState } from "@/hooks/use-order-data";
 import { useProcurementV2 } from "@/hooks/use-mock-data";
 import { useLocations } from "@/hooks/use-inventory-data";
+import { useReceiveCrossProjectTransfer } from "@/hooks/use-cross-project-transfer";
 import { useToast } from "@/hooks/use-toast";
-import { useWorkspaceMode } from "@/hooks/use-workspace-source";
+import { useWorkspaceMode, useWorkspaceProjectsState } from "@/hooks/use-workspace-source";
 import { fmtCost } from "@/lib/procurement-utils";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -47,9 +48,26 @@ export function OrderDetailModal({
   const isSupabaseMode = workspaceMode.kind === "supabase";
   const [receiveOpen, setReceiveOpen] = useState(false);
   const { toast } = useToast();
+  const { projects: workspaceProjects } = useWorkspaceProjectsState();
+  const { receive: receiveCrossProjectTransfer, receivingId } = useReceiveCrossProjectTransfer();
 
   const itemById = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
   const locationById = useMemo(() => new Map(locations.map((location) => [location.id, location])), [locations]);
+
+  // For a received cross-project transfer, the delivery date shown must be the FACTUAL receipt
+  // date (from the receive movements), not the expected ETA which would be misleading afterwards.
+  const deliveryDisplay = useMemo(() => {
+    if (!order) return null;
+    if (order.transferDirection && order.status === "received") {
+      const receivedAt = (order.receiveEvents ?? []).reduce<string | null>((latest, event) => {
+        if (!event.createdAt) return latest;
+        if (!latest) return event.createdAt;
+        return new Date(event.createdAt).getTime() > new Date(latest).getTime() ? event.createdAt : latest;
+      }, null);
+      return receivedAt ?? order.updatedAt;
+    }
+    return order.deliveryDeadline ?? null;
+  }, [order]);
 
   const total = useMemo(() => {
     if (!order) return 0;
@@ -108,6 +126,30 @@ export function OrderDetailModal({
     toast({ title: t("procurement.orderDetail.orderVoided") });
   };
 
+  const counterpartyProjectTitle = useMemo(
+    () =>
+      order?.counterpartyProjectId
+        ? workspaceProjects.find((p) => p.id === order.counterpartyProjectId)?.title ?? ""
+        : "",
+    [order?.counterpartyProjectId, workspaceProjects],
+  );
+
+  // The destination ('in') side of a pending cross-project transfer is the one the receiver acts on.
+  const canReceiveCrossProjectTransfer = Boolean(
+    isSupabaseMode
+      && order?.kind === "stock"
+      && order?.status === "placed"
+      && order?.transferDirection === "in"
+      && order?.transferGroupId,
+  );
+  const isReceivingTransfer = order != null && receivingId === order.id;
+
+  const onReceiveCrossProjectTransfer = async () => {
+    if (!order) return;
+    const ok = await receiveCrossProjectTransfer(order);
+    if (ok) onOpenChange(false);
+  };
+
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -147,6 +189,20 @@ export function OrderDetailModal({
                       <p className="text-foreground">{order.supplierName}</p>
                     </>
                   )}
+                  {order.transferDirection && counterpartyProjectTitle && (
+                    <>
+                      <p className="text-xs text-muted-foreground pt-1">
+                        {order.transferDirection === "in"
+                          ? t("procurement.orderDetail.incomingTransfer")
+                          : t("procurement.orderDetail.outgoingTransfer")}
+                      </p>
+                      <p className="text-foreground">
+                        {order.transferDirection === "in"
+                          ? t("procurement.orderDetail.fromProjectName", { project: counterpartyProjectTitle })
+                          : t("procurement.orderDetail.toProjectName", { project: counterpartyProjectTitle })}
+                      </p>
+                    </>
+                  )}
                 </div>
                 <div className="rounded-lg border border-border p-3 space-y-1">
                   <p className="text-xs text-muted-foreground">{t("procurement.orderDetail.deliverTo")}</p>
@@ -162,7 +218,7 @@ export function OrderDetailModal({
                   <p className="text-xs text-muted-foreground">{t("procurement.orderDetail.dueDate")}</p>
                   <p className="text-foreground">{order.dueDate ? new Date(order.dueDate).toLocaleDateString() : "—"}</p>
                   <p className="text-xs text-muted-foreground pt-1">{t("procurement.orderDetail.deliveryDeadline")}</p>
-                  <p className="text-foreground">{order.deliveryDeadline ? new Date(order.deliveryDeadline).toLocaleDateString() : "—"}</p>
+                  <p className="text-foreground">{deliveryDisplay ? new Date(deliveryDisplay).toLocaleDateString() : "—"}</p>
                 </div>
                 <div className="rounded-lg border border-border p-3 space-y-1">
                   <p className="text-xs text-muted-foreground">{t("procurement.orderDetail.invoice")}</p>
@@ -261,6 +317,17 @@ export function OrderDetailModal({
             )}
             {order?.kind === "supplier" && order.status === "placed" && (
               <Button type="button" onClick={() => setReceiveOpen(true)}>{t("procurement.action.receive")}</Button>
+            )}
+            {canReceiveCrossProjectTransfer && (
+              <Button
+                type="button"
+                onClick={() => void onReceiveCrossProjectTransfer()}
+                disabled={isReceivingTransfer}
+              >
+                {isReceivingTransfer
+                  ? t("procurement.orderDetail.receivingTransfer")
+                  : t("procurement.action.receive")}
+              </Button>
             )}
           </DialogFooter>
         </DialogContent>

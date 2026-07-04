@@ -287,6 +287,12 @@ export interface Order {
   note?: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Cross-project transfer linkage (set on the two linked transfer orders; null on supplier
+   *  and same-project stock orders). `transferDirection` is this order's side of the move. */
+  transferGroupId?: string | null;
+  transferDirection?: "in" | "out" | null;
+  counterpartyProjectId?: string | null;
+  counterpartyLocationId?: string | null;
 }
 
 export interface OrderLine {
