@@ -205,3 +205,73 @@ export function useHomeInventorySnapshot(): HomeInventorySnapshot {
     totalRows: supabaseProjects.reduce((sum, project) => sum + project.rows.length, 0),
   };
 }
+
+const EMPTY_LOCATIONS_BY_PROJECT: ReadonlyMap<string, InventoryLocation[]> = new Map();
+
+/**
+ * Locations across every project the user can access, grouped by project id. Mirrors
+ * `useHomeInventorySnapshot`'s fan-out and reuses the same per-project `projectLocations`
+ * query keys (so the single-project `useLocations` cache is shared). Used by the
+ * cross-project stock-transfer destination picker.
+ */
+export function useAllProjectsLocations(): {
+  locationsByProjectId: ReadonlyMap<string, InventoryLocation[]>;
+  isLoading: boolean;
+} {
+  const mode = useWorkspaceMode();
+  const supabaseMode = mode.kind === "supabase" ? mode : null;
+  const { projects: workspaceHookProjects, isLoading: workspaceProjectsLoading } =
+    useWorkspaceProjectsState();
+
+  const browserMode = mode.kind === "demo" || mode.kind === "local";
+  const projects: Project[] = browserMode ? store.getProjects() : workspaceHookProjects;
+  const projectIds = projects.map((project) => project.id);
+
+  const getBrowserMap = useCallback((): ReadonlyMap<string, InventoryLocation[]> => {
+    const map = new Map<string, InventoryLocation[]>();
+    for (const project of store.getProjects()) {
+      map.set(project.id, listLocations(project.id));
+    }
+    return map;
+  }, []);
+  const browserLocationsByProject = useStoreValue(
+    getBrowserMap,
+    browserMode,
+    EMPTY_LOCATIONS_BY_PROJECT,
+  );
+
+  const locationsQueries = useQueries({
+    queries: projectIds.map((projectId) => ({
+      queryKey: supabaseMode
+        ? inventoryQueryKeys.projectLocations(supabaseMode.profileId, projectId)
+        : inventoryQueryKeys.projectLocations("browser", projectId),
+      queryFn: async () => {
+        const source = await getInventorySource(supabaseMode ?? undefined);
+        return source.getProjectLocations(projectId);
+      },
+      enabled: Boolean(supabaseMode && projectId),
+      staleTime: INVENTORY_QUERY_STALE_TIME_MS,
+    })),
+  });
+
+  if (browserMode) {
+    return { locationsByProjectId: browserLocationsByProject, isLoading: false };
+  }
+
+  if (!supabaseMode) {
+    return {
+      locationsByProjectId: EMPTY_LOCATIONS_BY_PROJECT,
+      isLoading: mode.kind === "pending-supabase",
+    };
+  }
+
+  if (workspaceProjectsLoading || locationsQueries.some((query) => query.isPending)) {
+    return { locationsByProjectId: EMPTY_LOCATIONS_BY_PROJECT, isLoading: true };
+  }
+
+  const map = new Map<string, InventoryLocation[]>();
+  projects.forEach((project, index) => {
+    map.set(project.id, locationsQueries[index]?.data ?? EMPTY_LOCATIONS);
+  });
+  return { locationsByProjectId: map, isLoading: false };
+}

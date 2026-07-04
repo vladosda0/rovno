@@ -96,6 +96,52 @@ export interface PlaceStockTransferInput {
   lines: PlaceStockTransferLineInput[];
 }
 
+export interface PlaceCrossProjectStockTransferLineInput {
+  /** The source project's inventory_item id (from the stock row). Preferred resolver. */
+  fromItemId?: string | null;
+  procurementItemId?: string | null;
+  title: string;
+  unit: string;
+  sku?: string | null;
+  /** Maps to inventory_items.notes; part of the canonical identity. */
+  spec?: string | null;
+  /** Resource type ('material' | 'tool' | 'other') — stored on the line so the source ('out')
+   *  side, which has no procurement_item_id, still shows the right type badge. */
+  itemType?: string | null;
+  qty: number;
+  actualUnitPrice?: number | null;
+}
+
+export interface PlaceCrossProjectStockTransferInput {
+  fromProjectId: string;
+  toProjectId: string;
+  fromLocationId: string;
+  toLocationId: string;
+  /** ISO string — the expected arrival date, stored as both orders' delivery_due_at. */
+  deliveryDeadline?: string | null;
+  lines: PlaceCrossProjectStockTransferLineInput[];
+}
+
+export interface CrossProjectStockTransferResult {
+  transferGroupId: string;
+  fromOrderId: string;
+  toOrderId: string;
+  fromProjectId: string;
+  toProjectId: string;
+  lineCount: number;
+  /** 'placed' — a cross-project transfer is now a pending order, received later. */
+  status: string;
+}
+
+export interface CrossProjectStockTransferReceiveResult {
+  transferGroupId: string;
+  fromOrderId: string;
+  toOrderId: string;
+  lineCount: number;
+  /** 'received' after a successful receipt. */
+  status: string;
+}
+
 export interface OrdersSource {
   mode: WorkspaceMode["kind"];
   getProjectOrders: (
@@ -112,6 +158,13 @@ export interface OrdersSource {
   placeSupplierOrder: (orderId: string) => Promise<OrderWithLines>;
   receiveSupplierOrder: (orderId: string, input: ReceiveSupplierOrderInput) => Promise<OrderWithLines>;
   placeStockTransfer: (input: PlaceStockTransferInput) => Promise<OrderWithLines>;
+  placeCrossProjectStockTransfer: (
+    input: PlaceCrossProjectStockTransferInput,
+  ) => Promise<CrossProjectStockTransferResult>;
+  /** Execute a placed cross-project transfer (B -qty, A +qty) and mark both orders received. */
+  receiveCrossProjectStockTransfer: (
+    transferGroupId: string,
+  ) => Promise<CrossProjectStockTransferReceiveResult>;
 }
 
 function createBrowserOrdersSource(mode: "demo" | "local"): OrdersSource {
@@ -188,6 +241,15 @@ function createBrowserOrdersSource(mode: "demo" | "local"): OrdersSource {
         throw new Error(result.error);
       }
       return result.order;
+    },
+    async placeCrossProjectStockTransfer() {
+      // Cross-project transfers require the signed-in Supabase backend (the
+      // place_cross_project_stock_transfer RPC). Demo/local mode never surfaces a
+      // cross-project destination, so this is unreachable through the UI.
+      throw new Error("Cross-project stock transfer requires a signed-in account");
+    },
+    async receiveCrossProjectStockTransfer() {
+      throw new Error("Cross-project stock transfer requires a signed-in account");
     },
   };
 }
@@ -330,6 +392,10 @@ export function shapeOrdersWithDetails(input: ShapeOrdersInput): OrderWithLines[
       id: row.id,
       orderId: row.order_id,
       procurementItemId: row.procurement_item_id ?? "",
+      // Persist the stored line title + type so lines with no procurement item (e.g. the source
+      // side of a cross-project transfer) still show the real material name and type badge.
+      title: row.title || procurementItem?.title || null,
+      itemType: (row.item_type as ProcurementItemType | null) ?? null,
       qty: row.quantity,
       receivedQty: receivedQtyByLineId.get(row.id) ?? 0,
       unit: row.unit ?? procurementItem?.unit ?? "",
@@ -389,7 +455,10 @@ export function shapeOrdersWithDetails(input: ShapeOrdersInput): OrderWithLines[
         id: row.id,
         projectId: row.project_id,
         status: mapOrderStatus(row.status),
-        kind: rawMovementRows.some((movementRow) => movementRow.movement_type === "transfer")
+        // A cross-project transfer is a stock order even while 'placed' (no movements yet), so
+        // classify by the transfer linkage first, then fall back to the movement signature.
+        kind: row.transfer_direction != null
+          || rawMovementRows.some((movementRow) => movementRow.movement_type === "transfer")
           ? "stock"
           : "supplier",
         supplierName: row.supplier_name,
@@ -412,6 +481,10 @@ export function shapeOrdersWithDetails(input: ShapeOrdersInput): OrderWithLines[
         note: null,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
+        transferGroupId: row.transfer_group_id ?? null,
+        transferDirection: row.transfer_direction ?? null,
+        counterpartyProjectId: row.counterparty_project_id ?? null,
+        counterpartyLocationId: row.counterparty_location_id ?? null,
         lines,
         receiveEvents: shapedMovementRowsByOrderId.get(row.id) ?? [],
       } satisfies OrderWithLines;
@@ -473,6 +546,7 @@ function syntheticOrderLineRowFromRpc(ol: ProcurementOperationalRpcOrderedLine):
     id: ol.order_line_id,
     order_id: ol.order_id,
     procurement_item_id: ol.procurement_item_id,
+    item_type: null,
     title: ol.title || ol.procurement_item_title || "Item",
     quantity: ol.quantity,
     unit: ol.unit,
@@ -1232,6 +1306,77 @@ export function createSupabaseOrdersSource(
       }
 
       return loadOrderOrThrow(supabase, orderId);
+    },
+    async placeCrossProjectStockTransfer(input: PlaceCrossProjectStockTransferInput) {
+      const lines = input.lines
+        .filter((line) => line.qty > 0)
+        .map((line) => ({
+          from_item_id: line.fromItemId ?? null,
+          procurement_item_id: line.procurementItemId ?? null,
+          title: line.title,
+          unit: line.unit,
+          sku: line.sku ?? null,
+          spec: line.spec ?? null,
+          item_type: line.itemType ?? null,
+          qty: line.qty,
+          actual_unit_price_cents: quantityToPriceCents(line.actualUnitPrice),
+        }));
+      if (lines.length === 0) {
+        throw new Error("No transfer lines provided");
+      }
+
+      const { data, error } = await supabase.rpc("place_cross_project_stock_transfer", {
+        p_from_project: input.fromProjectId,
+        p_to_project: input.toProjectId,
+        p_from_location: input.fromLocationId,
+        p_to_location: input.toLocationId,
+        p_lines: lines,
+        p_delivery_deadline: input.deliveryDeadline ?? null,
+      });
+      if (error) {
+        throw error;
+      }
+
+      const result = (data ?? {}) as {
+        transfer_group_id?: string;
+        from_order_id?: string;
+        to_order_id?: string;
+        from_project_id?: string;
+        to_project_id?: string;
+        line_count?: number;
+        status?: string;
+      };
+      return {
+        transferGroupId: result.transfer_group_id ?? "",
+        fromOrderId: result.from_order_id ?? "",
+        toOrderId: result.to_order_id ?? "",
+        fromProjectId: result.from_project_id ?? input.fromProjectId,
+        toProjectId: result.to_project_id ?? input.toProjectId,
+        lineCount: result.line_count ?? 0,
+        status: result.status ?? "placed",
+      };
+    },
+    async receiveCrossProjectStockTransfer(transferGroupId: string) {
+      const { data, error } = await supabase.rpc("receive_cross_project_stock_transfer", {
+        p_transfer_group_id: transferGroupId,
+      });
+      if (error) {
+        throw error;
+      }
+      const result = (data ?? {}) as {
+        transfer_group_id?: string;
+        from_order_id?: string;
+        to_order_id?: string;
+        line_count?: number;
+        status?: string;
+      };
+      return {
+        transferGroupId: result.transfer_group_id ?? transferGroupId,
+        fromOrderId: result.from_order_id ?? "",
+        toOrderId: result.to_order_id ?? "",
+        lineCount: result.line_count ?? 0,
+        status: result.status ?? "received",
+      };
     },
   };
 }

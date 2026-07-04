@@ -163,6 +163,13 @@ export function computeInStockByLocation(
           return;
         }
 
+        // A not-yet-received stock order holds no real stock: a deferred cross-project transfer
+        // writes NO movements until receipt, so this legacy (event-less) fallback must not credit
+        // its qty as on-hand (a placed 'in' order would otherwise phantom-fill the destination, and
+        // a placed 'out' order the source). Received legacy stock orders always have events and take
+        // the branch above, so they never reach here.
+        if (order.status !== "received") return;
+
         const toLocationId = order.toLocationId ?? order.deliverToLocationId ?? fallbackLocation;
         const fromLocationId = order.fromLocationId ?? "";
         applyQty(toLocationId, line.procurementItemId, line.qty, order.id);
@@ -484,7 +491,12 @@ export function computeTabChipTotals(
     total: requestedItems.reduce((sum, entry) => sum + (entry.item.plannedUnitPrice ?? 0) * entry.remaining, 0),
   };
 
-  const orderedOrders = orders.filter((order) => order.projectId === projectId && order.kind === "supplier" && order.status === "placed");
+  // Count placed supplier orders AND pending cross-project transfers (both sides) — an outgoing
+  // transfer is a real placed order in this project, so it belongs in the "ordered" tally.
+  const orderedOrders = orders.filter((order) =>
+    order.projectId === projectId
+    && order.status === "placed"
+    && (order.kind === "supplier" || order.transferDirection != null));
   const itemById = new Map(items.map((item) => [item.id, item]));
   const ordered: TabChipStat = {
     count: orderedOrders.length,

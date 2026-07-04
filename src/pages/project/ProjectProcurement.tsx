@@ -47,7 +47,7 @@ import { ProjectWorkflowEmptyState } from "@/components/ProjectWorkflowEmptyStat
 import { StatusBadge } from "@/components/StatusBadge";
 import { useProject } from "@/hooks/use-mock-data";
 import { useOrders } from "@/hooks/use-order-data";
-import { useInventoryStock, useLocations } from "@/hooks/use-inventory-data";
+import { useAllProjectsLocations, useInventoryStock, useLocations } from "@/hooks/use-inventory-data";
 import {
   actionStateToControlProps,
   getProjectDomainAccess,
@@ -96,6 +96,7 @@ import { LocationPicker } from "@/components/procurement/LocationPicker";
 import { ResourceTypeBadge } from "@/components/estimate-v2/ResourceTypeBadge";
 import { isProcurementResourceLineType, resourceLineTypeToPersisted, projectToProcurementItemType } from "@/lib/estimate-v2/resource-type-contract";
 import { useEstimateV2Project } from "@/hooks/use-estimate-v2-data";
+import { useReceiveCrossProjectTransfer } from "@/hooks/use-cross-project-transfer";
 import { inventoryQueryKeys } from "@/hooks/use-inventory-data";
 import {
   orderPlacedSupplierOrdersQueryRoot,
@@ -103,7 +104,7 @@ import {
   orderQueryKeys,
 } from "@/hooks/use-order-data";
 import { procurementProjectItemsQueryRoot, procurementQueryKeys, useProjectProcurementItemsState } from "@/hooks/use-procurement-source";
-import { useWorkspaceCurrentUserState, useWorkspaceMode } from "@/hooks/use-workspace-source";
+import { useWorkspaceCurrentUserState, useWorkspaceMode, useWorkspaceProjectsState } from "@/hooks/use-workspace-source";
 import { computeProjectTotals } from "@/lib/estimate-v2/pricing";
 import type {
   Event,
@@ -137,7 +138,7 @@ const TABS: ProcurementTab[] = ["requested", "ordered", "in_stock"];
 type Translator = (key: string, options?: Record<string, unknown>) => string;
 
 const TAB_META: Record<ProcurementTab, { labelKey: string; className: string }> = {
-  requested: { labelKey: "procurement.tabs.requested", className: "bg-warning/15 text-warning-foreground border-warning/30" },
+  requested: { labelKey: "procurement.tabs.requested", className: "bg-warning/15 text-warning border-warning/30" },
   ordered: { labelKey: "procurement.tabs.ordered", className: "bg-info/15 text-info border-info/25" },
   in_stock: { labelKey: "procurement.tabs.inStock", className: "bg-success/15 text-success border-success/25" },
 };
@@ -800,6 +801,55 @@ export default function ProjectProcurement() {
       })
   ), [orders, search, itemById]);
 
+  const { projects: workspaceProjects } = useWorkspaceProjectsState();
+  const { receive: receiveCrossProjectTransfer, receivingId: receivingTransferId } =
+    useReceiveCrossProjectTransfer();
+  const { locationsByProjectId: allLocationsByProjectId } = useAllProjectsLocations();
+  const projectTitleById = useMemo(
+    () => new Map(workspaceProjects.map((p) => [p.id, p.title])),
+    [workspaceProjects],
+  );
+  // The counterparty location lives in the OTHER project, so resolve its name across all projects.
+  const transferLocationName = useCallback(
+    (projId: string | null | undefined, locId: string | null | undefined): string | undefined => {
+      if (!projId || !locId) return undefined;
+      return allLocationsByProjectId.get(projId)?.find((loc) => loc.id === locId)?.name;
+    },
+    [allLocationsByProjectId],
+  );
+  // Cross-project transfers are pending orders (placed → received). They sit among the supplier
+  // orders in the Ordered tab (distinguished by a small badge) so the destination can mark an
+  // incoming transfer received. Both sides ('in'/'out') surface here.
+  const crossProjectTransferOrders = useMemo(
+    () =>
+      orders.filter((order) => {
+        if (order.kind !== "stock" || order.transferDirection == null) return false;
+        if (!search.trim()) return true;
+        const q = search.trim().toLowerCase();
+        const counterparty = order.counterpartyProjectId
+          ? (projectTitleById.get(order.counterpartyProjectId) ?? "").toLowerCase()
+          : "";
+        const lineMatch = order.lines.some((line) => {
+          const item = itemById.get(line.procurementItemId);
+          return (
+            (item?.name?.toLowerCase()?.includes(q) ?? false)
+            || (line.title?.toLowerCase()?.includes(q) ?? false)
+          );
+        });
+        return counterparty.includes(q) || lineMatch;
+      }),
+    [orders, search, projectTitleById, itemById],
+  );
+
+  // Supplier orders + cross-project transfers, interleaved newest-first for the Ordered tab list.
+  const orderedTabOrders = useMemo(
+    () =>
+      [...activeAndReceivedSupplierOrders, ...crossProjectTransferOrders].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      ),
+    [activeAndReceivedSupplierOrders, crossProjectTransferOrders],
+  );
+
   const supplierOrderNumberById = useMemo(() => {
     const sortedSupplierOrders = orders
       .filter((order) => order.kind === "supplier")
@@ -1021,14 +1071,14 @@ export default function ProjectProcurement() {
   useEffect(() => {
     if (canManageProcurement) return;
     if (activeTab !== "ordered") return;
-    if (activeAndReceivedSupplierOrders.length > 0) return;
+    if (orderedTabOrders.length > 0) return;
     if (visibleInStockRows.length === 0) return;
     setActiveTab("in_stock");
-  }, [activeTab, canManageProcurement, activeAndReceivedSupplierOrders.length, visibleInStockRows.length]);
+  }, [activeTab, canManageProcurement, orderedTabOrders.length, visibleInStockRows.length]);
 
   const effectiveActiveTab: ProcurementTab = !canManageProcurement
     && activeTab === "ordered"
-    && activeAndReceivedSupplierOrders.length === 0
+    && orderedTabOrders.length === 0
     && visibleInStockRows.length > 0
     ? "in_stock"
     : activeTab;
@@ -2111,7 +2161,7 @@ export default function ProjectProcurement() {
 
       {effectiveActiveTab === "ordered" && (
         <div className="glass rounded-card p-2 space-y-2">
-          {activeAndReceivedSupplierOrders.length === 0 ? (
+          {orderedTabOrders.length === 0 ? (
             items.length === 0 && (isProcurementItemsLoading || isProcurementSyncing) ? (
               <div className="space-y-2" aria-hidden>
                 {[0, 1, 2, 3].map((i) => (
@@ -2122,7 +2172,147 @@ export default function ProjectProcurement() {
               <p className="text-sm text-muted-foreground text-center py-8">{t("procurement.empty.noPlaced")}</p>
             )
           ) : (
-            activeAndReceivedSupplierOrders.map((order) => {
+            orderedTabOrders.map((order) => {
+              // Cross-project transfer: rendered like a supplier order card (title + location
+              // subtitle + expandable line details), distinguished only by the "Заказ со склада"
+              // title. Order-level "mark received" (destination chosen at placement).
+              if (order.kind === "stock" && order.transferDirection) {
+                const isIncoming = order.transferDirection === "in";
+                const transferCollapsed = collapsedOrderIds.has(order.id);
+                // The counterparty location is where an incoming transfer ships FROM; fall back to
+                // the counterparty project name if that project's locations aren't loaded.
+                const locationSubtitle =
+                  transferLocationName(order.counterpartyProjectId, order.counterpartyLocationId)
+                  ?? (order.counterpartyProjectId ? projectTitleById.get(order.counterpartyProjectId) : undefined)
+                  ?? dash;
+                const transferTotal = order.lines.reduce((sum, line) => {
+                  const item = itemById.get(line.procurementItemId);
+                  const unitPrice = line.actualUnitPrice ?? line.plannedUnitPrice
+                    ?? item?.actualUnitPrice ?? item?.plannedUnitPrice ?? 0;
+                  return sum + unitPrice * line.qty;
+                }, 0);
+                const isReceived = order.status === "received";
+                // Once received, the delivery date must show the FACTUAL receipt date (from the
+                // receive movements, immutable), not the expected ETA — a future/past expected
+                // date is misleading after delivery.
+                const transferReceivedAt = (order.receiveEvents ?? []).reduce<string | null>((latest, event) => {
+                  if (!event.createdAt) return latest;
+                  if (!latest) return event.createdAt;
+                  return new Date(event.createdAt).getTime() > new Date(latest).getTime()
+                    ? event.createdAt
+                    : latest;
+                }, null) ?? order.updatedAt;
+                const deliveryLabel = isReceived
+                  ? formatDate(transferReceivedAt, dash)
+                  : formatDate(order.deliveryDeadline, dash);
+                const canReceive = isIncoming && order.status === "placed" && canManageProcurement;
+                // Distinct title conveys direction (the source project's card is an outgoing
+                // shipment, not an incoming order) without re-introducing a separate badge.
+                const transferTitle = isIncoming
+                  ? t("procurement.order.stockOrder")
+                  : t("procurement.order.stockShipment");
+                return (
+                  <div key={order.id} className="rounded-lg border border-border overflow-hidden">
+                    <div className="w-full flex items-center gap-2 px-3 py-2 bg-muted/40">
+                      <button
+                        type="button"
+                        className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-muted/70"
+                        onClick={() => toggleOrder(order.id)}
+                        aria-label={transferCollapsed ? t("procurement.order.expandAria") : t("procurement.order.collapseAria")}
+                      >
+                        {transferCollapsed
+                          ? <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                          : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+                      </button>
+                      {canManageProcurement ? (
+                        <button
+                          type="button"
+                          className="text-sm font-semibold text-foreground hover:underline"
+                          onClick={() => openOrderDetail(order.id)}
+                        >
+                          {transferTitle}
+                        </button>
+                      ) : (
+                        <span className="text-sm font-semibold text-foreground">{transferTitle}</span>
+                      )}
+                      <span className="text-xs text-muted-foreground truncate">{locationSubtitle}</span>
+                      {canViewSensitiveDetail && transferTotal > 0 && (
+                        <span className="ml-auto text-xs text-muted-foreground">{fmtCost(transferTotal)}</span>
+                      )}
+                    </div>
+
+                    {isReceived && (
+                      <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-t border-border/60 text-success">
+                        <CheckCircle2 className="h-4 w-4" />
+                        <span className="text-sm">{t("procurement.transfers.received")}</span>
+                        <span className="text-xs text-muted-foreground">{formatDate(transferReceivedAt, dash)}</span>
+                      </div>
+                    )}
+
+                    {!transferCollapsed && (
+                      <div className="overflow-x-auto border-t border-border">
+                        {/* Fixed layout + identical columns on every transfer card (the action
+                            column is always present, empty when there's nothing to receive) so the
+                            columns line up across cards regardless of status or content width. */}
+                        <table className="w-full table-fixed text-sm">
+                          <thead className="bg-muted/30 border-b border-border">
+                            <tr>
+                              <th className="text-left px-3 py-2">{t("procurement.col.item")}</th>
+                              <th className="w-28 text-right px-3 py-2">{t("procurement.col.orderedQty")}</th>
+                              <th className="w-20 text-left px-3 py-2">{t("procurement.col.unit")}</th>
+                              <th className="w-40 text-left px-3 py-2">{t("procurement.orderModal.deliveryDate")}</th>
+                              <th className="w-32 text-right px-3 py-2">{canReceive ? t("procurement.col.action") : ""}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {order.lines.map((line) => {
+                              const item = itemById.get(line.procurementItemId);
+                              const itemName = item?.name ?? line.title ?? t("procurement.order.orderedItemFallback");
+                              const itemSpec = item?.spec ?? null;
+                              // The source ('out') line has no procurement item to type it; inventory
+                              // transfers are goods, so fall back to material rather than "other".
+                              const itemType = item?.type ?? line.itemType ?? "material";
+                              return (
+                                <tr key={line.id} className="border-b border-border/70 last:border-0">
+                                  <td className="px-3 py-2">
+                                    <div className="flex min-w-0 items-start gap-2">
+                                      <ResourceTypeBadge type={itemType} className="shrink-0 border-transparent" />
+                                      <div className="min-w-0">
+                                        <p className="font-medium text-foreground truncate">{itemName}</p>
+                                        {itemSpec && <p className="text-xs text-muted-foreground truncate">{itemSpec}</p>}
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="px-3 py-2 text-right tabular-nums">{line.qty}</td>
+                                  <td className="px-3 py-2">{line.unit}</td>
+                                  <td className="px-3 py-2 truncate">{deliveryLabel}</td>
+                                  <td className="px-3 py-2">
+                                    {canReceive && (
+                                      <div className="flex justify-end">
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          className="h-7"
+                                          onClick={() => void receiveCrossProjectTransfer(order)}
+                                          disabled={receivingTransferId === order.id}
+                                        >
+                                          {receivingTransferId === order.id
+                                            ? t("procurement.orderDetail.receivingTransfer")
+                                            : t("procurement.action.receive")}
+                                        </Button>
+                                      </div>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              }
               const collapsed = collapsedOrderIds.has(order.id);
               const orderNumber = supplierOrderNumberById.get(order.id) ?? 0;
               const total = order.lines.reduce((sum, line) => {
@@ -2205,13 +2395,6 @@ export default function ProjectProcurement() {
                         {lastReceiveAt && (
                           <span className="text-xs text-muted-foreground">{formatDate(lastReceiveAt, dash)}</span>
                         )}
-                        <button
-                          type="button"
-                          className="ml-auto text-xs text-accent hover:underline"
-                          onClick={() => toggleReceivedOrderDetails(order.id)}
-                        >
-                          {receivedExpanded ? t("procurement.order.hideDetails") : t("procurement.order.showDetails")}
-                        </button>
                       </div>
                       {receivedExpanded && (
                         <div className="overflow-x-auto border-t border-border">
