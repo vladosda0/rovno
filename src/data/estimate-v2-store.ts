@@ -1963,7 +1963,9 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
           discountBpsOverride: null,
           taxBpsOverride: cachedLine?.taxBpsOverride ?? null,
           assigneeId: line.assignee_profile_id ?? cachedLine?.assigneeId ?? null,
-          assigneeName: line.assignee_label?.trim() || cachedLine?.assigneeName || null,
+          // The RPC never returns assignee_label; a free-text label arrives baked
+          // into assignee_display_name (profile assignees get their profile name).
+          assigneeName: line.assignee_display_name?.trim() || cachedLine?.assigneeName || null,
           assigneeEmail: cachedLine?.assigneeEmail ?? null,
           receivedCents: cachedLine?.receivedCents ?? 0,
           pnlPlaceholderCents: cachedLine?.pnlPlaceholderCents ?? 0,
@@ -1972,7 +1974,7 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
         } satisfies EstimateV2ResourceLine;
       })
       : canRebuildLinesFromTasks
-        ? linkedChecklistEntries.map(({ task, item }, index) => {
+        ? linkedChecklistEntries.map(({ task, item }, index): EstimateV2ResourceLine | null => {
           const lineId = item.estimateV2LineId ?? `${task.id}-line-${index}`;
           const workId = item.estimateV2WorkId
             ?? linkedChecklistEntries.find(({ item: sibling }) => sibling.estimateV2LineId === item.estimateV2LineId)?.item.estimateV2WorkId
@@ -3504,11 +3506,9 @@ export function submitVersion(projectId: string, versionId: string, options: Sub
   const actor = getCurrentUser();
   const approvalPolicy = resolveShareApprovalPolicy(options);
 
-  let submittedVersion: EstimateV2Version | null = null;
-
   state.versions = state.versions.map((version) => {
     if (version.id === versionId) {
-      const next = {
+      return {
         ...version,
         status: "proposed" as const,
         archived: false,
@@ -3518,8 +3518,6 @@ export function submitVersion(projectId: string, versionId: string, options: Sub
         shareApprovalDisabledReason: approvalPolicy.shareApprovalDisabledReason,
         updatedAt: now,
       };
-      submittedVersion = next;
-      return next;
     }
     return {
       ...version,
@@ -3528,6 +3526,7 @@ export function submitVersion(projectId: string, versionId: string, options: Sub
     };
   });
 
+  const submittedVersion = state.versions.find((version) => version.id === versionId);
   if (!submittedVersion) return false;
 
   addEvent({
@@ -3565,11 +3564,9 @@ export function refreshVersionSnapshot(
   const snapshot = getSnapshotFromState(state);
   const approvalPolicy = resolveShareApprovalPolicy(options);
 
-  let refreshedVersion: EstimateV2Version | null = null;
-
   state.versions = state.versions.map((version) => {
     if (version.id === versionId) {
-      const next = {
+      return {
         ...version,
         status: "proposed" as const,
         snapshot,
@@ -3580,8 +3577,6 @@ export function refreshVersionSnapshot(
         shareApprovalDisabledReason: approvalPolicy.shareApprovalDisabledReason,
         updatedAt: now,
       };
-      refreshedVersion = next;
-      return next;
     }
     return {
       ...version,
@@ -3590,6 +3585,7 @@ export function refreshVersionSnapshot(
     };
   });
 
+  const refreshedVersion = state.versions.find((version) => version.id === versionId);
   if (!refreshedVersion) return false;
 
   addEvent({
@@ -3627,11 +3623,9 @@ export function approveVersion(
   if (target.shareApprovalPolicy === "disabled") return false;
   const now = nowIso();
 
-  let approvedVersion: EstimateV2Version | null = null;
-
   state.versions = state.versions.map((version) => {
     if (version.id === versionId) {
-      const next = {
+      return {
         ...version,
         status: "approved" as const,
         archived: false,
@@ -3639,8 +3633,6 @@ export function approveVersion(
         approvalStamp: { ...stamp },
         updatedAt: now,
       };
-      approvedVersion = next;
-      return next;
     }
 
     return {
@@ -3650,6 +3642,7 @@ export function approveVersion(
     };
   });
 
+  const approvedVersion = state.versions.find((version) => version.id === versionId);
   if (!approvedVersion) return false;
 
   const actorId = options.actorId ?? "client";

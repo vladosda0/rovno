@@ -2180,6 +2180,7 @@
   "procurement.orderStatus.draft": "Черновик",
   "procurement.orderStatus.ordered": "Заказано",
   "procurement.orderStatus.voided": "Аннулировано",
+  "procurement.orderStatus.partiallyReceived": "Частично получено",
   "procurement.orderStatus.inStock": "На складе",
   "procurement.receiveOrder.title": "Принять заказ",
   "procurement.receiveOrder.notFound": "Заказ не найден.",

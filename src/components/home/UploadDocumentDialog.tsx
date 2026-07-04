@@ -26,11 +26,7 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { useProjects } from "@/hooks/use-mock-data";
 import { useActiveOrg, orgQueryKeys } from "@/hooks/use-orgs";
-import {
-  prepareDocumentUpload,
-  uploadBytes,
-  finalizeDocumentUpload,
-} from "@/data/documents-media-source";
+import { useDocumentUploadMutations } from "@/hooks/use-documents-media-source";
 import {
   prepareWorkspaceDocumentUpload,
   finalizeWorkspaceDocumentUpload,
@@ -71,6 +67,7 @@ export function UploadDocumentDialog({
   const [visibility, setVisibility] = useState<DocMediaVisibilityClass>("shared_project");
   const [projectId, setProjectId] = useState<string | undefined>(defaultProjectId);
   const [submitting, setSubmitting] = useState(false);
+  const projectUpload = useDocumentUploadMutations(projectId ?? "");
 
   useEffect(() => {
     if (!open) {
@@ -151,8 +148,7 @@ export function UploadDocumentDialog({
         toast({ title: t("home.upload.toast.savedOrg") });
       } else {
         if (!projectId) throw new Error("No project selected");
-        const intent = await prepareDocumentUpload({
-          projectId,
+        const intent = await projectUpload.prepareUpload({
           type: "knowledge_base",
           title: effectiveTitle,
           clientFilename: file.name,
@@ -161,8 +157,8 @@ export function UploadDocumentDialog({
           description: description.trim() || undefined,
           visibilityClass: visibility,
         });
-        await uploadBytes(intent.bucket, intent.objectPath, file);
-        await finalizeDocumentUpload(intent.uploadIntentId);
+        await projectUpload.uploadBytes(intent.bucket, intent.objectPath, file);
+        await projectUpload.finalizeUpload(intent.uploadIntentId);
         await queryClient.invalidateQueries({ queryKey: ["documents-media"] });
         toast({ title: t("home.upload.toast.uploadedProject") });
       }

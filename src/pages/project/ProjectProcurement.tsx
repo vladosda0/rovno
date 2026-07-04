@@ -239,9 +239,10 @@ function newAttachmentId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
-function orderStatusLabel(status: "draft" | "placed" | "received" | "voided", t: Translator): string {
+function orderStatusLabel(status: "draft" | "placed" | "partially_received" | "received" | "voided", t: Translator): string {
   if (status === "draft") return t("procurement.orderStatus.draft");
   if (status === "placed") return t("procurement.orderStatus.ordered");
+  if (status === "partially_received") return t("procurement.orderStatus.partiallyReceived");
   if (status === "voided") return t("procurement.orderStatus.voided");
   return t("procurement.orderStatus.inStock");
 }
