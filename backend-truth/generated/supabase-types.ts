@@ -931,6 +931,7 @@ export type Database = {
           "counterparty_project_id": string | null
           "counterparty_location_id": string | null
           "transfer_direction": "out" | "in" | null
+          "transfer_payload": Json | null
           }
           Insert: {
           "id"?: string
@@ -947,6 +948,7 @@ export type Database = {
           "counterparty_project_id"?: string | null
           "counterparty_location_id"?: string | null
           "transfer_direction"?: "out" | "in" | null
+          "transfer_payload"?: Json | null
           }
           Update: {
           "id"?: string
@@ -963,6 +965,7 @@ export type Database = {
           "counterparty_project_id"?: string | null
           "counterparty_location_id"?: string | null
           "transfer_direction"?: "out" | "in" | null
+          "transfer_payload"?: Json | null
           }
           Relationships: []
         }
@@ -977,6 +980,7 @@ export type Database = {
           "unit_price_cents": number | null
           "total_price_cents": number | null
           "created_at": string
+          "item_type": string | null
           }
           Insert: {
           "id"?: string
@@ -988,6 +992,7 @@ export type Database = {
           "unit_price_cents"?: number | null
           "total_price_cents"?: number | null
           "created_at"?: string
+          "item_type"?: string | null
           }
           Update: {
           "id"?: string
@@ -999,6 +1004,7 @@ export type Database = {
           "unit_price_cents"?: number | null
           "total_price_cents"?: number | null
           "created_at"?: string
+          "item_type"?: string | null
           }
           Relationships: []
         }
@@ -1015,6 +1021,7 @@ export type Database = {
           "notes": string | null
           "created_by": string | null
           "created_at": string
+          "transfer_group_id": string | null
           }
           Insert: {
           "id"?: string
@@ -1028,6 +1035,7 @@ export type Database = {
           "notes"?: string | null
           "created_by"?: string | null
           "created_at"?: string
+          "transfer_group_id"?: string | null
           }
           Update: {
           "id"?: string
@@ -1041,6 +1049,7 @@ export type Database = {
           "notes"?: string | null
           "created_by"?: string | null
           "created_at"?: string
+          "transfer_group_id"?: string | null
           }
           Relationships: []
         }
@@ -2742,6 +2751,7 @@ export type Database = {
           "p_from_location": string
           "p_to_location": string
           "p_lines": Json
+          "p_delivery_deadline": string
           }
           Returns: Json
         }
@@ -2809,6 +2819,12 @@ export type Database = {
           "p_snapshot": Json
           "p_share_approval_policy": unknown
           "p_share_approval_disabled_reason": unknown
+          }
+          Returns: Json
+        }
+        "receive_cross_project_stock_transfer": {
+          Args: {
+          "p_transfer_group_id": string
           }
           Returns: Json
         }
