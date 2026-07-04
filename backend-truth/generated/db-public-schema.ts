@@ -499,6 +499,14 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260630120000_cross_project_stock_transfer.sql",
       "sha256": "83bc79a6e70eb1fa04336682be06065670699c8bf8f0d3ca2b1f0ad5c5890737"
+    },
+    {
+      "path": "supabase/migrations/20260630130000_cross_project_transfer_procurement_item_on_destination.sql",
+      "sha256": "73d33c022ae72938b35d1a9dd86b39bd1dd4663a7dffce849e5aed34b5e5c5ed"
+    },
+    {
+      "path": "supabase/migrations/20260630140000_cross_project_transfer_deferred_receipt.sql",
+      "sha256": "32fed68f4e873a85698f1deccf57fb6c5d6097c872cf11bfc440aa998e45d544"
     }
   ],
   "generated_artifacts": [
@@ -648,6 +656,8 @@ export const manifest = {
     "sql/20260629120000_add_procurement_item_detail_columns.sql",
     "sql/20260630110000_inventory_canonical_identity.sql",
     "sql/20260630120000_cross_project_stock_transfer.sql",
+    "sql/20260630130000_cross_project_transfer_procurement_item_on_destination.sql",
+    "sql/20260630140000_cross_project_transfer_deferred_receipt.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -5292,6 +5302,16 @@ export const tables = {
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "transfer_payload",
+          "sqlType": "jsonb",
+          "tsType": "Json",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -5478,6 +5498,16 @@ export const tables = {
           "tsType": "string",
           "nullable": false,
           "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "item_type",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
           "primaryKey": false,
           "unique": false,
           "references": null
@@ -5697,6 +5727,16 @@ export const tables = {
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "transfer_group_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -5766,6 +5806,17 @@ export const tables = {
           "where": null,
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+        },
+        {
+          "name": "idx_inventory_movements_transfer_group_id",
+          "unique": false,
+          "method": null,
+          "expressions": [
+            "transfer_group_id"
+          ],
+          "where": "transfer_group_id is not null",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260630140000_cross_project_transfer_deferred_receipt.sql"
         }
       ],
       "triggers": [
@@ -18395,7 +18446,7 @@ export const functions = {
     {
       "schema": "public",
       "name": "place_cross_project_stock_transfer",
-      "signature": "public.place_cross_project_stock_transfer(uuid, uuid, uuid, uuid, jsonb)",
+      "signature": "public.place_cross_project_stock_transfer(uuid, uuid, uuid, uuid, jsonb, timestamptz)",
       "args": [
         {
           "name": "p_from_project",
@@ -18421,6 +18472,11 @@ export const functions = {
           "name": "p_lines",
           "type": "jsonb",
           "identityType": "jsonb"
+        },
+        {
+          "name": "p_delivery_deadline",
+          "type": "timestamptz default null",
+          "identityType": "timestamptz"
         }
       ],
       "returnType": "jsonb",
@@ -18429,7 +18485,27 @@ export const functions = {
       "securityDefiner": true,
       "searchPath": "public",
       "authenticatedExecute": true,
-      "sourceMigration": "supabase/migrations/20260630120000_cross_project_stock_transfer.sql",
+      "sourceMigration": "supabase/migrations/20260630140000_cross_project_transfer_deferred_receipt.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "receive_cross_project_stock_transfer",
+      "signature": "public.receive_cross_project_stock_transfer(uuid)",
+      "args": [
+        {
+          "name": "p_transfer_group_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260630140000_cross_project_transfer_deferred_receipt.sql",
       "triggerUsages": []
     }
   ]
@@ -22070,8 +22146,15 @@ export const sourceTrace = {
       "key": "public.place_cross_project_stock_transfer",
       "schema": "public",
       "name": "place_cross_project_stock_transfer",
-      "signature": "public.place_cross_project_stock_transfer(uuid, uuid, uuid, uuid, jsonb)",
-      "sourceMigration": "supabase/migrations/20260630120000_cross_project_stock_transfer.sql"
+      "signature": "public.place_cross_project_stock_transfer(uuid, uuid, uuid, uuid, jsonb, timestamptz)",
+      "sourceMigration": "supabase/migrations/20260630140000_cross_project_transfer_deferred_receipt.sql"
+    },
+    {
+      "key": "public.receive_cross_project_stock_transfer",
+      "schema": "public",
+      "name": "receive_cross_project_stock_transfer",
+      "signature": "public.receive_cross_project_stock_transfer(uuid)",
+      "sourceMigration": "supabase/migrations/20260630140000_cross_project_transfer_deferred_receipt.sql"
     }
   ],
   "policies": [
@@ -24093,6 +24176,7 @@ export const sourceTrace = {
         "supabase/migrations/20260406183000_procurement_operational_summary_requested_and_ordered_line_types.sql",
         "supabase/migrations/20260419120000_session3c_procurement_ai_in_stock_evidence.sql",
         "supabase/migrations/20260630110000_inventory_canonical_identity.sql",
+        "supabase/migrations/20260630140000_cross_project_transfer_deferred_receipt.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
@@ -24112,7 +24196,8 @@ export const sourceTrace = {
         "public.get_procurement_ai_operational_evidence",
         "public.normalize_inventory_text",
         "public.inventory_item_identity",
-        "public.place_cross_project_stock_transfer"
+        "public.place_cross_project_stock_transfer",
+        "public.receive_cross_project_stock_transfer"
       ],
       "policies": [
         "public.inventory_items.inventory_items_select",
@@ -24564,11 +24649,12 @@ export const slices = {
         "supabase/migrations/20260406183000_procurement_operational_summary_requested_and_ordered_line_types.sql",
         "supabase/migrations/20260419120000_session3c_procurement_ai_in_stock_evidence.sql",
         "supabase/migrations/20260630110000_inventory_canonical_identity.sql",
+        "supabase/migrations/20260630140000_cross_project_transfer_deferred_receipt.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
         "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
       ],
       "tableCount": 7,
-      "functionCount": 7,
+      "functionCount": 8,
       "rlsTableCount": 7
     },
     {
