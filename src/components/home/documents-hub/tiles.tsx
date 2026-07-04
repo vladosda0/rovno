@@ -10,7 +10,7 @@ import {
 import { Folder, MoreHorizontal, Edit2, Trash2, Plus, Download, Eye, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type IconComponent = ComponentType<{ className?: string }>;
+type IconComponent = ComponentType<{ className?: string; strokeWidth?: number | string }>;
 
 interface FolderTileProps {
   title: string;

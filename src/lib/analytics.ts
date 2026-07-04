@@ -74,7 +74,18 @@ export type AnalyticsEventName =
   // funnel breakdown ("how often does in_progress → done vs in_progress → blocked").
   | "task_marked_in_progress"
   | "task_marked_done"
-  | "task_marked_blocked";
+  | "task_marked_blocked"
+  // ─── Registered call sites that were missing from the union (2026-07). These
+  // events already fire in code; they were never added here because the
+  // `typecheck` script was a no-op (solution-style tsconfig checked 0 files).
+  // Sources: ChangePaymentMethodDialog, BrigadeAiFeature, legal/* pages.
+  | "billing_change_card_started"
+  | "billing_change_card_succeeded"
+  | "portfolio_feature_upgrade_clicked"
+  | "legal_contacts_viewed"
+  | "legal_offer_viewed"
+  | "legal_privacy_viewed"
+  | "legal_refund_viewed";
 
 export type AnalyticsEventPayload = Record<string, unknown>;
 

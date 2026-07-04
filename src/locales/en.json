@@ -2156,6 +2156,7 @@
   "procurement.orderStatus.draft": "Draft",
   "procurement.orderStatus.ordered": "Ordered",
   "procurement.orderStatus.voided": "Voided",
+  "procurement.orderStatus.partiallyReceived": "Partially received",
   "procurement.orderStatus.inStock": "In stock",
   "procurement.receiveOrder.title": "Receive order",
   "procurement.receiveOrder.notFound": "Order not found.",

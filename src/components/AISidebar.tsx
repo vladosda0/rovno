@@ -1384,7 +1384,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
             ]);
             return;
           }
-          if (readiness.status === "no_project") {
+          if (readiness.status === "no_project" || !ctxProject) {
             setWorkLogs((prev) => {
               const next = new Map(prev);
               next.delete(workLogId);
@@ -1498,7 +1498,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
           ]);
           return;
         }
-        if (readiness.status === "no_project") {
+        if (readiness.status === "no_project" || !ctxProject) {
           setWorkLogs((prev) => {
             const next = new Map(prev);
             next.delete(workLogId);
@@ -1677,7 +1677,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     const pendingContent = pendingGeneralProposalInput;
 
     const canRunPendingAssistant =
-      Boolean(pendingContent) &&
+      !!pendingContent &&
       nextProjectMode !== GENERAL_MODE_VALUE &&
       activeWindow === "none" &&
       !proposalQueue;

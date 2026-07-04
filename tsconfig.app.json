@@ -18,6 +18,9 @@
 
     /* Linting */
     "strict": false,
+    /* strictNullChecks on: with it off, TS cannot narrow discriminated unions
+       (every `if (!r.ok) r.error` misreports) while real null derefs pass. */
+    "strictNullChecks": true,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noImplicitAny": false,

@@ -1331,7 +1331,8 @@ export function createSupabaseOrdersSource(
         p_from_location: input.fromLocationId,
         p_to_location: input.toLocationId,
         p_lines: lines,
-        p_delivery_deadline: input.deliveryDeadline ?? null,
+        // The SQL arg is `default null`; the generator types RPC args non-nullable.
+        p_delivery_deadline: (input.deliveryDeadline ?? null) as unknown as string,
       });
       if (error) {
         throw error;

@@ -25,9 +25,10 @@ interface OrderDetailModalProps {
 
 type Translator = (key: string, options?: Record<string, unknown>) => string;
 
-function orderStatusLabel(status: "draft" | "placed" | "received" | "voided", t: Translator) {
+function orderStatusLabel(status: "draft" | "placed" | "partially_received" | "received" | "voided", t: Translator) {
   if (status === "draft") return t("procurement.orderStatus.draft");
   if (status === "placed") return t("procurement.orderStatus.ordered");
+  if (status === "partially_received") return t("procurement.orderStatus.partiallyReceived");
   if (status === "voided") return t("procurement.orderStatus.voided");
   return t("procurement.orderStatus.inStock");
 }

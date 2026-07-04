@@ -97,7 +97,7 @@ export type NotificationPreferencesPatch = Partial<NotificationPreferences>;
 export interface ProfileIdentity {
   fullName: string | null;
   avatarUrl: string | null;
-  locale: string;
+  locale: NonNullable<ProfilesUpdate["locale"]>;
   timezone: string;
 }
 export type ProfileIdentityPatch = Partial<ProfileIdentity>;

@@ -548,7 +548,9 @@ export default function ProjectTasks() {
           description: taskDesc.trim(),
           status: taskStatus,
           assigneeId: taskAssignee || currentUser.id,
-          createdBy: workspaceMode.kind === "supabase" ? workspaceMode.profileId : currentUser.id,
+          // canAuthorTaskStructure (guard above) is never true in supabase mode,
+          // so there is no profileId branch here.
+          createdBy: currentUser.id,
           deadline: taskDeadline?.toISOString(),
         });
         await invalidateProjectTasks();

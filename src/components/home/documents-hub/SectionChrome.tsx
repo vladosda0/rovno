@@ -129,7 +129,7 @@ export function SectionChrome({
                   }}
                   className={cn(
                     "rounded-md px-3 py-1.5 text-left text-body-sm transition-colors",
-                    preset === option.value && option.value !== "custom"
+                    preset === option.value
                       ? "bg-accent/10 text-accent font-medium"
                       : "hover:bg-muted",
                   )}

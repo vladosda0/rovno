@@ -38,7 +38,7 @@ const LANGUAGES: { value: string; label: string; disabled?: boolean }[] = [
   { value: "es", label: "Español", disabled: true },
 ];
 
-function normalizeSelectableLanguage(locale: string | undefined): string {
+function normalizeSelectableLanguage(locale: string | undefined): "ru" | "en" {
   const raw = locale || "en";
   // Only ru/en are real translation bundles; any placeholder (de/fr/es) or stale
   // backend value falls back to English.
@@ -246,7 +246,7 @@ export function ProfilePanel() {
           </div>
           <div className="space-y-1.5">
             <Label>{t("profile.language")}</Label>
-            <Select value={language} onValueChange={setLanguage}>
+            <Select value={language} onValueChange={(value) => setLanguage(normalizeSelectableLanguage(value))}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {LANGUAGES.map((lang) => (

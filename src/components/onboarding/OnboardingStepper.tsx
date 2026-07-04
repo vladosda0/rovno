@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Zap, Bot, Wrench, Eye, Plus, Trash2, Building2 } from "lucide-react";
 import { MVP_SHOW_AI_AUTOMATION_MODE_UI } from "@/lib/mvp-ai-automation-ui";
 import { getPlanningSource } from "@/data/planning-source";
-import { getWorkspaceSource, resolveWorkspaceMode, type ProfileUnits } from "@/data/workspace-source";
+import { getWorkspaceSource, resolveWorkspaceMode, resolveRuntimeWorkspaceMode, type ProfileUnits } from "@/data/workspace-source";
 import { useWorkspaceMode } from "@/hooks/use-mock-data";
 import { workspaceQueryKeys } from "@/hooks/use-workspace-source";
 import { planningQueryKeys } from "@/hooks/use-planning-source";
@@ -142,9 +142,10 @@ export function OnboardingStepper({ onComplete, onProjectCreated }: OnboardingSt
 
   async function persistUnits() {
     // Guest/unauthenticated have no profile_settings row to write; skip silently.
+    // Runtime resolver: it can resolve to guest, plain resolveWorkspaceMode cannot.
     if (workspaceMode.kind === "guest") return;
     const resolvedMode =
-      workspaceMode.kind === "pending-supabase" ? await resolveWorkspaceMode() : workspaceMode;
+      workspaceMode.kind === "pending-supabase" ? await resolveRuntimeWorkspaceMode() : workspaceMode;
     if (resolvedMode.kind === "guest") return;
     const workspaceSource = await getWorkspaceSource(resolvedMode);
     await workspaceSource.updateProfilePreferences({ units: units as ProfileUnits });
