@@ -341,25 +341,27 @@ describe("ProjectParticipants", () => {
         } as never],
         stages: [],
       });
+      const ownerSeam = {
+        projectId: "project-1",
+        profileId,
+        membership: {
+          project_id: "project-1",
+          user_id: profileId,
+          role: "owner",
+          ai_access: "project_pool",
+          finance_visibility: "detail",
+          credit_limit: 500,
+          used_credits: 0,
+          internal_docs_visibility: "edit",
+        } as never,
+        project: undefined,
+      };
       vi.spyOn(permissions, "usePermission").mockReturnValue({
-        seam: {
-          projectId: "project-1",
-          profileId,
-          membership: {
-            project_id: "project-1",
-            user_id: profileId,
-            role: "owner",
-            ai_access: "project_pool",
-            finance_visibility: "detail",
-            credit_limit: 500,
-            used_credits: 0,
-            internal_docs_visibility: "edit",
-          } as never,
-          project: undefined,
-        },
+        seam: ownerSeam,
         can: () => true,
-        // Owner exercises every path in this suite; the contract resolves all owner actions to enabled.
-        actionState: () => "enabled",
+        // Contract-derived, not hardcoded: the owner seam resolves every
+        // participant action to enabled today, and stays honest if it stops.
+        actionState: (domain, action) => permissions.seamResolveActionState(ownerSeam, domain, action),
         role: "owner",
         isLoading: false,
       });
