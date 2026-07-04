@@ -392,7 +392,10 @@ export async function resolveExistingHeroHRItemsByLineage(
 
   const rows = data ?? [];
   const rowById = new Map(rows.map((row) => [row.id, row]));
-  const rowByEstimateLineId = new Map<string, HRItemRow>();
+  const rowByEstimateLineId = new Map<
+    string,
+    Pick<HRItemRow, "id" | "estimate_resource_line_id" | "estimate_work_id" | "task_id" | "title" | "description" | "compensation_type" | "planned_cost_cents" | "actual_cost_cents" | "status" | "start_at" | "end_at" | "created_by">
+  >();
   rows.forEach((row) => {
     if (!row.estimate_resource_line_id) {
       return;

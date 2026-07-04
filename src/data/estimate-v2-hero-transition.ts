@@ -46,6 +46,12 @@ import {
 import { resolveRuntimeWorkspaceMode } from "@/data/workspace-source";
 import type { EstimateV2Snapshot, ResourceLineType } from "@/types/estimate-v2";
 import { resourceLineTypeToPersisted } from "@/lib/estimate-v2/resource-type-contract";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database as HeroDatabase } from "../../backend-truth/generated/supabase-types";
+
+// The shared runtime client is typed against the app-local schema snapshot; every
+// hero helper types its client against backend-truth. Same client instance.
+const heroClient = supabase as unknown as SupabaseClient<HeroDatabase>;
 
 const RESOURCE_TYPE_ORDER: Record<ResourceLineType, number> = {
   material: 0,
@@ -529,10 +535,10 @@ async function cleanupStaleDownstreamRows(
     taskIds: string[];
   },
 ): Promise<void> {
-  await deleteHeroTaskChecklistItems(supabase, staleIds.checklistItemIds);
-  await deleteHeroProcurementItems(supabase, staleIds.procurementItemIds);
-  await deleteHeroHRItems(supabase, staleIds.hrItemIds);
-  await deleteHeroTasks(supabase, staleIds.taskIds);
+  await deleteHeroTaskChecklistItems(heroClient, staleIds.checklistItemIds);
+  await deleteHeroProcurementItems(heroClient, staleIds.procurementItemIds);
+  await deleteHeroHRItems(heroClient, staleIds.hrItemIds);
+  await deleteHeroTasks(heroClient, staleIds.taskIds);
 }
 
 export async function persistEstimateV2HeroTransition(
@@ -571,10 +577,10 @@ export async function persistEstimateV2HeroTransition(
   });
   let ids = buildIds(plan, fingerprint, draftIds);
 
-  const exactEvent = await getHeroTransitionEventById(supabase, ids.eventId);
+  const exactEvent = await getHeroTransitionEventById(heroClient, ids.eventId);
   const latestEvent = exactEvent
     ? null
-    : await getLatestHeroTransitionEvent(supabase, plan.projectId);
+    : await getLatestHeroTransitionEvent(heroClient, plan.projectId);
   const eventRecoveryIds = exactEvent?.payload.ids
     ?? (latestEvent?.payload.fingerprint === fingerprint ? latestEvent.payload.ids : null);
 
@@ -599,7 +605,7 @@ export async function persistEstimateV2HeroTransition(
 
   try {
     const stageMapping = await ensureProjectStages(
-      supabase,
+      heroClient,
       plan.stages.map((stage) => ({
         localStageId: stage.localStageId,
         remoteStageId: ids.stageIdByLocalStageId[stage.localStageId],
@@ -633,7 +639,7 @@ export async function persistEstimateV2HeroTransition(
   }
 
   try {
-    const rootResult = await ensureProjectEstimateRoot(supabase, {
+    const rootResult = await ensureProjectEstimateRoot(heroClient, {
       projectId: plan.projectId,
       estimateId: ids.estimateId,
       title: plan.projectTitle,
@@ -647,7 +653,7 @@ export async function persistEstimateV2HeroTransition(
       );
     }
 
-    const versionResult = await ensureEstimateCurrentVersion(supabase, {
+    const versionResult = await ensureEstimateCurrentVersion(heroClient, {
       estimateId: ids.estimateId,
       versionId: ids.versionId,
       createdBy: mode.profileId,
@@ -668,7 +674,7 @@ export async function persistEstimateV2HeroTransition(
     });
 
     await upsertEstimateWorks(
-      supabase,
+      heroClient,
       plan.works.map((work) => ({
         id: ids.workIdByLocalWorkId[work.localWorkId],
         estimate_version_id: ids.versionId,
@@ -682,7 +688,7 @@ export async function persistEstimateV2HeroTransition(
     );
 
     await upsertEstimateResourceLines(
-      supabase,
+      heroClient,
       plan.lines.map((line) => ({
         id: ids.lineIdByLocalLineId[line.localLineId],
         estimate_work_id: ids.workIdByLocalWorkId[line.localWorkId],
@@ -695,7 +701,7 @@ export async function persistEstimateV2HeroTransition(
       })),
     );
 
-    await updateProjectEstimateRootStatus(supabase, {
+    await updateProjectEstimateRootStatus(heroClient, {
       estimateId: ids.estimateId,
       status: "approved",
     });
@@ -729,9 +735,9 @@ export async function persistEstimateV2HeroTransition(
     await cleanupStaleDownstreamRows(staleDownstreamIds);
 
     const [taskRows, checklistRows] = await Promise.all([
-      loadHeroTasksForProject(supabase, plan.projectId),
+      loadHeroTasksForProject(heroClient, plan.projectId),
       loadHeroTaskChecklistItemsByEstimateWorkIds(
-        supabase,
+        heroClient,
         Object.values(ids.workIdByLocalWorkId),
       ),
     ]);
@@ -755,7 +761,7 @@ export async function persistEstimateV2HeroTransition(
     const existingTaskRowById = new Map(taskRows.map((row) => [row.id, row]));
 
     await upsertHeroTasks(
-      supabase,
+      heroClient,
       plan.works.map((work) => ({
         id: ids.taskIdByLocalWorkId[work.localWorkId],
         projectId: plan.projectId,
@@ -782,7 +788,7 @@ export async function persistEstimateV2HeroTransition(
     });
 
     await upsertTaskChecklistItems(
-      supabase,
+      heroClient,
       plan.works.flatMap((work) => (
         (sortedLinesByWorkId.get(work.localWorkId) ?? []).map((line, index) => {
           const existingChecklistRow = checklistRows.find((row) => (
@@ -813,7 +819,7 @@ export async function persistEstimateV2HeroTransition(
   }
 
   try {
-    const existingProcurementByEstimateLineId = await loadHeroProcurementItemsByEstimateLineId(supabase, {
+    const existingProcurementByEstimateLineId = await loadHeroProcurementItemsByEstimateLineId(heroClient, {
       projectId: plan.projectId,
       estimateResourceLineIds: plan.lines.map((line) => ids.lineIdByLocalLineId[line.localLineId]),
     });
@@ -838,7 +844,7 @@ export async function persistEstimateV2HeroTransition(
     });
 
     await upsertHeroProcurementItems(
-      supabase,
+      heroClient,
       plan.lines
         .filter((line) => line.type === "material" || line.type === "tool")
         .map((line) => {
@@ -873,7 +879,7 @@ export async function persistEstimateV2HeroTransition(
 
   try {
     const workByLocalId = new Map(plan.works.map((work) => [work.localWorkId, work]));
-    const existingHrRowsByLocalLineId = await resolveExistingHeroHRItemsByLineage(supabase, {
+    const existingHrRowsByLocalLineId = await resolveExistingHeroHRItemsByLineage(heroClient, {
       projectId: plan.projectId,
       items: plan.lines
         .filter((line) => line.type === "labor" || line.type === "subcontractor")
@@ -905,7 +911,7 @@ export async function persistEstimateV2HeroTransition(
     });
 
     await upsertHeroHRItems(
-      supabase,
+      heroClient,
       plan.lines
         .filter((line) => line.type === "labor" || line.type === "subcontractor")
         .map((line) => {
@@ -942,7 +948,7 @@ export async function persistEstimateV2HeroTransition(
   }
 
   try {
-    await insertHeroTransitionEvent(supabase, {
+    await insertHeroTransitionEvent(heroClient, {
       id: ids.eventId,
       projectId: plan.projectId,
       actorProfileId: mode.profileId,
