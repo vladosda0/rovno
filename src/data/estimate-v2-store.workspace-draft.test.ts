@@ -216,7 +216,9 @@ describe("estimate-v2 workspace drafts", () => {
     createStage(projectId, { title: "Local pending stage" });
 
     // Gate the in-flight non-forced hydrate's draft load so it stays in flight while we fire forced.
-    let releaseNonForced: (() => void) | null = null;
+    // Definite-assignment: the promise executor runs synchronously; TS's CFA
+    // cannot see closure assignments and would otherwise narrow this to null.
+    let releaseNonForced!: () => void;
     const gate = new Promise<void>((resolve) => { releaseNonForced = resolve; });
     loadCurrentEstimateDraftMock.mockImplementationOnce(async () => {
       await gate;
@@ -914,7 +916,7 @@ describe("estimate-v2 workspace drafts", () => {
   it("defers the background draft sync until the hero transition finishes", async () => {
     vi.useFakeTimers();
     const projectId = "project-remote-1";
-    let resolvePersist: ((value: unknown) => void) | null = null;
+    let resolvePersist!: (value: unknown) => void;
 
     persistEstimateV2HeroTransitionMock.mockImplementation(() => (
       new Promise((resolve) => {
@@ -1368,7 +1370,7 @@ describe("estimate-v2 workspace drafts", () => {
   it("skips stale HR projection writes when a newer estimate edit lands mid-sync", async () => {
     vi.useFakeTimers();
     const projectId = "project-remote-1";
-    let resolveFirstTaskSync: ((value: Record<string, string>) => void) | null = null;
+    let resolveFirstTaskSync!: (value: Record<string, string>) => void;
 
     loadCurrentEstimateDraftMock.mockResolvedValue({
       estimate: {
@@ -1500,7 +1502,7 @@ describe("estimate-v2 workspace drafts", () => {
   it("does not let stale remote hydration overwrite a newer local line title while sync is in flight", async () => {
     vi.useFakeTimers();
     const projectId = "project-remote-1";
-    let resolveFirstTaskSync: ((value: Record<string, string>) => void) | null = null;
+    let resolveFirstTaskSync!: (value: Record<string, string>) => void;
 
     loadCurrentEstimateDraftMock.mockResolvedValue({
       estimate: {

@@ -197,6 +197,8 @@ describe("useProjectDocumentsState/useProjectMedia", () => {
       prepareMediaUpload: vi.fn(),
       finalizeMediaUpload: vi.fn(),
       uploadBytes: vi.fn(),
+      deleteProjectMedia: vi.fn(),
+      updateProjectMediaCaption: vi.fn(),
     };
 
     authenticateRuntimeAuth();

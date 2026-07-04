@@ -19,7 +19,7 @@ type MockProcurementItemRow = {
   supplier_preferred: string | null;
   location_preferred_id: string | null;
   actual_unit_price_cents: number | null;
-  status: "requested" | "ordered" | "cancelled";
+  status: "requested" | "ordered" | "partially_received" | "received" | "cancelled";
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -217,6 +217,11 @@ function orderRow(
     created_by: "profile-1",
     created_at: "2026-03-02T00:00:00.000Z",
     updated_at: "2026-03-03T00:00:00.000Z",
+    transfer_group_id: null,
+    counterparty_project_id: null,
+    counterparty_location_id: null,
+    transfer_direction: null,
+    transfer_payload: null,
     ...overrides,
   };
 }
@@ -228,6 +233,7 @@ function orderLineRow(
     id: "order-line-1",
     order_id: "order-1",
     procurement_item_id: "procurement-item-1",
+    item_type: null,
     title: "Copper cable",
     quantity: 7,
     unit: "m",
@@ -253,6 +259,7 @@ function movementRow(
     notes: null,
     created_by: "profile-1",
     created_at: "2026-03-03T00:00:00.000Z",
+    transfer_group_id: null,
     ...overrides,
   };
 }

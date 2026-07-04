@@ -42,7 +42,7 @@ const BASE_INPUTS: AIContextInputs = {
     projectTitle: "Test Project",
     currency: "RUB",
     hasEstimate: true,
-    status: "active",
+    status: "in_work",
     stageCount: 2,
     workCount: 5,
     lineCount: 10,
@@ -52,6 +52,15 @@ const BASE_INPUTS: AIContextInputs = {
     varianceCents: 0,
     percentSpent: 24,
     percentProfitability: 30,
+    contractValueCents: 500_000_00,
+    costCents: 350_000_00,
+    marginCents: 150_000_00,
+    percentUtilization: 34,
+    tasksDone: 1,
+    tasksTotal: 3,
+    percentComplete: 33,
+    daysToEnd: null,
+    behindScheduleDays: 0,
   },
   procurementSummary: {
     projectId: "project-1",
@@ -69,7 +78,6 @@ const BASE_INPUTS: AIContextInputs = {
   },
   events: [],
   memberCount: 4,
-  userCredits: 30,
 };
 
 // ---------------------------------------------------------------------------
@@ -140,7 +148,7 @@ describe("buildAIProjectContext — estimate finance gating", () => {
   it("includes estimate status for summary finance visibility", () => {
     const pack = buildAIProjectContext(seamForRole("viewer", "summary"), BASE_INPUTS);
     expect(pack.estimate).not.toBeNull();
-    expect(pack.estimate!.status).toBe("active");
+    expect(pack.estimate!.status).toBe("in_work");
     expect(pack.estimate!.hasEstimate).toBe(true);
   });
 
@@ -155,7 +163,7 @@ describe("buildAIProjectContext — estimate finance gating", () => {
   it("includes full estimate context for detail finance visibility", () => {
     const pack = buildAIProjectContext(seamForRole("owner", "detail"), BASE_INPUTS);
     expect(pack.estimate).not.toBeNull();
-    expect(pack.estimate!.status).toBe("active");
+    expect(pack.estimate!.status).toBe("in_work");
   });
 });
 

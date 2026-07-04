@@ -22,7 +22,7 @@ const t = (key: string, options?: Record<string, unknown>): string => {
   for (const [name, value] of Object.entries(options)) {
     const placeholder = `{{${name}}}`;
     if (out.includes(placeholder)) {
-      out = out.replaceAll(placeholder, String(value));
+      out = out.split(placeholder).join(String(value));
     } else {
       out = `${out} ${String(value)}`;
     }

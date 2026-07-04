@@ -189,7 +189,6 @@ describe("estimate-v2 finance read model", () => {
       type: "material",
       qtyMilli: 1_000,
       costUnitCents: 90_000,
-      receivedCents: 9_000_000,
     });
     updateEstimateV2Project("project-1", { receivedCents: 9_000_000 });
 
@@ -261,7 +260,7 @@ function fixtureWork(partial: Partial<EstimateV2Work> = {}): EstimateV2Work {
     plannedStart: null,
     plannedEnd: null,
     taskId: null,
-    status: "planned",
+    status: "not_started",
     createdAt: "2025-01-01T00:00:00.000Z",
     updatedAt: "2025-01-01T00:00:00.000Z",
     ...partial,

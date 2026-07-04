@@ -206,7 +206,7 @@ describe("Track 1 estimate export + finance visibility seams", () => {
         project_id: "project-1",
         user_id: "profile-1",
         role,
-        viewer_regime: null,
+        viewer_regime: undefined,
         ai_access: "consult_only",
         finance_visibility: finance_visibility ?? "summary",
         credit_limit: 0,
@@ -235,7 +235,7 @@ describe("seamCanViewSensitiveDetail", () => {
     return {
       projectId: "project-1",
       profileId: "profile-1",
-      project: null,
+      project: undefined,
       membership: null,
       ...partial,
     };

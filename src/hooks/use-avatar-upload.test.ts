@@ -3,10 +3,10 @@ import { renderHook } from "@testing-library/react";
 
 const getSessionMock = vi.fn();
 const getPublicUrlMock = vi.fn();
-const storageFromMock = vi.fn(() => ({ getPublicUrl: getPublicUrlMock }));
+const storageFromMock = vi.fn((_bucket: string) => ({ getPublicUrl: getPublicUrlMock }));
 const optimizeMock = vi.fn();
 const uploadMock = vi.fn();
-const isImageMock = vi.fn(() => true);
+const isImageMock = vi.fn((_file: File) => true);
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
