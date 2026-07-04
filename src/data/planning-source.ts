@@ -395,7 +395,9 @@ function createBrowserPlanningSource(mode: "demo" | "local"): PlanningSource {
   };
 }
 
-export function mapProjectStageRowToStage(row: ProjectStageRow): Stage {
+export function mapProjectStageRowToStage(
+  row: Pick<ProjectStageRow, "id" | "project_id" | "title" | "description" | "sort_order" | "status">,
+): Stage {
   return {
     id: row.id,
     project_id: row.project_id,
@@ -406,7 +408,9 @@ export function mapProjectStageRowToStage(row: ProjectStageRow): Stage {
   };
 }
 
-export function mapTaskRowToTask(row: TaskRow): Task {
+export function mapTaskRowToTask(
+  row: Pick<TaskRow, "id" | "project_id" | "stage_id" | "estimate_work_id" | "title" | "description" | "status" | "assignee_profile_id" | "created_by" | "created_at" | "start_at" | "due_at">,
+): Task {
   return {
     id: row.id,
     project_id: row.project_id,
@@ -501,7 +505,7 @@ function mapEstimateResourceTypeToChecklistType(
 }
 
 function mapTaskChecklistItemRowToChecklistItem(
-  row: TaskChecklistItemRow,
+  row: Pick<TaskChecklistItemRow, "id" | "task_id" | "title" | "is_done" | "procurement_item_id" | "estimate_resource_line_id" | "estimate_work_id" | "sort_order">,
   lineById: Map<string, Pick<EstimateResourceLineRow, "id" | "resource_type" | "quantity" | "unit">>,
 ): ChecklistItem {
   const linkedLine = row.estimate_resource_line_id
