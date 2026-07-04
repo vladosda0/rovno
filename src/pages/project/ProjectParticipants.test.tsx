@@ -302,7 +302,11 @@ describe("ProjectParticipants", () => {
   describe("Invite email delivery (Supabase)", () => {
     beforeEach(() => {
       vi.restoreAllMocks();
-      vi.spyOn(toastModule, "toast").mockImplementation(() => {});
+      vi.spyOn(toastModule, "toast").mockImplementation(() => ({
+        id: "toast-mock",
+        dismiss: () => {},
+        update: () => {},
+      }));
       vi.spyOn(useMockData, "useWorkspaceMode").mockReturnValue({ kind: "supabase", profileId });
       vi.spyOn(useMockData, "useCurrentUser").mockReturnValue({
         id: profileId,
@@ -335,6 +339,7 @@ describe("ProjectParticipants", () => {
           used_credits: 0,
           internal_docs_visibility: "edit",
         } as never],
+        stages: [],
       });
       vi.spyOn(permissions, "usePermission").mockReturnValue({
         seam: {
@@ -353,7 +358,10 @@ describe("ProjectParticipants", () => {
           project: undefined,
         },
         can: () => true,
+        // Owner exercises every path in this suite; the contract resolves all owner actions to enabled.
+        actionState: () => "enabled",
         role: "owner",
+        isLoading: false,
       });
     });
 

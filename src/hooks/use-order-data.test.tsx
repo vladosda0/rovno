@@ -140,6 +140,9 @@ describe("order read hooks", () => {
       createDraftSupplierOrder: vi.fn(),
       placeSupplierOrder: vi.fn(),
       receiveSupplierOrder: vi.fn(),
+      placeStockTransfer: vi.fn(),
+      placeCrossProjectStockTransfer: vi.fn(),
+      receiveCrossProjectStockTransfer: vi.fn(),
     };
 
     authenticateRuntimeAuth();

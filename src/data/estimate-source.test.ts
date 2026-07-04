@@ -215,6 +215,7 @@ describe("saveCurrentEstimateDraft", () => {
             created_by: "profile-1",
             created_at: "2026-03-01T00:00:00.000Z",
             updated_at: "2026-03-02T00:00:00.000Z",
+            execution_status: null,
           },
         ],
         estimate_versions: [
@@ -225,6 +226,7 @@ describe("saveCurrentEstimateDraft", () => {
             is_current: true,
             created_by: "profile-1",
             created_at: "2026-03-01T00:00:00.000Z",
+            client_vat_bps: null,
           },
         ],
         project_stages: [
@@ -236,6 +238,7 @@ describe("saveCurrentEstimateDraft", () => {
             sort_order: 1,
             status: "open",
             discount_bps: 0,
+            system_stage_article_id: null,
             created_at: "2026-03-01T00:00:00.000Z",
             updated_at: "2026-03-02T00:00:00.000Z",
           },
@@ -249,6 +252,9 @@ describe("saveCurrentEstimateDraft", () => {
             description: null,
             sort_order: 1,
             planned_cost_cents: 0,
+            planned_start: null,
+            planned_end: null,
+            system_work_article_id: null,
             created_at: "2026-03-01T00:00:00.000Z",
           },
         ],

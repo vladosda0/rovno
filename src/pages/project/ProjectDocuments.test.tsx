@@ -164,7 +164,7 @@ describe("ProjectDocuments", () => {
 
     const emptyState = screen.getByText("No documents").closest(".rounded-card");
     expect(emptyState).toBeTruthy();
-    if (!emptyState) return;
+    if (!(emptyState instanceof HTMLElement)) return;
 
     fireEvent.click(within(emptyState).getByRole("button", { name: "Upload a document" }));
 

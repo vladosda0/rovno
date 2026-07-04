@@ -121,6 +121,8 @@ describe("useProjectProcurementItems", () => {
     const source = {
       mode: "supabase" as const,
       getProjectProcurementItems: vi.fn(() => itemsPromise),
+      updateProjectProcurementItem: vi.fn(),
+      cancelProcurementItem: vi.fn(),
     };
 
     authenticateRuntimeAuth();
