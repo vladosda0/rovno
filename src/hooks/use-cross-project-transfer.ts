@@ -39,8 +39,14 @@ export function useReceiveCrossProjectTransfer() {
       setReceivingId(order.id);
       try {
         const source = await getOrdersSource(workspaceMode);
-        await source.receiveCrossProjectStockTransfer(order.transferGroupId);
+        const result = await source.receiveCrossProjectStockTransfer(order.transferGroupId);
         const projectIds = [order.projectId, order.counterpartyProjectId].filter(
+          (id): id is string => Boolean(id),
+        );
+        // Both linked orders (this 'in' order + its paired 'out' order) flip to 'received', so
+        // refresh both order-detail caches, not just the one acted on — otherwise a directly-open
+        // source-side (out) detail view stays stale at 'placed'.
+        const orderIds = [order.id, result.fromOrderId, result.toOrderId].filter(
           (id): id is string => Boolean(id),
         );
         await Promise.all([
@@ -51,7 +57,9 @@ export function useReceiveCrossProjectTransfer() {
             queryClient.invalidateQueries({ queryKey: inventoryQueryKeys.projectStock(profileId, pid) }),
             queryClient.invalidateQueries({ queryKey: inventoryQueryKeys.projectLocations(profileId, pid) }),
           ]),
-          queryClient.invalidateQueries({ queryKey: orderQueryKeys.orderById(profileId, order.id) }),
+          ...orderIds.map((oid) =>
+            queryClient.invalidateQueries({ queryKey: orderQueryKeys.orderById(profileId, oid) }),
+          ),
           queryClient.invalidateQueries({
             queryKey: orderQueryKeys.placedSupplierOrdersAllProjects(profileId),
           }),

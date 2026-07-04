@@ -347,6 +347,43 @@ describe("procurement fulfillment utils", () => {
     expect(byLocation.get("loc-wh")?.items[0]?.qty).toBe(4);
   });
 
+  it("does not count a placed (not-yet-received) cross-project transfer as in-stock", () => {
+    const projectId = `phantom-${Date.now()}`;
+    const item = buildTestRequestLine(projectId, `req-phantom-${Date.now()}`, 10);
+
+    const orders: OrderWithLines[] = [
+      {
+        id: "transfer-in-placed",
+        projectId,
+        status: "placed",
+        kind: "stock",
+        transferDirection: "in",
+        counterpartyProjectId: "project-b",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        lines: [
+          {
+            id: "line-t",
+            orderId: "transfer-in-placed",
+            procurementItemId: item.id,
+            qty: 10,
+            receivedQty: 0,
+            unit: "pcs",
+            plannedUnitPrice: 100,
+            actualUnitPrice: 120,
+          },
+        ],
+        receiveEvents: [],
+      },
+    ];
+
+    const locations: InventoryLocation[] = [{ id: "loc-site", name: "Site", isDefault: true }];
+
+    // The deferred transfer holds no real stock until received, so no in-stock group should appear.
+    const groups = computeInStockByLocation(projectId, [item], orders, locations);
+    expect(groups.length).toBe(0);
+  });
+
   it("computes last received date from positive receipt events only", () => {
     const projectId = `last-received-${Date.now()}`;
     const item = buildTestRequestLine(projectId, `req-last-${Date.now()}`, 10);
