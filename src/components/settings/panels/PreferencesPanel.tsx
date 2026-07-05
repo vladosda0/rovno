@@ -38,7 +38,7 @@ const DATE_FORMATS = [
   { value: "yyyy-MM-dd", label: "YYYY-MM-DD" },
 ];
 
-const AI_LANGUAGES = [
+const AI_LANGUAGES: Array<{ value: string; label?: string; labelKey?: string }> = [
   { value: "ru", label: "Русский" },
   { value: "en", label: "English" },
   { value: "auto", labelKey: "preferences.aiLanguage.auto" },
@@ -169,7 +169,7 @@ export function PreferencesPanel() {
               <SelectContent>
                 {AI_LANGUAGES.map((l) => (
                   <SelectItem key={l.value} value={l.value}>
-                    {"labelKey" in l ? t(l.labelKey) : l.label}
+                    {l.labelKey ? t(l.labelKey) : l.label}
                   </SelectItem>
                 ))}
               </SelectContent>

@@ -1,5 +1,7 @@
 // StroyAgent Domain Entities
 
+import type { ResourceLineType } from "./estimate-v2";
+
 export type UserPlan = "free" | "pro" | "business";
 export type MemberRole = "owner" | "co_owner" | "contractor" | "viewer";
 export type AIAccess = "none" | "consult_only" | "project_pool";
@@ -15,7 +17,7 @@ export type ProposalStatus = "submitted" | "accepted" | "rejected";
 export type ProcurementStatus = "to_buy" | "ordered" | "in_stock";
 export type ProcurementCreatedFrom = "estimate" | "task_material" | "manual" | "ai";
 export type ProcurementItemType = "material" | "tool" | "other";
-export type OrderStatus = "draft" | "placed" | "received" | "voided";
+export type OrderStatus = "draft" | "placed" | "partially_received" | "received" | "voided";
 export type OrderKind = "supplier" | "stock";
 export type ChecklistItemType = "subtask" | "material" | "tool";
 /** Binary document/media visibility; matches DB `visibility_class` check constraint. */
@@ -119,7 +121,7 @@ export interface ChecklistItem {
   procurementItemId?: string | null;
   estimateV2LineId?: string;
   estimateV2WorkId?: string;
-  estimateV2ResourceType?: "material" | "tool" | "labor" | "subcontractor" | "other";
+  estimateV2ResourceType?: ResourceLineType;
   estimateV2QtyMilli?: number;
   estimateV2Unit?: string;
   /** Linked `estimate_resource_lines.assignee_profile_id` when loaded from planning (refresh-safe). */
@@ -287,6 +289,12 @@ export interface Order {
   note?: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Cross-project transfer linkage (set on the two linked transfer orders; null on supplier
+   *  and same-project stock orders). `transferDirection` is this order's side of the move. */
+  transferGroupId?: string | null;
+  transferDirection?: "in" | "out" | null;
+  counterpartyProjectId?: string | null;
+  counterpartyLocationId?: string | null;
 }
 
 export interface OrderLine {

@@ -16,6 +16,7 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 - `supabase/migrations/20260406183000_procurement_operational_summary_requested_and_ordered_line_types.sql`
 - `supabase/migrations/20260419120000_session3c_procurement_ai_in_stock_evidence.sql`
 - `supabase/migrations/20260630110000_inventory_canonical_identity.sql`
+- `supabase/migrations/20260630140000_cross_project_transfer_deferred_receipt.sql`
 - `supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql`
 - `supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql`
 
@@ -139,6 +140,7 @@ Triggers:
 | `counterparty_project_id` | `uuid` | yes |   | no |
 | `counterparty_location_id` | `uuid` | yes |   | no |
 | `transfer_direction` | `text` | yes |   | no |
+| `transfer_payload` | `jsonb` | yes |   | no |
 
 Constraints:
 - unnamed check (expression `status in ('draft', 'placed', 'partially_received', 'received', 'cancelled')`)
@@ -166,6 +168,7 @@ Triggers:
 | `unit_price_cents` | `bigint` | yes |   | no |
 | `total_price_cents` | `bigint` | yes |   | no |
 | `created_at` | `timestamptz` | no | `now()` | no |
+| `item_type` | `text` | yes |   | no |
 
 Constraints:
 - unnamed check (expression `quantity >= 0`)
@@ -191,6 +194,7 @@ Indexes:
 | `notes` | `text` | yes |   | no |
 | `created_by` | `uuid` | yes |   | no |
 | `created_at` | `timestamptz` | no | `now()` | no |
+| `transfer_group_id` | `uuid` | yes |   | no |
 
 Constraints:
 - unnamed check (expression `movement_type in ('receipt', 'issue', 'transfer', 'adjustment')`)
@@ -201,6 +205,7 @@ Indexes:
 - `idx_inventory_movements_inventory_location_id` on (`inventory_location_id`)
 - `idx_inventory_movements_order_line_id` on (`order_line_id`)
 - `idx_inventory_movements_procurement_item_id` on (`procurement_item_id`)
+- `idx_inventory_movements_transfer_group_id` on (`transfer_group_id`), where `transfer_group_id is not null`
 
 Triggers:
 - `on_inventory_movements_sync_balances`: after insert or update or delete, executes `public.sync_inventory_balances()`
@@ -244,7 +249,8 @@ Triggers:
 | `public.get_procurement_ai_operational_evidence(uuid, integer, integer)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260419120000_session3c_procurement_ai_in_stock_evidence.sql` |
 | `public.normalize_inventory_text(text)` | `text` | no | `helper` | `supabase/migrations/20260630110000_inventory_canonical_identity.sql` |
 | `public.inventory_item_identity(text, text, text)` | `text` | no | `helper` | `supabase/migrations/20260630110000_inventory_canonical_identity.sql` |
-| `public.place_cross_project_stock_transfer(uuid, uuid, uuid, uuid, jsonb)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260630120000_cross_project_stock_transfer.sql` |
+| `public.place_cross_project_stock_transfer(uuid, uuid, uuid, uuid, jsonb, timestamptz)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260630140000_cross_project_transfer_deferred_receipt.sql` |
+| `public.receive_cross_project_stock_transfer(uuid)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260630140000_cross_project_transfer_deferred_receipt.sql` |
 
 ## RLS and Grants
 

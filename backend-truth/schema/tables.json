@@ -4609,6 +4609,16 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "transfer_payload",
+          "sqlType": "jsonb",
+          "tsType": "Json",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -4795,6 +4805,16 @@
           "tsType": "string",
           "nullable": false,
           "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "item_type",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
           "primaryKey": false,
           "unique": false,
           "references": null
@@ -5014,6 +5034,16 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "transfer_group_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -5083,6 +5113,17 @@
           "where": null,
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+        },
+        {
+          "name": "idx_inventory_movements_transfer_group_id",
+          "unique": false,
+          "method": null,
+          "expressions": [
+            "transfer_group_id"
+          ],
+          "where": "transfer_group_id is not null",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260630140000_cross_project_transfer_deferred_receipt.sql"
         }
       ],
       "triggers": [

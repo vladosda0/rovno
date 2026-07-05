@@ -1,0 +1,9 @@
+# Pin the hook to Node 22 (Homebrew node@22), matching dev, CI, and `npm test`;
+# see pre-commit for why the unversioned Homebrew node breaks native modules.
+export PATH="/opt/homebrew/opt/node@22/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+export PATH="$(git rev-parse --show-toplevel)/node_modules/.bin:$PATH"
+
+# Full typecheck before anything leaves the machine. Pre-commit stays fast
+# (vitest related only); the ~15s tsc cost is paid once per push instead.
+echo "pre-push: npm run typecheck"
+npm run typecheck

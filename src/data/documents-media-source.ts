@@ -767,7 +767,7 @@ export async function prepareSupabaseMediaUpload(
       p_mime_type: input.mimeType,
       p_size_bytes: input.sizeBytes,
       p_caption: input.caption ?? null,
-    });
+    } as DocumentsMediaDatabase["public"]["Functions"]["prepare_project_media_upload"]["Args"]);
     data = retry.data;
     error = retry.error;
   }
@@ -840,7 +840,7 @@ export async function finalizeSupabaseMediaUpload(
   if (shouldRetryWithLegacyFinalizeSignature) {
     const retry = await supabase.rpc("finalize_project_media_upload", {
       p_upload_intent_id: uploadIntentId,
-    });
+    } as DocumentsMediaDatabase["public"]["Functions"]["finalize_project_media_upload"]["Args"]);
     data = retry.data;
     error = retry.error;
   }

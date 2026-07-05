@@ -16,9 +16,13 @@ import { MemoryRouter } from "react-router-dom";
 
 const { liveFlag, invokeLiveTextAssistantMock } = vi.hoisted(() => {
   const liveFlag = { current: false };
-  const invokeLiveTextAssistantMock = vi.fn(async () => ({
+  // Return the contract type (not the inferred literal shape) so tests can
+  // resolve minimal results and other grounding states.
+  const invokeLiveTextAssistantMock = vi.fn(async (
+    ..._args: unknown[]
+  ): Promise<import("@/lib/ai-assistant-contract").LiveTextAssistantResult> => ({
     explanation: "LIVE_ASSISTANT_EXPLANATION_BODY",
-    grounding: "project_context_grounded" as const,
+    grounding: "project_context_grounded",
     sources: [{ kind: "project_summary" as const, label: "SRC_PROJECT_A" }],
     workProposal: {
       proposalTitle: "PREVIEW_TITLE",
@@ -163,9 +167,11 @@ describe("AISidebar assistant paths", () => {
     });
 
     it("uses answer-focused work log copy for hosted consult turns", async () => {
-      let resolveAssistant: ((value: Awaited<ReturnType<typeof invokeLiveTextAssistantMock>>) => void) | null = null;
+      // The contract result type, not the mock's inferred return: the test
+      // resolves a minimal result without sources/workProposal.
+      let resolveAssistant!: (value: import("@/lib/ai-assistant-contract").LiveTextAssistantResult) => void;
       invokeLiveTextAssistantMock.mockImplementationOnce(() =>
-        new Promise((resolve) => {
+        new Promise<import("@/lib/ai-assistant-contract").LiveTextAssistantResult>((resolve) => {
           resolveAssistant = resolve;
         })
       );

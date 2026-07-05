@@ -86,7 +86,7 @@ export function PhotoViewer({ photo, open, onOpenChange, source: _source, allPho
   }
 
   function handleTaskClick() {
-    if (!task) return;
+    if (!photo || !task) return;
     const navProjectId = photo.project_id || routeProjectId;
     if (!navProjectId) return;
     navigate(`/project/${navProjectId}/tasks`, {

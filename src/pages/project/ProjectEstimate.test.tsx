@@ -260,6 +260,7 @@ function seedEstimateLine(projectId: string) {
   });
 
   expect(line).not.toBeNull();
+  if (!line) return null;
   return { stage, work, line };
 }
 
@@ -430,7 +431,7 @@ describe("ProjectEstimate", () => {
     });
 
     await act(async () => {
-      fireEvent.click(await screen.findByRole("menuitem", { name: "Material", timeout: 10_000 }));
+      fireEvent.click(await screen.findByRole("menuitem", { name: "Material" }, { timeout: 10_000 }));
       await flushUi();
     });
 
@@ -504,7 +505,7 @@ describe("ProjectEstimate", () => {
     });
 
     await act(async () => {
-      fireEvent.click(await screen.findByRole("menuitem", { name: "Material", timeout: 10_000 }));
+      fireEvent.click(await screen.findByRole("menuitem", { name: "Material" }, { timeout: 10_000 }));
       await flushUi();
     });
 
@@ -806,7 +807,7 @@ describe("ProjectEstimate", () => {
 
     const footer = screen.getByText("Total across all stages").closest("div.rounded-lg");
     expect(footer).not.toBeNull();
-    if (!footer) return;
+    if (!(footer instanceof HTMLElement)) return;
 
     expect(within(footer).getByText(byNormalizedText(formatMoney(computedTotals.totalCents, state.project.currency)))).toBeInTheDocument();
   });
@@ -878,7 +879,7 @@ describe("ProjectEstimate", () => {
 
     const footer = screen.getByText("Total across all stages").closest("div.rounded-lg");
     expect(footer).not.toBeNull();
-    if (!footer) return;
+    if (!(footer instanceof HTMLElement)) return;
 
     expect(within(footer).getByText(byNormalizedText(formatMoney(computedTotals.totalCents, state.project.currency)))).toBeInTheDocument();
     expect(within(footer).queryByText(byNormalizedText(formatMoney(0, state.project.currency)))).not.toBeInTheDocument();
@@ -1443,7 +1444,7 @@ describe("ProjectEstimate", () => {
 
     const footer = screen.getByText("Total across all stages").closest("div.rounded-lg");
     expect(footer).not.toBeNull();
-    if (!footer) return;
+    if (!(footer instanceof HTMLElement)) return;
 
     const beforeState = getEstimateV2ProjectState(projectId);
     const beforeTotals = computeProjectTotals(

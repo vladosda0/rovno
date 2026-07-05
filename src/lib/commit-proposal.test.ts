@@ -5,7 +5,6 @@ import {
   filterPhotoConsultProposalChangesBySeam,
   type CommitResult,
 } from "@/lib/commit-proposal";
-import type { ProposalChange } from "@/types/ai";
 import type { AIProposal, ProposalChange } from "@/types/ai";
 import type { ProjectAuthoritySeam } from "@/lib/project-authority-seam";
 import type { FinanceVisibility, MemberRole } from "@/types/entities";
@@ -36,7 +35,7 @@ function seamForRole(
   };
 }
 
-function makeProposal(type: string): AIProposal {
+function makeProposal(type: AIProposal["type"]): AIProposal {
   const changeMap: Record<string, ProposalChange[]> = {
     add_task: [{ entity_type: "task", action: "create", label: "Test task", after: "not_started" }],
     update_estimate: [{ entity_type: "estimate_item", action: "update", label: "Line item", before: "100", after: "200" }],

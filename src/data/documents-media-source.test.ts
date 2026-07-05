@@ -26,6 +26,10 @@ function documentRow(
     created_by: "profile-1",
     created_at: "2026-03-01T00:00:00.000Z",
     updated_at: "2026-03-01T00:00:00.000Z",
+    visibility_class: "shared_project" as const,
+    linked_external_kind: null,
+    linked_workspace_document_id: null,
+    linked_org_document_id: null,
     ...overrides,
   };
 }
@@ -58,6 +62,7 @@ function projectMediaRow(
     is_final: false,
     caption: "Before shot",
     created_at: "2026-03-01T00:00:00.000Z",
+    visibility_class: "shared_project" as const,
     ...overrides,
   };
 }
@@ -162,6 +167,7 @@ describe("documents-media-source helpers", () => {
         created_at: "2026-03-01T00:00:00.000Z",
         file_meta: undefined,
         ai_flags: undefined,
+        visibility_class: "shared_project",
       },
     ]);
   });
@@ -184,6 +190,7 @@ describe("documents-media-source helpers", () => {
       is_final: true,
       created_at: "2026-03-01T00:00:00.000Z",
       file_meta: undefined,
+      visibility_class: "shared_project",
     });
   });
 

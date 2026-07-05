@@ -154,6 +154,13 @@ describe("usePlanningProjectStages/usePlanningProjectTasks", () => {
       mode: "supabase" as const,
       getProjectStages: vi.fn(() => stagesPromise),
       getProjectTasks: vi.fn(() => tasksPromise),
+      createProjectStage: vi.fn(),
+      createProjectTask: vi.fn(),
+      updateProjectTask: vi.fn(),
+      updateTaskChecklistItem: vi.fn(),
+      createTaskChecklistItem: vi.fn(),
+      deleteTaskChecklistItem: vi.fn(),
+      createTaskComment: vi.fn(),
     };
 
     authenticateRuntimeAuth();

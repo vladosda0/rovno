@@ -1,6 +1,6 @@
-import type { LucideIcon, ReactNode } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 
 interface EmptyStateProps {
   icon: LucideIcon | ComponentType<{ className?: string }>;

@@ -17,6 +17,7 @@
     "supabase/migrations/20260406183000_procurement_operational_summary_requested_and_ordered_line_types.sql",
     "supabase/migrations/20260419120000_session3c_procurement_ai_in_stock_evidence.sql",
     "supabase/migrations/20260630110000_inventory_canonical_identity.sql",
+    "supabase/migrations/20260630140000_cross_project_transfer_deferred_receipt.sql",
     "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
     "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
   ],
@@ -931,6 +932,16 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "transfer_payload",
+          "sqlType": "jsonb",
+          "tsType": "Json",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -1117,6 +1128,16 @@
           "tsType": "string",
           "nullable": false,
           "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "item_type",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
           "primaryKey": false,
           "unique": false,
           "references": null
@@ -1336,6 +1357,16 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "transfer_group_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -1405,6 +1436,17 @@
           "where": null,
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql"
+        },
+        {
+          "name": "idx_inventory_movements_transfer_group_id",
+          "unique": false,
+          "method": null,
+          "expressions": [
+            "transfer_group_id"
+          ],
+          "where": "transfer_group_id is not null",
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260630140000_cross_project_transfer_deferred_receipt.sql"
         }
       ],
       "triggers": [
@@ -1973,7 +2015,7 @@
       "schema": "public",
       "name": "place_cross_project_stock_transfer",
       "key": "public.place_cross_project_stock_transfer",
-      "signature": "public.place_cross_project_stock_transfer(uuid, uuid, uuid, uuid, jsonb)",
+      "signature": "public.place_cross_project_stock_transfer(uuid, uuid, uuid, uuid, jsonb, timestamptz)",
       "args": [
         {
           "name": "p_from_project",
@@ -1999,6 +2041,11 @@
           "name": "p_lines",
           "type": "jsonb",
           "identityType": "jsonb"
+        },
+        {
+          "name": "p_delivery_deadline",
+          "type": "timestamptz default null",
+          "identityType": "timestamptz"
         }
       ],
       "returnType": "jsonb",
@@ -2006,7 +2053,28 @@
       "volatility": "volatile",
       "securityDefiner": true,
       "searchPath": "public",
-      "sourceMigration": "supabase/migrations/20260630120000_cross_project_stock_transfer.sql",
+      "sourceMigration": "supabase/migrations/20260630140000_cross_project_transfer_deferred_receipt.sql",
+      "authenticatedExecute": true,
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "receive_cross_project_stock_transfer",
+      "key": "public.receive_cross_project_stock_transfer",
+      "signature": "public.receive_cross_project_stock_transfer(uuid)",
+      "args": [
+        {
+          "name": "p_transfer_group_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "sourceMigration": "supabase/migrations/20260630140000_cross_project_transfer_deferred_receipt.sql",
       "authenticatedExecute": true,
       "triggerUsages": []
     }

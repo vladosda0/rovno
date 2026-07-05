@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import ProjectTasks from "@/pages/project/ProjectTasks";
 import type { ContractAction, ContractDomain } from "@/lib/permission-contract-actions";
 import { seamResolveActionState } from "@/lib/permissions";
+import type { ProjectAuthoritySeam } from "@/lib/project-authority-seam";
 import type { MemberRole } from "@/types/entities";
 
 const mocks = vi.hoisted(() => ({
@@ -89,14 +90,14 @@ function renderProjectTasks() {
 }
 
 function buildPermission(role: MemberRole) {
-  const seam = {
+  const seam: ProjectAuthoritySeam = {
     projectId: "project-1",
     profileId: "user-1",
     membership: {
       project_id: "project-1",
       user_id: "user-1",
       role,
-      viewer_regime: null,
+      viewer_regime: undefined,
       ai_access: "consult_only",
       finance_visibility: "summary",
       credit_limit: 0,

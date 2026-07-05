@@ -97,7 +97,7 @@ export type NotificationPreferencesPatch = Partial<NotificationPreferences>;
 export interface ProfileIdentity {
   fullName: string | null;
   avatarUrl: string | null;
-  locale: string;
+  locale: NonNullable<ProfilesUpdate["locale"]>;
   timezone: string;
 }
 export type ProfileIdentityPatch = Partial<ProfileIdentity>;
@@ -197,7 +197,9 @@ function writeLocalProfilePreferences(next: ProfilePreferences): void {
   window.localStorage.setItem("profile-automation-level", next.automationLevel);
 }
 
-function mapProfileSettingsRowToPreferences(row: ProfileSettingsRow | null | undefined): ProfilePreferences {
+function mapProfileSettingsRowToPreferences(
+  row: Pick<ProfileSettingsRow, "currency" | "units" | "date_format" | "week_start" | "ai_output_language" | "automation_level"> | null | undefined,
+): ProfilePreferences {
   return normalizeProfilePreferences(row as Record<string, unknown> | null | undefined);
 }
 
@@ -247,7 +249,7 @@ function writeLocalNotificationPreferences(next: NotificationPreferences): void 
 }
 
 function mapNotificationPreferencesRowToPreferences(
-  row: NotificationPreferencesRow | null | undefined,
+  row: Pick<NotificationPreferencesRow, "in_app_enabled" | "email_enabled" | "digest_frequency" | "event_toggles"> | null | undefined,
 ): NotificationPreferences {
   return normalizeNotificationPreferences(row as Record<string, unknown> | null | undefined);
 }
@@ -413,7 +415,9 @@ function createBrowserWorkspaceSource(mode: store.BrowserWorkspaceKind): Workspa
   };
 }
 
-export function mapProfileRowToUser(row: ProfileRow): User {
+export function mapProfileRowToUser(
+  row: Pick<ProfileRow, "id" | "email" | "full_name" | "avatar_url" | "locale" | "timezone" | "plan" | "credits_free" | "credits_paid">,
+): User {
   return {
     id: row.id,
     email: row.email ?? "",

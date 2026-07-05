@@ -10,8 +10,14 @@ import { Calendar } from "@/components/ui/calendar";
 import { getOrdersSource } from "@/data/orders-source";
 import { trackEvent } from "@/lib/analytics";
 import { useProcurementV2 } from "@/hooks/use-mock-data";
-import { useInventoryStock, useLocations } from "@/hooks/use-inventory-data";
+import {
+  useAllProjectsLocations,
+  useHomeInventorySnapshot,
+  useInventoryStock,
+  useLocations,
+} from "@/hooks/use-inventory-data";
 import { inventoryQueryKeys } from "@/hooks/use-inventory-data";
+import { useWorkspaceProjectsCanUseStockMap } from "@/hooks/use-home-sensitive-detail-map";
 import {
   orderPlacedSupplierOrdersQueryRoot,
   orderProjectOrdersQueryRoot,
@@ -23,9 +29,13 @@ import { computeRemainingRequestedQty, toInventoryKey } from "@/lib/procurement-
 import { fmtCost } from "@/lib/procurement-utils";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { LocationPicker } from "@/components/procurement/LocationPicker";
+import {
+  type CrossProjectLocationGroup,
+  GroupedLocationPicker,
+  LocationPicker,
+} from "@/components/procurement/LocationPicker";
 import type { OrderKind, ProcurementItemType } from "@/types/entities";
-import { useWorkspaceMode } from "@/hooks/use-workspace-source";
+import { useWorkspaceMode, useWorkspaceProjectsState } from "@/hooks/use-workspace-source";
 import { useEstimateV2Project } from "@/hooks/use-estimate-v2-data";
 import {
   isProcurementResourceLineType,
@@ -88,13 +98,18 @@ export function OrderModal({
   const baseItems = useProcurementV2(projectId);
   const orders = useOrders(projectId);
   const locations = useLocations(projectId);
-  const inventoryStock = useInventoryStock(projectId);
   const workspaceMode = useWorkspaceMode();
   const supabaseMode = workspaceMode.kind === "supabase" ? workspaceMode : null;
   const isSupabaseMode = workspaceMode.kind === "supabase";
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const estimateState = useEstimateV2Project(projectId);
+  // Cross-project transfer destination data (supabase-only; the source stays this project).
+  const { projects: workspaceProjects } = useWorkspaceProjectsState();
+  const { locationsByProjectId } = useAllProjectsLocations();
+  const { canUseStockByProjectId } = useWorkspaceProjectsCanUseStockMap();
+  // Stock across all projects, for the per-location availability shown in the source picker.
+  const inventorySnapshot = useHomeInventorySnapshot();
 
   const items = useMemo(() => {
     const nowIso = new Date().toISOString();
@@ -212,6 +227,12 @@ export function OrderModal({
   const [deliverToLocationId, setDeliverToLocationId] = useState("");
   const [fromLocationId, setFromLocationId] = useState("");
   const [toLocationId, setToLocationId] = useState("");
+  // Transfer SOURCE project (where the stock is pulled FROM); defaults to the current project
+  // (a same-project move). The destination is always the current project A — you are fulfilling
+  // its procurement — so only the source varies across projects. The source's on-hand stock
+  // drives availability and the from_item_id.
+  const [fromProjectId, setFromProjectId] = useState(projectId);
+  const sourceStock = useInventoryStock(fromProjectId);
   const [deliveryDeadline, setDeliveryDeadline] = useState<Date | undefined>(undefined);
   const [invoiceAttachment, setInvoiceAttachment] = useState<{ name: string; url: string } | null>(null);
   const [note, setNote] = useState("");
@@ -234,13 +255,68 @@ export function OrderModal({
    */
   const availableByInventoryKey = useMemo(() => {
     const map = new Map<string, number>();
-    inventoryStock
+    sourceStock
       .filter((row) => row.locationId === fromLocationId)
       .forEach((row) => {
         map.set(row.inventoryKey, (map.get(row.inventoryKey) ?? 0) + row.qty);
       });
     return map;
-  }, [inventoryStock, fromLocationId]);
+  }, [sourceStock, fromLocationId]);
+
+  /**
+   * Source inventory_item id per inventoryKey at the source location. Passed as `from_item_id`
+   * so the RPC resolves the exact source item rather than re-matching by identity.
+   */
+  const sourceItemIdByInventoryKey = useMemo(() => {
+    const map = new Map<string, string>();
+    sourceStock
+      .filter((row) => row.locationId === fromLocationId && row.inventoryItemId)
+      .forEach((row) => {
+        if (!map.has(row.inventoryKey)) map.set(row.inventoryKey, row.inventoryItemId as string);
+      });
+    return map;
+  }, [sourceStock, fromLocationId]);
+
+  /** A different SOURCE project means a cross-project transfer (supabase-only). */
+  const isCrossProject = isSupabaseMode && fromProjectId !== "" && fromProjectId !== projectId;
+
+  const sourceProjectTitle = useMemo(
+    () => workspaceProjects.find((p) => p.id === fromProjectId)?.title ?? "",
+    [workspaceProjects, fromProjectId],
+  );
+
+  /**
+   * Source location groups for the picker: the current project first (a same-project move), then
+   * other projects the user can use stock in (owner/co-owner or full financial access). Demo/local
+   * offers only the current project (cross-project transfer is supabase-only).
+   */
+  const sourceGroups = useMemo((): CrossProjectLocationGroup[] => {
+    const current: CrossProjectLocationGroup = {
+      projectId,
+      projectTitle: workspaceProjects.find((p) => p.id === projectId)?.title ?? "",
+      isCurrent: true,
+      locations: locationsByProjectId.get(projectId) ?? locations,
+    };
+    if (!isSupabaseMode) return [current];
+    const others = workspaceProjects
+      .filter((p) => p.id !== projectId && canUseStockByProjectId.get(p.id))
+      .map(
+        (p): CrossProjectLocationGroup => ({
+          projectId: p.id,
+          projectTitle: p.title,
+          isCurrent: false,
+          locations: locationsByProjectId.get(p.id) ?? [],
+        }),
+      );
+    return [current, ...others];
+  }, [
+    projectId,
+    locationsByProjectId,
+    locations,
+    isSupabaseMode,
+    workspaceProjects,
+    canUseStockByProjectId,
+  ]);
 
   // Seed the draft only on open and when the requested item SET changes, never on a
   // background procurement refetch (which gives items/itemById fresh identities). Without
@@ -279,12 +355,13 @@ export function OrderModal({
     setDeliverToLocationId(isSupabaseMode ? "" : defaultLocationId);
     setFromLocationId(defaultLocationId);
     setToLocationId(defaultLocationId);
+    setFromProjectId(projectId);
     setDeliveryDeadline(undefined);
     setInvoiceAttachment(null);
     setNote("");
     setLines(nextLines);
     seededKeyRef.current = seedKey;
-  }, [open, seedKey, initialItemIds, itemById, items, orders, defaultLocationId, isSupabaseMode]);
+  }, [open, seedKey, initialItemIds, itemById, items, orders, defaultLocationId, isSupabaseMode, projectId]);
 
   const requestedRemainingByItemId = useMemo(() => (
     new Map(lines.map((line) => [line.procurementItemId, computeRemainingRequestedQty(itemById.get(line.procurementItemId), orders)]))
@@ -296,6 +373,55 @@ export function OrderModal({
   // Actual price is required only for supplier orders; a stock transfer moves on-hand qty.
   const canPlaceOrder = hasOrderedLines
     && (kind === "stock" || allOrderedLinesHaveValidActualPrices);
+
+  /**
+   * Per-source-location availability of the ordered materials, keyed `${projectId}:${locationId}`.
+   * A single-line order shows "<qty> <unit>"; a multi-line order shows how many of the ordered
+   * items the location can supply ("<n>/<m>"). A location with NONE of the ordered materials is
+   * disabled in the source picker. (The submit guard still validates exact quantities.)
+   */
+  const orderedAvailabilitySpecs = useMemo(
+    () =>
+      orderedLines
+        .map((line) => {
+          const item = itemById.get(line.procurementItemId);
+          if (!item) return null;
+          return { key: toInventoryKey(item), unit: line.unit };
+        })
+        .filter((spec): spec is { key: string; unit: string } => spec != null),
+    [orderedLines, itemById],
+  );
+  const stockQtyByProjectLocationKey = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const project of inventorySnapshot.projects) {
+      for (const row of project.rows) {
+        const key = `${project.projectId}:${row.locationId}:${row.inventoryKey}`;
+        map.set(key, (map.get(key) ?? 0) + row.qty);
+      }
+    }
+    return map;
+  }, [inventorySnapshot.projects]);
+  const sourceLocationAvailability = useMemo(() => {
+    const map = new Map<string, { label: string; disabled: boolean }>();
+    if (inventorySnapshot.isLoading || orderedAvailabilitySpecs.length === 0) return map;
+    for (const group of sourceGroups) {
+      for (const loc of group.locations) {
+        let availableCount = 0;
+        let firstQty = 0;
+        orderedAvailabilitySpecs.forEach((spec, index) => {
+          const qty = stockQtyByProjectLocationKey.get(`${group.projectId}:${loc.id}:${spec.key}`) ?? 0;
+          if (qty > 0) availableCount += 1;
+          if (index === 0) firstQty = qty;
+        });
+        const label =
+          orderedAvailabilitySpecs.length === 1
+            ? `${firstQty.toLocaleString("ru-RU")} ${orderedAvailabilitySpecs[0].unit}`
+            : `${availableCount}/${orderedAvailabilitySpecs.length}`;
+        map.set(`${group.projectId}:${loc.id}`, { label, disabled: availableCount === 0 });
+      }
+    }
+    return map;
+  }, [inventorySnapshot.isLoading, orderedAvailabilitySpecs, sourceGroups, stockQtyByProjectLocationKey]);
 
   const saveOrder = async (action: "draft" | "place") => {
     if (orderActionInFlightRef.current) return;
@@ -314,7 +440,11 @@ export function OrderModal({
       toast({ title: t("procurement.orderModal.toast.fromRequired"), variant: "destructive" });
       return;
     }
-    if (kind === "stock" && toLocationId === fromLocationId) {
+    if (kind === "stock" && !toLocationId) {
+      toast({ title: t("procurement.orderModal.toast.toRequired"), variant: "destructive" });
+      return;
+    }
+    if (kind === "stock" && fromProjectId === projectId && fromLocationId === toLocationId) {
       toast({ title: t("procurement.orderModal.toast.sameLocation"), variant: "destructive" });
       return;
     }
@@ -339,6 +469,77 @@ export function OrderModal({
 
       try {
         const source = await getOrdersSource(supabaseMode ?? undefined);
+
+        if (isCrossProject && supabaseMode) {
+          const result = await source.placeCrossProjectStockTransfer({
+            fromProjectId,
+            toProjectId: projectId,
+            fromLocationId,
+            toLocationId,
+            deliveryDeadline: deliveryDeadline?.toISOString() ?? null,
+            lines: positiveLines.map((line) => {
+              const item = itemById.get(line.procurementItemId);
+              const inventoryKey = item ? toInventoryKey(item) : "";
+              return {
+                fromItemId: sourceItemIdByInventoryKey.get(inventoryKey) ?? null,
+                procurementItemId: line.procurementItemId,
+                title: item?.name ?? t("procurement.orderModal.untitledItem"),
+                unit: line.unit,
+                sku: null,
+                spec: item?.spec ?? null,
+                itemType: item?.type ?? null,
+                qty: line.qty,
+                actualUnitPrice: line.actualUnitPrice,
+              };
+            }),
+          });
+
+          trackEvent("procurement_order_placed", {
+            project_id: projectId,
+            kind: "stock_cross_project",
+            line_count: positiveLines.length,
+          });
+
+          // Refresh BOTH projects' orders / procurement / inventory caches so each side reflects
+          // the move.
+          await Promise.all([
+            ...[projectId, fromProjectId].flatMap((pid) => [
+              queryClient.invalidateQueries({
+                queryKey: orderProjectOrdersQueryRoot(supabaseMode.profileId, pid),
+              }),
+              queryClient.invalidateQueries({
+                queryKey: orderPlacedSupplierOrdersQueryRoot(supabaseMode.profileId, pid),
+              }),
+              queryClient.invalidateQueries({
+                queryKey: procurementProjectItemsQueryRoot(supabaseMode.profileId, pid),
+              }),
+              queryClient.invalidateQueries({
+                queryKey: inventoryQueryKeys.projectLocations(supabaseMode.profileId, pid),
+              }),
+              queryClient.invalidateQueries({
+                queryKey: inventoryQueryKeys.projectStock(supabaseMode.profileId, pid),
+              }),
+            ]),
+            queryClient.invalidateQueries({
+              queryKey: orderQueryKeys.placedSupplierOrdersAllProjects(supabaseMode.profileId),
+            }),
+            queryClient.invalidateQueries({
+              queryKey: orderQueryKeys.orderById(supabaseMode.profileId, result.fromOrderId),
+            }),
+            queryClient.invalidateQueries({
+              queryKey: orderQueryKeys.orderById(supabaseMode.profileId, result.toOrderId),
+            }),
+          ]);
+
+          toast({
+            title: t("procurement.orderModal.toast.crossProjectPlaced"),
+            description: t("procurement.orderModal.toast.crossProjectPlacedDesc"),
+          });
+          onCompleted?.(result.toOrderId);
+          onOpenChange(false);
+          return;
+        }
+
         const created = await source.placeStockTransfer({
           projectId,
           fromLocationId,
@@ -400,7 +601,7 @@ export function OrderModal({
         // A concurrent stock change can make the backend abort the paired transfer
         // with "Inventory balance cannot go negative ...". Surface the friendly
         // not-enough-stock message instead of the raw Postgres error (with UUIDs).
-        if (rawMessage.includes("cannot go negative")) {
+        if (rawMessage.includes("cannot go negative") || rawMessage.includes("Not enough stock")) {
           toast({
             title: t("procurement.orderModal.toast.notEnoughStock"),
             description: t("procurement.orderModal.toast.stockChangedDesc"),
@@ -562,7 +763,25 @@ export function OrderModal({
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <div className="space-y-1">
                 <label className="text-xs text-muted-foreground">{t("procurement.orderModal.fromLocation")}</label>
-                <LocationPicker projectId={projectId} value={fromLocationId} onChange={setFromLocationId} className="h-9" />
+                {isSupabaseMode ? (
+                  <GroupedLocationPicker
+                    groups={sourceGroups}
+                    value={fromLocationId ? { projectId: fromProjectId, locationId: fromLocationId } : null}
+                    onChange={(selection) => {
+                      setFromProjectId(selection.projectId);
+                      setFromLocationId(selection.locationId);
+                    }}
+                    availability={sourceLocationAvailability}
+                    className="h-9"
+                  />
+                ) : (
+                  <LocationPicker projectId={projectId} value={fromLocationId} onChange={setFromLocationId} className="h-9" />
+                )}
+                {isCrossProject && sourceProjectTitle && (
+                  <p className="text-xs text-primary">
+                    {t("procurement.orderModal.fromProject", { project: sourceProjectTitle })}
+                  </p>
+                )}
               </div>
               <div className="space-y-1">
                 <label className="text-xs text-muted-foreground">{t("procurement.orderModal.toLocation")}</label>

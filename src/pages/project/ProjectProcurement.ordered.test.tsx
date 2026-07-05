@@ -3,6 +3,8 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import * as permissions from "@/lib/permissions";
+import type { ContractAction, ContractDomain } from "@/lib/permission-contract-actions";
+import type { ProjectAuthoritySeam } from "@/lib/project-authority-seam";
 import { addProcurementItem } from "@/data/procurement-store";
 import type { FinanceVisibility, MemberRole } from "@/types/entities";
 import {
@@ -48,7 +50,7 @@ function renderProjectProcurement(projectId: string) {
 }
 
 function seedPartialOrderedLine(projectId: string) {
-  let linkedLineId = getEstimateV2ProjectState(projectId).lines[0]?.id ?? null;
+  let linkedLineId: string | null = getEstimateV2ProjectState(projectId).lines[0]?.id ?? null;
   if (!linkedLineId) {
     const stage = createStage(projectId, { title: "Linked stage" });
     const work = stage ? createWork(projectId, { stageId: stage.id, title: "Linked work" }) : null;
@@ -111,30 +113,33 @@ function seedPartialOrderedLine(projectId: string) {
 }
 
 function buildNonDetailProcurementPermission(role: MemberRole, finance_visibility: FinanceVisibility) {
-  return {
-    seam: {
-      projectId: "project-1",
-      profileId: "user-1",
-      membership: {
-        project_id: "project-1",
-        user_id: "user-1",
-        role,
-        viewer_regime: null,
-        ai_access: "consult_only" as const,
-        finance_visibility,
-        credit_limit: 0,
-        used_credits: 0,
-      },
-      project: undefined,
+  const seam: ProjectAuthoritySeam = {
+    projectId: "project-1",
+    profileId: "user-1",
+    membership: {
+      project_id: "project-1",
+      user_id: "user-1",
+      role,
+      viewer_regime: undefined,
+      ai_access: "consult_only" as const,
+      finance_visibility,
+      credit_limit: 0,
+      used_credits: 0,
     },
+    project: undefined,
+  };
+  return {
+    seam,
     role,
     can: () => true,
     isLoading: false,
+    actionState: (domain: ContractDomain, action: ContractAction) =>
+      permissions.seamResolveActionState(seam, domain, action),
   };
 }
 
 function seedPlacedOrderWithUnresolvedItemLine(projectId: string) {
-  let linkedLineId = getEstimateV2ProjectState(projectId).lines[0]?.id ?? null;
+  let linkedLineId: string | null = getEstimateV2ProjectState(projectId).lines[0]?.id ?? null;
   if (!linkedLineId) {
     const stage = createStage(projectId, { title: "Linked stage" });
     const work = stage ? createWork(projectId, { stageId: stage.id, title: "Linked work" }) : null;

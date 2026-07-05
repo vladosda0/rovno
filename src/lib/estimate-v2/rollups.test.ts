@@ -231,6 +231,7 @@ describe("estimate-v2 rollups", () => {
       {
         spentCents: 50,
         spentByTypeCents: { material: 10, tool: 10, labor: 10, subcontractor: 10, overhead: 10, other: 10 },
+        unattributedSpendCents: 0,
         toBePaidPlannedCents: 25,
         spentAbovePlannedCents: -5,
       },

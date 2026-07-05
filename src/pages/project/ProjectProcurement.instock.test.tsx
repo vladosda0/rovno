@@ -52,7 +52,7 @@ function renderProjectProcurement(projectId: string) {
 }
 
 function ensureLinkedEstimateLine(projectId: string) {
-  let linkedLineId = getEstimateV2ProjectState(projectId).lines[0]?.id ?? null;
+  let linkedLineId: string | null = getEstimateV2ProjectState(projectId).lines[0]?.id ?? null;
   if (!linkedLineId) {
     const stage = createStage(projectId, { title: "Linked stage" });
     const work = stage ? createWork(projectId, { stageId: stage.id, title: "Linked work" }) : null;

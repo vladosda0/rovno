@@ -478,7 +478,7 @@ async function resolveHeroTransitionIds(
 }
 
 function mapProcurementLineageRow(
-  row: ProcurementItemRow,
+  row: Pick<ProcurementItemRow, "id" | "estimate_resource_line_id" | "task_id" | "title" | "description" | "category" | "quantity" | "unit" | "planned_unit_price_cents" | "planned_total_price_cents" | "status" | "created_by">,
 ): ExistingHeroProcurementRow {
   return {
     id: row.id,

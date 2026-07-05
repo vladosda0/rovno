@@ -74,6 +74,7 @@ function memberRow(overrides: Partial<Parameters<typeof mapProjectMemberRowToMem
     used_credits: 10,
     joined_at: "2026-03-01T00:00:00.000Z",
     finance_visibility: "none" as const,
+    internal_docs_visibility: "none" as const,
     ...overrides,
   };
 }
@@ -225,6 +226,7 @@ describe("workspace-source helpers", () => {
       viewer_regime: undefined,
       ai_access: "consult_only",
       finance_visibility: "none",
+      internal_docs_visibility: "none",
       credit_limit: 50,
       used_credits: 10,
     });
