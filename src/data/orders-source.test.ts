@@ -303,6 +303,8 @@ function procurementItemRow(
     supplier_preferred: null,
     location_preferred_id: null,
     status: "ordered" as const,
+    received_qty: 0,
+    received_at: null,
     created_by: "profile-1",
     created_at: "2026-03-01T00:00:00.000Z",
     updated_at: "2026-03-02T00:00:00.000Z",
