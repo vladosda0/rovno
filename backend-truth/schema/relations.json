@@ -2053,6 +2053,38 @@
         "id"
       ],
       "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "blog_authors",
+      "fromColumns": [
+        "profile_id"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "blog_posts",
+      "fromColumns": [
+        "author_id"
+      ],
+      "toSchema": "public",
+      "toTable": "blog_authors",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "restrict"
     }
   ]
 }

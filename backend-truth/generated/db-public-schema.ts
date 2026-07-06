@@ -507,6 +507,14 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260630140000_cross_project_transfer_deferred_receipt.sql",
       "sha256": "32fed68f4e873a85698f1deccf57fb6c5d6097c872cf11bfc440aa998e45d544"
+    },
+    {
+      "path": "supabase/migrations/20260705191000_p31_procurement_received_columns.sql",
+      "sha256": "6b654e27d8df8e4460163a549478b7f5b9d5ff8182937f77e2a2d07b2c9abd02"
+    },
+    {
+      "path": "supabase/migrations/20260706120000_blog_schema.sql",
+      "sha256": "d3848cf1656e8fa41bafa02e7d65a0b5d499178159830f9fbfa945637b35735c"
     }
   ],
   "generated_artifacts": [
@@ -658,6 +666,8 @@ export const manifest = {
     "sql/20260630120000_cross_project_stock_transfer.sql",
     "sql/20260630130000_cross_project_transfer_procurement_item_on_destination.sql",
     "sql/20260630140000_cross_project_transfer_deferred_receipt.sql",
+    "sql/20260705191000_p31_procurement_received_columns.sql",
+    "sql/20260706120000_blog_schema.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -5008,6 +5018,26 @@ export const tables = {
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "received_qty",
+          "sqlType": "numeric(14,3)",
+          "tsType": "number",
+          "nullable": false,
+          "defaultSql": "0",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "received_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -5060,6 +5090,16 @@ export const tables = {
           "expression": "actual_unit_price_cents is null or actual_unit_price_cents >= 0",
           "usingIndex": null,
           "sourceMigration": "supabase/migrations/20260629120000_add_procurement_item_detail_columns.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "received_qty"
+          ],
+          "expression": "received_qty >= 0",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260705191000_p31_procurement_received_columns.sql"
         }
       ],
       "indexes": [
@@ -11824,6 +11864,410 @@ export const tables = {
           "sourceMigration": "supabase/migrations/20260604120000_create_card_bindings.sql"
         }
       ]
+    },
+    {
+      "schema": "public",
+      "name": "blog_authors",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql",
+      "columns": [
+        {
+          "name": "id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "gen_random_uuid()",
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "profile_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": true,
+          "references": {
+            "toSchema": "public",
+            "toTable": "profiles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "cascade"
+          }
+        },
+        {
+          "name": "display_name",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "bio",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "avatar_url",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "updated_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [],
+      "indexes": [],
+      "triggers": [
+        {
+          "name": "set_blog_authors_updated_at",
+          "activation": "before update",
+          "functionSchema": "public",
+          "functionName": "set_updated_at",
+          "functionSignature": "public.set_updated_at()",
+          "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "blog_posts",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql",
+      "columns": [
+        {
+          "name": "id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "gen_random_uuid()",
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "author_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "blog_authors",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "restrict"
+          }
+        },
+        {
+          "name": "slug",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": true,
+          "references": null
+        },
+        {
+          "name": "title",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "subtitle",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "excerpt",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "content",
+          "sqlType": "jsonb",
+          "tsType": "Json",
+          "nullable": false,
+          "defaultSql": "'{}'::jsonb",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "content_html",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "''",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "cover_image_url",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "seo_title",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "seo_description",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "tags",
+          "sqlType": "text[]",
+          "tsType": "unknown",
+          "nullable": false,
+          "defaultSql": "'{}'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "locale",
+          "sqlType": "text",
+          "tsType": "\"ru\" | \"en\"",
+          "nullable": false,
+          "defaultSql": "'ru'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "status",
+          "sqlType": "text",
+          "tsType": "\"draft\" | \"published\"",
+          "nullable": false,
+          "defaultSql": "'draft'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "published_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "reading_time_minutes",
+          "sqlType": "integer",
+          "tsType": "number",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "word_count",
+          "sqlType": "integer",
+          "tsType": "number",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "updated_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "locale"
+          ],
+          "expression": "locale in ('ru', 'en')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "status"
+          ],
+          "expression": "status in ('draft', 'published')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "reading_time_minutes"
+          ],
+          "expression": "reading_time_minutes is null or reading_time_minutes > 0",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "word_count"
+          ],
+          "expression": "word_count is null or word_count >= 0",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+        },
+        {
+          "type": "check",
+          "name": "blog_posts_slug_format",
+          "columns": [],
+          "expression": "slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$' and char_length(slug) between 3 and 120",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+        },
+        {
+          "type": "check",
+          "name": "blog_posts_slug_reserved",
+          "columns": [],
+          "expression": "slug not in ('admin', 'new', 'edit', 'feed', 'rss', 'sitemap', 'tag', 'tags', 'preview')",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+        },
+        {
+          "type": "check",
+          "name": "blog_posts_published_has_timestamp",
+          "columns": [],
+          "expression": "status <> 'published' or published_at is not null",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_blog_posts_status_published_at",
+          "unique": false,
+          "method": null,
+          "expressions": [
+            "status",
+            "published_at desc"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+        },
+        {
+          "name": "idx_blog_posts_author_id",
+          "unique": false,
+          "method": null,
+          "expressions": [
+            "author_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "set_blog_posts_updated_at",
+          "activation": "before update",
+          "functionSchema": "public",
+          "functionName": "set_updated_at",
+          "functionSignature": "public.set_updated_at()",
+          "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+        }
+      ]
     }
   ]
 } as const;
@@ -13883,6 +14327,38 @@ export const relations = {
         "id"
       ],
       "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "blog_authors",
+      "fromColumns": [
+        "profile_id"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "blog_posts",
+      "fromColumns": [
+        "author_id"
+      ],
+      "toSchema": "public",
+      "toTable": "blog_authors",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "restrict"
     }
   ]
 } as const;
@@ -14658,6 +15134,16 @@ export const checks = {
       "allowedValues": null,
       "expression": "actual_unit_price_cents is null or actual_unit_price_cents >= 0",
       "sourceMigration": "supabase/migrations/20260629120000_add_procurement_item_detail_columns.sql"
+    },
+    {
+      "schema": "public",
+      "table": "procurement_items",
+      "column": "received_qty",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "received_qty >= 0",
+      "sourceMigration": "supabase/migrations/20260705191000_p31_procurement_received_columns.sql"
     },
     {
       "schema": "public",
@@ -15607,6 +16093,82 @@ export const checks = {
       ],
       "expression": "status in (\n    'pending',\n    'active',\n    'inactive',\n    'rejected'\n  )",
       "sourceMigration": "supabase/migrations/20260604120000_create_card_bindings.sql"
+    },
+    {
+      "schema": "public",
+      "table": "blog_posts",
+      "column": "locale",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "ru",
+        "en"
+      ],
+      "expression": "locale in ('ru', 'en')",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "blog_posts",
+      "column": "status",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "draft",
+        "published"
+      ],
+      "expression": "status in ('draft', 'published')",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "blog_posts",
+      "column": "reading_time_minutes",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "reading_time_minutes is null or reading_time_minutes > 0",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "blog_posts",
+      "column": "word_count",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "word_count is null or word_count >= 0",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "blog_posts",
+      "column": null,
+      "constraintName": "blog_posts_slug_format",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$' and char_length(slug) between 3 and 120",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "blog_posts",
+      "column": null,
+      "constraintName": "blog_posts_slug_reserved",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "slug not in ('admin', 'new', 'edit', 'feed', 'rss', 'sitemap', 'tag', 'tags', 'preview')",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "blog_posts",
+      "column": null,
+      "constraintName": "blog_posts_published_has_timestamp",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "status <> 'published' or published_at is not null",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
     }
   ]
 } as const;
@@ -15780,6 +16342,16 @@ export const functions = {
         {
           "table": "public.card_bindings",
           "triggerName": "set_card_bindings_updated_at",
+          "activation": "before update"
+        },
+        {
+          "table": "public.blog_authors",
+          "triggerName": "set_blog_authors_updated_at",
+          "activation": "before update"
+        },
+        {
+          "table": "public.blog_posts",
+          "triggerName": "set_blog_posts_updated_at",
           "activation": "before update"
         }
       ]
@@ -21035,6 +21607,102 @@ export const rls = {
       "rlsEnabled": true,
       "authenticatedGrants": [],
       "policies": []
+    },
+    {
+      "schema": "public",
+      "table": "blog_authors",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "select"
+      ],
+      "policies": [
+        {
+          "name": "blog_authors_select_public",
+          "schema": "public",
+          "table": "blog_authors",
+          "command": "select",
+          "roles": [
+            "anon",
+            "authenticated"
+          ],
+          "using": "true",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "table": "blog_posts",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "delete",
+        "insert",
+        "select",
+        "update"
+      ],
+      "policies": [
+        {
+          "name": "blog_posts_select_published_anon",
+          "schema": "public",
+          "table": "blog_posts",
+          "command": "select",
+          "roles": [
+            "anon"
+          ],
+          "using": "status = 'published'",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+        },
+        {
+          "name": "blog_posts_select_authenticated",
+          "schema": "public",
+          "table": "blog_posts",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "status = 'published'\n  or exists (\n    select 1 from public.blog_authors ba\n    where ba.profile_id = auth.uid()\n  )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+        },
+        {
+          "name": "blog_posts_insert_authors",
+          "schema": "public",
+          "table": "blog_posts",
+          "command": "insert",
+          "roles": [
+            "authenticated"
+          ],
+          "using": null,
+          "withCheck": "author_id in (\n    select ba.id from public.blog_authors ba\n    where ba.profile_id = auth.uid()\n  )",
+          "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+        },
+        {
+          "name": "blog_posts_update_authors",
+          "schema": "public",
+          "table": "blog_posts",
+          "command": "update",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n    select 1 from public.blog_authors ba\n    where ba.profile_id = auth.uid()\n  )",
+          "withCheck": "exists (\n    select 1 from public.blog_authors ba\n    where ba.profile_id = auth.uid()\n  )",
+          "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+        },
+        {
+          "name": "blog_posts_delete_authors",
+          "schema": "public",
+          "table": "blog_posts",
+          "command": "delete",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n    select 1 from public.blog_authors ba\n    where ba.profile_id = auth.uid()\n  )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+        }
+      ]
     }
   ]
 } as const;
@@ -21376,6 +22044,18 @@ export const sourceTrace = {
       "schema": "public",
       "table": "card_bindings",
       "sourceMigration": "supabase/migrations/20260604120000_create_card_bindings.sql"
+    },
+    {
+      "key": "public.blog_authors",
+      "schema": "public",
+      "table": "blog_authors",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+    },
+    {
+      "key": "public.blog_posts",
+      "schema": "public",
+      "table": "blog_posts",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
     }
   ],
   "functions": [
@@ -23405,6 +24085,54 @@ export const sourceTrace = {
       "name": "system_work_articles_select",
       "command": "select",
       "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+    },
+    {
+      "key": "public.blog_authors.blog_authors_select_public",
+      "schema": "public",
+      "table": "blog_authors",
+      "name": "blog_authors_select_public",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+    },
+    {
+      "key": "public.blog_posts.blog_posts_select_published_anon",
+      "schema": "public",
+      "table": "blog_posts",
+      "name": "blog_posts_select_published_anon",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+    },
+    {
+      "key": "public.blog_posts.blog_posts_select_authenticated",
+      "schema": "public",
+      "table": "blog_posts",
+      "name": "blog_posts_select_authenticated",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+    },
+    {
+      "key": "public.blog_posts.blog_posts_insert_authors",
+      "schema": "public",
+      "table": "blog_posts",
+      "name": "blog_posts_insert_authors",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+    },
+    {
+      "key": "public.blog_posts.blog_posts_update_authors",
+      "schema": "public",
+      "table": "blog_posts",
+      "name": "blog_posts_update_authors",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+    },
+    {
+      "key": "public.blog_posts.blog_posts_delete_authors",
+      "schema": "public",
+      "table": "blog_posts",
+      "name": "blog_posts_delete_authors",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
     }
   ],
   "slices": [

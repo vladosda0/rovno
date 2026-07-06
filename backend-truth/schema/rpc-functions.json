@@ -168,6 +168,16 @@
           "table": "public.card_bindings",
           "triggerName": "set_card_bindings_updated_at",
           "activation": "before update"
+        },
+        {
+          "table": "public.blog_authors",
+          "triggerName": "set_blog_authors_updated_at",
+          "activation": "before update"
+        },
+        {
+          "table": "public.blog_posts",
+          "triggerName": "set_blog_posts_updated_at",
+          "activation": "before update"
         }
       ]
     },
