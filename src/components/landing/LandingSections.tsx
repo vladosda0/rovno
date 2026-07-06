@@ -29,7 +29,9 @@ const NAV_LINKS = [
   { label: "FAQ", href: "#faq" },
 ];
 
-export function Nav({ startPath }: { startPath: string }) {
+export function Nav({ startPath, homeLink = false }: { startPath: string; homeLink?: boolean }) {
+  // homeLink: rendered on a subpage (e.g. /blog) — the logo routes to "/" and
+  // section anchors become absolute so they land on the landing page.
   const [c, setC] = useState(false);
   useEffect(() => {
     const onScroll = () => setC(window.scrollY > 64);
@@ -76,20 +78,30 @@ export function Nav({ startPath }: { startPath: string }) {
             outlineColor: c ? "var(--line-blue-soft)" : "transparent",
           }}
         >
-          <div
-            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-            title="Наверх"
-            role="button"
-            aria-label="Наверх"
-            style={{ display: "flex", alignItems: "center", flexShrink: 0, cursor: "pointer" }}
-          >
-            {/* App's canonical logo lockup (public/logo.svg), shown larger than in-app. */}
-            <img
-              src="/logo.svg"
-              alt="ровно"
-              style={{ display: "block", height: c ? 34 : 52, width: "auto", transition: `height .42s ${E}` }}
-            />
-          </div>
+          {homeLink ? (
+            <Link to="/" title="На главную" aria-label="На главную" style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
+              <img
+                src="/logo.svg"
+                alt="ровно"
+                style={{ display: "block", height: c ? 34 : 52, width: "auto", transition: `height .42s ${E}` }}
+              />
+            </Link>
+          ) : (
+            <div
+              onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+              title="Наверх"
+              role="button"
+              aria-label="Наверх"
+              style={{ display: "flex", alignItems: "center", flexShrink: 0, cursor: "pointer" }}
+            >
+              {/* App's canonical logo lockup (public/logo.svg), shown larger than in-app. */}
+              <img
+                src="/logo.svg"
+                alt="ровно"
+                style={{ display: "block", height: c ? 34 : 52, width: "auto", transition: `height .42s ${E}` }}
+              />
+            </div>
+          )}
           <div style={{ display: "flex", alignItems: "center", gap: 0, flexShrink: 0 }}>
             <div
               style={{
@@ -105,7 +117,7 @@ export function Nav({ startPath }: { startPath: string }) {
             >
               <div className="rv-nav-anchors" style={{ display: "flex", gap: 32, alignItems: "center" }}>
                 {NAV_LINKS.map((x) => (
-                  <a key={x.label} href={x.href} style={{ fontFamily: "var(--font-body)", fontSize: 15, color: "var(--rv-blue)", textDecoration: "none", opacity: 0.72 }}>
+                  <a key={x.label} href={homeLink ? `/${x.href}` : x.href} style={{ fontFamily: "var(--font-body)", fontSize: 15, color: "var(--rv-blue)", textDecoration: "none", opacity: 0.72 }}>
                     {x.label}
                   </a>
                 ))}
