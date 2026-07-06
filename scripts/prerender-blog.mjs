@@ -32,8 +32,14 @@ import { readFile, writeFile, mkdir, readdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
+import { JSDOM } from "jsdom";
+import createDOMPurify from "dompurify";
+import { sanitizeArticleHtmlWith } from "../src/lib/blog/sanitizeConfig.mjs";
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+// fileURLToPath (not new URL().pathname) so a build path containing a space or
+// non-ASCII char decodes correctly instead of staying percent-encoded.
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DIST = path.join(ROOT, "dist");
 
 const SITE_ORIGIN = "https://rovno.ai";
@@ -58,6 +64,23 @@ function escapeHtml(value) {
 }
 
 const escapeXml = escapeHtml;
+
+// Sanitize article body HTML for the static snapshot, using the SAME allow-list
+// as the live SPA render (sanitizeConfig.mjs). This static file is served to
+// anonymous visitors and crawlers before React hydrates, so it must not carry
+// any HTML the live path would strip. Lazy jsdom init preserves the script's
+// fail-soft contract; if the sanitizer itself ever throws, fall back to escaped
+// (inert) text rather than emitting raw content_html or breaking the build.
+let _articlePurify = null;
+function sanitizeArticleBody(html) {
+  try {
+    if (!_articlePurify) _articlePurify = createDOMPurify(new JSDOM("").window);
+    return sanitizeArticleHtmlWith(_articlePurify, html ?? "");
+  } catch (err) {
+    log(`sanitize failed, escaping article body: ${err?.message ?? err}`);
+    return escapeHtml(html ?? "");
+  }
+}
 
 /** JSON safe to embed in <script> (no `</script>` breakout). */
 function jsonForScriptTag(value) {
@@ -296,7 +319,7 @@ function articleHtml(post) {
         ${post.cover_image_url ? `<div class="rv-article-cover"><img src="${escapeHtml(post.cover_image_url)}" alt="${escapeHtml(post.title)}" /></div>` : ""}
       </section>
       <section class="rv-section" style="padding:48px 48px 96px">
-        <div class="rv-article">${post.content_html}</div>
+        <div class="rv-article">${sanitizeArticleBody(post.content_html)}</div>
       </section>
     </article>
     <nav class="rv-section" style="padding:0 48px 96px;font-family:var(--font-body)">

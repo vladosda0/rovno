@@ -36,6 +36,7 @@ import { triggerFrontendRebuild, uploadBlogImage } from "@/lib/blog/api";
 import { slugifyTitle, validateSlug, type SlugIssue } from "@/lib/blog/slug";
 import { countWords, formatReadingTime, readingTimeMinutes } from "@/lib/blog/reading-time";
 import { blogPostPath } from "@/lib/blog/jsonld";
+import { sanitizeArticleHtml } from "@/lib/blog/sanitize";
 import type { BlogPostPatch, BlogPostStatus } from "@/lib/blog/types";
 import { BlogAdminGuard } from "@/components/blog/admin/BlogAdminGuard";
 import { RichTextEditor } from "@/components/blog/editor/RichTextEditor";
@@ -179,7 +180,10 @@ export default function BlogEditorPage() {
       slug: state.slugTouched || state.status === "published" ? state.slug : slugifyTitle(state.title),
       excerpt: state.excerpt.trim() || deriveExcerpt(text) || null,
       content: editor?.getJSON() ?? {},
-      content_html: editor?.getHTML() ?? "",
+      // Sanitize at write time too (defense in depth): the render paths already
+      // sanitize, but this keeps the DB value itself free of anything the
+      // allow-list drops, so a service-role/SQL reader never trusts raw HTML.
+      content_html: sanitizeArticleHtml(editor?.getHTML() ?? ""),
       cover_image_url: state.coverUrl,
       seo_title: state.seoTitle.trim() || null,
       seo_description: state.seoDescription.trim() || null,
