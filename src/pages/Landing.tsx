@@ -13,6 +13,7 @@ import { seedProjects } from "@/data/seed";
 import { enterDemoSession } from "@/lib/auth-state";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
 import { KeyFeatures } from "@/components/landing/LandingKeyFeatures";
+import { BlogTeaser } from "@/components/landing/LandingBlogTeaser";
 import {
   Nav,
   Hero,
@@ -60,6 +61,7 @@ export default function Landing() {
       <Pricing startPath={startPath} />
       <FAQ />
       <FinalCTA startPath={startPath} onDemo={handleDemo} />
+      <BlogTeaser />
       <Interlude tone="sage" />
       <Footer onDemo={handleDemo} />
     </div>

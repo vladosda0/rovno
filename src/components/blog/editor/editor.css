@@ -1,0 +1,159 @@
+/* TipTap editor chrome for the blog admin. The content area itself reuses
+   .rv-article (blog.css) so the editor is true WYSIWYG for the public page. */
+
+.rv-editor-content {
+  outline: none;
+  min-height: 320px;
+  caret-color: var(--rv-blue);
+}
+
+.rv-editor-content:focus {
+  outline: none;
+}
+
+/* Placeholder (per empty node, TipTap Placeholder extension). */
+.rv-editor-content p.is-editor-empty:first-child::before {
+  color: rgba(30, 92, 203, 0.32);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.rv-editor-content img.ProseMirror-selectednode,
+.rv-editor-content div[data-youtube-video].ProseMirror-selectednode iframe {
+  outline: 3px solid var(--rv-orange);
+  outline-offset: 2px;
+  border-radius: var(--r-md);
+}
+
+.rv-editor-content [data-youtube-video] {
+  pointer-events: none; /* select the node instead of playing inline while editing */
+}
+
+/* Dropcursor / gapcursor */
+.rv-editor-content .ProseMirror-gapcursor:after {
+  border-top: 1px solid var(--rv-blue);
+}
+
+/* ---------- Menus ---------- */
+
+.rv-editor-menu {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: #0e0d06;
+  color: #edebd7;
+  border-radius: 10px;
+  padding: 4px;
+  box-shadow: 0 12px 32px rgba(14, 13, 6, 0.24);
+}
+
+.rv-editor-menu button {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 7px;
+  border-radius: 7px;
+  font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1;
+  opacity: 0.85;
+}
+
+.rv-editor-menu button:hover {
+  background: rgba(237, 235, 215, 0.14);
+  opacity: 1;
+}
+
+.rv-editor-menu button.active {
+  background: #ee7a53;
+  color: #0e0d06;
+  opacity: 1;
+}
+
+.rv-editor-menu .rv-editor-menu__divider {
+  width: 1px;
+  height: 18px;
+  background: rgba(237, 235, 215, 0.24);
+  margin: 0 4px;
+}
+
+.rv-editor-menu input {
+  all: unset;
+  font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+  font-size: 13px;
+  color: #edebd7;
+  padding: 0 8px;
+  min-width: 220px;
+}
+
+.rv-editor-menu input::placeholder {
+  color: rgba(237, 235, 215, 0.4);
+}
+
+/* Floating "+" control (empty line): bare plus button first, panel on click */
+.rv-editor-pluswrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rv-editor-plusbtn {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1.5px solid rgba(30, 92, 203, 0.4);
+  color: #1e5ccb;
+  background: #fff;
+  box-sizing: border-box;
+  transition: transform 120ms cubic-bezier(0.4, 0, 0.2, 1), background 120ms;
+}
+
+.rv-editor-plusbtn:hover {
+  background: rgba(30, 92, 203, 0.08);
+}
+
+.rv-editor-plusbtn.open {
+  background: #1e5ccb;
+  color: #edebd7;
+  border-color: #1e5ccb;
+}
+
+.rv-editor-plus {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #fff;
+  border: 1px solid rgba(30, 92, 203, 0.16);
+  border-radius: 999px;
+  padding: 4px 8px;
+  box-shadow: 0 4px 16px rgba(14, 13, 6, 0.08);
+}
+
+.rv-editor-plus button {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+  font-size: 12.5px;
+  color: #1e5ccb;
+  white-space: nowrap;
+}
+
+.rv-editor-plus button:hover {
+  background: rgba(30, 92, 203, 0.08);
+}

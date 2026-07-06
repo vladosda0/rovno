@@ -41,6 +41,10 @@ const ProjectParticipants = lazy(() => import("@/pages/project/ProjectParticipan
 const ShareEstimate = lazy(() => import("@/pages/share/ShareEstimate"));
 const InviteAccept = lazy(() => import("@/pages/invite/InviteAccept"));
 const ThemeDemo = lazy(() => import("@/pages/ThemeDemo"));
+const BlogIndex = lazy(() => import("@/pages/blog/BlogIndex"));
+const BlogPostPage = lazy(() => import("@/pages/blog/BlogPostPage"));
+const BlogAdminList = lazy(() => import("@/pages/blog/admin/BlogAdminList"));
+const BlogEditorPage = lazy(() => import("@/pages/blog/admin/BlogEditorPage"));
 const Offer = lazy(() => import("@/pages/legal/Offer"));
 const Privacy = lazy(() => import("@/pages/legal/Privacy"));
 const Refund = lazy(() => import("@/pages/legal/Refund"));
@@ -90,6 +94,10 @@ const App = () => (
           <Route path="/share/estimate/:shareId" element={routeElement(<ShareEstimate />)} />
           <Route path="/invite/accept/:inviteToken" element={routeElement(<InviteAccept />)} />
 
+          {/* Public blog (SEO surface; static prerender covers these routes) */}
+          <Route path="/blog" element={routeElement(<BlogIndex />)} />
+          <Route path="/blog/:slug" element={routeElement(<BlogPostPage />)} />
+
           {/* Legal / compliance pages (required by T-Bank acquirer) */}
           <Route path="/offer" element={routeElement(<Offer />)} />
           <Route path="/privacy" element={routeElement(<Privacy />)} />
@@ -120,6 +128,11 @@ const App = () => (
             <Route path="/billing/checkout" element={routeElement(<BillingCheckout />)} />
             <Route path="/billing/success" element={routeElement(<BillingSuccess />)} />
             <Route path="/billing/fail" element={routeElement(<BillingFail />)} />
+
+            {/* Blog admin (editorial allowlist; BlogAdminGuard + RLS gate access) */}
+            <Route path="/blog/admin" element={routeElement(<BlogAdminList />)} />
+            <Route path="/blog/admin/new" element={routeElement(<BlogEditorPage />)} />
+            <Route path="/blog/admin/:id" element={routeElement(<BlogEditorPage />)} />
 
             {/* Project with nested tabs */}
             <Route path="/project/:id" element={routeElement(<ProjectLayout />)}>
