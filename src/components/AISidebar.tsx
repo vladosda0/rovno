@@ -91,6 +91,7 @@ import {
   getOrCreateProjectChatSessionId,
   rotateProjectChatSessionId,
 } from "@/lib/ai-project-chat-session";
+import { resolveAiChatKey } from "@/lib/ai-chat-key";
 import {
   buildArchivePreviewLines,
   clearProjectTranscript,
@@ -737,6 +738,10 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const isGuest = !isAuthenticated();
   const user = useCurrentUser();
   const workspaceMode = useWorkspaceMode();
+  // Auth profile id when a Supabase session is live; null in guest/demo/local
+  // modes. Drives the canonical cross-channel chat key below.
+  const workspaceProfileId =
+    workspaceMode.kind === "supabase" ? workspaceMode.profileId : null;
   const workspaceProfilePreferences = useWorkspaceProfilePreferences();
   const profileAssistantLang = resolveAiAssistantUiLanguage(workspaceProfilePreferences?.aiOutputLanguage);
   const projects = useProjects();
@@ -1551,7 +1556,23 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
           memberCount: ctxMembers.length,
         };
         const contextPack = buildAIProjectContext(seam, contextInputs);
-        const chatId = getOrCreateProjectChatSessionId(targetProjectId);
+        // Canonical chat key, byte-for-byte equivalent to public.resolve_ai_chat_key
+        // in rovno-db and packages/core/src/memoryKey.ts in rovno-bots. Using the
+        // same UUID v5 over (profile_id, project_id) means web, Telegram, and the
+        // Mini App all hit the same project_ai_chat_sessions row and share
+        // conversational memory. Fallback to the legacy per-project localStorage
+        // value when profileId is unavailable (guest / demo mode) or in the
+        // exotic case of a Web Crypto failure; server append/get RPCs ignore
+        // chat_id and resolve via derived_chat_key after P0 migration
+        // 20260513150000, so the fallback chat_id is harmless metadata.
+        let chatId: string | undefined;
+        try {
+          chatId = workspaceProfileId
+            ? await resolveAiChatKey(workspaceProfileId, targetProjectId)
+            : getOrCreateProjectChatSessionId(targetProjectId);
+        } catch {
+          chatId = getOrCreateProjectChatSessionId(targetProjectId);
+        }
         const priorTurns = buildPriorTurnsForInference(messages, userMessageId);
 
         // Bill 'photo' only for the first message about a newly attached photo;
@@ -1661,6 +1682,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     seamForProjectCommit,
     messages,
     workspaceMode.kind,
+    workspaceProfileId,
     photoConsult,
     queryClient,
   ]);
