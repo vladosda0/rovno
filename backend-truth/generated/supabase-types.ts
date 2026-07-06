@@ -868,6 +868,8 @@ export type Database = {
           "supplier_preferred": string | null
           "location_preferred_id": string | null
           "actual_unit_price_cents": number | null
+          "received_qty": number
+          "received_at": string | null
           }
           Insert: {
           "id"?: string
@@ -890,6 +892,8 @@ export type Database = {
           "supplier_preferred"?: string | null
           "location_preferred_id"?: string | null
           "actual_unit_price_cents"?: number | null
+          "received_qty"?: number
+          "received_at"?: string | null
           }
           Update: {
           "id"?: string
@@ -912,6 +916,8 @@ export type Database = {
           "supplier_preferred"?: string | null
           "location_preferred_id"?: string | null
           "actual_unit_price_cents"?: number | null
+          "received_qty"?: number
+          "received_at"?: string | null
           }
           Relationships: []
         }
@@ -2323,6 +2329,102 @@ export type Database = {
           "bound_at"?: string | null
           "last_notification"?: Json | null
           "error_code"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Relationships: []
+        }
+        "blog_authors": {
+          Row: {
+          "id": string
+          "profile_id": string
+          "display_name": string
+          "bio": string | null
+          "avatar_url": string | null
+          "created_at": string
+          "updated_at": string
+          }
+          Insert: {
+          "id"?: string
+          "profile_id": string
+          "display_name": string
+          "bio"?: string | null
+          "avatar_url"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Update: {
+          "id"?: string
+          "profile_id"?: string
+          "display_name"?: string
+          "bio"?: string | null
+          "avatar_url"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Relationships: []
+        }
+        "blog_posts": {
+          Row: {
+          "id": string
+          "author_id": string
+          "slug": string
+          "title": string
+          "subtitle": string | null
+          "excerpt": string | null
+          "content": Json
+          "content_html": string
+          "cover_image_url": string | null
+          "seo_title": string | null
+          "seo_description": string | null
+          "tags": unknown
+          "locale": "ru" | "en"
+          "status": "draft" | "published"
+          "published_at": string | null
+          "reading_time_minutes": number | null
+          "word_count": number | null
+          "created_at": string
+          "updated_at": string
+          }
+          Insert: {
+          "id"?: string
+          "author_id": string
+          "slug": string
+          "title": string
+          "subtitle"?: string | null
+          "excerpt"?: string | null
+          "content"?: Json
+          "content_html"?: string
+          "cover_image_url"?: string | null
+          "seo_title"?: string | null
+          "seo_description"?: string | null
+          "tags"?: unknown
+          "locale"?: "ru" | "en"
+          "status"?: "draft" | "published"
+          "published_at"?: string | null
+          "reading_time_minutes"?: number | null
+          "word_count"?: number | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Update: {
+          "id"?: string
+          "author_id"?: string
+          "slug"?: string
+          "title"?: string
+          "subtitle"?: string | null
+          "excerpt"?: string | null
+          "content"?: Json
+          "content_html"?: string
+          "cover_image_url"?: string | null
+          "seo_title"?: string | null
+          "seo_description"?: string | null
+          "tags"?: unknown
+          "locale"?: "ru" | "en"
+          "status"?: "draft" | "published"
+          "published_at"?: string | null
+          "reading_time_minutes"?: number | null
+          "word_count"?: number | null
           "created_at"?: string
           "updated_at"?: string
           }

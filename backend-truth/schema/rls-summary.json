@@ -2522,6 +2522,102 @@
       "rlsEnabled": true,
       "authenticatedGrants": [],
       "policies": []
+    },
+    {
+      "schema": "public",
+      "table": "blog_authors",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "select"
+      ],
+      "policies": [
+        {
+          "name": "blog_authors_select_public",
+          "schema": "public",
+          "table": "blog_authors",
+          "command": "select",
+          "roles": [
+            "anon",
+            "authenticated"
+          ],
+          "using": "true",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "table": "blog_posts",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "delete",
+        "insert",
+        "select",
+        "update"
+      ],
+      "policies": [
+        {
+          "name": "blog_posts_select_published_anon",
+          "schema": "public",
+          "table": "blog_posts",
+          "command": "select",
+          "roles": [
+            "anon"
+          ],
+          "using": "status = 'published'",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+        },
+        {
+          "name": "blog_posts_select_authenticated",
+          "schema": "public",
+          "table": "blog_posts",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "status = 'published'\n  or exists (\n    select 1 from public.blog_authors ba\n    where ba.profile_id = auth.uid()\n  )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+        },
+        {
+          "name": "blog_posts_insert_authors",
+          "schema": "public",
+          "table": "blog_posts",
+          "command": "insert",
+          "roles": [
+            "authenticated"
+          ],
+          "using": null,
+          "withCheck": "author_id in (\n    select ba.id from public.blog_authors ba\n    where ba.profile_id = auth.uid()\n  )",
+          "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+        },
+        {
+          "name": "blog_posts_update_authors",
+          "schema": "public",
+          "table": "blog_posts",
+          "command": "update",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n    select 1 from public.blog_authors ba\n    where ba.profile_id = auth.uid()\n  )",
+          "withCheck": "exists (\n    select 1 from public.blog_authors ba\n    where ba.profile_id = auth.uid()\n  )",
+          "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+        },
+        {
+          "name": "blog_posts_delete_authors",
+          "schema": "public",
+          "table": "blog_posts",
+          "command": "delete",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n    select 1 from public.blog_authors ba\n    where ba.profile_id = auth.uid()\n  )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+        }
+      ]
     }
   ]
 }

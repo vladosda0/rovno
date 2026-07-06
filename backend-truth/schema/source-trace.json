@@ -335,6 +335,18 @@
       "schema": "public",
       "table": "card_bindings",
       "sourceMigration": "supabase/migrations/20260604120000_create_card_bindings.sql"
+    },
+    {
+      "key": "public.blog_authors",
+      "schema": "public",
+      "table": "blog_authors",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+    },
+    {
+      "key": "public.blog_posts",
+      "schema": "public",
+      "table": "blog_posts",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
     }
   ],
   "functions": [
@@ -2364,6 +2376,54 @@
       "name": "system_work_articles_select",
       "command": "select",
       "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+    },
+    {
+      "key": "public.blog_authors.blog_authors_select_public",
+      "schema": "public",
+      "table": "blog_authors",
+      "name": "blog_authors_select_public",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+    },
+    {
+      "key": "public.blog_posts.blog_posts_select_published_anon",
+      "schema": "public",
+      "table": "blog_posts",
+      "name": "blog_posts_select_published_anon",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+    },
+    {
+      "key": "public.blog_posts.blog_posts_select_authenticated",
+      "schema": "public",
+      "table": "blog_posts",
+      "name": "blog_posts_select_authenticated",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+    },
+    {
+      "key": "public.blog_posts.blog_posts_insert_authors",
+      "schema": "public",
+      "table": "blog_posts",
+      "name": "blog_posts_insert_authors",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+    },
+    {
+      "key": "public.blog_posts.blog_posts_update_authors",
+      "schema": "public",
+      "table": "blog_posts",
+      "name": "blog_posts_update_authors",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+    },
+    {
+      "key": "public.blog_posts.blog_posts_delete_authors",
+      "schema": "public",
+      "table": "blog_posts",
+      "name": "blog_posts_delete_authors",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
     }
   ],
   "slices": [
