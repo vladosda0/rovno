@@ -25,6 +25,14 @@ describe("parsePriceInputToCents", () => {
     expect(parsePriceInputToCents("-100")).toBe(-10000);
   });
 
+  it("reads grouped thousands and keeps real decimals (parser mirror)", () => {
+    expect(parsePriceInputToCents("1.200")).toBe(120000);
+    expect(parsePriceInputToCents("1.234.567")).toBe(123456700);
+    expect(parsePriceInputToCents("1,200,300")).toBe(120030000);
+    expect(parsePriceInputToCents("850.5")).toBe(85050);
+    expect(parsePriceInputToCents("1.2345")).toBe(123);
+  });
+
   it("rejects non-numeric input", () => {
     expect(parsePriceInputToCents("договорная")).toBeNull();
     expect(parsePriceInputToCents("")).toBeNull();

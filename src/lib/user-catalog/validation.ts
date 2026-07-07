@@ -60,7 +60,16 @@ export function parsePriceInputToCents(input: string): number | null {
     cleaned = cleaned.split(grouping).join("");
     if (decimal === ",") cleaned = cleaned.replace(",", ".");
   } else if (hasComma) {
-    cleaned = cleaned.replace(",", ".");
+    if (/^-?[1-9]\d{0,2}(,\d{3}){2,}$/.test(cleaned)) {
+      // "1,200,300" — unambiguous comma-grouped thousands (2+ groups).
+      cleaned = cleaned.split(",").join("");
+    } else {
+      cleaned = cleaned.replace(",", ".");
+    }
+  } else if (hasDot && /^-?[1-9]\d{0,2}(\.\d{3})+$/.test(cleaned)) {
+    // "1.200" / "1.234.567" — dot-grouped thousands (common vendor style);
+    // "850.5" stays a decimal. Mirrors the parser.
+    cleaned = cleaned.split(".").join("");
   }
 
   if (!/^-?\d+(\.\d+)?$/.test(cleaned)) return null;
