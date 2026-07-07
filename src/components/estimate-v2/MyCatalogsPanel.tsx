@@ -56,6 +56,14 @@ export function MyCatalogsPanel({ enabled, onAddItem }: MyCatalogsPanelProps) {
   const isLoading = catalogsQuery.isLoading || itemsQuery.isLoading;
   const hasFilter = filter.trim().length > 0;
 
+  if (catalogsQuery.isError || itemsQuery.isError) {
+    return (
+      <p className="px-4 py-10 text-center text-sm text-muted-foreground">
+        {t("estimate.myCatalogs.loadError")}
+      </p>
+    );
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">

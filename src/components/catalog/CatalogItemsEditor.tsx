@@ -278,6 +278,7 @@ function EditorRow({
             onChange={(event) => onChange({ name: event.target.value })}
             placeholder={t("catalogEditor.namePlaceholder")}
             className="h-8"
+            maxLength={500}
           />
         </TableCell>
         <TableCell className="py-1.5 align-top">

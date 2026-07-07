@@ -60,7 +60,12 @@ export function CatalogForm({ onBack, onClose }: CatalogFormProps) {
       const parsed = await parseMutation.mutateAsync(file);
       const uploadId = crypto.randomUUID();
       const draft = buildDraftFromParse(uploadId, parsed);
-      saveCatalogDraft(draft);
+      if (!saveCatalogDraft(draft)) {
+        // Private mode / quota: the review page would load nothing — surface
+        // the storage problem instead of navigating into a dead end.
+        setErrorCode("STORAGE_FAILED");
+        return;
+      }
       const counts = countBySeverity(draft.rows);
       trackEvent("catalog_uploaded", {
         rows: parsed.totalDataRows,
@@ -118,7 +123,11 @@ export function CatalogForm({ onBack, onClose }: CatalogFormProps) {
               accept=".xlsx,.xls,.csv"
               disabled={parsing}
               onChange={(event) => {
-                void handleFileSelected(event.target.files?.[0] ?? null);
+                const selected = event.target.files?.[0] ?? null;
+                // Reset so re-picking the SAME file (retry after fixing it in
+                // Excel) fires a change event again.
+                event.target.value = "";
+                void handleFileSelected(selected);
               }}
             />
             <p className="text-caption text-muted-foreground">

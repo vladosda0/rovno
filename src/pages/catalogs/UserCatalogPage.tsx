@@ -25,11 +25,13 @@ import {
   type EditorRowPatch,
 } from "@/components/catalog/CatalogItemsEditor";
 import {
+  applyDuplicateMarks,
   countBySeverity,
   editDraftRow,
   formatCentsAsPriceInput,
   parsePriceInputToCents,
   removeDraftRow,
+  validateDraftRow,
 } from "@/lib/user-catalog/validation";
 import type { DraftRow } from "@/types/user-catalog";
 import { trackEvent } from "@/lib/analytics";
@@ -68,6 +70,30 @@ export default function UserCatalogPage() {
   const dirtyIds = useRef(new Set<string>());
   const flushTimer = useRef<number | null>(null);
   const maxPosition = useRef(0);
+  // A row created in the editor keeps its local "new-…" id for its whole
+  // lifetime (stable React key — no remount/focus loss); the insert's server
+  // id lives in this map and every mutation resolves through it. Edits made
+  // while the insert is in flight stay dirty under the SAME id and flush as
+  // an update once the id is known.
+  const serverIds = useRef(new Map<string, string>());
+  const inFlightAdds = useRef(new Set<string>());
+  // New rows deleted while their insert is in flight: the delete fires when
+  // the insert settles (otherwise the item would resurrect server-side).
+  const pendingDeletes = useRef(new Set<string>());
+  const editedRowIds = useRef(new Set<string>());
+  const rowsRef = useRef<DraftRow[] | null>(null);
+
+  // Fresh state per catalog (latent cross-catalog navigation safety).
+  useEffect(() => {
+    setRows(null);
+    setNameDraft(null);
+    dirtyIds.current.clear();
+    serverIds.current.clear();
+    inFlightAdds.current.clear();
+    pendingDeletes.current.clear();
+    editedRowIds.current.clear();
+    maxPosition.current = 0;
+  }, [catalogId]);
 
   const matchedIds = useMemo(
     () => (rows ?? []).map((row) => row.matchedArticleId).filter((id): id is string => Boolean(id)),
@@ -76,30 +102,52 @@ export default function UserCatalogPage() {
   const articleNamesQuery = useMatchedArticleNames(matchedIds, isSupabaseMode);
 
   // Seed local rows once per catalog load; afterwards local state is the
-  // source of truth (the flush keeps the server in sync).
+  // source of truth (the flush keeps the server in sync). Saved data gets the
+  // same validation pass as drafts so pre-existing warnings (duplicates,
+  // empty units) are visible before the first edit.
   useEffect(() => {
     if (!itemsQuery.data || rows !== null) return;
     maxPosition.current = itemsQuery.data.reduce((max, item) => Math.max(max, item.position), 0);
-    const seeded: DraftRow[] = itemsQuery.data.map((item, index) => ({
-      localId: item.id,
-      name: item.name,
-      unit: item.unit,
-      priceInput: formatCentsAsPriceInput(item.priceCents),
-      resourceType: item.resourceType,
-      typeAutoFilled: false,
-      supplierSku: item.supplierSku ?? "",
-      matchedArticleId: item.matchedArticleId,
-      matchedArticleName: null,
-      sourceRowNumber: index + 1,
-      issues: [],
-      severity: "ok",
-    }));
-    setRows(seeded);
+    const seeded: DraftRow[] = itemsQuery.data.map((item, index) => {
+      const base = {
+        localId: item.id,
+        name: item.name,
+        unit: item.unit,
+        priceInput: formatCentsAsPriceInput(item.priceCents),
+        resourceType: item.resourceType,
+        typeAutoFilled: false,
+        supplierSku: item.supplierSku ?? "",
+        matchedArticleId: item.matchedArticleId,
+        matchedArticleName: null,
+        sourceRowNumber: index + 1,
+      };
+      const { issues, severity } = validateDraftRow(
+        {
+          name: base.name,
+          unit: base.unit,
+          priceInput: base.priceInput,
+          supplierSku: base.supplierSku,
+        },
+        new Set<string>(),
+      );
+      return { ...base, issues, severity };
+    });
+    setRows(applyDuplicateMarks(seeded));
   }, [itemsQuery.data, rows]);
 
+  useEffect(() => {
+    rowsRef.current = rows;
+  }, [rows]);
+
+  const resolveServerId = (localId: string): string | null => {
+    if (!localId.startsWith(NEW_ROW_PREFIX)) return localId;
+    return serverIds.current.get(localId) ?? null;
+  };
+
   const flushDirtyRows = useCallback(() => {
-    if (!rows || !catalogId) return;
-    for (const row of rows) {
+    const currentRows = rowsRef.current;
+    if (!currentRows || !catalogId) return;
+    for (const row of currentRows) {
       if (!dirtyIds.current.has(row.localId)) continue;
       if (row.severity === "blocking") continue; // stays local until fixed
       const priceCents = parsePriceInputToCents(row.priceInput) ?? 0;
@@ -111,42 +159,71 @@ export default function UserCatalogPage() {
         supplierSku: row.supplierSku.trim() || null,
         matchedArticleId: row.matchedArticleId,
       };
-      dirtyIds.current.delete(row.localId);
-      if (row.localId.startsWith(NEW_ROW_PREFIX)) {
+      const localId = row.localId;
+      const targetId = resolveServerId(localId);
+
+      if (localId.startsWith(NEW_ROW_PREFIX) && targetId === null) {
+        // Not persisted yet. While the insert is in flight the row simply
+        // stays dirty; the settle handler re-arms the flush.
+        if (inFlightAdds.current.has(localId)) continue;
+        dirtyIds.current.delete(localId);
+        inFlightAdds.current.add(localId);
         maxPosition.current += 1;
         addItemMutation.mutate(
           { catalogId, item: payload, position: maxPosition.current },
           {
             onSuccess: (created) => {
-              // Swap the local id for the server id so later edits target the row.
-              setRows((current) =>
-                current
-                  ? current.map((r) =>
-                      r.localId === row.localId ? { ...r, localId: created.id } : r,
-                    )
-                  : current,
-              );
+              inFlightAdds.current.delete(localId);
+              serverIds.current.set(localId, created.id);
+              if (pendingDeletes.current.has(localId)) {
+                pendingDeletes.current.delete(localId);
+                deleteItemMutation.mutate(created.id, {
+                  onError: () =>
+                    toast({ title: t("catalogPage.deleteRowFailed"), variant: "destructive" }),
+                });
+                return;
+              }
+              if (dirtyIds.current.has(localId)) scheduleFlush();
             },
-            onError: () => dirtyIds.current.add(row.localId),
+            onError: () => {
+              inFlightAdds.current.delete(localId);
+              dirtyIds.current.add(localId);
+              toast({ title: t("catalogPage.saveRowFailed"), variant: "destructive" });
+              scheduleFlush();
+            },
           },
         );
-      } else {
-        updateItemMutation.mutate(
-          { itemId: row.localId, patch: payload },
-          { onError: () => dirtyIds.current.add(row.localId) },
-        );
+        continue;
       }
+
+      if (targetId === null) continue;
+      dirtyIds.current.delete(localId);
+      updateItemMutation.mutate(
+        { itemId: targetId, patch: payload },
+        {
+          onError: () => {
+            dirtyIds.current.add(localId);
+            toast({ title: t("catalogPage.saveRowFailed"), variant: "destructive" });
+            scheduleFlush();
+          },
+        },
+      );
     }
-  }, [rows, catalogId, addItemMutation, updateItemMutation]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catalogId, addItemMutation, updateItemMutation, deleteItemMutation, t]);
+
+  const scheduleFlush = useCallback(() => {
+    if (flushTimer.current !== null) window.clearTimeout(flushTimer.current);
+    flushTimer.current = window.setTimeout(flushDirtyRows, FLUSH_DELAY_MS);
+  }, [flushDirtyRows]);
 
   useEffect(() => {
     if (!rows || dirtyIds.current.size === 0) return;
-    if (flushTimer.current !== null) window.clearTimeout(flushTimer.current);
-    flushTimer.current = window.setTimeout(flushDirtyRows, FLUSH_DELAY_MS);
+    scheduleFlush();
     return () => {
       if (flushTimer.current !== null) window.clearTimeout(flushTimer.current);
     };
-  }, [rows, flushDirtyRows]);
+  }, [rows, scheduleFlush]);
 
   const editorRows: EditorRowData[] = useMemo(() => {
     if (!rows) return [];
@@ -181,6 +258,20 @@ export default function UserCatalogPage() {
     );
   }
 
+  // Query errors (incl. a non-uuid :catalogId → PostgREST cast error) render
+  // as not-found instead of an infinite spinner.
+  if (catalogQuery.isError || itemsQuery.isError) {
+    return (
+      <div className="mx-auto w-full max-w-2xl px-4 py-16 text-center space-y-3">
+        <PackageOpen className="mx-auto h-10 w-10 text-muted-foreground" aria-hidden="true" />
+        <p className="text-body-sm text-muted-foreground">{t("catalogPage.notFound")}</p>
+        <Button asChild variant="outline">
+          <Link to={CATALOGS_TAB_URL}>{t("catalogReview.backToCatalogs")}</Link>
+        </Button>
+      </div>
+    );
+  }
+
   if (catalogQuery.isLoading || itemsQuery.isLoading || rows === null) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center text-sm text-muted-foreground">
@@ -207,16 +298,23 @@ export default function UserCatalogPage() {
 
   const handleRowChange = (id: string, patch: EditorRowPatch) => {
     dirtyIds.current.add(id);
-    trackEvent("catalog_row_edited", { catalog_id: catalog.id, saved: true });
+    // One measurement event per row per visit, not per keystroke.
+    if (!editedRowIds.current.has(id)) {
+      editedRowIds.current.add(id);
+      trackEvent("catalog_row_edited", { catalog_id: catalog.id, saved: true });
+    }
     setRows((current) => (current ? editDraftRow(current, id, patch) : current));
   };
 
   const handleRowDelete = (id: string) => {
     const row = rows.find((r) => r.localId === id);
     if (!row) return;
-    if (id.startsWith(NEW_ROW_PREFIX)) {
-      // Never persisted — drop locally without confirmation.
+    if (id.startsWith(NEW_ROW_PREFIX) && !serverIds.current.get(id)) {
       dirtyIds.current.delete(id);
+      if (inFlightAdds.current.has(id)) {
+        // Insert in flight: remove locally now, delete server-side on settle.
+        pendingDeletes.current.add(id);
+      }
       setRows((current) => (current ? removeDraftRow(current, id) : current));
       return;
     }
@@ -227,9 +325,11 @@ export default function UserCatalogPage() {
     const row = rowPendingDelete;
     if (!row) return;
     setRowPendingDelete(null);
+    const targetId = resolveServerId(row.localId);
     dirtyIds.current.delete(row.localId);
     setRows((current) => (current ? removeDraftRow(current, row.localId) : current));
-    deleteItemMutation.mutate(row.localId, {
+    if (!targetId) return;
+    deleteItemMutation.mutate(targetId, {
       onError: () => {
         toast({ title: t("catalogPage.deleteRowFailed"), variant: "destructive" });
         setRows((current) => (current ? [...current, row] : current));
@@ -296,6 +396,7 @@ export default function UserCatalogPage() {
           <Input
             value={nameDraft ?? catalog.name}
             onChange={(event) => setNameDraft(event.target.value)}
+            maxLength={200}
             onBlur={commitRename}
             onKeyDown={(event) => {
               if (event.key === "Enter") (event.target as HTMLInputElement).blur();

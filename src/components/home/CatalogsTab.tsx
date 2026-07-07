@@ -127,7 +127,13 @@ export function CatalogsTab() {
         </Button>
       </div>
 
-      {catalogsQuery.isLoading ? (
+      {catalogsQuery.isError ? (
+        <Card>
+          <CardContent className="py-10 text-center text-sm text-muted-foreground">
+            {t("home.catalogs.loadError")}
+          </CardContent>
+        </Card>
+      ) : catalogsQuery.isLoading ? (
         <Card>
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
             {t("home.tab.loading")}

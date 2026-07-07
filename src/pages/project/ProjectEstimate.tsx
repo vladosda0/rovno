@@ -2451,7 +2451,11 @@ export default function ProjectEstimate() {
       if (RESOURCE_LINE_TYPES.has(suggestion.badgeType as ResourceLineType)) {
         partial.type = suggestion.badgeType as ResourceLineType;
       }
-      if (suggestion.priceCents != null) partial.costUnitCents = suggestion.priceCents;
+      if (suggestion.priceCents != null) {
+        // Estimate lines never go negative (createLine clamps the same way);
+        // a negative catalog price is a keepable warning there, not here.
+        partial.costUnitCents = Math.max(0, suggestion.priceCents);
+      }
       updateLine(pid, lineId, partial);
       trackEvent("catalog_item_used_in_estimate", {
         project_id: pid,

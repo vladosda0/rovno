@@ -48,6 +48,7 @@ export default function CatalogUploadReview() {
   const [draft, setDraft] = useState<CatalogUploadDraft | null | "missing">(null);
   const editedRowIds = useRef(new Set<string>());
   const persistTimer = useRef<number | null>(null);
+  const pendingDraftRef = useRef<CatalogUploadDraft | null>(null);
 
   useEffect(() => {
     if (!uploadId) {
@@ -61,14 +62,24 @@ export default function CatalogUploadReview() {
   // localStorage is unavailable (private mode / quota).
   useEffect(() => {
     if (!draft || draft === "missing") return;
+    pendingDraftRef.current = draft;
     if (persistTimer.current !== null) window.clearTimeout(persistTimer.current);
     persistTimer.current = window.setTimeout(() => {
+      pendingDraftRef.current = null;
       saveCatalogDraft(draft);
     }, 400);
     return () => {
       if (persistTimer.current !== null) window.clearTimeout(persistTimer.current);
     };
   }, [draft]);
+
+  // Unmount flush: edits made within the debounce window right before
+  // navigating away must not be lost from the stored draft.
+  useEffect(() => {
+    return () => {
+      if (pendingDraftRef.current) saveCatalogDraft(pendingDraftRef.current);
+    };
+  }, []);
 
   const rows: EditorRowData[] = useMemo(() => {
     if (!draft || draft === "missing") return [];
@@ -112,10 +123,14 @@ export default function CatalogUploadReview() {
 
   const counts = countBySeverity(draft.rows);
   const isSupabaseMode = workspaceMode.kind === "supabase";
+  // Mirrors the create_user_catalog RPC's item cap (reachable via "+ Добавить
+  // строку" on a truncated 1000-row upload).
+  const tooManyRows = draft.rows.length > 1000;
   const canSave =
     isSupabaseMode &&
     !saveMutation.isPending &&
     draft.rows.length > 0 &&
+    !tooManyRows &&
     counts.blocking === 0 &&
     draft.catalogName.trim().length > 0;
 
@@ -233,6 +248,7 @@ export default function CatalogUploadReview() {
           </Label>
           <Input
             id="catalog-name"
+            maxLength={200}
             value={draft.catalogName}
             onChange={(event) =>
               setDraft((current) =>
@@ -252,6 +268,12 @@ export default function CatalogUploadReview() {
 
       {counts.blocking > 0 && (
         <p className="text-caption text-destructive">{t("catalogReview.blockingHint")}</p>
+      )}
+
+      {tooManyRows && (
+        <p className="text-caption text-destructive">
+          {t("catalogReview.tooManyRows", { max: 1000 })}
+        </p>
       )}
 
       <CatalogItemsEditor
