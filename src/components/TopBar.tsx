@@ -483,6 +483,7 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOp
               <DropdownMenuItem asChild>
                 <Link to="/settings"><Settings className="mr-2 h-4 w-4" />{t("nav.settings")}</Link>
               </DropdownMenuItem>
+              <DropdownMenuSeparator />
               {renderSiteLinks()}
               {showRoleSwitcher && renderRoleSwitcher()}
               <DropdownMenuSeparator />
