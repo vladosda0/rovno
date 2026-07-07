@@ -211,6 +211,8 @@
   "nav.settings": "Settings",
   "nav.logout": "Log out",
   "nav.home": "Home",
+  "nav.blog": "Blog",
+  "nav.toSite": "To website",
   "nav.loggedOutToast": "Logged out",
   "nav.logoutFailed": "Logout failed",
   "nav.logoutGeneric": "Unable to log out.",

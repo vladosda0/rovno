@@ -29,9 +29,12 @@ const NAV_LINKS = [
   { label: "FAQ", href: "#faq" },
 ];
 
-export function Nav({ startPath, homeLink = false }: { startPath: string; homeLink?: boolean }) {
+export function Nav({ startPath, homeLink = false, isAuthed = false }: { startPath: string; homeLink?: boolean; isAuthed?: boolean }) {
   // homeLink: rendered on a subpage (e.g. /blog) — the logo routes to "/" and
   // section anchors become absolute so they land on the landing page.
+  // isAuthed: a signed-in visitor gets a single "В приложение" CTA instead of
+  // the "Войти" + "Начать проект" pair (offering "Войти" to someone already
+  // logged in was the double-login trap).
   const [c, setC] = useState(false);
   useEffect(() => {
     const onScroll = () => setC(window.scrollY > 64);
@@ -121,17 +124,22 @@ export function Nav({ startPath, homeLink = false }: { startPath: string; homeLi
                     {x.label}
                   </a>
                 ))}
+                <Link to="/blog/" style={{ fontFamily: "var(--font-body)", fontSize: 15, color: "var(--rv-blue)", textDecoration: "none", opacity: 0.72 }}>
+                  Блог
+                </Link>
               </div>
-              <Link className="rv-btn rv-btn--secondary" to="/auth/login" style={{ fontSize: 20, padding: "8px 14px" }}>
-                Войти
-              </Link>
+              {!isAuthed && (
+                <Link className="rv-btn rv-btn--secondary" to="/auth/login" style={{ fontSize: 20, padding: "8px 14px" }}>
+                  Войти
+                </Link>
+              )}
             </div>
             <Link
               className="rv-btn rv-btn--primary"
               to={startPath}
               style={{ fontSize: 20, padding: "8px 16px", flexShrink: 0, borderRadius: c ? 999 : "var(--r-md)", transition: `background .12s ${E}, color .12s ${E}, border-color .12s ${E}, transform .12s ${E}, border-radius .42s ${E}` }}
             >
-              Начать проект
+              {isAuthed ? "В приложение" : "Начать проект"}
             </Link>
           </div>
         </nav>
@@ -646,6 +654,7 @@ export function Footer({ onDemo }: { onDemo: () => void }) {
           <a href="#features" style={footerLinkStyle}>Возможности</a>
           <a href="#process" style={footerLinkStyle}>Процесс</a>
           <a href="#pricing" style={footerLinkStyle}>Тарифы</a>
+          <Link to="/blog/" style={footerLinkStyle}>Блог</Link>
           <button type="button" onClick={onDemo} style={{ background: "none", border: 0, padding: 0, margin: 0, cursor: "pointer", textAlign: "left", ...footerLinkStyle }}>Демо</button>
         </div>
 

@@ -1,6 +1,6 @@
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Home, LogOut, Settings, Sparkles, UserCog } from "lucide-react";
+import { Globe, Home, LogOut, Newspaper, Settings, Sparkles, UserCog } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -151,6 +151,16 @@ export function MobileNavSheet({
                 <span>{t("demo.changeRole")}</span>
               </button>
             ) : null}
+
+            <Link to="/blog/" onClick={close} className={ROW_BASE}>
+              <Newspaper className="h-4 w-4" />
+              <span>{t("nav.blog")}</span>
+            </Link>
+
+            <Link to="/" onClick={close} className={ROW_BASE}>
+              <Globe className="h-4 w-4" />
+              <span>{t("nav.toSite")}</span>
+            </Link>
 
             <button
               type="button"
