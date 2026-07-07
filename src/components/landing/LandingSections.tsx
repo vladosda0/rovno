@@ -157,8 +157,7 @@ export function Nav({ startPath, homeLink = false, authStatus = "guest" }: { sta
               // link with the correct label + target.
               <span
                 className="rv-btn rv-btn--primary"
-                role="link"
-                aria-disabled="true"
+                aria-hidden="true"
                 style={{ fontSize: 20, padding: "8px 16px", flexShrink: 0, borderRadius: c ? 999 : "var(--r-md)", pointerEvents: "none", transition: `background .12s ${E}, color .12s ${E}, border-color .12s ${E}, transform .12s ${E}, border-radius .42s ${E}` }}
               >
                 Начать проект
