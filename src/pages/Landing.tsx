@@ -52,7 +52,7 @@ export default function Landing() {
 
   return (
     <div className="rv-landing">
-      <Nav startPath={startPath} isAuthed={isSupabaseAuthed} />
+      <Nav startPath={startPath} authStatus={runtimeAuthStatus} />
       <Hero startPath={startPath} onDemo={handleDemo} />
       <KeyFeatures />
       <Problem />

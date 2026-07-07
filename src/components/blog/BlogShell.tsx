@@ -14,22 +14,21 @@ import "./blog.css";
 export function useLandingCta() {
   const navigate = useNavigate();
   const { status } = useRuntimeAuth();
-  const isAuthed = status === "authenticated";
-  const startPath = isAuthed ? "/home" : "/auth/signup";
+  const startPath = status === "authenticated" ? "/home" : "/auth/signup";
   const demoProjectId = seedProjects[0]?.id;
   const onDemo = () => {
     if (!demoProjectId) return;
     enterDemoSession(demoProjectId);
     navigate(`/project/${demoProjectId}/dashboard`);
   };
-  return { startPath, onDemo, isAuthed };
+  return { startPath, onDemo, authStatus: status };
 }
 
 export function BlogShell({ children }: { children: ReactNode }) {
-  const { startPath, onDemo, isAuthed } = useLandingCta();
+  const { startPath, onDemo, authStatus } = useLandingCta();
   return (
     <div className="rv-landing">
-      <Nav startPath={startPath} homeLink isAuthed={isAuthed} />
+      <Nav startPath={startPath} homeLink authStatus={authStatus} />
       {children}
       <Interlude tone="sage" />
       <Footer onDemo={onDemo} />
