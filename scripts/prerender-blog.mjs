@@ -208,46 +208,52 @@ function buildHeadTags(page) {
 function renderPage(template, page) {
   let html = template;
 
-  html = html.replace(/<title>[\s\S]*?<\/title>/, `<title>${escapeHtml(page.title)}</title>`);
+  // Use FUNCTION replacements everywhere below. The replacement values interpolate
+  // author-controlled content (titles, descriptions, and page.rootHtml, the whole
+  // rendered article body). String.prototype.replace interprets `$&`, `` $` ``,
+  // `$'`, `$$` and `$n` in a replacement STRING, so a `$` sequence in a title or
+  // post body would splice app-shell template fragments into the output. A function
+  // replacement returns its value literally, disabling that interpretation.
+  html = html.replace(/<title>[\s\S]*?<\/title>/, () => `<title>${escapeHtml(page.title)}</title>`);
   html = html.replace(
     /<meta name="description"[^>]*\/>/,
-    `<meta name="description" content="${escapeHtml(page.description)}" />`,
+    () => `<meta name="description" content="${escapeHtml(page.description)}" />`,
   );
   html = html.replace(
     /<meta property="og:title"[^>]*\/>/,
-    `<meta property="og:title" content="${escapeHtml(page.title)}" />`,
+    () => `<meta property="og:title" content="${escapeHtml(page.title)}" />`,
   );
   html = html.replace(
     /<meta property="og:description"[^>]*\/>/,
-    `<meta property="og:description" content="${escapeHtml(page.description)}" />`,
+    () => `<meta property="og:description" content="${escapeHtml(page.description)}" />`,
   );
   html = html.replace(
     /<meta property="og:type"[^>]*\/>/,
-    `<meta property="og:type" content="${page.ogType ?? "website"}" />`,
+    () => `<meta property="og:type" content="${page.ogType ?? "website"}" />`,
   );
   if (page.ogImage) {
     html = html.replace(
       /<meta property="og:image"[^>]*\/>/,
-      `<meta property="og:image" content="${escapeHtml(page.ogImage)}" />`,
+      () => `<meta property="og:image" content="${escapeHtml(page.ogImage)}" />`,
     );
     html = html.replace(
       /<meta name="twitter:card"[^>]*\/>/,
-      `<meta name="twitter:card" content="summary_large_image" />`,
+      () => `<meta name="twitter:card" content="summary_large_image" />`,
     );
   }
   html = html.replace(
     /<meta name="twitter:title"[^>]*\/>/,
-    `<meta name="twitter:title" content="${escapeHtml(page.title)}" />`,
+    () => `<meta name="twitter:title" content="${escapeHtml(page.title)}" />`,
   );
 
-  html = html.replace("</head>", `    ${buildHeadTags(page)}\n  </head>`);
+  html = html.replace("</head>", () => `    ${buildHeadTags(page)}\n  </head>`);
 
   const dataScript = page.inlineData
     ? `<script type="application/json" id="${page.inlineData.id}">${jsonForScriptTag(page.inlineData.value)}</script>\n    `
     : "";
   html = html.replace(
     /<div id="root"><\/div>/,
-    `<div id="root">${page.rootHtml}</div>\n    ${dataScript}`,
+    () => `<div id="root">${page.rootHtml}</div>\n    ${dataScript}`,
   );
 
   return html;
