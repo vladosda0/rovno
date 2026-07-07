@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Lock, Plus, X } from "lucide-react";
 
@@ -82,6 +82,21 @@ function issueKey(issue: RowIssue): string {
   return `${issue.code}:${issue.field}`;
 }
 
+// Editable fields, named to match RowIssue.field so a dismissal (`code:field`)
+// can be cleared when its field is edited.
+type CatalogFieldKey = "name" | "unit" | "price" | "type" | "sku";
+const CATALOG_FIELDS: CatalogFieldKey[] = ["name", "unit", "price", "type", "sku"];
+
+function fieldValues(row: EditorRowData): Record<CatalogFieldKey, string> {
+  return {
+    name: row.name,
+    unit: row.unit,
+    price: row.priceInput,
+    type: row.resourceType,
+    sku: row.supplierSku,
+  };
+}
+
 /**
  * Row highlight/severity as the user currently SEES it: blocking issues always
  * count, warnings the user dismissed (× on hover) drop out. Dismissal is a
@@ -122,7 +137,8 @@ export function CatalogItemsEditor({
   const { t } = useTranslation();
   const [filter, setFilter] = useState<SeverityFilter>("all");
   const [page, setPage] = useState(0);
-  // Warning hints the user has dismissed, keyed by row id → set of issue keys.
+  // Warning hints the user has dismissed, keyed by row id → set of issue keys
+  // (`${code}:${field}`). Dismissal is local and cosmetic.
   const [dismissed, setDismissed] = useState<Record<string, Set<string>>>({});
 
   const dismissIssue = (rowId: string, key: string) => {
@@ -132,6 +148,56 @@ export function CatalogItemsEditor({
       return { ...prev, [rowId]: next };
     });
   };
+
+  // Re-evaluate a field's skipped warnings when that field is edited, so a
+  // freshly-raised warning (e.g. a different still-unknown unit) is never
+  // silently pre-suppressed by a stale dismissal keyed on the same code:field.
+  // Also prune dismissals for rows that no longer exist. Editing a field only
+  // clears that field's skips; unrelated skips on the row survive.
+  const prevValues = useRef<Map<string, Record<CatalogFieldKey, string>>>(new Map());
+  useEffect(() => {
+    const present = new Set<string>();
+    const changedFields = new Map<string, Set<string>>();
+    const nextValues = new Map<string, Record<CatalogFieldKey, string>>();
+    for (const row of rows) {
+      present.add(row.id);
+      const vals = fieldValues(row);
+      nextValues.set(row.id, vals);
+      const prev = prevValues.current.get(row.id);
+      if (prev) {
+        const changed = new Set<string>();
+        for (const field of CATALOG_FIELDS) {
+          if (prev[field] !== vals[field]) changed.add(field);
+        }
+        if (changed.size > 0) changedFields.set(row.id, changed);
+      }
+    }
+    prevValues.current = nextValues;
+
+    setDismissed((current) => {
+      let mutated = false;
+      const next: Record<string, Set<string>> = {};
+      for (const [id, set] of Object.entries(current)) {
+        if (!present.has(id)) {
+          mutated = true; // row gone
+          continue;
+        }
+        const changed = changedFields.get(id);
+        if (!changed) {
+          next[id] = set;
+          continue;
+        }
+        const kept = new Set([...set].filter((key) => !changed.has(key.split(":")[1] ?? "")));
+        if (kept.size !== set.size) {
+          mutated = true;
+          if (kept.size > 0) next[id] = kept;
+        } else {
+          next[id] = set;
+        }
+      }
+      return mutated ? next : current;
+    });
+  }, [rows]);
 
   const filteredRows = useMemo(() => {
     if (filter === "all") return rows;
