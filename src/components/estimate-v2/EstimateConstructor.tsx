@@ -24,8 +24,10 @@ import { useApplyTemplateStages, type StageApplySelection } from "@/hooks/use-ap
 import { useAddLibraryWork, type AddWorkRequest } from "@/hooks/use-add-library-work";
 import { useCanonicalCatalog, type CatalogResource } from "@/hooks/use-canonical-catalog";
 import { useEstimateV2ProjectSync } from "@/hooks/use-estimate-v2-data";
+import { MyCatalogsPanel } from "@/components/estimate-v2/MyCatalogsPanel";
+import type { UserCatalogItem } from "@/types/user-catalog";
 
-type ConstructorTab = "estimates" | "catalog";
+type ConstructorTab = "estimates" | "catalog" | "my-catalogs";
 
 interface EstimateConstructorProps {
   open: boolean;
@@ -49,6 +51,8 @@ interface EstimateConstructorProps {
   initialTab?: ConstructorTab;
   /** Adds a catalog leaf as a resource line on the target work (client-side). Add-resource mode. */
   onAddCatalogResource?: (resource: CatalogResource) => void;
+  /** Adds a personal catalog item (with the user's price) on the target work. Add-resource mode. */
+  onAddPersonalItem?: (item: UserCatalogItem) => void;
 }
 
 const EMPTY_CONSTRUCTOR_STAGES: ConstructorStage[] = [];
@@ -63,6 +67,7 @@ export function EstimateConstructor({
   target,
   initialTab,
   onAddCatalogResource,
+  onAddPersonalItem,
 }: EstimateConstructorProps) {
   const { t } = useTranslation();
 
@@ -248,6 +253,14 @@ export function EstimateConstructor({
                 title={!addResourceMode ? t("estimate.constructor.catalogNeedsWork") : undefined}
               >
                 {t("estimate.constructor.tabs.catalog")}
+              </TabsTrigger>
+              <TabsTrigger
+                value="my-catalogs"
+                className="flex-1"
+                disabled={!addResourceMode}
+                title={!addResourceMode ? t("estimate.constructor.catalogNeedsWork") : undefined}
+              >
+                {t("estimate.constructor.tabs.myCatalogs")}
               </TabsTrigger>
             </TabsList>
           </div>
@@ -521,6 +534,19 @@ export function EstimateConstructor({
                 </p>
               )}
             </div>
+          </TabsContent>
+
+          <TabsContent
+            value="my-catalogs"
+            className="mt-0 min-h-0 flex-1 flex-col data-[state=active]:flex"
+          >
+            <p className="px-4 pt-3 text-xs text-muted-foreground">
+              {t("estimate.myCatalogs.hint")}
+            </p>
+            <MyCatalogsPanel
+              enabled={open && canApply && addResourceMode && tab === "my-catalogs"}
+              onAddItem={(item) => onAddPersonalItem?.(item)}
+            />
           </TabsContent>
         </Tabs>
       </SheetContent>

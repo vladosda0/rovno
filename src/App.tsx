@@ -23,6 +23,8 @@ const EmailSent = lazy(() => import("@/pages/auth/EmailSent"));
 const AuthCallback = lazy(() => import("@/pages/auth/AuthCallback"));
 const Onboarding = lazy(() => import("@/pages/Onboarding"));
 const Home = lazy(() => import("@/pages/Home"));
+const CatalogUploadReview = lazy(() => import("@/pages/catalogs/CatalogUploadReview"));
+const UserCatalogPage = lazy(() => import("@/pages/catalogs/UserCatalogPage"));
 const PromoRedeem = lazy(() => import("@/pages/promo/Redeem"));
 const Profile = lazy(() => import("@/pages/Profile"));
 const Settings = lazy(() => import("@/pages/Settings"));
@@ -118,6 +120,12 @@ const App = () => (
           {/* App layout (sidebar + topbar) */}
           <Route element={routeElement(<AppLayout />)}>
             <Route path="/home" element={routeElement(<Home />)} />
+            {/* User Catalog Upload v1: bookmarkable review editor + saved catalog page */}
+            <Route
+              path="/home/catalogs/upload-review/:uploadId"
+              element={routeElement(<CatalogUploadReview />)}
+            />
+            <Route path="/home/catalogs/:catalogId" element={routeElement(<UserCatalogPage />)} />
             <Route path="/demo" element={routeElement(<Demo />)} />
             <Route path="/profile" element={routeElement(<Profile />)} />
             <Route path="/profile/upgrade" element={routeElement(<Navigate to="/settings?tab=billing" replace />)} />

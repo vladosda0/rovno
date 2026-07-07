@@ -6,6 +6,7 @@ import {
   FolderTree,
   HardHat,
   Hammer,
+  Home,
   Layers,
   Package,
   Truck,
@@ -22,6 +23,8 @@ import {
   type CanonicalSearchKind,
   type CanonicalSuggestion,
 } from "@/hooks/use-canonical-search";
+import { usePersonalResourceSuggestions } from "@/hooks/use-personal-resource-suggestions";
+import { formatCentsAsRub } from "@/lib/user-catalog/validation";
 
 const BADGE_ICON: Record<string, LucideIcon> = {
   stage: Layers,
@@ -52,6 +55,12 @@ interface LibraryNameInputProps {
    * search_canonical_library RPC is issued. Defaults to true.
    */
   searchEnabled?: boolean;
+  /**
+   * Merge the user's personal catalog items into the suggestions (above the
+   * canonical results, home icon, price shown). Only meaningful for
+   * kind="resource" in supabase mode. Defaults to false.
+   */
+  personalEnabled?: boolean;
   readOnly?: boolean;
   startInEditMode?: boolean;
   className?: string;
@@ -71,6 +80,7 @@ export function LibraryNameInput({
   onCommit,
   onApplySuggestion,
   searchEnabled = true,
+  personalEnabled = false,
   readOnly = false,
   startInEditMode = false,
   className,
@@ -88,10 +98,15 @@ export function LibraryNameInput({
   const debounced = useDebounce(draft, 200);
   const dropdownOpen = isEditing && draft.trim().length > 0 && searchEnabled;
   const search = useCanonicalSearch(debounced, kind, dropdownOpen);
+  const personalSuggestions = usePersonalResourceSuggestions(
+    debounced,
+    dropdownOpen && personalEnabled && kind === "resource",
+  );
   // True while the debounce gap hasn't caught up to the latest keystroke OR the
   // query is in flight — prevents the "no matches" empty state from flashing mid-type.
   const searchPending = search.isLoading || debounced.trim() !== draft.trim();
-  const suggestions = search.data ?? [];
+  // Personal items rank above canonical (spec R-8: "юзер обычно ищет свои").
+  const suggestions = [...personalSuggestions, ...(search.data ?? [])];
 
   useEffect(() => {
     if (!isEditing) setDraft(value);
@@ -225,9 +240,21 @@ export function LibraryNameInput({
             </div>
           ) : (
             suggestions.map((suggestion) => {
-              const Icon = BADGE_ICON[suggestion.badgeType] ?? Circle;
-              const secondary =
-                suggestion.kind === "work"
+              // Personal items get the home icon regardless of resource type
+              // (spec R-8: the icon marks the SOURCE, only in the dropdown).
+              const Icon = suggestion.isPersonal
+                ? Home
+                : BADGE_ICON[suggestion.badgeType] ?? Circle;
+              const secondary = suggestion.isPersonal
+                ? [
+                    suggestion.unit,
+                    suggestion.priceCents != null
+                      ? `${formatCentsAsRub(suggestion.priceCents)} ₽`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")
+                : suggestion.kind === "work"
                   ? suggestion.workStageName
                   : suggestion.kind === "subcategory"
                     ? t("estimate.search.badge.subcategory")
@@ -247,7 +274,12 @@ export function LibraryNameInput({
                   }}
                   className="flex w-full items-start gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:outline-none"
                 >
-                  <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                  <Icon
+                    className={cn(
+                      "mt-0.5 h-4 w-4 shrink-0",
+                      suggestion.isPersonal ? "text-accent" : "text-muted-foreground",
+                    )}
+                  />
                   <span className="min-w-0 flex-1">
                     <span className="block break-words leading-snug">{suggestion.name}</span>
                     {secondary && (
