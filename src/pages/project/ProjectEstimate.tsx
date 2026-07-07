@@ -160,6 +160,7 @@ import { ResourceModal } from "@/components/estimate-v2/ResourceModal";
 import { LibraryNameInput } from "@/components/estimate-v2/LibraryNameInput";
 import type { CanonicalSuggestion } from "@/hooks/use-canonical-search";
 import type { CatalogResource } from "@/hooks/use-canonical-catalog";
+import type { UserCatalogItem } from "@/types/user-catalog";
 import { EstimateConstructor } from "@/components/estimate-v2/EstimateConstructor";
 import { useCurrentEstimateVersionId } from "@/hooks/use-current-estimate-version";
 import type {
@@ -972,7 +973,7 @@ export default function ProjectEstimate() {
   const canonicalSearchEnabled = workspaceMode.kind === "supabase";
   const constructorProfileId = workspaceMode.kind === "supabase" ? workspaceMode.profileId : (currentUser.id || "");
   const [constructorTarget, setConstructorTarget] = useState<{ stageId?: string; workId?: string } | null>(null);
-  const [constructorTab, setConstructorTab] = useState<"estimates" | "catalog">("estimates");
+  const [constructorTab, setConstructorTab] = useState<"estimates" | "catalog" | "my-catalogs">("estimates");
   const openConstructor = (
     target: { stageId?: string; workId?: string } | null,
     tab: "estimates" | "catalog",
@@ -2438,6 +2439,27 @@ export default function ProjectEstimate() {
   // the article so the row indicator + resource modal light up). Resource-level
   // apply is client-side and silent (no revert toast), per spec.
   const applyResourceSuggestion = (lineId: string, suggestion: CanonicalSuggestion) => {
+    if (suggestion.isPersonal) {
+      // Personal catalog item: suggestion.id is the user_catalog_item id, NOT
+      // a canonical article — the line links to the canonical library only
+      // through the item's manual match. The user's own price copies over.
+      const partial: Partial<EstimateV2ResourceLine> = {
+        title: suggestion.name,
+        systemResourceArticleId: suggestion.matchedArticleId ?? null,
+      };
+      if (suggestion.unit) partial.unit = suggestion.unit;
+      if (RESOURCE_LINE_TYPES.has(suggestion.badgeType as ResourceLineType)) {
+        partial.type = suggestion.badgeType as ResourceLineType;
+      }
+      if (suggestion.priceCents != null) partial.costUnitCents = suggestion.priceCents;
+      updateLine(pid, lineId, partial);
+      trackEvent("catalog_item_used_in_estimate", {
+        project_id: pid,
+        via: "autocomplete",
+        matched: Boolean(suggestion.matchedArticleId),
+      });
+      return;
+    }
     const partial: Partial<EstimateV2ResourceLine> = {
       title: suggestion.name,
       systemResourceArticleId: suggestion.id,
@@ -2477,6 +2499,38 @@ export default function ProjectEstimate() {
       resource_type: type,
     });
     toast({ title: t("estimate.constructor.catalogAdded", { name: resource.name }) });
+  };
+
+  // Add a personal catalog item on the target work — unlike canonical leaves
+  // it carries the user's own price; the canonical link comes only from the
+  // item's manual "Артикул Rovno" match. Backs the Мои каталоги tab.
+  const handleAddPersonalCatalogItem = (item: UserCatalogItem) => {
+    const stageId = constructorTarget?.stageId;
+    const workId = constructorTarget?.workId;
+    if (!stageId || !workId) return;
+    const created = createLine(pid, {
+      stageId,
+      workId,
+      title: item.name,
+      type: item.resourceType,
+      unit: item.unit || getUnitOptionsForType(item.resourceType)[0] || "pcs",
+      qtyMilli: 1_000,
+      costUnitCents: item.priceCents,
+      systemResourceArticleId: item.matchedArticleId,
+    });
+    if (!created) return;
+    trackEvent("estimate_line_created", {
+      project_id: pid,
+      stage_id: stageId,
+      work_id: workId,
+      resource_type: item.resourceType,
+    });
+    trackEvent("catalog_item_used_in_estimate", {
+      project_id: pid,
+      via: "constructor",
+      matched: Boolean(item.matchedArticleId),
+    });
+    toast({ title: t("estimate.constructor.catalogAdded", { name: item.name }) });
   };
 
   const openWorkDelete = (workId: string) => {
@@ -2966,6 +3020,7 @@ export default function ProjectEstimate() {
                                                     value={line.title}
                                                     kind="resource"
                                                     searchEnabled={canonicalSearchEnabled}
+                                                    personalEnabled={canonicalSearchEnabled}
                                                     readOnly={!canEditEstimate}
                                                     startInEditMode={pendingLineTitleEditId === line.id}
                                                     onCommit={(nextValue) => updateLine(pid, line.id, { title: nextValue || line.title, systemResourceArticleId: null })}
@@ -3696,6 +3751,7 @@ export default function ProjectEstimate() {
           target={constructorTarget}
           initialTab={constructorTab}
           onAddCatalogResource={handleAddCatalogResource}
+          onAddPersonalItem={handleAddPersonalCatalogItem}
         />
       </div>
     </div>

@@ -11,6 +11,9 @@ vi.mock("@/hooks/use-debounce", () => ({ useDebounce: () => "" }));
 vi.mock("@/hooks/use-canonical-search", () => ({
   useCanonicalSearch: () => ({ data: [], isLoading: false }),
 }));
+vi.mock("@/hooks/use-personal-resource-suggestions", () => ({
+  usePersonalResourceSuggestions: () => [],
+}));
 
 describe("LibraryNameInput debounce gap", () => {
   it("shows the loading state (not 'no matches') while the debounce hasn't caught up", () => {

@@ -23,6 +23,10 @@ export interface CanonicalSuggestion {
   subcategory: string | null;
   unit: string | null;
   rovnoSku: string | null;
+  /** Personal catalog suggestions only: the user's own price for the item. */
+  priceCents?: number | null;
+  /** Personal catalog suggestions only: canonical article the item is matched to. */
+  matchedArticleId?: string | null;
 }
 
 interface RawSuggestion {
