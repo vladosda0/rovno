@@ -150,6 +150,9 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20260630120000_cross_project_stock_transfer.sql`
 - `supabase/migrations/20260630130000_cross_project_transfer_procurement_item_on_destination.sql`
 - `supabase/migrations/20260630140000_cross_project_transfer_deferred_receipt.sql`
+- `supabase/migrations/20260705191000_p31_procurement_received_columns.sql`
+- `supabase/migrations/20260706120000_blog_schema.sql`
+- `supabase/migrations/20260706140000_user_catalogs.sql`
 
 ## Exclusions
 

@@ -1,6 +1,7 @@
 import { Link, useLocation, useMatch, useNavigate } from "react-router-dom";
-import { ChevronDown, LogOut, Menu, PanelLeft, Settings, User, UserCog } from "lucide-react";
+import { ChevronDown, Globe, LogOut, Menu, Newspaper, PanelLeft, Settings, User, UserCog } from "lucide-react";
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -75,6 +76,7 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOp
   const isInProject = Boolean(projectId);
   const isHomePage = location.pathname === "/home";
   const runtimeAuth = useRuntimeAuth();
+  const queryClient = useQueryClient();
 
   const user = useCurrentUser();
   const projects = useProjects();
@@ -186,6 +188,20 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOp
     );
   };
 
+  // Links out of the app to the public marketing surface: the blog and the
+  // landing. Gives every in-app screen a reachable path back to the site
+  // (previously the landing was only reachable by hand-typing "/").
+  const renderSiteLinks = () => (
+    <>
+      <DropdownMenuItem asChild>
+        <Link to="/blog/"><Newspaper className="mr-2 h-4 w-4" />{t("nav.blog")}</Link>
+      </DropdownMenuItem>
+      <DropdownMenuItem asChild>
+        <Link to="/"><Globe className="mr-2 h-4 w-4" />{t("nav.toSite")}</Link>
+      </DropdownMenuItem>
+    </>
+  );
+
   const renderRoleSwitcher = () => (
     <DropdownMenuItem
       onSelect={(event) => {
@@ -219,6 +235,10 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOp
       clearDemoSession();
       clearAiSidebarSessionPreference();
       clearStoredAuthProfile();
+      // Drop all cached queries so the next account signing in on this same tab
+      // cannot read the previous user's private data (e.g. personal catalogs)
+      // from React Query's cache before it refetches. Keys are not user-scoped.
+      queryClient.clear();
       setAuthRole("guest");
       toast({ title: t("nav.loggedOutToast") });
       navigate("/");
@@ -309,6 +329,9 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOp
                   {t("nav.settings")}
                 </Link>
               </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {renderSiteLinks()}
+              <DropdownMenuSeparator />
               {showRoleSwitcher && renderRoleSwitcher()}
               <DropdownMenuItem onClick={handleLogout}>
                 <LogOut className="mr-2 h-4 w-4" />
@@ -415,6 +438,9 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOp
                   {t("nav.settings")}
                 </Link>
               </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {renderSiteLinks()}
+              <DropdownMenuSeparator />
               {showRoleSwitcher && renderRoleSwitcher()}
               <DropdownMenuItem onClick={handleLogout}>
                 <LogOut className="mr-2 h-4 w-4" />
@@ -463,6 +489,8 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOp
               <DropdownMenuItem asChild>
                 <Link to="/settings"><Settings className="mr-2 h-4 w-4" />{t("nav.settings")}</Link>
               </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {renderSiteLinks()}
               {showRoleSwitcher && renderRoleSwitcher()}
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleLogout}>

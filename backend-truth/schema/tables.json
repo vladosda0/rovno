@@ -4315,6 +4315,26 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "received_qty",
+          "sqlType": "numeric(14,3)",
+          "tsType": "number",
+          "nullable": false,
+          "defaultSql": "0",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "received_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -4367,6 +4387,16 @@
           "expression": "actual_unit_price_cents is null or actual_unit_price_cents >= 0",
           "usingIndex": null,
           "sourceMigration": "supabase/migrations/20260629120000_add_procurement_item_detail_columns.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "received_qty"
+          ],
+          "expression": "received_qty >= 0",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260705191000_p31_procurement_received_columns.sql"
         }
       ],
       "indexes": [
@@ -11129,6 +11159,747 @@
           "functionName": "set_updated_at",
           "functionSignature": "public.set_updated_at()",
           "sourceMigration": "supabase/migrations/20260604120000_create_card_bindings.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "blog_authors",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql",
+      "columns": [
+        {
+          "name": "id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "gen_random_uuid()",
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "profile_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": true,
+          "references": {
+            "toSchema": "public",
+            "toTable": "profiles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "cascade"
+          }
+        },
+        {
+          "name": "display_name",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "bio",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "avatar_url",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "updated_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [],
+      "indexes": [],
+      "triggers": [
+        {
+          "name": "set_blog_authors_updated_at",
+          "activation": "before update",
+          "functionSchema": "public",
+          "functionName": "set_updated_at",
+          "functionSignature": "public.set_updated_at()",
+          "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "blog_posts",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql",
+      "columns": [
+        {
+          "name": "id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "gen_random_uuid()",
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "author_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "blog_authors",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "restrict"
+          }
+        },
+        {
+          "name": "slug",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": true,
+          "references": null
+        },
+        {
+          "name": "title",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "subtitle",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "excerpt",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "content",
+          "sqlType": "jsonb",
+          "tsType": "Json",
+          "nullable": false,
+          "defaultSql": "'{}'::jsonb",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "content_html",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "''",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "cover_image_url",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "seo_title",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "seo_description",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "tags",
+          "sqlType": "text[]",
+          "tsType": "unknown",
+          "nullable": false,
+          "defaultSql": "'{}'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "locale",
+          "sqlType": "text",
+          "tsType": "\"ru\" | \"en\"",
+          "nullable": false,
+          "defaultSql": "'ru'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "status",
+          "sqlType": "text",
+          "tsType": "\"draft\" | \"published\"",
+          "nullable": false,
+          "defaultSql": "'draft'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "published_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "reading_time_minutes",
+          "sqlType": "integer",
+          "tsType": "number",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "word_count",
+          "sqlType": "integer",
+          "tsType": "number",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "updated_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "locale"
+          ],
+          "expression": "locale in ('ru', 'en')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "status"
+          ],
+          "expression": "status in ('draft', 'published')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "reading_time_minutes"
+          ],
+          "expression": "reading_time_minutes is null or reading_time_minutes > 0",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "word_count"
+          ],
+          "expression": "word_count is null or word_count >= 0",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+        },
+        {
+          "type": "check",
+          "name": "blog_posts_slug_format",
+          "columns": [],
+          "expression": "slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$' and char_length(slug) between 3 and 120",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+        },
+        {
+          "type": "check",
+          "name": "blog_posts_slug_reserved",
+          "columns": [],
+          "expression": "slug not in ('admin', 'new', 'edit', 'feed', 'rss', 'sitemap', 'tag', 'tags', 'preview')",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+        },
+        {
+          "type": "check",
+          "name": "blog_posts_published_has_timestamp",
+          "columns": [],
+          "expression": "status <> 'published' or published_at is not null",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_blog_posts_status_published_at",
+          "unique": false,
+          "method": null,
+          "expressions": [
+            "status",
+            "published_at desc"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+        },
+        {
+          "name": "idx_blog_posts_author_id",
+          "unique": false,
+          "method": null,
+          "expressions": [
+            "author_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "set_blog_posts_updated_at",
+          "activation": "before update",
+          "functionSchema": "public",
+          "functionName": "set_updated_at",
+          "functionSignature": "public.set_updated_at()",
+          "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "user_catalogs",
+      "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql",
+      "columns": [
+        {
+          "name": "id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "gen_random_uuid()",
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "owner_profile_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "profiles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "cascade"
+          }
+        },
+        {
+          "name": "name",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "source_filename",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "updated_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "name"
+          ],
+          "expression": "char_length(btrim(name)) between 1 and 200",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "source_filename"
+          ],
+          "expression": "source_filename is null or char_length(source_filename) <= 255",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_user_catalogs_owner",
+          "unique": false,
+          "method": null,
+          "expressions": [
+            "owner_profile_id",
+            "created_at desc"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "set_user_catalogs_updated_at",
+          "activation": "before update",
+          "functionSchema": "public",
+          "functionName": "set_updated_at",
+          "functionSignature": "public.set_updated_at()",
+          "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "user_catalog_items",
+      "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql",
+      "columns": [
+        {
+          "name": "id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "gen_random_uuid()",
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "catalog_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "user_catalogs",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "cascade"
+          }
+        },
+        {
+          "name": "position",
+          "sqlType": "integer",
+          "tsType": "number",
+          "nullable": false,
+          "defaultSql": "0",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "name",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "unit",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "''",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "price_cents",
+          "sqlType": "bigint",
+          "tsType": "number",
+          "nullable": false,
+          "defaultSql": "0",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "resource_type",
+          "sqlType": "text",
+          "tsType": "\"material\" | \"tool\" | \"labor\" | \"subcontractor\" | \"overhead\" | \"other\"",
+          "nullable": false,
+          "defaultSql": "'material'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "supplier_sku",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "matched_article_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "system_resource_articles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "updated_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "name"
+          ],
+          "expression": "char_length(btrim(name)) between 1 and 500",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "unit"
+          ],
+          "expression": "char_length(unit) <= 50",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "resource_type"
+          ],
+          "expression": "resource_type in ('material', 'tool', 'labor', 'subcontractor', 'overhead', 'other')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "supplier_sku"
+          ],
+          "expression": "supplier_sku is null or char_length(supplier_sku) <= 100",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+        },
+        {
+          "type": "check",
+          "name": "user_catalog_items_price_cents_bounds",
+          "columns": [],
+          "expression": "price_cents between -1000000000000 and 1000000000000",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_user_catalog_items_catalog",
+          "unique": false,
+          "method": null,
+          "expressions": [
+            "catalog_id",
+            "position"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+        },
+        {
+          "name": "idx_user_catalog_items_matched_article",
+          "unique": false,
+          "method": null,
+          "expressions": [
+            "matched_article_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "set_user_catalog_items_updated_at",
+          "activation": "before update",
+          "functionSchema": "public",
+          "functionName": "set_updated_at",
+          "functionSignature": "public.set_updated_at()",
+          "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
         }
       ]
     }

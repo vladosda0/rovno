@@ -1,0 +1,168 @@
+// Supabase access for the blog feature.
+//
+// Uses the untyped client until the backend-truth sync PR adds blog tables
+// to the generated Database type (same pattern as subscriptions/billing).
+// RLS drives visibility: anon/regular users receive published rows only;
+// registered blog authors (public.blog_authors) also receive drafts and hold
+// the write surface. See rovno-db 20260706120000_blog_schema.sql.
+
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { supabase } from "@/integrations/supabase/client";
+import { isImage, optimizeImageForUpload } from "@/lib/image-optimization";
+import { uploadFileToBucket } from "@/data/org-source";
+import type {
+  BlogAuthor,
+  BlogPost,
+  BlogPostInsert,
+  BlogPostPatch,
+  BlogPostWithAuthor,
+} from "./types";
+
+const rawSupabase = supabase as unknown as SupabaseClient;
+
+export const BLOG_IMAGES_BUCKET = "blog-images";
+
+const AUTHOR_EMBED = "author:blog_authors(id, display_name, avatar_url, bio)";
+
+const POST_LIST_COLUMNS =
+  `id, author_id, slug, title, subtitle, excerpt, cover_image_url, tags, locale, status, published_at, reading_time_minutes, word_count, created_at, updated_at, ${AUTHOR_EMBED}`;
+
+const POST_FULL_COLUMNS =
+  `id, author_id, slug, title, subtitle, excerpt, content, content_html, cover_image_url, seo_title, seo_description, tags, locale, status, published_at, reading_time_minutes, word_count, created_at, updated_at, ${AUTHOR_EMBED}`;
+
+/** Published posts for the public list / landing teaser (newest first).
+ * List projection: no content/content_html on the wire. */
+export async function fetchPublishedPosts(limit?: number): Promise<BlogPostWithAuthor[]> {
+  let query = rawSupabase
+    .from("blog_posts")
+    .select(POST_LIST_COLUMNS)
+    .eq("status", "published")
+    .order("published_at", { ascending: false });
+  if (limit) query = query.limit(limit);
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data ?? []) as unknown as BlogPostWithAuthor[];
+}
+
+/** One post by slug. RLS decides draft visibility: for a blog author this
+ * returns their draft (used by the editor's preview), for everyone else
+ * drafts read as "not found". */
+export async function fetchPostBySlug(slug: string): Promise<BlogPostWithAuthor | null> {
+  const { data, error } = await rawSupabase
+    .from("blog_posts")
+    .select(POST_FULL_COLUMNS)
+    .eq("slug", slug)
+    .maybeSingle();
+  if (error) throw error;
+  return (data ?? null) as unknown as BlogPostWithAuthor | null;
+}
+
+export async function fetchPostById(id: string): Promise<BlogPostWithAuthor | null> {
+  const { data, error } = await rawSupabase
+    .from("blog_posts")
+    .select(POST_FULL_COLUMNS)
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  return (data ?? null) as unknown as BlogPostWithAuthor | null;
+}
+
+/** Admin list: RLS already scopes drafts to authors; order by freshest edit. */
+export async function fetchAllPostsForAdmin(): Promise<BlogPostWithAuthor[]> {
+  const { data, error } = await rawSupabase
+    .from("blog_posts")
+    .select(POST_LIST_COLUMNS)
+    .order("updated_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as unknown as BlogPostWithAuthor[];
+}
+
+/** The caller's blog_authors row, or null when they are not an author. */
+export async function fetchMyBlogAuthor(profileId: string): Promise<BlogAuthor | null> {
+  const { data, error } = await rawSupabase
+    .from("blog_authors")
+    .select("id, profile_id, display_name, bio, avatar_url, created_at, updated_at")
+    .eq("profile_id", profileId)
+    .maybeSingle();
+  if (error) throw error;
+  return (data ?? null) as BlogAuthor | null;
+}
+
+export async function createBlogPost(input: BlogPostInsert): Promise<BlogPost> {
+  const { data, error } = await rawSupabase
+    .from("blog_posts")
+    .insert(input)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as BlogPost;
+}
+
+export async function updateBlogPost(id: string, patch: BlogPostPatch): Promise<BlogPost> {
+  const { data, error } = await rawSupabase
+    .from("blog_posts")
+    .update(patch)
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as BlogPost;
+}
+
+export async function deleteBlogPost(id: string): Promise<void> {
+  const { error } = await rawSupabase.from("blog_posts").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export type RebuildResult =
+  | { ok: true }
+  | { ok: false; notConfigured: boolean; message: string };
+
+/** Ask the blog-rebuild-frontend edge function to kick a Timeweb rebuild so
+ * the static blog pages / sitemap / RSS regenerate with current content.
+ * Author-only (the function re-checks blog_authors server-side). A 501 means
+ * the webhook secrets are not set on this environment — callers surface that
+ * as "не настроено", not as a failure of the publish itself. */
+export async function triggerFrontendRebuild(): Promise<RebuildResult> {
+  const { error } = await rawSupabase.functions.invoke("blog-rebuild-frontend", {
+    body: {},
+  });
+  if (!error) return { ok: true };
+
+  let status: number | null = null;
+  let message = error.message ?? "Unknown error";
+  const context = (error as { context?: Response }).context;
+  if (context && typeof context.status === "number") {
+    status = context.status;
+    try {
+      const body = (await context.json()) as { error?: string };
+      if (body?.error) message = body.error;
+    } catch {
+      // non-JSON body — keep the generic message
+    }
+  }
+  return { ok: false, notConfigured: status === 501, message };
+}
+
+export interface BlogImageUploadResult {
+  url: string;
+  path: string;
+}
+
+/** Upload an article image (cover or inline figure) to the public
+ * blog-images bucket. Re-encoded to JPEG (EXIF/GPS stripped — the bucket is
+ * world-readable), stored under the uploader's uid prefix to satisfy the
+ * bucket RLS, rendered via getPublicUrl. */
+export async function uploadBlogImage(file: File): Promise<BlogImageUploadResult> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const uid = sessionData.session?.user?.id;
+  if (!uid) throw new Error("Not authenticated");
+  if (!isImage(file)) throw new Error("Selected file is not an image");
+
+  const { file: optimized } = await optimizeImageForUpload(file, { forceReencode: true });
+  const path = `${uid}/${crypto.randomUUID()}.jpg`;
+  await uploadFileToBucket(BLOG_IMAGES_BUCKET, path, optimized, { upsert: false });
+
+  const { data } = supabase.storage.from(BLOG_IMAGES_BUCKET).getPublicUrl(path);
+  return { url: data.publicUrl, path };
+}

@@ -772,6 +772,16 @@
     },
     {
       "schema": "public",
+      "table": "procurement_items",
+      "column": "received_qty",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "received_qty >= 0",
+      "sourceMigration": "supabase/migrations/20260705191000_p31_procurement_received_columns.sql"
+    },
+    {
+      "schema": "public",
       "table": "orders",
       "column": "status",
       "constraintName": null,
@@ -1718,6 +1728,159 @@
       ],
       "expression": "status in (\n    'pending',\n    'active',\n    'inactive',\n    'rejected'\n  )",
       "sourceMigration": "supabase/migrations/20260604120000_create_card_bindings.sql"
+    },
+    {
+      "schema": "public",
+      "table": "blog_posts",
+      "column": "locale",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "ru",
+        "en"
+      ],
+      "expression": "locale in ('ru', 'en')",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "blog_posts",
+      "column": "status",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "draft",
+        "published"
+      ],
+      "expression": "status in ('draft', 'published')",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "blog_posts",
+      "column": "reading_time_minutes",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "reading_time_minutes is null or reading_time_minutes > 0",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "blog_posts",
+      "column": "word_count",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "word_count is null or word_count >= 0",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "blog_posts",
+      "column": null,
+      "constraintName": "blog_posts_slug_format",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$' and char_length(slug) between 3 and 120",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "blog_posts",
+      "column": null,
+      "constraintName": "blog_posts_slug_reserved",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "slug not in ('admin', 'new', 'edit', 'feed', 'rss', 'sitemap', 'tag', 'tags', 'preview')",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "blog_posts",
+      "column": null,
+      "constraintName": "blog_posts_published_has_timestamp",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "status <> 'published' or published_at is not null",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+    },
+    {
+      "schema": "public",
+      "table": "user_catalogs",
+      "column": "name",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "char_length(btrim(name)) between 1 and 200",
+      "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+    },
+    {
+      "schema": "public",
+      "table": "user_catalogs",
+      "column": "source_filename",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "source_filename is null or char_length(source_filename) <= 255",
+      "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+    },
+    {
+      "schema": "public",
+      "table": "user_catalog_items",
+      "column": "name",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "char_length(btrim(name)) between 1 and 500",
+      "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+    },
+    {
+      "schema": "public",
+      "table": "user_catalog_items",
+      "column": "unit",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "char_length(unit) <= 50",
+      "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+    },
+    {
+      "schema": "public",
+      "table": "user_catalog_items",
+      "column": "resource_type",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "material",
+        "tool",
+        "labor",
+        "subcontractor",
+        "overhead",
+        "other"
+      ],
+      "expression": "resource_type in ('material', 'tool', 'labor', 'subcontractor', 'overhead', 'other')",
+      "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+    },
+    {
+      "schema": "public",
+      "table": "user_catalog_items",
+      "column": "supplier_sku",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "supplier_sku is null or char_length(supplier_sku) <= 100",
+      "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+    },
+    {
+      "schema": "public",
+      "table": "user_catalog_items",
+      "column": null,
+      "constraintName": "user_catalog_items_price_cents_bounds",
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "price_cents between -1000000000000 and 1000000000000",
+      "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
     }
   ]
 }

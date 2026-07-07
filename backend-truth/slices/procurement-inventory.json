@@ -638,6 +638,26 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "received_qty",
+          "sqlType": "numeric(14,3)",
+          "tsType": "number",
+          "nullable": false,
+          "defaultSql": "0",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "received_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -690,6 +710,16 @@
           "expression": "actual_unit_price_cents is null or actual_unit_price_cents >= 0",
           "usingIndex": null,
           "sourceMigration": "supabase/migrations/20260629120000_add_procurement_item_detail_columns.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "received_qty"
+          ],
+          "expression": "received_qty >= 0",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260705191000_p31_procurement_received_columns.sql"
         }
       ],
       "indexes": [

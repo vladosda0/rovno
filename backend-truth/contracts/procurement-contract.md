@@ -104,6 +104,8 @@ Triggers:
 | `supplier_preferred` | `text` | yes |   | no |
 | `location_preferred_id` | `uuid` | yes |   | no |
 | `actual_unit_price_cents` | `bigint` | yes |   | no |
+| `received_qty` | `numeric(14,3)` | no | `0` | no |
+| `received_at` | `timestamptz` | yes |   | no |
 
 Constraints:
 - unnamed check (expression `quantity >= 0`)
@@ -111,6 +113,7 @@ Constraints:
 - unnamed check (expression `planned_total_price_cents is null or planned_total_price_cents >= 0`)
 - unnamed check (expression `status in ('requested', 'ordered', 'partially_received', 'received', 'cancelled')`)
 - unnamed check (expression `actual_unit_price_cents is null or actual_unit_price_cents >= 0`)
+- unnamed check (expression `received_qty >= 0`)
 
 Indexes:
 - `idx_procurement_items_project_id` on (`project_id`)

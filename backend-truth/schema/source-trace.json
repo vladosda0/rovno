@@ -335,6 +335,30 @@
       "schema": "public",
       "table": "card_bindings",
       "sourceMigration": "supabase/migrations/20260604120000_create_card_bindings.sql"
+    },
+    {
+      "key": "public.blog_authors",
+      "schema": "public",
+      "table": "blog_authors",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+    },
+    {
+      "key": "public.blog_posts",
+      "schema": "public",
+      "table": "blog_posts",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+    },
+    {
+      "key": "public.user_catalogs",
+      "schema": "public",
+      "table": "user_catalogs",
+      "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+    },
+    {
+      "key": "public.user_catalog_items",
+      "schema": "public",
+      "table": "user_catalog_items",
+      "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
     }
   ],
   "functions": [
@@ -1114,6 +1138,13 @@
       "name": "receive_cross_project_stock_transfer",
       "signature": "public.receive_cross_project_stock_transfer(uuid)",
       "sourceMigration": "supabase/migrations/20260630140000_cross_project_transfer_deferred_receipt.sql"
+    },
+    {
+      "key": "public.create_user_catalog",
+      "schema": "public",
+      "name": "create_user_catalog",
+      "signature": "public.create_user_catalog(text, text, jsonb)",
+      "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
     }
   ],
   "policies": [
@@ -2364,6 +2395,118 @@
       "name": "system_work_articles_select",
       "command": "select",
       "sourceMigration": "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql"
+    },
+    {
+      "key": "public.blog_authors.blog_authors_select_public",
+      "schema": "public",
+      "table": "blog_authors",
+      "name": "blog_authors_select_public",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+    },
+    {
+      "key": "public.blog_posts.blog_posts_select_published_anon",
+      "schema": "public",
+      "table": "blog_posts",
+      "name": "blog_posts_select_published_anon",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+    },
+    {
+      "key": "public.blog_posts.blog_posts_select_authenticated",
+      "schema": "public",
+      "table": "blog_posts",
+      "name": "blog_posts_select_authenticated",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+    },
+    {
+      "key": "public.blog_posts.blog_posts_insert_authors",
+      "schema": "public",
+      "table": "blog_posts",
+      "name": "blog_posts_insert_authors",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+    },
+    {
+      "key": "public.blog_posts.blog_posts_update_authors",
+      "schema": "public",
+      "table": "blog_posts",
+      "name": "blog_posts_update_authors",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+    },
+    {
+      "key": "public.blog_posts.blog_posts_delete_authors",
+      "schema": "public",
+      "table": "blog_posts",
+      "name": "blog_posts_delete_authors",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
+    },
+    {
+      "key": "public.user_catalogs.user_catalogs_select",
+      "schema": "public",
+      "table": "user_catalogs",
+      "name": "user_catalogs_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+    },
+    {
+      "key": "public.user_catalogs.user_catalogs_insert",
+      "schema": "public",
+      "table": "user_catalogs",
+      "name": "user_catalogs_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+    },
+    {
+      "key": "public.user_catalogs.user_catalogs_update",
+      "schema": "public",
+      "table": "user_catalogs",
+      "name": "user_catalogs_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+    },
+    {
+      "key": "public.user_catalogs.user_catalogs_delete",
+      "schema": "public",
+      "table": "user_catalogs",
+      "name": "user_catalogs_delete",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+    },
+    {
+      "key": "public.user_catalog_items.user_catalog_items_select",
+      "schema": "public",
+      "table": "user_catalog_items",
+      "name": "user_catalog_items_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+    },
+    {
+      "key": "public.user_catalog_items.user_catalog_items_insert",
+      "schema": "public",
+      "table": "user_catalog_items",
+      "name": "user_catalog_items_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+    },
+    {
+      "key": "public.user_catalog_items.user_catalog_items_update",
+      "schema": "public",
+      "table": "user_catalog_items",
+      "name": "user_catalog_items_update",
+      "command": "update",
+      "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+    },
+    {
+      "key": "public.user_catalog_items.user_catalog_items_delete",
+      "schema": "public",
+      "table": "user_catalog_items",
+      "name": "user_catalog_items_delete",
+      "command": "delete",
+      "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
     }
   ],
   "slices": [
@@ -2991,6 +3134,7 @@
         "supabase/migrations/20260512132330_contractor_profiles_schema.sql",
         "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql",
         "supabase/migrations/20260602150100_instance_tables_library_fks.sql",
+        "supabase/migrations/20260706140000_user_catalogs.sql",
         "supabase/migrations/20260512132320_template_rls.sql",
         "supabase/migrations/20260512132340_template_rpcs.sql",
         "supabase/migrations/20260602150200_apply_template_propagate_library_fks.sql",
@@ -3119,6 +3263,11 @@
           "from": "public.estimate_resource_lines",
           "to": "public.system_resource_articles",
           "sourceMigration": "supabase/migrations/20260602150100_instance_tables_library_fks.sql"
+        },
+        {
+          "from": "public.user_catalog_items",
+          "to": "public.system_resource_articles",
+          "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
         }
       ]
     },
@@ -3461,6 +3610,48 @@
           "from": "public.subscriptions",
           "to": "public.billing_customers",
           "sourceMigration": "supabase/migrations/20260306165000_billing_launch_tables.sql"
+        }
+      ]
+    },
+    {
+      "name": "user-catalogs",
+      "title": "User Catalogs Contract",
+      "kind": "derived_contract_bundle",
+      "sourceMigrations": [
+        "supabase/migrations/20260706140000_user_catalogs.sql"
+      ],
+      "tables": [
+        "public.user_catalogs",
+        "public.user_catalog_items"
+      ],
+      "functions": [
+        "public.create_user_catalog"
+      ],
+      "policies": [
+        "public.user_catalogs.user_catalogs_select",
+        "public.user_catalogs.user_catalogs_insert",
+        "public.user_catalogs.user_catalogs_update",
+        "public.user_catalogs.user_catalogs_delete",
+        "public.user_catalog_items.user_catalog_items_select",
+        "public.user_catalog_items.user_catalog_items_insert",
+        "public.user_catalog_items.user_catalog_items_update",
+        "public.user_catalog_items.user_catalog_items_delete"
+      ],
+      "relations": [
+        {
+          "from": "public.user_catalogs",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+        },
+        {
+          "from": "public.user_catalog_items",
+          "to": "public.user_catalogs",
+          "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+        },
+        {
+          "from": "public.user_catalog_items",
+          "to": "public.system_resource_articles",
+          "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
         }
       ]
     }

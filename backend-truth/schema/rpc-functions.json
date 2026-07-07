@@ -168,6 +168,26 @@
           "table": "public.card_bindings",
           "triggerName": "set_card_bindings_updated_at",
           "activation": "before update"
+        },
+        {
+          "table": "public.blog_authors",
+          "triggerName": "set_blog_authors_updated_at",
+          "activation": "before update"
+        },
+        {
+          "table": "public.blog_posts",
+          "triggerName": "set_blog_posts_updated_at",
+          "activation": "before update"
+        },
+        {
+          "table": "public.user_catalogs",
+          "triggerName": "set_user_catalogs_updated_at",
+          "activation": "before update"
+        },
+        {
+          "table": "public.user_catalog_items",
+          "triggerName": "set_user_catalog_items_updated_at",
+          "activation": "before update"
         }
       ]
     },
@@ -2893,6 +2913,36 @@
       "searchPath": "public",
       "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260630140000_cross_project_transfer_deferred_receipt.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "create_user_catalog",
+      "signature": "public.create_user_catalog(text, text, jsonb)",
+      "args": [
+        {
+          "name": "p_name",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_source_filename",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_items",
+          "type": "jsonb",
+          "identityType": "jsonb"
+        }
+      ],
+      "returnType": "uuid",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": false,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql",
       "triggerUsages": []
     }
   ]
