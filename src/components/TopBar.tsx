@@ -1,6 +1,7 @@
 import { Link, useLocation, useMatch, useNavigate } from "react-router-dom";
 import { ChevronDown, Globe, LogOut, Menu, Newspaper, PanelLeft, Settings, User, UserCog } from "lucide-react";
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -75,6 +76,7 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOp
   const isInProject = Boolean(projectId);
   const isHomePage = location.pathname === "/home";
   const runtimeAuth = useRuntimeAuth();
+  const queryClient = useQueryClient();
 
   const user = useCurrentUser();
   const projects = useProjects();
@@ -233,6 +235,10 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOp
       clearDemoSession();
       clearAiSidebarSessionPreference();
       clearStoredAuthProfile();
+      // Drop all cached queries so the next account signing in on this same tab
+      // cannot read the previous user's private data (e.g. personal catalogs)
+      // from React Query's cache before it refetches. Keys are not user-scoped.
+      queryClient.clear();
       setAuthRole("guest");
       toast({ title: t("nav.loggedOutToast") });
       navigate("/");
