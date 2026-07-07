@@ -184,6 +184,14 @@ export default function CatalogUploadReview() {
         matched_rows: items.filter((item) => item.matchedArticleId).length,
       });
       removeCatalogDraft(draft.uploadId);
+      // Disarm the debounced persist AND the unmount flush — otherwise an
+      // edit made within 400ms of a successful save resurrects the just-
+      // removed draft on navigation.
+      pendingDraftRef.current = null;
+      if (persistTimer.current !== null) {
+        window.clearTimeout(persistTimer.current);
+        persistTimer.current = null;
+      }
       toast({ title: t("catalogReview.savedToast", { name: draft.catalogName.trim() }) });
       navigate(`/home/catalogs/${catalogId}`, { replace: true });
     } catch (error) {
