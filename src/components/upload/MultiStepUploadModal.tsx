@@ -47,6 +47,11 @@ function computeInitialState(
   if (presetType === "visitka") {
     return { step: 3, type: "visitka", scope: "public" };
   }
+  // Catalog skips Step 2 too — User Catalog Upload v1 is personal-only; the
+  // form parses the price list and hands off to the review editor.
+  if (presetType === "catalog") {
+    return { step: 3, type: "catalog", scope: "personal" };
+  }
   if (presetType) {
     const scopeOk = presetScope && isScopeValidForType(presetType, presetScope);
     const projectOk = presetScope !== "project" || Boolean(presetProjectId);
@@ -91,6 +96,10 @@ export function MultiStepUploadModal({
   function selectType(type: UploadType) {
     if (type === "visitka") {
       setState({ step: 3, type: "visitka", scope: "public" });
+      return;
+    }
+    if (type === "catalog") {
+      setState({ step: 3, type: "catalog", scope: "personal" });
       return;
     }
     setState({ step: 2, type, scope: null, projectId: presetProjectId });
@@ -164,13 +173,7 @@ export function MultiStepUploadModal({
             />
           )}
           {state.step === 3 && state.type === "catalog" && (
-            <CatalogForm
-              scope={state.scope}
-              projectId={state.projectId}
-              onBack={backToStep2}
-              onClose={handleClose}
-              onComplete={handleComplete}
-            />
+            <CatalogForm onBack={backToStep1} onClose={handleClose} />
           )}
           {state.step === 3 && state.type === "estimate_template" && (
             <EstimateTemplateForm

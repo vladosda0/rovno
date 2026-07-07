@@ -7,6 +7,7 @@ vi.mock("@/components/upload/Step1TypeSelection", () => ({
     <div>
       <button onClick={() => onSelect("document")}>pick-document</button>
       <button onClick={() => onSelect("visitka")}>pick-visitka</button>
+      <button onClick={() => onSelect("catalog")}>pick-catalog</button>
     </div>
   ),
 }));
@@ -76,6 +77,19 @@ describe("MultiStepUploadModal", () => {
   it("with presetType=visitka skips Step 2 and opens the visitka form", () => {
     render(<MultiStepUploadModal open onOpenChange={() => {}} presetType="visitka" />);
     expect(screen.getByText("visitka-form")).toBeInTheDocument();
+    expect(screen.queryByText("step2-marker")).not.toBeInTheDocument();
+  });
+
+  it("with presetType=catalog skips Step 2 and opens the price-list upload form", () => {
+    render(<MultiStepUploadModal open onOpenChange={() => {}} presetType="catalog" />);
+    expect(screen.getByText("catalog-form")).toBeInTheDocument();
+    expect(screen.queryByText("step2-marker")).not.toBeInTheDocument();
+  });
+
+  it("picking catalog on Step 1 goes straight to the upload form (personal-only v1)", () => {
+    render(<MultiStepUploadModal open onOpenChange={() => {}} />);
+    fireEvent.click(screen.getByText("pick-catalog"));
+    expect(screen.getByText("catalog-form")).toBeInTheDocument();
     expect(screen.queryByText("step2-marker")).not.toBeInTheDocument();
   });
 
