@@ -2085,6 +2085,54 @@
         "id"
       ],
       "onDelete": "restrict"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "user_catalogs",
+      "fromColumns": [
+        "owner_profile_id"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "user_catalog_items",
+      "fromColumns": [
+        "catalog_id"
+      ],
+      "toSchema": "public",
+      "toTable": "user_catalogs",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "user_catalog_items",
+      "fromColumns": [
+        "matched_article_id"
+      ],
+      "toSchema": "public",
+      "toTable": "system_resource_articles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
     }
   ]
 }

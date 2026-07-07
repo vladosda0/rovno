@@ -14,6 +14,7 @@
     "supabase/migrations/20260512132330_contractor_profiles_schema.sql",
     "supabase/migrations/20260602150000_canonical_library_stages_and_works.sql",
     "supabase/migrations/20260602150100_instance_tables_library_fks.sql",
+    "supabase/migrations/20260706140000_user_catalogs.sql",
     "supabase/migrations/20260512132320_template_rls.sql",
     "supabase/migrations/20260512132340_template_rpcs.sql",
     "supabase/migrations/20260602150200_apply_template_propagate_library_fks.sql",
@@ -2104,6 +2105,22 @@
       "fromTable": "estimate_resource_lines",
       "fromColumns": [
         "system_resource_article_id"
+      ],
+      "toSchema": "public",
+      "toTable": "system_resource_articles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "user_catalog_items",
+      "fromColumns": [
+        "matched_article_id"
       ],
       "toSchema": "public",
       "toTable": "system_resource_articles",

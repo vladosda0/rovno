@@ -11565,6 +11565,343 @@
           "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
         }
       ]
+    },
+    {
+      "schema": "public",
+      "name": "user_catalogs",
+      "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql",
+      "columns": [
+        {
+          "name": "id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "gen_random_uuid()",
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "owner_profile_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "profiles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "cascade"
+          }
+        },
+        {
+          "name": "name",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "source_filename",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "updated_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "name"
+          ],
+          "expression": "char_length(btrim(name)) between 1 and 200",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "source_filename"
+          ],
+          "expression": "source_filename is null or char_length(source_filename) <= 255",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_user_catalogs_owner",
+          "unique": false,
+          "method": null,
+          "expressions": [
+            "owner_profile_id",
+            "created_at desc"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "set_user_catalogs_updated_at",
+          "activation": "before update",
+          "functionSchema": "public",
+          "functionName": "set_updated_at",
+          "functionSignature": "public.set_updated_at()",
+          "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "user_catalog_items",
+      "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql",
+      "columns": [
+        {
+          "name": "id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "gen_random_uuid()",
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "catalog_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "user_catalogs",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "cascade"
+          }
+        },
+        {
+          "name": "position",
+          "sqlType": "integer",
+          "tsType": "number",
+          "nullable": false,
+          "defaultSql": "0",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "name",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "unit",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "''",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "price_cents",
+          "sqlType": "bigint",
+          "tsType": "number",
+          "nullable": false,
+          "defaultSql": "0",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "resource_type",
+          "sqlType": "text",
+          "tsType": "\"material\" | \"tool\" | \"labor\" | \"subcontractor\" | \"overhead\" | \"other\"",
+          "nullable": false,
+          "defaultSql": "'material'",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "supplier_sku",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "matched_article_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "system_resource_articles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "updated_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "name"
+          ],
+          "expression": "char_length(btrim(name)) between 1 and 500",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "unit"
+          ],
+          "expression": "char_length(unit) <= 50",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "resource_type"
+          ],
+          "expression": "resource_type in ('material', 'tool', 'labor', 'subcontractor', 'overhead', 'other')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "supplier_sku"
+          ],
+          "expression": "supplier_sku is null or char_length(supplier_sku) <= 100",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+        },
+        {
+          "type": "check",
+          "name": "user_catalog_items_price_cents_bounds",
+          "columns": [],
+          "expression": "price_cents between -1000000000000 and 1000000000000",
+          "usingIndex": null,
+          "nullsNotDistinct": false,
+          "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_user_catalog_items_catalog",
+          "unique": false,
+          "method": null,
+          "expressions": [
+            "catalog_id",
+            "position"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+        },
+        {
+          "name": "idx_user_catalog_items_matched_article",
+          "unique": false,
+          "method": null,
+          "expressions": [
+            "matched_article_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "set_user_catalog_items_updated_at",
+          "activation": "before update",
+          "functionSchema": "public",
+          "functionName": "set_updated_at",
+          "functionSignature": "public.set_updated_at()",
+          "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+        }
+      ]
     }
   ]
 }

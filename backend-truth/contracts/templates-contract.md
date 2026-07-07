@@ -13,6 +13,7 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 - `supabase/migrations/20260512132330_contractor_profiles_schema.sql`
 - `supabase/migrations/20260602150000_canonical_library_stages_and_works.sql`
 - `supabase/migrations/20260602150100_instance_tables_library_fks.sql`
+- `supabase/migrations/20260706140000_user_catalogs.sql`
 - `supabase/migrations/20260512132320_template_rls.sql`
 - `supabase/migrations/20260512132340_template_rpcs.sql`
 - `supabase/migrations/20260602150200_apply_template_propagate_library_fks.sql`
@@ -305,6 +306,7 @@ Triggers:
 | `public.project_stages(system_stage_article_id)` | `public.system_stage_articles(id)` | `set null` | `supabase/migrations/20260602150100_instance_tables_library_fks.sql` |
 | `public.estimate_works(system_work_article_id)` | `public.system_work_articles(id)` | `set null` | `supabase/migrations/20260602150100_instance_tables_library_fks.sql` |
 | `public.estimate_resource_lines(system_resource_article_id)` | `public.system_resource_articles(id)` | `set null` | `supabase/migrations/20260602150100_instance_tables_library_fks.sql` |
+| `public.user_catalog_items(matched_article_id)` | `public.system_resource_articles(id)` | `set null` | `supabase/migrations/20260706140000_user_catalogs.sql` |
 
 ## Functions
 
