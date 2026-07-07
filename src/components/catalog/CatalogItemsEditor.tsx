@@ -74,8 +74,28 @@ interface CatalogItemsEditorProps {
 }
 
 const PAGE_SIZE = 50;
+const EMPTY_KEYS: ReadonlySet<string> = new Set<string>();
 
 type SeverityFilter = "all" | "blocking" | "warning";
+
+function issueKey(issue: RowIssue): string {
+  return `${issue.code}:${issue.field}`;
+}
+
+/**
+ * Row highlight/severity as the user currently SEES it: blocking issues always
+ * count, warnings the user dismissed (× on hover) drop out. Dismissal is a
+ * local, cosmetic "I've checked this" — it never unblocks a save (only
+ * warnings are dismissable) and is not persisted.
+ */
+function visibleSeverity(issues: RowIssue[], dismissed: ReadonlySet<string>): RowSeverity {
+  let hasWarning = false;
+  for (const issue of issues) {
+    if (issue.severity === "blocking") return "blocking";
+    if (!dismissed.has(issueKey(issue))) hasWarning = true;
+  }
+  return hasWarning ? "warning" : "ok";
+}
 
 function severityRowClass(severity: RowSeverity): string {
   // Both tiers use the brand orange (--warning === --destructive in the
@@ -102,6 +122,16 @@ export function CatalogItemsEditor({
   const { t } = useTranslation();
   const [filter, setFilter] = useState<SeverityFilter>("all");
   const [page, setPage] = useState(0);
+  // Warning hints the user has dismissed, keyed by row id → set of issue keys.
+  const [dismissed, setDismissed] = useState<Record<string, Set<string>>>({});
+
+  const dismissIssue = (rowId: string, key: string) => {
+    setDismissed((prev) => {
+      const next = new Set(prev[rowId] ?? []);
+      next.add(key);
+      return { ...prev, [rowId]: next };
+    });
+  };
 
   const filteredRows = useMemo(() => {
     if (filter === "all") return rows;
@@ -151,18 +181,20 @@ export function CatalogItemsEditor({
         ))}
       </div>
 
+      <p className="text-caption text-muted-foreground">{t(`catalogEditor.filterHint.${filter}`)}</p>
+
       <div className="overflow-x-auto rounded-panel border border-border bg-card">
-        <Table className="min-w-[880px]">
+        <Table className="w-full min-w-[1040px] table-fixed">
           <TableHeader>
             <TableRow>
-              <TableHead className="w-10 text-right">№</TableHead>
-              <TableHead className="min-w-[220px]">{t("catalogEditor.columns.name")}</TableHead>
-              <TableHead className="w-36">{t("catalogEditor.columns.unit")}</TableHead>
-              <TableHead className="w-28">{t("catalogEditor.columns.price")}</TableHead>
-              <TableHead className="w-36">{t("catalogEditor.columns.type")}</TableHead>
-              <TableHead className="w-32">{t("catalogEditor.columns.sku")}</TableHead>
-              <TableHead className="w-48">{t("catalogEditor.columns.match")}</TableHead>
-              <TableHead className="w-10" />
+              <TableHead className="w-11 px-2 text-right">№</TableHead>
+              <TableHead className="px-2">{t("catalogEditor.columns.name")}</TableHead>
+              <TableHead className="w-32 px-2">{t("catalogEditor.columns.unit")}</TableHead>
+              <TableHead className="w-44 px-2">{t("catalogEditor.columns.price")}</TableHead>
+              <TableHead className="w-36 px-2">{t("catalogEditor.columns.type")}</TableHead>
+              <TableHead className="w-28 px-2">{t("catalogEditor.columns.sku")}</TableHead>
+              <TableHead className="w-40 px-2">{t("catalogEditor.columns.match")}</TableHead>
+              <TableHead className="w-11 px-2" />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -179,6 +211,8 @@ export function CatalogItemsEditor({
                   row={row}
                   disabled={disabled}
                   matchSearchEnabled={matchSearchEnabled}
+                  dismissedKeys={dismissed[row.id] ?? EMPTY_KEYS}
+                  onDismissIssue={(key) => dismissIssue(row.id, key)}
                   onChange={(patch) => onRowChange(row.id, patch)}
                   onDelete={() => onRowDelete(row.id)}
                 />
@@ -235,12 +269,16 @@ function EditorRow({
   row,
   disabled,
   matchSearchEnabled,
+  dismissedKeys,
+  onDismissIssue,
   onChange,
   onDelete,
 }: {
   row: EditorRowData;
   disabled: boolean;
   matchSearchEnabled: boolean;
+  dismissedKeys: ReadonlySet<string>;
+  onDismissIssue: (key: string) => void;
   onChange: (patch: EditorRowPatch) => void;
   onDelete: () => void;
 }) {
@@ -250,7 +288,12 @@ function EditorRow({
   const unitOptions = buildUnitSelectOptions(row.resourceType, t);
   const isCustomUnit = unitSelectValue === CUSTOM_UNIT_SENTINEL;
 
-  const hintIssues = row.issues;
+  // Warnings the user dismissed drop out of the hints and the row highlight;
+  // blocking issues can't be dismissed.
+  const hintIssues = row.issues.filter(
+    (issue) => issue.severity === "blocking" || !dismissedKeys.has(issueKey(issue)),
+  );
+  const severity = visibleSeverity(row.issues, dismissedKeys);
 
   const handleMatchSelect = (article: MatchedArticle | null) => {
     onChange(
@@ -262,16 +305,16 @@ function EditorRow({
 
   return (
     <>
-      <TableRow className={cn(severityRowClass(row.severity), hintIssues.length > 0 && "border-b-0")}>
-        <TableCell className="py-1.5 text-right align-top text-caption tabular-nums text-muted-foreground">
+      <TableRow className={cn(severityRowClass(severity), hintIssues.length > 0 && "border-b-0")}>
+        <TableCell className="px-2 py-1.5 text-right align-top text-caption tabular-nums text-muted-foreground">
           <span className="inline-flex items-center gap-1 pt-2">
-            {row.severity === "blocking" && (
+            {severity === "blocking" && (
               <Lock className="h-3 w-3 text-destructive" aria-hidden="true" />
             )}
             {row.sourceRowNumber ?? "+"}
           </span>
         </TableCell>
-        <TableCell className="py-1.5 align-top">
+        <TableCell className="px-2 py-1.5 align-top">
           <Input
             value={row.name}
             disabled={disabled}
@@ -281,7 +324,7 @@ function EditorRow({
             maxLength={500}
           />
         </TableCell>
-        <TableCell className="py-1.5 align-top">
+        <TableCell className="px-2 py-1.5 align-top">
           <div className="space-y-1">
             <Select
               value={unitSelectValue}
@@ -315,7 +358,7 @@ function EditorRow({
             )}
           </div>
         </TableCell>
-        <TableCell className="py-1.5 align-top">
+        <TableCell className="px-2 py-1.5 align-top">
           <Input
             value={row.priceInput}
             disabled={disabled}
@@ -325,7 +368,7 @@ function EditorRow({
             className="h-8 text-right tabular-nums"
           />
         </TableCell>
-        <TableCell className="py-1.5 align-top">
+        <TableCell className="px-2 py-1.5 align-top">
           <div className="space-y-0.5">
             <Select
               value={row.resourceType}
@@ -352,7 +395,7 @@ function EditorRow({
             )}
           </div>
         </TableCell>
-        <TableCell className="py-1.5 align-top">
+        <TableCell className="px-2 py-1.5 align-top">
           <Input
             value={row.supplierSku}
             disabled={disabled}
@@ -361,7 +404,7 @@ function EditorRow({
             maxLength={100}
           />
         </TableCell>
-        <TableCell className="py-1.5 align-top">
+        <TableCell className="px-2 py-1.5 align-top">
           <ArticleMatchCombobox
             matchedArticleId={row.matchedArticleId}
             matchedArticleName={row.matchedArticleName}
@@ -370,7 +413,7 @@ function EditorRow({
             disabled={disabled || !matchSearchEnabled}
           />
         </TableCell>
-        <TableCell className="py-1.5 align-top">
+        <TableCell className="px-2 py-1.5 align-top">
           <Button
             type="button"
             variant="ghost"
@@ -385,21 +428,45 @@ function EditorRow({
         </TableCell>
       </TableRow>
       {hintIssues.length > 0 && (
-        <TableRow className={cn(severityRowClass(row.severity), "hover:bg-transparent")}>
-          <TableCell colSpan={8} className="pb-2 pt-0">
-            <div className="flex flex-wrap gap-x-4 gap-y-0.5 pl-1">
-              {hintIssues.map((issue) => (
-                <span
-                  key={`${issue.code}:${issue.field}`}
-                  className={cn(
-                    "text-caption",
-                    issue.severity === "blocking" ? "text-destructive" : "text-warning",
-                  )}
-                >
-                  {t(`catalogIssues.${issue.code}`)}
-                </span>
-              ))}
-            </div>
+        <TableRow className={cn(severityRowClass(severity), "hover:bg-transparent")}>
+          <TableCell colSpan={8} className="px-2 pb-2 pt-0">
+            <ul className="flex flex-col gap-1 pl-9">
+              {hintIssues.map((issue) => {
+                const dismissable = issue.severity === "warning";
+                return (
+                  <li
+                    key={issueKey(issue)}
+                    className="group/hint flex items-start gap-1.5 text-caption"
+                  >
+                    <span
+                      className={cn(
+                        "mt-1.5 h-1 w-1 shrink-0 rounded-full",
+                        issue.severity === "blocking" ? "bg-destructive" : "bg-warning",
+                      )}
+                      aria-hidden="true"
+                    />
+                    <span
+                      className={cn(
+                        "flex-1",
+                        issue.severity === "blocking" ? "text-destructive" : "text-warning",
+                      )}
+                    >
+                      {t(`catalogIssues.${issue.code}`)}
+                    </span>
+                    {dismissable && !disabled && (
+                      <button
+                        type="button"
+                        onClick={() => onDismissIssue(issueKey(issue))}
+                        className="inline-flex shrink-0 items-center gap-0.5 rounded px-1 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none group-hover/hint:opacity-100"
+                      >
+                        <span>{t("catalogEditor.dismissWarning")}</span>
+                        <X className="h-3 w-3" aria-hidden="true" />
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
           </TableCell>
         </TableRow>
       )}
