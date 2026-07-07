@@ -87,6 +87,8 @@ export default function UserCatalogPage() {
   useEffect(() => {
     setRows(null);
     setNameDraft(null);
+    setRowPendingDelete(null);
+    setDeleteCatalogOpen(false);
     dirtyIds.current.clear();
     serverIds.current.clear();
     inFlightAdds.current.clear();
@@ -187,6 +189,13 @@ export default function UserCatalogPage() {
             },
             onError: () => {
               inFlightAdds.current.delete(localId);
+              if (pendingDeletes.current.has(localId)) {
+                // The user deleted the row while its insert was failing —
+                // nothing exists server-side and nothing should retry.
+                pendingDeletes.current.delete(localId);
+                return;
+              }
+              if (!rowsRef.current?.some((r) => r.localId === localId)) return;
               dirtyIds.current.add(localId);
               toast({ title: t("catalogPage.saveRowFailed"), variant: "destructive" });
               scheduleFlush();
@@ -202,6 +211,8 @@ export default function UserCatalogPage() {
         { itemId: targetId, patch: payload },
         {
           onError: () => {
+            // Deleted meanwhile → no row to re-flush.
+            if (!rowsRef.current?.some((r) => r.localId === localId)) return;
             dirtyIds.current.add(localId);
             toast({ title: t("catalogPage.saveRowFailed"), variant: "destructive" });
             scheduleFlush();
