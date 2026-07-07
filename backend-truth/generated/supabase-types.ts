@@ -2430,6 +2430,75 @@ export type Database = {
           }
           Relationships: []
         }
+        "user_catalogs": {
+          Row: {
+          "id": string
+          "owner_profile_id": string
+          "name": string
+          "source_filename": string | null
+          "created_at": string
+          "updated_at": string
+          }
+          Insert: {
+          "id"?: string
+          "owner_profile_id": string
+          "name": string
+          "source_filename"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Update: {
+          "id"?: string
+          "owner_profile_id"?: string
+          "name"?: string
+          "source_filename"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Relationships: []
+        }
+        "user_catalog_items": {
+          Row: {
+          "id": string
+          "catalog_id": string
+          "position": number
+          "name": string
+          "unit": string
+          "price_cents": number
+          "resource_type": "material" | "tool" | "labor" | "subcontractor" | "overhead" | "other"
+          "supplier_sku": string | null
+          "matched_article_id": string | null
+          "created_at": string
+          "updated_at": string
+          }
+          Insert: {
+          "id"?: string
+          "catalog_id": string
+          "position"?: number
+          "name": string
+          "unit"?: string
+          "price_cents"?: number
+          "resource_type"?: "material" | "tool" | "labor" | "subcontractor" | "overhead" | "other"
+          "supplier_sku"?: string | null
+          "matched_article_id"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Update: {
+          "id"?: string
+          "catalog_id"?: string
+          "position"?: number
+          "name"?: string
+          "unit"?: string
+          "price_cents"?: number
+          "resource_type"?: "material" | "tool" | "labor" | "subcontractor" | "overhead" | "other"
+          "supplier_sku"?: string | null
+          "matched_article_id"?: string | null
+          "created_at"?: string
+          "updated_at"?: string
+          }
+          Relationships: []
+        }
     }
     Views: {
       [_ in never]: never
@@ -2590,6 +2659,14 @@ export type Database = {
           "p_profile_data": Json
           }
           Returns: Json
+        }
+        "create_user_catalog": {
+          Args: {
+          "p_name": string
+          "p_source_filename": string
+          "p_items": Json
+          }
+          Returns: string
         }
         "current_profile_id": {
           Args: Record<PropertyKey, never>

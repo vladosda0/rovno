@@ -511,6 +511,10 @@
     {
       "path": "supabase/migrations/20260706120000_blog_schema.sql",
       "sha256": "d3848cf1656e8fa41bafa02e7d65a0b5d499178159830f9fbfa945637b35735c"
+    },
+    {
+      "path": "supabase/migrations/20260706140000_user_catalogs.sql",
+      "sha256": "e670a058a270ddfa3f58d55c3845dd0ea823e5c467bb78dfe7f3ba79623824a0"
     }
   ],
   "generated_artifacts": [
@@ -530,6 +534,7 @@
     "slices/procurement-inventory.json",
     "slices/hr.json",
     "slices/activity-billing.json",
+    "slices/user-catalogs.json",
     "contracts/workspace-contract.md",
     "contracts/planning-contract.md",
     "contracts/documents-contract.md",
@@ -538,6 +543,7 @@
     "contracts/procurement-contract.md",
     "contracts/hr-contract.md",
     "contracts/activity-billing-contract.md",
+    "contracts/user-catalogs-contract.md",
     "sql/20260306160000_extensions_and_base_helpers.sql",
     "sql/20260306160500_core_profiles_and_preferences.sql",
     "sql/20260306161000_projects_membership_and_invites.sql",
@@ -664,6 +670,7 @@
     "sql/20260630140000_cross_project_transfer_deferred_receipt.sql",
     "sql/20260705191000_p31_procurement_received_columns.sql",
     "sql/20260706120000_blog_schema.sql",
+    "sql/20260706140000_user_catalogs.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],

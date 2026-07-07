@@ -2618,6 +2618,128 @@
           "sourceMigration": "supabase/migrations/20260706120000_blog_schema.sql"
         }
       ]
+    },
+    {
+      "schema": "public",
+      "table": "user_catalogs",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "delete",
+        "insert",
+        "select",
+        "update"
+      ],
+      "policies": [
+        {
+          "name": "user_catalogs_select",
+          "schema": "public",
+          "table": "user_catalogs",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "owner_profile_id = auth.uid()",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+        },
+        {
+          "name": "user_catalogs_insert",
+          "schema": "public",
+          "table": "user_catalogs",
+          "command": "insert",
+          "roles": [
+            "authenticated"
+          ],
+          "using": null,
+          "withCheck": "owner_profile_id = auth.uid()",
+          "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+        },
+        {
+          "name": "user_catalogs_update",
+          "schema": "public",
+          "table": "user_catalogs",
+          "command": "update",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "owner_profile_id = auth.uid()",
+          "withCheck": "owner_profile_id = auth.uid()",
+          "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+        },
+        {
+          "name": "user_catalogs_delete",
+          "schema": "public",
+          "table": "user_catalogs",
+          "command": "delete",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "owner_profile_id = auth.uid()",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "table": "user_catalog_items",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "delete",
+        "insert",
+        "select",
+        "update"
+      ],
+      "policies": [
+        {
+          "name": "user_catalog_items_select",
+          "schema": "public",
+          "table": "user_catalog_items",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n      select 1\n      from public.user_catalogs uc\n      where uc.id = user_catalog_items.catalog_id\n        and uc.owner_profile_id = auth.uid()\n    )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+        },
+        {
+          "name": "user_catalog_items_insert",
+          "schema": "public",
+          "table": "user_catalog_items",
+          "command": "insert",
+          "roles": [
+            "authenticated"
+          ],
+          "using": null,
+          "withCheck": "exists (\n      select 1\n      from public.user_catalogs uc\n      where uc.id = user_catalog_items.catalog_id\n        and uc.owner_profile_id = auth.uid()\n    )",
+          "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+        },
+        {
+          "name": "user_catalog_items_update",
+          "schema": "public",
+          "table": "user_catalog_items",
+          "command": "update",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n      select 1\n      from public.user_catalogs uc\n      where uc.id = user_catalog_items.catalog_id\n        and uc.owner_profile_id = auth.uid()\n    )",
+          "withCheck": "exists (\n      select 1\n      from public.user_catalogs uc\n      where uc.id = user_catalog_items.catalog_id\n        and uc.owner_profile_id = auth.uid()\n    )",
+          "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+        },
+        {
+          "name": "user_catalog_items_delete",
+          "schema": "public",
+          "table": "user_catalog_items",
+          "command": "delete",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "exists (\n      select 1\n      from public.user_catalogs uc\n      where uc.id = user_catalog_items.catalog_id\n        and uc.owner_profile_id = auth.uid()\n    )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+        }
+      ]
     }
   ]
 }
