@@ -211,6 +211,8 @@
   "nav.settings": "Настройки",
   "nav.logout": "Выйти",
   "nav.home": "Главная",
+  "nav.blog": "Блог",
+  "nav.toSite": "На сайт",
   "nav.loggedOutToast": "Вы вышли",
   "nav.logoutFailed": "Не удалось выйти",
   "nav.logoutGeneric": "Не удалось выполнить выход.",
