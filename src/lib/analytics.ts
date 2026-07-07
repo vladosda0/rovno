@@ -85,7 +85,14 @@ export type AnalyticsEventName =
   | "legal_contacts_viewed"
   | "legal_offer_viewed"
   | "legal_privacy_viewed"
-  | "legal_refund_viewed";
+  | "legal_refund_viewed"
+  // ─── User Catalog Upload v1 (2026-07). Measurement contract from the spec:
+  // template download → upload → save funnel + editor/estimate usage signals.
+  | "catalog_template_downloaded"
+  | "catalog_uploaded"
+  | "catalog_saved"
+  | "catalog_row_edited"
+  | "catalog_item_used_in_estimate";
 
 export type AnalyticsEventPayload = Record<string, unknown>;
 
