@@ -147,13 +147,31 @@ export function Nav({ startPath, homeLink = false, authStatus = "guest" }: { sta
                 </Link>
               )}
             </div>
-            <Link
-              className="rv-btn rv-btn--primary"
-              to={startPath}
-              style={{ fontSize: 20, padding: "8px 16px", flexShrink: 0, borderRadius: c ? 999 : "var(--r-md)", transition: `background .12s ${E}, color .12s ${E}, border-color .12s ${E}, transform .12s ${E}, border-radius .42s ${E}` }}
-            >
-              {isAuthed ? "В приложение" : "Начать проект"}
-            </Link>
+            {authStatus === "loading" ? (
+              // Auth not resolved yet: keep the primary CTA visible and
+              // pixel-identical, but inert. During loading the caller's
+              // startPath defaults to the guest /auth/signup, so a premature
+              // click by an already-signed-in visitor would misroute to signup;
+              // pointer-events:none + aria-disabled makes the button do nothing
+              // until status resolves (a beat later), when it becomes the real
+              // link with the correct label + target.
+              <span
+                className="rv-btn rv-btn--primary"
+                role="link"
+                aria-disabled="true"
+                style={{ fontSize: 20, padding: "8px 16px", flexShrink: 0, borderRadius: c ? 999 : "var(--r-md)", pointerEvents: "none", transition: `background .12s ${E}, color .12s ${E}, border-color .12s ${E}, transform .12s ${E}, border-radius .42s ${E}` }}
+              >
+                Начать проект
+              </span>
+            ) : (
+              <Link
+                className="rv-btn rv-btn--primary"
+                to={startPath}
+                style={{ fontSize: 20, padding: "8px 16px", flexShrink: 0, borderRadius: c ? 999 : "var(--r-md)", transition: `background .12s ${E}, color .12s ${E}, border-color .12s ${E}, transform .12s ${E}, border-radius .42s ${E}` }}
+              >
+                {isAuthed ? "В приложение" : "Начать проект"}
+              </Link>
+            )}
           </div>
         </nav>
       </div>
