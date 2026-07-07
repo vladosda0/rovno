@@ -12,6 +12,7 @@ import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { PLANS, type PlanCode } from "@/data/plans";
 import { formatRubFromKopecks } from "@/lib/billing";
+import type { RuntimeAuthStatus } from "@/hooks/use-runtime-auth";
 
 const E = "cubic-bezier(0.4,0,0.2,1)";
 
@@ -29,12 +30,18 @@ const NAV_LINKS = [
   { label: "FAQ", href: "#faq" },
 ];
 
-export function Nav({ startPath, homeLink = false, isAuthed = false }: { startPath: string; homeLink?: boolean; isAuthed?: boolean }) {
+export function Nav({ startPath, homeLink = false, authStatus = "guest" }: { startPath: string; homeLink?: boolean; authStatus?: RuntimeAuthStatus }) {
   // homeLink: rendered on a subpage (e.g. /blog) — the logo routes to "/" and
   // section anchors become absolute so they land on the landing page.
-  // isAuthed: a signed-in visitor gets a single "В приложение" CTA instead of
-  // the "Войти" + "Начать проект" pair (offering "Войти" to someone already
-  // logged in was the double-login trap).
+  // authStatus drives the CTA. A signed-in visitor gets a single "В приложение"
+  // instead of the "Войти" + "Начать проект" pair (offering "Войти" to someone
+  // already logged in was the double-login trap). On a hard load the session
+  // resolves async, so status is "loading" for the first frames: we keep the
+  // "Войти" slot but render it invisible (visibility:hidden) so it reserves its
+  // width — a guest then sees it appear in place with no layout shift, and an
+  // authenticated user never sees a "Войти" flash. Only a definitive "guest"
+  // shows the link; "loading" hides it, "authenticated" drops it entirely.
+  const isAuthed = authStatus === "authenticated";
   const [c, setC] = useState(false);
   useEffect(() => {
     const onScroll = () => setC(window.scrollY > 64);
@@ -128,19 +135,45 @@ export function Nav({ startPath, homeLink = false, isAuthed = false }: { startPa
                   Блог
                 </Link>
               </div>
-              {!isAuthed && (
-                <Link className="rv-btn rv-btn--secondary" to="/auth/login" style={{ fontSize: 20, padding: "8px 14px" }}>
+              {authStatus !== "authenticated" && (
+                <Link
+                  className="rv-btn rv-btn--secondary"
+                  to="/auth/login"
+                  aria-hidden={authStatus === "loading"}
+                  tabIndex={authStatus === "loading" ? -1 : undefined}
+                  style={{ fontSize: 20, padding: "8px 14px", visibility: authStatus === "loading" ? "hidden" : "visible" }}
+                >
                   Войти
                 </Link>
               )}
             </div>
-            <Link
-              className="rv-btn rv-btn--primary"
-              to={startPath}
-              style={{ fontSize: 20, padding: "8px 16px", flexShrink: 0, borderRadius: c ? 999 : "var(--r-md)", transition: `background .12s ${E}, color .12s ${E}, border-color .12s ${E}, transform .12s ${E}, border-radius .42s ${E}` }}
-            >
-              {isAuthed ? "В приложение" : "Начать проект"}
-            </Link>
+            {authStatus === "loading" ? (
+              // Auth not resolved yet: keep the primary CTA visible and
+              // pixel-identical, but inert. During loading the caller's
+              // startPath defaults to the guest /auth/signup, so a premature
+              // click by an already-signed-in visitor would misroute to signup;
+              // pointer-events:none keeps the button inert (and aria-hidden
+              // drops the transient placeholder from the a11y tree) until status
+              // resolves (a beat later), when it becomes the real link with the
+              // correct label + target. NB: aria-disabled is deliberately avoided
+              // here — it matches .rv-btn[aria-disabled] { opacity:.32 } and would
+              // dim the CTA, reintroducing the very flash this branch removes.
+              <span
+                className="rv-btn rv-btn--primary"
+                aria-hidden="true"
+                style={{ fontSize: 20, padding: "8px 16px", flexShrink: 0, borderRadius: c ? 999 : "var(--r-md)", pointerEvents: "none", transition: `background .12s ${E}, color .12s ${E}, border-color .12s ${E}, transform .12s ${E}, border-radius .42s ${E}` }}
+              >
+                Начать проект
+              </span>
+            ) : (
+              <Link
+                className="rv-btn rv-btn--primary"
+                to={startPath}
+                style={{ fontSize: 20, padding: "8px 16px", flexShrink: 0, borderRadius: c ? 999 : "var(--r-md)", transition: `background .12s ${E}, color .12s ${E}, border-color .12s ${E}, transform .12s ${E}, border-radius .42s ${E}` }}
+              >
+                {isAuthed ? "В приложение" : "Начать проект"}
+              </Link>
+            )}
           </div>
         </nav>
       </div>
