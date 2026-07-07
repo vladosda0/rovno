@@ -152,9 +152,12 @@ export function Nav({ startPath, homeLink = false, authStatus = "guest" }: { sta
               // pixel-identical, but inert. During loading the caller's
               // startPath defaults to the guest /auth/signup, so a premature
               // click by an already-signed-in visitor would misroute to signup;
-              // pointer-events:none + aria-disabled makes the button do nothing
-              // until status resolves (a beat later), when it becomes the real
-              // link with the correct label + target.
+              // pointer-events:none keeps the button inert (and aria-hidden
+              // drops the transient placeholder from the a11y tree) until status
+              // resolves (a beat later), when it becomes the real link with the
+              // correct label + target. NB: aria-disabled is deliberately avoided
+              // here — it matches .rv-btn[aria-disabled] { opacity:.32 } and would
+              // dim the CTA, reintroducing the very flash this branch removes.
               <span
                 className="rv-btn rv-btn--primary"
                 aria-hidden="true"
