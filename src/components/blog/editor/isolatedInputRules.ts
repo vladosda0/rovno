@@ -42,7 +42,7 @@
 import { Extension, InputRule, type Editor } from "@tiptap/core";
 import { inputRegex as IMAGE_FIND } from "@tiptap/extension-image";
 import type { Node as PMNode, ResolvedPos } from "@tiptap/pm/model";
-import { TextSelection, type Selection } from "@tiptap/pm/state";
+import { Selection, TextSelection } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
 
 /** Nodes whose content must never be structurally replaced. */
@@ -99,10 +99,11 @@ const containerKey = ($pos: ResolvedPos) => isolatedContainerRange($pos)?.from ?
 /**
  * A selection that never crosses the boundary of a figure or an FAQ pair.
  *
- * Returns null when anchor and head already sit in the same container (or both outside),
- * which lets ProseMirror build its default selection. Otherwise the HEAD is clamped back to
- * the anchor's side of the boundary, so a shift-click from a paragraph into a caption
- * selects up to the figure and stops.
+ * Returns null when the selection ProseMirror WOULD build already keeps both ends in the same
+ * container (or both outside), which is the common case and includes selecting straight
+ * across a figure into the prose beyond it. Otherwise the head is clamped back to the
+ * anchor's side, so a shift-click from a paragraph into a caption selects up to the figure
+ * and stops.
  *
  * Every destructive edit — paste, typing, Backspace, drag — goes through the current
  * selection, so refusing to build the crossing range fixes all of them at once. A guard on
@@ -114,18 +115,37 @@ export function boundedSelectionBetween(
   $anchor: ResolvedPos,
   $head: ResolvedPos,
 ): Selection | null {
-  const anchorIn = isolatedContainerRange($anchor);
-  const headIn = isolatedContainerRange($head);
-  if (containerKey($anchor) === containerKey($head)) return null;
+  // Judge the RESULT, not the arguments. `TextSelection.between` MOVES an endpoint whose
+  // parent is not inline content: a click at doc position 0, just before a leading <figure>,
+  // arrives here with both keys -1 and is then resolved forward to a position INSIDE the
+  // caption. Testing the raw `$anchor`/`$head` would wave that through as "both outside".
+  const natural = TextSelection.between($anchor, $head);
+  if (containerKey(natural.$from) === containerKey(natural.$to)) return null;
 
-  const forward = $head.pos > $anchor.pos;
+  // Clamp using the endpoints ProseMirror actually chose. One of the two is inside a
+  // container (their keys differ), so exactly one branch below is reachable.
+  const $a = natural.$anchor;
+  const $h = natural.$head;
+  const anchorIn = isolatedContainerRange($a);
+  const headIn = isolatedContainerRange($h);
+  const forward = $h.pos > $a.pos;
   const clamped = anchorIn
     // Anchored inside: keep the head within this container.
     ? (forward ? anchorIn.to - 1 : anchorIn.from + 1)
     // Anchored outside: stop just short of the container the head fell into.
     : (forward ? headIn!.from : headIn!.to);
 
-  return TextSelection.between(doc.resolve($anchor.pos), doc.resolve(clamped));
+  const bounded = TextSelection.between(doc.resolve($a.pos), doc.resolve(clamped));
+  if (containerKey(bounded.$from) === containerKey(bounded.$to)) return bounded;
+  // The clamp was itself resolved across the boundary. Collapse rather than hand back a range
+  // whose edit would delete the container.
+  //
+  // No known input reaches this: the exhaustive sweep below (every (anchor, head) pair over
+  // eight document shapes) never triggers it, and removing this line fails no test. It stays
+  // as the invariant in code — this function may not return a crossing range — because the
+  // clamp above depends on `TextSelection.between`'s resolution behaviour, and that is
+  // precisely what the argument-based version of this check got wrong.
+  return Selection.near($a);
 }
 
 /**

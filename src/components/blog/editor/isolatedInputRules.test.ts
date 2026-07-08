@@ -557,3 +557,74 @@ describe("insertBlockNodesHoisted — the uploadAndInsert call site", () => {
     editor.destroy();
   });
 });
+
+describe("boundedSelectionBetween: exhaustive sweep and normal-editing sanity", () => {
+  const CONTAINERS = ["figure", "faqItem"];
+  const keyOf = ($pos: import("@tiptap/pm/model").ResolvedPos) => {
+    for (let d = $pos.depth; d > 0; d -= 1) if (CONTAINERS.includes($pos.node(d).type.name)) return $pos.before(d);
+    return -1;
+  };
+  const fig = (cap: string) => ({ type: "figure", attrs: { src: SRC, alt: "А", width: 4, height: 3 },
+    content: [{ type: "figcaption", content: cap ? [{ type: "text", text: cap }] : [] }] });
+  const para = (t: string) => ({ type: "paragraph", content: [{ type: "text", text: t }] });
+
+  const DOCS: [string, JsonNode[]][] = [
+    ["figure FIRST", [fig("Подпись"), para("после")]],
+    ["figure LAST", [para("до"), fig("Подпись")]],
+    ["adjacent figures", [fig("А"), fig("Б")]],
+    ["figure only", [fig("Подпись")]],
+    ["empty caption", [para("до"), fig(""), para("после")]],
+    ["faq between prose", [para("до"), faqDoc().content![0], para("после")]],
+    ["adjacent faq + figure", [faqDoc().content![0], fig("Подпись")]],
+    ["prose figure prose faq prose", [para("до"), fig("П"), para("между"), faqDoc().content![0], para("после")]],
+  ] as [string, JsonNode[]][];
+
+  for (const [label, content] of DOCS) {
+    it(`${label}: no (anchor, head) pair yields a boundary-crossing selection`, () => {
+      // Exhaustive, because the interesting cases are the ones nobody thinks to write down.
+      // A doc-level endpoint (pos 0, just before a leading <figure>) arrives with both keys
+      // -1, and `TextSelection.between` then resolves the anchor INSIDE the caption — so an
+      // input-only guard waved it through. This sweep is what found that.
+      const editor = makeEditor({ type: "doc", content });
+      const { doc } = editor.state;
+      const bad: string[] = [];
+      for (let a = 0; a <= doc.content.size; a += 1) {
+        for (let h = 0; h <= doc.content.size; h += 1) {
+          const $a = doc.resolve(a), $h = doc.resolve(h);
+          const sel = boundedSelectionBetween(doc, $a, $h) ?? TextSelection.between($a, $h);
+          if (keyOf(sel.$from) !== keyOf(sel.$to)) bad.push(`${a}->${h} => ${sel.from}..${sel.to}`);
+        }
+      }
+      expect(bad).toEqual([]);
+      editor.destroy();
+    });
+  }
+
+  it("still lets a selection SPAN a figure — prose -> figure -> prose is normal editing", () => {
+    const editor = makeEditor({ type: "doc", content: [para("до"), fig("П"), para("после")] as JsonNode[] });
+    const { doc } = editor.state;
+    const figure = firstNode(editor, "figure");
+    const last = doc.child(2);
+    const anchor = 1;                        // inside "до"
+    const head = doc.content.size - 1;       // inside "после"
+    expect(boundedSelectionBetween(doc, doc.resolve(anchor), doc.resolve(head))).toBeNull();
+
+    // ...and deleting it really does remove the figure, which is what the author asked for.
+    editor.view.dispatch(editor.state.tr
+      .setSelection(TextSelection.between(doc.resolve(anchor), doc.resolve(head)))
+      .deleteSelection());
+    expect(countType(editor, "figure")).toBe(0);
+    expect(() => editor.state.doc.check()).not.toThrow();
+    void figure; void last;
+    editor.destroy();
+  });
+
+  it("Ctrl+A (AllSelection) is untouched: it never consults createSelectionBetween", () => {
+    const editor = makeEditor({ type: "doc", content: [para("до"), fig("П")] as JsonNode[] });
+    editor.commands.selectAll();
+    editor.commands.deleteSelection();
+    expect(countType(editor, "figure")).toBe(0);
+    expect(() => editor.state.doc.check()).not.toThrow();
+    editor.destroy();
+  });
+});
