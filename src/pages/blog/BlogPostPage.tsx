@@ -11,6 +11,7 @@ import { useDocumentHead, SITE_NAME } from "@/lib/blog/seo";
 import { articleJsonLd, blogPostPath, BLOG_TITLE } from "@/lib/blog/jsonld";
 import { readPrerenderedPost } from "@/lib/blog/prerendered-data";
 import { sanitizeArticleHtml } from "@/lib/blog/sanitize";
+import { withHeadingAnchors } from "@/lib/blog/anchors";
 import { formatReadingTime } from "@/lib/blog/reading-time";
 import { useBlogPost, usePublishedBlogPosts } from "@/hooks/use-blog";
 import { BlogShell, useLandingCta } from "@/components/blog/BlogShell";
@@ -50,8 +51,11 @@ export default function BlogPostPage() {
     [morePosts, slug],
   );
 
+  // Sanitize first, anchor second: the anchor pass adds ids and a TOC that are
+  // ours, not the author's, so they must not be handed to DOMPurify as if they
+  // came from the DB — and DOMPurify must never see them as something to strip.
   const safeHtml = useMemo(
-    () => (post ? sanitizeArticleHtml(post.content_html) : ""),
+    () => (post ? withHeadingAnchors(sanitizeArticleHtml(post.content_html)).html : ""),
     [post],
   );
 
