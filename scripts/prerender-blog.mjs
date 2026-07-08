@@ -442,7 +442,7 @@ function rssXml(posts) {
       <guid isPermaLink="true">${escapeXml(url)}</guid>
       ${pubDate ? `<pubDate>${pubDate}</pubDate>` : ""}
       ${post.excerpt ? `<description>${escapeXml(post.excerpt)}</description>` : ""}
-      <content:encoded><![CDATA[${(post.content_html ?? "").replaceAll("]]>", "]]]]><![CDATA[>")}]]></content:encoded>
+      <content:encoded><![CDATA[${sanitizeArticleBody(post.content_html).replaceAll("]]>", "]]]]><![CDATA[>")}]]></content:encoded>
     </item>`;
     })
     .join("\n");
