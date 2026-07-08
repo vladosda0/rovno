@@ -65,24 +65,38 @@ interface AppliedTag {
  *
  * Removing them restores exactly what `/` boots with when it is served for real: nothing.
  *
- * Everything else here (`description`, `og:title`, `og:description`, `og:type`, `og:image`,
- * `twitter:card`, `twitter:title`) IS in index.html, so restore-to-mount-state is right and
- * exactly correct on a non-prerendered boot. Cross-checked against index.html's <head>.
+ * KNOWN RESIDUAL, and it is bigger than this list. `prerender-blog.mjs` also OVERWRITES, in
+ * place, eight tags index.html does ship: `<title>`, `description`, `og:title`,
+ * `og:description`, `og:type`, `og:image`, `twitter:card`, `twitter:title`. On a prerendered
+ * boot their mount-state is the article's too, so "restore" reinstates the article's values
+ * on the next route — the same mechanism, one layer down. We do not fix it here because the
+ * DOM cannot answer the question that matters ("was this value written by index.html or by
+ * the prerenderer?"), and removing them would break the non-prerendered boot, where restore
+ * is exactly right and a visitor who opens the blog and comes back must get the shell's
+ * og:title.
  *
- * Known residual: on a PRERENDERED boot the mount-state of those tags is also the article's,
- * so `/` keeps the article's `og:title` for the rest of the client-side session. We cannot
- * recover index.html's default from a document that never contained it, and REMOVING them
- * would be worse — a visitor who boots on `/`, opens the blog and comes back would lose the
- * shell's og:title entirely. Bounded and harmless: these are social-preview tags, and no
- * scraper or crawler SPA-navigates. The indexing directives are the ones listed below.
+ * Bounded: crawlers and social scrapers fetch each URL fresh and never SPA-navigate, so no
+ * indexing or preview consumer ever observes ANY of this class — including, honestly, the
+ * `noindex` leak that started this. The one human-visible symptom is the browser tab, which
+ * reads the article's title on `/` after a client-side navigation. Fixing it properly means
+ * the prerenderer stamping `data-rv-shell-default` beside each value it overwrites, or the
+ * landing route managing its own head. Neither belongs in this PR.
  */
 const PRERENDER_ONLY_TAGS: TagSelector[] = [
   { kind: "link", rel: "canonical" },
   { kind: "meta", attr: "name", key: "robots" },
   { kind: "meta", attr: "property", key: "og:url" },
   { kind: "meta", attr: "property", key: "og:site_name" },
+  { kind: "meta", attr: "property", key: "article:published_time" },
+  { kind: "meta", attr: "property", key: "article:modified_time" },
+  // NOT emitted by the prerenderer today — it writes only twitter:card and twitter:title.
+  // The entry is inert, and it stays because the PREDICATE is "index.html does not ship it",
+  // which is true. The day the prerenderer emits it, this is already correct.
   { kind: "meta", attr: "name", key: "twitter:description" },
 ];
+
+/** Repeatable, so it never goes through upsertTag; handled by hand below. */
+const ARTICLE_TAG_SELECTOR = 'meta[property="article:tag"]';
 
 function sameSelector(a: TagSelector, b: TagSelector): boolean {
   if (a.kind === "link") return b.kind === "link" && a.rel === b.rel;
@@ -175,8 +189,12 @@ export function useDocumentHead(options: DocumentHeadOptions | null): void {
           applied,
         );
       }
+      // `article:tag` is repeatable, so it can never go through upsertTag. On a prerendered
+      // article the static head already carries one per tag; creating more left DUPLICATES
+      // while mounted, and the prerendered copies then survived unmount forever. Clear the
+      // whole family first — index.html ships none, so this is the boot state.
+      document.head.querySelectorAll(ARTICLE_TAG_SELECTOR).forEach((el) => el.remove());
       for (const tag of opts.article.tags ?? []) {
-        // article:tag is repeatable — always create fresh managed elements.
         const el = document.createElement("meta");
         el.setAttribute("property", "article:tag");
         el.setAttribute("content", tag);

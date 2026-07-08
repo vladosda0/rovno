@@ -16,10 +16,14 @@ import Image from "@tiptap/extension-image";
 import Youtube from "@tiptap/extension-youtube";
 import { Figcaption, Figure } from "./Figure";
 import { FaqAnswer, FaqItem, FaqQuestion } from "./Faq";
+import { TextSelection } from "@tiptap/pm/state";
 import {
+  boundedSelectionBetween,
+  insertBlockNodesHoisted,
   HORIZONTAL_RULE_FIND_FOR_TEST,
   IsolatedInputRules,
   isInsideIsolatedNode,
+  isolatedEditorProps,
   positionAfterIsolatedContainer,
 } from "./isolatedInputRules";
 
@@ -324,5 +328,232 @@ describe("the copied horizontal-rule regex has not drifted from the package", ()
     );
     const found = /find:\s*(\/\^.*?\/)[,\s]/.exec(source)?.[1];
     expect(found).toBe(String(HORIZONTAL_RULE_FIND_FOR_TEST));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The FOURTH door: a selection that starts outside a guarded node and ends inside it.
+// Not a caller of tr.replaceWith at all — but every edit goes through the selection.
+// ---------------------------------------------------------------------------
+
+/** A doc with prose BEFORE a figure, so a selection can start outside and end inside. */
+const proseThenFigureDoc = (): JsonNode => ({
+  type: "doc",
+  content: [
+    { type: "paragraph", content: [{ type: "text", text: "проза" }] },
+    {
+      type: "figure",
+      attrs: { src: SRC, alt: "А", width: 16, height: 9 },
+      content: [{ type: "figcaption", content: [{ type: "text", text: "Подпись" }] }],
+    },
+  ],
+});
+
+const proseThenFaqDoc = (): JsonNode => ({
+  type: "doc",
+  content: [
+    { type: "paragraph", content: [{ type: "text", text: "проза" }] },
+    faqDoc().content![0],
+  ],
+});
+
+/** Exactly what prosemirror-view builds from a shift-click or a drag. */
+function crossingSelection(editor: Editor, anchorPos: number, headPos: number) {
+  const { doc } = editor.state;
+  return TextSelection.between(doc.resolve(anchorPos), doc.resolve(headPos));
+}
+
+/** Install the selection guard as prosemirror-view does: through `createSelectionBetween`. */
+function guarded(editor: Editor, anchorPos: number, headPos: number) {
+  const { doc } = editor.state;
+  const $a = doc.resolve(anchorPos);
+  const $h = doc.resolve(headPos);
+  return boundedSelectionBetween(doc, $a, $h) ?? TextSelection.between($a, $h);
+}
+
+describe("a selection crossing an isolating boundary destroys the container", () => {
+  it("UNGUARDED, deleting such a selection removes the whole figure — this is the bug", () => {
+    const editor = makeEditor(proseThenFigureDoc());
+    const caption = firstNode(editor, "figcaption");
+    const sel = crossingSelection(editor, 3, caption.pos + 4); // "про|за" .. "Под|пись"
+    editor.view.dispatch(editor.state.tr.setSelection(sel).deleteSelection());
+
+    expect(() => editor.state.doc.check()).not.toThrow(); // valid, and the image is gone
+    expect(countType(editor, "figure")).toBe(0);
+    editor.destroy();
+  });
+
+  it("UNGUARDED, typing over such a selection removes the whole figure", () => {
+    const editor = makeEditor(proseThenFigureDoc());
+    const caption = firstNode(editor, "figcaption");
+    const sel = crossingSelection(editor, 3, caption.pos + 4);
+    editor.view.dispatch(editor.state.tr.setSelection(sel).insertText("x"));
+
+    expect(() => editor.state.doc.check()).not.toThrow();
+    expect(countType(editor, "figure")).toBe(0);
+    editor.destroy();
+  });
+
+  it("UNGUARDED, it empties the FAQ question, so the FAQPage silently disappears", () => {
+    const editor = makeEditor(proseThenFaqDoc());
+    const q = firstNode(editor, "faqQuestion");
+    const sel = crossingSelection(editor, 3, q.pos + 4);
+    editor.view.dispatch(editor.state.tr.setSelection(sel).insertText("x"));
+
+    expect(() => editor.state.doc.check()).not.toThrow();
+    // The pair survives structurally; extractFaqItems' `question && answer` gate drops it.
+    expect(firstNode(editor, "faqQuestion").node.textContent).toBe("");
+    editor.destroy();
+  });
+});
+
+describe("boundedSelectionBetween makes that selection unrepresentable", () => {
+  it("clamps a prose -> caption selection to stop before the figure", () => {
+    const editor = makeEditor(proseThenFigureDoc());
+    const figure = firstNode(editor, "figure");
+    const caption = firstNode(editor, "figcaption");
+    const sel = guarded(editor, 3, caption.pos + 4);
+
+    expect(sel.to).toBeLessThanOrEqual(figure.pos);
+    editor.view.dispatch(editor.state.tr.setSelection(sel).deleteSelection());
+    expect(countType(editor, "figure")).toBe(1);
+    expect(firstNode(editor, "figure").node.attrs.src).toBe(SRC);
+    expect(firstNode(editor, "figcaption").node.textContent).toBe("Подпись");
+    editor.destroy();
+  });
+
+  it("clamps a caption -> prose selection to stay inside the figure", () => {
+    const editor = makeEditor(proseThenFigureDoc());
+    const figure = firstNode(editor, "figure");
+    const caption = firstNode(editor, "figcaption");
+    const sel = guarded(editor, caption.pos + 4, 3); // anchor inside, head backwards into prose
+
+    expect(sel.from).toBeGreaterThanOrEqual(figure.pos);
+    editor.view.dispatch(editor.state.tr.setSelection(sel).deleteSelection());
+    expect(countType(editor, "figure")).toBe(1);
+    expect(editor.state.doc.firstChild!.textContent).toBe("проза");
+    editor.destroy();
+  });
+
+  it("typing and Backspace over the clamped range leave the figure whole", () => {
+    for (const edit of ["type", "delete"] as const) {
+      const editor = makeEditor(proseThenFigureDoc());
+      const caption = firstNode(editor, "figcaption");
+      const sel = guarded(editor, 3, caption.pos + 4);
+      const tr = editor.state.tr.setSelection(sel);
+      editor.view.dispatch(edit === "type" ? tr.insertText("x") : tr.deleteSelection());
+      expect(countType(editor, "figure")).toBe(1);
+      expect(() => editor.state.doc.check()).not.toThrow();
+      editor.destroy();
+    }
+  });
+
+  it("leaves ordinary selections alone (both outside, or both in the same container)", () => {
+    const editor = makeEditor(proseThenFigureDoc());
+    const caption = firstNode(editor, "figcaption");
+    const { doc } = editor.state;
+    expect(boundedSelectionBetween(doc, doc.resolve(1), doc.resolve(5))).toBeNull();
+    expect(boundedSelectionBetween(doc, doc.resolve(caption.pos + 1), doc.resolve(caption.pos + 5))).toBeNull();
+    editor.destroy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The CALL SITES, not the helpers. Deleting every guard used to leave the suite green.
+// ---------------------------------------------------------------------------
+
+/** A ClipboardEvent good enough for handlePaste; jsdom's has no writable clipboardData. */
+function fakePaste(text: string) {
+  let prevented = false;
+  return {
+    event: {
+      preventDefault() { prevented = true; },
+      clipboardData: { files: [], getData: (t: string) => (t === "text/plain" ? text : "") },
+    } as unknown as ClipboardEvent,
+    wasPrevented: () => prevented,
+  };
+}
+
+describe("isolatedEditorProps.handlePaste — the real call site", () => {
+  const YT = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
+
+  it("inside an FAQ answer it handles the paste itself, so no paste rule can run", () => {
+    const editor = makeEditor(emptyAnswerFaqDoc());
+    editor.commands.focus(firstNode(editor, "faqAnswer").pos + 2);
+    const { event, wasPrevented } = fakePaste(YT);
+
+    expect(isolatedEditorProps.handlePaste(editor.view, event)).toBe(true);
+    expect(wasPrevented()).toBe(true);
+    expect(countType(editor, "youtube")).toBe(0);
+    expect(countType(editor, "faqItem")).toBe(1);
+    expect(firstNode(editor, "faqAnswer").node.textContent).toBe(YT);
+    editor.destroy();
+  });
+
+  it("inside a caption it inserts text and collapses newlines", () => {
+    const editor = makeEditor(figureDoc());
+    editor.commands.focus(firstNode(editor, "figcaption").pos + 1);
+    const { event } = fakePaste("две\nстроки");
+
+    expect(isolatedEditorProps.handlePaste(editor.view, event)).toBe(true);
+    expect(firstNode(editor, "figcaption").node.textContent).toBe("две строкиПодпись");
+    expect(countType(editor, "figure")).toBe(1);
+    editor.destroy();
+  });
+
+  it("in ordinary prose it declines, so ProseMirror and extension-link still run", () => {
+    const editor = makeEditor({ type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "x" }] }] });
+    editor.commands.focus(1);
+    const { event, wasPrevented } = fakePaste(YT);
+
+    expect(isolatedEditorProps.handlePaste(editor.view, event)).toBe(false);
+    expect(wasPrevented()).toBe(false);
+    editor.destroy();
+  });
+
+  it("an empty clipboard over a selection deletes it, as a native paste does", () => {
+    const editor = makeEditor(figureDoc());
+    const caption = firstNode(editor, "figcaption");
+    editor.commands.setTextSelection({ from: caption.pos + 1, to: caption.pos + 4 });
+    const { event } = fakePaste("");
+
+    expect(isolatedEditorProps.handlePaste(editor.view, event)).toBe(true);
+    expect(firstNode(editor, "figcaption").node.textContent).toBe("пись");
+    editor.destroy();
+  });
+});
+
+describe("insertBlockNodesHoisted — the uploadAndInsert call site", () => {
+  const newFig = { type: "figure", attrs: { src: "https://x.test/b.jpg", alt: null, width: 4, height: 3 }, content: [{ type: "figcaption" }] };
+
+  it("a figure dropped into a caption lands AFTER the figure, which survives whole", () => {
+    const editor = makeEditor(figureDoc());
+    insertBlockNodesHoisted(editor, [newFig], firstNode(editor, "figcaption").pos + 4);
+
+    expect(() => editor.state.doc.check()).not.toThrow();
+    expect(countType(editor, "figure")).toBe(2); // original + new, NOT the torn 3
+    const original = firstNode(editor, "figure").node;
+    expect(original.attrs.src).toBe(SRC);
+    expect(original.textContent).toBe("Подпись");
+    editor.destroy();
+  });
+
+  it("a figure dropped into an FAQ answer lands after the pair, which stays intact", () => {
+    const editor = makeEditor(faqDoc());
+    insertBlockNodesHoisted(editor, [newFig], firstNode(editor, "faqAnswer").pos + 3);
+
+    expect(() => editor.state.doc.check()).not.toThrow();
+    expect(countType(editor, "faqItem")).toBe(1);
+    const item = firstNode(editor, "faqItem").node;
+    expect([item.child(0).textContent, item.child(1).textContent]).toEqual(["Вопрос", "Ответ"]);
+    editor.destroy();
+  });
+
+  it("in ordinary prose it inserts exactly where asked, and clamps a stale position", () => {
+    const editor = makeEditor({ type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "проза" }] }] });
+    insertBlockNodesHoisted(editor, [newFig], 9_999); // the doc shrank while the upload awaited
+    expect(() => editor.state.doc.check()).not.toThrow();
+    expect(countType(editor, "figure")).toBe(1);
+    editor.destroy();
   });
 });

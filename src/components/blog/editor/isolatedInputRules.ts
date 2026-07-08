@@ -25,12 +25,25 @@
 // is only one of them. The other two are guarded in RichTextEditor's editorProps:
 //   * @tiptap/extension-youtube's nodePasteRule — pasting a YouTube URL into a caption
 //   * the editor's own uploadAndInsert / a block HTML paste
-// See `handlePaste` / `handleDrop` there, which use the helpers below. Locking one
-// door in a room with three is how the first version of this file shipped.
+// See `isolatedEditorProps` below, which RichTextEditor installs. Locking one door in a
+// room with three is how the first version of this file shipped.
+//
+// The fourth door is not a caller of `tr.replaceWith` at all: a SELECTION that starts
+// outside a guarded node and ends inside it. `isolating: true` does not prevent one from
+// being built — `TextSelection.between` happily spans the boundary, and that is exactly
+// what a shift-click or a drag produces. Any edit on such a range (paste, typing,
+// Backspace) then replaces it, deleting the whole <figure> or emptying the FAQ question,
+// and the resulting doc is VALID so autosave writes it away. Widening the paste guard to
+// `$to` would not help: `tr.insertText` over that range destroys the node by itself.
+//
+// So we make the crossing selection unrepresentable, via `createSelectionBetween`. That
+// closes paste, typing and Backspace in one place, rather than one handler at a time.
 
-import { Extension, InputRule } from "@tiptap/core";
+import { Extension, InputRule, type Editor } from "@tiptap/core";
 import { inputRegex as IMAGE_FIND } from "@tiptap/extension-image";
-import type { ResolvedPos } from "@tiptap/pm/model";
+import type { Node as PMNode, ResolvedPos } from "@tiptap/pm/model";
+import { TextSelection, type Selection } from "@tiptap/pm/state";
+import type { EditorView } from "@tiptap/pm/view";
 
 /** Nodes whose content must never be structurally replaced. */
 export const ISOLATED_NODE_NAMES = ["figcaption", "faqQuestion", "faqAnswer"] as const;
@@ -67,13 +80,141 @@ export function isInsideIsolatedNode($pos: ResolvedPos): boolean {
  * `tr.replaceWith`, which is what `insertContentAt` ultimately calls.
  */
 export function positionAfterIsolatedContainer($pos: ResolvedPos): number | null {
+  return isolatedContainerRange($pos)?.to ?? null;
+}
+
+/** The span of the figure / faqItem `$pos` sits inside, or null. Containers never nest. */
+function isolatedContainerRange($pos: ResolvedPos): { from: number; to: number } | null {
   for (let depth = $pos.depth; depth > 0; depth -= 1) {
     if ((ISOLATED_CONTAINER_NAMES as readonly string[]).includes($pos.node(depth).type.name)) {
-      return $pos.after(depth);
+      return { from: $pos.before(depth), to: $pos.after(depth) };
     }
   }
   return null;
 }
+
+/** Identity of the guarded container a position lies in; -1 for "none". */
+const containerKey = ($pos: ResolvedPos) => isolatedContainerRange($pos)?.from ?? -1;
+
+/**
+ * A selection that never crosses the boundary of a figure or an FAQ pair.
+ *
+ * Returns null when anchor and head already sit in the same container (or both outside),
+ * which lets ProseMirror build its default selection. Otherwise the HEAD is clamped back to
+ * the anchor's side of the boundary, so a shift-click from a paragraph into a caption
+ * selects up to the figure and stops.
+ *
+ * Every destructive edit — paste, typing, Backspace, drag — goes through the current
+ * selection, so refusing to build the crossing range fixes all of them at once. A guard on
+ * any single handler cannot: `tr.insertText` over a boundary-crossing range deletes the
+ * <figure> without any handler being involved.
+ */
+export function boundedSelectionBetween(
+  doc: PMNode,
+  $anchor: ResolvedPos,
+  $head: ResolvedPos,
+): Selection | null {
+  const anchorIn = isolatedContainerRange($anchor);
+  const headIn = isolatedContainerRange($head);
+  if (containerKey($anchor) === containerKey($head)) return null;
+
+  const forward = $head.pos > $anchor.pos;
+  const clamped = anchorIn
+    // Anchored inside: keep the head within this container.
+    ? (forward ? anchorIn.to - 1 : anchorIn.from + 1)
+    // Anchored outside: stop just short of the container the head fell into.
+    : (forward ? headIn!.from : headIn!.to);
+
+  return TextSelection.between(doc.resolve($anchor.pos), doc.resolve(clamped));
+}
+
+/**
+ * Insert block nodes at `position` (or the caret), hoisting out of a guarded container.
+ *
+ * A <figure> is a block. Inserting one at a caret inside a caption or an FAQ answer makes
+ * ProseMirror split the enclosing node to fit it: the figure is DUPLICATED and the caption
+ * torn in half, or the FAQ pair becomes two invalid halves — and `doc.check()` passes, so
+ * autosave writes the wreckage to `content` jsonb.
+ *
+ * A function rather than three lines inside `uploadAndInsert`, so the CALL SITE is testable:
+ * deleting the hoist there left the whole suite green.
+ */
+export function insertBlockNodesHoisted(editor: Editor, nodes: object[], position?: number): void {
+  // The drop position was captured before the uploads awaited, so the doc may have shrunk
+  // underneath it. Clamp rather than throw a RangeError.
+  const size = editor.state.doc.content.size;
+  const at = Math.min(Math.max(position ?? editor.state.selection.from, 0), size);
+  const target = positionAfterIsolatedContainer(editor.state.doc.resolve(at)) ?? at;
+  editor.chain().focus().insertContentAt(target, nodes).run();
+}
+
+/** `text/plain`, or the `text/uri-list` a dragged link/image carries instead. */
+function clipboardText(data: DataTransfer | null | undefined): string {
+  return data?.getData("text/plain") || data?.getData("text/uri-list") || "";
+}
+
+/**
+ * Insert `text` as plain text, collapsing newlines.
+ *
+ * A caption and an FAQ question are `inline*`, so a literal `\n` would render as nothing;
+ * an FAQ answer would keep it inside one paragraph. A space is the honest reading of both.
+ * Not trimmed: `tr.insertText("", from, to)` over a non-empty range deletes it, which is
+ * exactly what a native paste of empty text does.
+ */
+export function insertPlainText(view: EditorView, text: string, at?: number): void {
+  const size = view.state.doc.content.size;
+  const clean = text.replace(/\s*\r?\n+\s*/g, " ");
+  const { selection } = view.state;
+  const from = at === undefined ? selection.from : Math.min(Math.max(at, 0), size);
+  const to = at === undefined ? selection.to : from;
+  if (!clean && from === to) return;
+  view.dispatch(view.state.tr.insertText(clean, from, to).scrollIntoView());
+}
+
+/**
+ * Inside a caption or an FAQ pair, paste TEXT and nothing else. Returns false elsewhere,
+ * so `someProp` falls through to the next handler (extension-link's, ProseMirror's own).
+ *
+ * A pasted <hr>, <img> or block slice makes ProseMirror split the enclosing node to fit it,
+ * and a pasted YouTube URL does the same through extension-youtube's nodePasteRule. Both
+ * leave a doc that passes `doc.check()`, so autosave persists it.
+ *
+ * WHERE this runs is the point: prosemirror-view's `doPaste` consults `handlePaste` before
+ * it dispatches the `uiEvent: "paste"` transaction, and every paste rule keys off that meta.
+ * Handling it here means no paste rule ever runs, rather than racing one that already has.
+ */
+export function handleIsolatedPaste(view: EditorView, event: ClipboardEvent): boolean {
+  const { $from, $to } = view.state.selection;
+  if (containerKey($from) === -1 && containerKey($to) === -1) return false;
+
+  event.preventDefault();
+  // `createSelectionBetween` should make this unreachable; refuse rather than corrupt if a
+  // boundary-crossing selection ever arrives from a path that does not consult it.
+  if (containerKey($from) !== containerKey($to)) return true;
+
+  insertPlainText(view, clipboardText(event.clipboardData));
+  return true;
+}
+
+/** Same rule for a non-file drop: the drop path reaches the identical paste-rule machinery. */
+export function handleIsolatedDrop(view: EditorView, event: DragEvent, pos: number | undefined): boolean {
+  if (pos === undefined) return false;
+  if (!isInsideIsolatedNode(view.state.doc.resolve(pos))) return false;
+  event.preventDefault();
+  insertPlainText(view, clipboardText(event.dataTransfer), pos);
+  return true;
+}
+
+/**
+ * The editorProps RichTextEditor installs. Exported as one object so a test can drive the
+ * REAL call sites: three earlier tests characterised the bug rather than the fix, and
+ * deleting every guard left the whole suite green.
+ */
+export const isolatedEditorProps = {
+  createSelectionBetween: (view: EditorView, $anchor: ResolvedPos, $head: ResolvedPos) =>
+    boundedSelectionBetween(view.state.doc, $anchor, $head),
+  handlePaste: (view: EditorView, event: ClipboardEvent) => handleIsolatedPaste(view, event),
+};
 
 function guard(find: RegExp): InputRule {
   return new InputRule({

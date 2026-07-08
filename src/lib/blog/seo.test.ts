@@ -122,9 +122,11 @@ describe("prerendered head tags do not leak across a client-side navigation", ()
     // Tests here seed prerender-only tags; leaving one behind would let the NEXT test
     // pass for the wrong reason (the tag it expects removed was never there to begin with).
     for (const sel of ['link[rel="canonical"]', 'meta[property="og:url"]',
-      'meta[property="og:site_name"]', 'meta[name="twitter:description"]']) {
+      'meta[property="og:site_name"]', 'meta[name="twitter:description"]',
+      'meta[property="article:published_time"]', 'meta[property="article:modified_time"]']) {
       document.head.querySelector(sel)?.remove();
     }
+    document.head.querySelectorAll('meta[property="article:tag"]').forEach((el) => el.remove());
   });
 
   // The half-closed version of this fix only removed a prerendered tag when the NEXT page
@@ -170,6 +172,44 @@ describe("prerendered head tags do not leak across a client-side navigation", ()
       .toBe("https://rovno.ai/blog/b/");
     unmount();
     expect(document.head.querySelector('link[rel="canonical"]')).toBeNull();
+  });
+
+  it("article:published_time / article:modified_time are prerender-only too", () => {
+    for (const key of ["article:published_time", "article:modified_time"]) {
+      const el = document.createElement("meta");
+      el.setAttribute("property", key);
+      el.setAttribute("content", "2026-01-01T00:00:00Z");
+      document.head.appendChild(el);
+    }
+    const { unmount } = renderHook(() =>
+      useDocumentHead({
+        title: "Статья",
+        article: { publishedTime: "2026-07-01T00:00:00Z", modifiedTime: "2026-07-02T00:00:00Z" },
+      }),
+    );
+    unmount();
+    expect(document.head.querySelector('meta[property="article:published_time"]')).toBeNull();
+    expect(document.head.querySelector('meta[property="article:modified_time"]')).toBeNull();
+  });
+
+  it("article:tag is not duplicated while mounted, and none survive unmount", () => {
+    // Repeatable, so it never goes through upsertTag. The prerendered copies used to sit
+    // alongside the freshly created ones, and then outlive them.
+    for (const tag of ["приёмка", "смета"]) {
+      const el = document.createElement("meta");
+      el.setAttribute("property", "article:tag");
+      el.setAttribute("content", tag);
+      document.head.appendChild(el);
+    }
+    const { unmount } = renderHook(() =>
+      useDocumentHead({
+        title: "Статья",
+        article: { publishedTime: "2026-07-01T00:00:00Z", tags: ["приёмка", "смета"] },
+      }),
+    );
+    expect(document.head.querySelectorAll('meta[property="article:tag"]').length).toBe(2);
+    unmount();
+    expect(document.head.querySelectorAll('meta[property="article:tag"]').length).toBe(0);
   });
 
   it("og:url / og:site_name / twitter:description are prerender-only too", () => {

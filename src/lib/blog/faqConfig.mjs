@@ -35,7 +35,13 @@ function children(node) {
 /** Concatenate the inline content of a node into plain text. */
 function inlineText(node) {
   if (!node) return "";
-  if (node.type === "text") return typeof node.text === "string" ? node.text : "";
+  if (node.type === "text") {
+    // Faithful, not lossy: a numeric `text` is invalid data, but dropping it silently
+    // rewrites the question ("42?" -> "?"). Objects/arrays still yield "".
+    if (typeof node.text === "string") return node.text;
+    if (typeof node.text === "number" && Number.isFinite(node.text)) return String(node.text);
+    return "";
+  }
   if (node.type === "hardBreak") return "\n";
   return children(node).map(inlineText).join("");
 }

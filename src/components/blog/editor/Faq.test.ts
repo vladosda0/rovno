@@ -174,7 +174,7 @@ describe("extractFaqItems survives a hand-written content jsonb", () => {
     }
   });
 
-  it("a numeric `text` does not become part of a question", () => {
+  it("a numeric `text` is stringified, not silently dropped", () => {
     const doc = {
       type: "doc",
       content: [{
@@ -185,7 +185,7 @@ describe("extractFaqItems survives a hand-written content jsonb", () => {
         ],
       }],
     };
-    expect(extractFaqItems(doc)).toEqual([{ question: "?", answer: "Да" }]);
+    expect(extractFaqItems(doc)).toEqual([{ question: "42?", answer: "Да" }]);
   });
 });
 
