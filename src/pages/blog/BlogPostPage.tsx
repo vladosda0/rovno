@@ -5,12 +5,13 @@
 // row only to blog authors, so authors get a live preview at the same URL
 // (with a "Черновик" badge), everyone else gets the not-found state.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useDocumentHead, SITE_NAME } from "@/lib/blog/seo";
 import { articleJsonLd, blogPostPath, BLOG_TITLE } from "@/lib/blog/jsonld";
 import { readPrerenderedPost } from "@/lib/blog/prerendered-data";
 import { sanitizeArticleHtml } from "@/lib/blog/sanitize";
+import { withHeadingAnchors } from "@/lib/blog/anchors";
 import { formatReadingTime } from "@/lib/blog/reading-time";
 import { useBlogPost, usePublishedBlogPosts } from "@/hooks/use-blog";
 import { BlogShell, useLandingCta } from "@/components/blog/BlogShell";
@@ -50,10 +51,49 @@ export default function BlogPostPage() {
     [morePosts, slug],
   );
 
+  // Sanitize first, anchor second: the anchor pass adds ids and a TOC that are
+  // ours, not the author's, so they must not be handed to DOMPurify as if they
+  // came from the DB — and DOMPurify must never see them as something to strip.
   const safeHtml = useMemo(
-    () => (post ? sanitizeArticleHtml(post.content_html) : ""),
+    () => (post ? withHeadingAnchors(sanitizeArticleHtml(post.content_html)).html : ""),
     [post],
   );
+
+  // Land a #deep-link that arrived with the URL.
+  //
+  // The browser tries to scroll while parsing the static HTML, but React then
+  // replaces #root wholesale (createRoot, not hydrateRoot), so the target it
+  // scrolled to no longer exists. On a draft or a post published since the last
+  // Timeweb rebuild there is no static snapshot at all and the heading simply is
+  // not in the DOM at load time. Either way, re-apply the hash once the article
+  // has rendered. In-page TOC clicks already work and are unaffected.
+  //
+  // Keyed on the post identity, NOT on safeHtml: safeHtml is a fresh string on
+  // every React Query refetch (window refocus, etc.), and re-running this would
+  // yank a reader who had scrolled down back up to the anchor. One landing per
+  // article is the whole intent.
+  const scrolledSlug = useRef<string | null>(null);
+  useEffect(() => {
+    if (!safeHtml || !post || scrolledSlug.current === post.slug) return;
+    scrolledSlug.current = post.slug;
+
+    // decodeURIComponent throws URIError on a malformed escape (#discount-50%).
+    // The app has no error boundary, so an unguarded throw here unmounts the
+    // whole SPA. A bad hash is simply not a target.
+    let id: string;
+    try {
+      id = decodeURIComponent(window.location.hash.slice(1));
+    } catch {
+      return;
+    }
+    if (!id) return;
+
+    // After paint: the article HTML is committed but layout may not be settled.
+    const raf = requestAnimationFrame(() => {
+      document.getElementById(id)?.scrollIntoView();
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [safeHtml, post]);
 
   useDocumentHead(
     post

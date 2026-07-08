@@ -147,6 +147,24 @@ export async function triggerFrontendRebuild(): Promise<RebuildResult> {
 export interface BlogImageUploadResult {
   url: string;
   path: string;
+  /** Intrinsic size of the stored JPEG; null when the browser can't decode it. */
+  width: number | null;
+  height: number | null;
+}
+
+/** Intrinsic pixel size of an encoded image, or null if it can't be decoded.
+ * Used to stamp width/height on article <img>s so the browser reserves the
+ * box before the photo arrives (Cumulative Layout Shift). */
+async function readImageDimensions(file: Blob): Promise<{ width: number; height: number } | null> {
+  if (typeof createImageBitmap !== "function") return null;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const { width, height } = bitmap;
+    bitmap.close();
+    return width > 0 && height > 0 ? { width, height } : null;
+  } catch {
+    return null; // never fail an upload over a missing layout hint
+  }
 }
 
 /** Upload an article image (cover or inline figure) to the public
@@ -160,9 +178,15 @@ export async function uploadBlogImage(file: File): Promise<BlogImageUploadResult
   if (!isImage(file)) throw new Error("Selected file is not an image");
 
   const { file: optimized } = await optimizeImageForUpload(file, { forceReencode: true });
+  const dimensions = await readImageDimensions(optimized);
   const path = `${uid}/${crypto.randomUUID()}.jpg`;
   await uploadFileToBucket(BLOG_IMAGES_BUCKET, path, optimized, { upsert: false });
 
   const { data } = supabase.storage.from(BLOG_IMAGES_BUCKET).getPublicUrl(path);
-  return { url: data.publicUrl, path };
+  return {
+    url: data.publicUrl,
+    path,
+    width: dimensions?.width ?? null,
+    height: dimensions?.height ?? null,
+  };
 }

@@ -36,6 +36,7 @@ import { fileURLToPath } from "node:url";
 import { JSDOM } from "jsdom";
 import createDOMPurify from "dompurify";
 import { sanitizeArticleHtmlWith } from "../src/lib/blog/sanitizeConfig.mjs";
+import { annotateArticleHtml } from "../src/lib/blog/anchorsConfig.mjs";
 
 // fileURLToPath (not new URL().pathname) so a build path containing a space or
 // non-ASCII char decodes correctly instead of staying percent-encoded.
@@ -79,6 +80,32 @@ function sanitizeArticleBody(html) {
   } catch (err) {
     log(`sanitize failed, escaping article body: ${err?.message ?? err}`);
     return escapeHtml(html ?? "");
+  }
+}
+
+// Sanitize, then stamp heading ids and prepend the TOC — the same order, and
+// the same anchorsConfig.mjs pass, that BlogPostPage runs at render time. If the two
+// disagreed, every #deep-link a crawler indexed from the static snapshot would
+// break the moment React hydrated and replaced the markup.
+//
+// One lazily-built jsdom window, reused across articles (same shape as the
+// purify singleton above). `new JSDOM(html)` per post would build and leak a
+// full window each time, and would run jsdom's CSS parser over any <style> in
+// the body just to spray parse errors into the build log. DOMParser skips both
+// and mirrors what BlogPostPage does in the browser.
+let _articleDom = null;
+function parseArticleHtml(source) {
+  if (!_articleDom) _articleDom = new JSDOM("");
+  return new _articleDom.window.DOMParser().parseFromString(source, "text/html");
+}
+
+function renderArticleBody(html) {
+  const safe = sanitizeArticleBody(html);
+  try {
+    return annotateArticleHtml(safe, parseArticleHtml).html;
+  } catch (err) {
+    log(`anchor pass failed, serving unanchored body: ${err?.message ?? err}`);
+    return safe;
   }
 }
 
@@ -325,7 +352,7 @@ function articleHtml(post) {
         ${post.cover_image_url ? `<div class="rv-article-cover"><img src="${escapeHtml(post.cover_image_url)}" alt="${escapeHtml(post.title)}" /></div>` : ""}
       </section>
       <section class="rv-section" style="padding:48px 48px 96px">
-        <div class="rv-article">${sanitizeArticleBody(post.content_html)}</div>
+        <div class="rv-article">${renderArticleBody(post.content_html)}</div>
       </section>
     </article>
     <nav class="rv-section" style="padding:0 48px 96px;font-family:var(--font-body)">
@@ -427,7 +454,7 @@ function rssXml(posts) {
       <guid isPermaLink="true">${escapeXml(url)}</guid>
       ${pubDate ? `<pubDate>${pubDate}</pubDate>` : ""}
       ${post.excerpt ? `<description>${escapeXml(post.excerpt)}</description>` : ""}
-      <content:encoded><![CDATA[${(post.content_html ?? "").replaceAll("]]>", "]]]]><![CDATA[>")}]]></content:encoded>
+      <content:encoded><![CDATA[${sanitizeArticleBody(post.content_html).replaceAll("]]>", "]]]]><![CDATA[>")}]]></content:encoded>
     </item>`;
     })
     .join("\n");
