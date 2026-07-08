@@ -21,12 +21,13 @@ import { CharacterCount, Placeholder } from "@tiptap/extensions";
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough, Code, Link2, Link2Off,
   Heading2, Heading3, Quote, ImagePlus, ListOrdered, List, Minus, Plus, SquareCode, X,
-  Youtube as YoutubeIcon,
+  Youtube as YoutubeIcon, MessageCircleQuestion,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { uploadBlogImage } from "@/lib/blog/api";
 import { isInternalHref, normalizeHref } from "@/lib/blog/link-href";
 import { Figcaption, Figure } from "./Figure";
+import { FaqAnswer, FaqItem, FaqQuestion } from "./Faq";
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -125,12 +126,22 @@ export function RichTextEditor({
       }),
       Figure,
       Figcaption,
+      FaqItem,
+      FaqQuestion,
+      FaqAnswer,
       // Legacy: articles written before the figure node still hold plain `image`
       // nodes. Unregistering Image would make TipTap drop them on hydrate, and
       // the autosave would then write the loss back to the DB.
       Image,
       Youtube.configure({ nocookie: true, width: 0, height: 0, HTMLAttributes: {} }),
-      Placeholder.configure({ placeholder }),
+      Placeholder.configure({
+        // Not just the focused node: an empty FAQ question needs its hint even
+        // while the caret sits in the answer below it. CSS scopes which of the
+        // decorated nodes actually paint a hint.
+        showOnlyCurrent: false,
+        placeholder: ({ node }) =>
+          node.type.name === "faqQuestion" ? "Вопрос?" : placeholder,
+      }),
       CharacterCount,
     ],
     content: (initialContent as object | null) ?? "",
@@ -360,7 +371,7 @@ export function RichTextEditor({
               {/* Block-level commands are inapplicable inside a figure caption
                   (figure's content expression is exactly "figcaption"), so they
                   would be dead buttons. Hide them instead of showing no-ops. */}
-              {!editor.isActive("figcaption") && (
+              {!editor.isActive("figcaption") && !editor.isActive("faqQuestion") && (
                 <>
                   <span className="rv-editor-menu__divider" />
                   <button type="button" className={editor.isActive("heading", { level: 2 }) ? "active" : ""} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} title="Заголовок">
@@ -420,6 +431,9 @@ export function RichTextEditor({
               </button>
               <button type="button" onClick={() => editor.chain().focus().toggleCodeBlock().run()}>
                 <SquareCode size={14} /> Код
+              </button>
+              <button type="button" onClick={() => editor.chain().focus().setFaqItem().run()}>
+                <MessageCircleQuestion size={14} /> Вопрос-ответ
               </button>
               <button type="button" onClick={() => editor.chain().focus().setHorizontalRule().run()}>
                 <Minus size={14} /> Разделитель
