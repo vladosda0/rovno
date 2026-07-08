@@ -382,10 +382,13 @@
 .rv-landing .rv-article [data-rv-faq-item] {
   padding: 20px 0;
   border-bottom: 1px solid var(--line-blue-soft);
+  /* Top rule only on the FIRST item of a run. `:first-of-type` matches the first
+     `div` sibling, so a preceding div[data-youtube-video] silently stole it. */
+  border-top: 1px solid var(--line-blue-soft);
 }
 
-.rv-landing .rv-article [data-rv-faq-item]:first-of-type {
-  border-top: 1px solid var(--line-blue-soft);
+.rv-landing .rv-article [data-rv-faq-item] + [data-rv-faq-item] {
+  border-top: 0;
 }
 
 /* Smaller than a prose h3: this is a question, not a section break. */

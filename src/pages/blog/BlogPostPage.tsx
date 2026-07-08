@@ -66,7 +66,10 @@ export default function BlogPostPage() {
   const { slug } = useParams<{ slug: string }>();
   const [initialPost] = useState(() => (slug ? readPrerenderedPost(slug) : undefined));
   const { data: post, isLoading } = useBlogPost(slug, initialPost);
-  const { data: morePosts } = usePublishedBlogPosts(4);
+  // The FULL list, not the 4 newest: with a 4-row pool, relatedPosts can only
+  // reorder the same 3 candidates the old `.slice(0, 3)` produced, so no cluster
+  // ever forms. The "all" query key is already warm from /blog/ and the tag hubs.
+  const { data: morePosts } = usePublishedBlogPosts();
   const { startPath } = useLandingCta();
 
   // Cluster linking: articles sharing a tag come first, then the newest others.

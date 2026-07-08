@@ -574,8 +574,12 @@ function sitemapXml(posts) {
   }
   // Tag hubs enter the sitemap only once they have real depth. A one-post tag page
   // competes with the article it links to; listing it is asking for index bloat.
+  //
+  // Gate on the SAME quantity the page itself uses (distinct posts at that slug).
+  // Anything else and the sitemap advertises a URL this very build stamped
+  // `noindex` — Search Console calls that "Submitted URL marked 'noindex'".
   for (const hub of collectTagHubs(posts)) {
-    if (!isIndexableTag(hub.count)) continue;
+    if (!isIndexableTag(postsForTagSlug(posts, hub.slug).length)) continue;
     urls.push(`  <url><loc>${escapeXml(`${SITE_ORIGIN}/blog/tag/${hub.slug}/`)}</loc><lastmod>${today}</lastmod></url>`);
   }
   return `<?xml version="1.0" encoding="UTF-8"?>

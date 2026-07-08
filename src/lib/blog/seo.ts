@@ -145,8 +145,23 @@ export function useDocumentHead(options: DocumentHeadOptions | null): void {
       }
     }
 
+    // `robots` and the JSON-LD script are the two head tags a PRERENDERED page can
+    // arrive with. For every other tag, "restore the original on unmount" is right:
+    // the original came from index.html and is a sane default. For these two it is
+    // actively wrong — the original belongs to the document we booted on, and after
+    // a client-side navigation it describes a page that is no longer displayed.
+    //
+    // Concretely: land on a prerendered thin tag hub (static `noindex, follow`) and
+    // click through to an article — the article's live head still said noindex, and
+    // so did every page after it. Land on a prerendered article (static
+    // Article+BreadcrumbList+FAQPage) and a thin hub kept declaring that article's
+    // structured data alongside its own canonical.
+    //
+    // So when THIS page does not set them, remove them outright and do not restore.
     if (opts.robots) {
       upsertTag({ kind: "meta", attr: "name", key: "robots" }, opts.robots, applied);
+    } else {
+      document.head.querySelector('meta[name="robots"]')?.remove();
     }
 
     let jsonLdEl: HTMLScriptElement | null = null;
@@ -165,6 +180,8 @@ export function useDocumentHead(options: DocumentHeadOptions | null): void {
         jsonLdCreated = true;
       }
       jsonLdEl.textContent = payload;
+    } else {
+      document.getElementById(JSONLD_ID)?.remove();
     }
 
     return () => {

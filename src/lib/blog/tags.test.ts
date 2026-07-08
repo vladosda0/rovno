@@ -130,3 +130,44 @@ describe("pluralizeRu", () => {
     );
   });
 });
+
+describe("collectTagHubs counts DISTINCT posts, not tag occurrences", () => {
+  it("two tag texts that slugify alike count the post once", () => {
+    // "приёмка" and "приемка" both -> priemka. Counting occurrences made a
+    // one-post hub look like a two-post hub, so the sitemap advertised a URL that
+    // the same build stamped `noindex`.
+    const hubs = collectTagHubs([{ id: "a", tags: ["приёмка", "приемка"] }]);
+    expect(hubs).toEqual([{ slug: "priemka", name: "приёмка", count: 1 }]);
+    expect(isIndexableTag(hubs[0].count)).toBe(false);
+    expect(postsForTagSlug([{ id: "a", tags: ["приёмка", "приемка"] }], "priemka")).toHaveLength(1);
+  });
+
+  it("the hub count matches postsForTagSlug for every hub", () => {
+    const posts = [
+      { id: "a", tags: ["смета", "Смета"] },
+      { id: "b", tags: ["смета"] },
+      { id: "c", tags: ["ai"] },
+    ];
+    for (const hub of collectTagHubs(posts)) {
+      expect(hub.count, hub.slug).toBe(postsForTagSlug(posts, hub.slug).length);
+    }
+  });
+
+  it("an exact duplicate tag on one post still counts once", () => {
+    expect(collectTagHubs([{ id: "a", tags: ["смета", "смета"] }])[0].count).toBe(1);
+  });
+});
+
+describe("relatedPosts matches by slug, exactly as the hubs do", () => {
+  it("treats ё/е variants of the same tag as related", () => {
+    // They share /blog/tag/priemka/, so "Читать ещё" must agree.
+    const posts = [{ slug: "sibling", tags: ["приемка"] }, { slug: "other", tags: ["ai"] }];
+    expect(relatedPosts(posts, "current", ["приёмка"], 2).map((p) => p.slug)).toEqual(["sibling", "other"]);
+  });
+
+  it("ignores tags with no URL when deciding relatedness", () => {
+    const posts = [{ slug: "x", tags: ["!!!"] }, { slug: "y", tags: ["смета"] }];
+    // The current article's only tag has no slug -> fall back to newest-first.
+    expect(relatedPosts(posts, "cur", ["!!!"], 2).map((p) => p.slug)).toEqual(["x", "y"]);
+  });
+});

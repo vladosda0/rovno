@@ -97,3 +97,61 @@ describe("useDocumentHead", () => {
     unmount();
   });
 });
+
+describe("prerendered head tags do not leak across a client-side navigation", () => {
+  /** Simulate booting on a PRERENDERED page: the static head already has these. */
+  function seedPrerenderedHead(robots: string | null, jsonLd: unknown | null) {
+    if (robots) {
+      const meta = document.createElement("meta");
+      meta.setAttribute("name", "robots");
+      meta.setAttribute("content", robots);
+      document.head.appendChild(meta);
+    }
+    if (jsonLd) {
+      const script = document.createElement("script");
+      script.type = "application/ld+json";
+      script.id = "rv-jsonld";
+      script.textContent = JSON.stringify(jsonLd);
+      document.head.appendChild(script);
+    }
+  }
+
+  afterEach(() => {
+    document.head.querySelector('meta[name="robots"]')?.remove();
+    document.getElementById("rv-jsonld")?.remove();
+  });
+
+  it("a page that sets no robots REMOVES a prerendered noindex", () => {
+    // Land on a prerendered thin tag hub (static `noindex, follow`), then navigate
+    // to an article. Restoring the original on unmount left the article noindex,
+    // and so did every page after it for the rest of the session.
+    seedPrerenderedHead("noindex, follow", null);
+    const { unmount } = renderHook(() => useDocumentHead({ title: "Статья" }));
+    expect(getMeta("name", "robots")).toBeNull();
+    unmount();
+    expect(document.head.querySelector('meta[name="robots"]')).toBeNull();
+  });
+
+  it("a page that DOES set robots still wins", () => {
+    seedPrerenderedHead("index, follow", null);
+    renderHook(() => useDocumentHead({ title: "Черновик", robots: "noindex, nofollow" }));
+    expect(getMeta("name", "robots")).toBe("noindex, nofollow");
+  });
+
+  it("a page with no JSON-LD REMOVES a prerendered #rv-jsonld", () => {
+    // Prerendered article carries Article+BreadcrumbList+FAQPage; a thin tag hub
+    // (jsonLd: null) must not keep declaring the article's structured data.
+    seedPrerenderedHead(null, [{ "@type": "Article" }, { "@type": "FAQPage" }]);
+    const { unmount } = renderHook(() => useDocumentHead({ title: "#тег", jsonLd: null }));
+    expect(document.getElementById("rv-jsonld")).toBeNull();
+    unmount();
+    expect(document.getElementById("rv-jsonld")).toBeNull();
+  });
+
+  it("a page with JSON-LD overwrites the prerendered one", () => {
+    seedPrerenderedHead(null, [{ "@type": "Article" }]);
+    renderHook(() => useDocumentHead({ title: "#тег", jsonLd: [{ "@type": "CollectionPage" }] }));
+    const payload = JSON.parse(document.getElementById("rv-jsonld")!.textContent!);
+    expect(payload).toEqual({ "@type": "CollectionPage" });
+  });
+});

@@ -74,9 +74,17 @@ export function tagNamesForSlug(posts, slug) {
 export function collectTagHubs(posts) {
   const bySlug = new Map();
   for (const post of posts ?? []) {
+    // Count each POST once per slug, not each tag. Two distinct tag texts can
+    // slugify alike ("приёмка"/"приемка" both -> priemka; the admin's lowercase
+    // Set dedupe does not catch them, and Studio-written rows bypass it entirely).
+    // Counting occurrences made a one-post hub look like a two-post hub, so the
+    // sitemap advertised a URL that the same build stamped `noindex` — Search
+    // Console reports that as "Submitted URL marked 'noindex'".
+    const slugsOnThisPost = new Set();
     for (const tag of post.tags ?? []) {
       const slug = tagSlug(tag);
-      if (!slug) continue;
+      if (!slug || slugsOnThisPost.has(slug)) continue;
+      slugsOnThisPost.add(slug);
       const hub = bySlug.get(slug) ?? { slug, name: tag, count: 0 };
       hub.count += 1;
       bySlug.set(slug, hub);
@@ -104,13 +112,15 @@ export function isIndexableTag(postCount) {
  */
 export function relatedPosts(posts, slug, tags, limit = 3) {
   const others = (posts ?? []).filter((post) => post.slug !== slug);
-  const mine = new Set(tags ?? []);
+  // Match on the SLUG, exactly as the hubs do. Matching raw text would call two
+  // articles unrelated ("приёмка" vs "приемка") while /blog/tag/priemka/ lists both.
+  const mine = new Set((tags ?? []).map(tagSlug).filter(Boolean));
   if (mine.size === 0) return others.slice(0, limit);
 
   const related = [];
   const rest = [];
   for (const post of others) {
-    ((post.tags ?? []).some((tag) => mine.has(tag)) ? related : rest).push(post);
+    ((post.tags ?? []).some((tag) => mine.has(tagSlug(tag))) ? related : rest).push(post);
   }
   return [...related, ...rest].slice(0, limit);
 }

@@ -28,6 +28,7 @@ import { uploadBlogImage } from "@/lib/blog/api";
 import { isInternalHref, normalizeHref } from "@/lib/blog/link-href";
 import { Figcaption, Figure } from "./Figure";
 import { FaqAnswer, FaqItem, FaqQuestion } from "./Faq";
+import { IsolatedInputRules } from "./isolatedInputRules";
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -129,6 +130,9 @@ export function RichTextEditor({
       FaqItem,
       FaqQuestion,
       FaqAnswer,
+      // Must be registered: `isolating` guards commands, not input rules. Typing
+      // `---` in a caption or an FAQ answer otherwise tears the node apart.
+      IsolatedInputRules,
       // Legacy: articles written before the figure node still hold plain `image`
       // nodes. Unregistering Image would make TipTap drop them on hydrate, and
       // the autosave would then write the loss back to the DB.
@@ -139,8 +143,14 @@ export function RichTextEditor({
         // while the caret sits in the answer below it. CSS scopes which of the
         // decorated nodes actually paint a hint.
         showOnlyCurrent: false,
-        placeholder: ({ node }) =>
-          node.type.name === "faqQuestion" ? "Вопрос?" : placeholder,
+        // Without this, buildPlaceholderDecorations never descends into faqItem or
+        // figure, so `showOnlyCurrent: false` is inert and the hints below are dead.
+        includeChildren: true,
+        placeholder: ({ node }) => {
+          if (node.type.name === "faqQuestion") return "Вопрос?";
+          if (node.type.name === "figcaption") return "Подпись к изображению";
+          return placeholder;
+        },
       }),
       CharacterCount,
     ],
@@ -371,7 +381,7 @@ export function RichTextEditor({
               {/* Block-level commands are inapplicable inside a figure caption
                   (figure's content expression is exactly "figcaption"), so they
                   would be dead buttons. Hide them instead of showing no-ops. */}
-              {!editor.isActive("figcaption") && !editor.isActive("faqQuestion") && (
+              {!editor.isActive("figcaption") && !editor.isActive("faqQuestion") && !editor.isActive("faqAnswer") && (
                 <>
                   <span className="rv-editor-menu__divider" />
                   <button type="button" className={editor.isActive("heading", { level: 2 }) ? "active" : ""} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} title="Заголовок">
