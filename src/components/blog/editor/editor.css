@@ -31,6 +31,75 @@
   pointer-events: none; /* select the node instead of playing inline while editing */
 }
 
+/* ---------- Figure (image + caption) ---------- */
+
+.rv-editor-content .rv-figure.is-selected img {
+  outline: 3px solid var(--rv-orange);
+  outline-offset: 2px;
+  border-radius: var(--r-md);
+}
+
+.rv-editor-content .rv-figure__media {
+  position: relative;
+}
+
+/* Empty caption: show the hint instead of a blank line, so the author sees
+   that a caption slot exists at all. */
+.rv-editor-content .rv-figure figcaption.is-empty::before {
+  color: rgba(30, 92, 203, 0.32);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.rv-editor-content .rv-figure__tools {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  display: flex;
+  gap: 6px;
+}
+
+.rv-editor-content .rv-figure__tool {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-family: var(--font-mono-ui), ui-monospace, monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  background: rgba(14, 13, 6, 0.72);
+  color: #edebd7;
+  opacity: 0.6;
+}
+
+.rv-editor-content .rv-figure__tool:hover {
+  opacity: 1;
+}
+
+.rv-editor-content .rv-figure__tool[disabled] {
+  cursor: progress;
+  opacity: 0.4;
+}
+
+/* Missing alt is the default state and the one that costs image-search traffic,
+   so it shouts (orange) until it's filled in — then it recedes to match. */
+.rv-editor-content .rv-figure__alt {
+  background: var(--rv-orange);
+  color: #0e0d06;
+  opacity: 0.92;
+}
+
+.rv-editor-content .rv-figure__alt.has-alt {
+  background: rgba(14, 13, 6, 0.72);
+  color: #edebd7;
+  opacity: 0.6;
+}
+
 /* Dropcursor / gapcursor */
 .rv-editor-content .ProseMirror-gapcursor:after {
   border-top: 1px solid var(--rv-blue);

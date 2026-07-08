@@ -2,11 +2,11 @@
 //
 // UX surface:
 //  - bubble menu on selection: bold / italic / underline / strike / inline
-//    code / link (inline URL input) / H2 / H3 / quote;
+//    code / link (inline URL input, ⌘K) / H2 / H3 / quote;
 //  - floating "+" menu on an empty paragraph: image upload, YouTube embed,
 //    bullet/ordered list, code block, divider;
 //  - drag-drop and paste of image files uploads to the blog-images bucket and
-//    inserts the public URL at the drop/caret position.
+//    inserts a <figure> (image + caption) at the drop/caret position.
 //
 // The content area is rendered with the SAME .rv-article classes the public
 // page uses — the editor is WYSIWYG against blog.css.
@@ -25,6 +25,8 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { uploadBlogImage } from "@/lib/blog/api";
+import { isInternalHref, normalizeHref } from "@/lib/blog/link-href";
+import { Figcaption, Figure } from "./Figure";
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -38,13 +40,21 @@ export interface RichTextEditorProps {
   placeholder: string;
   onReady: (editor: Editor) => void;
   onChange: () => void;
+  /**
+   * The stored document could not be loaded into this build's schema (e.g. it
+   * holds a node type this bundle does not know). The document in the editor is
+   * NOT the stored one, so the host must stop autosaving over it.
+   */
+  onContentError: (error: Error) => void;
 }
 
 function isImageFile(file: File): boolean {
   return file.type.startsWith("image/");
 }
 
-export function RichTextEditor({ initialContent, placeholder, onReady, onChange }: RichTextEditorProps) {
+export function RichTextEditor({
+  initialContent, placeholder, onReady, onChange, onContentError,
+}: RichTextEditorProps) {
   const { toast } = useToast();
   const [linkMode, setLinkMode] = useState(false);
   const [linkValue, setLinkValue] = useState("");
@@ -57,20 +67,27 @@ export function RichTextEditor({ initialContent, placeholder, onReady, onChange 
   plusOpenRef.current = plusOpen;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const hydratedRef = useRef(false);
+  // editorProps closes over the FIRST render, so ⌘K reaches the live callback
+  // through a ref rather than a stale copy of it.
+  const openLinkEditorRef = useRef<(() => void) | null>(null);
 
   const uploadAndInsert = useCallback(
     async (editor: Editor, files: File[], position?: number) => {
       const images = files.filter(isImageFile);
       if (images.length === 0) return;
+
+      // Upload everything first, then insert ONCE. Inserting inside the loop put
+      // every image at the same captured position, so each new figure pushed the
+      // previous one down and N dropped images landed in reverse order.
+      const nodes: object[] = [];
       for (const file of images) {
         try {
-          const { url } = await uploadBlogImage(file);
-          const chain = editor.chain().focus();
-          if (position !== undefined) {
-            chain.insertContentAt(position, { type: "image", attrs: { src: url } }).run();
-          } else {
-            chain.setImage({ src: url }).run();
-          }
+          const { url, width, height } = await uploadBlogImage(file);
+          nodes.push({
+            type: "figure",
+            attrs: { src: url, alt: null, width, height },
+            content: [{ type: "figcaption" }],
+          });
         } catch (error) {
           toast({
             title: "Не удалось загрузить изображение",
@@ -79,6 +96,16 @@ export function RichTextEditor({ initialContent, placeholder, onReady, onChange 
           });
         }
       }
+      if (nodes.length === 0 || editor.isDestroyed) return;
+
+      if (position === undefined) {
+        editor.chain().focus().insertContent(nodes).run();
+        return;
+      }
+      // The drop position was captured before the uploads awaited, so the doc may
+      // have shrunk underneath it. Clamp rather than throw a RangeError.
+      const at = Math.min(position, editor.state.doc.content.size);
+      editor.chain().focus().insertContentAt(at, nodes).run();
     },
     [toast],
   );
@@ -91,20 +118,43 @@ export function RichTextEditor({ initialContent, placeholder, onReady, onChange 
           openOnClick: false,
           autolink: true,
           defaultProtocol: "https",
+          // Defaults for autolinked (always outbound) URLs. applyLink overrides
+          // both to null on internal links so they open in the same tab.
           HTMLAttributes: { rel: "noopener noreferrer", target: "_blank" },
         },
       }),
+      Figure,
+      Figcaption,
+      // Legacy: articles written before the figure node still hold plain `image`
+      // nodes. Unregistering Image would make TipTap drop them on hydrate, and
+      // the autosave would then write the loss back to the DB.
       Image,
       Youtube.configure({ nocookie: true, width: 0, height: 0, HTMLAttributes: {} }),
       Placeholder.configure({ placeholder }),
       CharacterCount,
     ],
     content: (initialContent as object | null) ?? "",
+    // Without this, a document holding a node type this bundle does not know
+    // (a stale tab after a deploy that added `figure`) is swallowed by
+    // createNodeFromContent: it console.warns and hands back an EMPTY doc. The
+    // first keystroke then autosaves that emptiness over the real post. Fail
+    // loudly instead, and let BlogEditorPage freeze the save.
+    enableContentCheck: true,
+    onContentError: ({ error }) => onContentError(error),
     editorProps: {
       attributes: { class: "rv-article rv-editor-content" },
-      handleKeyDown: (_view, event) => {
+      handleKeyDown: (view, event) => {
         if (event.key === "Escape" && plusOpenRef.current) {
           setPlusOpen(false);
+          return true;
+        }
+        // ⌘K / Ctrl+K — the shortcut every writer reaches for. The bubble menu
+        // is already on screen (it shows on any non-empty selection), so this
+        // only has to flip it into link-input mode.
+        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+          if (view.state.selection.empty) return false;
+          event.preventDefault();
+          openLinkEditorRef.current?.();
           return true;
         }
         return false;
@@ -159,32 +209,82 @@ export function RichTextEditor({ initialContent, placeholder, onReady, onChange 
     };
   }, [editor]);
 
+  // The bubble menu stays mounted while hidden, so link mode would otherwise
+  // survive: open the URL input, click elsewhere, select other text — and the
+  // menu reappears as an input still holding the previous link.
+  //
+  // selectionUpdate only, NOT blur: focusing the autoFocus'd URL input blurs
+  // the editor, which would close the input the instant it opened.
+  useEffect(() => {
+    if (!editor) return;
+    const close = () => setLinkMode(false);
+    editor.on("selectionUpdate", close);
+    return () => {
+      editor.off("selectionUpdate", close);
+    };
+  }, [editor]);
+
   // Hydrate once when async post data arrives after mount (edit flow).
+  //
+  // Unlike the Editor constructor, the setContent COMMAND does not catch an
+  // invalid-content error — with enableContentCheck on it throws straight out of
+  // here. Catch it and report, so an unknown node type surfaces as a frozen,
+  // explained editor rather than an unhandled render exception (or, worse, the
+  // silent empty document it used to produce).
   useEffect(() => {
     if (!editor || hydratedRef.current) return;
     if (initialContent && Object.keys(initialContent as object).length > 0) {
       hydratedRef.current = true;
-      editor.commands.setContent(initialContent as object, { emitUpdate: false });
+      try {
+        editor.commands.setContent(initialContent as object, { emitUpdate: false });
+      } catch (error) {
+        onContentError(error instanceof Error ? error : new Error(String(error)));
+      }
     }
-  }, [editor, initialContent]);
+  }, [editor, initialContent, onContentError]);
 
   const openLinkEditor = useCallback(() => {
     if (!editor) return;
     setLinkValue((editor.getAttributes("link").href as string | undefined) ?? "");
     setLinkMode(true);
   }, [editor]);
+  openLinkEditorRef.current = openLinkEditor;
 
   const applyLink = useCallback(() => {
     if (!editor) return;
-    const href = linkValue.trim();
-    if (href) {
-      const withProtocol = /^(https?:)?\/\//i.test(href) ? href : `https://${href}`;
-      editor.chain().focus().extendMarkRange("link").setLink({ href: withProtocol }).run();
-    } else {
+
+    // Empty input on an existing link means "remove it".
+    if (!linkValue.trim()) {
       editor.chain().focus().extendMarkRange("link").unsetLink().run();
+      setLinkMode(false);
+      return;
     }
+
+    const href = normalizeHref(linkValue);
+    if (!href) {
+      toast({
+        title: "Не удалось распознать ссылку",
+        description: "Укажите адрес вида https://example.com, /blog/statya или #razdel.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const internal = isInternalHref(href);
+    editor
+      .chain()
+      .focus()
+      .extendMarkRange("link")
+      .setLink({
+        href,
+        // null clears the extension-level default (mergeAttributes lets the node
+        // attribute win, and ProseMirror omits null attributes on serialize).
+        target: internal ? null : "_blank",
+        rel: internal ? null : "noopener noreferrer",
+      })
+      .run();
     setLinkMode(false);
-  }, [editor, linkValue]);
+  }, [editor, linkValue, toast]);
 
   const insertYoutube = useCallback(() => {
     if (!editor) return;
@@ -205,6 +305,10 @@ export function RichTextEditor({ initialContent, placeholder, onReady, onChange 
         pluginKey="blogBubbleMenu"
         shouldShow={({ editor: e, state }) => {
           if (e.isActive("image") || e.isActive("youtube") || e.isActive("codeBlock")) return false;
+          // A NodeSelection (clicked image / figure / divider) reports a
+          // non-empty selection but has no text to format. Text *inside* a
+          // figure caption is a TextSelection and still gets the menu.
+          if ("node" in state.selection && state.selection.node) return false;
           return !state.selection.empty;
         }}
       >
@@ -253,16 +357,23 @@ export function RichTextEditor({ initialContent, placeholder, onReady, onChange 
                   <Link2Off size={15} />
                 </button>
               )}
-              <span className="rv-editor-menu__divider" />
-              <button type="button" className={editor.isActive("heading", { level: 2 }) ? "active" : ""} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} title="Заголовок">
-                <Heading2 size={15} />
-              </button>
-              <button type="button" className={editor.isActive("heading", { level: 3 }) ? "active" : ""} onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} title="Подзаголовок">
-                <Heading3 size={15} />
-              </button>
-              <button type="button" className={editor.isActive("blockquote") ? "active" : ""} onClick={() => editor.chain().focus().toggleBlockquote().run()} title="Цитата">
-                <Quote size={15} />
-              </button>
+              {/* Block-level commands are inapplicable inside a figure caption
+                  (figure's content expression is exactly "figcaption"), so they
+                  would be dead buttons. Hide them instead of showing no-ops. */}
+              {!editor.isActive("figcaption") && (
+                <>
+                  <span className="rv-editor-menu__divider" />
+                  <button type="button" className={editor.isActive("heading", { level: 2 }) ? "active" : ""} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} title="Заголовок">
+                    <Heading2 size={15} />
+                  </button>
+                  <button type="button" className={editor.isActive("heading", { level: 3 }) ? "active" : ""} onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} title="Подзаголовок">
+                    <Heading3 size={15} />
+                  </button>
+                  <button type="button" className={editor.isActive("blockquote") ? "active" : ""} onClick={() => editor.chain().focus().toggleBlockquote().run()} title="Цитата">
+                    <Quote size={15} />
+                  </button>
+                </>
+              )}
             </>
           )}
         </div>
