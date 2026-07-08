@@ -87,10 +87,22 @@ function sanitizeArticleBody(html) {
 // the same anchorsConfig.mjs pass, that BlogPostPage runs at render time. If the two
 // disagreed, every #deep-link a crawler indexed from the static snapshot would
 // break the moment React hydrated and replaced the markup.
+//
+// One lazily-built jsdom window, reused across articles (same shape as the
+// purify singleton above). `new JSDOM(html)` per post would build and leak a
+// full window each time, and would run jsdom's CSS parser over any <style> in
+// the body just to spray parse errors into the build log. DOMParser skips both
+// and mirrors what BlogPostPage does in the browser.
+let _articleDom = null;
+function parseArticleHtml(source) {
+  if (!_articleDom) _articleDom = new JSDOM("");
+  return new _articleDom.window.DOMParser().parseFromString(source, "text/html");
+}
+
 function renderArticleBody(html) {
   const safe = sanitizeArticleBody(html);
   try {
-    return annotateArticleHtml(safe, (source) => new JSDOM(source).window.document).html;
+    return annotateArticleHtml(safe, parseArticleHtml).html;
   } catch (err) {
     log(`anchor pass failed, serving unanchored body: ${err?.message ?? err}`);
     return safe;

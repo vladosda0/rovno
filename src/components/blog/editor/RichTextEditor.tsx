@@ -26,7 +26,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { uploadBlogImage } from "@/lib/blog/api";
 import { isInternalHref, normalizeHref } from "@/lib/blog/link-href";
-import { Figure } from "./Figure";
+import { Figcaption, Figure } from "./Figure";
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -40,13 +40,21 @@ export interface RichTextEditorProps {
   placeholder: string;
   onReady: (editor: Editor) => void;
   onChange: () => void;
+  /**
+   * The stored document could not be loaded into this build's schema (e.g. it
+   * holds a node type this bundle does not know). The document in the editor is
+   * NOT the stored one, so the host must stop autosaving over it.
+   */
+  onContentError: (error: Error) => void;
 }
 
 function isImageFile(file: File): boolean {
   return file.type.startsWith("image/");
 }
 
-export function RichTextEditor({ initialContent, placeholder, onReady, onChange }: RichTextEditorProps) {
+export function RichTextEditor({
+  initialContent, placeholder, onReady, onChange, onContentError,
+}: RichTextEditorProps) {
   const { toast } = useToast();
   const [linkMode, setLinkMode] = useState(false);
   const [linkValue, setLinkValue] = useState("");
@@ -67,16 +75,19 @@ export function RichTextEditor({ initialContent, placeholder, onReady, onChange 
     async (editor: Editor, files: File[], position?: number) => {
       const images = files.filter(isImageFile);
       if (images.length === 0) return;
+
+      // Upload everything first, then insert ONCE. Inserting inside the loop put
+      // every image at the same captured position, so each new figure pushed the
+      // previous one down and N dropped images landed in reverse order.
+      const nodes: object[] = [];
       for (const file of images) {
         try {
           const { url, width, height } = await uploadBlogImage(file);
-          const attrs = { src: url, alt: null, width, height };
-          const chain = editor.chain().focus();
-          if (position !== undefined) {
-            chain.insertContentAt(position, { type: "figure", attrs }).run();
-          } else {
-            chain.setFigure(attrs).run();
-          }
+          nodes.push({
+            type: "figure",
+            attrs: { src: url, alt: null, width, height },
+            content: [{ type: "figcaption" }],
+          });
         } catch (error) {
           toast({
             title: "Не удалось загрузить изображение",
@@ -85,6 +96,16 @@ export function RichTextEditor({ initialContent, placeholder, onReady, onChange 
           });
         }
       }
+      if (nodes.length === 0 || editor.isDestroyed) return;
+
+      if (position === undefined) {
+        editor.chain().focus().insertContent(nodes).run();
+        return;
+      }
+      // The drop position was captured before the uploads awaited, so the doc may
+      // have shrunk underneath it. Clamp rather than throw a RangeError.
+      const at = Math.min(position, editor.state.doc.content.size);
+      editor.chain().focus().insertContentAt(at, nodes).run();
     },
     [toast],
   );
@@ -103,6 +124,7 @@ export function RichTextEditor({ initialContent, placeholder, onReady, onChange 
         },
       }),
       Figure,
+      Figcaption,
       // Legacy: articles written before the figure node still hold plain `image`
       // nodes. Unregistering Image would make TipTap drop them on hydrate, and
       // the autosave would then write the loss back to the DB.
@@ -112,6 +134,13 @@ export function RichTextEditor({ initialContent, placeholder, onReady, onChange 
       CharacterCount,
     ],
     content: (initialContent as object | null) ?? "",
+    // Without this, a document holding a node type this bundle does not know
+    // (a stale tab after a deploy that added `figure`) is swallowed by
+    // createNodeFromContent: it console.warns and hands back an EMPTY doc. The
+    // first keystroke then autosaves that emptiness over the real post. Fail
+    // loudly instead, and let BlogEditorPage freeze the save.
+    enableContentCheck: true,
+    onContentError: ({ error }) => onContentError(error),
     editorProps: {
       attributes: { class: "rv-article rv-editor-content" },
       handleKeyDown: (view, event) => {
@@ -196,13 +225,23 @@ export function RichTextEditor({ initialContent, placeholder, onReady, onChange 
   }, [editor]);
 
   // Hydrate once when async post data arrives after mount (edit flow).
+  //
+  // Unlike the Editor constructor, the setContent COMMAND does not catch an
+  // invalid-content error — with enableContentCheck on it throws straight out of
+  // here. Catch it and report, so an unknown node type surfaces as a frozen,
+  // explained editor rather than an unhandled render exception (or, worse, the
+  // silent empty document it used to produce).
   useEffect(() => {
     if (!editor || hydratedRef.current) return;
     if (initialContent && Object.keys(initialContent as object).length > 0) {
       hydratedRef.current = true;
-      editor.commands.setContent(initialContent as object, { emitUpdate: false });
+      try {
+        editor.commands.setContent(initialContent as object, { emitUpdate: false });
+      } catch (error) {
+        onContentError(error instanceof Error ? error : new Error(String(error)));
+      }
     }
-  }, [editor, initialContent]);
+  }, [editor, initialContent, onContentError]);
 
   const openLinkEditor = useCallback(() => {
     if (!editor) return;
@@ -318,16 +357,23 @@ export function RichTextEditor({ initialContent, placeholder, onReady, onChange 
                   <Link2Off size={15} />
                 </button>
               )}
-              <span className="rv-editor-menu__divider" />
-              <button type="button" className={editor.isActive("heading", { level: 2 }) ? "active" : ""} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} title="Заголовок">
-                <Heading2 size={15} />
-              </button>
-              <button type="button" className={editor.isActive("heading", { level: 3 }) ? "active" : ""} onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} title="Подзаголовок">
-                <Heading3 size={15} />
-              </button>
-              <button type="button" className={editor.isActive("blockquote") ? "active" : ""} onClick={() => editor.chain().focus().toggleBlockquote().run()} title="Цитата">
-                <Quote size={15} />
-              </button>
+              {/* Block-level commands are inapplicable inside a figure caption
+                  (figure's content expression is exactly "figcaption"), so they
+                  would be dead buttons. Hide them instead of showing no-ops. */}
+              {!editor.isActive("figcaption") && (
+                <>
+                  <span className="rv-editor-menu__divider" />
+                  <button type="button" className={editor.isActive("heading", { level: 2 }) ? "active" : ""} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} title="Заголовок">
+                    <Heading2 size={15} />
+                  </button>
+                  <button type="button" className={editor.isActive("heading", { level: 3 }) ? "active" : ""} onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} title="Подзаголовок">
+                    <Heading3 size={15} />
+                  </button>
+                  <button type="button" className={editor.isActive("blockquote") ? "active" : ""} onClick={() => editor.chain().focus().toggleBlockquote().run()} title="Цитата">
+                    <Quote size={15} />
+                  </button>
+                </>
+              )}
             </>
           )}
         </div>

@@ -23,8 +23,31 @@ describe("sanitizeArticleHtml", () => {
     expect(sanitizeArticleHtml('<a href="javascript:alert(1)">x</a>')).not.toMatch(/javascript:/i);
   });
 
-  it("strips <style>", () => {
+  it("strips <style> wherever it sits in the fragment", () => {
+    // The leading-position case passed for the WRONG reason: a fragment starting
+    // with <style> is parsed into <head> and never serialized, so it looked
+    // stripped while DOMPurify's default allow-list was in fact keeping it (it
+    // arrives via the SVG tag set). Move it after any element and it survived
+    // into the article body of every published page. Both positions now assert.
     expect(sanitizeArticleHtml("<style>body{background:url(x)}</style><p>x</p>")).not.toMatch(/<style/i);
+    expect(sanitizeArticleHtml("<p>x</p><style>body{background:url(x)}</style>")).not.toMatch(/<style/i);
+    expect(sanitizeArticleHtml("<h2>a</h2><style>a{}</style><p>x</p>")).not.toMatch(/<style/i);
+  });
+
+  it("drops the CSS text along with the <style> element", () => {
+    expect(sanitizeArticleHtml("<p>x</p><style>body{color:red}</style>")).not.toMatch(/color:red/);
+  });
+
+  it("strips tags our editor can never emit but DOMPurify allows by default", () => {
+    for (const html of [
+      "<p>x</p><form action='//evil.test'><input name='p'></form>",
+      "<p>x</p><svg><desc>d</desc></svg>",
+      "<p>x</p><math><mtext>m</mtext></math>",
+      "<p>x</p><template><p>t</p></template>",
+    ]) {
+      const out = sanitizeArticleHtml(html);
+      expect(out, html).not.toMatch(/<(form|svg|math|template)/i);
+    }
   });
 
   it("removes a non-allowlisted iframe", () => {

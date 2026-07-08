@@ -35,6 +35,27 @@ describe("normalizeHref", () => {
     expect(normalizeHref("vbscript:msgbox")).toBeNull();
   });
 
+  it("refuses the backslash trap that escapes the origin", () => {
+    // `new URL("/\\evil.com", "https://rovno.ai/").href === "https://evil.com/"`.
+    // Neither TipTap's isAllowedUri nor DOMPurify rejects it, so if this passes
+    // the link ships as same-site (no target, no rel) and navigates off-site.
+    expect(normalizeHref("/\\evil.com")).toBeNull();
+    expect(normalizeHref("/\\/evil.com")).toBeNull();
+    expect(normalizeHref("\\\\evil.com")).toBeNull();
+    expect(normalizeHref("https://rovno.ai\\@evil.com")).toBeNull();
+  });
+
+  it("accepts a bare host with a port (a colon is not always a scheme)", () => {
+    expect(normalizeHref("example.com:8080/x")).toBe("https://example.com:8080/x");
+    expect(normalizeHref("localhost:3000")).toBe("https://localhost:3000");
+  });
+
+  it("rejects hrefs the URL parser cannot resolve", () => {
+    // These used to be returned as valid and written into the link mark.
+    expect(normalizeHref("//")).toBeNull();
+    expect(normalizeHref("?q=1")).toBeNull();
+  });
+
   it("returns null for blank input", () => {
     expect(normalizeHref("")).toBeNull();
     expect(normalizeHref("   ")).toBeNull();
@@ -55,6 +76,16 @@ describe("isInternalHref", () => {
     expect(isInternalHref("https://example.com")).toBe(false);
     expect(isInternalHref("http://rovno.ai")).toBe(false); // scheme is part of origin
     expect(isInternalHref("https://evil.rovno.ai.attacker.test")).toBe(false);
+  });
+
+  it("resolves rather than pattern-matches, so an origin escape reads as external", () => {
+    // normalizeHref rejects these outright; belt and braces if one ever reaches here.
+    expect(isInternalHref("/\\evil.com")).toBe(false);
+    expect(isInternalHref("//evil.com")).toBe(false);
+  });
+
+  it("ignores a default port", () => {
+    expect(isInternalHref("https://rovno.ai:443/x")).toBe(true);
   });
 
   it("treats mailto as external (no origin)", () => {

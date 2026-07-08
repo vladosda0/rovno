@@ -5,7 +5,7 @@
 // row only to blog authors, so authors get a live preview at the same URL
 // (with a "Черновик" badge), everyone else gets the not-found state.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useDocumentHead, SITE_NAME } from "@/lib/blog/seo";
 import { articleJsonLd, blogPostPath, BLOG_TITLE } from "@/lib/blog/jsonld";
@@ -58,6 +58,25 @@ export default function BlogPostPage() {
     () => (post ? withHeadingAnchors(sanitizeArticleHtml(post.content_html)).html : ""),
     [post],
   );
+
+  // Land a #deep-link that arrived with the URL.
+  //
+  // The browser tries to scroll while parsing the static HTML, but React then
+  // replaces #root wholesale (createRoot, not hydrateRoot), so the target it
+  // scrolled to no longer exists. On a draft or a post published since the last
+  // Timeweb rebuild there is no static snapshot at all and the heading simply is
+  // not in the DOM at load time. Either way, re-apply the hash once the article
+  // has committed. In-page TOC clicks already work and are unaffected.
+  useEffect(() => {
+    if (!safeHtml) return;
+    const id = decodeURIComponent(window.location.hash.slice(1));
+    if (!id) return;
+    // After paint: the article HTML is committed but layout may not be settled.
+    const raf = requestAnimationFrame(() => {
+      document.getElementById(id)?.scrollIntoView();
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [safeHtml]);
 
   useDocumentHead(
     post

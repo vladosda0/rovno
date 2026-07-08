@@ -22,6 +22,17 @@ export const MIN_TOC_ENTRIES = 3;
 
 const TOC_TITLE = "Содержание";
 
+/**
+ * Element ids the app looks up by name (seo.ts, index.html, the prerenderer's
+ * inlined data scripts). A heading id shares the document's id namespace, so a
+ * section titled "Rv jsonld" would slugify onto one of these and hijack the
+ * getElementById that owns it (DOM clobbering).
+ *
+ * This pass runs AFTER DOMPurify, so DOMPurify's own SANITIZE_DOM check never
+ * sees these ids. This list is the only guard.
+ */
+const RESERVED_IDS = new Set(["root", "rv-jsonld", "blog-post-data", "blog-list-data"]);
+
 function escapeHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -48,8 +59,10 @@ export function annotateHeadings(root) {
     if (!text) continue;
 
     const base = slugifyTitle(text) || "razdel";
+    // The `-2` suffix also resolves a collision with an app-owned id, so a
+    // heading can never take one over: "Rv jsonld" -> #rv-jsonld-2.
     let id = base;
-    for (let n = 2; seen.has(id); n += 1) id = `${base}-${n}`;
+    for (let n = 2; seen.has(id) || RESERVED_IDS.has(id); n += 1) id = `${base}-${n}`;
     seen.add(id);
 
     el.setAttribute("id", id);

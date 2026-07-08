@@ -1,20 +1,25 @@
 // Schema-level tests for the figure node.
 //
-// These exercise renderHTML/parseHTML directly (no EditorView, no node view):
-// that serialized HTML is exactly what BlogEditorPage writes to content_html
-// and what crawlers read off the static snapshot, so its shape is a contract.
+// These exercise renderHTML/parseHTML and the schema's content expression
+// directly (no EditorView, no node view). That serialized HTML is exactly what
+// BlogEditorPage writes to content_html and what crawlers read off the static
+// snapshot, so its shape is a contract — and the content expression is what
+// stops a block command from eating the image.
 
 import { describe, expect, it } from "vitest";
 import { getSchema } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Image from "@tiptap/extension-image";
 import { DOMParser as PMDOMParser, DOMSerializer, Node as PMNode } from "@tiptap/pm/model";
-import { Figure } from "./Figure";
+import { EditorState, TextSelection } from "@tiptap/pm/state";
+import { setBlockType, wrapIn } from "@tiptap/pm/commands";
+import { Figcaption, Figure } from "./Figure";
 
 // Mirrors RichTextEditor's extension list (order matters: Figure before Image).
 const schema = getSchema([
   StarterKit.configure({ heading: { levels: [2, 3] } }),
   Figure,
+  Figcaption,
   Image,
 ]);
 
@@ -24,6 +29,8 @@ interface JsonNode {
   type: string;
   attrs?: Record<string, unknown>;
   content?: JsonNode[];
+  text?: string;
+  marks?: { type: string }[];
 }
 
 function toHtml(doc: JsonNode): string {
@@ -47,7 +54,12 @@ function figureDoc(attrs: Record<string, unknown>, caption?: string): JsonNode {
       {
         type: "figure",
         attrs,
-        ...(caption ? { content: [{ type: "text", text: caption } as JsonNode] } : {}),
+        content: [
+          {
+            type: "figcaption",
+            ...(caption ? { content: [{ type: "text", text: caption }] } : {}),
+          },
+        ],
       },
     ],
   };
@@ -73,6 +85,8 @@ describe("Figure serialization", () => {
     expect(img.getAttribute("width")).toBe("1600");
     expect(img.getAttribute("height")).toBe("900");
     expect(figure.querySelector("figcaption")!.textContent).toBe("Один экран");
+    // Exactly one figcaption, not a nested pair.
+    expect(figure.querySelectorAll("figcaption")).toHaveLength(1);
   });
 
   it("always marks article images lazy + async so they never block the LCP paint", () => {
@@ -81,7 +95,7 @@ describe("Figure serialization", () => {
     expect(img.getAttribute("decoding")).toBe("async");
   });
 
-  it("omits alt and dimensions rather than emitting empty ones", () => {
+  it("omits alt rather than declaring the image decorative with alt=''", () => {
     const img = parseFigure(
       toHtml(figureDoc({ src: SRC, alt: null, width: null, height: null })),
     ).querySelector("img")!;
@@ -108,7 +122,12 @@ describe("Figure serialization", () => {
         {
           type: "figure",
           attrs: { src: SRC },
-          content: [{ type: "text", text: "жирно", marks: [{ type: "bold" }] } as JsonNode],
+          content: [
+            {
+              type: "figcaption",
+              content: [{ type: "text", text: "жирно", marks: [{ type: "bold" }] }],
+            },
+          ],
         },
       ],
     });
@@ -124,7 +143,8 @@ describe("Figure parsing", () => {
 
     expect(figure.type).toBe("figure");
     expect(figure.attrs).toMatchObject({ src: SRC, alt: "Альт", width: 1600, height: 900 });
-    expect(figure.content![0]).toMatchObject({ type: "text", text: "Подпись" });
+    expect(figure.content![0].type).toBe("figcaption");
+    expect(figure.content![0].content![0]).toMatchObject({ type: "text", text: "Подпись" });
   });
 
   it("claims the whole figure, so Image cannot steal the inner <img>", () => {
@@ -132,6 +152,20 @@ describe("Figure parsing", () => {
       `<figure data-rv-figure=""><img src="${SRC}" alt="А"><figcaption>П</figcaption></figure>`,
     );
     expect(back.content!.map((n) => n.type)).toEqual(["figure"]);
+    // The <img> must not survive as a sibling `image` node inside the figure.
+    expect(back.content![0].content!.map((n) => n.type)).toEqual(["figcaption"]);
+  });
+
+  it("does NOT throw on a figure with no figcaption (clipboard round-trip)", () => {
+    // Regression: `contentElement: "figcaption"` used to hand prosemirror-model a
+    // null contentDOM here and blow up with "Cannot read properties of null".
+    // Reachable by copying an uncaptioned published figure (whose empty
+    // figcaption is display:none, so Blink omits it) and pasting it back.
+    const html = `<figure data-rv-figure=""><img src="${SRC}" alt="А"></figure>`;
+    expect(() => toJson(html)).not.toThrow();
+    const back = toJson(html);
+    expect(back.content![0].type).toBe("figure");
+    expect(back.content![0].content![0].type).toBe("figcaption");
   });
 
   it("drops a figure with no image rather than producing a src-less node", () => {
@@ -139,11 +173,60 @@ describe("Figure parsing", () => {
     expect(back.content!.some((n) => n.type === "figure")).toBe(false);
   });
 
-  it("coerces junk dimensions to null instead of emitting width='abc'", () => {
+  it("rejects any non-integer dimension instead of reading its numeric prefix", () => {
+    // parseInt would give 1e3 -> 1, 12px -> 12, 3.7 -> 3, stamping a WRONG
+    // intrinsic size and reserving the wrong box — worse than omitting it.
+    for (const [w, h] of [["abc", "-5"], ["1e3", "1e3"], ["12px", "9px"], ["3.7", "2.4"], ["", "0"]]) {
+      const back = toJson(
+        `<figure data-rv-figure=""><img src="${SRC}" width="${w}" height="${h}"><figcaption></figcaption></figure>`,
+      );
+      expect(back.content![0].attrs).toMatchObject({ width: null, height: null });
+    }
+  });
+
+  it("still accepts plain integer dimensions", () => {
     const back = toJson(
-      `<figure data-rv-figure=""><img src="${SRC}" width="abc" height="-5"><figcaption></figcaption></figure>`,
+      `<figure data-rv-figure=""><img src="${SRC}" width="1600" height="900"><figcaption></figcaption></figure>`,
     );
-    expect(back.content![0].attrs).toMatchObject({ width: null, height: null });
+    expect(back.content![0].attrs).toMatchObject({ width: 1600, height: 900 });
+  });
+});
+
+describe("Figure is not a textblock (block commands cannot eat the image)", () => {
+  /** Put the caret inside the caption of a doc whose only child is a figure. */
+  function stateWithCaretInCaption() {
+    const doc = PMNode.fromJSON(schema, figureDoc({ src: SRC, alt: "А", width: 16, height: 9 }, "подпись"));
+    const state = EditorState.create({ doc, schema });
+    // figure starts at 0; figcaption at 1; its text at 2.
+    return state.apply(
+      state.tr.setSelection(TextSelection.create(state.doc, 3)),
+    );
+  }
+
+  it("setBlockType(heading) is inapplicable inside a caption", () => {
+    // Regression for the bug that replaced the entire <figure> with an <h2>
+    // containing only the caption text, then autosaved the loss.
+    const state = stateWithCaretInCaption();
+    const applied = setBlockType(schema.nodes.heading, { level: 2 })(state, undefined);
+    expect(applied).toBe(false);
+  });
+
+  it("wrapIn(blockquote) is inapplicable inside a caption", () => {
+    const state = stateWithCaretInCaption();
+    expect(wrapIn(schema.nodes.blockquote)(state, undefined)).toBe(false);
+  });
+
+  it("figure accepts only a figcaption as its content", () => {
+    expect(schema.nodes.figure.spec.content).toBe("figcaption");
+    const figure = schema.nodes.figure;
+    expect(figure.contentMatch.matchType(schema.nodes.heading)).toBeFalsy();
+    expect(figure.contentMatch.matchType(schema.nodes.paragraph)).toBeFalsy();
+    expect(figure.contentMatch.matchType(schema.nodes.figcaption)).toBeTruthy();
+  });
+
+  it("figcaption cannot sit at the document level", () => {
+    // No `group`, so doc's "block+" never matches it.
+    expect(schema.nodes.doc.contentMatch.matchType(schema.nodes.figcaption)).toBeFalsy();
   });
 });
 

@@ -70,6 +70,16 @@ describe("withHeadingAnchors", () => {
     expect(html).not.toContain("<script>");
   });
 
+  it("never hands a heading an id the app looks up by name", () => {
+    // The anchor pass runs AFTER DOMPurify, so DOMPurify's SANITIZE_DOM
+    // id-clobbering check never sees these. A section titled "Rv jsonld" would
+    // otherwise win getElementById("rv-jsonld") against the real <script>.
+    const { toc } = withHeadingAnchors(
+      "<h2>Rv jsonld</h2><h2>Root</h2><h2>Blog post data</h2><h2>Обычный</h2>",
+    );
+    expect(toc.map((e) => e.id)).toEqual(["rv-jsonld-2", "root-2", "blog-post-data-2", "obychnyy"]);
+  });
+
   it("overwrites an id the author somehow smuggled in", () => {
     const { html } = withHeadingAnchors('<h2 id="attacker">Раздел</h2>');
     expect(html).toContain('id="razdel"');

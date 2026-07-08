@@ -24,6 +24,17 @@ export const ALLOWED_IFRAME_HOSTS = new Set([
 export const ARTICLE_PURIFY_OPTIONS = {
   ADD_TAGS: ["iframe"],
   ADD_ATTR: ["allow", "allowfullscreen", "frameborder", "target"],
+  // These ARE in DOMPurify's default allow-list (style/svg/math come in via its
+  // SVG + MathML sets). Our TipTap schema can never emit any of them, so any
+  // occurrence is a hand-edited DB row or a paste — and each is a live hazard:
+  // <style> restyles the whole reader-facing page (overlay the CTA, hide a
+  // disclosure, fetch a background URL), <form> phishes, and <svg>/<math>/
+  // <template> are the classic mutation-XSS re-parse vectors.
+  //
+  // Do NOT assume the default profile already dropped <style>: it only *looked*
+  // that way because a fragment STARTING with <style> is parsed into <head> and
+  // never serialized. Move it after any other element and it survives.
+  FORBID_TAGS: ["style", "form", "svg", "math", "template"],
 };
 
 // Install the iframe host-allowlist hook on a DOMPurify instance exactly once.

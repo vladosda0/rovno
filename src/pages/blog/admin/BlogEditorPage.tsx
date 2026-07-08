@@ -121,6 +121,14 @@ export default function BlogEditorPage() {
   const [seoOpen, setSeoOpen] = useState(false);
   const [coverUploading, setCoverUploading] = useState(false);
   const [stats, setStats] = useState({ words: 0, minutes: 0 });
+  /**
+   * The stored document did not fit this bundle's schema, so the editor is NOT
+   * showing the real post. Every write path has to freeze: an autosave from here
+   * would overwrite a good article with whatever partial document we managed to
+   * build. Reachable when a tab that predates a node-type deploy (e.g. `figure`)
+   * opens a post written by a newer one.
+   */
+  const [contentBroken, setContentBroken] = useState(false);
 
   const editorRef = useRef<Editor | null>(null);
   const postIdRef = useRef<string | null>(routeId ?? null);
@@ -131,6 +139,7 @@ export default function BlogEditorPage() {
   const savingRef = useRef(false);
   const pendingRef = useRef(false);
   const dirtyRef = useRef(false);
+  const contentBrokenRef = useRef(false);
   const coverInputRef = useRef<HTMLInputElement>(null);
 
   const titleResize = useAutoResize();
@@ -194,6 +203,9 @@ export default function BlogEditorPage() {
   }, []);
 
   const saveNow = useCallback(async (): Promise<boolean> => {
+    // Hard stop: the editor is not holding the stored document (see contentBroken).
+    // Anything we write from here is data loss, not a save.
+    if (contentBrokenRef.current) return false;
     if (savingRef.current) {
       pendingRef.current = true;
       return false;
@@ -296,8 +308,28 @@ export default function BlogEditorPage() {
   }, []);
 
   const handleEditorChange = useCallback(() => {
+    if (contentBrokenRef.current) return;
     scheduleSave();
   }, [scheduleSave]);
+
+  const handleContentError = useCallback(
+    (error: Error) => {
+      // Set the ref synchronously: an onUpdate can fire before React commits the
+      // state, and scheduleSave reads the ref.
+      contentBrokenRef.current = true;
+      setContentBroken(true);
+      setSaveState("idle");
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      toast({
+        title: "Не удалось открыть статью",
+        description:
+          "Похоже, страница устарела. Обновите её (Cmd+Shift+R) — редактирование заблокировано, чтобы не перезаписать статью.",
+        variant: "destructive",
+      });
+      console.error("[blog editor] content schema mismatch:", error);
+    },
+    [toast],
+  );
 
   const addTagsFromInput = useCallback(() => {
     const parts = tagsInput.split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
@@ -331,6 +363,10 @@ export default function BlogEditorPage() {
 
   const publish = useCallback(async () => {
     const editor = editorRef.current;
+    if (contentBrokenRef.current) {
+      toast({ title: "Обновите страницу — статья открыта не полностью", variant: "destructive" });
+      return;
+    }
     if (!formRef.current.title.trim()) {
       toast({ title: "Дайте статье название", variant: "destructive" });
       return;
@@ -606,12 +642,26 @@ export default function BlogEditorPage() {
               }}
             />
 
+            {contentBroken && (
+              <div
+                role="alert"
+                style={{
+                  border: "1px solid #b3261e", background: "rgba(179,38,30,0.06)", color: "#b3261e",
+                  borderRadius: 8, padding: "12px 16px", marginBottom: 16, fontSize: 14, lineHeight: 1.5,
+                }}
+              >
+                Эта версия страницы не умеет открывать статью, поэтому сохранение заблокировано.
+                Обновите страницу (Cmd+Shift+R). Ничего не потеряно.
+              </div>
+            )}
+
             {/* Body */}
             <RichTextEditor
               initialContent={loadedPost?.content ?? null}
               placeholder="Расскажите историю… Выделите текст для форматирования, «+» на пустой строке — фото и блоки."
               onReady={handleEditorReady}
               onChange={handleEditorChange}
+              onContentError={handleContentError}
             />
           </div>
         </div>
