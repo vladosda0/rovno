@@ -2,11 +2,11 @@
 //
 // UX surface:
 //  - bubble menu on selection: bold / italic / underline / strike / inline
-//    code / link (inline URL input) / H2 / H3 / quote;
+//    code / link (inline URL input, ⌘K) / H2 / H3 / quote;
 //  - floating "+" menu on an empty paragraph: image upload, YouTube embed,
 //    bullet/ordered list, code block, divider;
 //  - drag-drop and paste of image files uploads to the blog-images bucket and
-//    inserts the public URL at the drop/caret position.
+//    inserts a <figure> (image + caption) at the drop/caret position.
 //
 // The content area is rendered with the SAME .rv-article classes the public
 // page uses — the editor is WYSIWYG against blog.css.
@@ -25,6 +25,8 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { uploadBlogImage } from "@/lib/blog/api";
+import { isInternalHref, normalizeHref } from "@/lib/blog/link-href";
+import { Figure } from "./Figure";
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -57,6 +59,9 @@ export function RichTextEditor({ initialContent, placeholder, onReady, onChange 
   plusOpenRef.current = plusOpen;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const hydratedRef = useRef(false);
+  // editorProps closes over the FIRST render, so ⌘K reaches the live callback
+  // through a ref rather than a stale copy of it.
+  const openLinkEditorRef = useRef<(() => void) | null>(null);
 
   const uploadAndInsert = useCallback(
     async (editor: Editor, files: File[], position?: number) => {
@@ -64,12 +69,13 @@ export function RichTextEditor({ initialContent, placeholder, onReady, onChange 
       if (images.length === 0) return;
       for (const file of images) {
         try {
-          const { url } = await uploadBlogImage(file);
+          const { url, width, height } = await uploadBlogImage(file);
+          const attrs = { src: url, alt: null, width, height };
           const chain = editor.chain().focus();
           if (position !== undefined) {
-            chain.insertContentAt(position, { type: "image", attrs: { src: url } }).run();
+            chain.insertContentAt(position, { type: "figure", attrs }).run();
           } else {
-            chain.setImage({ src: url }).run();
+            chain.setFigure(attrs).run();
           }
         } catch (error) {
           toast({
@@ -91,9 +97,15 @@ export function RichTextEditor({ initialContent, placeholder, onReady, onChange 
           openOnClick: false,
           autolink: true,
           defaultProtocol: "https",
+          // Defaults for autolinked (always outbound) URLs. applyLink overrides
+          // both to null on internal links so they open in the same tab.
           HTMLAttributes: { rel: "noopener noreferrer", target: "_blank" },
         },
       }),
+      Figure,
+      // Legacy: articles written before the figure node still hold plain `image`
+      // nodes. Unregistering Image would make TipTap drop them on hydrate, and
+      // the autosave would then write the loss back to the DB.
       Image,
       Youtube.configure({ nocookie: true, width: 0, height: 0, HTMLAttributes: {} }),
       Placeholder.configure({ placeholder }),
@@ -102,9 +114,18 @@ export function RichTextEditor({ initialContent, placeholder, onReady, onChange 
     content: (initialContent as object | null) ?? "",
     editorProps: {
       attributes: { class: "rv-article rv-editor-content" },
-      handleKeyDown: (_view, event) => {
+      handleKeyDown: (view, event) => {
         if (event.key === "Escape" && plusOpenRef.current) {
           setPlusOpen(false);
+          return true;
+        }
+        // ⌘K / Ctrl+K — the shortcut every writer reaches for. The bubble menu
+        // is already on screen (it shows on any non-empty selection), so this
+        // only has to flip it into link-input mode.
+        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+          if (view.state.selection.empty) return false;
+          event.preventDefault();
+          openLinkEditorRef.current?.();
           return true;
         }
         return false;
@@ -159,6 +180,21 @@ export function RichTextEditor({ initialContent, placeholder, onReady, onChange 
     };
   }, [editor]);
 
+  // The bubble menu stays mounted while hidden, so link mode would otherwise
+  // survive: open the URL input, click elsewhere, select other text — and the
+  // menu reappears as an input still holding the previous link.
+  //
+  // selectionUpdate only, NOT blur: focusing the autoFocus'd URL input blurs
+  // the editor, which would close the input the instant it opened.
+  useEffect(() => {
+    if (!editor) return;
+    const close = () => setLinkMode(false);
+    editor.on("selectionUpdate", close);
+    return () => {
+      editor.off("selectionUpdate", close);
+    };
+  }, [editor]);
+
   // Hydrate once when async post data arrives after mount (edit flow).
   useEffect(() => {
     if (!editor || hydratedRef.current) return;
@@ -173,18 +209,43 @@ export function RichTextEditor({ initialContent, placeholder, onReady, onChange 
     setLinkValue((editor.getAttributes("link").href as string | undefined) ?? "");
     setLinkMode(true);
   }, [editor]);
+  openLinkEditorRef.current = openLinkEditor;
 
   const applyLink = useCallback(() => {
     if (!editor) return;
-    const href = linkValue.trim();
-    if (href) {
-      const withProtocol = /^(https?:)?\/\//i.test(href) ? href : `https://${href}`;
-      editor.chain().focus().extendMarkRange("link").setLink({ href: withProtocol }).run();
-    } else {
+
+    // Empty input on an existing link means "remove it".
+    if (!linkValue.trim()) {
       editor.chain().focus().extendMarkRange("link").unsetLink().run();
+      setLinkMode(false);
+      return;
     }
+
+    const href = normalizeHref(linkValue);
+    if (!href) {
+      toast({
+        title: "Не удалось распознать ссылку",
+        description: "Укажите адрес вида https://example.com, /blog/statya или #razdel.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const internal = isInternalHref(href);
+    editor
+      .chain()
+      .focus()
+      .extendMarkRange("link")
+      .setLink({
+        href,
+        // null clears the extension-level default (mergeAttributes lets the node
+        // attribute win, and ProseMirror omits null attributes on serialize).
+        target: internal ? null : "_blank",
+        rel: internal ? null : "noopener noreferrer",
+      })
+      .run();
     setLinkMode(false);
-  }, [editor, linkValue]);
+  }, [editor, linkValue, toast]);
 
   const insertYoutube = useCallback(() => {
     if (!editor) return;
@@ -205,6 +266,10 @@ export function RichTextEditor({ initialContent, placeholder, onReady, onChange 
         pluginKey="blogBubbleMenu"
         shouldShow={({ editor: e, state }) => {
           if (e.isActive("image") || e.isActive("youtube") || e.isActive("codeBlock")) return false;
+          // A NodeSelection (clicked image / figure / divider) reports a
+          // non-empty selection but has no text to format. Text *inside* a
+          // figure caption is a TextSelection and still gets the menu.
+          if ("node" in state.selection && state.selection.node) return false;
           return !state.selection.empty;
         }}
       >
