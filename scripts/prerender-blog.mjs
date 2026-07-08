@@ -166,6 +166,24 @@ const POST_COLUMNS =
   "seo_title,seo_description,tags,locale,status,published_at,reading_time_minutes," +
   "word_count,created_at,updated_at,author:blog_authors(id,display_name,avatar_url,bio)";
 
+/**
+ * Project a full post down to the columns the runtime LIST query actually selects.
+ *
+ * `__BLOG_LIST_DATA__` seeds React Query's ["blog-posts","published","all"] key, whose
+ * queryFn selects POST_LIST_COLUMNS -- no `content`, no `content_html`, no `seo_*`. The
+ * prerenderer fetched the full rows because it needs `content` to build the FAQPage and
+ * `content_html` to render the body. Inlining them into the LIST feed shipped every
+ * article's entire HTML into /blog/index.html and into EVERY tag hub, N x M.
+ */
+function toListPost(post) {
+  const { content, content_html, seo_title, seo_description, ...rest } = post;
+  void content;
+  void content_html;
+  void seo_title;
+  void seo_description;
+  return rest;
+}
+
 async function fetchPublishedPosts(env) {
   const base = env.VITE_SUPABASE_URL?.replace(/\/$/, "");
   const key = env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -686,7 +704,7 @@ async function main() {
     jsonLd: posts.length > 0 ? blogIndexJsonLd(posts) : null,
     cssAssets,
     rootHtml: blogIndexHtml(posts),
-    inlineData: { id: "__BLOG_LIST_DATA__", value: posts },
+    inlineData: { id: "__BLOG_LIST_DATA__", value: posts.map(toListPost) },
   });
   await mkdir(path.join(DIST, "blog"), { recursive: true });
   await writeFile(path.join(DIST, "blog", "index.html"), indexHtml, "utf8");
@@ -740,7 +758,7 @@ async function main() {
       // React Query initialData for the global ["blog-posts","published","all"]
       // key; seeding it with a filtered subset would poison /blog/ for the rest
       // of the session. BlogTagPage narrows it client-side.
-      inlineData: { id: "__BLOG_LIST_DATA__", value: posts },
+      inlineData: { id: "__BLOG_LIST_DATA__", value: posts.map(toListPost) },
     });
     const dir = path.join(DIST, "blog", "tag", hub.slug);
     await mkdir(dir, { recursive: true });

@@ -154,6 +154,15 @@ export async function triggerFrontendRebuild(): Promise<RebuildResult> {
   return {
     ok: false,
     notConfigured: status === 501,
+    // DEPLOY ORDER: `code` is only sent by blog-rebuild-frontend from rovno-db#75 on.
+    // Until that function is deployed to this environment, a rebuild failure lands in
+    // the generic destructive toast — correct, if less specific.
+    //
+    // Not relaxable to a bare `status === 409`: the endpoint answers 409 for BOTH
+    // `rebuild_in_progress` (harmless, retry in a minute) and `no_live_commit` (the app
+    // has no successful deploy, or its history cannot be ordered — a human must look).
+    // Telling an author "a deploy is already running" for the latter is a lie that
+    // makes them wait for something that will never arrive.
     inProgress: status === 409 && code === "rebuild_in_progress",
     message,
   };

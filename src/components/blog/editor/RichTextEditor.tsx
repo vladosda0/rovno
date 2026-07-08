@@ -13,6 +13,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
+import type { EditorView } from "@tiptap/pm/view";
 import { BubbleMenu, FloatingMenu } from "@tiptap/react/menus";
 import StarterKit from "@tiptap/starter-kit";
 import Image from "@tiptap/extension-image";
@@ -28,7 +29,11 @@ import { uploadBlogImage } from "@/lib/blog/api";
 import { isInternalHref, normalizeHref } from "@/lib/blog/link-href";
 import { Figcaption, Figure } from "./Figure";
 import { FaqAnswer, FaqItem, FaqQuestion } from "./Faq";
-import { IsolatedInputRules } from "./isolatedInputRules";
+import {
+  IsolatedInputRules,
+  isInsideIsolatedNode,
+  positionAfterIsolatedContainer,
+} from "./isolatedInputRules";
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -52,6 +57,22 @@ export interface RichTextEditorProps {
 
 function isImageFile(file: File): boolean {
   return file.type.startsWith("image/");
+}
+
+/**
+ * Insert `text` as plain text, collapsing newlines.
+ *
+ * A caption is `inline*` and an FAQ question is too, so a literal `\n` would render as
+ * nothing; an FAQ answer would keep it inside one paragraph. Neither is what an author
+ * pasting two lines means, and a space is the honest reading of both.
+ */
+function insertPlainText(view: EditorView, text: string, at?: number): void {
+  const clean = text.replace(/\s*\r?\n+\s*/g, " ").trim();
+  if (!clean) return;
+  const { tr } = view.state;
+  const from = at ?? view.state.selection.from;
+  const to = at ?? view.state.selection.to;
+  view.dispatch(tr.insertText(clean, from, to).scrollIntoView());
 }
 
 export function RichTextEditor({
@@ -100,14 +121,19 @@ export function RichTextEditor({
       }
       if (nodes.length === 0 || editor.isDestroyed) return;
 
-      if (position === undefined) {
-        editor.chain().focus().insertContent(nodes).run();
-        return;
-      }
       // The drop position was captured before the uploads awaited, so the doc may
       // have shrunk underneath it. Clamp rather than throw a RangeError.
-      const at = Math.min(position, editor.state.doc.content.size);
-      editor.chain().focus().insertContentAt(at, nodes).run();
+      const raw = position ?? editor.state.selection.from;
+      const at = Math.min(raw, editor.state.doc.content.size);
+
+      // A <figure> is a block. Inserting one at a caret inside a caption or an FAQ
+      // answer makes ProseMirror split the enclosing node to fit it: the figure is
+      // DUPLICATED and the caption text is torn in half, or the FAQ pair becomes two
+      // invalid halves — and `doc.check()` passes, so autosave writes the wreckage to
+      // `content` jsonb. `isolating: true` does not stop `tr.replaceWith`. Hoist the
+      // figure out to just after the container instead.
+      const target = positionAfterIsolatedContainer(editor.state.doc.resolve(at)) ?? at;
+      editor.chain().focus().insertContentAt(target, nodes).run();
     },
     [toast],
   );
@@ -183,23 +209,48 @@ export function RichTextEditor({
       handleDrop: (view, event, _slice, moved) => {
         if (moved) return false;
         const files = Array.from(event.dataTransfer?.files ?? []);
+        const coords = view.posAtCoords({ left: event.clientX, top: event.clientY });
         if (files.some(isImageFile)) {
           event.preventDefault();
-          const coords = view.posAtCoords({ left: event.clientX, top: event.clientY });
           if (editorRef.current) {
             void uploadAndInsert(editorRef.current, files, coords?.pos);
           }
           return true;
         }
+        // A non-file drop into a caption or an FAQ pair reaches the same paste-rule
+        // machinery as handlePaste below. Same rule: text only.
+        if (coords && isInsideIsolatedNode(view.state.doc.resolve(coords.pos))) {
+          event.preventDefault();
+          insertPlainText(view, event.dataTransfer?.getData("text/plain") ?? "", coords.pos);
+          return true;
+        }
         return false;
       },
-      handlePaste: (_view, event) => {
+      handlePaste: (view, event) => {
         const files = Array.from(event.clipboardData?.files ?? []);
         if (files.some(isImageFile)) {
           event.preventDefault();
           if (editorRef.current) {
             void uploadAndInsert(editorRef.current, files);
           }
+          return true;
+        }
+        // Inside a caption or an FAQ pair, paste TEXT and nothing else.
+        //
+        // A pasted <hr>, <img> or any block slice makes ProseMirror split the enclosing
+        // node to fit it, and a pasted YouTube URL does the same through
+        // @tiptap/extension-youtube's nodePasteRule. Both leave a doc that passes
+        // `doc.check()`, so autosave persists it. `isolating: true` guards selections
+        // and commands, not `tr.replaceWith` — the same blind spot the input-rule guard
+        // exists for.
+        //
+        // Returning true here matters for WHERE we sit: prosemirror-view's `doPaste`
+        // consults handlePaste BEFORE it dispatches the `uiEvent: "paste"` transaction,
+        // and every paste rule keys off that meta. Handling it here means no paste rule
+        // ever runs, rather than racing one that already has.
+        if (isInsideIsolatedNode(view.state.selection.$from)) {
+          event.preventDefault();
+          insertPlainText(view, event.clipboardData?.getData("text/plain") ?? "");
           return true;
         }
         return false;

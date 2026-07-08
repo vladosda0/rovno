@@ -164,20 +164,14 @@ export function useDocumentHead(options: DocumentHeadOptions | null): void {
       document.head.querySelector('meta[name="robots"]')?.remove();
     }
 
-    let jsonLdEl: HTMLScriptElement | null = null;
-    let jsonLdCreated = false;
-    let jsonLdOriginal: string | null = null;
     if (opts.jsonLd) {
       const payload = JSON.stringify(Array.isArray(opts.jsonLd) && opts.jsonLd.length === 1 ? opts.jsonLd[0] : opts.jsonLd);
-      jsonLdEl = document.getElementById(JSONLD_ID) as HTMLScriptElement | null;
-      if (jsonLdEl) {
-        jsonLdOriginal = jsonLdEl.textContent;
-      } else {
+      let jsonLdEl = document.getElementById(JSONLD_ID) as HTMLScriptElement | null;
+      if (!jsonLdEl) {
         jsonLdEl = document.createElement("script");
         jsonLdEl.type = "application/ld+json";
         jsonLdEl.id = JSONLD_ID;
         document.head.appendChild(jsonLdEl);
-        jsonLdCreated = true;
       }
       jsonLdEl.textContent = payload;
     } else {
@@ -187,20 +181,30 @@ export function useDocumentHead(options: DocumentHeadOptions | null): void {
     return () => {
       document.title = previousTitle;
       for (const tag of applied) {
-        if (tag.created) {
+        // `robots` and the JSON-LD block are REMOVED on unmount, never restored — even
+        // when this page created neither and merely overwrote a prerendered one.
+        //
+        // Removing them when the next page sets none (above) only half-closed the leak:
+        // that branch lives in the NEXT page's effect, and only BlogIndex/BlogPostPage/
+        // BlogTagPage call this hook. Navigate from a prerendered thin hub (static
+        // `noindex, follow`) to the landing page and nothing ran to clear it, so `/`
+        // carried noindex in the live DOM. index.html ships neither tag, so removing
+        // them restores exactly the boot state. Everything else (canonical, og:*,
+        // description) has a sane index.html default and IS restored.
+        if (isRobotsMeta(tag.element)) {
+          tag.element.remove();
+        } else if (tag.created) {
           tag.element.remove();
         } else if (tag.originalContent !== null) {
           const attrName = tag.element.tagName === "LINK" ? "href" : "content";
           tag.element.setAttribute(attrName, tag.originalContent);
         }
       }
-      if (jsonLdEl) {
-        if (jsonLdCreated) {
-          jsonLdEl.remove();
-        } else if (jsonLdOriginal !== null) {
-          jsonLdEl.textContent = jsonLdOriginal;
-        }
-      }
+      document.getElementById(JSONLD_ID)?.remove();
     };
   }, [serialized]);
+}
+
+function isRobotsMeta(element: Element): boolean {
+  return element.tagName === "META" && element.getAttribute("name") === "robots";
 }

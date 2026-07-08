@@ -64,11 +64,26 @@ function AuthorBio({ name, bio, avatarUrl }: { name: string; bio: string | null;
 
 export default function BlogPostPage() {
   const { slug } = useParams<{ slug: string }>();
-  const [initialPost] = useState(() => (slug ? readPrerenderedPost(slug) : undefined));
+  // useMemo, NOT useState: React Router reuses this element across a :slug change, so a
+  // lazy useState initializer runs exactly once — for the FIRST article. Its value then
+  // seeded React Query's `initialData` for the SECOND article's key, marking that key
+  // fresh (staleTime 5min) so `queryFn` never ran; `refetchOnWindowFocus: false` (App.tsx)
+  // meant it never healed. Every "Читать ещё" click from a prerendered article rendered
+  // the previous article's body, title and canonical under the new URL.
+  //
+  // readPrerenderedPost already returns undefined when its slug does not match the
+  // inlined snapshot. The bug was never that it answered wrong — it was never asked again.
+  const initialPost = useMemo(() => (slug ? readPrerenderedPost(slug) : undefined), [slug]);
   const { data: post, isLoading } = useBlogPost(slug, initialPost);
   // The FULL list, not the 4 newest: with a 4-row pool, relatedPosts can only
   // reorder the same 3 candidates the old `.slice(0, 3)` produced, so no cluster
   // ever forms. The "all" query key is already warm from /blog/ and the tag hubs.
+  //
+  // Deliberately unbounded, and NOT `usePublishedBlogPosts(50)`: `limit` is part of the
+  // query key, so a cap would key off ["blog-posts","published",50] — matching neither
+  // the prerendered __BLOG_LIST_DATA__ (seeded under "all") nor /blog/'s cache, and
+  // forcing an extra fetch on every article view. When the blog outgrows one page, the
+  // fix is a `related_posts` column or an RPC, not a client-side cap.
   const { data: morePosts } = usePublishedBlogPosts();
   const { startPath } = useLandingCta();
 

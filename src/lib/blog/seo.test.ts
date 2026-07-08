@@ -121,6 +121,46 @@ describe("prerendered head tags do not leak across a client-side navigation", ()
     document.getElementById("rv-jsonld")?.remove();
   });
 
+  // The half-closed version of this fix only removed a prerendered tag when the NEXT page
+  // also called useDocumentHead. Only BlogIndex / BlogPostPage / BlogTagPage do. Navigate
+  // from a prerendered thin hub to the landing page and nothing ran to clear it, so `/`
+  // carried `noindex` in the live DOM for the rest of the session.
+
+  it("UNMOUNTING to a page that never calls the hook still removes robots", () => {
+    seedPrerenderedHead("noindex, follow", null);
+    const { unmount } = renderHook(() =>
+      useDocumentHead({ title: "#тег", robots: "noindex, follow" }),
+    );
+    expect(getMeta("name", "robots")).toBe("noindex, follow");
+    unmount(); // -> Landing, which does not manage the head at all
+    expect(getMeta("name", "robots")).toBeNull();
+  });
+
+  it("UNMOUNTING to a page that never calls the hook still removes the JSON-LD", () => {
+    seedPrerenderedHead(null, { "@type": "Article", headline: "Статья" });
+    const { unmount } = renderHook(() =>
+      useDocumentHead({ title: "Статья", jsonLd: [{ "@type": "Article" }] }),
+    );
+    expect(document.getElementById("rv-jsonld")).not.toBeNull();
+    unmount();
+    expect(document.getElementById("rv-jsonld")).toBeNull();
+  });
+
+  it("canonical and og:* ARE restored — index.html ships sane defaults for those", () => {
+    const canonical = document.createElement("link");
+    canonical.setAttribute("rel", "canonical");
+    canonical.setAttribute("href", "https://rovno.ai/blog/a/");
+    document.head.appendChild(canonical);
+
+    const { unmount } = renderHook(() =>
+      useDocumentHead({ title: "Б", canonicalPath: "/blog/b/" }),
+    );
+    unmount();
+    expect(document.head.querySelector('link[rel="canonical"]')?.getAttribute("href"))
+      .toBe("https://rovno.ai/blog/a/");
+    canonical.remove();
+  });
+
   it("a page that sets no robots REMOVES a prerendered noindex", () => {
     // Land on a prerendered thin tag hub (static `noindex, follow`), then navigate
     // to an article. Restoring the original on unmount left the article noindex,

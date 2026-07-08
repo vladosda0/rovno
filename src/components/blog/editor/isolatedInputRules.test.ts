@@ -8,17 +8,27 @@
 // Driven through a real Editor with the exact RichTextEditor extension list,
 // because the bug lives in the input-rule plugin, not in the schema.
 
+import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Image from "@tiptap/extension-image";
+import Youtube from "@tiptap/extension-youtube";
 import { Figcaption, Figure } from "./Figure";
 import { FaqAnswer, FaqItem, FaqQuestion } from "./Faq";
-import { IsolatedInputRules } from "./isolatedInputRules";
+import {
+  HORIZONTAL_RULE_FIND_FOR_TEST,
+  IsolatedInputRules,
+  isInsideIsolatedNode,
+  positionAfterIsolatedContainer,
+} from "./isolatedInputRules";
 
+// Youtube is in the real list, and it registers a nodePasteRule — the third caller of
+// tr.replaceWith, and the one the input-rule guard does not shadow.
 const extensions = [
   StarterKit.configure({ heading: { levels: [2, 3] } }),
   Figure, Figcaption, FaqItem, FaqQuestion, FaqAnswer, IsolatedInputRules, Image,
+  Youtube.configure({ nocookie: true, width: 0, height: 0, HTMLAttributes: {} }),
 ];
 
 interface JsonNode {
@@ -72,6 +82,19 @@ const faqDoc = (): JsonNode => ({
     content: [
       { type: "faqQuestion", content: [{ type: "text", text: "Вопрос" }] },
       { type: "faqAnswer", content: [{ type: "paragraph", content: [{ type: "text", text: "Ответ" }] }] },
+    ],
+  }],
+});
+
+/** An author clicks into a fresh FAQ answer and pastes. The paste rule needs the URL to
+ *  be the whole textblock (its regex is `^…$`), which an empty answer supplies. */
+const emptyAnswerFaqDoc = (): JsonNode => ({
+  type: "doc",
+  content: [{
+    type: "faqItem",
+    content: [
+      { type: "faqQuestion", content: [{ type: "text", text: "Вопрос" }] },
+      { type: "faqAnswer", content: [{ type: "paragraph" }] },
     ],
   }],
 });
@@ -165,5 +188,141 @@ describe("the guard does not break ordinary prose", () => {
     expect(countType(editor, "figure")).toBe(1);
     expect(countType(editor, "image")).toBe(0);
     editor.destroy();
+  });
+});
+
+// An input rule was one of THREE callers of tr.replaceWith. These cover the other two.
+
+describe("isInsideIsolatedNode / positionAfterIsolatedContainer", () => {
+  it("recognises the three guarded nodes and nothing else", () => {
+    const editor = makeEditor({
+      type: "doc",
+      content: [
+        faqDoc().content![0],
+        figureDoc().content![0],
+        { type: "paragraph", content: [{ type: "text", text: "проза" }] },
+        { type: "blockquote", content: [{ type: "paragraph", content: [{ type: "text", text: "цитата" }] }] },
+      ],
+    });
+    const inside = (name: string, offset: number) =>
+      isInsideIsolatedNode(editor.state.doc.resolve(firstNode(editor, name).pos + offset));
+
+    expect(inside("faqQuestion", 1)).toBe(true);
+    expect(inside("faqAnswer", 2)).toBe(true); // inside its paragraph
+    expect(inside("figcaption", 1)).toBe(true);
+    expect(inside("blockquote", 2)).toBe(false);
+    editor.destroy();
+  });
+
+  it("hoists to just after the enclosing figure / faqItem, and to null in prose", () => {
+    const editor = makeEditor(figureDoc());
+    const caption = firstNode(editor, "figcaption");
+    const figure = firstNode(editor, "figure");
+    const after = positionAfterIsolatedContainer(editor.state.doc.resolve(caption.pos + 1));
+    expect(after).toBe(figure.pos + figure.node.nodeSize);
+    editor.destroy();
+
+    const prose = makeEditor({ type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "x" }] }] });
+    expect(positionAfterIsolatedContainer(prose.state.doc.resolve(1))).toBe(null);
+    prose.destroy();
+  });
+});
+
+describe("inserting a block at a caret inside a guarded node (uploadAndInsert)", () => {
+  const newFigure = { type: "figure", attrs: { src: "https://x.test/b.jpg", alt: null, width: 4, height: 3 }, content: [{ type: "figcaption" }] };
+
+  it("UNHOISTED, it tears the figure in half — this is the bug", () => {
+    // Reproduces what `insertContentAt(caretPos, figure)` did. `isolating: true` does not
+    // stop tr.replaceWith, and the resulting doc is VALID, so autosave persisted it.
+    const editor = makeEditor(figureDoc());
+    const caret = firstNode(editor, "figcaption").pos + 4; // mid-caption: "Под|пись"
+    editor.chain().insertContentAt(caret, newFigure).run();
+
+    expect(() => editor.state.doc.check()).not.toThrow(); // valid, and wrong
+    expect(countType(editor, "figure")).toBe(3); // original DUPLICATED + the new one
+    editor.destroy();
+  });
+
+  it("HOISTED, the figure lands after the container and the caption survives whole", () => {
+    const editor = makeEditor(figureDoc());
+    const caret = firstNode(editor, "figcaption").pos + 4;
+    const target = positionAfterIsolatedContainer(editor.state.doc.resolve(caret))!;
+    editor.chain().insertContentAt(target, newFigure).run();
+
+    expect(() => editor.state.doc.check()).not.toThrow();
+    expect(countType(editor, "figure")).toBe(2); // the original, plus the new one
+    const original = firstNode(editor, "figure").node;
+    expect(original.attrs.src).toBe(SRC);
+    expect(original.textContent).toBe("Подпись");
+    editor.destroy();
+  });
+
+  it("HOISTED out of an FAQ answer, the pair stays intact", () => {
+    const editor = makeEditor(faqDoc());
+    const caret = firstNode(editor, "faqAnswer").pos + 3;
+    const target = positionAfterIsolatedContainer(editor.state.doc.resolve(caret))!;
+    editor.chain().insertContentAt(target, newFigure).run();
+
+    expect(() => editor.state.doc.check()).not.toThrow();
+    expect(countType(editor, "faqItem")).toBe(1);
+    const item = firstNode(editor, "faqItem").node;
+    expect([item.child(0).textContent, item.child(1).textContent]).toEqual(["Вопрос", "Ответ"]);
+    editor.destroy();
+  });
+});
+
+describe("@tiptap/extension-youtube's nodePasteRule reaches the same tr.replaceWith", () => {
+  const URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
+
+  /** Exactly the meta prosemirror-view's doPaste sets; pasteRulesPlugin keys off it. */
+  function pasteAt(editor: Editor, pos: number, text: string) {
+    editor.view.dispatch(editor.state.tr.insertText(text, pos).setMeta("uiEvent", "paste"));
+  }
+
+  it("pasting a YouTube URL into an empty FAQ answer guts the pair — the hazard is real", () => {
+    const editor = makeEditor(emptyAnswerFaqDoc());
+    pasteAt(editor, firstNode(editor, "faqAnswer").pos + 2, URL);
+
+    // The resulting doc is VALID, so autosave writes it straight to `content` jsonb.
+    expect(() => editor.state.doc.check()).not.toThrow();
+    // The video escaped the isolating node entirely and landed at DOC level, outside the
+    // faqItem — a video that answers nothing, under a question with no answer.
+    expect(countType(editor, "youtube")).toBe(1);
+    const topLevel = editor.state.doc.children.map((n) => n.type.name);
+    expect(topLevel).toContain("youtube");
+    expect(topLevel.indexOf("youtube")).toBeGreaterThan(topLevel.indexOf("faqItem"));
+    // ...leaving the answer EMPTY. extractFaqItems requires `question && answer`, so the
+    // article still SHOWS the question while emitting no FAQPage entry for it. That is
+    // the silent half of this bug: nothing looks broken until Search Console does.
+    expect(firstNode(editor, "faqAnswer").node.textContent).toBe("");
+    editor.destroy();
+  });
+
+  it("RichTextEditor's remedy — handle the paste as plain text — leaves the pair intact", () => {
+    // handlePaste returns true BEFORE prosemirror-view dispatches `uiEvent: "paste"`,
+    // so no paste rule ever runs. Modelled here by inserting the text without that meta.
+    const editor = makeEditor(emptyAnswerFaqDoc());
+    const pos = firstNode(editor, "faqAnswer").pos + 2;
+    editor.view.dispatch(editor.state.tr.insertText(URL, pos));
+
+    expect(() => editor.state.doc.check()).not.toThrow();
+    expect(countType(editor, "youtube")).toBe(0);
+    expect(countType(editor, "faqItem")).toBe(1);
+    expect(firstNode(editor, "faqAnswer").node.textContent).toBe(URL);
+    editor.destroy();
+  });
+});
+
+describe("the copied horizontal-rule regex has not drifted from the package", () => {
+  it("matches exactly what @tiptap/extension-horizontal-rule matches", async () => {
+    // extension-image EXPORTS its inputRegex, so isolatedInputRules imports it and cannot
+    // drift. horizontal-rule exports nothing, so its regex is hand-copied — pin it here.
+    // A package update that widens the rule would otherwise silently reopen the tear.
+    const source = await readFile(
+      "node_modules/@tiptap/extension-horizontal-rule/dist/index.js",
+      "utf8",
+    );
+    const found = /find:\s*(\/\^.*?\/)[,\s]/.exec(source)?.[1];
+    expect(found).toBe(String(HORIZONTAL_RULE_FIND_FOR_TEST));
   });
 });

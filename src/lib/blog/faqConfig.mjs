@@ -17,18 +17,33 @@
 // no Google snippet. It is read by Yandex, Bing and the LLM answer engines that
 // already fetch /llms.txt — which is exactly the traffic this blog is aimed at.
 
+/**
+ * A node's children, or none.
+ *
+ * `content` is whatever sits in the `content` jsonb column. The editor only ever writes
+ * an array, but a hand-written or service-role row can put an object there, and `.map`
+ * or a destructure on that throws. The throw is NOT contained: articleJsonLd() runs in
+ * BlogPostPage's render body with no error boundary above it (the SPA unmounts), and
+ * prerender-blog.mjs runs it at build time, so one bad row fails `npm run build` and
+ * bricks the Timeweb prod deploy. Likewise `text` is coerced: a numeric `text` would
+ * survive the join and blow up on the caller's `.trim()`.
+ */
+function children(node) {
+  return Array.isArray(node?.content) ? node.content : [];
+}
+
 /** Concatenate the inline content of a node into plain text. */
 function inlineText(node) {
   if (!node) return "";
-  if (node.type === "text") return node.text ?? "";
+  if (node.type === "text") return typeof node.text === "string" ? node.text : "";
   if (node.type === "hardBreak") return "\n";
-  return (node.content ?? []).map(inlineText).join("");
+  return children(node).map(inlineText).join("");
 }
 
 /** An answer is one or more paragraphs; keep the paragraph boundaries. */
 function answerText(node) {
   if (!node) return "";
-  return (node.content ?? [])
+  return children(node)
     .map((block) => inlineText(block).trim())
     .filter(Boolean)
     .join("\n\n");
@@ -50,13 +65,13 @@ export function extractFaqItems(doc) {
   function walk(node) {
     if (!node || typeof node !== "object") return;
     if (node.type === "faqItem") {
-      const [question, answer] = node.content ?? [];
+      const [question, answer] = children(node);
       const q = inlineText(question).trim();
       const a = answerText(answer).trim();
       if (q && a) items.push({ question: q, answer: a });
       return; // faqItems never nest
     }
-    for (const child of node.content ?? []) walk(child);
+    for (const child of children(node)) walk(child);
   }
 
   walk(doc);

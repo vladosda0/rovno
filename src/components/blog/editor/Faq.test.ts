@@ -149,6 +149,46 @@ describe("FAQ schema safety (block commands cannot destroy a pair)", () => {
   });
 });
 
+describe("extractFaqItems survives a hand-written content jsonb", () => {
+  // The editor only ever writes arrays, but a Studio / service-role row can put anything
+  // in `content`. A throw here is NOT contained: articleJsonLd() runs in BlogPostPage's
+  // render body with no error boundary above it (the whole SPA unmounts), and
+  // prerender-blog.mjs runs it at build time, so one bad row fails `npm run build` and
+  // bricks the Timeweb prod deploy.
+  const hostile: unknown[] = [
+    { type: "doc", content: { type: "faqItem" } },                       // object, not array
+    { type: "doc", content: [{ type: "faqItem", content: { a: 1 } }] },  // faqItem.content object
+    { type: "doc", content: [{ type: "faqItem", content: "нет" }] },
+    { type: "doc", content: [{ type: "faqItem" }] },                     // no content at all
+    { type: "doc", content: [{ type: "faqItem", content: [{ type: "faqQuestion", content: [{ type: "text", text: 42 }] }] }] },
+    { type: "doc", content: [null, undefined, 7, "s"] },
+    null, undefined, 7, "s", true, [],
+  ];
+
+  it("never throws, and never invents an FAQ", () => {
+    for (const doc of hostile) {
+      expect(() => extractFaqItems(doc)).not.toThrow();
+      expect(extractFaqItems(doc)).toEqual([]);
+      expect(() => faqJsonLdFromDoc(doc)).not.toThrow();
+      expect(faqJsonLdFromDoc(doc)).toBeNull();
+    }
+  });
+
+  it("a numeric `text` does not become part of a question", () => {
+    const doc = {
+      type: "doc",
+      content: [{
+        type: "faqItem",
+        content: [
+          { type: "faqQuestion", content: [{ type: "text", text: 42 }, { type: "text", text: "?" }] },
+          { type: "faqAnswer", content: [{ type: "paragraph", content: [{ type: "text", text: "Да" }] }] },
+        ],
+      }],
+    };
+    expect(extractFaqItems(doc)).toEqual([{ question: "?", answer: "Да" }]);
+  });
+});
+
 describe("extractFaqItems", () => {
   it("pulls pairs in document order", () => {
     const items = extractFaqItems(

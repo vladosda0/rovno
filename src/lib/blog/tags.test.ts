@@ -159,15 +159,23 @@ describe("collectTagHubs counts DISTINCT posts, not tag occurrences", () => {
 });
 
 describe("relatedPosts matches by slug, exactly as the hubs do", () => {
+  // The UNRELATED post must come FIRST in the fixture. Both of these tests originally
+  // listed the related post first, so `relatedPosts` returned the input order whether it
+  // matched on slug or on raw text — they passed against the very implementation they
+  // were written to reject. An assertion that cannot fail is not a test.
+
   it("treats ё/е variants of the same tag as related", () => {
-    // They share /blog/tag/priemka/, so "Читать ещё" must agree.
-    const posts = [{ slug: "sibling", tags: ["приемка"] }, { slug: "other", tags: ["ai"] }];
+    // They share /blog/tag/priemka/, so "Читать ещё" must agree with the hub.
+    const posts = [{ slug: "other", tags: ["ai"] }, { slug: "sibling", tags: ["приемка"] }];
+    // Raw-text matching sees "приёмка" !== "приемка" and leaves the input order.
     expect(relatedPosts(posts, "current", ["приёмка"], 2).map((p) => p.slug)).toEqual(["sibling", "other"]);
   });
 
   it("ignores tags with no URL when deciding relatedness", () => {
-    const posts = [{ slug: "x", tags: ["!!!"] }, { slug: "y", tags: ["смета"] }];
-    // The current article's only tag has no slug -> fall back to newest-first.
-    expect(relatedPosts(posts, "cur", ["!!!"], 2).map((p) => p.slug)).toEqual(["x", "y"]);
+    // "!!!" slugifies to "", so it links nowhere and must not make anything related.
+    const posts = [{ slug: "y", tags: ["смета"] }, { slug: "x", tags: ["!!!"] }];
+    // Raw-text matching would promote `x` (its literal tag matches); slug matching
+    // finds no usable tag on the current article and falls back to newest-first.
+    expect(relatedPosts(posts, "cur", ["!!!"], 2).map((p) => p.slug)).toEqual(["y", "x"]);
   });
 });
