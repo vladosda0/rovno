@@ -105,6 +105,24 @@
   border-top: 1px solid var(--rv-blue);
 }
 
+/* ---------- FAQ block ---------- */
+
+/* Placeholder hints. Placeholder runs with showOnlyCurrent:false, so every empty
+   node carries data-placeholder; these two selectors decide which ones paint. */
+.rv-editor-content h3[data-rv-faq-q].is-empty::before,
+.rv-editor-content [data-rv-faq-a] > p.is-empty:first-child::before {
+  color: rgba(30, 92, 203, 0.32);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* The answer's empty paragraph says "Ответ", not the article-wide hint. */
+.rv-editor-content [data-rv-faq-a] > p.is-empty:first-child::before {
+  content: "Ответ";
+}
+
 /* ---------- Menus ---------- */
 
 .rv-editor-menu {

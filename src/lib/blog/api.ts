@@ -116,13 +116,21 @@ export async function deleteBlogPost(id: string): Promise<void> {
 
 export type RebuildResult =
   | { ok: true }
-  | { ok: false; notConfigured: boolean; message: string };
+  | { ok: false; notConfigured: boolean; inProgress: boolean; message: string };
 
 /** Ask the blog-rebuild-frontend edge function to kick a Timeweb rebuild so
  * the static blog pages / sitemap / RSS regenerate with current content.
- * Author-only (the function re-checks blog_authors server-side). A 501 means
- * the webhook secrets are not set on this environment — callers surface that
- * as "не настроено", not as a failure of the publish itself. */
+ * Author-only (the function re-checks blog_authors server-side).
+ *
+ * Two non-failures the caller must NOT surface as errors:
+ *  - 501 → the webhook secrets are not set on this environment;
+ *  - 409 `rebuild_in_progress` → a build is already running. That is the routine
+ *    answer while a previous publish's build is still going (minutes), and the
+ *    function refuses to queue a second one because it could redeploy an older
+ *    commit over a newer in-flight one.
+ *
+ * The function's `error` strings are English and meant for logs; the UI keys off
+ * `code`/`notConfigured` and writes its own Russian copy. */
 export async function triggerFrontendRebuild(): Promise<RebuildResult> {
   const { error } = await rawSupabase.functions.invoke("blog-rebuild-frontend", {
     body: {},
@@ -130,18 +138,34 @@ export async function triggerFrontendRebuild(): Promise<RebuildResult> {
   if (!error) return { ok: true };
 
   let status: number | null = null;
+  let code: string | null = null;
   let message = error.message ?? "Unknown error";
   const context = (error as { context?: Response }).context;
   if (context && typeof context.status === "number") {
     status = context.status;
     try {
-      const body = (await context.json()) as { error?: string };
+      const body = (await context.json()) as { error?: string; code?: string };
       if (body?.error) message = body.error;
+      if (body?.code) code = body.code;
     } catch {
       // non-JSON body — keep the generic message
     }
   }
-  return { ok: false, notConfigured: status === 501, message };
+  return {
+    ok: false,
+    notConfigured: status === 501,
+    // DEPLOY ORDER: `code` is only sent by blog-rebuild-frontend from rovno-db#75 on.
+    // Until that function is deployed to this environment, a rebuild failure lands in
+    // the generic destructive toast — correct, if less specific.
+    //
+    // Not relaxable to a bare `status === 409`: the endpoint answers 409 for BOTH
+    // `rebuild_in_progress` (harmless, retry in a minute) and `no_live_commit` (the app
+    // has no successful deploy, or its history cannot be ordered — a human must look).
+    // Telling an author "a deploy is already running" for the latter is a lie that
+    // makes them wait for something that will never arrive.
+    inProgress: status === 409 && code === "rebuild_in_progress",
+    message,
+  };
 }
 
 export interface BlogImageUploadResult {
