@@ -426,10 +426,18 @@ export default function BlogEditorPage() {
             title: "Статья опубликована",
             description: "Автопересборка не настроена: в поисковики статья попадёт после следующего деплоя.",
           });
+        } else if (rebuild.inProgress) {
+          // Routine, not a failure: a previous build is still running and the
+          // function refuses to queue a second one (it could redeploy an older
+          // commit over the newer in-flight one).
+          toast({
+            title: "Статья опубликована",
+            description: "Пересборка уже идёт. Когда она закончится, нажмите «Обновить сайт», чтобы статья попала к поисковикам.",
+          });
         } else {
           toast({
             title: "Статья опубликована, но пересборка не запустилась",
-            description: `${rebuild.message}. Можно повторить кнопкой «Обновить сайт» в списке статей.`,
+            description: "Повторите кнопкой «Обновить сайт» в списке статей.",
             variant: "destructive",
           });
         }
@@ -443,9 +451,31 @@ export default function BlogEditorPage() {
     formRef.current = { ...formRef.current, status: "draft" };
     try {
       await updateMutation.mutateAsync({ id: postIdRef.current, patch: { status: "draft" } });
-      // The static page must disappear from the site too — rebuild.
-      void triggerFrontendRebuild();
-      toast({ title: "Статья снята с публикации" });
+      // The static page must disappear from the site too — rebuild. Never swallow
+      // the result: the article's static page, its sitemap entry and its RSS item
+      // stay crawler-visible until a build runs, and the admin would show only the
+      // reassuring "снята с публикации".
+      void triggerFrontendRebuild().then((rebuild) => {
+        if (rebuild.ok) {
+          toast({ title: "Статья снята с публикации", description: "Пересборка запущена." });
+        } else if (rebuild.notConfigured) {
+          toast({
+            title: "Статья снята с публикации",
+            description: "Автопересборка не настроена: страница исчезнет из поиска после следующего деплоя.",
+          });
+        } else if (rebuild.inProgress) {
+          toast({
+            title: "Статья снята с публикации",
+            description: "Пересборка уже идёт. Нажмите «Обновить сайт» после её завершения.",
+          });
+        } else {
+          toast({
+            title: "Снята с публикации, но страница ещё в поиске",
+            description: "Пересборка не запустилась. Повторите кнопкой «Обновить сайт».",
+            variant: "destructive",
+          });
+        }
+      });
     } catch (error) {
       toast({
         title: "Не удалось снять с публикации",

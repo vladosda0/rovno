@@ -21,12 +21,19 @@ import { CharacterCount, Placeholder } from "@tiptap/extensions";
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough, Code, Link2, Link2Off,
   Heading2, Heading3, Quote, ImagePlus, ListOrdered, List, Minus, Plus, SquareCode, X,
-  Youtube as YoutubeIcon,
+  Youtube as YoutubeIcon, MessageCircleQuestion,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { uploadBlogImage } from "@/lib/blog/api";
 import { isInternalHref, normalizeHref } from "@/lib/blog/link-href";
 import { Figcaption, Figure } from "./Figure";
+import { FaqAnswer, FaqItem, FaqQuestion } from "./Faq";
+import {
+  IsolatedInputRules,
+  handleIsolatedDrop,
+  insertBlockNodesHoisted,
+  isolatedEditorProps,
+} from "./isolatedInputRules";
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -51,6 +58,7 @@ export interface RichTextEditorProps {
 function isImageFile(file: File): boolean {
   return file.type.startsWith("image/");
 }
+
 
 export function RichTextEditor({
   initialContent, placeholder, onReady, onChange, onContentError,
@@ -98,14 +106,8 @@ export function RichTextEditor({
       }
       if (nodes.length === 0 || editor.isDestroyed) return;
 
-      if (position === undefined) {
-        editor.chain().focus().insertContent(nodes).run();
-        return;
-      }
-      // The drop position was captured before the uploads awaited, so the doc may
-      // have shrunk underneath it. Clamp rather than throw a RangeError.
-      const at = Math.min(position, editor.state.doc.content.size);
-      editor.chain().focus().insertContentAt(at, nodes).run();
+      // Hoists out of a caption / FAQ pair instead of splitting it. See the helper.
+      insertBlockNodesHoisted(editor, nodes, position);
     },
     [toast],
   );
@@ -125,12 +127,31 @@ export function RichTextEditor({
       }),
       Figure,
       Figcaption,
+      FaqItem,
+      FaqQuestion,
+      FaqAnswer,
+      // Must be registered: `isolating` guards commands, not input rules. Typing
+      // `---` in a caption or an FAQ answer otherwise tears the node apart.
+      IsolatedInputRules,
       // Legacy: articles written before the figure node still hold plain `image`
       // nodes. Unregistering Image would make TipTap drop them on hydrate, and
       // the autosave would then write the loss back to the DB.
       Image,
       Youtube.configure({ nocookie: true, width: 0, height: 0, HTMLAttributes: {} }),
-      Placeholder.configure({ placeholder }),
+      Placeholder.configure({
+        // Not just the focused node: an empty FAQ question needs its hint even
+        // while the caret sits in the answer below it. CSS scopes which of the
+        // decorated nodes actually paint a hint.
+        showOnlyCurrent: false,
+        // Without this, buildPlaceholderDecorations never descends into faqItem or
+        // figure, so `showOnlyCurrent: false` is inert and the hints below are dead.
+        includeChildren: true,
+        placeholder: ({ node }) => {
+          if (node.type.name === "faqQuestion") return "Вопрос?";
+          if (node.type.name === "figcaption") return "Подпись к изображению";
+          return placeholder;
+        },
+      }),
       CharacterCount,
     ],
     content: (initialContent as object | null) ?? "",
@@ -159,20 +180,23 @@ export function RichTextEditor({
         }
         return false;
       },
+      // Makes a selection crossing a figure / FAQ boundary unrepresentable, which is what
+      // stops paste, typing and Backspace from destroying the node. See isolatedInputRules.
+      createSelectionBetween: isolatedEditorProps.createSelectionBetween,
       handleDrop: (view, event, _slice, moved) => {
         if (moved) return false;
         const files = Array.from(event.dataTransfer?.files ?? []);
+        const coords = view.posAtCoords({ left: event.clientX, top: event.clientY });
         if (files.some(isImageFile)) {
           event.preventDefault();
-          const coords = view.posAtCoords({ left: event.clientX, top: event.clientY });
           if (editorRef.current) {
             void uploadAndInsert(editorRef.current, files, coords?.pos);
           }
           return true;
         }
-        return false;
+        return handleIsolatedDrop(view, event, coords?.pos);
       },
-      handlePaste: (_view, event) => {
+      handlePaste: (view, event) => {
         const files = Array.from(event.clipboardData?.files ?? []);
         if (files.some(isImageFile)) {
           event.preventDefault();
@@ -181,7 +205,7 @@ export function RichTextEditor({
           }
           return true;
         }
-        return false;
+        return isolatedEditorProps.handlePaste(view, event);
       },
     },
     onUpdate: () => onChange(),
@@ -360,7 +384,7 @@ export function RichTextEditor({
               {/* Block-level commands are inapplicable inside a figure caption
                   (figure's content expression is exactly "figcaption"), so they
                   would be dead buttons. Hide them instead of showing no-ops. */}
-              {!editor.isActive("figcaption") && (
+              {!editor.isActive("figcaption") && !editor.isActive("faqQuestion") && !editor.isActive("faqAnswer") && (
                 <>
                   <span className="rv-editor-menu__divider" />
                   <button type="button" className={editor.isActive("heading", { level: 2 }) ? "active" : ""} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} title="Заголовок">
@@ -420,6 +444,9 @@ export function RichTextEditor({
               </button>
               <button type="button" onClick={() => editor.chain().focus().toggleCodeBlock().run()}>
                 <SquareCode size={14} /> Код
+              </button>
+              <button type="button" onClick={() => editor.chain().focus().setFaqItem().run()}>
+                <MessageCircleQuestion size={14} /> Вопрос-ответ
               </button>
               <button type="button" onClick={() => editor.chain().focus().setHorizontalRule().run()}>
                 <Minus size={14} /> Разделитель

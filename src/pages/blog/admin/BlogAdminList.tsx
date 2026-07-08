@@ -119,8 +119,18 @@ export default function BlogAdminList() {
         title: "Автопересборка не настроена",
         description: "Нужны секреты TIMEWEB_API_TOKEN и TIMEWEB_APP_ID у функции blog-rebuild-frontend.",
       });
+    } else if (result.inProgress) {
+      toast({
+        title: "Пересборка уже идёт",
+        description: "Дождитесь её окончания и нажмите ещё раз — вторая сборка могла бы откатить сайт на предыдущий коммит.",
+      });
     } else {
-      toast({ title: "Не удалось запустить пересборку", description: result.message, variant: "destructive" });
+      // result.message is the function's English log string; do not show it.
+      toast({
+        title: "Не удалось запустить пересборку",
+        description: "Проверьте логи функции blog-rebuild-frontend.",
+        variant: "destructive",
+      });
     }
   };
 

@@ -8,7 +8,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useDocumentHead, SITE_NAME } from "@/lib/blog/seo";
-import { articleJsonLd, blogPostPath, BLOG_TITLE } from "@/lib/blog/jsonld";
+import { articleBreadcrumbTrail, articleJsonLd, blogPostPath, BLOG_TITLE } from "@/lib/blog/jsonld";
 import { readPrerenderedPost } from "@/lib/blog/prerendered-data";
 import { sanitizeArticleHtml } from "@/lib/blog/sanitize";
 import { withHeadingAnchors } from "@/lib/blog/anchors";
@@ -16,6 +16,8 @@ import { formatReadingTime } from "@/lib/blog/reading-time";
 import { useBlogPost, usePublishedBlogPosts } from "@/hooks/use-blog";
 import { BlogShell, useLandingCta } from "@/components/blog/BlogShell";
 import { BlogPostCard, formatPostDate } from "@/components/blog/BlogPostCard";
+import { Breadcrumbs } from "@/components/blog/Breadcrumbs";
+import { relatedPosts, tagPath, tagSlug } from "@/lib/blog/tagsConfig.mjs";
 
 function AuthorLine({ name, avatarUrl }: { name: string; avatarUrl: string | null }) {
   return (
@@ -39,16 +41,56 @@ function AuthorLine({ name, avatarUrl }: { name: string; avatarUrl: string | nul
   );
 }
 
+/** "Об авторе" card. E-E-A-T: bio and avatar have existed on blog_authors since
+ *  the blog shipped and were never rendered anywhere. Nothing shows when the
+ *  author has no bio — an empty card is worse than no card. */
+function AuthorBio({ name, bio, avatarUrl }: { name: string; bio: string | null; avatarUrl: string | null }) {
+  if (!bio) return null;
+  return (
+    <aside className="rv-author-bio">
+      {avatarUrl ? (
+        <img src={avatarUrl} alt="" width={56} height={56} loading="lazy" decoding="async" />
+      ) : (
+        <span className="rv-author-bio__initial" aria-hidden="true">{name.slice(0, 1).toUpperCase()}</span>
+      )}
+      <div>
+        <p className="rv-author-bio__label">Об авторе</p>
+        <p className="rv-author-bio__name">{name}</p>
+        <p className="rv-author-bio__text">{bio}</p>
+      </div>
+    </aside>
+  );
+}
+
 export default function BlogPostPage() {
   const { slug } = useParams<{ slug: string }>();
-  const [initialPost] = useState(() => (slug ? readPrerenderedPost(slug) : undefined));
+  // useMemo, NOT useState: React Router reuses this element across a :slug change, so a
+  // lazy useState initializer runs exactly once — for the FIRST article. Its value then
+  // seeded React Query's `initialData` for the SECOND article's key, marking that key
+  // fresh (staleTime 5min) so `queryFn` never ran; `refetchOnWindowFocus: false` (App.tsx)
+  // meant it never healed. Every "Читать ещё" click from a prerendered article rendered
+  // the previous article's body, title and canonical under the new URL.
+  //
+  // readPrerenderedPost already returns undefined when its slug does not match the
+  // inlined snapshot. The bug was never that it answered wrong — it was never asked again.
+  const initialPost = useMemo(() => (slug ? readPrerenderedPost(slug) : undefined), [slug]);
   const { data: post, isLoading } = useBlogPost(slug, initialPost);
-  const { data: morePosts } = usePublishedBlogPosts(4);
+  // The FULL list, not the 4 newest: with a 4-row pool, relatedPosts can only
+  // reorder the same 3 candidates the old `.slice(0, 3)` produced, so no cluster
+  // ever forms. The "all" query key is already warm from /blog/ and the tag hubs.
+  //
+  // Deliberately unbounded, and NOT `usePublishedBlogPosts(50)`: `limit` is part of the
+  // query key, so a cap would key off ["blog-posts","published",50] — matching neither
+  // the prerendered __BLOG_LIST_DATA__ (seeded under "all") nor /blog/'s cache, and
+  // forcing an extra fetch on every article view. When the blog outgrows one page, the
+  // fix is a `related_posts` column or an RPC, not a client-side cap.
+  const { data: morePosts } = usePublishedBlogPosts();
   const { startPath } = useLandingCta();
 
+  // Cluster linking: articles sharing a tag come first, then the newest others.
   const readMore = useMemo(
-    () => (morePosts ?? []).filter((p) => p.slug !== slug).slice(0, 3),
-    [morePosts, slug],
+    () => relatedPosts(morePosts ?? [], slug ?? "", post?.tags ?? [], 3),
+    [morePosts, slug, post],
   );
 
   // Sanitize first, anchor second: the anchor pass adds ids and a TOC that are
@@ -153,6 +195,7 @@ export default function BlogPostPage() {
     <BlogShell>
       <article>
         <section className="rv-section" style={{ padding: "64px 48px 0" }}>
+          <Breadcrumbs trail={articleBreadcrumbTrail(post)} />
           <header className="rv-article-header">
             {post.status === "draft" && (
               <span
@@ -163,7 +206,16 @@ export default function BlogPostPage() {
               </span>
             )}
             <span className="rv-caption" style={{ fontSize: 12, color: "var(--rv-blue)", letterSpacing: ".04em" }}>
-              {[metaLine, ...post.tags.map((t) => `#${t}`)].filter(Boolean).join("   ")}
+              {metaLine}
+              {/* A tag that transliterates to nothing has no URL — render it flat
+                  rather than linking to /blog/tag//. */}
+              {post.tags.map((t) =>
+                tagSlug(t) ? (
+                  <Link key={t} to={tagPath(t)} className="rv-tag-link">#{t}</Link>
+                ) : (
+                  <span key={t} className="rv-tag-link">#{t}</span>
+                ),
+              )}
             </span>
             <h1 className="rv-article-title">{post.title}</h1>
             {post.subtitle && <p className="rv-article-subtitle">{post.subtitle}</p>}
@@ -180,6 +232,9 @@ export default function BlogPostPage() {
           {/* content_html is authored in our TipTap editor and re-sanitized on
               every render (sanitizeArticleHtml) before hitting the DOM. */}
           <div className="rv-article" dangerouslySetInnerHTML={{ __html: safeHtml }} />
+          {post.author && (
+            <AuthorBio name={post.author.display_name} bio={post.author.bio} avatarUrl={post.author.avatar_url} />
+          )}
         </section>
       </article>
 
