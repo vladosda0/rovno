@@ -50,7 +50,47 @@ interface AppliedTag {
   element: Element;
   created: boolean;
   originalContent: string | null;
+  /** Absent from index.html: found at mount time only because we booted on a prerender. */
+  prerenderOnly: boolean;
 }
+
+/**
+ * Head tags that `index.html` does NOT ship, but `scripts/prerender-blog.mjs` DOES.
+ *
+ * For these, "the value that was there when this component mounted" is not the app
+ * shell's default — it is the STATIC SNAPSHOT OF THE PAGE WE BOOTED ON. Restoring it on
+ * unmount carries one page's SEO onto the next: navigate from a prerendered article to
+ * the landing page and `/` ends up declaring `canonical: /blog/<the-article>/`, which
+ * tells a crawler the landing page is a duplicate of a blog post. Verified in a browser.
+ *
+ * Removing them restores exactly what `/` boots with when it is served for real: nothing.
+ *
+ * Everything else here (`description`, `og:title`, `og:description`, `og:type`, `og:image`,
+ * `twitter:card`, `twitter:title`) IS in index.html, so restore-to-mount-state is right and
+ * exactly correct on a non-prerendered boot. Cross-checked against index.html's <head>.
+ *
+ * Known residual: on a PRERENDERED boot the mount-state of those tags is also the article's,
+ * so `/` keeps the article's `og:title` for the rest of the client-side session. We cannot
+ * recover index.html's default from a document that never contained it, and REMOVING them
+ * would be worse — a visitor who boots on `/`, opens the blog and comes back would lose the
+ * shell's og:title entirely. Bounded and harmless: these are social-preview tags, and no
+ * scraper or crawler SPA-navigates. The indexing directives are the ones listed below.
+ */
+const PRERENDER_ONLY_TAGS: TagSelector[] = [
+  { kind: "link", rel: "canonical" },
+  { kind: "meta", attr: "name", key: "robots" },
+  { kind: "meta", attr: "property", key: "og:url" },
+  { kind: "meta", attr: "property", key: "og:site_name" },
+  { kind: "meta", attr: "name", key: "twitter:description" },
+];
+
+function sameSelector(a: TagSelector, b: TagSelector): boolean {
+  if (a.kind === "link") return b.kind === "link" && a.rel === b.rel;
+  return b.kind === "meta" && a.attr === b.attr && a.key === b.key;
+}
+
+const isPrerenderOnly = (selector: TagSelector) =>
+  PRERENDER_ONLY_TAGS.some((only) => sameSelector(only, selector));
 
 function upsertTag(selector: TagSelector, value: string, applied: AppliedTag[]): void {
   let element: Element | null;
@@ -59,10 +99,11 @@ function upsertTag(selector: TagSelector, value: string, applied: AppliedTag[]):
   } else {
     element = document.head.querySelector(`link[rel="${selector.rel}"]`);
   }
+  const prerenderOnly = isPrerenderOnly(selector);
 
   if (element) {
     const attrName = selector.kind === "meta" ? "content" : "href";
-    applied.push({ element, created: false, originalContent: element.getAttribute(attrName) });
+    applied.push({ element, created: false, originalContent: element.getAttribute(attrName), prerenderOnly });
     element.setAttribute(attrName, value);
     return;
   }
@@ -78,7 +119,7 @@ function upsertTag(selector: TagSelector, value: string, applied: AppliedTag[]):
   }
   element.setAttribute(MANAGED_ATTR, "1");
   document.head.appendChild(element);
-  applied.push({ element, created: true, originalContent: null });
+  applied.push({ element, created: true, originalContent: null, prerenderOnly });
 }
 
 /** Apply head tags for the current page; restores previous state on unmount.
@@ -141,23 +182,19 @@ export function useDocumentHead(options: DocumentHeadOptions | null): void {
         el.setAttribute("content", tag);
         el.setAttribute(MANAGED_ATTR, "1");
         document.head.appendChild(el);
-        applied.push({ element: el, created: true, originalContent: null });
+        // Freshly created, so `created: true` already removes it; `prerenderOnly` is moot.
+        applied.push({ element: el, created: true, originalContent: null, prerenderOnly: false });
       }
     }
 
-    // `robots` and the JSON-LD script are the two head tags a PRERENDERED page can
-    // arrive with. For every other tag, "restore the original on unmount" is right:
-    // the original came from index.html and is a sane default. For these two it is
-    // actively wrong — the original belongs to the document we booted on, and after
-    // a client-side navigation it describes a page that is no longer displayed.
+    // `robots` and `#rv-jsonld` are the two tags a page may need to CLEAR rather than
+    // overwrite: an article sets no robots, and a thin hub sets no JSON-LD, so without
+    // this a prerendered value would simply survive into the next page's head.
     //
-    // Concretely: land on a prerendered thin tag hub (static `noindex, follow`) and
-    // click through to an article — the article's live head still said noindex, and
-    // so did every page after it. Land on a prerendered article (static
-    // Article+BreadcrumbList+FAQPage) and a thin hub kept declaring that article's
-    // structured data alongside its own canonical.
-    //
-    // So when THIS page does not set them, remove them outright and do not restore.
+    // That is only half the story. Removing a tag when THIS page sets none happens in
+    // this page's effect; a prerendered tag also has to go when we unmount to a page that
+    // never calls this hook at all. See PRERENDER_ONLY_TAGS and the cleanup below —
+    // `robots` is one of six, not one of two.
     if (opts.robots) {
       upsertTag({ kind: "meta", attr: "name", key: "robots" }, opts.robots, applied);
     } else {
@@ -181,19 +218,15 @@ export function useDocumentHead(options: DocumentHeadOptions | null): void {
     return () => {
       document.title = previousTitle;
       for (const tag of applied) {
-        // `robots` and the JSON-LD block are REMOVED on unmount, never restored — even
-        // when this page created neither and merely overwrote a prerendered one.
+        // Tags index.html does not ship are REMOVED, never restored — even when this page
+        // merely overwrote one the prerenderer had put there. See PRERENDER_ONLY_TAGS: for
+        // those, "the value at mount time" is the static snapshot of the page we booted on,
+        // so restoring it walks one article's canonical and noindex onto the next route.
         //
-        // Removing them when the next page sets none (above) only half-closed the leak:
-        // that branch lives in the NEXT page's effect, and only BlogIndex/BlogPostPage/
-        // BlogTagPage call this hook. Navigate from a prerendered thin hub (static
-        // `noindex, follow`) to the landing page and nothing ran to clear it, so `/`
-        // carried noindex in the live DOM. index.html ships neither tag, so removing
-        // them restores exactly the boot state. Everything else (canonical, og:*,
-        // description) has a sane index.html default and IS restored.
-        if (isRobotsMeta(tag.element)) {
-          tag.element.remove();
-        } else if (tag.created) {
+        // Removing them only when the NEXT page sets none (above) half-closed this: that
+        // branch lives in the next page's effect, and only BlogIndex / BlogPostPage /
+        // BlogTagPage call this hook at all. Navigate to the landing page and nothing ran.
+        if (tag.prerenderOnly || tag.created) {
           tag.element.remove();
         } else if (tag.originalContent !== null) {
           const attrName = tag.element.tagName === "LINK" ? "href" : "content";
@@ -203,8 +236,4 @@ export function useDocumentHead(options: DocumentHeadOptions | null): void {
       document.getElementById(JSONLD_ID)?.remove();
     };
   }, [serialized]);
-}
-
-function isRobotsMeta(element: Element): boolean {
-  return element.tagName === "META" && element.getAttribute("name") === "robots";
 }

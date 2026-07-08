@@ -119,6 +119,12 @@ describe("prerendered head tags do not leak across a client-side navigation", ()
   afterEach(() => {
     document.head.querySelector('meta[name="robots"]')?.remove();
     document.getElementById("rv-jsonld")?.remove();
+    // Tests here seed prerender-only tags; leaving one behind would let the NEXT test
+    // pass for the wrong reason (the tag it expects removed was never there to begin with).
+    for (const sel of ['link[rel="canonical"]', 'meta[property="og:url"]',
+      'meta[property="og:site_name"]', 'meta[name="twitter:description"]']) {
+      document.head.querySelector(sel)?.remove();
+    }
   });
 
   // The half-closed version of this fix only removed a prerendered tag when the NEXT page
@@ -146,19 +152,54 @@ describe("prerendered head tags do not leak across a client-side navigation", ()
     expect(document.getElementById("rv-jsonld")).toBeNull();
   });
 
-  it("canonical and og:* ARE restored — index.html ships sane defaults for those", () => {
+  it("a prerendered CANONICAL is removed, not restored — it names the page we booted on", () => {
+    // Caught in a real browser: hard-load the prerendered /blog/a/, SPA-navigate away, and
+    // the next route still declared `canonical: https://rovno.ai/blog/a/`. index.html ships
+    // NO canonical, so the one found at mount time is the article's own, and "restoring" it
+    // tells a crawler the landing page is a duplicate of a blog post.
+    // An earlier version of THIS test asserted the leak as intended behaviour.
     const canonical = document.createElement("link");
     canonical.setAttribute("rel", "canonical");
-    canonical.setAttribute("href", "https://rovno.ai/blog/a/");
+    canonical.setAttribute("href", "https://rovno.ai/blog/a/"); // as the prerenderer emits it
     document.head.appendChild(canonical);
 
     const { unmount } = renderHook(() =>
       useDocumentHead({ title: "Б", canonicalPath: "/blog/b/" }),
     );
-    unmount();
     expect(document.head.querySelector('link[rel="canonical"]')?.getAttribute("href"))
-      .toBe("https://rovno.ai/blog/a/");
-    canonical.remove();
+      .toBe("https://rovno.ai/blog/b/");
+    unmount();
+    expect(document.head.querySelector('link[rel="canonical"]')).toBeNull();
+  });
+
+  it("og:url / og:site_name / twitter:description are prerender-only too", () => {
+    // The full set of head tags the prerenderer emits that index.html does not.
+    for (const [attr, key] of [["property", "og:url"], ["property", "og:site_name"], ["name", "twitter:description"]]) {
+      const el = document.createElement("meta");
+      el.setAttribute(attr, key);
+      el.setAttribute("content", "из статьи");
+      document.head.appendChild(el);
+    }
+    const { unmount } = renderHook(() =>
+      useDocumentHead({ title: "Статья", description: "Описание", canonicalPath: "/blog/a/" }),
+    );
+    unmount();
+    expect(document.head.querySelector('meta[property="og:url"]')).toBeNull();
+    expect(document.head.querySelector('meta[property="og:site_name"]')).toBeNull();
+    expect(document.head.querySelector('meta[name="twitter:description"]')).toBeNull();
+  });
+
+  it("og:title and description ARE restored — index.html really does ship those", () => {
+    const og = document.createElement("meta");
+    og.setAttribute("property", "og:title");
+    og.setAttribute("content", "Ровно ИИ"); // the app-shell default, verbatim from index.html
+    document.head.appendChild(og);
+
+    const { unmount } = renderHook(() => useDocumentHead({ title: "Статья" }));
+    expect(og.getAttribute("content")).toBe("Статья");
+    unmount();
+    expect(og.getAttribute("content")).toBe("Ровно ИИ");
+    og.remove();
   });
 
   it("a page that sets no robots REMOVES a prerendered noindex", () => {
