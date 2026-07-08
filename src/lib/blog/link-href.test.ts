@@ -48,6 +48,19 @@ describe("normalizeHref", () => {
   it("accepts a bare host with a port (a colon is not always a scheme)", () => {
     expect(normalizeHref("example.com:8080/x")).toBe("https://example.com:8080/x");
     expect(normalizeHref("localhost:3000")).toBe("https://localhost:3000");
+    expect(normalizeHref("1.2.3.4:80")).toBe("https://1.2.3.4:80");
+    expect(normalizeHref("rovno.ai:443/pricing")).toBe("https://rovno.ai:443/pricing");
+  });
+
+  it("does not mistake a dangerous scheme for a host:port just because a digit follows", () => {
+    // `scheme:` + digit is what a naive "a scheme is never followed by a digit"
+    // rule accepts, turning javascript:1 into the nonsense link https://javascript:1
+    // instead of refusing it.
+    expect(normalizeHref("javascript:1")).toBeNull();
+    expect(normalizeHref("jAvAsCrIpT:1//")).toBeNull();
+    expect(normalizeHref("data:1")).toBeNull();
+    expect(normalizeHref("vbscript:0")).toBeNull();
+    expect(normalizeHref("example.com:80abc")).toBeNull();
   });
 
   it("rejects hrefs the URL parser cannot resolve", () => {

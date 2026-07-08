@@ -75,9 +75,9 @@ describe("withHeadingAnchors", () => {
     // id-clobbering check never sees these. A section titled "Rv jsonld" would
     // otherwise win getElementById("rv-jsonld") against the real <script>.
     const { toc } = withHeadingAnchors(
-      "<h2>Rv jsonld</h2><h2>Root</h2><h2>Blog post data</h2><h2>Обычный</h2>",
+      "<h2>Rv jsonld</h2><h2>Root</h2><h2>Обычный</h2>",
     );
-    expect(toc.map((e) => e.id)).toEqual(["rv-jsonld-2", "root-2", "blog-post-data-2", "obychnyy"]);
+    expect(toc.map((e) => e.id)).toEqual(["rv-jsonld-2", "root-2", "obychnyy"]);
   });
 
   it("overwrites an id the author somehow smuggled in", () => {

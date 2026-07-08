@@ -173,6 +173,11 @@ describe("Figure parsing", () => {
     expect(back.content!.some((n) => n.type === "figure")).toBe(false);
   });
 
+  it("treats an empty src as no image (no orphan src=null figure)", () => {
+    const back = toJson('<figure data-rv-figure=""><img src=""><figcaption>x</figcaption></figure>');
+    expect(back.content!.some((n) => n.type === "figure")).toBe(false);
+  });
+
   it("rejects any non-integer dimension instead of reading its numeric prefix", () => {
     // parseInt would give 1e3 -> 1, 12px -> 12, 3.7 -> 3, stamping a WRONG
     // intrinsic size and reserving the wrong box — worse than omitting it.

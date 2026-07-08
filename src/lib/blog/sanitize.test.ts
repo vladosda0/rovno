@@ -34,20 +34,47 @@ describe("sanitizeArticleHtml", () => {
     expect(sanitizeArticleHtml("<h2>a</h2><style>a{}</style><p>x</p>")).not.toMatch(/<style/i);
   });
 
-  it("drops the CSS text along with the <style> element", () => {
-    expect(sanitizeArticleHtml("<p>x</p><style>body{color:red}</style>")).not.toMatch(/color:red/);
+  it("drops the CONTENT of a removed tag, not just the tag", () => {
+    // KEEP_CONTENT unwraps a forbidden element by default, and passing
+    // FORBID_CONTENTS REPLACES DOMPurify's default set rather than extending it.
+    // Get that wrong and a removed <style> leaves its CSS behind as visible
+    // article text, and a removed <form> leaves a live password field.
+    expect(sanitizeArticleHtml("<p>x</p><style>body{color:red}</style>")).toBe("<p>x</p>");
+    expect(sanitizeArticleHtml("<p>x</p><svg><script>alert(1)</script></svg>")).toBe("<p>x</p>");
+    expect(sanitizeArticleHtml('<p>x</p><form action="//evil.test"><input name="pw"><button>go</button></form>')).toBe("<p>x</p>");
+    expect(sanitizeArticleHtml('<p>x</p><button onclick="x()">go</button>')).toBe("<p>x</p>");
+    expect(sanitizeArticleHtml("<p>x</p><textarea>t</textarea>")).toBe("<p>x</p>");
   });
 
   it("strips tags our editor can never emit but DOMPurify allows by default", () => {
     for (const html of [
-      "<p>x</p><form action='//evil.test'><input name='p'></form>",
+      '<p>x</p><form action="//evil.test"><input name="p"></form>',
+      "<p>x</p><input name='pw'>",
       "<p>x</p><svg><desc>d</desc></svg>",
       "<p>x</p><math><mtext>m</mtext></math>",
       "<p>x</p><template><p>t</p></template>",
+      "<p>x</p><select><option>o</option></select>",
     ]) {
       const out = sanitizeArticleHtml(html);
-      expect(out, html).not.toMatch(/<(form|svg|math|template)/i);
+      expect(out, html).not.toMatch(/<(form|input|button|select|textarea|option|svg|math|template|style)/i);
     }
+  });
+
+  it("keeps the full editor surface untouched", () => {
+    // Guards against the FORBID_* lists over-reaching.
+    const html =
+      "<h2>H</h2><h3>h</h3><p><strong>b</strong><em>i</em><u>u</u><s>s</s><code>c</code></p>" +
+      "<blockquote><p>q</p></blockquote><ul><li>x</li></ul><ol><li>y</li></ol>" +
+      "<pre><code>z</code></pre><hr>" +
+      '<figure data-rv-figure=""><img src="https://x.test/a.jpg" alt="A" width="16" height="9" loading="lazy" decoding="async"><figcaption>C <strong>b</strong> <a href="/x">l</a></figcaption></figure>' +
+      '<div data-youtube-video=""><iframe src="https://www.youtube-nocookie.com/embed/x" allowfullscreen frameborder="0"></iframe></div>';
+    const out = sanitizeArticleHtml(html);
+    for (const tag of ["h2", "h3", "strong", "em", "u", "s", "code", "blockquote", "ul", "ol", "li", "pre", "hr", "figure", "figcaption", "img", "iframe"]) {
+      expect(out, tag).toMatch(new RegExp(`<${tag}[ >]`));
+    }
+    expect(out).toMatch(/data-rv-figure/);
+    expect(out).toMatch(/data-youtube-video/);
+    expect(out).toMatch(/loading="lazy"/);
   });
 
   it("removes a non-allowlisted iframe", () => {

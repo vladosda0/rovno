@@ -6,14 +6,19 @@ import { SITE_ORIGIN } from "./seo";
 
 const SAFE_SCHEME_RE = /^(https?|mailto|tel):/i;
 
+/** Anything of the form `word:` — a scheme, unless it is really a host:port. */
+const ANY_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
+
 /**
- * A scheme, not a host:port.
+ * A bare host with an explicit port: `example.com:8080`, `1.2.3.4:80`, `localhost:3000`.
  *
- * `^[a-z][a-z0-9+.-]*:` alone also matches `example.com:8080`, so a perfectly
- * good bare host with a port was rejected as an unknown scheme. A scheme is
- * never followed by a digit, so require a non-digit after the colon.
+ * ANY_SCHEME_RE alone also matches those, so a perfectly good host:port was
+ * rejected as an unknown scheme. The naive repair — "a scheme is never followed
+ * by a digit" — quietly accepts `javascript:1` and turns it into
+ * `https://javascript:1`. Match the host shape instead: a dotted name or
+ * `localhost`, then a numeric port.
  */
-const UNKNOWN_SCHEME_RE = /^[a-z][a-z0-9+.-]*:(?!\d)/i;
+const HOST_PORT_RE = /^(localhost|[a-z0-9-]+(\.[a-z0-9-]+)+):\d+(?![^/?#])/i;
 
 /** Reject a normalized href the URL parser cannot make sense of. */
 function isResolvable(href: string): boolean {
@@ -50,7 +55,8 @@ export function normalizeHref(raw: string): string | null {
   if (href.startsWith("//")) return check(`https:${href}`);
   if (href.startsWith("/") || href.startsWith("#")) return check(href);
   if (SAFE_SCHEME_RE.test(href)) return check(href);
-  if (UNKNOWN_SCHEME_RE.test(href)) return null;
+  if (HOST_PORT_RE.test(href)) return check(`https://${href}`);
+  if (ANY_SCHEME_RE.test(href)) return null;
   return check(`https://${href}`);
 }
 

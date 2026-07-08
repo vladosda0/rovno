@@ -91,8 +91,13 @@ export const Figcaption = Node.create({
     return [
       {
         tag: "figure[data-rv-figure] > figcaption",
-        getAttrs: (element) =>
-          element.parentElement?.querySelector("img[src]") ? null : false,
+        // Require a NON-EMPTY src: `img[src]` also matches <img src="">, which
+        // would let this caption keep a figure whose own getAttrs declined it
+        // (src falsy) and leave an orphan src=null figure.
+        getAttrs: (element) => {
+          const img = element.parentElement?.querySelector("img");
+          return img?.getAttribute("src") ? null : false;
+        },
       },
     ];
   },

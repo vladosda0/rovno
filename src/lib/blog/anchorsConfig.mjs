@@ -31,7 +31,13 @@ const TOC_TITLE = "Содержание";
  * This pass runs AFTER DOMPurify, so DOMPurify's own SANITIZE_DOM check never
  * sees these ids. This list is the only guard.
  */
-const RESERVED_IDS = new Set(["root", "rv-jsonld", "blog-post-data", "blog-list-data"]);
+// The real ids as they appear in the DOM. `root` and `rv-jsonld` are the only
+// two a heading slug can actually collide with; the inlined data scripts use
+// __BLOG_POST_DATA__ / __BLOG_LIST_DATA__, which slugifyTitle can never emit
+// (no underscores, no uppercase) — kept here so the list names the true set.
+const RESERVED_IDS = new Set([
+  "root", "rv-jsonld", "__BLOG_POST_DATA__", "__BLOG_LIST_DATA__",
+]);
 
 function escapeHtml(value) {
   return String(value ?? "")
