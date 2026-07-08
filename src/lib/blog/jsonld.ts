@@ -5,7 +5,8 @@
 // change the shapes in both places).
 
 import { SITE_NAME, SITE_ORIGIN } from "./seo";
-import type { BlogPostWithAuthor } from "./types";
+import { faqJsonLdFromDoc } from "./faqConfig.mjs";
+import type { BlogPostAuthor, BlogPostWithAuthor } from "./types";
 
 export const BLOG_TITLE = "Блог Ровно";
 
@@ -27,6 +28,46 @@ export function blogPostUrl(slug: string): string {
   return `${SITE_ORIGIN}${blogPostPath(slug)}`;
 }
 
+export interface BreadcrumbEntry {
+  name: string;
+  /** Site-relative, so the visible <a> and the JSON-LD `item` can share it. */
+  path: string;
+}
+
+/**
+ * The one definition of an article's breadcrumb trail.
+ *
+ * Google expects the visible breadcrumb and the BreadcrumbList markup to agree;
+ * if they drift, the markup is the one that gets distrusted. Both the rendered
+ * nav and the JSON-LD below are built from this list so they cannot.
+ */
+export function articleBreadcrumbTrail(post: BlogPostWithAuthor): BreadcrumbEntry[] {
+  return [
+    { name: "Главная", path: "/" },
+    { name: BLOG_TITLE, path: "/blog/" },
+    { name: post.title, path: blogPostPath(post.slug) },
+  ];
+}
+
+/** Absolute URL for a trail entry (home stays bare, matching the canonical). */
+function breadcrumbItemUrl(path: string): string {
+  return path === "/" ? SITE_ORIGIN : `${SITE_ORIGIN}${path}`;
+}
+
+/**
+ * The article's author as a schema.org Person.
+ *
+ * bio and avatar already exist on blog_authors and were never surfaced anywhere.
+ * Deliberately no `url`/`sameAs`: those would need columns we chose not to add,
+ * and an invented profile URL is worse than an absent one.
+ */
+export function authorPersonJsonLd(author: BlogPostAuthor): Record<string, unknown> {
+  const person: Record<string, unknown> = { "@type": "Person", name: author.display_name };
+  if (author.bio) person.description = author.bio;
+  if (author.avatar_url) person.image = author.avatar_url;
+  return person;
+}
+
 export function articleJsonLd(post: BlogPostWithAuthor): object[] {
   const url = blogPostUrl(post.slug);
   const article: Record<string, unknown> = {
@@ -42,21 +83,77 @@ export function articleJsonLd(post: BlogPostWithAuthor): object[] {
     publisher: PUBLISHER,
   };
   if (post.cover_image_url) article.image = [post.cover_image_url];
-  if (post.author) article.author = { "@type": "Person", name: post.author.display_name };
+  if (post.author) article.author = authorPersonJsonLd(post.author);
   if (post.word_count) article.wordCount = post.word_count;
   if (post.tags.length > 0) article.keywords = post.tags.join(", ");
 
   const breadcrumbs = {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
-    itemListElement: [
-      { "@type": "ListItem", position: 1, name: "Главная", item: SITE_ORIGIN },
-      { "@type": "ListItem", position: 2, name: BLOG_TITLE, item: `${SITE_ORIGIN}/blog/` },
-      { "@type": "ListItem", position: 3, name: post.title, item: url },
-    ],
+    itemListElement: articleBreadcrumbTrail(post).map((entry, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: entry.name,
+      item: breadcrumbItemUrl(entry.path),
+    })),
   };
 
-  return [article, breadcrumbs];
+  // Read out of the TipTap document, not the prose: faqItem nodes make the pairs
+  // explicit, so the schema can never drift from what the page actually shows.
+  const faq = faqJsonLdFromDoc(post.content);
+
+  return faq ? [article, breadcrumbs, faq] : [article, breadcrumbs];
+}
+
+export function tagPagePath(slug: string): string {
+  return `/blog/tag/${slug}/`;
+}
+
+/** Breadcrumbs for a tag hub: Главная → Блог Ровно → #тег */
+export function tagBreadcrumbTrail(tagName: string, slug: string): BreadcrumbEntry[] {
+  return [
+    { name: "Главная", path: "/" },
+    { name: BLOG_TITLE, path: "/blog/" },
+    { name: `#${tagName}`, path: tagPagePath(slug) },
+  ];
+}
+
+/** CollectionPage + BreadcrumbList for a tag hub. */
+export function tagPageJsonLd(
+  tagName: string,
+  slug: string,
+  posts: BlogPostWithAuthor[],
+): object[] {
+  const url = `${SITE_ORIGIN}${tagPagePath(slug)}`;
+  const collection = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: `#${tagName}`,
+    url,
+    inLanguage: "ru-RU",
+    publisher: PUBLISHER,
+    mainEntity: {
+      "@type": "ItemList",
+      numberOfItems: posts.length,
+      itemListElement: posts.map((post, index) => ({
+        "@type": "ListItem",
+        position: index + 1,
+        url: blogPostUrl(post.slug),
+        name: post.title,
+      })),
+    },
+  };
+  const breadcrumbs = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: tagBreadcrumbTrail(tagName, slug).map((entry, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: entry.name,
+      item: breadcrumbItemUrl(entry.path),
+    })),
+  };
+  return [collection, breadcrumbs];
 }
 
 export function blogIndexJsonLd(posts: BlogPostWithAuthor[]): object {

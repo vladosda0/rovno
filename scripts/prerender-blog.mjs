@@ -37,6 +37,8 @@ import { JSDOM } from "jsdom";
 import createDOMPurify from "dompurify";
 import { sanitizeArticleHtmlWith } from "../src/lib/blog/sanitizeConfig.mjs";
 import { annotateArticleHtml } from "../src/lib/blog/anchorsConfig.mjs";
+import { faqJsonLdFromDoc } from "../src/lib/blog/faqConfig.mjs";
+import { collectTagHubs, isIndexableTag, pluralizeRu, postsForTagSlug, tagNamesForSlug, tagSlug } from "../src/lib/blog/tagsConfig.mjs";
 
 // fileURLToPath (not new URL().pathname) so a build path containing a space or
 // non-ASCII char decodes correctly instead of staying percent-encoded.
@@ -210,6 +212,11 @@ function buildHeadTags(page) {
     tags.push(`<meta property="og:url" content="${escapeHtml(canonical)}" />`);
   }
   tags.push(`<meta property="og:site_name" content="${escapeHtml(SITE_NAME)}" />`);
+  // Thin tag hubs are served but must not be indexed. Mirrors useDocumentHead's
+  // `robots` option, so the static snapshot and the hydrated page agree.
+  if (page.robots) {
+    tags.push(`<meta name="robots" content="${escapeHtml(page.robots)}" />`);
+  }
   if (page.article) {
     if (page.article.publishedTime) {
       tags.push(`<meta property="article:published_time" content="${escapeHtml(page.article.publishedTime)}" />`);
@@ -334,17 +341,67 @@ function blogIndexHtml(posts) {
   ${pageChromeEnd()}`;
 }
 
+// Mirrors articleBreadcrumbTrail() in src/lib/blog/jsonld.ts. The visible trail and
+// the BreadcrumbList markup must name the same things, or Google distrusts the markup.
+function breadcrumbTrail(post) {
+  return [
+    { name: "Главная", path: "/" },
+    { name: BLOG_TITLE, path: "/blog/" },
+    { name: post.title, path: `/blog/${post.slug}/` },
+  ];
+}
+
+function breadcrumbsHtml(post) {
+  const trail = breadcrumbTrail(post);
+  const items = trail
+    .map((entry, i) =>
+      i === trail.length - 1
+        ? `<li><span aria-current="page">${escapeHtml(entry.name)}</span></li>`
+        : `<li><a href="${escapeHtml(entry.path)}">${escapeHtml(entry.name)}</a></li>`,
+    )
+    .join("");
+  return `<nav class="rv-breadcrumbs" aria-label="Навигация по разделам"><ol>${items}</ol></nav>`;
+}
+
+// Mirrors <AuthorBio> in src/pages/blog/BlogPostPage.tsx. Nothing renders without a bio.
+function authorBioHtml(post) {
+  const author = post.author;
+  if (!author?.bio) return "";
+  const avatar = author.avatar_url
+    ? `<img src="${escapeHtml(author.avatar_url)}" alt="" width="56" height="56" loading="lazy" decoding="async" />`
+    : `<span class="rv-author-bio__initial" aria-hidden="true">${escapeHtml(author.display_name.slice(0, 1).toUpperCase())}</span>`;
+  return (
+    `<aside class="rv-author-bio">${avatar}<div>` +
+    `<p class="rv-author-bio__label">Об авторе</p>` +
+    `<p class="rv-author-bio__name">${escapeHtml(author.display_name)}</p>` +
+    `<p class="rv-author-bio__text">${escapeHtml(author.bio)}</p>` +
+    `</div></aside>`
+  );
+}
+
+// Mirrors the meta line in BlogPostPage: tags are LINKS to their cluster hub, so a
+// crawler reading the static snapshot can walk article -> hub -> sibling articles.
+function tagLinksHtml(tags) {
+  return (tags ?? [])
+    .map((t) =>
+      tagSlug(t)
+        ? `<a href="/blog/tag/${escapeHtml(tagSlug(t))}/" class="rv-tag-link">#${escapeHtml(t)}</a>`
+        : `<span class="rv-tag-link">#${escapeHtml(t)}</span>`,
+    )
+    .join("");
+}
+
 function articleHtml(post) {
   const meta = [formatDateRu(post.published_at), readingTimeLabel(post.reading_time_minutes)]
     .filter(Boolean)
     .join(" · ");
-  const tagsLine = (post.tags ?? []).map((t) => `#${t}`).join("  ");
   return `${pageChromeStart()}
   <main>
     <article>
       <section class="rv-section" style="padding:64px 48px 0">
+        ${breadcrumbsHtml(post)}
         <header class="rv-article-header">
-          <span class="rv-caption" style="font-size:12px;color:var(--rv-blue)">${escapeHtml([meta, tagsLine].filter(Boolean).join("   "))}</span>
+          <span class="rv-caption" style="font-size:12px;color:var(--rv-blue)">${escapeHtml(meta)}${tagLinksHtml(post.tags)}</span>
           <h1 class="rv-article-title">${escapeHtml(post.title)}</h1>
           ${post.subtitle ? `<p class="rv-article-subtitle">${escapeHtml(post.subtitle)}</p>` : ""}
           ${post.author ? `<p style="font-family:var(--font-body);font-size:14px;color:var(--rv-blue)">${escapeHtml(post.author.display_name)}</p>` : ""}
@@ -353,6 +410,7 @@ function articleHtml(post) {
       </section>
       <section class="rv-section" style="padding:48px 48px 96px">
         <div class="rv-article">${renderArticleBody(post.content_html)}</div>
+        ${authorBioHtml(post)}
       </section>
     </article>
     <nav class="rv-section" style="padding:0 48px 96px;font-family:var(--font-body)">
@@ -388,19 +446,97 @@ function articleJsonLd(post) {
     publisher: PUBLISHER,
   };
   if (post.cover_image_url) article.image = [post.cover_image_url];
-  if (post.author) article.author = { "@type": "Person", name: post.author.display_name };
+  if (post.author) {
+    // Mirrors authorPersonJsonLd() in src/lib/blog/jsonld.ts.
+    const person = { "@type": "Person", name: post.author.display_name };
+    if (post.author.bio) person.description = post.author.bio;
+    if (post.author.avatar_url) person.image = post.author.avatar_url;
+    article.author = person;
+  }
   if (post.word_count) article.wordCount = post.word_count;
   if (post.tags?.length) article.keywords = post.tags.join(", ");
   const breadcrumbs = {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
-    itemListElement: [
-      { "@type": "ListItem", position: 1, name: "Главная", item: SITE_ORIGIN },
-      { "@type": "ListItem", position: 2, name: BLOG_TITLE, item: `${SITE_ORIGIN}/blog/` },
-      { "@type": "ListItem", position: 3, name: post.title, item: url },
-    ],
+    itemListElement: breadcrumbTrail(post).map((entry, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: entry.name,
+      item: entry.path === "/" ? SITE_ORIGIN : `${SITE_ORIGIN}${entry.path}`,
+    })),
   };
-  return [article, breadcrumbs];
+  // Mirrors src/lib/blog/jsonld.ts — the static snapshot and the hydrated page
+  // must declare the SAME structured data. Read from the TipTap doc, not the HTML.
+  const faq = faqJsonLdFromDoc(post.content);
+  return faq ? [article, breadcrumbs, faq] : [article, breadcrumbs];
+}
+
+function tagBreadcrumbTrail(tagName, slug) {
+  return [
+    { name: "Главная", path: "/" },
+    { name: BLOG_TITLE, path: "/blog/" },
+    { name: `#${tagName}`, path: `/blog/tag/${slug}/` },
+  ];
+}
+
+/** Mirrors tagPageJsonLd() in src/lib/blog/jsonld.ts. */
+function tagPageJsonLd(tagName, slug, posts) {
+  const url = `${SITE_ORIGIN}/blog/tag/${slug}/`;
+  const collection = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: `#${tagName}`,
+    url,
+    inLanguage: "ru-RU",
+    publisher: PUBLISHER,
+    mainEntity: {
+      "@type": "ItemList",
+      numberOfItems: posts.length,
+      itemListElement: posts.map((post, index) => ({
+        "@type": "ListItem",
+        position: index + 1,
+        url: `${SITE_ORIGIN}/blog/${post.slug}/`,
+        name: post.title,
+      })),
+    },
+  };
+  const breadcrumbs = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: tagBreadcrumbTrail(tagName, slug).map((entry, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: entry.name,
+      item: entry.path === "/" ? SITE_ORIGIN : `${SITE_ORIGIN}${entry.path}`,
+    })),
+  };
+  return [collection, breadcrumbs];
+}
+
+function tagPageHtml(tagName, slug, posts) {
+  const trail = tagBreadcrumbTrail(tagName, slug);
+  const crumbs = trail
+    .map((e, i) =>
+      i === trail.length - 1
+        ? `<li><span aria-current="page">${escapeHtml(e.name)}</span></li>`
+        : `<li><a href="${escapeHtml(e.path)}">${escapeHtml(e.name)}</a></li>`,
+    )
+    .join("");
+  return `${pageChromeStart()}
+  <main>
+    <section class="rv-section" style="padding:64px 48px 40px">
+      <nav class="rv-breadcrumbs" aria-label="Навигация по разделам"><ol>${crumbs}</ol></nav>
+      <span class="rv-caption" style="font-size:12px;color:var(--rv-blue)">ТЕМА</span>
+      <h1 style="font-family:var(--font-display);font-size:56px;line-height:1;letter-spacing:-0.03em;color:var(--rv-blue);margin:16px 0 0">#${escapeHtml(tagName)}</h1>
+      <p style="font-family:var(--font-body);font-size:18px;color:var(--rv-blue);opacity:.8;margin-top:12px">${posts.length} ${pluralizeRu(posts.length, ["статья", "статьи", "статей"])} по этой теме</p>
+    </section>
+    <section class="rv-section" style="padding:0 48px 128px">
+      <div class="rv-blog-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:24px">
+        ${posts.map(postCardHtml).join("\n        ")}
+      </div>
+    </section>
+  </main>
+  ${pageChromeEnd()}`;
 }
 
 function blogIndexJsonLd(posts) {
@@ -435,6 +571,12 @@ function sitemapXml(posts) {
     urls.push(
       `  <url><loc>${escapeXml(`${SITE_ORIGIN}/blog/${post.slug}/`)}</loc><lastmod>${lastmod}</lastmod></url>`,
     );
+  }
+  // Tag hubs enter the sitemap only once they have real depth. A one-post tag page
+  // competes with the article it links to; listing it is asking for index bloat.
+  for (const hub of collectTagHubs(posts)) {
+    if (!isIndexableTag(hub.count)) continue;
+    urls.push(`  <url><loc>${escapeXml(`${SITE_ORIGIN}/blog/tag/${hub.slug}/`)}</loc><lastmod>${today}</lastmod></url>`);
   }
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -569,6 +711,38 @@ async function main() {
     await writeFile(path.join(dir, "index.html"), pageHtml, "utf8");
   }
   log(`wrote ${posts.length} article page(s)`);
+
+  // Tag hubs. Every tag gets a page (an inbound link must never 404); only the
+  // ones with real depth are indexable — the rest carry noindex,follow so the
+  // crawler still walks through to the articles.
+  const hubs = collectTagHubs(posts);
+  let indexableHubs = 0;
+  for (const hub of hubs) {
+    const hubPosts = postsForTagSlug(posts, hub.slug);
+    const names = tagNamesForSlug(posts, hub.slug);
+    const name = names[0] ?? hub.slug;
+    const indexable = isIndexableTag(hubPosts.length);
+    if (indexable) indexableHubs += 1;
+    const pageHtml = renderPage(template, {
+      title: `#${name} — ${BLOG_TITLE}`,
+      description: `Статьи Ровно по теме «${name}»: ${hubPosts.length} ${pluralizeRu(hubPosts.length, ["материал", "материала", "материалов"])}.`,
+      canonicalPath: `/blog/tag/${hub.slug}/`,
+      ogType: "website",
+      robots: indexable ? undefined : "noindex, follow",
+      jsonLd: indexable ? tagPageJsonLd(name, hub.slug, hubPosts) : null,
+      cssAssets,
+      rootHtml: tagPageHtml(name, hub.slug, hubPosts),
+      // The FULL published list, not just this hub's posts. __BLOG_LIST_DATA__ is
+      // React Query initialData for the global ["blog-posts","published","all"]
+      // key; seeding it with a filtered subset would poison /blog/ for the rest
+      // of the session. BlogTagPage narrows it client-side.
+      inlineData: { id: "__BLOG_LIST_DATA__", value: posts },
+    });
+    const dir = path.join(DIST, "blog", "tag", hub.slug);
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, "index.html"), pageHtml, "utf8");
+  }
+  log(`wrote ${hubs.length} tag hub(s), ${indexableHubs} indexable`);
 
   await writeFile(path.join(DIST, "blog", "feed.xml"), rssXml(posts), "utf8");
   log("wrote blog/feed.xml");
