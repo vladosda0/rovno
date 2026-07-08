@@ -45,6 +45,7 @@ const InviteAccept = lazy(() => import("@/pages/invite/InviteAccept"));
 const ThemeDemo = lazy(() => import("@/pages/ThemeDemo"));
 const BlogIndex = lazy(() => import("@/pages/blog/BlogIndex"));
 const BlogPostPage = lazy(() => import("@/pages/blog/BlogPostPage"));
+const BlogTagPage = lazy(() => import("@/pages/blog/BlogTagPage"));
 const BlogAdminList = lazy(() => import("@/pages/blog/admin/BlogAdminList"));
 const BlogEditorPage = lazy(() => import("@/pages/blog/admin/BlogEditorPage"));
 const Offer = lazy(() => import("@/pages/legal/Offer"));
@@ -98,6 +99,9 @@ const App = () => (
 
           {/* Public blog (SEO surface; static prerender covers these routes) */}
           <Route path="/blog" element={routeElement(<BlogIndex />)} />
+          {/* Two segments after /blog, so it can never collide with /blog/:slug
+              (and "tag" is a reserved post slug anyway). */}
+          <Route path="/blog/tag/:tag" element={routeElement(<BlogTagPage />)} />
           <Route path="/blog/:slug" element={routeElement(<BlogPostPage />)} />
 
           {/* Legal / compliance pages (required by T-Bank acquirer) */}
