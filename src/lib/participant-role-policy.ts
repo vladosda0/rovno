@@ -54,9 +54,9 @@ const INVITE_ROLE_OPTIONS_BY_ACTOR: Record<MemberRole, MemberRole[]> = {
   viewer: [],
 };
 
-const AI_ACCESS_RANK: readonly AIAccess[] = ["none", "consult_only", "project_pool"];
-const FINANCE_VISIBILITY_RANK: readonly FinanceVisibility[] = ["none", "summary", "detail"];
-const INTERNAL_DOCS_VISIBILITY_RANK: readonly InternalDocsVisibility[] = ["none", "view", "edit"];
+export const AI_ACCESS_RANK: readonly AIAccess[] = ["none", "consult_only", "project_pool"];
+export const FINANCE_VISIBILITY_RANK: readonly FinanceVisibility[] = ["none", "summary", "detail"];
+export const INTERNAL_DOCS_VISIBILITY_RANK: readonly InternalDocsVisibility[] = ["none", "view", "edit"];
 
 export type PermissionSummaryInput = {
   role: MemberRole;
@@ -109,18 +109,16 @@ export function getFinanceVisibilityOptions(
   actorRole: MemberRole,
   actorFinanceVisibility?: FinanceVisibility,
 ): FinanceVisibility[] {
-  if (actorRole === "owner") return [...FINANCE_VISIBILITY_RANK];
-  if (!actorFinanceVisibility) return ["none"];
-  return sliceRank(FINANCE_VISIBILITY_RANK, actorFinanceVisibility, ["none"]);
+  const caps = getActorDelegateCaps({ role: actorRole, financeVisibility: actorFinanceVisibility });
+  return sliceRank(FINANCE_VISIBILITY_RANK, caps.financeVisibility, ["none"]);
 }
 
 export function getInternalDocsVisibilityOptions(
   actorRole: MemberRole,
   actorInternalDocsVisibility?: InternalDocsVisibility,
 ): InternalDocsVisibility[] {
-  if (actorRole === "owner") return [...INTERNAL_DOCS_VISIBILITY_RANK];
-  if (!actorInternalDocsVisibility) return ["none"];
-  return sliceRank(INTERNAL_DOCS_VISIBILITY_RANK, actorInternalDocsVisibility, ["none"]);
+  const caps = getActorDelegateCaps({ role: actorRole, internalDocsVisibility: actorInternalDocsVisibility });
+  return sliceRank(INTERNAL_DOCS_VISIBILITY_RANK, caps.internalDocsVisibility, ["none"]);
 }
 
 export function describePermissionSummary(input: PermissionSummaryInput, t: Translator): string[] {
@@ -182,7 +180,126 @@ export function getDefaultFinanceVisibility(role: MemberRole): FinanceVisibility
 }
 
 export function getDefaultInternalDocsVisibility(role: MemberRole): InternalDocsVisibility {
+  // Owner mirrors `handle_project_owner_membership`, which force-sets the
+  // owner membership row to internal_docs_visibility='edit'.
+  if (role === "owner") return "edit";
   return role === "viewer" ? "none" : "view";
+}
+
+export function getDefaultAiAccess(role: MemberRole): AIAccess {
+  if (role === "owner" || role === "co_owner") return "project_pool";
+  if (role === "contractor") return "consult_only";
+  return "none";
+}
+
+// ---------------------------------------------------------------------------
+// Delegation caps — mirror of `assert_project_participant_delegate_ok` and the
+// `actor_*_delegate_cap` SQL helpers (rovno-db 20260324140000 + 20260325100000).
+// The DB enforces these in BEFORE INSERT/UPDATE triggers on project_members and
+// project_invites; the client cannot call the assert directly, so this mirror
+// is what keeps the UI from offering writes the DB will reject (PRD P0-8).
+// ---------------------------------------------------------------------------
+
+export type ActorDelegationContext = {
+  role: MemberRole;
+  aiAccess?: AIAccess;
+  financeVisibility?: FinanceVisibility;
+  internalDocsVisibility?: InternalDocsVisibility;
+};
+
+export type ParticipantAxisValues = {
+  aiAccess: AIAccess;
+  financeVisibility: FinanceVisibility;
+  internalDocsVisibility: InternalDocsVisibility;
+};
+
+export type DelegateCaps = {
+  aiAccess: AIAccess;
+  financeVisibility: FinanceVisibility;
+  internalDocsVisibility: InternalDocsVisibility;
+};
+
+/**
+ * The highest value of each axis the actor may grant to someone else.
+ *
+ * Deliberate SQL asymmetry, preserved exactly: a co_owner whose stored finance
+ * visibility is `none` is floored to `summary` (and internal docs to `view`),
+ * but the AI axis has NO floor — a co_owner with ai_access='none' cannot grant
+ * any AI access. Do not symmetrize.
+ */
+export function getActorDelegateCaps(actor: ActorDelegationContext): DelegateCaps {
+  if (actor.role === "owner") {
+    return { aiAccess: "project_pool", financeVisibility: "detail", internalDocsVisibility: "edit" };
+  }
+
+  const finance = actor.financeVisibility ?? "none";
+  const docs = actor.internalDocsVisibility ?? "none";
+  const isCoOwner = actor.role === "co_owner";
+
+  return {
+    aiAccess: actor.aiAccess ?? "none",
+    financeVisibility: isCoOwner && finance === "none" ? "summary" : finance,
+    internalDocsVisibility: isCoOwner && docs === "none" ? "view" : docs,
+  };
+}
+
+function rankOf<T extends string>(rank: readonly T[], value: T): number {
+  return rank.indexOf(value);
+}
+
+/**
+ * True when every axis value is within the actor's delegate caps — i.e. the
+ * delegation trigger would accept a row carrying these values. Note the DB
+ * re-runs the check on ANY project_invites UPDATE (including a status-only
+ * revoke) and on any project_members UPDATE that touches a delegated column,
+ * validating the row's FINAL values against the ACTOR's caps.
+ */
+export function axesWithinDelegateCaps(
+  actor: ActorDelegationContext,
+  axes: ParticipantAxisValues,
+): boolean {
+  const caps = getActorDelegateCaps(actor);
+  return (
+    rankOf(AI_ACCESS_RANK, axes.aiAccess) <= rankOf(AI_ACCESS_RANK, caps.aiAccess)
+    && rankOf(FINANCE_VISIBILITY_RANK, axes.financeVisibility) <= rankOf(FINANCE_VISIBILITY_RANK, caps.financeVisibility)
+    && rankOf(INTERNAL_DOCS_VISIBILITY_RANK, axes.internalDocsVisibility) <= rankOf(INTERNAL_DOCS_VISIBILITY_RANK, caps.internalDocsVisibility)
+  );
+}
+
+/**
+ * Mirror of the role part of `assert_project_participant_delegate_ok` for a
+ * target role value: what the actor may assign at all.
+ */
+export function canActorAssignRole(actorRole: MemberRole, targetRole: MemberRole): boolean {
+  if (targetRole === "owner") return false;
+  if (actorRole === "owner") return true;
+  if (actorRole === "co_owner") return targetRole === "contractor" || targetRole === "viewer";
+  return false;
+}
+
+/**
+ * Member removal is DELETE on project_members: RLS allows ONLY the project
+ * owner, and never for the owner's own row (rovno-db 20260325133000). There is
+ * no self-leave path in the DB.
+ */
+export function canRemoveMember(actorRole: MemberRole, targetRole: MemberRole): boolean {
+  return actorRole === "owner" && targetRole !== "owner";
+}
+
+/**
+ * Invite revocation is UPDATE status='revoked' under `can_manage_project`
+ * (owner/co_owner), but the delegation trigger re-runs on every UPDATE with the
+ * row's final values — so a co_owner cannot revoke a co_owner invite, nor an
+ * invite whose axes exceed the co_owner's own delegate caps.
+ */
+export function canRevokeInvite(
+  actor: ActorDelegationContext,
+  invite: { role: MemberRole } & ParticipantAxisValues,
+): boolean {
+  if (actor.role === "owner") return true;
+  if (actor.role !== "co_owner") return false;
+  if (!canActorAssignRole(actor.role, invite.role)) return false;
+  return axesWithinDelegateCaps(actor, invite);
 }
 
 export function hasNonStandardSupportedAccess(input: Pick<PermissionSummaryInput, "role" | "financeVisibility">): boolean {

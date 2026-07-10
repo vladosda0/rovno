@@ -1,8 +1,17 @@
 import { describe, expect, it } from "vitest";
 import type { AIAccess, MemberRole } from "@/types/entities";
 import {
+  axesWithinDelegateCaps,
+  canActorAssignRole,
+  canRemoveMember,
+  canRevokeInvite,
   describePermissionSummary,
+  getActorDelegateCaps,
+  getDefaultAiAccess,
   getDefaultFinanceVisibility,
+  getDefaultInternalDocsVisibility,
+  getFinanceVisibilityOptions,
+  getInternalDocsVisibilityOptions,
   getInviteAiAccessOptions,
   getInviteRoleOptions,
   getNonStandardAccessSummary,
@@ -129,6 +138,111 @@ describe("participant-role-policy", () => {
         creditLimit: 0,
       }, t);
       expect(warnings).toContain("participants.warning.docsEdit");
+    });
+  });
+
+  // Mirror of `assert_project_participant_delegate_ok` + `actor_*_delegate_cap`
+  // (rovno-db 20260324140000 / 20260325100000). Any change here must match SQL.
+  describe("delegation caps mirror", () => {
+    it("owner caps are the maximum of every axis", () => {
+      expect(getActorDelegateCaps({ role: "owner" })).toEqual({
+        aiAccess: "project_pool",
+        financeVisibility: "detail",
+        internalDocsVisibility: "edit",
+      });
+    });
+
+    it("co_owner with none/missing finance and docs is floored to summary/view", () => {
+      expect(getActorDelegateCaps({ role: "co_owner" })).toEqual({
+        aiAccess: "none",
+        financeVisibility: "summary",
+        internalDocsVisibility: "view",
+      });
+      expect(getActorDelegateCaps({
+        role: "co_owner",
+        aiAccess: "none",
+        financeVisibility: "none",
+        internalDocsVisibility: "none",
+      })).toEqual({
+        aiAccess: "none",
+        financeVisibility: "summary",
+        internalDocsVisibility: "view",
+      });
+    });
+
+    it("the AI axis has NO co_owner floor (deliberate SQL asymmetry)", () => {
+      expect(getActorDelegateCaps({ role: "co_owner", aiAccess: "none" }).aiAccess).toBe("none");
+      expect(getActorDelegateCaps({ role: "co_owner", aiAccess: "consult_only" }).aiAccess).toBe("consult_only");
+    });
+
+    it("co_owner stored values above the floor are kept", () => {
+      expect(getActorDelegateCaps({ role: "co_owner", financeVisibility: "detail" }).financeVisibility).toBe("detail");
+      expect(getActorDelegateCaps({ role: "co_owner", internalDocsVisibility: "edit" }).internalDocsVisibility).toBe("edit");
+    });
+
+    it("axesWithinDelegateCaps accepts values at the cap and rejects above it", () => {
+      const coOwner = { role: "co_owner" as MemberRole, aiAccess: "consult_only" as AIAccess, financeVisibility: "none" as const, internalDocsVisibility: "none" as const };
+      expect(axesWithinDelegateCaps(coOwner, { aiAccess: "consult_only", financeVisibility: "summary", internalDocsVisibility: "view" })).toBe(true);
+      expect(axesWithinDelegateCaps(coOwner, { aiAccess: "project_pool", financeVisibility: "summary", internalDocsVisibility: "view" })).toBe(false);
+      expect(axesWithinDelegateCaps(coOwner, { aiAccess: "none", financeVisibility: "detail", internalDocsVisibility: "none" })).toBe(false);
+      expect(axesWithinDelegateCaps(coOwner, { aiAccess: "none", financeVisibility: "none", internalDocsVisibility: "edit" })).toBe(false);
+    });
+
+    it("canActorAssignRole enumerates the full role matrix", () => {
+      const roles: MemberRole[] = ["owner", "co_owner", "contractor", "viewer"];
+      for (const target of roles) {
+        expect(canActorAssignRole("owner", target)).toBe(target !== "owner");
+        expect(canActorAssignRole("co_owner", target)).toBe(target === "contractor" || target === "viewer");
+        expect(canActorAssignRole("contractor", target)).toBe(false);
+        expect(canActorAssignRole("viewer", target)).toBe(false);
+      }
+    });
+
+    it("member removal is owner-only and never targets the owner row", () => {
+      expect(canRemoveMember("owner", "co_owner")).toBe(true);
+      expect(canRemoveMember("owner", "contractor")).toBe(true);
+      expect(canRemoveMember("owner", "viewer")).toBe(true);
+      expect(canRemoveMember("owner", "owner")).toBe(false);
+      expect(canRemoveMember("co_owner", "contractor")).toBe(false);
+      expect(canRemoveMember("co_owner", "viewer")).toBe(false);
+      expect(canRemoveMember("contractor", "viewer")).toBe(false);
+    });
+
+    it("co_owner cannot revoke a co_owner invite or one with axes above their caps", () => {
+      const coOwner = { role: "co_owner" as MemberRole, aiAccess: "consult_only" as AIAccess, financeVisibility: "summary" as const, internalDocsVisibility: "view" as const };
+      const plainContractorInvite = { role: "contractor" as MemberRole, aiAccess: "consult_only" as AIAccess, financeVisibility: "none" as const, internalDocsVisibility: "view" as const };
+      expect(canRevokeInvite(coOwner, plainContractorInvite)).toBe(true);
+      expect(canRevokeInvite(coOwner, { ...plainContractorInvite, role: "co_owner" })).toBe(false);
+      expect(canRevokeInvite(coOwner, { ...plainContractorInvite, financeVisibility: "detail" })).toBe(false);
+      expect(canRevokeInvite(coOwner, { ...plainContractorInvite, aiAccess: "project_pool" })).toBe(false);
+      // Owner revokes anything, including invites above any caps.
+      expect(canRevokeInvite({ role: "owner" }, { ...plainContractorInvite, financeVisibility: "detail" })).toBe(true);
+      expect(canRevokeInvite({ role: "contractor" }, plainContractorInvite)).toBe(false);
+    });
+
+    it("option lists widen with the co_owner floors", () => {
+      expect(getFinanceVisibilityOptions("co_owner", "none")).toEqual(["none", "summary"]);
+      expect(getFinanceVisibilityOptions("co_owner", undefined)).toEqual(["none", "summary"]);
+      expect(getFinanceVisibilityOptions("co_owner", "detail")).toEqual(["none", "summary", "detail"]);
+      expect(getFinanceVisibilityOptions("owner")).toEqual(["none", "summary", "detail"]);
+      expect(getInternalDocsVisibilityOptions("co_owner", "none")).toEqual(["none", "view"]);
+      expect(getInternalDocsVisibilityOptions("co_owner", undefined)).toEqual(["none", "view"]);
+    });
+  });
+
+  describe("role axis defaults", () => {
+    it("AI defaults follow the role presets", () => {
+      expect(getDefaultAiAccess("owner")).toBe("project_pool");
+      expect(getDefaultAiAccess("co_owner")).toBe("project_pool");
+      expect(getDefaultAiAccess("contractor")).toBe("consult_only");
+      expect(getDefaultAiAccess("viewer")).toBe("none");
+    });
+
+    it("owner internal docs default mirrors the DB owner-membership trigger (edit)", () => {
+      expect(getDefaultInternalDocsVisibility("owner")).toBe("edit");
+      expect(getDefaultInternalDocsVisibility("co_owner")).toBe("view");
+      expect(getDefaultInternalDocsVisibility("contractor")).toBe("view");
+      expect(getDefaultInternalDocsVisibility("viewer")).toBe("none");
     });
   });
 
