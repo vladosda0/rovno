@@ -223,7 +223,19 @@ export function ParticipantDrawer(props: ParticipantDrawerProps) {
 
   useEffect(() => {
     if (!open) return;
-    setForm(record ? buildFormFromRecord(record, projectMode) : buildCreateForm(projectMode));
+    if (record) {
+      setForm(buildFormFromRecord(record, projectMode));
+    } else {
+      // Default invite role is contractor, but when editor seats are already
+      // at the plan cap (and viewer seats are not) starting there would only
+      // lead to a blocked save — start from viewer instead (codex P2, PR #160).
+      const base = buildCreateForm(projectMode);
+      const editorsFull = seatLimitReached(seat.editorsUsed, seat.editorsLimit);
+      const viewersFull = seatLimitReached(seat.viewersUsed, seat.viewersLimit);
+      setForm(editorsFull && !viewersFull
+        ? { ...base, role: "viewer", ...getRoleAxisDefaults("viewer") }
+        : base);
+    }
     setEmail("");
     setAddToOrg(false);
     setConfirmGrants(null);
@@ -261,7 +273,11 @@ export function ParticipantDrawer(props: ParticipantDrawerProps) {
   const aiCreditCap = seat.aiMonthlyLimit != null && seat.aiMonthlyLimit >= 0 ? seat.aiMonthlyLimit : null;
   const creditLimitTooHigh = !readOnly && form.aiAccess !== "none"
     && aiCreditCap != null && parseCreditLimit(form.creditLimit) > aiCreditCap;
-  const canSubmit = !readOnly && roleAllowed && axesAllowed && emailValid && !creditLimitTooHigh && !saving;
+  // The seat gate must also hold for the CURRENTLY selected role, not only for
+  // switching cards — otherwise the default role sails past the cap on submit.
+  const selectedRoleSeatBlocked = !readOnly && Boolean(seatBlockReasonFor(form.role));
+  const canSubmit = !readOnly && roleAllowed && axesAllowed && emailValid
+    && !creditLimitTooHigh && !selectedRoleSeatBlocked && !saving;
 
   function seatBlockReasonFor(role: MemberRole): string | null {
     if (!ASSIGNABLE_ROLES.includes(role)) return null;
@@ -409,7 +425,7 @@ export function ParticipantDrawer(props: ParticipantDrawerProps) {
               {(readOnly && record ? [record.role] : ASSIGNABLE_ROLES).map((role) => {
                 const RoleIcon = ROLE_CARD_ICONS[role];
                 const allowed = readOnly ? true : roleOptions.includes(role);
-                const seatReason = readOnly || form.role === role ? null : seatBlockReasonFor(role);
+                const seatReason = readOnly ? null : seatBlockReasonFor(role);
                 const disabled = readOnly || !allowed || Boolean(seatReason);
                 const selected = form.role === role;
                 const reasonKey = !allowed
@@ -435,7 +451,7 @@ export function ParticipantDrawer(props: ParticipantDrawerProps) {
                     <span className="mt-1 block text-caption text-muted-foreground">
                       {t(roleDescriptions[role])}
                     </span>
-                    {reasonKey && !selected && (
+                    {reasonKey && (
                       <span className="mt-1 flex items-center gap-1 text-caption text-warning">
                         <Lock className="h-3 w-3" />
                         {t(reasonKey)}
