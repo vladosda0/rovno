@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { parseCreditLimit } from "@/components/participants/participants-shared";
 import {
   computeAccessPreview,
   effectiveFinanceVisibility,
@@ -153,6 +154,26 @@ describe("participant-access-preview", () => {
       }));
       expect(deviations).toEqual(["financeVisibility"]);
       expect(hasManualAxisConfig("contractor", axes({ aiAccess: "none" }))).toBe(true);
+    });
+  });
+
+  describe("parseCreditLimit", () => {
+    it("reads integers, exponent notation, and trims", () => {
+      expect(parseCreditLimit("50")).toBe(50);
+      expect(parseCreditLimit("1e3")).toBe(1000);
+      expect(parseCreditLimit(" 10 ")).toBe(10);
+    });
+
+    it("floors decimals and clamps negatives / junk / empty to 0", () => {
+      expect(parseCreditLimit("1.9")).toBe(1);
+      expect(parseCreditLimit("-5")).toBe(0);
+      expect(parseCreditLimit("abc")).toBe(0);
+      expect(parseCreditLimit("")).toBe(0);
+    });
+
+    it("clamps non-finite input to 0 so it never serializes to null", () => {
+      expect(parseCreditLimit("1e999")).toBe(0);
+      expect(parseCreditLimit("Infinity")).toBe(0);
     });
   });
 

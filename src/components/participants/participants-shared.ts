@@ -124,8 +124,10 @@ export function recordAxes(record: ParticipantRecord): ParticipantAxes {
 export function parseCreditLimit(value: string): number {
   // Number(), not parseInt(): a `<input type="number">` can legitimately hold
   // exponent notation ("1e3" → 1000, which parseInt would read as 1). Floor to
-  // an integer credit count and clamp at zero; NaN/empty → 0.
-  return Math.max(0, Math.floor(Number(value) || 0));
+  // an integer credit count and clamp at zero. Non-finite input ("1e999" →
+  // Infinity, which would JSON-serialize to null and wipe the column) → 0.
+  const parsed = Math.floor(Number(value));
+  return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
 }
 
 /** Roles that consume "editor" seats in the DB limits trigger (owner's row never counts). */

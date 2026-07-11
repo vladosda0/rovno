@@ -903,7 +903,10 @@ function LegacyProjectParticipants() {
         );
       }
 
-      const invite = invites.find((row) => row.id === target.inviteId);
+      // Deliberately omit `status`: writing a stale cached status back could
+      // resurrect a concurrently revoked/accepted invite to 'pending' and
+      // re-arm its token. Status transitions belong to the revoke mutation and
+      // the accept RPC only. (Mirrors the redesigned screen's fix.)
       return updateWorkspaceProjectInvite(
         workspaceMode.kind === "pending-supabase" ? { kind: "local" } : workspaceMode,
         {
@@ -915,7 +918,6 @@ function LegacyProjectParticipants() {
           creditLimit: Math.max(0, parseInt(input.form.creditLimit, 10) || 0),
           financeVisibility: input.form.financeVisibility,
           internalDocsVisibility: input.form.internalDocsVisibility,
-          status: invite?.status,
         },
       );
     },
