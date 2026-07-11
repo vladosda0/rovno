@@ -21,6 +21,9 @@ import {
 import * as useMockData from "@/hooks/use-mock-data";
 import * as toastModule from "@/hooks/use-toast";
 import * as permissions from "@/lib/permissions";
+import * as activeSubscription from "@/hooks/useActiveSubscription";
+import { authenticateRuntimeAuth } from "@/test/runtime-auth";
+import type { Member } from "@/types/entities";
 
 function createQueryClient() {
   return new QueryClient({
@@ -536,6 +539,128 @@ describe("ProjectParticipants", () => {
           );
         });
       });
+    });
+  });
+
+  describe("seat limits (Supabase owner)", () => {
+    // The seat gate reads the OWNER's subscription plan (master = 2 editors,
+    // unlimited viewers, 500 AI requests/mo). Mock the supabase surface so the
+    // screen sees a fixed roster + plan without a live backend.
+    function mountSupabaseOwner(opts: {
+      members: Member[];
+      invites?: WorkspaceProjectInvite[];
+      planCode?: "free" | "master" | "brigade";
+      subscriptionError?: boolean;
+    }) {
+      const ownerMember: Member = {
+        project_id: "project-1",
+        user_id: profileId,
+        role: "owner",
+        ai_access: "project_pool",
+        finance_visibility: "detail",
+        credit_limit: 500,
+        used_credits: 0,
+        internal_docs_visibility: "edit",
+      };
+      const allMembers = [ownerMember, ...opts.members];
+      authenticateRuntimeAuth(profileId);
+      vi.spyOn(toastModule, "toast").mockImplementation(() => ({ id: "t", dismiss: () => {}, update: () => {} }));
+      vi.spyOn(useMockData, "useWorkspaceMode").mockReturnValue({ kind: "supabase", profileId });
+      vi.spyOn(useMockData, "useCurrentUser").mockReturnValue({
+        id: profileId, email: "owner@example.com", name: "Owner User",
+        locale: "en", timezone: "UTC", plan: "free", credits_free: 0, credits_paid: 0,
+      });
+      vi.spyOn(useMockData, "useProject").mockReturnValue({
+        project: {
+          id: "project-1", owner_id: profileId, title: "P", type: "residential",
+          project_mode: "contractor", automation_level: "assisted", current_stage_id: "", progress_pct: 0,
+        },
+        members: allMembers,
+        stages: [],
+      });
+      vi.spyOn(useMockData, "useProjectInvites").mockReturnValue(opts.invites ?? []);
+      vi.spyOn(activeSubscription, "useActiveSubscription").mockReturnValue({
+        status: opts.subscriptionError ? "none" : "active",
+        subscription: opts.subscriptionError ? null : ({ plan_code: opts.planCode ?? "master" } as never),
+        readOnly: false,
+        isLoading: false,
+        isError: Boolean(opts.subscriptionError),
+        refetch: () => {},
+      });
+      const ownerSeam = {
+        projectId: "project-1", profileId,
+        membership: ownerMember as never,
+        project: undefined,
+      };
+      vi.spyOn(permissions, "usePermission").mockReturnValue({
+        seam: ownerSeam,
+        can: () => true,
+        actionState: (domain, action) => permissions.seamResolveActionState(ownerSeam, domain, action),
+        role: "owner",
+        isLoading: false,
+      });
+    }
+
+    function contractor(userId: string): Member {
+      return {
+        project_id: "project-1", user_id: userId, role: "contractor",
+        ai_access: "consult_only", finance_visibility: "none",
+        internal_docs_visibility: "view", credit_limit: 50, used_credits: 0,
+      };
+    }
+
+    beforeEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("at the editor cap, editor role cards are disabled and the invite defaults to viewer", async () => {
+      mountSupabaseOwner({ members: [contractor("m-a"), contractor("m-b")], planCode: "master" });
+      renderParticipants();
+
+      expect(screen.getByText(/Editors: 2 of 2/)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Invite" }));
+      const drawer = await screen.findByRole("dialog", { name: "Invite participant" });
+
+      // Viewer preselected (editors full, viewers unlimited); editor cards blocked.
+      expect(within(drawer).getByRole("button", { name: /Viewer/ })).toHaveAttribute("aria-pressed", "true");
+      expect(within(drawer).getByRole("button", { name: /Co-owner/ })).toBeDisabled();
+      expect(within(drawer).getByRole("button", { name: /Contractor/ })).toBeDisabled();
+      expect(within(drawer).getAllByText("Editor seat limit reached for the plan").length).toBeGreaterThan(0);
+    });
+
+    it("with every seat full, the invite button opens the paywall instead of the drawer", () => {
+      // free plan = 0 editors / 0 viewers → both caps hit immediately.
+      mountSupabaseOwner({ members: [], planCode: "free" });
+      renderParticipants();
+
+      fireEvent.click(screen.getByRole("button", { name: "Invite" }));
+
+      expect(screen.queryByRole("dialog", { name: "Invite participant" })).not.toBeInTheDocument();
+      expect(toastModule.toast).toHaveBeenCalledWith(
+        expect.objectContaining({ title: expect.any(String) }),
+      );
+    });
+
+    it("blocks saving a credit limit above the owner plan's monthly AI quota", async () => {
+      mountSupabaseOwner({ members: [contractor("m-a")], planCode: "master" });
+      const updateSpy = vi.spyOn(workspaceSource, "updateWorkspaceProjectMemberRole");
+      renderParticipants();
+
+      fireEvent.click(screen.getByText("m-a"));
+      const drawer = await screen.findByRole("dialog", { name: "m-a" });
+      // contractor default ai=consult_only already shows the requests field.
+      const requests = within(drawer).getByLabelText("Request limit");
+      fireEvent.change(requests, { target: { value: "5000" } });
+
+      expect(within(drawer).getByText(/At most 500/)).toBeInTheDocument();
+      const saveBtn = within(drawer).getByRole("button", { name: "Save access" });
+      expect(saveBtn).toBeDisabled();
+      fireEvent.click(saveBtn);
+      expect(updateSpy).not.toHaveBeenCalled();
+
+      // Lowering it under the cap re-enables save.
+      fireEvent.change(requests, { target: { value: "300" } });
+      expect(within(drawer).getByRole("button", { name: "Save access" })).toBeEnabled();
     });
   });
 

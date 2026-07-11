@@ -1271,7 +1271,11 @@ export async function updateWorkspaceProjectInvite(
       ...(input.internalDocsVisibility !== undefined
         ? { internal_docs_visibility: input.internalDocsVisibility }
         : {}),
-      status: input.status,
+      // status is spread only when explicitly provided — an axis/role edit must
+      // never resurrect a concurrently revoked/accepted invite back to its
+      // stale status (there is no DB status-transition guard). Status changes
+      // go through revokeWorkspaceProjectInvite / accept_project_invite only.
+      ...(input.status !== undefined ? { status: input.status } : {}),
     }, mode.kind);
     if (!updated) {
       throw new Error("Project invite not found");
@@ -1280,17 +1284,20 @@ export async function updateWorkspaceProjectInvite(
   }
 
   const supabase = await loadSupabaseClient();
+  const patch: Record<string, unknown> = {
+    role: input.role,
+    ai_access: input.aiAccess,
+    viewer_regime: input.viewerRegime ?? null,
+    credit_limit: input.creditLimit,
+    finance_visibility: input.financeVisibility,
+    internal_docs_visibility: input.internalDocsVisibility,
+  };
+  if (input.status !== undefined) {
+    patch.status = input.status;
+  }
   const { data, error } = await supabase
     .from("project_invites")
-    .update({
-      role: input.role,
-      ai_access: input.aiAccess,
-      viewer_regime: input.viewerRegime ?? null,
-      credit_limit: input.creditLimit,
-      finance_visibility: input.financeVisibility,
-      internal_docs_visibility: input.internalDocsVisibility,
-      status: input.status,
-    })
+    .update(patch)
     .eq("id", input.id)
     .eq("project_id", input.projectId)
     .select("*")

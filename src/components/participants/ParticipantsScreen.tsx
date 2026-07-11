@@ -28,6 +28,8 @@ import { usePermission } from "@/lib/permissions";
 import { addEvent, getUserById } from "@/data/store";
 import {
   createWorkspaceProjectInvite,
+  ProjectInviteNoLongerPendingError,
+  ProjectMemberRemoveNotPermittedError,
   removeWorkspaceProjectMember,
   revokeWorkspaceProjectInvite,
   sendWorkspaceProjectInviteEmail,
@@ -124,6 +126,19 @@ function readInternalDocsVisibility(record: unknown): Member["internal_docs_visi
   if (!record || typeof record !== "object") return undefined;
   const candidate = (record as { internal_docs_visibility?: unknown }).internal_docs_visibility;
   return candidate === "none" || candidate === "view" || candidate === "edit" ? candidate : undefined;
+}
+
+/**
+ * Our own domain-error classes carry developer-English messages that must not
+ * reach a Russian toast; show the localized fallback for those. Supabase /
+ * PostgREST errors keep their message (often the actionable backend reason).
+ */
+function describeMutationError(error: unknown, localizedFallback: string): string {
+  if (error instanceof ProjectMemberRemoveNotPermittedError
+    || error instanceof ProjectInviteNoLongerPendingError) {
+    return localizedFallback;
+  }
+  return error instanceof Error ? error.message : localizedFallback;
 }
 
 /**
@@ -238,7 +253,10 @@ export default function ParticipantsScreen() {
     let planCode: string | null = null;
     if (actorRole === "owner") {
       if (workspaceMode.kind === "supabase") {
-        planCode = runtimeAuth.status === "authenticated" && !subscription.isLoading
+        // A FETCH ERROR is not "no subscription": treating it as free (0/0)
+        // would hard-paywall a paying owner on a transient blip. Only a clean
+        // load with no row means free; error/loading → unknown (count-only).
+        planCode = runtimeAuth.status === "authenticated" && !subscription.isLoading && !subscription.isError
           ? (subscription.subscription?.plan_code ?? "free")
           : null;
       } else if (workspaceMode.kind === "demo") {
@@ -256,7 +274,7 @@ export default function ParticipantsScreen() {
       viewersLimit: limits ? limits.viewers_per_project : null,
       aiMonthlyLimit: limits ? limits.ai_chat_per_month : null,
     };
-  }, [members, pendingInvites, actorRole, workspaceMode.kind, subscription.subscription, subscription.isLoading, runtimeAuth.status, currentUser.plan]);
+  }, [members, pendingInvites, actorRole, workspaceMode.kind, subscription.subscription, subscription.isLoading, subscription.isError, runtimeAuth.status, currentUser.plan]);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState<ParticipantDrawerMode>({ kind: "create" });
@@ -388,7 +406,10 @@ export default function ParticipantsScreen() {
           internalDocsVisibility: input.form.internalDocsVisibility,
         });
       }
-      const invite = invites.find((row) => row.id === target.inviteId);
+      // Deliberately omit `status`: an access edit must not write a stale
+      // cached status back onto the row, which would resurrect a concurrently
+      // revoked/accepted invite to 'pending' and re-arm its token. Status
+      // transitions are owned by the revoke mutation and the accept RPC.
       return updateWorkspaceProjectInvite(mode, {
         id: target.inviteId,
         projectId,
@@ -398,7 +419,6 @@ export default function ParticipantsScreen() {
         creditLimit: parseCreditLimit(input.form.creditLimit),
         financeVisibility: input.form.financeVisibility,
         internalDocsVisibility: input.form.internalDocsVisibility,
-        status: invite?.status,
       });
     },
     onMutate: async (input) => {
@@ -495,7 +515,7 @@ export default function ParticipantsScreen() {
     onError: (error) => {
       toast({
         title: t("participants.toast.memberRemoveFailed"),
-        description: error instanceof Error ? error.message : t("participants.toast.memberRemoveFailedDesc"),
+        description: describeMutationError(error, t("participants.toast.memberRemoveFailedDesc")),
         variant: "destructive",
       });
     },
@@ -523,7 +543,7 @@ export default function ParticipantsScreen() {
     onError: (error) => {
       toast({
         title: t("participants.toast.inviteRevokeFailed"),
-        description: error instanceof Error ? error.message : t("participants.toast.inviteRevokeFailedDesc"),
+        description: describeMutationError(error, t("participants.toast.inviteRevokeFailedDesc")),
         variant: "destructive",
       });
     },
