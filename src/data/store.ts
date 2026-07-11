@@ -654,6 +654,16 @@ export function updateMember(projectId: string, userId: string, partial: Partial
   return updated;
 }
 
+export function removeMember(projectId: string, userId: string, mode?: BrowserWorkspaceKind): boolean {
+  let removed = false;
+  updateWorkspaceState((state) => {
+    const next = state.members.filter((member) => !(member.project_id === projectId && member.user_id === userId));
+    removed = next.length !== state.members.length;
+    state.members = next;
+  }, mode);
+  return removed;
+}
+
 export function addProjectInvite(invite: WorkspaceProjectInvite, mode?: BrowserWorkspaceKind) {
   updateWorkspaceState((state) => {
     state.invites = [...state.invites, invite];

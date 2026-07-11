@@ -92,7 +92,23 @@ export type AnalyticsEventName =
   | "catalog_uploaded"
   | "catalog_saved"
   | "catalog_row_edited"
-  | "catalog_item_used_in_estimate";
+  | "catalog_item_used_in_estimate"
+  // ─── Participants management redesign (2026-07, PRD roles & access UX v1).
+  // Measurement contract: time-to-invite (drawer_opened → invite_sent),
+  // preset-sufficiency (invite_sent.manual_axes), sensitive-grant funnel,
+  // reset-to-role usage — all gates for the v2 per-capability decision.
+  | "participants_invite_drawer_opened"
+  | "participants_invite_sent"
+  | "participants_access_updated"
+  | "participants_member_removed"
+  | "participants_invite_revoked"
+  | "participants_invite_resent"
+  | "participants_role_preset_selected"
+  | "participants_axes_reset_to_role"
+  | "participants_sensitive_confirm_shown"
+  | "participants_sensitive_confirm_accepted"
+  | "participants_sensitive_confirm_cancelled"
+  | "participants_seat_paywall_shown";
 
 export type AnalyticsEventPayload = Record<string, unknown>;
 
