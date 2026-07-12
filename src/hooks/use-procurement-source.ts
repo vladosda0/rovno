@@ -66,6 +66,11 @@ export function useProjectProcurementItemsState(
     // and the fetch would run under the wrong finance identity (zeros flash).
     enabled: Boolean(supabaseMode && projectId) && !isPermissionLoading,
     staleTime: PROCUREMENT_QUERY_STALE_TIME_MS,
+    // Refetch on page entry: an estimate edit on another page can advance the
+    // projection while this hook is unmounted; returning within staleTime would
+    // otherwise serve the stale cached list. Stable key => background refetch
+    // keeps prior rows visible (no empty flash).
+    refetchOnMount: "always",
   });
 
   // Keep the query key stable across projection advances so cached data does not

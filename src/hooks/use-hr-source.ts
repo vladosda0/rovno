@@ -113,6 +113,11 @@ export function useProjectHRItemsState(projectId: string, options?: HRQueryOptio
     },
     enabled: loadsEnabled && Boolean(supabaseMode && projectId) && !isPermissionLoading,
     staleTime: HR_QUERY_STALE_TIME_MS,
+    // Refetch on page entry: an estimate edit on another page can advance the
+    // projection while this hook is unmounted; returning within staleTime would
+    // otherwise serve the stale cached list. Stable key => background refetch
+    // keeps prior rows visible (no empty flash).
+    refetchOnMount: "always",
   });
 
   const queryClient = useQueryClient();
@@ -188,6 +193,11 @@ export function useProjectHRPaymentsState(projectId: string, options?: HRQueryOp
     },
     enabled: loadsEnabled && Boolean(supabaseMode && projectId) && !isPermissionLoading,
     staleTime: HR_QUERY_STALE_TIME_MS,
+    // Refetch on page entry: an estimate edit on another page can advance the
+    // projection while this hook is unmounted; returning within staleTime would
+    // otherwise serve the stale cached list. Stable key => background refetch
+    // keeps prior rows visible (no empty flash).
+    refetchOnMount: "always",
   });
 
   const queryClient = useQueryClient();

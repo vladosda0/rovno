@@ -92,6 +92,11 @@ export function usePlanningProjectStagesState(projectId: string): { stages: Stag
     },
     enabled: Boolean(supabaseMode && projectId),
     staleTime: PLANNING_QUERY_STALE_TIME_MS,
+    // Refetch on page entry: an estimate edit on another page can advance the
+    // projection while this hook is unmounted; returning within staleTime would
+    // otherwise serve the stale cached list. Stable key => background refetch
+    // keeps prior rows visible (no empty flash).
+    refetchOnMount: "always",
   });
 
   usePlanningProjectionInvalidation(
@@ -136,6 +141,11 @@ export function usePlanningProjectTasksState(projectId: string): { tasks: Task[]
     },
     enabled: Boolean(supabaseMode && projectId),
     staleTime: PLANNING_QUERY_STALE_TIME_MS,
+    // Refetch on page entry: an estimate edit on another page can advance the
+    // projection while this hook is unmounted; returning within staleTime would
+    // otherwise serve the stale cached list. Stable key => background refetch
+    // keeps prior rows visible (no empty flash).
+    refetchOnMount: "always",
   });
 
   usePlanningProjectionInvalidation(
