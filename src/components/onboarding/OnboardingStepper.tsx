@@ -14,6 +14,7 @@ import { planningQueryKeys } from "@/hooks/use-planning-source";
 import { useCreateOrganization, useSetActiveOrg } from "@/hooks/use-orgs";
 import { suggestOrgSlug } from "@/data/org-source";
 import { toast } from "@/hooks/use-toast";
+import { trackEvent } from "@/lib/analytics";
 import { type AppLanguage, getStoredLanguage, setAppLanguage } from "@/i18n";
 
 const MAX_ONBOARDING_STAGES = 5;
@@ -99,6 +100,11 @@ export function OnboardingStepper({ onComplete, onProjectCreated }: OnboardingSt
         });
       }
 
+      trackEvent("project_created", {
+        source: "onboarding",
+        workspace: resolvedMode.kind,
+        project_type: projectType,
+      });
       setCreatedProjectId(createdProject.id);
       onProjectCreated?.(createdProject.id);
       setStep(3);

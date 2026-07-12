@@ -6,6 +6,7 @@ import { AuthCard } from "@/components/auth/AuthCard";
 import { supabase } from "@/integrations/supabase/client";
 import { clearAiSidebarSessionPreference } from "@/lib/ai-sidebar-session";
 import { clearDemoSession, setAuthRole } from "@/lib/auth-state";
+import { trackEvent } from "@/lib/analytics";
 
 export default function AuthCallback() {
   const { t } = useTranslation();
@@ -16,7 +17,13 @@ export default function AuthCallback() {
 
     const finalize = async () => {
       try {
-        await supabase.auth.getSession();
+        // getSession() consumes the confirmation link and (briefly)
+        // establishes the verified session — that is the "email verified"
+        // moment; the session is then dropped so the user logs in explicitly.
+        const { data } = await supabase.auth.getSession();
+        if (data.session?.user) {
+          trackEvent("email_verified", { user_id: data.session.user.id });
+        }
       } catch {
         // ignore — we redirect regardless
       }

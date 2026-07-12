@@ -22,6 +22,7 @@ import { getWorkspaceSource, ProjectDeleteNotPermittedError, resolveWorkspaceMod
 import { planningQueryKeys } from "@/hooks/use-planning-source";
 import { toast } from "@/hooks/use-toast";
 import { workspaceQueryKeys } from "@/hooks/use-workspace-source";
+import { trackEvent } from "@/lib/analytics";
 
 function getStatusKey(progress: number): string {
   if (progress >= 100) return "status.done";
@@ -129,6 +130,11 @@ export function ProjectsTab() {
         });
       }
 
+      trackEvent("project_created", {
+        source: "manual",
+        workspace: resolvedWorkspaceMode.kind,
+        project_type: manualType,
+      });
       toast({ title: t("projectsTab.projectCreated"), description: title });
       setManualTitle("");
       setManualType("residential");

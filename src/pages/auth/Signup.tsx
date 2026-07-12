@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Trans, useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { clearDemoSession, setAuthRole } from "@/lib/auth-state";
 import { clearAiSidebarSessionPreference } from "@/lib/ai-sidebar-session";
+import { trackEvent } from "@/lib/analytics";
 
 export default function Signup() {
   const { t } = useTranslation();
@@ -21,6 +22,12 @@ export default function Signup() {
   const [loading, setLoading] = useState(false);
   const nextUrl = searchParams.get("next");
   const postAuthDestination = nextUrl && nextUrl.startsWith("/") ? nextUrl : "/onboarding";
+
+  // Funnel: "registration started" = the form was opened (captures the
+  // never-submitted drop-off, not just failed submits).
+  useEffect(() => {
+    trackEvent("registration_start");
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,12 +77,22 @@ export default function Signup() {
       clearDemoSession();
       clearAiSidebarSessionPreference();
       if (data.session?.user) {
+        // Email confirmation disabled: the signup IS the first login.
+        trackEvent("registration_complete", {
+          user_id: data.session.user.id,
+          email_confirmation_required: false,
+        });
+        trackEvent("first_login", { user_id: data.session.user.id, via: "signup_autologin" });
         setAuthRole("owner");
         toast({ title: t("auth.signup.successTitle"), description: t("auth.signup.welcomeToApp") });
         navigate(postAuthDestination);
         return;
       }
 
+      trackEvent("registration_complete", {
+        user_id: data.user?.id ?? "unknown",
+        email_confirmation_required: true,
+      });
       navigate(`/auth/email-sent?email=${encodeURIComponent(email.trim())}`);
     } catch (error) {
       toast({

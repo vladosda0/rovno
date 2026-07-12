@@ -50,6 +50,11 @@ export default function CatalogUploadReview() {
   const persistTimer = useRef<number | null>(null);
   const pendingDraftRef = useRef<CatalogUploadDraft | null>(null);
 
+  // Catalog-upload funnel: editor opened (observability v1).
+  useEffect(() => {
+    trackEvent("catalog_editor_opened", { editor: "upload_review" });
+  }, []);
+
   useEffect(() => {
     if (!uploadId) {
       setDraft("missing");

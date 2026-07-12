@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { MoreHorizontal, Package, Pencil, Trash2, Upload } from "lucide-react";
@@ -22,6 +22,7 @@ import {
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { MultiStepUploadModal } from "@/components/upload/MultiStepUploadModal";
 import { toast } from "@/hooks/use-toast";
+import { trackEvent } from "@/lib/analytics";
 import { useWorkspaceMode } from "@/hooks/use-workspace-source";
 import {
   useAllUserCatalogItems,
@@ -40,6 +41,11 @@ export function CatalogsTab() {
   const navigate = useNavigate();
   const workspaceMode = useWorkspaceMode();
   const isSupabaseMode = workspaceMode.kind === "supabase";
+
+  // Catalog-upload funnel step 1 (observability v1).
+  useEffect(() => {
+    trackEvent("catalog_tab_visit");
+  }, []);
 
   const catalogsQuery = useUserCatalogs(isSupabaseMode);
   const itemsQuery = useAllUserCatalogItems(isSupabaseMode);

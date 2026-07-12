@@ -9,6 +9,7 @@ import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { clearDemoSession, hasCompletedOnboarding, setAuthRole } from "@/lib/auth-state";
 import { clearAiSidebarSessionPreference } from "@/lib/ai-sidebar-session";
+import { trackEvent } from "@/lib/analytics";
 
 export default function Login() {
   const { t } = useTranslation();
@@ -29,9 +30,9 @@ export default function Login() {
     }
   }, [confirmed, t]);
 
-  const resolveDestination = async (userId: string | null | undefined): Promise<string> => {
+  const resolveDestination = (completedOnboarding: boolean): string => {
     if (nextUrl && nextUrl.startsWith("/")) return nextUrl;
-    return await hasCompletedOnboarding(userId) ? "/home" : "/onboarding";
+    return completedOnboarding ? "/home" : "/onboarding";
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -59,8 +60,16 @@ export default function Login() {
       clearDemoSession();
       clearAiSidebarSessionPreference();
       setAuthRole("owner");
+
+      // "First login" proxy: onboarding not completed yet (server-backed via
+      // profiles.onboarding_completed_at, so it survives device changes).
+      const completedOnboarding = await hasCompletedOnboarding(data.session.user.id);
+      if (!completedOnboarding) {
+        trackEvent("first_login", { user_id: data.session.user.id, via: "login" });
+      }
+
       toast({ title: t("auth.login.successTitle"), description: t("auth.login.successDescription") });
-      navigate(await resolveDestination(data.session.user.id));
+      navigate(resolveDestination(completedOnboarding));
     } catch (error) {
       toast({
         title: t("auth.login.failureTitle"),
