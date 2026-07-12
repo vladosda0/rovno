@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const {
   loadCurrentEstimateDraftMock,
   saveCurrentEstimateDraftMock,
+  syncEstimateProjectionRemoteMock,
+  emitEstimateDraftSyncEventMock,
   getWorkspaceSourceMock,
   getPlanningSourceMock,
   persistEstimateV2HeroTransitionMock,
@@ -12,6 +14,8 @@ const {
 } = vi.hoisted(() => ({
   loadCurrentEstimateDraftMock: vi.fn(),
   saveCurrentEstimateDraftMock: vi.fn(),
+  syncEstimateProjectionRemoteMock: vi.fn(),
+  emitEstimateDraftSyncEventMock: vi.fn(),
   getWorkspaceSourceMock: vi.fn(),
   getPlanningSourceMock: vi.fn(),
   persistEstimateV2HeroTransitionMock: vi.fn(),
@@ -26,6 +30,8 @@ vi.mock("@/data/estimate-source", async () => {
     ...actual,
     loadCurrentEstimateDraft: loadCurrentEstimateDraftMock,
     saveCurrentEstimateDraft: saveCurrentEstimateDraftMock,
+    syncEstimateProjectionRemote: syncEstimateProjectionRemoteMock,
+    emitEstimateDraftSyncEvent: emitEstimateDraftSyncEventMock,
   };
 });
 
@@ -82,6 +88,7 @@ import {
   updateLine,
   updateWorkDates,
 } from "@/data/estimate-v2-store";
+import { EstimateDraftConflictError, SyncEstimateProjectionUnavailableError } from "@/data/estimate-source";
 import { __unsafeResetStoreForTests } from "@/data/store";
 
 describe("estimate-v2 workspace drafts", () => {
@@ -127,6 +134,13 @@ describe("estimate-v2 workspace drafts", () => {
     syncProjectProcurementFromEstimateMock.mockResolvedValue(undefined);
     syncProjectHRFromEstimateMock.mockResolvedValue(undefined);
     saveCurrentEstimateDraftMock.mockResolvedValue(undefined);
+    emitEstimateDraftSyncEventMock.mockResolvedValue(undefined);
+    // Default to a pre-P1 database so the pinned suites keep exercising the
+    // legacy client pipeline (still shipped as the fallback); RPC-path tests
+    // override this per test.
+    syncEstimateProjectionRemoteMock.mockImplementation(async () => {
+      throw new SyncEstimateProjectionUnavailableError();
+    });
     loadCurrentEstimateDraftMock.mockResolvedValue({
       estimate: null,
       currentVersion: null,

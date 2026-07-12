@@ -1427,6 +1427,7 @@
   "estimate.sync.saved": "Saved {{time}}",
   "estimate.sync.error": "Save error",
   "estimate.sync.blockedPermission": "Saving unavailable for your access level",
+  "estimate.sync.conflict": "Changed elsewhere — refreshing",
   "projectSync.chip.blocked": "Sync unavailable",
   "projectSync.chip.error": "Sync error",
   "projectSync.chip.syncing": "Syncing…",

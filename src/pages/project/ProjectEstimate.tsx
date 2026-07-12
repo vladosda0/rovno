@@ -789,12 +789,13 @@ function EstimateSyncStatusIndicator({
     : status === "pending" ? t("estimate.sync.pending")
     : status === "error" ? t("estimate.sync.error")
     : status === "blocked_permission" ? t("estimate.sync.blockedPermission")
+    : status === "conflict" ? t("estimate.sync.conflict")
     : savedTime ? t("estimate.sync.saved", { time: savedTime })
     : null;
 
   if (!label) return null;
 
-  const colorClass = status === "error"
+  const colorClass = status === "error" || status === "conflict"
     ? "text-destructive"
     : status === "blocked_permission"
       ? "text-warning"

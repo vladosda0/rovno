@@ -12,6 +12,10 @@ import {
   type EstimateOperationalUpperBlock,
   saveCurrentEstimateDraft,
   updateProjectEstimateExecutionStatus,
+  EstimateDraftConflictError,
+  SyncEstimateProjectionUnavailableError,
+  emitEstimateDraftSyncEvent,
+  syncEstimateProjectionRemote,
 } from "@/data/estimate-source";
 import { getPlanningSource, syncProjectTasksFromEstimate } from "@/data/planning-source";
 import { syncProjectProcurementFromEstimate } from "@/data/procurement-source";
@@ -100,7 +104,7 @@ export interface EstimateV2ProjectSyncDomainState {
   skipReason: EstimateV2SyncSkipReason | null;
 }
 
-type EstimateV2DraftSaveStatus = "idle" | "pending" | "saving" | "saved" | "blocked_permission" | "error";
+type EstimateV2DraftSaveStatus = "idle" | "pending" | "saving" | "saved" | "blocked_permission" | "conflict" | "error";
 
 /**
  * Whether this session's sync state is meaningful for gating UI:
@@ -1093,6 +1097,169 @@ function applyTaskIdsToState(
   return state.works.map((work) => ({ ...work }));
 }
 
+/**
+ * Pre-P1 fallback: the client-orchestrated three-step projection (tasks →
+ * procurement → HR), kept verbatim for one release so a frontend deployed
+ * ahead of the sync_estimate_projection migration keeps projecting. Delete
+ * once prod is confirmed on the RPC.
+ */
+async function runLegacyClientProjection(input: {
+  projectId: string;
+  profileId: string;
+  normalized: Pick<EstimateV2ProjectState, "project" | "works" | "lines">;
+  projectionRevision: string | null;
+  estimateRevision: string | null;
+}): Promise<void> {
+  const { projectId, profileId, normalized, projectionRevision, estimateRevision } = input;
+  let worksForDownstream = normalized.works.map((work) => ({ ...work }));
+
+  try {
+    if (hasProjectDraftProjectionDrift(projectId, projectionRevision)) {
+      return;
+    }
+    const taskIdByWorkId = await syncProjectTasksFromEstimate({
+      projectId,
+      estimateStatus: normalized.project.estimateStatus,
+      works: normalized.works,
+      lines: normalized.lines,
+      profileId,
+    });
+    if (!isCurrentSupabaseProjectProfile(projectId, profileId)) {
+      return;
+    }
+    if (hasProjectDraftProjectionDrift(projectId, projectionRevision)) {
+      return;
+    }
+    const syncedWorks = applyTaskIdsToState(projectId, taskIdByWorkId);
+    worksForDownstream = syncedWorks.length > 0
+      ? syncedWorks
+      : worksForDownstream.map((work) => ({
+        ...work,
+        taskId: taskIdByWorkId[work.id] ?? work.taskId,
+      }));
+    const latestState = statesByProjectId.get(projectId);
+    if (latestState) {
+      setProjectSyncDomainStatus(latestState, "tasks", {
+        status: "synced",
+        projectedRevision: estimateRevision,
+        lastSucceededAt: nowIso(),
+        lastError: null,
+        skipReason: null,
+      });
+      saveWorkspaceEstimateCache(projectId, profileId, latestState);
+    }
+  } catch (error) {
+    // Procurement and HR depend on the task ids this step resolves; projecting
+    // them from a work set with stale/missing taskIds silently drops HR lines.
+    // Stop the fan-out and report all three domains instead of a fake partial sync.
+    const latestState = statesByProjectId.get(projectId);
+    if (latestState) {
+      setProjectSyncDomainStatus(latestState, "tasks", {
+        status: "error",
+        lastError: error instanceof Error ? error.message : "Unable to sync tasks from estimate.",
+      });
+      (["procurement", "hr"] as const).forEach((domain) => {
+        setProjectSyncDomainStatus(latestState, domain, {
+          status: "error",
+          lastError: "Blocked: tasks projection failed.",
+        });
+      });
+      saveWorkspaceEstimateCache(projectId, profileId, latestState);
+    }
+    console.error("Failed to sync estimate v2 tasks projection", error);
+    notify();
+    return;
+  } finally {
+    notify();
+  }
+
+  try {
+    if (hasProjectDraftProjectionDrift(projectId, projectionRevision)) {
+      return;
+    }
+    await syncProjectProcurementFromEstimate({
+      projectId,
+      estimateStatus: normalized.project.estimateStatus,
+      works: worksForDownstream,
+      lines: normalized.lines,
+      profileId,
+    });
+    if (!isCurrentSupabaseProjectProfile(projectId, profileId)) {
+      return;
+    }
+    if (hasProjectDraftProjectionDrift(projectId, projectionRevision)) {
+      return;
+    }
+    const latestState = statesByProjectId.get(projectId);
+    if (latestState) {
+      setProjectSyncDomainStatus(latestState, "procurement", {
+        status: "synced",
+        projectedRevision: estimateRevision,
+        lastSucceededAt: nowIso(),
+        lastError: null,
+        skipReason: null,
+      });
+      saveWorkspaceEstimateCache(projectId, profileId, latestState);
+    }
+  } catch (error) {
+    const latestState = statesByProjectId.get(projectId);
+    if (latestState) {
+      setProjectSyncDomainStatus(latestState, "procurement", {
+        status: "error",
+        lastError: error instanceof Error ? error.message : "Unable to sync procurement from estimate.",
+      });
+      saveWorkspaceEstimateCache(projectId, profileId, latestState);
+    }
+    console.error("Failed to sync estimate v2 procurement projection", error);
+  } finally {
+    notify();
+  }
+
+  try {
+    if (hasProjectDraftProjectionDrift(projectId, projectionRevision)) {
+      return;
+    }
+    await syncProjectHRFromEstimate(
+      { kind: "supabase", profileId },
+      {
+        projectId,
+        estimateStatus: normalized.project.estimateStatus,
+        works: worksForDownstream,
+        lines: normalized.lines,
+      },
+    );
+    if (!isCurrentSupabaseProjectProfile(projectId, profileId)) {
+      return;
+    }
+    if (hasProjectDraftProjectionDrift(projectId, projectionRevision)) {
+      return;
+    }
+    const latestState = statesByProjectId.get(projectId);
+    if (latestState) {
+      setProjectSyncDomainStatus(latestState, "hr", {
+        status: "synced",
+        projectedRevision: estimateRevision,
+        lastSucceededAt: nowIso(),
+        lastError: null,
+        skipReason: null,
+      });
+      saveWorkspaceEstimateCache(projectId, profileId, latestState);
+    }
+  } catch (error) {
+    const latestState = statesByProjectId.get(projectId);
+    if (latestState) {
+      setProjectSyncDomainStatus(latestState, "hr", {
+        status: "error",
+        lastError: error instanceof Error ? error.message : "Unable to sync HR from estimate.",
+      });
+      saveWorkspaceEstimateCache(projectId, profileId, latestState);
+    }
+    console.error("Failed to sync estimate v2 HR projection", error);
+  } finally {
+    notify();
+  }
+}
+
 async function runProjectDraftSync(projectId: string) {
   const state = statesByProjectId.get(projectId);
   const managedSyncContext = getManagedEstimateRemoteSyncContext(projectId);
@@ -1161,7 +1328,24 @@ async function runProjectDraftSync(projectId: string) {
           postSync.draftSaveLastSucceededAt = nowIso();
           postSync.draftSaveLastError = null;
         }
+        // Cross-session signal for P2 realtime consumers; best-effort.
+        void emitEstimateDraftSyncEvent(projectId, projectionRevision);
       } catch (saveError) {
+        if (saveError instanceof EstimateDraftConflictError) {
+          // Another session saved between our load and our save. Converge on
+          // the server truth instead of fighting it: mark the conflict and
+          // force-refresh (forceFresh bypasses the pending-sync early-return
+          // that would otherwise keep the conflicting local state alive).
+          const conflictState = statesByProjectId.get(projectId);
+          if (conflictState) {
+            const conflictSync = ensureProjectSyncState(conflictState);
+            conflictSync.draftSaveStatus = "conflict";
+            conflictSync.draftSaveLastError = saveError.message;
+            notify();
+          }
+          void hydrateEstimateV2ProjectFromWorkspace(projectId, { profileId, forceFresh: true });
+          return;
+        }
         const postSaveState = statesByProjectId.get(projectId);
         if (postSaveState) {
           const postSync = ensureProjectSyncState(postSaveState);
@@ -1233,152 +1417,75 @@ async function runProjectDraftSync(projectId: string) {
         notify();
       }
     } else {
-      let worksForDownstream = normalized.works.map((work) => ({ ...work }));
-
+      // P1: one atomic server-side projection replaces the three-step client
+      // pipeline. The RPC reads the server draft (never this snapshot), so a
+      // stale call cannot write stale data; concurrency serializes server-side.
       try {
         if (hasProjectDraftProjectionDrift(projectId, projectionRevision)) {
           return;
         }
-        const taskIdByWorkId = await syncProjectTasksFromEstimate({
-          projectId,
-          estimateStatus: normalized.project.estimateStatus,
-          works: normalized.works,
-          lines: normalized.lines,
-          profileId,
-        });
+        const projection = await syncEstimateProjectionRemote(projectId, projectionRevision);
         if (!isCurrentSupabaseProjectProfile(projectId, profileId)) {
           return;
         }
         if (hasProjectDraftProjectionDrift(projectId, projectionRevision)) {
           return;
         }
-        const syncedWorks = applyTaskIdsToState(projectId, taskIdByWorkId);
-        worksForDownstream = syncedWorks.length > 0
-          ? syncedWorks
-          : worksForDownstream.map((work) => ({
-            ...work,
-            taskId: taskIdByWorkId[work.id] ?? work.taskId,
-          }));
-        const latestState = statesByProjectId.get(projectId);
-        if (latestState) {
-          setProjectSyncDomainStatus(latestState, "tasks", {
-            status: "synced",
-            projectedRevision: sync.estimateRevision,
-            lastSucceededAt: nowIso(),
-            lastError: null,
-            skipReason: null,
-          });
-          saveWorkspaceEstimateCache(projectId, profileId, latestState);
-        }
-      } catch (error) {
-        // Procurement and HR depend on the task ids this step resolves; projecting
-        // them from a work set with stale/missing taskIds silently drops HR lines.
-        // Stop the fan-out and report all three domains instead of a fake partial sync.
-        const latestState = statesByProjectId.get(projectId);
-        if (latestState) {
-          setProjectSyncDomainStatus(latestState, "tasks", {
-            status: "error",
-            lastError: error instanceof Error ? error.message : "Unable to sync tasks from estimate.",
-          });
-          (["procurement", "hr"] as const).forEach((domain) => {
-            setProjectSyncDomainStatus(latestState, domain, {
-              status: "error",
-              lastError: "Blocked: tasks projection failed.",
+        if (projection.status === "projected") {
+          applyTaskIdsToState(projectId, projection.taskIdByWorkId);
+          const latestState = statesByProjectId.get(projectId);
+          if (latestState) {
+            (["tasks", "procurement", "hr"] as const).forEach((domain) => {
+              setProjectSyncDomainStatus(latestState, domain, {
+                status: "synced",
+                projectedRevision: sync.estimateRevision,
+                lastSucceededAt: nowIso(),
+                lastError: null,
+                skipReason: null,
+              });
             });
-          });
-          saveWorkspaceEstimateCache(projectId, profileId, latestState);
-        }
-        console.error("Failed to sync estimate v2 tasks projection", error);
-        notify();
-        return;
-      } finally {
-        notify();
-      }
-
-      try {
-        if (hasProjectDraftProjectionDrift(projectId, projectionRevision)) {
-          return;
-        }
-        await syncProjectProcurementFromEstimate({
-          projectId,
-          estimateStatus: normalized.project.estimateStatus,
-          works: worksForDownstream,
-          lines: normalized.lines,
-          profileId,
-        });
-        if (!isCurrentSupabaseProjectProfile(projectId, profileId)) {
-          return;
-        }
-        if (hasProjectDraftProjectionDrift(projectId, projectionRevision)) {
-          return;
-        }
-        const latestState = statesByProjectId.get(projectId);
-        if (latestState) {
-          setProjectSyncDomainStatus(latestState, "procurement", {
-            status: "synced",
-            projectedRevision: sync.estimateRevision,
-            lastSucceededAt: nowIso(),
-            lastError: null,
-            skipReason: null,
-          });
-          saveWorkspaceEstimateCache(projectId, profileId, latestState);
+            saveWorkspaceEstimateCache(projectId, profileId, latestState);
+          }
+          notify();
+        } else {
+          // The server declined to project (draft emptied / status raced back
+          // to planning): honest "skipped" — nothing may claim this revision.
+          const skipState = statesByProjectId.get(projectId);
+          if (skipState) {
+            (["tasks", "procurement", "hr"] as const).forEach((domain) => {
+              setProjectSyncDomainStatus(skipState, domain, {
+                status: "skipped",
+                skipReason: "unauthoritative",
+                lastError: null,
+              });
+            });
+            saveWorkspaceEstimateCache(projectId, profileId, skipState);
+            notify();
+          }
         }
       } catch (error) {
-        const latestState = statesByProjectId.get(projectId);
-        if (latestState) {
-          setProjectSyncDomainStatus(latestState, "procurement", {
-            status: "error",
-            lastError: error instanceof Error ? error.message : "Unable to sync procurement from estimate.",
-          });
-          saveWorkspaceEstimateCache(projectId, profileId, latestState);
-        }
-        console.error("Failed to sync estimate v2 procurement projection", error);
-      } finally {
-        notify();
-      }
-
-      try {
-        if (hasProjectDraftProjectionDrift(projectId, projectionRevision)) {
-          return;
-        }
-        await syncProjectHRFromEstimate(
-          { kind: "supabase", profileId },
-          {
+        if (error instanceof SyncEstimateProjectionUnavailableError) {
+          await runLegacyClientProjection({
             projectId,
-            estimateStatus: normalized.project.estimateStatus,
-            works: worksForDownstream,
-            lines: normalized.lines,
-          },
-        );
-        if (!isCurrentSupabaseProjectProfile(projectId, profileId)) {
-          return;
-        }
-        if (hasProjectDraftProjectionDrift(projectId, projectionRevision)) {
-          return;
-        }
-        const latestState = statesByProjectId.get(projectId);
-        if (latestState) {
-          setProjectSyncDomainStatus(latestState, "hr", {
-            status: "synced",
-            projectedRevision: sync.estimateRevision,
-            lastSucceededAt: nowIso(),
-            lastError: null,
-            skipReason: null,
+            profileId,
+            normalized,
+            projectionRevision,
+            estimateRevision: sync.estimateRevision,
           });
-          saveWorkspaceEstimateCache(projectId, profileId, latestState);
+        } else {
+          const latestState = statesByProjectId.get(projectId);
+          if (latestState) {
+            (["tasks", "procurement", "hr"] as const).forEach((domain) => {
+              setProjectSyncDomainStatus(latestState, domain, {
+                status: "error",
+                lastError: error instanceof Error ? error.message : "Unable to project the estimate.",
+              });
+            });
+            saveWorkspaceEstimateCache(projectId, profileId, latestState);
+          }
+          console.error("Failed to run sync_estimate_projection", error);
+          notify();
         }
-      } catch (error) {
-        const latestState = statesByProjectId.get(projectId);
-        if (latestState) {
-          setProjectSyncDomainStatus(latestState, "hr", {
-            status: "error",
-            lastError: error instanceof Error ? error.message : "Unable to sync HR from estimate.",
-          });
-          saveWorkspaceEstimateCache(projectId, profileId, latestState);
-        }
-        console.error("Failed to sync estimate v2 HR projection", error);
-      } finally {
-        notify();
       }
     }
   } catch (error) {
@@ -2341,9 +2448,15 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
     const inferredEstimateStatus: EstimateExecutionStatus = (
       remoteRootIndicatesInWork || hasLinkedEstimateChecklist || hasStartedTaskExecution
     ) ? "in_work" : "planning";
-    const nextEstimateStatus: EstimateExecutionStatus = cachedProject?.estimateStatus && cachedProject.estimateStatus !== "planning"
-      ? cachedProject.estimateStatus
-      : inferredEstimateStatus;
+    // P1: the server execution_status is authoritative when present — it is
+    // what other sessions/devices see and what the projection RPC gates on.
+    // The cached-status and inference chains remain only for null (pre-column
+    // rows and drafts whose mirror write was lost).
+    const serverExecutionStatus = (draft.estimate?.execution_status ?? null) as EstimateExecutionStatus | null;
+    const nextEstimateStatus: EstimateExecutionStatus = serverExecutionStatus
+      ?? (cachedProject?.estimateStatus && cachedProject.estimateStatus !== "planning"
+        ? cachedProject.estimateStatus
+        : inferredEstimateStatus);
     const nextProject: EstimateV2Project = {
       ...currentState.project,
       ...cachedProject,

@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "../../backend-truth/generated/supabase-types";
-import { parseEstimateOperationalSummaryPayload, saveCurrentEstimateDraft } from "@/data/estimate-source";
+import {
+  EstimateDraftConflictError,
+  ensureProjectEstimateRoot,
+  parseEstimateOperationalSummaryPayload,
+  saveCurrentEstimateDraft,
+} from "@/data/estimate-source";
 import type { EstimateV2Snapshot } from "@/types/estimate-v2";
 
 type TableName =
@@ -151,10 +156,18 @@ class MockQueryBuilder<TTable extends TableName> implements PromiseLike<{ data: 
     }
 
     if (this.action === "update") {
-      applyFilters(rows, this.filters).forEach((row) => {
+      const matched = applyFilters(rows, this.filters);
+      matched.forEach((row) => {
         Object.assign(row, this.payload as Record<string, unknown>);
       });
-      return { data: null, error: null };
+      // Honor .select() after .update() — the draft-save CAS tail counts the
+      // returned rows to detect a lost compare-and-set.
+      return {
+        data: this.shouldReturnRows
+          ? (this.shouldReturnSingleRow ? (matched[0] ?? null) : matched)
+          : null,
+        error: null,
+      };
     }
 
     if (this.action === "upsert") {
@@ -189,6 +202,18 @@ function createMockSupabase(database: MockDatabase) {
     from<TTable extends TableName>(table: TTable) {
       return new MockQueryBuilder(database, table);
     },
+    // Pre-P1 database shape: the RPCs are absent, so callers take their legacy
+    // fallback paths (which these suites pin). RPC-path behavior is covered by
+    // the estimate-v2-store suites and the pgTAP parity suite in rovno-db.
+    async rpc(functionName: string) {
+      return {
+        data: null,
+        error: {
+          code: "PGRST202",
+          message: `Could not find the function public.${functionName} in the schema cache`,
+        },
+      };
+    },
   };
 }
 
@@ -216,6 +241,11 @@ describe("saveCurrentEstimateDraft", () => {
             created_at: "2026-03-01T00:00:00.000Z",
             updated_at: "2026-03-02T00:00:00.000Z",
             execution_status: null,
+            draft_seq: 0,
+            projection_revision: null,
+            projection_seq: 0,
+            projection_synced_at: null,
+            projection_actor: null,
           },
         ],
         estimate_versions: [
@@ -856,6 +886,68 @@ describe("saveCurrentEstimateDraft", () => {
     const row = mockDatabaseRef.current?.tables.estimate_resource_lines[0] as Record<string, unknown> | undefined;
     expect(row?.assignee_profile_id).toBeNull();
     expect(row?.assignee_label).toBe("Володя");
+  });
+});
+
+describe("ensureProjectEstimateRoot creation race (23505)", () => {
+  // Purpose-built stub: the pre-check select sees no root, the insert loses the
+  // idx_project_estimates_project_id_unique race, the re-read sees the winner.
+  function createRaceStub(winnerRow: Record<string, unknown>) {
+    let selectCalls = 0;
+    return {
+      from(table: string) {
+        expect(table).toBe("project_estimates");
+        return {
+          select() {
+            return {
+              eq() {
+                selectCalls += 1;
+                return Promise.resolve({
+                  data: selectCalls === 1 ? [] : [winnerRow],
+                  error: null,
+                });
+              },
+            };
+          },
+          insert() {
+            return {
+              select() {
+                return {
+                  single: () => Promise.resolve({
+                    data: null,
+                    error: {
+                      code: "23505",
+                      message: 'duplicate key value violates unique constraint "idx_project_estimates_project_id_unique"',
+                    },
+                  }),
+                };
+              },
+            };
+          },
+        };
+      },
+    } as unknown as Parameters<typeof ensureProjectEstimateRoot>[0];
+  }
+
+  it("adopts the winner when it carries this session's estimate id", async () => {
+    const winner = { id: "estimate-1", project_id: "project-1", title: "Смета" };
+    const result = await ensureProjectEstimateRoot(createRaceStub(winner), {
+      projectId: "project-1",
+      estimateId: "estimate-1",
+      title: "Смета",
+      createdBy: "profile-1",
+    });
+    expect(result).toEqual({ ok: true, row: winner });
+  });
+
+  it("raises the draft conflict when another session's root won", async () => {
+    const winner = { id: "estimate-other", project_id: "project-1", title: "Смета" };
+    await expect(ensureProjectEstimateRoot(createRaceStub(winner), {
+      projectId: "project-1",
+      estimateId: "estimate-1",
+      title: "Смета",
+      createdBy: "profile-1",
+    })).rejects.toBeInstanceOf(EstimateDraftConflictError);
   });
 });
 

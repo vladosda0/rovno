@@ -55,7 +55,11 @@ export function ProjectSyncIndicator({ projectId }: { projectId: string }) {
       return "blocked";
     }
     const domains = Object.values(sync.domains);
-    if (sync.draftSaveStatus === "error" || domains.some((domain) => domain.status === "error")) {
+    if (
+      sync.draftSaveStatus === "error"
+      || sync.draftSaveStatus === "conflict"
+      || domains.some((domain) => domain.status === "error")
+    ) {
       return "error";
     }
     if (
