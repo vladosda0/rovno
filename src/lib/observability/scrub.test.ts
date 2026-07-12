@@ -47,6 +47,15 @@ describe("scrubText", () => {
     expect(scrubText("г. Москва, дом 5")).toBe("[ADDRESS], [ADDRESS]");
   });
 
+  it("address boundary is lookbehind-free but still word-anchored", () => {
+    // Cyrillic-preceded keyword (mid-word "д." inside "прод.") must NOT match —
+    // this is the property the removed lookbehind guarded; the leading
+    // (^|[^Cyrillic]) capture group must preserve it.
+    expect(scrubText("прод. товары со склада")).toBe("прод. товары со склада");
+    // First-position keyword still matches (^ branch of the boundary).
+    expect(scrubText("ул. Мира 7")).toBe("[ADDRESS]");
+  });
+
   it("keeps technical error messages intact", () => {
     const msg = 'column "estimate_id" of relation "estimate_lines" does not exist (SQLSTATE 42703)';
     expect(scrubText(msg)).toBe(msg);

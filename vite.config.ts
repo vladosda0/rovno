@@ -69,19 +69,16 @@ export default defineConfig(({ mode }) => ({
       ),
     },
   },
-  build: {
-    rollupOptions: {
-      output: {
-        manualChunks: (id) => {
-          // Keep the error-tracking SDK in its own lazy chunk so it is cleanly
-          // measurable (R-1 ≤30KB gz), tree-shaken (tracing/replay off), and
-          // never co-located with app/vendor code that other routes need.
-          if (id.includes("node_modules/@sentry")) return "sentry";
-          return undefined;
-        },
-      },
-    },
-  },
+  // NOTE: deliberately NO manualChunks for @sentry. Forcing all
+  // node_modules/@sentry into one named chunk promoted it to a STATIC/eager
+  // dependency of the entry (a shared binding leaked into the forced chunk),
+  // which emitted a `modulepreload` for it and defeated the whole
+  // lazy + DSN-gated design — the SDK downloaded on every page even with no
+  // DSN. Left to Rollup's default splitting, @sentry/react is reachable ONLY
+  // through the dynamic `import("@sentry/react")` in sentry.ts, so it stays a
+  // lazy chunk (0 eager cost). It then shares that lazy chunk with other
+  // dynamically-imported vendor code, so its size is not separately
+  // measurable, which is an acceptable trade for correct laziness.
   test: {
     environment: "jsdom",
     globals: true,

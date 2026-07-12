@@ -67,10 +67,17 @@ const SCRUB_RULES: ScrubRule[] = [
     // require it (bare "г"/"д" are too common). Deliberately over-matches
     // ("2025 г. Москва слово" loses the tail) — acceptable per fail-private
     // policy; error messages are overwhelmingly technical English.
+    //
+    // The leading `(^|[^А-ЯЁа-яё])` capture group is a lookbehind-free Cyrillic
+    // boundary (JS `\b` is ASCII-only): it asserts the keyword is not mid-word,
+    // then $1 re-emits the boundary char. NOT a real lookbehind — this module
+    // is statically imported by the entry bundle (main.tsx → sentry.ts →
+    // scrub.ts), and a `(?<=...)` literal is a parse-time SyntaxError on
+    // Safari/iOS < 16.4, which would white-screen the whole app.
     name: "address-ru",
     pattern:
-      /(?<![А-ЯЁа-яё])(?:(?:улица|проспект|переулок|квартира|город|дом|шоссе|бульвар|набережная|область|мкр)\.?|(?:ул|просп|пр-т|пер|кв|обл|наб|б-р|г|д)\.)\s*[«"']?[А-ЯЁа-яё0-9][^,;\n]{0,40}/g,
-    replacement: "[ADDRESS]",
+      /(^|[^А-ЯЁа-яё])(?:(?:улица|проспект|переулок|квартира|город|дом|шоссе|бульвар|набережная|область|мкр)\.?|(?:ул|просп|пр-т|пер|кв|обл|наб|б-р|г|д)\.)\s*[«"']?[А-ЯЁа-яё0-9][^,;\n]{0,40}/g,
+    replacement: "$1[ADDRESS]",
   },
 ];
 

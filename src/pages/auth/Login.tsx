@@ -9,7 +9,7 @@ import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { clearDemoSession, hasCompletedOnboarding, setAuthRole } from "@/lib/auth-state";
 import { clearAiSidebarSessionPreference } from "@/lib/ai-sidebar-session";
-import { trackEvent } from "@/lib/analytics";
+import { setAnalyticsUserId, trackEventOncePerUser } from "@/lib/analytics";
 
 export default function Login() {
   const { t } = useTranslation();
@@ -61,11 +61,17 @@ export default function Login() {
       clearAiSidebarSessionPreference();
       setAuthRole("owner");
 
-      // "First login" proxy: onboarding not completed yet (server-backed via
-      // profiles.onboarding_completed_at, so it survives device changes).
+      // Set the analytics user id now so the once-per-user guard below keys on
+      // the real user id (AppLayout also sets it post-navigation; idempotent).
+      setAnalyticsUserId(data.session.user.id);
+
+      // "First login" = the user's first sign-in while still in the signup
+      // funnel (onboarding not completed). Once-per-user guarded so repeated
+      // pre-onboarding logins can't re-fire this funnel step and inflate
+      // activation/retention metrics.
       const completedOnboarding = await hasCompletedOnboarding(data.session.user.id);
       if (!completedOnboarding) {
-        trackEvent("first_login", { user_id: data.session.user.id, via: "login" });
+        trackEventOncePerUser("first_login", { user_id: data.session.user.id, via: "login" });
       }
 
       toast({ title: t("auth.login.successTitle"), description: t("auth.login.successDescription") });

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { MessageSquareText } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,10 @@ export function FeedbackWidget() {
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
+  // Synchronous re-entrancy guard: the `sending` state only disables the
+  // button after a re-render, so two clicks in the same frame would both pass
+  // the `canSubmit` check and double-submit. This ref flips immediately.
+  const submittingRef = useRef(false);
 
   if (runtimeAuth.status !== "authenticated") return null;
 
@@ -42,7 +46,8 @@ export function FeedbackWidget() {
   const canSubmit = trimmed.length > 0 && !sending;
 
   const handleSubmit = async () => {
-    if (!canSubmit) return;
+    if (!canSubmit || submittingRef.current) return;
+    submittingRef.current = true;
     setSending(true);
     try {
       const { error } = await supabase.functions.invoke("submit-feedback", {
@@ -69,6 +74,7 @@ export function FeedbackWidget() {
         variant: "destructive",
       });
     } finally {
+      submittingRef.current = false;
       setSending(false);
     }
   };
