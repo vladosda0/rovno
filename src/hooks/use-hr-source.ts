@@ -15,6 +15,7 @@ import {
   setProjectHRItemStatus as setProjectHRItemStatusSource,
 } from "@/data/hr-source";
 import { useEstimateV2ProjectSync } from "@/hooks/use-estimate-v2-data";
+import { useProjectionAdvance } from "@/hooks/use-projection-advance";
 import { useWorkspaceMode } from "@/hooks/use-workspace-source";
 import {
   getProjectDomainAccess,
@@ -49,10 +50,9 @@ function readCachedSupabaseHRItem(
   profileId: string,
   projectId: string,
   financeAccess: FinanceRowLoadAccess,
-  projectedRevision: string | null,
   hrItemId: string,
 ): HRPlannedItem | undefined {
-  const key = [...hrQueryKeys.projectItems(profileId, projectId, financeAccess), projectedRevision ?? "initial"];
+  const key = hrQueryKeys.projectItems(profileId, projectId, financeAccess);
   return queryClient.getQueryData<HRPlannedItem[]>(key)?.find((item) => item.id === hrItemId);
 }
 
@@ -73,11 +73,19 @@ function useStoreValue<T>(getter: () => T, enabled: boolean, fallback: T): T {
   return enabled ? value : fallback;
 }
 
-export function useProjectHRItems(projectId: string, options?: HRQueryOptions): HRPlannedItem[] {
+export interface ProjectHRItemsState {
+  items: HRPlannedItem[];
+  /** True while permissions or the items query are still resolving. */
+  isLoading: boolean;
+  /** False when the HR domain is hidden for this role — "no access", not "no items". */
+  readsEnabled: boolean;
+}
+
+export function useProjectHRItemsState(projectId: string, options?: HRQueryOptions): ProjectHRItemsState {
   const mode = useWorkspaceMode();
   const estimateSync = useEstimateV2ProjectSync(projectId);
   const supabaseMode = mode.kind === "supabase" ? mode : null;
-  const { seam } = usePermission(projectId);
+  const { seam, isLoading: isPermissionLoading } = usePermission(projectId);
   const financeAccess = useMemo(() => resolveFinanceRowLoadAccess(seam), [seam]);
   const hrReadsEnabled = useMemo(
     () => projectDomainAllowsView(getProjectDomainAccess(seam, "hr")),
@@ -91,30 +99,72 @@ export function useProjectHRItems(projectId: string, options?: HRQueryOptions): 
     loadsEnabled && (mode.kind === "demo" || mode.kind === "local"),
     EMPTY_HR_ITEMS,
   );
+  // Stable key (no projection-revision segment): a revision-embedding key collapses
+  // to `undefined` data on every estimate sync and the list flashes empty. The
+  // invalidation effect below covers freshness. Permission-race: while permissions
+  // resolve, the seam defaults to viewer/none — don't fetch under that identity.
   const itemsQuery = useQuery({
     queryKey: supabaseMode
-      ? [...hrQueryKeys.projectItems(supabaseMode.profileId, projectId, financeAccess), estimateSync.domains.hr.projectedRevision ?? "initial"]
+      ? hrQueryKeys.projectItems(supabaseMode.profileId, projectId, financeAccess)
       : hrQueryKeys.projectItems("browser", projectId),
     queryFn: async () => {
       const source = await getHRSource(supabaseMode ?? undefined);
       return source.getProjectHRItems(projectId, financeAccess);
     },
-    enabled: loadsEnabled && Boolean(supabaseMode && projectId),
+    enabled: loadsEnabled && Boolean(supabaseMode && projectId) && !isPermissionLoading,
     staleTime: HR_QUERY_STALE_TIME_MS,
   });
 
+  const queryClient = useQueryClient();
+  const projectedRevision = estimateSync.domains.hr.projectedRevision ?? null;
+  const invalidateProfileId = supabaseMode?.profileId ?? null;
+  useProjectionAdvance(
+    invalidateProfileId && projectId ? `${invalidateProfileId}:${projectId}` : null,
+    projectedRevision,
+    () => {
+      if (!invalidateProfileId) return;
+      void queryClient.invalidateQueries({
+        queryKey: hrQueryKeys.projectItemsRoot(invalidateProfileId, projectId),
+      });
+    },
+  );
+
   if (mode.kind === "demo" || mode.kind === "local") {
-    return browserItems;
+    return { items: browserItems, isLoading: false, readsEnabled: loadsEnabled };
   }
 
-  return itemsQuery.data ?? EMPTY_HR_ITEMS;
+  if (!supabaseMode) {
+    return {
+      items: EMPTY_HR_ITEMS,
+      isLoading: mode.kind === "pending-supabase",
+      readsEnabled: loadsEnabled,
+    };
+  }
+
+  return {
+    // Never serve cached rows from before a permission downgrade: with reads
+    // disabled the truthful answer is "no access", not the last visible list.
+    items: loadsEnabled ? (itemsQuery.data ?? EMPTY_HR_ITEMS) : EMPTY_HR_ITEMS,
+    isLoading: isPermissionLoading || (loadsEnabled && itemsQuery.isPending),
+    readsEnabled: loadsEnabled,
+  };
 }
 
-export function useProjectHRPayments(projectId: string, options?: HRQueryOptions): HRPayment[] {
+export function useProjectHRItems(projectId: string, options?: HRQueryOptions): HRPlannedItem[] {
+  return useProjectHRItemsState(projectId, options).items;
+}
+
+export interface ProjectHRPaymentsState {
+  payments: HRPayment[];
+  isLoading: boolean;
+  readsEnabled: boolean;
+}
+
+export function useProjectHRPaymentsState(projectId: string, options?: HRQueryOptions): ProjectHRPaymentsState {
   const mode = useWorkspaceMode();
   const estimateSync = useEstimateV2ProjectSync(projectId);
   const supabaseMode = mode.kind === "supabase" ? mode : null;
-  const { seam } = usePermission(projectId);
+  const { seam, isLoading: isPermissionLoading } = usePermission(projectId);
   const hrReadsEnabled = useMemo(
     () => projectDomainAllowsView(getProjectDomainAccess(seam, "hr")),
     [seam],
@@ -127,23 +177,54 @@ export function useProjectHRPayments(projectId: string, options?: HRQueryOptions
     loadsEnabled && (mode.kind === "demo" || mode.kind === "local"),
     EMPTY_HR_PAYMENTS,
   );
+  // Stable key + root invalidation on projection advance (see useProjectHRItemsState).
   const paymentsQuery = useQuery({
     queryKey: supabaseMode
-      ? [...hrQueryKeys.projectPayments(supabaseMode.profileId, projectId), estimateSync.domains.hr.projectedRevision ?? "initial"]
+      ? hrQueryKeys.projectPayments(supabaseMode.profileId, projectId)
       : hrQueryKeys.projectPayments("browser", projectId),
     queryFn: async () => {
       const source = await getHRSource(supabaseMode ?? undefined);
       return source.getProjectHRPayments(projectId);
     },
-    enabled: loadsEnabled && Boolean(supabaseMode && projectId),
+    enabled: loadsEnabled && Boolean(supabaseMode && projectId) && !isPermissionLoading,
     staleTime: HR_QUERY_STALE_TIME_MS,
   });
 
+  const queryClient = useQueryClient();
+  const projectedRevision = estimateSync.domains.hr.projectedRevision ?? null;
+  const invalidateProfileId = supabaseMode?.profileId ?? null;
+  useProjectionAdvance(
+    invalidateProfileId && projectId ? `${invalidateProfileId}:${projectId}` : null,
+    projectedRevision,
+    () => {
+      if (!invalidateProfileId) return;
+      void queryClient.invalidateQueries({
+        queryKey: hrQueryKeys.projectPayments(invalidateProfileId, projectId),
+      });
+    },
+  );
+
   if (mode.kind === "demo" || mode.kind === "local") {
-    return browserPayments;
+    return { payments: browserPayments, isLoading: false, readsEnabled: loadsEnabled };
   }
 
-  return paymentsQuery.data ?? EMPTY_HR_PAYMENTS;
+  if (!supabaseMode) {
+    return {
+      payments: EMPTY_HR_PAYMENTS,
+      isLoading: mode.kind === "pending-supabase",
+      readsEnabled: loadsEnabled,
+    };
+  }
+
+  return {
+    payments: loadsEnabled ? (paymentsQuery.data ?? EMPTY_HR_PAYMENTS) : EMPTY_HR_PAYMENTS,
+    isLoading: isPermissionLoading || (loadsEnabled && paymentsQuery.isPending),
+    readsEnabled: loadsEnabled,
+  };
+}
+
+export function useProjectHRPayments(projectId: string, options?: HRQueryOptions): HRPayment[] {
+  return useProjectHRPaymentsState(projectId, options).payments;
 }
 
 function assertHRMutationWorkspaceMode(
@@ -163,7 +244,6 @@ function assertHRMutationWorkspaceMode(
 export function useProjectHRMutations(projectId: string) {
   const mode = useWorkspaceMode();
   const queryClient = useQueryClient();
-  const estimateSync = useEstimateV2ProjectSync(projectId);
   const { seam } = usePermission(projectId);
   const financeAccess = useMemo(() => resolveFinanceRowLoadAccess(seam), [seam]);
 
@@ -188,7 +268,6 @@ export function useProjectHRMutations(projectId: string) {
         resolvedMode.profileId,
         projectId,
         financeAccess,
-        estimateSync.domains.hr.projectedRevision,
         hrItemId,
       )
       : getHRItems(projectId).find((item) => item.id === hrItemId);
@@ -218,7 +297,6 @@ export function useProjectHRMutations(projectId: string) {
       await invalidateProjectItems(resolvedMode);
     }
   }, [
-    estimateSync.domains.hr.projectedRevision,
     financeAccess,
     invalidateProjectItems,
     mode,
@@ -234,7 +312,6 @@ export function useProjectHRMutations(projectId: string) {
         resolvedMode.profileId,
         projectId,
         financeAccess,
-        estimateSync.domains.hr.projectedRevision,
         hrItemId,
       )
       : getHRItems(projectId).find((item) => item.id === hrItemId);
@@ -260,7 +337,6 @@ export function useProjectHRMutations(projectId: string) {
       await invalidateProjectItems(resolvedMode);
     }
   }, [
-    estimateSync.domains.hr.projectedRevision,
     financeAccess,
     invalidateProjectItems,
     mode,

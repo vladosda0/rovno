@@ -2,12 +2,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { useParams, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { useProject, useTasks, usePermission, useMedia, useWorkspaceMode } from "@/hooks/use-mock-data";
+import { useProject, usePermission, useMedia, useWorkspaceMode } from "@/hooks/use-mock-data";
 import {
   getUserById, getCurrentUser, updateTask, addTask, deleteTask as storeDeleteTask,
   deleteStage as storeDeleteStage, completeStage as storeCompleteStage,
 } from "@/data/store";
-import { getPlanningSource } from "@/data/planning-source";
+import { getPlanningSource, TaskNoLongerAvailableError } from "@/data/planning-source";
 import { EmptyState } from "@/components/EmptyState";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
@@ -33,9 +33,10 @@ import {
   ListTodo, Plus, CheckCircle2, Circle, Clock,
   AlertTriangle, Trash2, Check, User, Calendar as CalendarIcon, GripVertical, Camera, Loader2,
 } from "lucide-react";
-import { planningQueryKeys } from "@/hooks/use-planning-source";
+import { planningQueryKeys, usePlanningProjectTasksState } from "@/hooks/use-planning-source";
 import type { TaskStatus } from "@/types/entities";
-import { useEstimateV2Project } from "@/hooks/use-estimate-v2-data";
+import { useEstimateV2Project, useEstimateV2ProjectionCapability } from "@/hooks/use-estimate-v2-data";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useMediaUploadMutations } from "@/hooks/use-documents-media-source";
 import type { Task } from "@/types/entities";
 
@@ -102,7 +103,7 @@ export default function ProjectTasks() {
   const { id: projectId } = useParams<{ id: string }>();
   const pid = projectId!;
   const { project, stages, members } = useProject(pid);
-  const tasks = useTasks(pid);
+  const { tasks, isLoading: isTasksLoading } = usePlanningProjectTasksState(pid);
   const media = useMedia(pid);
   const perm = usePermission(pid);
   const { role } = perm;
@@ -124,10 +125,19 @@ export default function ProjectTasks() {
   const canUploadTaskMedia = canContributeTasks;
   const taskSyncState = estimateSync.domains.tasks;
   const isSupabaseMode = workspaceMode.kind === "supabase";
-  const isTaskSyncing = isSupabaseMode && taskSyncState.status === "syncing";
-  const hasTaskSyncError = isSupabaseMode && taskSyncState.status === "error";
-  const isTaskProjectionBehind = isSupabaseMode
+  // Only the session that actually RUNS the projection has a meaningful local
+  // sync state. A reader's (viewer/contractor) projectedRevision never advances,
+  // so comparing it to estimateRevision would block their task actions forever —
+  // the DB tasks they read through react-query ARE the projected truth.
+  const projectionCapability = useEstimateV2ProjectionCapability(pid);
+  const isProjectorSession = isSupabaseMode && projectionCapability === "projector";
+  const isTaskSyncing = isProjectorSession && taskSyncState.status === "syncing";
+  const hasTaskSyncError = isProjectorSession && taskSyncState.status === "error";
+  // "skipped" is a settled, honest no-op (nothing to project / no permission),
+  // not a pending sync — treating it as "behind" would block actions forever.
+  const isTaskProjectionBehind = isProjectorSession
     && estimateProject.estimateStatus !== "planning"
+    && taskSyncState.status !== "skipped"
     && taskSyncState.projectedRevision !== estimateSync.estimateRevision
     && !isTaskSyncing
     && !hasTaskSyncError;
@@ -230,7 +240,11 @@ export default function ProjectTasks() {
   // --- Central status change handler (intercepts Done / Blocked) ---
   const handleStatusChange = useCallback((taskId: string, newStatus: TaskStatus) => {
     if (!canChangeTaskStatus) return;
-    if (shouldBlockTaskLaunchActions) {
+    const task = tasks.find((entry) => entry.id === taskId);
+    if (!task || task.status === newStatus) return;
+    // Only estimate-linked tasks depend on the projection; manual tasks are
+    // always safe to move regardless of estimate sync state.
+    if (shouldBlockTaskLaunchActions && task.estimateV2WorkId) {
       toast({
         title: hasTaskSyncError ? t("tasks.sync.toast.needsAttention") : t("tasks.sync.toast.stillSyncing"),
         description: hasTaskSyncError
@@ -240,8 +254,6 @@ export default function ProjectTasks() {
       });
       return;
     }
-    const task = tasks.find((entry) => entry.id === taskId);
-    if (!task || task.status === newStatus) return;
 
     if (newStatus === "done") {
       const unresolvedChecklistItems = task.checklist.filter((item) => !item.done);
@@ -283,6 +295,16 @@ export default function ProjectTasks() {
           });
         }
       } catch (error) {
+        if (error instanceof TaskNoLongerAvailableError) {
+          // The task was re-projected/replaced while we looked at it. Refresh
+          // and tell the user the list converged — no scary failure.
+          await invalidateProjectTasks();
+          toast({
+            title: t("tasks.toast.taskRefreshed.title"),
+            description: t("tasks.toast.taskRefreshed.description"),
+          });
+          return;
+        }
         toast({
           title: t("tasks.toast.statusUpdateFailed.title"),
           description: error instanceof Error ? error.message : t("tasks.toast.statusUpdateFailed.fallback"),
@@ -295,7 +317,9 @@ export default function ProjectTasks() {
   // Confirm Done
   const handleConfirmDone = useCallback(async () => {
     if (!donePrompt) return;
-    if (shouldBlockTaskLaunchActions) {
+    const task = tasks.find((entry) => entry.id === donePrompt.taskId);
+    if (!task) return;
+    if (shouldBlockTaskLaunchActions && task.estimateV2WorkId) {
       toast({
         title: hasTaskSyncError ? t("tasks.sync.toast.needsAttention") : t("tasks.sync.toast.stillSyncing"),
         description: hasTaskSyncError
@@ -305,9 +329,6 @@ export default function ProjectTasks() {
       });
       return;
     }
-
-    const task = tasks.find((entry) => entry.id === donePrompt.taskId);
-    if (!task) return;
     if (task.checklist.some((item) => !item.done)) {
       toast({
         title: t("tasks.toast.cannotMarkDone.title"),
@@ -361,6 +382,15 @@ export default function ProjectTasks() {
       setDoneComment("");
       toast({ title: t("tasks.toast.markedDone") });
     } catch (error) {
+      if (error instanceof TaskNoLongerAvailableError) {
+        await invalidateProjectTasks();
+        setDonePrompt(null);
+        toast({
+          title: t("tasks.toast.taskRefreshed.title"),
+          description: t("tasks.toast.taskRefreshed.description"),
+        });
+        return;
+      }
       toast({
         title: t("tasks.toast.cannotComplete.title"),
         description: error instanceof Error ? error.message : t("tasks.toast.cannotComplete.fallback"),
@@ -390,7 +420,8 @@ export default function ProjectTasks() {
   // Confirm Blocked
   const handleConfirmBlocked = useCallback(async () => {
     if (!blockedPrompt) return;
-    if (shouldBlockTaskLaunchActions) {
+    const blockedTask = tasks.find((entry) => entry.id === blockedPrompt.taskId);
+    if (shouldBlockTaskLaunchActions && blockedTask?.estimateV2WorkId) {
       toast({
         title: hasTaskSyncError ? t("tasks.sync.toast.needsAttention") : t("tasks.sync.toast.stillSyncing"),
         description: hasTaskSyncError
@@ -418,13 +449,22 @@ export default function ProjectTasks() {
       setBlockedReason("");
       toast({ title: t("tasks.toast.markedBlocked") });
     } catch (error) {
+      if (error instanceof TaskNoLongerAvailableError) {
+        await invalidateProjectTasks();
+        setBlockedPrompt(null);
+        toast({
+          title: t("tasks.toast.taskRefreshed.title"),
+          description: t("tasks.toast.taskRefreshed.description"),
+        });
+        return;
+      }
       toast({
         title: t("tasks.toast.cannotBlock.title"),
         description: error instanceof Error ? error.message : t("tasks.toast.cannotBlock.fallback"),
         variant: "destructive",
       });
     }
-  }, [blockedPrompt, blockedReason, workspaceMode, currentUser.id, invalidateProjectTasks, toast, shouldBlockTaskLaunchActions, hasTaskSyncError, taskSyncState.lastError, t]);
+  }, [blockedPrompt, blockedReason, tasks, workspaceMode, currentUser.id, invalidateProjectTasks, toast, shouldBlockTaskLaunchActions, hasTaskSyncError, taskSyncState.lastError, t]);
 
   const handleChecklistToggle = useCallback(async (
     taskId: string,
@@ -800,7 +840,19 @@ export default function ProjectTasks() {
         );
       })()}
 
-      {/* Kanban columns */}
+      {/* Kanban columns — skeleton while the tasks query resolves so an empty
+          board is never mistaken for "no tasks". */}
+      {isTasksLoading ? (
+        <div className="flex gap-sp-2 overflow-x-auto pb-sp-2 flex-1 min-h-0" data-testid="tasks-kanban-skeleton">
+          {allStatuses.map((status) => (
+            <div key={status} className="bg-muted/30 border border-border rounded-xl p-sp-2 min-w-[260px] w-[280px] flex-shrink-0 space-y-2">
+              <Skeleton className="h-5 w-28" />
+              <Skeleton className="h-16 rounded-lg" />
+              <Skeleton className="h-16 rounded-lg" />
+            </div>
+          ))}
+        </div>
+      ) : (
       <div className="flex gap-sp-2 overflow-x-auto pb-sp-2 flex-1 min-h-0">
         {allStatuses.map((status) => {
           const meta = statusMeta[status];
@@ -909,6 +961,7 @@ export default function ProjectTasks() {
           );
         })}
       </div>
+      )}
 
       {/* Task Detail Modal */}
       <TaskDetailModal
@@ -923,7 +976,7 @@ export default function ProjectTasks() {
         estimateLinkedPlanningReadOnly={workspaceMode.kind === "supabase" && Boolean(selectedTask?.estimateV2WorkId)}
         taskStructureReadOnly={isSupabaseMode}
         blockEstimateLinkedDelete={isSupabaseMode || shouldBlockTaskLaunchActions}
-        disableStatusChanges={shouldBlockTaskLaunchActions}
+        disableStatusChanges={shouldBlockTaskLaunchActions && Boolean(selectedTask?.estimateV2WorkId)}
         onStatusChange={handleStatusChange}
         onTitleChange={handleTaskTitleChange}
         onDescriptionChange={handleTaskDescriptionChange}

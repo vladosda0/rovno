@@ -54,6 +54,7 @@ function buildView(overrides: Partial<EstimateFinanceView> = {}): EstimateFinanc
     rpcSummaryTotalIncVatCents: null,
     uiTotalIncVatCents: 567_235_900,
     taxBps: 2200,
+    spendExcludesHr: false,
     ...overrides,
   };
 }

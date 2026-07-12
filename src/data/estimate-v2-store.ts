@@ -1,4 +1,4 @@
-import { getAuthRole, isDemoSessionActive, subscribeAuthState } from "@/lib/auth-state";
+import { getAuthRole, getStoredAuthProfile, isDemoSessionActive, subscribeAuthState } from "@/lib/auth-state";
 import {
   getProjectDomainAccessForRole,
   projectDomainAllowsManage,
@@ -86,7 +86,9 @@ interface EstimateV2ProjectState {
 }
 
 type EstimateV2SyncDomain = "tasks" | "procurement" | "hr";
-type EstimateV2SyncStatus = "idle" | "syncing" | "synced" | "error";
+type EstimateV2SyncStatus = "idle" | "syncing" | "synced" | "skipped" | "error";
+
+export type EstimateV2SyncSkipReason = "permission" | "unauthoritative";
 
 export interface EstimateV2ProjectSyncDomainState {
   status: EstimateV2SyncStatus;
@@ -94,9 +96,22 @@ export interface EstimateV2ProjectSyncDomainState {
   lastAttemptedAt: string | null;
   lastSucceededAt: string | null;
   lastError: string | null;
+  /** Set only while status === "skipped": why the projection did not run. */
+  skipReason: EstimateV2SyncSkipReason | null;
 }
 
-type EstimateV2DraftSaveStatus = "idle" | "pending" | "saving" | "saved" | "error";
+type EstimateV2DraftSaveStatus = "idle" | "pending" | "saving" | "saved" | "blocked_permission" | "error";
+
+/**
+ * Whether this session's sync state is meaningful for gating UI:
+ * - "projector": this session persists the draft and projects tasks/procurement/HR.
+ * - "blocked_permission": this session may edit the estimate but cannot persist or
+ *   project it (finance visibility below "detail" hides the source rows under RLS).
+ * - "reader": this session never projects (viewer/contractor or demo/local mode);
+ *   its local projectedRevision is not comparable to the server truth and must not
+ *   be used to block actions.
+ */
+export type EstimateV2ProjectionCapability = "projector" | "blocked_permission" | "reader";
 
 export interface EstimateV2ProjectSyncState {
   estimateRevision: string | null;
@@ -212,8 +227,10 @@ let mainStoreUnsubscribe: (() => void) | null = null;
 // session becomes active. Without this, any state cached before the demo session
 // was entered (e.g. during app boot) would stick at estimateStatus="planning".
 let lastKnownDemoActive = false;
+let lastKnownAuthProfileId: string | null = null;
 if (typeof window !== "undefined") {
   lastKnownDemoActive = isDemoSessionActive();
+  lastKnownAuthProfileId = getStoredAuthProfile()?.id ?? null;
   subscribeAuthState(() => {
     const active = isDemoSessionActive();
     if (active && !lastKnownDemoActive) {
@@ -226,6 +243,16 @@ if (typeof window !== "undefined") {
       listeners.forEach((listener) => listener());
     }
     lastKnownDemoActive = active;
+
+    // Auth identity changed (logout or account switch in the same tab): the
+    // per-project supabase runtime state — access contexts, sync statuses,
+    // hydrated rows — belongs to the previous account and must not leak into
+    // the next one (wrong capability, wrong hydration path, stale data).
+    const authProfileId = getStoredAuthProfile()?.id ?? null;
+    if (authProfileId !== lastKnownAuthProfileId) {
+      lastKnownAuthProfileId = authProfileId;
+      resetEstimateV2SupabaseRuntimeSessionState();
+    }
   });
 }
 const remoteHydrationPromises = new Map<string, Promise<void>>();
@@ -237,6 +264,19 @@ const remoteProjectionSyncInFlightByProjectId = new Set<string>();
 // Promise for an in-flight runProjectDraftSync, so flushProjectDraftSync can await it.
 const runningProjectDraftSyncByProjectId = new Map<string, Promise<void>>();
 const retainedSupabaseSyncProfileIdByProjectId = new Map<string, string>();
+// Last registered supabase access context, kept after the registering page
+// unmounts. Only two pages register a context (Estimate, Procurement); without
+// this fallback, navigating to Tasks/HR mid-debounce made the engine and the
+// capability check lose all permission knowledge — pending syncs were silently
+// killed until the user returned. Cleared with the rest of the runtime state
+// when the session/profile changes.
+const retainedSupabaseAccessContextByProjectId = new Map<string, EstimateV2ProjectAccessContext>();
+// Projects whose in-memory state exists ONLY because a getter default-seeded it
+// (ensureProjectState) — no remote hydrate installed it and no user edit touched
+// it. Such placeholder state must never be cached to localStorage or autosaved:
+// a debounce firing before hydration would persist a default/empty snapshot over
+// the real remote draft. Cleared on hydrate install and on any real mutation.
+const defaultSeededStateProjectIds = new Set<string>();
 
 function notify() {
   listeners.forEach((listener) => listener());
@@ -412,6 +452,7 @@ function createEmptySyncDomainState(): EstimateV2ProjectSyncDomainState {
     lastAttemptedAt: null,
     lastSucceededAt: null,
     lastError: null,
+    skipReason: null,
   };
 }
 
@@ -437,9 +478,9 @@ function cloneProjectSyncState(sync?: EstimateV2ProjectSyncState | null): Estima
     draftSaveLastSucceededAt: source.draftSaveLastSucceededAt ?? null,
     draftSaveLastError: source.draftSaveLastError ?? null,
     domains: {
-      tasks: { ...(source.domains.tasks ?? createEmptySyncDomainState()) },
-      procurement: { ...(source.domains.procurement ?? createEmptySyncDomainState()) },
-      hr: { ...(source.domains.hr ?? createEmptySyncDomainState()) },
+      tasks: { ...createEmptySyncDomainState(), ...(source.domains.tasks ?? {}) },
+      procurement: { ...createEmptySyncDomainState(), ...(source.domains.procurement ?? {}) },
+      hr: { ...createEmptySyncDomainState(), ...(source.domains.hr ?? {}) },
     },
   };
 }
@@ -511,6 +552,7 @@ function ensureProjectSyncState(state: EstimateV2ProjectState): EstimateV2Projec
       if (previousRevision !== nextRevision && domainState.projectedRevision !== nextRevision && domainState.status !== "syncing") {
         domainState.status = "idle";
         domainState.lastError = null;
+        domainState.skipReason = null;
       }
       return;
     }
@@ -518,6 +560,7 @@ function ensureProjectSyncState(state: EstimateV2ProjectState): EstimateV2Projec
     domainState.status = "synced";
     domainState.projectedRevision = nextRevision;
     domainState.lastError = null;
+    domainState.skipReason = null;
   });
 
   state.sync = nextSync;
@@ -728,6 +771,46 @@ function clearEstimateV2ProjectRuntimeState(projectId: string) {
   heroTransitionInFlightByProjectId.delete(projectId);
   remoteProjectionSyncInFlightByProjectId.delete(projectId);
   retainedSupabaseSyncProfileIdByProjectId.delete(projectId);
+  retainedSupabaseAccessContextByProjectId.delete(projectId);
+  defaultSeededStateProjectIds.delete(projectId);
+}
+
+/**
+ * Live access context when a registering page is mounted; otherwise the last
+ * retained supabase context for this project (same session). An explicitly
+ * registered demo/local context is respected as-is — the fallback applies only
+ * when no context is registered at all.
+ */
+function resolveEstimateAccessContext(projectId: string): EstimateV2ProjectAccessContext | null {
+  return accessContextByProjectId.get(projectId)
+    ?? retainedSupabaseAccessContextByProjectId.get(projectId)
+    ?? null;
+}
+
+/**
+ * Drop every project's supabase runtime state (contexts, sync bookkeeping,
+ * hydrated rows). Called on auth identity change — logout or same-tab account
+ * switch — so nothing from the previous account survives into the next one.
+ * Demo/local project state is left alone.
+ */
+function resetEstimateV2SupabaseRuntimeSessionState(): void {
+  const supabaseProjectIds = new Set<string>([
+    ...retainedSupabaseSyncProfileIdByProjectId.keys(),
+    ...retainedSupabaseAccessContextByProjectId.keys(),
+  ]);
+  accessContextByProjectId.forEach((context, projectId) => {
+    if (context.mode === "supabase") {
+      supabaseProjectIds.add(projectId);
+    }
+  });
+  if (supabaseProjectIds.size === 0) {
+    return;
+  }
+  supabaseProjectIds.forEach((projectId) => {
+    clearEstimateV2ProjectRuntimeState(projectId);
+    accessContextByProjectId.delete(projectId);
+  });
+  notify();
 }
 
 function isCurrentSupabaseProjectProfile(projectId: string, profileId: string): boolean {
@@ -761,7 +844,7 @@ function shouldHydrateEstimateViaOperationalRpc(
 }
 
 function getManagedEstimateRemoteSyncContext(projectId: string): { profileId: string } | null {
-  const context = accessContextByProjectId.get(projectId);
+  const context = resolveEstimateAccessContext(projectId);
   if (!context || context.mode !== "supabase" || !context.profileId) {
     return null;
   }
@@ -774,6 +857,19 @@ function getManagedEstimateRemoteSyncContext(projectId: string): { profileId: st
   return {
     profileId: context.profileId,
   };
+}
+
+/**
+ * How this session relates to the estimate→domains projection. Pages must gate
+ * "projection behind / still syncing" blocking ONLY for "projector" sessions:
+ * a reader's local projectedRevision never advances and says nothing about the
+ * server truth it reads through react-query.
+ */
+export function getEstimateV2ProjectionCapability(projectId: string): EstimateV2ProjectionCapability {
+  const managed = getManagedEstimateRemoteSyncContext(projectId);
+  if (!managed) return "reader";
+  const context = resolveEstimateAccessContext(projectId);
+  return canAccessSensitiveEstimateRows(context) ? "projector" : "blocked_permission";
 }
 
 /**
@@ -805,6 +901,14 @@ function queueProjectDraftSync(projectId: string) {
     return;
   }
 
+  // A default-seeded placeholder (getter-created, never hydrated, never edited)
+  // is not user data: caching it would clobber the profile's real workspace
+  // cache, and autosaving it could persist a default snapshot over the remote
+  // draft when the debounce beats a slow hydration.
+  if (defaultSeededStateProjectIds.has(projectId)) {
+    return;
+  }
+
   ensureProjectSyncState(state);
   saveWorkspaceEstimateCache(projectId, profileId, state);
 
@@ -815,6 +919,28 @@ function queueProjectDraftSync(projectId: string) {
 
   if (heroTransitionInFlightByProjectId.has(projectId) || remoteProjectionSyncInFlightByProjectId.has(projectId)) {
     deferredDraftSyncByProjectId.add(projectId);
+    return;
+  }
+
+  // Honesty over silence: an editor whose finance visibility hides the estimate
+  // rows under RLS cannot persist or project this draft. Say so instead of
+  // parking the state at "pending" forever while the edits are silently lost.
+  if (!canAccessSensitiveEstimateRows(resolveEstimateAccessContext(projectId))) {
+    const blockedSync = ensureProjectSyncState(state);
+    blockedSync.draftSaveStatus = "blocked_permission";
+    blockedSync.draftSaveLastError = null;
+    if (isNonPlanningEstimateStatus(state.project.estimateStatus)) {
+      (["tasks", "procurement", "hr"] as const).forEach((domain) => {
+        blockedSync.domains[domain] = {
+          ...blockedSync.domains[domain],
+          status: "skipped",
+          skipReason: "permission",
+          lastError: null,
+        };
+      });
+    }
+    clearScheduledProjectDraftSync(projectId);
+    saveWorkspaceEstimateCache(projectId, profileId, state);
     return;
   }
 
@@ -869,6 +995,13 @@ export async function flushProjectDraftSync(projectId: string): Promise<void> {
       continue;
     }
     if (deferredDraftSyncByProjectId.has(projectId)) {
+      // A deferred entry with no running promise means a hero transition is (or
+      // was) in flight — running now would race the transition's server writes
+      // (the autosave prune can delete rows the transition just created). Leave
+      // the deferred flag for the transition's completion re-queue to consume.
+      if (heroTransitionInFlightByProjectId.has(projectId)) {
+        break;
+      }
       deferredDraftSyncByProjectId.delete(projectId);
       await runAndTrackProjectDraftSync(projectId);
       continue;
@@ -894,6 +1027,12 @@ function hasProjectDraftProjectionDrift(
   return ensureProjectSyncState(latestState).estimateRevision !== estimateRevision;
 }
 
+/** A restored cache whose save never completed (tab closed mid-debounce). */
+function hasUnflushedDraftSaveStatus(state: EstimateV2ProjectState): boolean {
+  const status = state.sync?.draftSaveStatus;
+  return status === "pending" || status === "saving";
+}
+
 function hasPendingProjectDraftSync(projectId: string): boolean {
   return heroTransitionInFlightByProjectId.has(projectId)
     || remoteProjectionSyncInFlightByProjectId.has(projectId)
@@ -906,6 +1045,9 @@ function commitProjectStateChange(projectId: string) {
   if (state) {
     ensureProjectSyncState(state);
   }
+  // A real mutation makes the state user-owned: it is now legitimate (and
+  // required) to cache and autosave it, even if it started default-seeded.
+  defaultSeededStateProjectIds.delete(projectId);
   queueProjectDraftSync(projectId);
   notify();
 }
@@ -954,7 +1096,7 @@ function applyTaskIdsToState(
 async function runProjectDraftSync(projectId: string) {
   const state = statesByProjectId.get(projectId);
   const managedSyncContext = getManagedEstimateRemoteSyncContext(projectId);
-  const accessContext = accessContextByProjectId.get(projectId) ?? null;
+  const accessContext = resolveEstimateAccessContext(projectId);
   if (!state || !managedSyncContext) {
     return;
   }
@@ -1032,6 +1174,16 @@ async function runProjectDraftSync(projectId: string) {
           lines: normalized.lines.length,
         });
       }
+    } else {
+      // This session may edit but cannot persist (RLS hides the estimate rows).
+      // Never leave the status at "pending" — the save did not and will not run.
+      const blockedState = statesByProjectId.get(projectId);
+      if (blockedState) {
+        const blockedSync = ensureProjectSyncState(blockedState);
+        blockedSync.draftSaveStatus = "blocked_permission";
+        blockedSync.draftSaveLastError = null;
+        notify();
+      }
     }
 
     if (!isCurrentSupabaseProjectProfile(projectId, profileId)) {
@@ -1060,13 +1212,14 @@ async function runProjectDraftSync(projectId: string) {
       // Skip downstream projections when estimate rows are not visible under RLS,
       // or when the snapshot is non-authoritative (empty/partial) to prevent
       // mass-unlinking procurement/HR items from an incomplete estimate state.
+      // Honesty: report "skipped" and leave projectedRevision untouched — nothing
+      // was projected, so nothing may claim to be in sync with this revision.
       const skipState = statesByProjectId.get(projectId);
       if (skipState) {
         (["tasks", "procurement", "hr"] as const).forEach((domain) => {
           setProjectSyncDomainStatus(skipState, domain, {
-            status: "synced",
-            projectedRevision: sync.estimateRevision,
-            lastSucceededAt: nowIso(),
+            status: "skipped",
+            skipReason: !canRunSensitiveEstimateProjection ? "permission" : "unauthoritative",
             lastError: null,
           });
         });
@@ -1107,19 +1260,31 @@ async function runProjectDraftSync(projectId: string) {
             projectedRevision: sync.estimateRevision,
             lastSucceededAt: nowIso(),
             lastError: null,
+            skipReason: null,
           });
           saveWorkspaceEstimateCache(projectId, profileId, latestState);
         }
       } catch (error) {
+        // Procurement and HR depend on the task ids this step resolves; projecting
+        // them from a work set with stale/missing taskIds silently drops HR lines.
+        // Stop the fan-out and report all three domains instead of a fake partial sync.
         const latestState = statesByProjectId.get(projectId);
         if (latestState) {
           setProjectSyncDomainStatus(latestState, "tasks", {
             status: "error",
             lastError: error instanceof Error ? error.message : "Unable to sync tasks from estimate.",
           });
+          (["procurement", "hr"] as const).forEach((domain) => {
+            setProjectSyncDomainStatus(latestState, domain, {
+              status: "error",
+              lastError: "Blocked: tasks projection failed.",
+            });
+          });
           saveWorkspaceEstimateCache(projectId, profileId, latestState);
         }
         console.error("Failed to sync estimate v2 tasks projection", error);
+        notify();
+        return;
       } finally {
         notify();
       }
@@ -1148,6 +1313,7 @@ async function runProjectDraftSync(projectId: string) {
             projectedRevision: sync.estimateRevision,
             lastSucceededAt: nowIso(),
             lastError: null,
+            skipReason: null,
           });
           saveWorkspaceEstimateCache(projectId, profileId, latestState);
         }
@@ -1191,6 +1357,7 @@ async function runProjectDraftSync(projectId: string) {
             projectedRevision: sync.estimateRevision,
             lastSucceededAt: nowIso(),
             lastError: null,
+            skipReason: null,
           });
           saveWorkspaceEstimateCache(projectId, profileId, latestState);
         }
@@ -1228,6 +1395,26 @@ async function runProjectDraftSync(projectId: string) {
       notify();
     }
   } finally {
+    // A mid-run guard return (drift/profile change) can leave domains this run
+    // marked "syncing" with no writer coming back for them. "syncing" must never
+    // outlive the run that set it — reset the leftovers to "idle" so consumers
+    // see an honest "not synced yet" instead of a spinner that never resolves.
+    if (shouldProject) {
+      const finalState = statesByProjectId.get(projectId);
+      if (finalState) {
+        let reconciled = false;
+        (["tasks", "procurement", "hr"] as const).forEach((domain) => {
+          const domainState = finalState.sync?.domains[domain];
+          if (domainState?.status === "syncing" && domainState.lastAttemptedAt === attemptedAt) {
+            setProjectSyncDomainStatus(finalState, domain, { status: "idle" });
+            reconciled = true;
+          }
+        });
+        if (reconciled) {
+          notify();
+        }
+      }
+    }
     remoteProjectionSyncInFlightByProjectId.delete(projectId);
     if (deferredDraftSyncByProjectId.delete(projectId)) {
       queueProjectDraftSync(projectId);
@@ -1258,9 +1445,15 @@ export function registerEstimateV2ProjectAccessContext(
   accessContextByProjectId.set(projectId, context);
   if (context.mode === "supabase" && context.profileId) {
     retainedSupabaseSyncProfileIdByProjectId.set(projectId, context.profileId);
+    retainedSupabaseAccessContextByProjectId.set(projectId, { ...context });
   }
   const state = statesByProjectId.get(projectId);
-  if (state && context.mode === "supabase" && context.profileId) {
+  if (
+    state
+    && context.mode === "supabase"
+    && context.profileId
+    && !defaultSeededStateProjectIds.has(projectId)
+  ) {
     saveWorkspaceEstimateCache(projectId, context.profileId, state);
     queueProjectDraftSync(projectId);
   }
@@ -1713,6 +1906,20 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
   projectId: string,
   input: { profileId: string; forceFresh?: boolean },
 ): Promise<void> {
+  // Identity guard: a hydrate for profile B while the (live or retained) access
+  // context belongs to profile A means the account changed in this tab without a
+  // reload. A's runtime state — capability, sync statuses, hydrated rows — must
+  // never leak into B's session (wrong capability, wrong hydration path, stuck
+  // "pending" from the split between the two retained maps).
+  const previousContext = resolveEstimateAccessContext(projectId);
+  if (
+    previousContext?.mode === "supabase"
+    && previousContext.profileId
+    && previousContext.profileId !== input.profileId
+  ) {
+    clearEstimateV2ProjectRuntimeState(projectId);
+    accessContextByProjectId.delete(projectId);
+  }
   retainedSupabaseSyncProfileIdByProjectId.set(projectId, input.profileId);
   const cacheKey = `${projectId}:${input.profileId}`;
   const pending = remoteHydrationPromises.get(cacheKey);
@@ -1801,11 +2008,16 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
       };
       ensureProjectSyncState(cachedState);
       statesByProjectId.set(projectId, cachedState);
+      defaultSeededStateProjectIds.delete(projectId);
       ensureMainStoreSubscription();
       notify();
       if (isNonPlanningEstimateStatus(cachedState.project.estimateStatus)) {
         queueProjectDraftSync(projectId);
         persistExecutionStatusIfManaged(projectId, cachedState.project.estimateStatus);
+      } else if (hasUnflushedDraftSaveStatus(cachedState)) {
+        // A planning estimate reloaded mid-debounce: the cache carries edits the
+        // server never received. Re-queue the save or "pending" sticks forever.
+        queueProjectDraftSync(projectId);
       }
       return;
     }
@@ -1822,8 +2034,8 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
     const hasStartedTaskExecution = tasks.some(
       (task) => task.status === "in_progress" || task.status === "blocked" || task.status === "done",
     );
-    const allowSensitiveEstimateHydrate = canAccessSensitiveEstimateRows(accessContextByProjectId.get(projectId));
-    const accessSnapshot = accessContextByProjectId.get(projectId);
+    const allowSensitiveEstimateHydrate = canAccessSensitiveEstimateRows(resolveEstimateAccessContext(projectId));
+    const accessSnapshot = resolveEstimateAccessContext(projectId);
     let operationalEstimatePayload: Awaited<ReturnType<typeof loadEstimateOperationalSummary>> = null;
     if (shouldHydrateEstimateViaOperationalRpc(accessSnapshot)) {
       try {
@@ -1956,6 +2168,7 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
           unit: line.unit ?? cachedLine?.unit ?? "unit",
           qtyMilli: Math.max(1, Math.round(line.quantity * 1_000)),
           costUnitCents: 0,
+          costRedacted: true,
           systemResourceArticleId: cachedLine?.systemResourceArticleId ?? null,
           ...summaryClientFieldsFromOptionalCents(line.client_unit_price_cents, line.client_total_price_cents),
           ...summaryDiscountedClientField(line.discounted_client_total_price_cents),
@@ -2175,6 +2388,7 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
       });
     }
     statesByProjectId.set(projectId, nextState);
+    defaultSeededStateProjectIds.delete(projectId);
     ensureMainStoreSubscription();
     saveWorkspaceEstimateCache(projectId, input.profileId, nextState);
     notify();
@@ -2184,6 +2398,8 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
       // project, so a paused/finished project whose immediate fire-and-forget write was
       // lost self-heals on next view (those statuses have no server-side reader fallback).
       persistExecutionStatusIfManaged(projectId, nextState.project.estimateStatus);
+    } else if (hasUnflushedDraftSaveStatus(nextState)) {
+      queueProjectDraftSync(projectId);
     }
   })().finally(() => {
     // Identity-guard the cleanup (mirrors runAndTrackProjectDraftSync): with the forceFresh
@@ -2252,6 +2468,7 @@ function ensureProjectState(projectId: string): EstimateV2ProjectState {
       };
       ensureProjectSyncState(state);
       statesByProjectId.set(projectId, state);
+      defaultSeededStateProjectIds.delete(projectId);
       return state;
     }
   }
@@ -2336,6 +2553,9 @@ function ensureProjectState(projectId: string): EstimateV2ProjectState {
   ensureProjectSyncState(state);
   ensureMainStoreSubscription();
   statesByProjectId.set(projectId, state);
+  // Placeholder until a hydrate installs remote truth or a user edit commits —
+  // must never be cached or autosaved (see defaultSeededStateProjectIds).
+  defaultSeededStateProjectIds.add(projectId);
   return state;
 }
 
@@ -3867,6 +4087,8 @@ export function __unsafeResetEstimateV2ForTests() {
   statesByProjectId.clear();
   accessContextByProjectId.clear();
   retainedSupabaseSyncProfileIdByProjectId.clear();
+  retainedSupabaseAccessContextByProjectId.clear();
+  defaultSeededStateProjectIds.clear();
   if (mainStoreUnsubscribe) {
     mainStoreUnsubscribe();
     mainStoreUnsubscribe = null;

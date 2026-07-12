@@ -29,9 +29,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useEstimateV2Project } from "@/hooks/use-estimate-v2-data";
-import { useProjectHRMutations } from "@/hooks/use-hr-source";
-import { useHRItems, useHRPayments, usePermission, useProject, useTasks } from "@/hooks/use-mock-data";
+import { useEstimateV2Project, useEstimateV2ProjectionCapability } from "@/hooks/use-estimate-v2-data";
+import { useProjectHRItemsState, useProjectHRMutations, useProjectHRPaymentsState } from "@/hooks/use-hr-source";
+import { usePermission, useProject, useTasks } from "@/hooks/use-mock-data";
+import { DataGate } from "@/components/project/DataGate";
+import { Skeleton } from "@/components/ui/skeleton";
+import { resolveProjectDataGateState } from "@/lib/project-data-gate";
 import { useWorkspaceMode } from "@/hooks/use-workspace-source";
 import {
   getProjectDomainAccess,
@@ -138,8 +141,8 @@ export default function ProjectHR() {
   const estimateSync = estimateState.sync ?? EMPTY_SYNC_STATE;
   const { lines } = estimateState;
   const tasks = useTasks(pid);
-  const hrItems = useHRItems(pid);
-  const hrPayments = useHRPayments(pid);
+  const { items: hrItems, isLoading: isHRItemsLoading, readsEnabled: hrReadsEnabled } = useProjectHRItemsState(pid);
+  const { payments: hrPayments, isLoading: isHRPaymentsLoading } = useProjectHRPaymentsState(pid);
   const hrMutations = useProjectHRMutations(pid);
   const perm = usePermission(pid);
   const workspaceMode = useWorkspaceMode();
@@ -148,10 +151,15 @@ export default function ProjectHR() {
   const isDemoMode = isDemoSessionActive();
   const isSupabaseMode = workspaceMode.kind === "supabase";
   const hrSyncState = estimateSync.domains.hr;
-  const isHRSyncing = isSupabaseMode && hrSyncState.status === "syncing";
-  const hasHRSyncError = isSupabaseMode && hrSyncState.status === "error";
-  const isHRProjectionBehind = isSupabaseMode
+  // Sync-state gating is only meaningful for the session that runs projections;
+  // readers consume the DB truth via react-query (see ProjectTasks for details).
+  const projectionCapability = useEstimateV2ProjectionCapability(pid);
+  const isProjectorSession = isSupabaseMode && projectionCapability === "projector";
+  const isHRSyncing = isProjectorSession && hrSyncState.status === "syncing";
+  const hasHRSyncError = isProjectorSession && hrSyncState.status === "error";
+  const isHRProjectionBehind = isProjectorSession
     && estimateState.project.estimateStatus !== "planning"
+    && hrSyncState.status !== "skipped"
     && hrSyncState.projectedRevision !== estimateSync.estimateRevision
     && !isHRSyncing
     && !hasHRSyncError;
@@ -290,6 +298,16 @@ export default function ProjectHR() {
   }
 
   if (estimateState.project.estimateStatus === "planning") {
+    // While the estimate hydrates, the status defaults to "planning" — showing
+    // the "start planning" gate for an actually-launched project is a lie.
+    if (isSupabaseMode && estimateState.isLoading) {
+      return (
+        <div className="space-y-3" data-testid="hr-loading-skeleton">
+          <Skeleton className="h-16 rounded-card" />
+          <Skeleton className="h-40 rounded-card" />
+        </div>
+      );
+    }
     return (
       <ProjectWorkflowEmptyState
         variant="hr"
@@ -334,16 +352,28 @@ export default function ProjectHR() {
       <div className="rounded-card border border-border bg-card p-sp-2 space-y-3">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-lg font-semibold text-foreground">{t("hr.heading")}</h2>
-          <Badge variant="secondary">{t("hr.count", { count: hrItems.length })}</Badge>
+          {!isHRItemsLoading && (
+            <Badge variant="secondary">{t("hr.count", { count: hrItems.length })}</Badge>
+          )}
         </div>
 
-        {hrItems.length === 0 ? (
-          <EmptyState
-            icon={Users}
-            title={t("hr.empty.noItems.title")}
-            description={t("hr.empty.noItems.description")}
-          />
-        ) : (
+        <DataGate
+          state={resolveProjectDataGateState({
+            // Payments feed the paid/remaining columns — rendering rows with
+            // paid=0 while payments are still loading reads as "not paid".
+            isLoading: isHRItemsLoading || isHRPaymentsLoading,
+            readsEnabled: hrReadsEnabled,
+            isSyncing: isHRSyncing,
+            isEmpty: hrItems.length === 0,
+          })}
+          empty={(
+            <EmptyState
+              icon={Users}
+              title={t("hr.empty.noItems.title")}
+              description={t("hr.empty.noItems.description")}
+            />
+          )}
+        >
           <>
             <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
               <Input
@@ -578,7 +608,7 @@ export default function ProjectHR() {
               </Table>
             </div>
           </>
-        )}
+        </DataGate>
       </div>
     </div>
   );

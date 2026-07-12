@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { RedactedMoney } from "@/components/project/RedactedMoney";
 import { ResourceTypeBadge } from "@/components/estimate-v2/ResourceTypeBadge";
 import {
   useResourceArticleDetail,
@@ -197,7 +198,7 @@ function ResourceModalBody({ articleId, projectId, line, lines, versions, open, 
               label={t("estimate.resourceModal.context.inLine")}
               value={
                 line
-                  ? `${(line.qtyMilli / 1000).toLocaleString("ru-RU")} ${line.unit} · ${formatCents(line.costUnitCents)}`
+                  ? `${(line.qtyMilli / 1000).toLocaleString("ru-RU")} ${line.unit} · ${line.costRedacted ? "—" : formatCents(line.costUnitCents)}`
                   : "—"
               }
             />
@@ -212,7 +213,9 @@ function ResourceModalBody({ articleId, projectId, line, lines, versions, open, 
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-md border border-border p-2.5">
               <p className="text-xs text-muted-foreground">{t("estimate.resourceModal.price.yourCost")}</p>
-              <p className="text-base font-semibold">{formatCents(line?.costUnitCents)}</p>
+              <p className="text-base font-semibold">
+                {line?.costRedacted ? <RedactedMoney showIcon={false} /> : formatCents(line?.costUnitCents)}
+              </p>
             </div>
             <div className="rounded-md border border-border p-2.5">
               <p className="text-xs text-muted-foreground">{t("estimate.resourceModal.price.markup")}</p>

@@ -1,5 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useProjectionAdvance } from "@/hooks/use-projection-advance";
 import * as store from "@/data/store";
 import {
   deriveEstimateTaskAssignees,
@@ -15,6 +16,11 @@ const PLANNING_QUERY_STALE_TIME_MS = 60_000;
 const EMPTY_PLANNING_STAGES: Stage[] = [];
 const EMPTY_PLANNING_TASKS: Task[] = [];
 
+// Query keys are STABLE across estimate projection advances (no revision segment).
+// A key that embeds projectedRevision collapses the cache to `undefined` on every
+// sync — the UI flashes an empty list while the new key refetches. Instead the
+// effect below invalidates the root when projectedRevision advances, which is a
+// background refetch that keeps previous data mounted (same freshness, no flash).
 export const planningQueryKeys = {
   projectStages: (profileId: string, projectId: string) =>
     ["planning", "project-stages", profileId, projectId] as const,
@@ -39,7 +45,33 @@ function useStoreValue<T>(getter: () => T, enabled: boolean, fallback: T): T {
   return enabled ? value : fallback;
 }
 
-export function usePlanningProjectStages(projectId: string): Stage[] {
+/**
+ * Invalidate the planning roots when the tasks projection ADVANCES (stable-key
+ * pattern). The first observed value is a baseline, not a change — invalidating
+ * on mount would defeat staleTime and abort/duplicate the initial fetch.
+ */
+function usePlanningProjectionInvalidation(
+  projectId: string,
+  profileId: string | null,
+  projectedRevision: string | null,
+) {
+  const queryClient = useQueryClient();
+  useProjectionAdvance(
+    profileId && projectId ? `${profileId}:${projectId}` : null,
+    projectedRevision,
+    () => {
+      if (!profileId) return;
+      void queryClient.invalidateQueries({
+        queryKey: planningQueryKeys.projectStages(profileId, projectId),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: planningQueryKeys.projectTasks(profileId, projectId),
+      });
+    },
+  );
+}
+
+export function usePlanningProjectStagesState(projectId: string): { stages: Stage[]; isLoading: boolean } {
   const mode = useWorkspaceMode();
   const estimateState = useEstimateV2Project(projectId);
   const estimateSync = estimateState.sync;
@@ -52,7 +84,7 @@ export function usePlanningProjectStages(projectId: string): Stage[] {
   );
   const stagesQuery = useQuery({
     queryKey: supabaseMode
-      ? [...planningQueryKeys.projectStages(supabaseMode.profileId, projectId), estimateSync.domains.tasks.projectedRevision ?? "initial"]
+      ? planningQueryKeys.projectStages(supabaseMode.profileId, projectId)
       : planningQueryKeys.projectStages("demo", projectId),
     queryFn: async () => {
       const source = await getPlanningSource(supabaseMode ?? undefined);
@@ -62,14 +94,28 @@ export function usePlanningProjectStages(projectId: string): Stage[] {
     staleTime: PLANNING_QUERY_STALE_TIME_MS,
   });
 
+  usePlanningProjectionInvalidation(
+    projectId,
+    supabaseMode?.profileId ?? null,
+    estimateSync.domains.tasks.projectedRevision ?? null,
+  );
+
   if (mode.kind === "demo" || mode.kind === "local") {
-    return demoStages;
+    return { stages: demoStages, isLoading: false };
   }
 
-  return stagesQuery.data ?? EMPTY_PLANNING_STAGES;
+  if (!supabaseMode) {
+    return { stages: EMPTY_PLANNING_STAGES, isLoading: mode.kind === "pending-supabase" };
+  }
+
+  return { stages: stagesQuery.data ?? EMPTY_PLANNING_STAGES, isLoading: stagesQuery.isPending };
 }
 
-export function usePlanningProjectTasks(projectId: string): Task[] {
+export function usePlanningProjectStages(projectId: string): Stage[] {
+  return usePlanningProjectStagesState(projectId).stages;
+}
+
+export function usePlanningProjectTasksState(projectId: string): { tasks: Task[]; isLoading: boolean } {
   const mode = useWorkspaceMode();
   const estimateState = useEstimateV2Project(projectId);
   const estimateSync = estimateState.sync;
@@ -82,7 +128,7 @@ export function usePlanningProjectTasks(projectId: string): Task[] {
   );
   const tasksQuery = useQuery({
     queryKey: supabaseMode
-      ? [...planningQueryKeys.projectTasks(supabaseMode.profileId, projectId), estimateSync.domains.tasks.projectedRevision ?? "initial"]
+      ? planningQueryKeys.projectTasks(supabaseMode.profileId, projectId)
       : planningQueryKeys.projectTasks("demo", projectId),
     queryFn: async () => {
       const source = await getPlanningSource(supabaseMode ?? undefined);
@@ -91,6 +137,12 @@ export function usePlanningProjectTasks(projectId: string): Task[] {
     enabled: Boolean(supabaseMode && projectId),
     staleTime: PLANNING_QUERY_STALE_TIME_MS,
   });
+
+  usePlanningProjectionInvalidation(
+    projectId,
+    supabaseMode?.profileId ?? null,
+    estimateSync.domains.tasks.projectedRevision ?? null,
+  );
 
   const remoteTasks = tasksQuery.data ?? EMPTY_PLANNING_TASKS;
   const derivedTasks = useMemo(() => {
@@ -130,5 +182,17 @@ export function usePlanningProjectTasks(projectId: string): Task[] {
     });
   }, [demoTasks, estimateState.lines, mode.kind, remoteTasks, supabaseMode]);
 
-  return derivedTasks;
+  if (mode.kind === "demo" || mode.kind === "local") {
+    return { tasks: derivedTasks, isLoading: false };
+  }
+
+  if (!supabaseMode) {
+    return { tasks: EMPTY_PLANNING_TASKS, isLoading: mode.kind === "pending-supabase" };
+  }
+
+  return { tasks: derivedTasks, isLoading: tasksQuery.isPending };
+}
+
+export function usePlanningProjectTasks(projectId: string): Task[] {
+  return usePlanningProjectTasksState(projectId).tasks;
 }

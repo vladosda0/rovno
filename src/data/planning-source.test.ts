@@ -589,4 +589,31 @@ describe("overlayEstimateLinkedAssigneeFromChecklist", () => {
     const next = overlayEstimateLinkedAssigneeFromChecklist(task);
     expect(next.assignee_id).toBe("user-1");
   });
+
+  // Supabase checklist rows never carry assignee metadata (the SELECT has no
+  // assignee columns) — the overlay must be enrich-only and keep the task row's
+  // projection-written assignee instead of clearing it to "Unassigned".
+  it("keeps the task row assignee when checklist items carry no assignee metadata", () => {
+    const base = mapTaskRowToTask(taskRow({
+      assignee_profile_id: "user-2",
+      estimate_work_id: "work-1",
+    }));
+    const task: Task = {
+      ...base,
+      checklist: [
+        {
+          id: "c1",
+          text: "Labor line",
+          done: false,
+          type: "subtask",
+          procurementItemId: null,
+          estimateV2LineId: "line-1",
+          estimateV2WorkId: "work-1",
+          estimateV2ResourceType: "labor",
+        },
+      ],
+    };
+    const next = overlayEstimateLinkedAssigneeFromChecklist(task);
+    expect(next.assignee_id).toBe("user-2");
+  });
 });
