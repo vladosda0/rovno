@@ -262,11 +262,21 @@ if (typeof window !== "undefined") {
   });
 }
 const remoteHydrationPromises = new Map<string, Promise<void>>();
-// draft_seq the local draft is BASED on, captured at hydrate and advanced on
-// each successful save. Passed to saveCurrentEstimateDraft as the CAS
-// baseline: a save of state hydrated before another session's save loses the
-// CAS and converges instead of overwriting. null = pre-P1 database (no CAS).
+// draft_seq the local draft is BASED on, captured at hydrate and advanced by
+// the save's onDraftSeqAcquired callback — i.e. only when the CAS row ACTUALLY
+// advanced (never on drift aborts, never skipped on post-acquire write
+// errors; a resolve-based bump desyncs both ways into phantom conflicts).
+// Passed to saveCurrentEstimateDraft as the CAS baseline: a save of state
+// hydrated before another session's save loses the CAS and converges instead
+// of overwriting. null = pre-P1 database (no CAS).
 const draftSeqBaseByProjectId = new Map<string, number | null>();
+// Monotonic per-project acquire counter: a hydrate snapshots it BEFORE
+// fetching the seq and skips its baseline write if a save acquired in
+// between (the callback's value is newer than the hydrate's fetch).
+const draftSeqAcquireGenByProjectId = new Map<string, number>();
+// Sentry dedupe: one report per project + skipped-work-set per session (the
+// condition persists across autosaves and the facade reports at error level).
+const reportedSkippedWorkSignatures = new Set<string>();
 const remoteDraftSyncTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const remoteDraftSyncErrorSignatureByProjectId = new Map<string, string>();
 const heroTransitionInFlightByProjectId = new Set<string>();
@@ -779,6 +789,7 @@ function clearEstimateV2ProjectRuntimeState(projectId: string) {
   clearScheduledProjectDraftSync(projectId);
   statesByProjectId.delete(projectId);
   draftSeqBaseByProjectId.delete(projectId);
+  draftSeqAcquireGenByProjectId.delete(projectId);
   remoteDraftSyncErrorSignatureByProjectId.delete(projectId);
   heroTransitionInFlightByProjectId.delete(projectId);
   remoteProjectionSyncInFlightByProjectId.delete(projectId);
@@ -1324,11 +1335,18 @@ async function runProjectDraftSync(projectId: string) {
           shouldAbort: () => hasProjectDraftProjectionDrift(projectId, projectionRevision),
           allowPrune,
           expectedDraftSeq,
+          onDraftSeqAcquired: (nextSeq) => {
+            draftSeqAcquireGenByProjectId.set(
+              projectId,
+              (draftSeqAcquireGenByProjectId.get(projectId) ?? 0) + 1,
+            );
+            // has(): an in-flight save must not resurrect an entry cleared by
+            // an identity switch / runtime reset.
+            if (draftSeqBaseByProjectId.has(projectId)) {
+              draftSeqBaseByProjectId.set(projectId, nextSeq);
+            }
+          },
         });
-        if (typeof expectedDraftSeq === "number") {
-          // The save advanced the CAS token; local state is now based on it.
-          draftSeqBaseByProjectId.set(projectId, expectedDraftSeq + 1);
-        }
         const postSaveState = statesByProjectId.get(projectId);
         // Activation funnel: first successful server persist of a non-empty
         // estimate (the estimate autosaves, so this is the real "saved"
@@ -1467,11 +1485,16 @@ async function runProjectDraftSync(projectId: string) {
             // Works without a stage cannot become tasks (stage_id NOT NULL).
             // Reachable via orphan works (stage pruned from the snapshot).
             // Rare and self-heals when the work regains a stage; observability
-            // over UI noise, but never silent.
-            captureMessage("estimate projection skipped stageless works", {
-              tags: { area: "estimate_sync" },
-              extra: { projectId, skippedWorkIds: projection.skippedWorkIds },
-            });
+            // over UI noise, but never silent. Deduped per session — the
+            // condition persists across every autosave until repaired.
+            const signature = `${projectId}:${[...projection.skippedWorkIds].sort().join(",")}`;
+            if (!reportedSkippedWorkSignatures.has(signature)) {
+              reportedSkippedWorkSignatures.add(signature);
+              captureMessage("estimate projection skipped stageless works", {
+                tags: { area: "estimate_sync" },
+                extra: { projectId, skippedWorkIds: projection.skippedWorkIds },
+              });
+            }
           }
           applyTaskIdsToState(projectId, projection.taskIdByWorkId);
           const latestState = statesByProjectId.get(projectId);
@@ -2093,11 +2116,17 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
     const hadExistingState = statesByProjectId.has(projectId);
     const currentState = ensureProjectState(projectId);
     const cached = loadWorkspaceEstimateCache(projectId, input.profileId)?.state ?? null;
-    const [workspaceSource, planningSource, draft, hydratedDraftSeq] = await Promise.all([
+    // The seq must be sampled STRICTLY BEFORE the draft content: a fresh seq
+    // paired with pre-commit content would let the next save CAS-succeed over
+    // another session's newer rows (silent overwrite). Stale-seq + fresh
+    // content only costs a convergent spurious conflict. The gen snapshot
+    // lets a save that acquires mid-hydrate win over this fetch.
+    const draftSeqGenAtFetch = draftSeqAcquireGenByProjectId.get(projectId) ?? 0;
+    const hydratedDraftSeq = await loadEstimateDraftSeq(projectId);
+    const [workspaceSource, planningSource, draft] = await Promise.all([
       getWorkspaceSource({ kind: "supabase", profileId: input.profileId }),
       getPlanningSource({ kind: "supabase", profileId: input.profileId }),
       loadCurrentEstimateDraft(projectId),
-      loadEstimateDraftSeq(projectId),
     ]);
     const [workspaceProject, tasks] = await Promise.all([
       workspaceSource.getProjectById(projectId),
@@ -2139,8 +2168,11 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
     // Past the keep-local early return: every following branch adopts state
     // whose next save races against THIS server seq — record it as the CAS
     // baseline (the cached branch included: its queued save is a full rebase
-    // onto the fetched server draft).
-    draftSeqBaseByProjectId.set(projectId, hydratedDraftSeq);
+    // onto the fetched server draft). Skipped when a save acquired since the
+    // fetch: the callback's baseline is newer and must not regress.
+    if ((draftSeqAcquireGenByProjectId.get(projectId) ?? 0) === draftSeqGenAtFetch) {
+      draftSeqBaseByProjectId.set(projectId, hydratedDraftSeq);
+    }
 
     if (!remoteHasStructure && cached) {
       const cachedState: EstimateV2ProjectState = {

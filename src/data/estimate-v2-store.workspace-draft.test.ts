@@ -208,6 +208,24 @@ describe("estimate-v2 workspace drafts", () => {
     expect(titles).toContain("Server Applied");
   });
 
+  it("samples the CAS baseline strictly before reading the draft content", async () => {
+    // A seq sampled AFTER a concurrent commit paired with content sampled
+    // BEFORE it would let the next save silently overwrite the newer rows;
+    // seq-first only ever costs a convergent spurious conflict.
+    const projectId = "project-remote-1";
+    registerEstimateV2ProjectAccessContext(projectId, {
+      mode: "supabase", profileId: "profile-1", projectOwnerProfileId: "profile-1", membershipRole: "owner",
+    });
+
+    await hydrateEstimateV2ProjectFromWorkspace(projectId, { profileId: "profile-1" });
+
+    const seqOrder = loadEstimateDraftSeqMock.mock.invocationCallOrder[0];
+    const draftOrder = loadCurrentEstimateDraftMock.mock.invocationCallOrder[0];
+    expect(seqOrder).toBeDefined();
+    expect(draftOrder).toBeDefined();
+    expect(seqOrder).toBeLessThan(draftOrder);
+  });
+
   it("a non-forced hydrate keeps stale local state while a save is pending (early-return)", async () => {
     const projectId = "project-remote-1";
     registerEstimateV2ProjectAccessContext(projectId, {

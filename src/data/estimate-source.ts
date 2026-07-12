@@ -101,6 +101,15 @@ export interface SaveCurrentEstimateDraftActor {
    * `null` = pre-P1 database, CAS skipped (legacy last-write-wins).
    */
   expectedDraftSeq?: number | null;
+  /**
+   * Invoked the moment the CAS row ACTUALLY advanced on the server (and never
+   * otherwise: not on pre-acquire aborts/errors, not on pre-P1 skips). The
+   * caller's baseline must track the server row, not the save promise — a
+   * save can resolve without acquiring (drift abort) or throw after acquiring
+   * (content-write error), and both directions desync a resolve-based bump
+   * into phantom conflicts that revert local edits.
+   */
+  onDraftSeqAcquired?: (nextSeq: number) => void;
 }
 
 export interface CurrentEstimateDraft {
@@ -1090,6 +1099,7 @@ export async function saveCurrentEstimateDraft(
     if ((data ?? []).length === 0) {
       throw new EstimateDraftConflictError();
     }
+    actor.onDraftSeqAcquired?.(baselineDraftSeq + 1);
   };
   const resolvedIds = resolveEstimateDraftRemoteIds({
     projectId,

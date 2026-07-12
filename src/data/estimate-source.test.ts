@@ -376,6 +376,55 @@ describe("saveCurrentEstimateDraft", () => {
     expect(database.tables.project_estimates[0]?.draft_seq).toBe(1);
   });
 
+  it("invokes onDraftSeqAcquired exactly when the CAS row advances", async () => {
+    const acquired: number[] = [];
+
+    await expect(
+      saveCurrentEstimateDraft("project-remote-1", buildSingleWorkSnapshot(), {
+        profileId: "profile-1",
+        expectedDraftSeq: 0,
+        onDraftSeqAcquired: (nextSeq) => acquired.push(nextSeq),
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(acquired).toEqual([1]);
+  });
+
+  it("never invokes onDraftSeqAcquired on a pre-acquire abort (baseline must not advance)", async () => {
+    const acquired: number[] = [];
+    const database = mockDatabaseRef.current!;
+    database.log = [];
+
+    await expect(
+      saveCurrentEstimateDraft("project-remote-1", buildSingleWorkSnapshot(), {
+        profileId: "profile-1",
+        expectedDraftSeq: 0,
+        shouldAbort: () => true,
+        onDraftSeqAcquired: (nextSeq) => acquired.push(nextSeq),
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(acquired).toEqual([]);
+    expect(database.log).toEqual([]);
+    expect(database.tables.project_estimates[0]?.draft_seq).toBe(0);
+  });
+
+  it("never invokes onDraftSeqAcquired when the CAS loses", async () => {
+    const acquired: number[] = [];
+    const database = mockDatabaseRef.current!;
+    (database.tables.project_estimates[0] as Record<string, unknown>).draft_seq = 5;
+
+    await expect(
+      saveCurrentEstimateDraft("project-remote-1", buildSingleWorkSnapshot(), {
+        profileId: "profile-1",
+        expectedDraftSeq: 4,
+        onDraftSeqAcquired: (nextSeq) => acquired.push(nextSeq),
+      }),
+    ).rejects.toBeInstanceOf(EstimateDraftConflictError);
+
+    expect(acquired).toEqual([]);
+  });
+
   it("loses the CAS with zero content writes when based on a stale hydrate", async () => {
     const database = mockDatabaseRef.current!;
     // The server moved to seq 5 after this session hydrated at seq 4; the
