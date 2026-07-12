@@ -7,9 +7,11 @@ import { subscribeProcurement } from "@/data/procurement-store";
 import { useQuery } from "@tanstack/react-query";
 import {
   findVersionByShareId,
+  getEstimateV2ProjectionCapability,
   getEstimateV2ProjectState,
   hydrateEstimateV2ProjectFromWorkspace,
   subscribeEstimateV2,
+  type EstimateV2ProjectionCapability,
   type EstimateV2ProjectSyncState,
   type EstimateV2ProjectView,
 } from "@/data/estimate-v2-store";
@@ -39,6 +41,7 @@ export const EMPTY_ESTIMATE_V2_PROJECT_SYNC_STATE: EstimateV2ProjectSyncState = 
       lastAttemptedAt: null,
       lastSucceededAt: null,
       lastError: null,
+      skipReason: null,
     },
     procurement: {
       status: "idle",
@@ -46,6 +49,7 @@ export const EMPTY_ESTIMATE_V2_PROJECT_SYNC_STATE: EstimateV2ProjectSyncState = 
       lastAttemptedAt: null,
       lastSucceededAt: null,
       lastError: null,
+      skipReason: null,
     },
     hr: {
       status: "idle",
@@ -53,6 +57,7 @@ export const EMPTY_ESTIMATE_V2_PROJECT_SYNC_STATE: EstimateV2ProjectSyncState = 
       lastAttemptedAt: null,
       lastSucceededAt: null,
       lastError: null,
+      skipReason: null,
     },
   },
 };
@@ -120,6 +125,23 @@ export function useEstimateV2Project(projectId: string): EstimateV2ProjectView &
 
 export function useEstimateV2ProjectSync(projectId: string): EstimateV2ProjectSyncState {
   return useEstimateV2Project(projectId).sync ?? EMPTY_ESTIMATE_V2_PROJECT_SYNC_STATE;
+}
+
+/**
+ * Reactive projection capability for this session: "projector" runs the
+ * estimate→domains sync, "blocked_permission" may edit but cannot persist,
+ * "reader" never projects (its local sync state must not gate UI actions).
+ */
+export function useEstimateV2ProjectionCapability(projectId: string): EstimateV2ProjectionCapability {
+  const getter = useCallback(() => getEstimateV2ProjectionCapability(projectId), [projectId]);
+  const [value, setValue] = useState(getter);
+
+  useEffect(() => {
+    setValue(getter());
+    return subscribeEstimateV2(() => setValue(getter()));
+  }, [getter]);
+
+  return value;
 }
 
 export interface EstimateV2ShareState {
@@ -211,6 +233,15 @@ export function useEstimateV2FinanceProjectSummary(
   return value;
 }
 
+export type EstimateV2FinanceProjectSummaryWithCoverage = EstimateV2FinanceProjectSummary & {
+  /**
+   * False when HR reads are disabled for this role: spentCents/toBePaidCents
+   * EXCLUDE payroll and are lower than the project truth. Surfaces must mark
+   * such figures (e.g. «без ФОТ»), never render them as complete numbers.
+   */
+  includesHr: boolean;
+};
+
 /**
  * Same finance truth as ProjectEstimate: fact rollups from workspace procurement/orders/HR hooks,
  * not only in-memory store snapshots.
@@ -219,7 +250,7 @@ export function useEstimateV2FinanceProjectSummaryFromWorkspace(
   projectId: string,
   projectInput: Pick<Project, "id" | "title"> | null | undefined,
   options: { hrReadsEnabled: boolean; tasks?: EstimateV2FinanceTaskSlice[] },
-): EstimateV2FinanceProjectSummary | null {
+): EstimateV2FinanceProjectSummaryWithCoverage | null {
   const procurementItems = useProcurementV2(projectId);
   const orders = useOrders(projectId);
   const hrItems = useHRItems(projectId, { enabled: options.hrReadsEnabled });
@@ -248,7 +279,8 @@ export function useEstimateV2FinanceProjectSummaryFromWorkspace(
       hrItems,
       hrPayments,
     });
-    return buildEstimateV2FinanceProjectSummary(project.id, project.title, state, fact, options.tasks);
+    const summary = buildEstimateV2FinanceProjectSummary(project.id, project.title, state, fact, options.tasks);
+    return { ...summary, includesHr: options.hrReadsEnabled };
   }, [
     revision,
     projectId,

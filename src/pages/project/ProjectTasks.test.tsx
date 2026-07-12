@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   useMedia: vi.fn(),
   useWorkspaceMode: vi.fn(),
   useEstimateV2Project: vi.fn(),
+  useEstimateV2ProjectionCapability: vi.fn(),
   useMediaUploadMutations: vi.fn(),
 }));
 
@@ -28,6 +29,20 @@ vi.mock("@/hooks/use-mock-data", () => ({
 
 vi.mock("@/hooks/use-estimate-v2-data", () => ({
   useEstimateV2Project: mocks.useEstimateV2Project,
+  useEstimateV2ProjectionCapability: mocks.useEstimateV2ProjectionCapability,
+}));
+
+vi.mock("@/hooks/use-planning-source", () => ({
+  planningQueryKeys: {
+    projectStages: (profileId: string, projectId: string) =>
+      ["planning", "project-stages", profileId, projectId] as const,
+    projectTasks: (profileId: string, projectId: string) =>
+      ["planning", "project-tasks", profileId, projectId] as const,
+  },
+  usePlanningProjectTasksState: (projectId: string) => ({
+    tasks: mocks.useTasks(projectId),
+    isLoading: false,
+  }),
 }));
 
 vi.mock("@/hooks/use-documents-media-source", () => ({
@@ -55,6 +70,7 @@ vi.mock("@/data/store", () => ({
 
 vi.mock("@/data/planning-source", () => ({
   getPlanningSource: vi.fn(),
+  TaskNoLongerAvailableError: class TaskNoLongerAvailableError extends Error {},
 }));
 
 vi.mock("@/lib/auth-state", () => ({
@@ -188,6 +204,7 @@ describe("ProjectTasks", () => {
         },
       },
     });
+    mocks.useEstimateV2ProjectionCapability.mockReturnValue("projector");
     mocks.useMediaUploadMutations.mockReturnValue({
       prepareUpload: vi.fn(),
       uploadBytes: vi.fn(),
@@ -237,5 +254,57 @@ describe("ProjectTasks", () => {
     expect(screen.queryByPlaceholderText("Add a comment...")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Add photos/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /New task/i })).not.toBeInTheDocument();
+  });
+
+  const behindSyncState = () => ({
+    project: { projectMode: "contractor", estimateStatus: "in_work" },
+    works: [],
+    lines: [],
+    stages: [],
+    sync: {
+      estimateRevision: "rev-2",
+      domains: {
+        tasks: { status: "idle", projectedRevision: "rev-1", lastAttemptedAt: null, lastSucceededAt: null, lastError: null, skipReason: null },
+        procurement: { status: "idle", projectedRevision: null, lastAttemptedAt: null, lastSucceededAt: null, lastError: null, skipReason: null },
+        hr: { status: "idle", projectedRevision: null, lastAttemptedAt: null, lastSucceededAt: null, lastError: null, skipReason: null },
+      },
+    },
+  });
+
+  it("does not block a reader session on its meaningless local projection state", () => {
+    // Contractor reader: local projectedRevision never advances for them, so a
+    // "behind" comparison must not gate their status changes or show a banner.
+    mocks.usePermission.mockReturnValue(buildPermission("contractor"));
+    mocks.useEstimateV2ProjectionCapability.mockReturnValue("reader");
+    mocks.useEstimateV2Project.mockReturnValue(behindSyncState());
+
+    renderProjectTasks();
+
+    expect(screen.queryByText("Tasks are behind the latest Estimate")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("Estimate task"));
+    expect(screen.getByRole("button", { name: "In progress" })).toBeEnabled();
+  });
+
+  it("does not block a blocked_permission editor on projection state it cannot advance", () => {
+    mocks.usePermission.mockReturnValue(buildPermission("co_owner"));
+    mocks.useEstimateV2ProjectionCapability.mockReturnValue("blocked_permission");
+    mocks.useEstimateV2Project.mockReturnValue(behindSyncState());
+
+    renderProjectTasks();
+
+    expect(screen.queryByText("Tasks are behind the latest Estimate")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("Estimate task"));
+    expect(screen.getByRole("button", { name: "In progress" })).toBeEnabled();
+  });
+
+  it("blocks estimate-linked status changes for the projector session while behind", () => {
+    mocks.useEstimateV2ProjectionCapability.mockReturnValue("projector");
+    mocks.useEstimateV2Project.mockReturnValue(behindSyncState());
+
+    renderProjectTasks();
+
+    expect(screen.getByText("Tasks are behind the latest Estimate")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Estimate task"));
+    expect(screen.getByRole("button", { name: "In progress" })).toBeDisabled();
   });
 });

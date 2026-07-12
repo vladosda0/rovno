@@ -65,6 +65,13 @@ export interface EstimateV2ResourceLine {
   unit: string;
   qtyMilli: number;
   costUnitCents: number;
+  /**
+   * True when this line was hydrated from the operational summary RPC and the
+   * internal cost is hidden by finance visibility: `costUnitCents`/`markupBps`
+   * are placeholder zeros, NOT real values. UI must render a redacted marker
+   * ("—"), never ₽0.
+   */
+  costRedacted?: boolean;
   /** Canonical-library link (system_resource_article_id). Set when this line came from the rovno.ai library; drives the library row indicator + resource modal. */
   systemResourceArticleId?: string | null;
   /** Populated from operational RPC when finance visibility is summary-only (no cost in payload). */

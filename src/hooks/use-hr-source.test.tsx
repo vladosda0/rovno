@@ -369,8 +369,10 @@ describe("useProjectHRItems/useProjectHRPayments", () => {
 
     authenticateRuntimeAuth("profile-77");
 
+    // Stable key (no projection-revision segment): the mutation pre-image must
+    // stay readable across projection advances.
     queryClient.setQueryData(
-      [...hrQueryKeys.projectItems("profile-77", "project-1", "full"), "initial"],
+      hrQueryKeys.projectItems("profile-77", "project-1", "full"),
       [
         hrItem({
           id: "hr-item-1",

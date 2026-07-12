@@ -56,6 +56,18 @@ const RESOURCE_TYPE_ORDER: Record<ResourceLineType, number> = {
   other: 5,
 };
 
+/**
+ * A task write matched 0 rows: the row was re-projected under a new id or is
+ * filtered by RLS for this session. Callers should refetch and inform the user
+ * the list was refreshed — this is a converge signal, not a crash.
+ */
+export class TaskNoLongerAvailableError extends Error {
+  constructor() {
+    super("Task is no longer available in its previous form.");
+    this.name = "TaskNoLongerAvailableError";
+  }
+}
+
 export interface CreateProjectStageInput {
   projectId: string;
   title: string;
@@ -449,8 +461,14 @@ function resourceLineTypeForChecklistAssigneeSort(item: ChecklistItem): Resource
 }
 
 /**
- * Hero `tasks.assignee_profile_id` can lag estimate lines after edits. Checklist rows are
- * already projected from `estimate_resource_lines` — align task-level assignee for UI/filters.
+ * Hero `tasks.assignee_profile_id` can lag estimate lines after edits. Checklist rows
+ * (when they carry assignee metadata — demo/local stores do, the Supabase checklist
+ * SELECT does not) refine the task-level assignee for UI/filters.
+ *
+ * ENRICH-ONLY: when no checklist item carries assignee data, keep the task row's own
+ * `assignee_profile_id` — it was written by the estimate projection and is the only
+ * assignee truth available to sessions that cannot read estimate lines under RLS.
+ * Clearing it here rendered every estimate-linked task "Unassigned" for those users.
  */
 export function overlayEstimateLinkedAssigneeFromChecklist(task: Task): Task {
   if (!task.estimateV2WorkId) return task;
@@ -485,11 +503,7 @@ export function overlayEstimateLinkedAssigneeFromChecklist(task: Task): Task {
     }
   }
 
-  return {
-    ...task,
-    assignee_id: "",
-    assignees: [],
-  };
+  return task;
 }
 
 function mapEstimateResourceTypeToChecklistType(
@@ -1132,10 +1146,17 @@ function createSupabasePlanningSource(
         .update(mapTaskPatchToTaskUpdateRow(patch))
         .eq("id", taskId)
         .select(TASK_SELECT)
-        .single();
+        .maybeSingle();
 
       if (error) {
         throw error;
+      }
+
+      // 0 rows = the task vanished from this session's view (re-projected under a
+      // new id, or filtered by RLS). Surface a converge-able "task changed" error
+      // instead of PostgREST's opaque "JSON object requested…" crash.
+      if (!data) {
+        throw new TaskNoLongerAvailableError();
       }
 
       return mapTaskRowToTask(data);

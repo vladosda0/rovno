@@ -788,6 +788,7 @@ function EstimateSyncStatusIndicator({
   const label = status === "saving" ? t("estimate.sync.saving")
     : status === "pending" ? t("estimate.sync.pending")
     : status === "error" ? t("estimate.sync.error")
+    : status === "blocked_permission" ? t("estimate.sync.blockedPermission")
     : savedTime ? t("estimate.sync.saved", { time: savedTime })
     : null;
 
@@ -795,6 +796,8 @@ function EstimateSyncStatusIndicator({
 
   const colorClass = status === "error"
     ? "text-destructive"
+    : status === "blocked_permission"
+      ? "text-warning"
     : status === "saving" || status === "pending"
       ? "text-muted-foreground/70"
       : "text-muted-foreground";
@@ -1763,6 +1766,7 @@ export default function ProjectEstimate() {
       rpcSummaryTotalIncVatCents,
       uiTotalIncVatCents,
       taxBps: estimateProject.taxBps,
+      spendExcludesHr: !hrReadsEnabled,
     };
   }, [
     totals,
@@ -1778,6 +1782,7 @@ export default function ProjectEstimate() {
     rpcSummaryTotalIncVatCents,
     uiTotalIncVatCents,
     estimateProject.taxBps,
+    hrReadsEnabled,
   ]);
 
   const ctaState = resolveProjectEstimateCtaState({
@@ -1846,7 +1851,11 @@ export default function ProjectEstimate() {
             queryKey: procurementProjectItemsQueryRoot(workspaceMode.profileId, pid),
           }),
           queryClient.invalidateQueries({
-            queryKey: hrQueryKeys.projectItems(workspaceMode.profileId, pid),
+            // Root key: covers every financeAccess variant, not only "full".
+            queryKey: hrQueryKeys.projectItemsRoot(workspaceMode.profileId, pid),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: hrQueryKeys.projectPayments(workspaceMode.profileId, pid),
           }),
           queryClient.invalidateQueries({
             queryKey: activityQueryKeys.projectEvents(workspaceMode.profileId, pid),
