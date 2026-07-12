@@ -2944,6 +2944,96 @@
       "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql",
       "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "guard_estimate_coordination_columns",
+      "signature": "public.guard_estimate_coordination_columns()",
+      "args": [],
+      "returnType": "trigger",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": false,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260712130000_estimate_projection_infra.sql",
+      "triggerUsages": [
+        {
+          "table": "public.project_estimates",
+          "triggerName": "guard_estimate_coordination_columns",
+          "activation": "before insert or update"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "unlink_projection_lineage_on_line_delete",
+      "signature": "public.unlink_projection_lineage_on_line_delete()",
+      "args": [],
+      "returnType": "trigger",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": false,
+      "sourceMigration": "supabase/migrations/20260712130200_sync_estimate_projection_rpc.sql",
+      "triggerUsages": [
+        {
+          "table": "public.estimate_resource_lines",
+          "triggerName": "unlink_projection_lineage_on_line_delete",
+          "activation": "before delete"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "sync_estimate_projection",
+      "signature": "public.sync_estimate_projection(uuid, text)",
+      "args": [
+        {
+          "name": "p_project_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_client_revision",
+          "type": "text default null",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "stable",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260712130200_sync_estimate_projection_rpc.sql",
+      "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "set_estimate_current_version",
+      "signature": "public.set_estimate_current_version(uuid, uuid)",
+      "args": [
+        {
+          "name": "p_estimate_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_version_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260712130200_sync_estimate_projection_rpc.sql",
+      "triggerUsages": []
     }
   ]
 }

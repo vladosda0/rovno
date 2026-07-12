@@ -2133,6 +2133,54 @@
         "id"
       ],
       "onDelete": "set null"
+    },
+    {
+      "name": "project_estimates_projection_actor_fkey",
+      "sourceMigration": "supabase/migrations/20260712130000_estimate_projection_infra.sql",
+      "sourceKind": "alter_table",
+      "fromSchema": "public",
+      "fromTable": "project_estimates",
+      "fromColumns": [
+        "projection_actor"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260712130000_estimate_projection_infra.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "project_sync_events",
+      "fromColumns": [
+        "project_id"
+      ],
+      "toSchema": "public",
+      "toTable": "projects",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "cascade"
+    },
+    {
+      "name": null,
+      "sourceMigration": "supabase/migrations/20260712130000_estimate_projection_infra.sql",
+      "sourceKind": "create_table",
+      "fromSchema": "public",
+      "fromTable": "project_sync_events",
+      "fromColumns": [
+        "actor_profile_id"
+      ],
+      "toSchema": "public",
+      "toTable": "profiles",
+      "toColumns": [
+        "id"
+      ],
+      "onDelete": "set null"
     }
   ]
 }
