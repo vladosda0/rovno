@@ -3,9 +3,11 @@ import { Suspense, lazy, useEffect, useState } from "react";
 import { PanelLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TopBar } from "@/components/TopBar";
+import { FeedbackWidget } from "@/components/feedback/FeedbackWidget";
 import { subscribePhotoConsult } from "@/lib/photo-consult-store";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
 import { setAnalyticsUserId } from "@/lib/analytics";
+import { setSentryUser } from "@/lib/observability/sentry";
 import {
   readAiSidebarSessionPreference,
   writeAiSidebarSessionPreference,
@@ -49,8 +51,10 @@ export default function AppLayout() {
   useEffect(() => {
     if (runtimeAuth.status === "authenticated") {
       setAnalyticsUserId(runtimeAuth.profileId);
+      setSentryUser(runtimeAuth.profileId);
     } else {
       setAnalyticsUserId(null);
+      setSentryUser(null);
     }
   }, [runtimeAuth.status, runtimeAuth.profileId]);
 
@@ -109,6 +113,9 @@ export default function AppLayout() {
           <Outlet />
         </main>
       </div>
+      {/* Observability v1 (R-8): fixed feedback entry point on every
+          authenticated page; renders nothing for guests. */}
+      <FeedbackWidget />
     </div>
   );
 }

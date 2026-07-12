@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { supabase } from "@/integrations/supabase/client";
+import { trackEventOncePerSession } from "@/lib/analytics";
 
 const rawSupabase = supabase as unknown as SupabaseClient;
 
@@ -57,6 +58,8 @@ export function useCanonicalSearch(query: string, kind: CanonicalSearchKind, ena
         p_kind: kind,
       });
       if (error) throw error;
+      // Funnel step (once per session — this fires per keystroke otherwise).
+      trackEventOncePerSession("library_searched", { kind });
       const rows = (data ?? []) as RawSuggestion[];
       return rows.map((r) => ({
         id: r.id,

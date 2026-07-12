@@ -16,7 +16,7 @@ import {
 import { getPlanningSource, syncProjectTasksFromEstimate } from "@/data/planning-source";
 import { syncProjectProcurementFromEstimate } from "@/data/procurement-source";
 import { getWorkspaceSource, resolveRuntimeWorkspaceMode } from "@/data/workspace-source";
-import { trackEvent } from "@/lib/analytics";
+import { trackEvent, trackEventOncePerUser } from "@/lib/analytics";
 import {
   addComment,
   addEvent,
@@ -1149,6 +1149,12 @@ async function runProjectDraftSync(projectId: string) {
           allowPrune,
         });
         const postSaveState = statesByProjectId.get(projectId);
+        // Activation funnel: first successful server persist of a non-empty
+        // estimate (the estimate autosaves, so this is the real "saved"
+        // moment). Once-per-user guard lives in the analytics helper.
+        if (hasStructure) {
+          trackEventOncePerUser("estimate_saved_first_time", { project_id: projectId });
+        }
         if (postSaveState) {
           const postSync = ensureProjectSyncState(postSaveState);
           postSync.draftSaveStatus = "saved";

@@ -5,6 +5,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
+import { trackEvent } from "@/lib/analytics";
+import { captureException } from "@/lib/observability/sentry";
 import {
   deleteStage,
   deleteWork,
@@ -81,6 +83,14 @@ export function useApplyTemplateStages(
             p_sort_position: null,
           });
           if (error || !data) {
+            // The loop deliberately continues on per-stage failure (partial
+            // apply UX) — report the swallowed error so critical-RPC alerts
+            // (alert-runbook.md) still see it.
+            if (error) {
+              captureException(error, {
+                tags: { source: "rpc", rpc: "apply_template_stage_to_estimate" },
+              });
+            }
             resultBySelection.push(null);
             continue;
           }
@@ -124,6 +134,8 @@ export function useApplyTemplateStages(
             if (unchecked.has(templateWorkId)) deleteWork(projectId, result.workIds[workIndex]);
           });
         });
+
+        trackEvent("template_applied", { stage_count: appliedStageIds.length });
 
         const { dismiss } = toast({
           title: t("estimate.constructor.applied", { count: appliedStageIds.length }),

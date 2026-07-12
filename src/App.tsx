@@ -3,10 +3,12 @@ import { useTranslation } from "react-i18next";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
 import { EnvBanner } from "@/components/system/EnvBanner";
 import { MetrikaPageviewTracker } from "@/components/system/MetrikaPageviewTracker";
+import { captureException } from "@/lib/observability/sentry";
+import { shouldReportDataLayerError } from "@/lib/observability/data-layer-errors";
 
 const AppLayout = lazy(() => import("@/layouts/AppLayout"));
 const AuthLayout = lazy(() => import("@/layouts/AuthLayout"));
@@ -55,6 +57,34 @@ const Contacts = lazy(() => import("@/pages/legal/Contacts"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
 const queryClient = new QueryClient({
+  // App-wide data-layer error reporting (Sentry). shouldReportDataLayerError
+  // filters expected outcomes (aborts, tier-limit paywalls, offline query
+  // retries) so this stays a defect signal, not noise.
+  queryCache: new QueryCache({
+    onError: (error, query) => {
+      if (!shouldReportDataLayerError(error, "query")) return;
+      // The queryKey head (resource/RPC name) goes into a TAG so Sentry alert
+      // rules can match critical data sources (e.g. search_canonical_library).
+      const keyHead = query.queryKey[0];
+      captureException(error, {
+        tags: {
+          source: "react-query",
+          kind: "query",
+          query_key: typeof keyHead === "string" ? keyHead : "unknown",
+        },
+        extra: { queryKey: query.queryKey },
+      });
+    },
+  }),
+  mutationCache: new MutationCache({
+    onError: (error, _variables, _context, mutation) => {
+      if (!shouldReportDataLayerError(error, "mutation")) return;
+      captureException(error, {
+        tags: { source: "react-query", kind: "mutation" },
+        extra: { mutationKey: mutation.options.mutationKey },
+      });
+    },
+  }),
   defaultOptions: {
     queries: {
       // Disabled app-wide on purpose: alt-tabbing back into a half-filled form (or any page)

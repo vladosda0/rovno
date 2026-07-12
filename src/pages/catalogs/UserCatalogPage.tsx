@@ -62,6 +62,11 @@ export default function UserCatalogPage() {
   const addItemMutation = useAddUserCatalogItem();
   const deleteItemMutation = useDeleteUserCatalogItem();
 
+  // Catalog funnel: saved-catalog editor opened (observability v1).
+  useEffect(() => {
+    trackEvent("catalog_editor_opened", { editor: "saved_catalog" });
+  }, []);
+
   const [rows, setRows] = useState<DraftRow[] | null>(null);
   const [nameDraft, setNameDraft] = useState<string | null>(null);
   const [deleteCatalogOpen, setDeleteCatalogOpen] = useState(false);

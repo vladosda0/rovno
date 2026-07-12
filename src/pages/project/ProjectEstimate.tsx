@@ -981,6 +981,10 @@ export default function ProjectEstimate() {
     target: { stageId?: string; workId?: string } | null,
     tab: "estimates" | "catalog",
   ) => {
+    trackEvent("estimate_constructor_opened", {
+      tab,
+      targeted: target !== null,
+    });
     setConstructorTarget(target);
     setConstructorTab(tab);
     setConstructorOpen(true);
