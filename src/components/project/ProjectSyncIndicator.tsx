@@ -176,6 +176,9 @@ export function ProjectSyncIndicator({ projectId }: { projectId: string }) {
             {sync.draftSaveStatus === "error" && sync.draftSaveLastError && (
               <p className="text-[11px] text-destructive">{sync.draftSaveLastError}</p>
             )}
+            {sync.draftSaveStatus === "conflict" && (
+              <p className="text-[11px] text-warning">{t("estimate.sync.conflict")}</p>
+            )}
           </div>
         </PopoverContent>
       </Popover>

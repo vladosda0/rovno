@@ -20,6 +20,8 @@ type MockDatabase = {
   tables: {
     [K in TableName]: Array<Database["public"]["Tables"][K]["Row"]>;
   };
+  /** When set, every WRITE operation is recorded as "action:table[:tag]". */
+  log?: string[];
 };
 
 type Filter =
@@ -120,7 +122,20 @@ class MockQueryBuilder<TTable extends TableName> implements PromiseLike<{ data: 
     return this.execute().then(onfulfilled, onrejected);
   }
 
+  private recordWrite(): void {
+    if (!this.database.log || !this.action || this.action === "select") {
+      return;
+    }
+    let tag = "";
+    if (this.action === "update" && this.table === "project_estimates") {
+      const payload = this.payload as Record<string, unknown> | null;
+      tag = payload && "draft_seq" in payload ? ":draft_seq" : ":content";
+    }
+    this.database.log.push(`${this.action}:${this.table}${tag}`);
+  }
+
   private async execute(): Promise<{ data: unknown; error: Error | null }> {
+    this.recordWrite();
     const rows = this.database.tables[this.table] as Array<Record<string, unknown>>;
 
     if (this.action === "select") {
@@ -292,6 +307,95 @@ describe("saveCurrentEstimateDraft", () => {
         estimate_dependencies: [],
       },
     };
+  });
+
+  const buildSingleWorkSnapshot = (): EstimateV2Snapshot => ({
+    project: {
+      id: "project-remote-1",
+      projectId: "project-remote-1",
+      title: "Remote Project",
+      projectMode: "contractor",
+      currency: "RUB",
+      taxBps: 2000,
+      discountBps: 0,
+      markupBps: 0,
+      estimateStatus: "planning",
+      receivedCents: 0,
+      pnlPlaceholderCents: 0,
+      createdAt: "2026-03-01T00:00:00.000Z",
+      updatedAt: "2026-03-02T00:00:00.000Z",
+    },
+    stages: [
+      {
+        id: "33333333-3333-4333-8333-333333333333",
+        projectId: "project-remote-1",
+        title: "Shell",
+        order: 1,
+        discountBps: 0,
+        createdAt: "2026-03-01T00:00:00.000Z",
+        updatedAt: "2026-03-02T00:00:00.000Z",
+      },
+    ],
+    works: [
+      {
+        id: "44444444-4444-4444-8444-444444444444",
+        projectId: "project-remote-1",
+        stageId: "33333333-3333-4333-8333-333333333333",
+        title: "Framing",
+        order: 1,
+        discountBps: 0,
+        plannedStart: null,
+        plannedEnd: null,
+        taskId: null,
+        status: "not_started",
+        createdAt: "2026-03-01T00:00:00.000Z",
+        updatedAt: "2026-03-02T00:00:00.000Z",
+      },
+    ],
+    lines: [],
+    dependencies: [],
+  });
+
+  it("acquires the draft CAS before any content write", async () => {
+    const database = mockDatabaseRef.current!;
+    database.log = [];
+
+    await expect(
+      saveCurrentEstimateDraft("project-remote-1", buildSingleWorkSnapshot(), {
+        profileId: "profile-1",
+        expectedDraftSeq: 0,
+      }),
+    ).resolves.toBeUndefined();
+
+    const log = database.log;
+    const casIndex = log.indexOf("update:project_estimates:draft_seq");
+    const firstContentWrite = log.findIndex((op) => op !== "update:project_estimates:draft_seq"
+      && /^(insert|upsert|update|delete):(project_estimates|project_stages|estimate_works|estimate_resource_lines|estimate_dependencies)/.test(op));
+    expect(casIndex).toBeGreaterThanOrEqual(0);
+    expect(firstContentWrite).toBeGreaterThan(casIndex);
+    expect(database.tables.project_estimates[0]?.draft_seq).toBe(1);
+  });
+
+  it("loses the CAS with zero content writes when based on a stale hydrate", async () => {
+    const database = mockDatabaseRef.current!;
+    // The server moved to seq 5 after this session hydrated at seq 4; the
+    // stale save must conflict BEFORE overwriting or pruning anything —
+    // non-overlapping saves are exactly the case a save-start read misses.
+    (database.tables.project_estimates[0] as Record<string, unknown>).draft_seq = 5;
+    database.log = [];
+    const worksBefore = database.tables.estimate_works.map((row) => ({ ...row }));
+
+    await expect(
+      saveCurrentEstimateDraft("project-remote-1", buildSingleWorkSnapshot(), {
+        profileId: "profile-1",
+        expectedDraftSeq: 4,
+      }),
+    ).rejects.toBeInstanceOf(EstimateDraftConflictError);
+
+    const contentWrites = database.log.filter((op) => op !== "update:project_estimates:draft_seq");
+    expect(contentWrites).toEqual([]);
+    expect(database.tables.estimate_works).toEqual(worksBefore);
+    expect(database.tables.project_estimates[0]?.draft_seq).toBe(5);
   });
 
   it("reuses the existing current version id when saving a second work", async () => {

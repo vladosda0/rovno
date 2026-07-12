@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   loadCurrentEstimateDraftMock,
+  loadEstimateDraftSeqMock,
   saveCurrentEstimateDraftMock,
   syncEstimateProjectionRemoteMock,
   emitEstimateDraftSyncEventMock,
@@ -13,6 +14,7 @@ const {
   syncProjectHRFromEstimateMock,
 } = vi.hoisted(() => ({
   loadCurrentEstimateDraftMock: vi.fn(),
+  loadEstimateDraftSeqMock: vi.fn(),
   saveCurrentEstimateDraftMock: vi.fn(),
   syncEstimateProjectionRemoteMock: vi.fn(),
   emitEstimateDraftSyncEventMock: vi.fn(),
@@ -29,6 +31,7 @@ vi.mock("@/data/estimate-source", async () => {
   return {
     ...actual,
     loadCurrentEstimateDraft: loadCurrentEstimateDraftMock,
+    loadEstimateDraftSeq: loadEstimateDraftSeqMock,
     saveCurrentEstimateDraft: saveCurrentEstimateDraftMock,
     syncEstimateProjectionRemote: syncEstimateProjectionRemoteMock,
     emitEstimateDraftSyncEvent: emitEstimateDraftSyncEventMock,
@@ -135,6 +138,7 @@ describe("estimate-v2 workspace drafts", () => {
     syncProjectHRFromEstimateMock.mockResolvedValue(undefined);
     saveCurrentEstimateDraftMock.mockResolvedValue(undefined);
     emitEstimateDraftSyncEventMock.mockResolvedValue(undefined);
+    loadEstimateDraftSeqMock.mockResolvedValue(0);
     // Default to a pre-P1 database so the pinned suites keep exercising the
     // legacy client pipeline (still shipped as the fallback); RPC-path tests
     // override this per test.

@@ -91,6 +91,16 @@ export interface SaveCurrentEstimateDraftActor {
    * Defaults to true for backward compatibility.
    */
   allowPrune?: boolean;
+  /**
+   * The draft_seq the local draft is BASED on, captured when it was hydrated
+   * from the server. The save advances it with a compare-and-set BEFORE any
+   * content write: 0 rows means another session saved since our hydrate and
+   * this save must converge (EstimateDraftConflictError), never overwrite.
+   * `undefined` = no hydrate-captured baseline (the save reads the seq at
+   * save start — weaker: it only catches physically overlapping saves).
+   * `null` = pre-P1 database, CAS skipped (legacy last-write-wins).
+   */
+  expectedDraftSeq?: number | null;
 }
 
 export interface CurrentEstimateDraft {
@@ -331,6 +341,16 @@ async function loadDraftSeq(
     return null;
   }
   return typeof rows[0].draft_seq === "number" ? rows[0].draft_seq : null;
+}
+
+/**
+ * Hydrate-time capture of the draft CAS baseline: the store records this next
+ * to the installed draft and passes it back as `expectedDraftSeq` so a save of
+ * state based on an outdated hydrate loses the CAS instead of overwriting.
+ */
+export async function loadEstimateDraftSeq(projectId: string): Promise<number | null> {
+  const supabase = await loadSupabaseClient();
+  return loadDraftSeq(supabase, projectId);
 }
 
 export async function ensureProjectEstimateRoot(
@@ -1038,22 +1058,28 @@ export async function saveCurrentEstimateDraft(
   if (shouldAbortCurrentEstimateDraftSave(actor)) {
     return;
   }
-  // Draft CAS token, read alongside the draft the save is based on. The final
-  // statement of every successful save bumps it conditionally; 0 rows means a
-  // concurrent session saved in between and this save must converge, not win.
-  const loadedDraftSeq = await loadDraftSeq(supabase, projectId);
+  // Draft CAS baseline: prefer the hydrate-captured seq (catches EVERY save
+  // based on stale state, not just overlapping ones); fall back to a
+  // save-start read for callers without one.
+  const baselineDraftSeq = actor.expectedDraftSeq !== undefined
+    ? actor.expectedDraftSeq
+    : await loadDraftSeq(supabase, projectId);
   if (shouldAbortCurrentEstimateDraftSave(actor)) {
     return;
   }
-  const completeSave = async (estimateId: string): Promise<void> => {
-    if (loadedDraftSeq === null) {
+  // Optimistic lock, acquired BEFORE any content write: a save that would
+  // lose must abort with the server rows untouched — a trailing check would
+  // detect the conflict only after the stale snapshot already overwrote the
+  // winner.
+  const acquireDraftSeq = async (estimateId: string): Promise<void> => {
+    if (baselineDraftSeq === null) {
       return; // pre-P1 database: no CAS column, legacy last-write-wins
     }
     const { data, error } = await (supabase as unknown as SupabaseClient)
       .from("project_estimates")
-      .update({ draft_seq: loadedDraftSeq + 1 })
+      .update({ draft_seq: baselineDraftSeq + 1 })
       .eq("id", estimateId)
-      .eq("draft_seq", loadedDraftSeq)
+      .eq("draft_seq", baselineDraftSeq)
       .select("id");
     if (error) {
       if (isMissingColumnError(error)) {
@@ -1093,8 +1119,19 @@ export async function saveCurrentEstimateDraft(
     createdBy: actor.profileId,
   });
   if (!versionResult.ok) {
+    if (versionResult.reason === "current_version_id_mismatch") {
+      // First-version creation race: another session established the current
+      // version between our load and this call. Converge like every other
+      // lost race instead of surfacing a dead-end save error.
+      throw new EstimateDraftConflictError();
+    }
     throw new Error(`Unable to ensure estimate current version: ${versionResult.reason}`);
   }
+  if (shouldAbortCurrentEstimateDraftSave(actor)) {
+    return;
+  }
+
+  await acquireDraftSeq(estimateResult.row.id);
   if (shouldAbortCurrentEstimateDraftSave(actor)) {
     return;
   }
@@ -1244,7 +1281,6 @@ export async function saveCurrentEstimateDraft(
   }
 
   if (actor.allowPrune === false) {
-    await completeSave(estimateResult.row.id);
     return;
   }
 
@@ -1255,7 +1291,6 @@ export async function saveCurrentEstimateDraft(
     || existingDraft.works.length > 0
     || existingDraft.lines.length > 0;
   if (!snapshotHasStructure && existingDraftHasStructure) {
-    await completeSave(estimateResult.row.id);
     return;
   }
 
@@ -1340,6 +1375,4 @@ export async function saveCurrentEstimateDraft(
       }
     }
   }
-
-  await completeSave(estimateResult.row.id);
 }

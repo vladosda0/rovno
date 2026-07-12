@@ -8,6 +8,7 @@ import {
   ensureRemoteEstimateCurrentVersionId,
   resolveRemoteEstimateStageId,
   loadCurrentEstimateDraft,
+  loadEstimateDraftSeq,
   loadEstimateOperationalSummary,
   type EstimateOperationalUpperBlock,
   saveCurrentEstimateDraft,
@@ -21,6 +22,7 @@ import { getPlanningSource, syncProjectTasksFromEstimate } from "@/data/planning
 import { syncProjectProcurementFromEstimate } from "@/data/procurement-source";
 import { getWorkspaceSource, resolveRuntimeWorkspaceMode } from "@/data/workspace-source";
 import { trackEvent, trackEventOncePerUser } from "@/lib/analytics";
+import { captureMessage } from "@/lib/observability/sentry";
 import {
   addComment,
   addEvent,
@@ -260,6 +262,11 @@ if (typeof window !== "undefined") {
   });
 }
 const remoteHydrationPromises = new Map<string, Promise<void>>();
+// draft_seq the local draft is BASED on, captured at hydrate and advanced on
+// each successful save. Passed to saveCurrentEstimateDraft as the CAS
+// baseline: a save of state hydrated before another session's save loses the
+// CAS and converges instead of overwriting. null = pre-P1 database (no CAS).
+const draftSeqBaseByProjectId = new Map<string, number | null>();
 const remoteDraftSyncTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const remoteDraftSyncErrorSignatureByProjectId = new Map<string, string>();
 const heroTransitionInFlightByProjectId = new Set<string>();
@@ -771,6 +778,7 @@ function getEstimateV2ProjectRuntimeSessionKey(
 function clearEstimateV2ProjectRuntimeState(projectId: string) {
   clearScheduledProjectDraftSync(projectId);
   statesByProjectId.delete(projectId);
+  draftSeqBaseByProjectId.delete(projectId);
   remoteDraftSyncErrorSignatureByProjectId.delete(projectId);
   heroTransitionInFlightByProjectId.delete(projectId);
   remoteProjectionSyncInFlightByProjectId.delete(projectId);
@@ -1309,12 +1317,18 @@ async function runProjectDraftSync(projectId: string) {
       syncState.draftSaveStatus = "saving";
       syncState.draftSaveLastError = null;
       notify();
+      const expectedDraftSeq = draftSeqBaseByProjectId.get(projectId);
       try {
         await saveCurrentEstimateDraft(projectId, getSnapshotFromState(normalized), {
           profileId,
           shouldAbort: () => hasProjectDraftProjectionDrift(projectId, projectionRevision),
           allowPrune,
+          expectedDraftSeq,
         });
+        if (typeof expectedDraftSeq === "number") {
+          // The save advanced the CAS token; local state is now based on it.
+          draftSeqBaseByProjectId.set(projectId, expectedDraftSeq + 1);
+        }
         const postSaveState = statesByProjectId.get(projectId);
         // Activation funnel: first successful server persist of a non-empty
         // estimate (the estimate autosaves, so this is the real "saved"
@@ -1332,10 +1346,13 @@ async function runProjectDraftSync(projectId: string) {
         void emitEstimateDraftSyncEvent(projectId, projectionRevision);
       } catch (saveError) {
         if (saveError instanceof EstimateDraftConflictError) {
-          // Another session saved between our load and our save. Converge on
-          // the server truth instead of fighting it: mark the conflict and
-          // force-refresh (forceFresh bypasses the pending-sync early-return
-          // that would otherwise keep the conflicting local state alive).
+          // Another session saved since our hydrate. Converge on the server
+          // truth instead of fighting it: DROP the losing snapshot's pending
+          // saves (clearScheduledProjectDraftSync also clears the deferred
+          // flag, so the finally-block cannot requeue the stale state), mark
+          // the conflict, and AWAIT the forced refresh — edits made during it
+          // re-defer and requeue against the post-hydrate state and baseline.
+          clearScheduledProjectDraftSync(projectId);
           const conflictState = statesByProjectId.get(projectId);
           if (conflictState) {
             const conflictSync = ensureProjectSyncState(conflictState);
@@ -1343,7 +1360,21 @@ async function runProjectDraftSync(projectId: string) {
             conflictSync.draftSaveLastError = saveError.message;
             notify();
           }
-          void hydrateEstimateV2ProjectFromWorkspace(projectId, { profileId, forceFresh: true });
+          try {
+            await hydrateEstimateV2ProjectFromWorkspace(projectId, { profileId, forceFresh: true });
+          } catch (hydrateError) {
+            // Never leave "conflict" with no writer coming back: surface the
+            // failed convergence as an error the next edit/retry can clear.
+            const failedState = statesByProjectId.get(projectId);
+            if (failedState) {
+              const failedSync = ensureProjectSyncState(failedState);
+              failedSync.draftSaveStatus = "error";
+              failedSync.draftSaveLastError = hydrateError instanceof Error
+                ? hydrateError.message
+                : "Conflict refresh failed";
+              notify();
+            }
+          }
           return;
         }
         const postSaveState = statesByProjectId.get(projectId);
@@ -1432,6 +1463,16 @@ async function runProjectDraftSync(projectId: string) {
           return;
         }
         if (projection.status === "projected") {
+          if (projection.skippedWorkIds.length > 0) {
+            // Works without a stage cannot become tasks (stage_id NOT NULL).
+            // Reachable via orphan works (stage pruned from the snapshot).
+            // Rare and self-heals when the work regains a stage; observability
+            // over UI noise, but never silent.
+            captureMessage("estimate projection skipped stageless works", {
+              tags: { area: "estimate_sync" },
+              extra: { projectId, skippedWorkIds: projection.skippedWorkIds },
+            });
+          }
           applyTaskIdsToState(projectId, projection.taskIdByWorkId);
           const latestState = statesByProjectId.get(projectId);
           if (latestState) {
@@ -2052,10 +2093,11 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
     const hadExistingState = statesByProjectId.has(projectId);
     const currentState = ensureProjectState(projectId);
     const cached = loadWorkspaceEstimateCache(projectId, input.profileId)?.state ?? null;
-    const [workspaceSource, planningSource, draft] = await Promise.all([
+    const [workspaceSource, planningSource, draft, hydratedDraftSeq] = await Promise.all([
       getWorkspaceSource({ kind: "supabase", profileId: input.profileId }),
       getPlanningSource({ kind: "supabase", profileId: input.profileId }),
       loadCurrentEstimateDraft(projectId),
+      loadEstimateDraftSeq(projectId),
     ]);
     const [workspaceProject, tasks] = await Promise.all([
       workspaceSource.getProjectById(projectId),
@@ -2093,6 +2135,12 @@ export async function hydrateEstimateV2ProjectFromWorkspace(
       notify();
       return;
     }
+
+    // Past the keep-local early return: every following branch adopts state
+    // whose next save races against THIS server seq — record it as the CAS
+    // baseline (the cached branch included: its queued save is a full rebase
+    // onto the fetched server draft).
+    draftSeqBaseByProjectId.set(projectId, hydratedDraftSeq);
 
     if (!remoteHasStructure && cached) {
       const cachedState: EstimateV2ProjectState = {
