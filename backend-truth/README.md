@@ -153,6 +153,8 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20260705191000_p31_procurement_received_columns.sql`
 - `supabase/migrations/20260706120000_blog_schema.sql`
 - `supabase/migrations/20260706140000_user_catalogs.sql`
+- `supabase/migrations/20260712130000_estimate_projection_infra.sql`
+- `supabase/migrations/20260712130200_sync_estimate_projection_rpc.sql`
 
 ## Exclusions
 

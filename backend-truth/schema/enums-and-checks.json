@@ -1881,6 +1881,35 @@
       "allowedValues": null,
       "expression": "price_cents between -1000000000000 and 1000000000000",
       "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+    },
+    {
+      "schema": "public",
+      "table": "project_sync_events",
+      "column": "kind",
+      "constraintName": null,
+      "kind": "enum_like",
+      "allowedValues": [
+        "projection",
+        "estimate_draft",
+        "tasks",
+        "checklist",
+        "procurement",
+        "hr",
+        "hr_payments",
+        "members"
+      ],
+      "expression": "kind in ('projection', 'estimate_draft', 'tasks', 'checklist', 'procurement', 'hr', 'hr_payments', 'members')",
+      "sourceMigration": "supabase/migrations/20260712130000_estimate_projection_infra.sql"
+    },
+    {
+      "schema": "public",
+      "table": "project_sync_events",
+      "column": "revision",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "revision is null or char_length(revision) <= 200",
+      "sourceMigration": "supabase/migrations/20260712130000_estimate_projection_infra.sql"
     }
   ]
 }

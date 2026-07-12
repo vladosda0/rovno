@@ -2740,6 +2740,41 @@
           "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
         }
       ]
+    },
+    {
+      "schema": "public",
+      "table": "project_sync_events",
+      "rlsEnabled": true,
+      "authenticatedGrants": [
+        "insert",
+        "select"
+      ],
+      "policies": [
+        {
+          "name": "project_sync_events_select",
+          "schema": "public",
+          "table": "project_sync_events",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "public.can_access_project(project_id)",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260712130000_estimate_projection_infra.sql"
+        },
+        {
+          "name": "project_sync_events_insert",
+          "schema": "public",
+          "table": "project_sync_events",
+          "command": "insert",
+          "roles": [
+            "authenticated"
+          ],
+          "using": null,
+          "withCheck": "public.can_write_project_content(project_id)\n    and kind = 'estimate_draft'\n    and (actor_profile_id is null or actor_profile_id = auth.uid())",
+          "sourceMigration": "supabase/migrations/20260712130000_estimate_projection_infra.sql"
+        }
+      ]
     }
   ]
 }

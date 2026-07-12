@@ -34,8 +34,7 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 | `notes` | `text` | yes |   | no |
 | `created_at` | `timestamptz` | no | `now()` | no |
 | `updated_at` | `timestamptz` | no | `now()` | no |
-| `identity_key` | `text
-  generated always as (public.inventory_item_identity(title, notes, unit)) stored` | yes |   | no |
+| `identity_key` | `text` | yes |   | no |
 
 Indexes:
 - `idx_inventory_items_project_id` on (`project_id`)
