@@ -26,7 +26,8 @@ import {
 import type { FinanceRowLoadAccess } from "@/lib/permissions";
 import type { HRItemStatus, HRPayment, HRPlannedItem } from "@/types/hr";
 
-const HR_QUERY_STALE_TIME_MS = 60_000;
+// 30s (P2): see the focus-refetch opt-in on the queries below.
+const HR_QUERY_STALE_TIME_MS = 30_000;
 const EMPTY_HR_ITEMS: HRPlannedItem[] = [];
 const EMPTY_HR_PAYMENTS: HRPayment[] = [];
 
@@ -118,6 +119,9 @@ export function useProjectHRItemsState(projectId: string, options?: HRQueryOptio
     // otherwise serve the stale cached list. Stable key => background refetch
     // keeps prior rows visible (no empty flash).
     refetchOnMount: "always",
+    // P2: local opt-in (global default stays false); cross-session freshness
+    // on tab return, bounded by staleTime.
+    refetchOnWindowFocus: true,
   });
 
   const queryClient = useQueryClient();
@@ -198,6 +202,9 @@ export function useProjectHRPaymentsState(projectId: string, options?: HRQueryOp
     // otherwise serve the stale cached list. Stable key => background refetch
     // keeps prior rows visible (no empty flash).
     refetchOnMount: "always",
+    // P2: local opt-in (global default stays false); cross-session freshness
+    // on tab return, bounded by staleTime.
+    refetchOnWindowFocus: true,
   });
 
   const queryClient = useQueryClient();

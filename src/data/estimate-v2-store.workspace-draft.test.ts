@@ -85,6 +85,7 @@ import {
   createWork,
   createStage,
   getEstimateV2ProjectState,
+  hasPendingProjectDraftSync,
   hydrateEstimateV2ProjectFromWorkspace,
   registerEstimateV2ProjectAccessContext,
   transitionEstimateV2ProjectToInWork,
@@ -1005,6 +1006,43 @@ describe("estimate-v2 workspace drafts", () => {
       expect(syncProjectTasksFromEstimateMock).toHaveBeenCalledTimes(1);
       expect(syncProjectProcurementFromEstimateMock).toHaveBeenCalledTimes(1);
       expect(syncProjectHRFromEstimateMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("reports a pending sync while the draft save is in flight (after the debounce fires)", async () => {
+    vi.useFakeTimers();
+    const projectId = "project-remote-1";
+    let resolveSave!: () => void;
+
+    try {
+      await hydrateEstimateV2ProjectFromWorkspace(projectId, { profileId: "profile-1" });
+      registerEstimateV2ProjectAccessContext(projectId, {
+        mode: "supabase",
+        profileId: "profile-1",
+        projectOwnerProfileId: "profile-1",
+        membershipRole: "owner",
+      });
+
+      // The save hangs: this is the window after the debounce timer fired (timer
+      // removed) but before remoteProjectionSyncInFlight is set — the running
+      // promise is the ONLY in-flight signal. A realtime hydrate here must be
+      // blocked and beforeunload must warn.
+      saveCurrentEstimateDraftMock.mockImplementation(() => new Promise<void>((resolve) => {
+        resolveSave = resolve;
+      }));
+
+      const stage = createStage(projectId, { title: "Shell" });
+      createWork(projectId, { stageId: stage?.id ?? "", title: "Framing" });
+
+      await vi.advanceTimersByTimeAsync(350);
+      expect(saveCurrentEstimateDraftMock).toHaveBeenCalledTimes(1);
+      expect(hasPendingProjectDraftSync(projectId)).toBe(true);
+
+      resolveSave();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(hasPendingProjectDraftSync(projectId)).toBe(false);
     } finally {
       vi.useRealTimers();
     }

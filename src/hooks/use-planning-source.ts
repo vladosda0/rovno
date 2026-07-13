@@ -12,7 +12,10 @@ import { useEstimateV2Project } from "@/hooks/use-estimate-v2-data";
 import { useWorkspaceMode } from "@/hooks/use-workspace-source";
 import type { Stage, Task } from "@/types/entities";
 
-const PLANNING_QUERY_STALE_TIME_MS = 60_000;
+// 30s (P2): with focus refetch opted in below, returning to the tab after
+// half a minute away re-checks the server truth without churning quick tab
+// switches.
+const PLANNING_QUERY_STALE_TIME_MS = 30_000;
 const EMPTY_PLANNING_STAGES: Stage[] = [];
 const EMPTY_PLANNING_TASKS: Task[] = [];
 
@@ -97,6 +100,10 @@ export function usePlanningProjectStagesState(projectId: string): { stages: Stag
     // otherwise serve the stale cached list. Stable key => background refetch
     // keeps prior rows visible (no empty flash).
     refetchOnMount: "always",
+    // P2: local opt-in (global default stays false — App-level form-reset
+    // rationale). Another session's write while this tab was backgrounded
+    // must surface on return; staleTime bounds the churn.
+    refetchOnWindowFocus: true,
   });
 
   usePlanningProjectionInvalidation(
@@ -146,6 +153,10 @@ export function usePlanningProjectTasksState(projectId: string): { tasks: Task[]
     // otherwise serve the stale cached list. Stable key => background refetch
     // keeps prior rows visible (no empty flash).
     refetchOnMount: "always",
+    // P2: local opt-in (global default stays false — App-level form-reset
+    // rationale). Another session's write while this tab was backgrounded
+    // must surface on return; staleTime bounds the churn.
+    refetchOnWindowFocus: true,
   });
 
   usePlanningProjectionInvalidation(

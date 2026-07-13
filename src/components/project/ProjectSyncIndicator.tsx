@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { AlertTriangle, Check, Loader2, Lock } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { EstimateV2ProjectSyncDomainState } from "@/data/estimate-v2-store";
+import type { ProjectSyncFeedHealth } from "@/lib/project-sync-events";
 import { useEstimateV2Project, useEstimateV2ProjectionCapability } from "@/hooks/use-estimate-v2-data";
 import { useWorkspaceMode } from "@/hooks/use-workspace-source";
 import { cn } from "@/lib/utils";
@@ -43,7 +44,14 @@ function domainRowState(
  * an editor blocked by finance visibility). Readers never project, so their
  * local revision bookkeeping says nothing worth showing.
  */
-export function ProjectSyncIndicator({ projectId }: { projectId: string }) {
+export function ProjectSyncIndicator({
+  projectId,
+  feedHealth = null,
+}: {
+  projectId: string;
+  /** P2 realtime feed health; "degraded" = the 30s poll is the delivery path. */
+  feedHealth?: ProjectSyncFeedHealth | null;
+}) {
   const { t } = useTranslation();
   const mode = useWorkspaceMode();
   const view = useEstimateV2Project(projectId);
@@ -178,6 +186,9 @@ export function ProjectSyncIndicator({ projectId }: { projectId: string }) {
             )}
             {sync.draftSaveStatus === "conflict" && (
               <p className="text-[11px] text-warning">{t("estimate.sync.conflict")}</p>
+            )}
+            {feedHealth === "degraded" && (
+              <p className="text-[11px] text-warning">{t("projectSync.feedDegraded")}</p>
             )}
           </div>
         </PopoverContent>

@@ -23,6 +23,7 @@ import { syncProjectProcurementFromEstimate } from "@/data/procurement-source";
 import { getWorkspaceSource, resolveRuntimeWorkspaceMode } from "@/data/workspace-source";
 import { trackEvent, trackEventOncePerUser } from "@/lib/analytics";
 import { captureMessage } from "@/lib/observability/sentry";
+import { queryClient } from "@/lib/query-client";
 import {
   addComment,
   addEvent,
@@ -258,6 +259,13 @@ if (typeof window !== "undefined") {
     if (authProfileId !== lastKnownAuthProfileId) {
       lastKnownAuthProfileId = authProfileId;
       resetEstimateV2SupabaseRuntimeSessionState();
+      // P2 logout hygiene: the localStorage estimate caches and every react-
+      // query cache entry also belong to the previous account. The caches are
+      // profile-keyed, but evicting them closes the shared-device leak (and a
+      // future same-profile login rehydrates from the server, not a possibly
+      // stale local copy).
+      evictAllWorkspaceEstimateCaches();
+      queryClient.clear();
     }
   });
 }
@@ -660,6 +668,23 @@ function workspaceCacheKey(projectId: string, profileId: string): string {
   return `estimate-v2-workspace:${projectId}:${profileId}`;
 }
 
+/** P2 logout hygiene: drop every cached estimate snapshot, all profiles. */
+function evictAllWorkspaceEstimateCaches(): void {
+  if (typeof window === "undefined") return;
+  try {
+    const stale: string[] = [];
+    for (let i = 0; i < window.localStorage.length; i += 1) {
+      const key = window.localStorage.key(i);
+      if (key && key.startsWith("estimate-v2-workspace:")) {
+        stale.push(key);
+      }
+    }
+    stale.forEach((key) => window.localStorage.removeItem(key));
+  } catch {
+    // Storage unavailable (private mode/quota): nothing to evict.
+  }
+}
+
 function loadWorkspaceEstimateCache(projectId: string, profileId: string): EstimateV2WorkspaceCache | null {
   if (typeof window === "undefined") return null;
   try {
@@ -1056,11 +1081,18 @@ function hasUnflushedDraftSaveStatus(state: EstimateV2ProjectState): boolean {
   return status === "pending" || status === "saving";
 }
 
-function hasPendingProjectDraftSync(projectId: string): boolean {
+export function hasPendingProjectDraftSync(projectId: string): boolean {
   return heroTransitionInFlightByProjectId.has(projectId)
     || remoteProjectionSyncInFlightByProjectId.has(projectId)
     || deferredDraftSyncByProjectId.has(projectId)
-    || remoteDraftSyncTimers.has(projectId);
+    || remoteDraftSyncTimers.has(projectId)
+    // The RUNNING save promise: once the debounce fires (or flush/visibility
+    // starts the run), the timer is gone and the draft-write executes under
+    // this promise BEFORE remoteProjectionSyncInFlight is set. Without this, the
+    // predicate reads false mid-save — the realtime hydrate would clobber the
+    // in-flight write and beforeunload would not warn. (flushProjectDraftSync
+    // already awaits this map directly; the predicate must agree.)
+    || runningProjectDraftSyncByProjectId.has(projectId);
 }
 
 function commitProjectStateChange(projectId: string) {
