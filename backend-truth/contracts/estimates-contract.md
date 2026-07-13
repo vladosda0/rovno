@@ -24,6 +24,7 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 - `supabase/migrations/20260712130200_sync_estimate_projection_rpc.sql`
 - `supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql`
 - `supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql`
+- `supabase/migrations/20260713110100_project_sync_events_sensitivity_policy.sql`
 
 ## Tables
 
@@ -308,8 +309,8 @@ Indexes:
 - RLS enabled: yes
 - Authenticated grants: `insert`, `select`
 - Policies:
-  - `project_sync_events_select` for `select` to `authenticated`
-    using: `public.can_access_project(project_id)`
   - `project_sync_events_insert` for `insert` to `authenticated`
     with check: `public.can_write_project_content(project_id) and kind = 'estimate_draft' and (actor_profile_id is null or actor_profile_id = auth.uid())`
+  - `project_sync_events_select` for `select` to `authenticated`
+    using: `public.can_access_project(project_id) and ( kind not in ('procurement', 'hr', 'hr_payments', 'members') or (kind = 'procurement' and public.can_view_sensitive_detail(project_id)) or (kind in ('hr', 'hr_payments') and public.can_view_sensitive_detail(project_id) and public.can_access_hr_domain(project_id)) or (kind = 'members' and public.can_manage_project(project_id)) )`
 

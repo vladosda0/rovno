@@ -2543,20 +2543,20 @@
       "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
     },
     {
-      "key": "public.project_sync_events.project_sync_events_select",
-      "schema": "public",
-      "table": "project_sync_events",
-      "name": "project_sync_events_select",
-      "command": "select",
-      "sourceMigration": "supabase/migrations/20260712130000_estimate_projection_infra.sql"
-    },
-    {
       "key": "public.project_sync_events.project_sync_events_insert",
       "schema": "public",
       "table": "project_sync_events",
       "name": "project_sync_events_insert",
       "command": "insert",
       "sourceMigration": "supabase/migrations/20260712130000_estimate_projection_infra.sql"
+    },
+    {
+      "key": "public.project_sync_events.project_sync_events_select",
+      "schema": "public",
+      "table": "project_sync_events",
+      "name": "project_sync_events_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260713110100_project_sync_events_sensitivity_policy.sql"
     }
   ],
   "slices": [
@@ -3040,7 +3040,8 @@
         "supabase/migrations/20260622120000_tighten_price_comparison_finance_gate.sql",
         "supabase/migrations/20260712130200_sync_estimate_projection_rpc.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
-        "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
+        "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
+        "supabase/migrations/20260713110100_project_sync_events_sensitivity_policy.sql"
       ],
       "tables": [
         "public.project_estimates",
@@ -3080,8 +3081,8 @@
         "public.estimate_dependencies.estimate_dependencies_insert",
         "public.estimate_dependencies.estimate_dependencies_update",
         "public.estimate_dependencies.estimate_dependencies_delete",
-        "public.project_sync_events.project_sync_events_select",
-        "public.project_sync_events.project_sync_events_insert"
+        "public.project_sync_events.project_sync_events_insert",
+        "public.project_sync_events.project_sync_events_select"
       ],
       "relations": [
         {
