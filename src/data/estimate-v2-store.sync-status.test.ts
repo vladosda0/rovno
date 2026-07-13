@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   loadCurrentEstimateDraftMock,
+  loadEstimateDraftSeqMock,
   saveCurrentEstimateDraftMock,
+  syncEstimateProjectionRemoteMock,
+  emitEstimateDraftSyncEventMock,
   getWorkspaceSourceMock,
   getPlanningSourceMock,
   persistEstimateV2HeroTransitionMock,
@@ -11,7 +14,10 @@ const {
   syncProjectHRFromEstimateMock,
 } = vi.hoisted(() => ({
   loadCurrentEstimateDraftMock: vi.fn(),
+  loadEstimateDraftSeqMock: vi.fn(),
   saveCurrentEstimateDraftMock: vi.fn(),
+  syncEstimateProjectionRemoteMock: vi.fn(),
+  emitEstimateDraftSyncEventMock: vi.fn(),
   getWorkspaceSourceMock: vi.fn(),
   getPlanningSourceMock: vi.fn(),
   persistEstimateV2HeroTransitionMock: vi.fn(),
@@ -25,7 +31,10 @@ vi.mock("@/data/estimate-source", async () => {
   return {
     ...actual,
     loadCurrentEstimateDraft: loadCurrentEstimateDraftMock,
+    loadEstimateDraftSeq: loadEstimateDraftSeqMock,
     saveCurrentEstimateDraft: saveCurrentEstimateDraftMock,
+    syncEstimateProjectionRemote: syncEstimateProjectionRemoteMock,
+    emitEstimateDraftSyncEvent: emitEstimateDraftSyncEventMock,
   };
 });
 
@@ -80,6 +89,7 @@ import {
   registerEstimateV2ProjectAccessContext,
   updateLine,
 } from "@/data/estimate-v2-store";
+import { EstimateDraftConflictError, SyncEstimateProjectionUnavailableError } from "@/data/estimate-source";
 import { __unsafeResetStoreForTests } from "@/data/store";
 
 const PROJECT_ID = "project-remote-1";
@@ -195,6 +205,14 @@ describe("estimate-v2 sync-state honesty", () => {
     syncProjectProcurementFromEstimateMock.mockResolvedValue(undefined);
     syncProjectHRFromEstimateMock.mockResolvedValue(undefined);
     saveCurrentEstimateDraftMock.mockResolvedValue(undefined);
+    emitEstimateDraftSyncEventMock.mockResolvedValue(undefined);
+    loadEstimateDraftSeqMock.mockResolvedValue(0);
+    // Default to a pre-P1 database so the pinned suites keep exercising the
+    // legacy client pipeline (still shipped as the fallback); RPC-path tests
+    // override this per test.
+    syncEstimateProjectionRemoteMock.mockImplementation(async () => {
+      throw new SyncEstimateProjectionUnavailableError();
+    });
     loadCurrentEstimateDraftMock.mockResolvedValue(serverDraft({ withStructure: true }));
   });
 
@@ -332,6 +350,169 @@ describe("estimate-v2 sync-state honesty", () => {
 
   it("reports reader capability when no context was ever registered", () => {
     expect(getEstimateV2ProjectionCapability("project-unknown")).toBe("reader");
+  });
+
+  it("projects via the server RPC: one call, task ids applied, all domains synced, no legacy fan-out", async () => {
+    vi.useFakeTimers();
+    try {
+      await hydrateEstimateV2ProjectFromWorkspace(PROJECT_ID, { profileId: "profile-1" });
+      registerOwnerContext();
+      syncEstimateProjectionRemoteMock.mockResolvedValue({
+        status: "projected",
+        reason: null,
+        taskIdByWorkId: { "22222222-2222-4222-8222-222222222222": "task-rpc-1" },
+        skippedWorkIds: [],
+        projectionSeq: 7,
+      });
+
+      await vi.advanceTimersByTimeAsync(350);
+
+      const state = getEstimateV2ProjectState(PROJECT_ID);
+      expect(syncEstimateProjectionRemoteMock).toHaveBeenCalledTimes(1);
+      expect(syncProjectTasksFromEstimateMock).not.toHaveBeenCalled();
+      expect(syncProjectProcurementFromEstimateMock).not.toHaveBeenCalled();
+      expect(syncProjectHRFromEstimateMock).not.toHaveBeenCalled();
+      expect(state.works.find((work) => work.id === "22222222-2222-4222-8222-222222222222")?.taskId)
+        .toBe("task-rpc-1");
+      (["tasks", "procurement", "hr"] as const).forEach((domain) => {
+        expect(state.sync.domains[domain].status).toBe("synced");
+        expect(state.sync.domains[domain].projectedRevision).toBe(state.sync.estimateRevision);
+      });
+      expect(emitEstimateDraftSyncEventMock).toHaveBeenCalledWith(PROJECT_ID, state.sync.estimateRevision);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("marks all domains error when the projection RPC fails hard", async () => {
+    vi.useFakeTimers();
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await hydrateEstimateV2ProjectFromWorkspace(PROJECT_ID, { profileId: "profile-1" });
+      registerOwnerContext();
+      syncEstimateProjectionRemoteMock.mockRejectedValue(new Error("projection exploded"));
+
+      await vi.advanceTimersByTimeAsync(350);
+
+      const sync = getEstimateV2ProjectState(PROJECT_ID).sync;
+      (["tasks", "procurement", "hr"] as const).forEach((domain) => {
+        expect(sync.domains[domain].status).toBe("error");
+        expect(sync.domains[domain].lastError).toBe("projection exploded");
+      });
+      expect(syncProjectTasksFromEstimateMock).not.toHaveBeenCalled();
+    } finally {
+      consoleErrorSpy.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  it("reports skipped when the server declines to project", async () => {
+    vi.useFakeTimers();
+    try {
+      await hydrateEstimateV2ProjectFromWorkspace(PROJECT_ID, { profileId: "profile-1" });
+      registerOwnerContext();
+      syncEstimateProjectionRemoteMock.mockResolvedValue({
+        status: "skipped",
+        reason: "empty_draft",
+        taskIdByWorkId: {},
+        skippedWorkIds: [],
+        projectionSeq: null,
+      });
+
+      await vi.advanceTimersByTimeAsync(350);
+
+      const sync = getEstimateV2ProjectState(PROJECT_ID).sync;
+      (["tasks", "procurement", "hr"] as const).forEach((domain) => {
+        expect(sync.domains[domain].status).toBe("skipped");
+        expect(sync.domains[domain].skipReason).toBe("unauthoritative");
+        expect(sync.domains[domain].projectedRevision).toBeNull();
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("falls back to the legacy client pipeline on pre-P1 databases", async () => {
+    vi.useFakeTimers();
+    try {
+      await hydrateEstimateV2ProjectFromWorkspace(PROJECT_ID, { profileId: "profile-1" });
+      registerOwnerContext();
+      // beforeEach default: syncEstimateProjectionRemote throws Unavailable.
+
+      await vi.advanceTimersByTimeAsync(350);
+
+      expect(syncEstimateProjectionRemoteMock).toHaveBeenCalledTimes(1);
+      expect(syncProjectTasksFromEstimateMock).toHaveBeenCalledTimes(1);
+      expect(syncProjectProcurementFromEstimateMock).toHaveBeenCalledTimes(1);
+      expect(syncProjectHRFromEstimateMock).toHaveBeenCalledTimes(1);
+      const sync = getEstimateV2ProjectState(PROJECT_ID).sync;
+      (["tasks", "procurement", "hr"] as const).forEach((domain) => {
+        expect(sync.domains[domain].status).toBe("synced");
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("converges on a draft conflict: status conflict, forced re-hydrate, no domain errors", async () => {
+    vi.useFakeTimers();
+    try {
+      await hydrateEstimateV2ProjectFromWorkspace(PROJECT_ID, { profileId: "profile-1" });
+      registerOwnerContext();
+      saveCurrentEstimateDraftMock.mockRejectedValue(new EstimateDraftConflictError());
+      const hydrateCallsBefore = loadCurrentEstimateDraftMock.mock.calls.length;
+
+      // Gate the forced re-hydrate so the intermediate "conflict" state is
+      // observable before convergence completes.
+      let resolveReload!: (value: unknown) => void;
+      loadCurrentEstimateDraftMock.mockImplementation(() => new Promise((resolve) => {
+        resolveReload = resolve;
+      }));
+
+      const created = createWork(PROJECT_ID, {
+        stageId: getEstimateV2ProjectState(PROJECT_ID).stages[0]?.id ?? "",
+        title: "Roof",
+      });
+      expect(created).not.toBeNull();
+      await vi.advanceTimersByTimeAsync(350);
+
+      const sync = getEstimateV2ProjectState(PROJECT_ID).sync;
+      expect(sync.draftSaveStatus).toBe("conflict");
+      (["tasks", "procurement", "hr"] as const).forEach((domain) => {
+        expect(sync.domains[domain].status).not.toBe("error");
+      });
+      expect(syncEstimateProjectionRemoteMock).not.toHaveBeenCalled();
+      // The forced re-hydrate reloads the server draft (convergence)...
+      expect(loadCurrentEstimateDraftMock.mock.calls.length).toBeGreaterThan(hydrateCallsBefore);
+
+      // ...and once the reload lands, autosave resumes from the server truth.
+      saveCurrentEstimateDraftMock.mockResolvedValue(undefined);
+      resolveReload(serverDraft({ withStructure: true }));
+      await vi.advanceTimersByTimeAsync(700);
+      const syncAfter = getEstimateV2ProjectState(PROJECT_ID).sync;
+      expect(syncAfter.draftSaveStatus).not.toBe("conflict");
+      expect(syncAfter.draftSaveStatus).not.toBe("error");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("trusts the server execution_status over the cached local status", async () => {
+    // Cache says in_work (a stale local mirror); the server says paused.
+    await hydrateEstimateV2ProjectFromWorkspace(PROJECT_ID, { profileId: "profile-1" });
+    registerOwnerContext();
+    const cacheKey = `estimate-v2-workspace:${PROJECT_ID}:profile-1`;
+    const cached = JSON.parse(localStorage.getItem(cacheKey) ?? "null");
+    expect(cached).not.toBeNull();
+    cached.state.project.estimateStatus = "in_work";
+    localStorage.setItem(cacheKey, JSON.stringify(cached));
+
+    const pausedDraft = serverDraft({ withStructure: true });
+    (pausedDraft.estimate as { execution_status?: string }).execution_status = "paused";
+    loadCurrentEstimateDraftMock.mockResolvedValue(pausedDraft);
+
+    await hydrateEstimateV2ProjectFromWorkspace(PROJECT_ID, { profileId: "profile-1", forceFresh: true });
+    expect(getEstimateV2ProjectState(PROJECT_ID).project.estimateStatus).toBe("paused");
   });
 
   it("never caches or autosaves a default-seeded state before hydration installs remote truth", async () => {

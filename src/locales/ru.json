@@ -1445,6 +1445,7 @@
   "estimate.sync.saved": "Сохранено {{time}}",
   "estimate.sync.error": "Ошибка сохранения",
   "estimate.sync.blockedPermission": "Сохранение недоступно для вашего уровня доступа",
+  "estimate.sync.conflict": "Изменено в другой сессии — обновляем",
   "projectSync.chip.blocked": "Синхронизация недоступна",
   "projectSync.chip.error": "Ошибка синхронизации",
   "projectSync.chip.syncing": "Синхронизация…",

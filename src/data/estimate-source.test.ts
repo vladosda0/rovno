@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "../../backend-truth/generated/supabase-types";
-import { parseEstimateOperationalSummaryPayload, saveCurrentEstimateDraft } from "@/data/estimate-source";
+import {
+  EstimateDraftConflictError,
+  ensureProjectEstimateRoot,
+  parseEstimateOperationalSummaryPayload,
+  saveCurrentEstimateDraft,
+} from "@/data/estimate-source";
 import type { EstimateV2Snapshot } from "@/types/estimate-v2";
 
 type TableName =
@@ -15,6 +20,8 @@ type MockDatabase = {
   tables: {
     [K in TableName]: Array<Database["public"]["Tables"][K]["Row"]>;
   };
+  /** When set, every WRITE operation is recorded as "action:table[:tag]". */
+  log?: string[];
 };
 
 type Filter =
@@ -115,7 +122,20 @@ class MockQueryBuilder<TTable extends TableName> implements PromiseLike<{ data: 
     return this.execute().then(onfulfilled, onrejected);
   }
 
+  private recordWrite(): void {
+    if (!this.database.log || !this.action || this.action === "select") {
+      return;
+    }
+    let tag = "";
+    if (this.action === "update" && this.table === "project_estimates") {
+      const payload = this.payload as Record<string, unknown> | null;
+      tag = payload && "draft_seq" in payload ? ":draft_seq" : ":content";
+    }
+    this.database.log.push(`${this.action}:${this.table}${tag}`);
+  }
+
   private async execute(): Promise<{ data: unknown; error: Error | null }> {
+    this.recordWrite();
     const rows = this.database.tables[this.table] as Array<Record<string, unknown>>;
 
     if (this.action === "select") {
@@ -151,10 +171,18 @@ class MockQueryBuilder<TTable extends TableName> implements PromiseLike<{ data: 
     }
 
     if (this.action === "update") {
-      applyFilters(rows, this.filters).forEach((row) => {
+      const matched = applyFilters(rows, this.filters);
+      matched.forEach((row) => {
         Object.assign(row, this.payload as Record<string, unknown>);
       });
-      return { data: null, error: null };
+      // Honor .select() after .update() — the draft-save CAS tail counts the
+      // returned rows to detect a lost compare-and-set.
+      return {
+        data: this.shouldReturnRows
+          ? (this.shouldReturnSingleRow ? (matched[0] ?? null) : matched)
+          : null,
+        error: null,
+      };
     }
 
     if (this.action === "upsert") {
@@ -189,6 +217,18 @@ function createMockSupabase(database: MockDatabase) {
     from<TTable extends TableName>(table: TTable) {
       return new MockQueryBuilder(database, table);
     },
+    // Pre-P1 database shape: the RPCs are absent, so callers take their legacy
+    // fallback paths (which these suites pin). RPC-path behavior is covered by
+    // the estimate-v2-store suites and the pgTAP parity suite in rovno-db.
+    async rpc(functionName: string) {
+      return {
+        data: null,
+        error: {
+          code: "PGRST202",
+          message: `Could not find the function public.${functionName} in the schema cache`,
+        },
+      };
+    },
   };
 }
 
@@ -216,6 +256,11 @@ describe("saveCurrentEstimateDraft", () => {
             created_at: "2026-03-01T00:00:00.000Z",
             updated_at: "2026-03-02T00:00:00.000Z",
             execution_status: null,
+            draft_seq: 0,
+            projection_revision: null,
+            projection_seq: 0,
+            projection_synced_at: null,
+            projection_actor: null,
           },
         ],
         estimate_versions: [
@@ -262,6 +307,144 @@ describe("saveCurrentEstimateDraft", () => {
         estimate_dependencies: [],
       },
     };
+  });
+
+  const buildSingleWorkSnapshot = (): EstimateV2Snapshot => ({
+    project: {
+      id: "project-remote-1",
+      projectId: "project-remote-1",
+      title: "Remote Project",
+      projectMode: "contractor",
+      currency: "RUB",
+      taxBps: 2000,
+      discountBps: 0,
+      markupBps: 0,
+      estimateStatus: "planning",
+      receivedCents: 0,
+      pnlPlaceholderCents: 0,
+      createdAt: "2026-03-01T00:00:00.000Z",
+      updatedAt: "2026-03-02T00:00:00.000Z",
+    },
+    stages: [
+      {
+        id: "33333333-3333-4333-8333-333333333333",
+        projectId: "project-remote-1",
+        title: "Shell",
+        order: 1,
+        discountBps: 0,
+        createdAt: "2026-03-01T00:00:00.000Z",
+        updatedAt: "2026-03-02T00:00:00.000Z",
+      },
+    ],
+    works: [
+      {
+        id: "44444444-4444-4444-8444-444444444444",
+        projectId: "project-remote-1",
+        stageId: "33333333-3333-4333-8333-333333333333",
+        title: "Framing",
+        order: 1,
+        discountBps: 0,
+        plannedStart: null,
+        plannedEnd: null,
+        taskId: null,
+        status: "not_started",
+        createdAt: "2026-03-01T00:00:00.000Z",
+        updatedAt: "2026-03-02T00:00:00.000Z",
+      },
+    ],
+    lines: [],
+    dependencies: [],
+  });
+
+  it("acquires the draft CAS before any content write", async () => {
+    const database = mockDatabaseRef.current!;
+    database.log = [];
+
+    await expect(
+      saveCurrentEstimateDraft("project-remote-1", buildSingleWorkSnapshot(), {
+        profileId: "profile-1",
+        expectedDraftSeq: 0,
+      }),
+    ).resolves.toBeUndefined();
+
+    const log = database.log;
+    const casIndex = log.indexOf("update:project_estimates:draft_seq");
+    const firstContentWrite = log.findIndex((op) => op !== "update:project_estimates:draft_seq"
+      && /^(insert|upsert|update|delete):(project_estimates|project_stages|estimate_works|estimate_resource_lines|estimate_dependencies)/.test(op));
+    expect(casIndex).toBeGreaterThanOrEqual(0);
+    expect(firstContentWrite).toBeGreaterThan(casIndex);
+    expect(database.tables.project_estimates[0]?.draft_seq).toBe(1);
+  });
+
+  it("invokes onDraftSeqAcquired exactly when the CAS row advances", async () => {
+    const acquired: number[] = [];
+
+    await expect(
+      saveCurrentEstimateDraft("project-remote-1", buildSingleWorkSnapshot(), {
+        profileId: "profile-1",
+        expectedDraftSeq: 0,
+        onDraftSeqAcquired: (nextSeq) => acquired.push(nextSeq),
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(acquired).toEqual([1]);
+  });
+
+  it("never invokes onDraftSeqAcquired on a pre-acquire abort (baseline must not advance)", async () => {
+    const acquired: number[] = [];
+    const database = mockDatabaseRef.current!;
+    database.log = [];
+
+    await expect(
+      saveCurrentEstimateDraft("project-remote-1", buildSingleWorkSnapshot(), {
+        profileId: "profile-1",
+        expectedDraftSeq: 0,
+        shouldAbort: () => true,
+        onDraftSeqAcquired: (nextSeq) => acquired.push(nextSeq),
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(acquired).toEqual([]);
+    expect(database.log).toEqual([]);
+    expect(database.tables.project_estimates[0]?.draft_seq).toBe(0);
+  });
+
+  it("never invokes onDraftSeqAcquired when the CAS loses", async () => {
+    const acquired: number[] = [];
+    const database = mockDatabaseRef.current!;
+    (database.tables.project_estimates[0] as Record<string, unknown>).draft_seq = 5;
+
+    await expect(
+      saveCurrentEstimateDraft("project-remote-1", buildSingleWorkSnapshot(), {
+        profileId: "profile-1",
+        expectedDraftSeq: 4,
+        onDraftSeqAcquired: (nextSeq) => acquired.push(nextSeq),
+      }),
+    ).rejects.toBeInstanceOf(EstimateDraftConflictError);
+
+    expect(acquired).toEqual([]);
+  });
+
+  it("loses the CAS with zero content writes when based on a stale hydrate", async () => {
+    const database = mockDatabaseRef.current!;
+    // The server moved to seq 5 after this session hydrated at seq 4; the
+    // stale save must conflict BEFORE overwriting or pruning anything —
+    // non-overlapping saves are exactly the case a save-start read misses.
+    (database.tables.project_estimates[0] as Record<string, unknown>).draft_seq = 5;
+    database.log = [];
+    const worksBefore = database.tables.estimate_works.map((row) => ({ ...row }));
+
+    await expect(
+      saveCurrentEstimateDraft("project-remote-1", buildSingleWorkSnapshot(), {
+        profileId: "profile-1",
+        expectedDraftSeq: 4,
+      }),
+    ).rejects.toBeInstanceOf(EstimateDraftConflictError);
+
+    const contentWrites = database.log.filter((op) => op !== "update:project_estimates:draft_seq");
+    expect(contentWrites).toEqual([]);
+    expect(database.tables.estimate_works).toEqual(worksBefore);
+    expect(database.tables.project_estimates[0]?.draft_seq).toBe(5);
   });
 
   it("reuses the existing current version id when saving a second work", async () => {
@@ -856,6 +1039,68 @@ describe("saveCurrentEstimateDraft", () => {
     const row = mockDatabaseRef.current?.tables.estimate_resource_lines[0] as Record<string, unknown> | undefined;
     expect(row?.assignee_profile_id).toBeNull();
     expect(row?.assignee_label).toBe("Володя");
+  });
+});
+
+describe("ensureProjectEstimateRoot creation race (23505)", () => {
+  // Purpose-built stub: the pre-check select sees no root, the insert loses the
+  // idx_project_estimates_project_id_unique race, the re-read sees the winner.
+  function createRaceStub(winnerRow: Record<string, unknown>) {
+    let selectCalls = 0;
+    return {
+      from(table: string) {
+        expect(table).toBe("project_estimates");
+        return {
+          select() {
+            return {
+              eq() {
+                selectCalls += 1;
+                return Promise.resolve({
+                  data: selectCalls === 1 ? [] : [winnerRow],
+                  error: null,
+                });
+              },
+            };
+          },
+          insert() {
+            return {
+              select() {
+                return {
+                  single: () => Promise.resolve({
+                    data: null,
+                    error: {
+                      code: "23505",
+                      message: 'duplicate key value violates unique constraint "idx_project_estimates_project_id_unique"',
+                    },
+                  }),
+                };
+              },
+            };
+          },
+        };
+      },
+    } as unknown as Parameters<typeof ensureProjectEstimateRoot>[0];
+  }
+
+  it("adopts the winner when it carries this session's estimate id", async () => {
+    const winner = { id: "estimate-1", project_id: "project-1", title: "Смета" };
+    const result = await ensureProjectEstimateRoot(createRaceStub(winner), {
+      projectId: "project-1",
+      estimateId: "estimate-1",
+      title: "Смета",
+      createdBy: "profile-1",
+    });
+    expect(result).toEqual({ ok: true, row: winner });
+  });
+
+  it("raises the draft conflict when another session's root won", async () => {
+    const winner = { id: "estimate-other", project_id: "project-1", title: "Смета" };
+    await expect(ensureProjectEstimateRoot(createRaceStub(winner), {
+      projectId: "project-1",
+      estimateId: "estimate-1",
+      title: "Смета",
+      createdBy: "profile-1",
+    })).rejects.toBeInstanceOf(EstimateDraftConflictError);
   });
 });
 

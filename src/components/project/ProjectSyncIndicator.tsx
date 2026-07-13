@@ -55,7 +55,11 @@ export function ProjectSyncIndicator({ projectId }: { projectId: string }) {
       return "blocked";
     }
     const domains = Object.values(sync.domains);
-    if (sync.draftSaveStatus === "error" || domains.some((domain) => domain.status === "error")) {
+    if (
+      sync.draftSaveStatus === "error"
+      || sync.draftSaveStatus === "conflict"
+      || domains.some((domain) => domain.status === "error")
+    ) {
       return "error";
     }
     if (
@@ -171,6 +175,9 @@ export function ProjectSyncIndicator({ projectId }: { projectId: string }) {
             </ul>
             {sync.draftSaveStatus === "error" && sync.draftSaveLastError && (
               <p className="text-[11px] text-destructive">{sync.draftSaveLastError}</p>
+            )}
+            {sync.draftSaveStatus === "conflict" && (
+              <p className="text-[11px] text-warning">{t("estimate.sync.conflict")}</p>
             )}
           </div>
         </PopoverContent>

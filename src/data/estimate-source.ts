@@ -5,7 +5,17 @@ import type { EstimateExecutionStatus, EstimateV2Snapshot, ResourceLineType } fr
 import { parsePersistedEstimateResourceType, resourceLineTypeToPersisted } from "@/lib/estimate-v2/resource-type-contract";
 
 type TypedSupabaseClient = SupabaseClient<Database>;
-type ProjectEstimateRow = Database["public"]["Tables"]["project_estimates"]["Row"];
+/**
+ * Exactly the PROJECT_ESTIMATE_SELECT columns. The P1 coordination columns
+ * (draft_seq, projection_*) are deliberately NOT selected here: draft_seq is
+ * read by loadDraftSeq's dedicated select, and projection_* are server-owned
+ * bookkeeping the client never consumes.
+ */
+type ProjectEstimateRow = Pick<
+  Database["public"]["Tables"]["project_estimates"]["Row"],
+  "id" | "project_id" | "title" | "description" | "status" | "created_by"
+  | "created_at" | "updated_at" | "execution_status"
+>;
 type ProjectEstimateInsert = Database["public"]["Tables"]["project_estimates"]["Insert"];
 type ProjectEstimateUpdate = Database["public"]["Tables"]["project_estimates"]["Update"];
 type EstimateVersionRow = Database["public"]["Tables"]["estimate_versions"]["Row"];
@@ -81,6 +91,25 @@ export interface SaveCurrentEstimateDraftActor {
    * Defaults to true for backward compatibility.
    */
   allowPrune?: boolean;
+  /**
+   * The draft_seq the local draft is BASED on, captured when it was hydrated
+   * from the server. The save advances it with a compare-and-set BEFORE any
+   * content write: 0 rows means another session saved since our hydrate and
+   * this save must converge (EstimateDraftConflictError), never overwrite.
+   * `undefined` = no hydrate-captured baseline (the save reads the seq at
+   * save start — weaker: it only catches physically overlapping saves).
+   * `null` = pre-P1 database, CAS skipped (legacy last-write-wins).
+   */
+  expectedDraftSeq?: number | null;
+  /**
+   * Invoked the moment the CAS row ACTUALLY advanced on the server (and never
+   * otherwise: not on pre-acquire aborts/errors, not on pre-P1 skips). The
+   * caller's baseline must track the server row, not the save promise — a
+   * save can resolve without acquiring (drift abort) or throw after acquiring
+   * (content-write error), and both directions desync a resolve-based bump
+   * into phantom conflicts that revert local edits.
+   */
+  onDraftSeqAcquired?: (nextSeq: number) => void;
 }
 
 export interface CurrentEstimateDraft {
@@ -182,6 +211,157 @@ async function loadSupabaseClient(): Promise<TypedSupabaseClient> {
   return supabase as unknown as TypedSupabaseClient;
 }
 
+/**
+ * Another session saved the draft between our load and our save (the
+ * draft_seq compare-and-set matched 0 rows). Convergence, not corruption:
+ * the caller re-hydrates from the server truth.
+ */
+export class EstimateDraftConflictError extends Error {
+  constructor() {
+    super("Estimate draft was saved by another session.");
+    this.name = "EstimateDraftConflictError";
+  }
+}
+
+/** The server does not have sync_estimate_projection yet (pre-P1 database). */
+export class SyncEstimateProjectionUnavailableError extends Error {
+  constructor() {
+    super("sync_estimate_projection is not available on this database.");
+    this.name = "SyncEstimateProjectionUnavailableError";
+  }
+}
+
+function errorCode(error: unknown): string | null {
+  return (error as { code?: string } | null)?.code ?? null;
+}
+
+function isMissingFunctionError(error: unknown, functionName: string): boolean {
+  const code = errorCode(error);
+  const message = (error as { message?: string } | null)?.message ?? "";
+  return (code === "PGRST202" && message.includes(functionName)) || code === "42883";
+}
+
+function isMissingColumnError(error: unknown): boolean {
+  const code = errorCode(error);
+  return code === "42703" || code === "PGRST204";
+}
+
+function isMissingTableError(error: unknown): boolean {
+  const code = errorCode(error);
+  return code === "42P01" || code === "PGRST205";
+}
+
+export interface SyncEstimateProjectionResult {
+  status: "projected" | "skipped";
+  reason: string | null;
+  taskIdByWorkId: Record<string, string>;
+  skippedWorkIds: string[];
+  projectionSeq: number | null;
+}
+
+/**
+ * Run the atomic server-side estimate→(tasks/procurement/HR) projection.
+ * Throws SyncEstimateProjectionUnavailableError on pre-P1 databases so the
+ * caller can fall back to the legacy client pipeline for one release.
+ */
+export async function syncEstimateProjectionRemote(
+  projectId: string,
+  clientRevision: string | null,
+): Promise<SyncEstimateProjectionResult> {
+  const supabase = await loadSupabaseClient();
+  // Not in the generated types until the backend-truth sync PR lands.
+  const { data, error } = await (supabase as unknown as SupabaseClient).rpc("sync_estimate_projection", {
+    p_project_id: projectId,
+    p_client_revision: clientRevision,
+  });
+
+  if (error) {
+    if (isMissingFunctionError(error, "sync_estimate_projection")) {
+      throw new SyncEstimateProjectionUnavailableError();
+    }
+    throw error;
+  }
+
+  const payload = (data ?? {}) as {
+    status?: string;
+    reason?: string;
+    task_id_by_work_id?: Record<string, string>;
+    skipped_work_ids?: string[];
+    projection_seq?: number;
+  };
+
+  return {
+    status: payload.status === "projected" ? "projected" : "skipped",
+    reason: payload.reason ?? null,
+    taskIdByWorkId: payload.task_id_by_work_id ?? {},
+    skippedWorkIds: payload.skipped_work_ids ?? [],
+    projectionSeq: typeof payload.projection_seq === "number" ? payload.projection_seq : null,
+  };
+}
+
+/**
+ * Best-effort cross-session signal: a draft save landed. Consumers (P2
+ * realtime) refetch through their own RLS-gated reads; losing an event only
+ * delays freshness, so failures are swallowed (pre-P1 databases lack the table).
+ */
+export async function emitEstimateDraftSyncEvent(
+  projectId: string,
+  revision: string | null,
+): Promise<void> {
+  try {
+    const supabase = await loadSupabaseClient();
+    const { error } = await (supabase as unknown as SupabaseClient)
+      .from("project_sync_events")
+      .insert({ project_id: projectId, kind: "estimate_draft", revision });
+    if (error && !isMissingTableError(error) && import.meta.env.DEV) {
+      console.warn("estimate_draft sync event emit failed", error);
+    }
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.warn("estimate_draft sync event emit failed", error);
+    }
+  }
+}
+
+/**
+ * Tolerant read of the draft CAS token: pre-P1 databases lack the column, in
+ * which case the CAS is skipped entirely (legacy last-write-wins behavior).
+ * A missing root reads as 0 — the save creates it with draft_seq's default 0.
+ */
+async function loadDraftSeq(
+  supabase: TypedSupabaseClient,
+  projectId: string,
+): Promise<number | null> {
+  const { data, error } = await (supabase as unknown as SupabaseClient)
+    .from("project_estimates")
+    .select("id, draft_seq")
+    .eq("project_id", projectId);
+  if (error) {
+    if (isMissingColumnError(error)) {
+      return null;
+    }
+    throw error;
+  }
+  const rows = (data ?? []) as Array<{ draft_seq?: number | null }>;
+  if (rows.length === 0) {
+    return 0;
+  }
+  if (rows.length > 1) {
+    return null;
+  }
+  return typeof rows[0].draft_seq === "number" ? rows[0].draft_seq : null;
+}
+
+/**
+ * Hydrate-time capture of the draft CAS baseline: the store records this next
+ * to the installed draft and passes it back as `expectedDraftSeq` so a save of
+ * state based on an outdated hydrate loses the CAS instead of overwriting.
+ */
+export async function loadEstimateDraftSeq(projectId: string): Promise<number | null> {
+  const supabase = await loadSupabaseClient();
+  return loadDraftSeq(supabase, projectId);
+}
+
 export async function ensureProjectEstimateRoot(
   supabase: TypedSupabaseClient,
   input: EnsureProjectEstimateRootInput,
@@ -224,6 +404,25 @@ export async function ensureProjectEstimateRoot(
     .single();
 
   if (insertError || !inserted) {
+    // 23505 on idx_project_estimates_project_id_unique = another session won
+    // the check-then-insert creation race. Adopt the winner when it carries
+    // our id; otherwise this session's resolved ids are stale — surface the
+    // same conflict the draft CAS raises so the store re-hydrates and
+    // converges on the winner's estimate.
+    if ((insertError as { code?: string } | null)?.code === "23505") {
+      const { data: raced, error: racedError } = await supabase
+        .from("project_estimates")
+        .select(PROJECT_ESTIMATE_SELECT)
+        .eq("project_id", input.projectId);
+      if (racedError) {
+        throw racedError;
+      }
+      const winner = (raced ?? [])[0];
+      if (winner && winner.id === input.estimateId) {
+        return { ok: true, row: winner };
+      }
+      throw new EstimateDraftConflictError();
+    }
     throw insertError ?? new Error("Unable to create project estimate root");
   }
 
@@ -234,6 +433,39 @@ export async function ensureEstimateCurrentVersion(
   supabase: TypedSupabaseClient,
   input: EnsureEstimateCurrentVersionInput,
 ): Promise<EnsureEstimateCurrentVersionResult> {
+  // Atomic path: set_estimate_current_version serializes the create/flip under
+  // an advisory lock, closing the SELECT-then-INSERT race two sessions could
+  // hit here. Falls back to the legacy statements on pre-P1 databases.
+  const { error: rpcError } = await (supabase as unknown as SupabaseClient)
+    .rpc("set_estimate_current_version", {
+      p_estimate_id: input.estimateId,
+      p_version_id: input.versionId,
+    });
+
+  if (!rpcError) {
+    const { data: currentRows, error: currentError } = await supabase
+      .from("estimate_versions")
+      .select(ESTIMATE_VERSION_SELECT)
+      .eq("estimate_id", input.estimateId)
+      .eq("is_current", true);
+    if (currentError) {
+      throw currentError;
+    }
+    const currentRow = (currentRows ?? [])[0];
+    if (!currentRow) {
+      throw new Error("Unable to read current estimate version after set_estimate_current_version");
+    }
+    return { ok: true, row: currentRow };
+  }
+
+  if (!isMissingFunctionError(rpcError, "set_estimate_current_version")) {
+    const message = (rpcError as { message?: string }).message ?? "";
+    if (message.includes("current version id mismatch")) {
+      return { ok: false, reason: "current_version_id_mismatch" };
+    }
+    throw rpcError;
+  }
+
   const { data, error } = await supabase
     .from("estimate_versions")
     .select(ESTIMATE_VERSION_SELECT)
@@ -835,6 +1067,40 @@ export async function saveCurrentEstimateDraft(
   if (shouldAbortCurrentEstimateDraftSave(actor)) {
     return;
   }
+  // Draft CAS baseline: prefer the hydrate-captured seq (catches EVERY save
+  // based on stale state, not just overlapping ones); fall back to a
+  // save-start read for callers without one.
+  const baselineDraftSeq = actor.expectedDraftSeq !== undefined
+    ? actor.expectedDraftSeq
+    : await loadDraftSeq(supabase, projectId);
+  if (shouldAbortCurrentEstimateDraftSave(actor)) {
+    return;
+  }
+  // Optimistic lock, acquired BEFORE any content write: a save that would
+  // lose must abort with the server rows untouched — a trailing check would
+  // detect the conflict only after the stale snapshot already overwrote the
+  // winner.
+  const acquireDraftSeq = async (estimateId: string): Promise<void> => {
+    if (baselineDraftSeq === null) {
+      return; // pre-P1 database: no CAS column, legacy last-write-wins
+    }
+    const { data, error } = await (supabase as unknown as SupabaseClient)
+      .from("project_estimates")
+      .update({ draft_seq: baselineDraftSeq + 1 })
+      .eq("id", estimateId)
+      .eq("draft_seq", baselineDraftSeq)
+      .select("id");
+    if (error) {
+      if (isMissingColumnError(error)) {
+        return;
+      }
+      throw error;
+    }
+    if ((data ?? []).length === 0) {
+      throw new EstimateDraftConflictError();
+    }
+    actor.onDraftSeqAcquired?.(baselineDraftSeq + 1);
+  };
   const resolvedIds = resolveEstimateDraftRemoteIds({
     projectId,
     snapshot,
@@ -863,8 +1129,19 @@ export async function saveCurrentEstimateDraft(
     createdBy: actor.profileId,
   });
   if (!versionResult.ok) {
+    if (versionResult.reason === "current_version_id_mismatch") {
+      // First-version creation race: another session established the current
+      // version between our load and this call. Converge like every other
+      // lost race instead of surfacing a dead-end save error.
+      throw new EstimateDraftConflictError();
+    }
     throw new Error(`Unable to ensure estimate current version: ${versionResult.reason}`);
   }
+  if (shouldAbortCurrentEstimateDraftSave(actor)) {
+    return;
+  }
+
+  await acquireDraftSeq(estimateResult.row.id);
   if (shouldAbortCurrentEstimateDraftSave(actor)) {
     return;
   }

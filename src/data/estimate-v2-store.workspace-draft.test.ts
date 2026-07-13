@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   loadCurrentEstimateDraftMock,
+  loadEstimateDraftSeqMock,
   saveCurrentEstimateDraftMock,
+  syncEstimateProjectionRemoteMock,
+  emitEstimateDraftSyncEventMock,
   getWorkspaceSourceMock,
   getPlanningSourceMock,
   persistEstimateV2HeroTransitionMock,
@@ -11,7 +14,10 @@ const {
   syncProjectHRFromEstimateMock,
 } = vi.hoisted(() => ({
   loadCurrentEstimateDraftMock: vi.fn(),
+  loadEstimateDraftSeqMock: vi.fn(),
   saveCurrentEstimateDraftMock: vi.fn(),
+  syncEstimateProjectionRemoteMock: vi.fn(),
+  emitEstimateDraftSyncEventMock: vi.fn(),
   getWorkspaceSourceMock: vi.fn(),
   getPlanningSourceMock: vi.fn(),
   persistEstimateV2HeroTransitionMock: vi.fn(),
@@ -25,7 +31,10 @@ vi.mock("@/data/estimate-source", async () => {
   return {
     ...actual,
     loadCurrentEstimateDraft: loadCurrentEstimateDraftMock,
+    loadEstimateDraftSeq: loadEstimateDraftSeqMock,
     saveCurrentEstimateDraft: saveCurrentEstimateDraftMock,
+    syncEstimateProjectionRemote: syncEstimateProjectionRemoteMock,
+    emitEstimateDraftSyncEvent: emitEstimateDraftSyncEventMock,
   };
 });
 
@@ -82,6 +91,7 @@ import {
   updateLine,
   updateWorkDates,
 } from "@/data/estimate-v2-store";
+import { EstimateDraftConflictError, SyncEstimateProjectionUnavailableError } from "@/data/estimate-source";
 import { __unsafeResetStoreForTests } from "@/data/store";
 
 describe("estimate-v2 workspace drafts", () => {
@@ -127,6 +137,14 @@ describe("estimate-v2 workspace drafts", () => {
     syncProjectProcurementFromEstimateMock.mockResolvedValue(undefined);
     syncProjectHRFromEstimateMock.mockResolvedValue(undefined);
     saveCurrentEstimateDraftMock.mockResolvedValue(undefined);
+    emitEstimateDraftSyncEventMock.mockResolvedValue(undefined);
+    loadEstimateDraftSeqMock.mockResolvedValue(0);
+    // Default to a pre-P1 database so the pinned suites keep exercising the
+    // legacy client pipeline (still shipped as the fallback); RPC-path tests
+    // override this per test.
+    syncEstimateProjectionRemoteMock.mockImplementation(async () => {
+      throw new SyncEstimateProjectionUnavailableError();
+    });
     loadCurrentEstimateDraftMock.mockResolvedValue({
       estimate: null,
       currentVersion: null,
@@ -188,6 +206,24 @@ describe("estimate-v2 workspace drafts", () => {
 
     const titles = getEstimateV2ProjectState(projectId).stages.map((stage) => stage.title);
     expect(titles).toContain("Server Applied");
+  });
+
+  it("samples the CAS baseline strictly before reading the draft content", async () => {
+    // A seq sampled AFTER a concurrent commit paired with content sampled
+    // BEFORE it would let the next save silently overwrite the newer rows;
+    // seq-first only ever costs a convergent spurious conflict.
+    const projectId = "project-remote-1";
+    registerEstimateV2ProjectAccessContext(projectId, {
+      mode: "supabase", profileId: "profile-1", projectOwnerProfileId: "profile-1", membershipRole: "owner",
+    });
+
+    await hydrateEstimateV2ProjectFromWorkspace(projectId, { profileId: "profile-1" });
+
+    const seqOrder = loadEstimateDraftSeqMock.mock.invocationCallOrder[0];
+    const draftOrder = loadCurrentEstimateDraftMock.mock.invocationCallOrder[0];
+    expect(seqOrder).toBeDefined();
+    expect(draftOrder).toBeDefined();
+    expect(seqOrder).toBeLessThan(draftOrder);
   });
 
   it("a non-forced hydrate keeps stale local state while a save is pending (early-return)", async () => {
