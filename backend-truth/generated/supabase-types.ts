@@ -2687,6 +2687,15 @@ export type Database = {
           }
           Returns: boolean
         }
+        "change_task_status_v2": {
+          Args: {
+          "p_task_id": string
+          "p_new_status": string
+          "p_comment_body": unknown
+          "p_expected_status": unknown
+          }
+          Returns: Json
+        }
         "create_org_document_folder": {
           Args: {
           "p_org_id": string

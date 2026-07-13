@@ -531,6 +531,10 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260713110100_project_sync_events_sensitivity_policy.sql",
       "sha256": "43a60694f93387f8691cee449004aa83fb8d88d2fd36a7b0268924c116a28106"
+    },
+    {
+      "path": "supabase/migrations/20260713150000_change_task_status_v2.sql",
+      "sha256": "d352fd9405b0ef4cedd0e8911310aa7d6bb1a67cf7c92741e7312cc581531dd6"
     }
   ],
   "generated_artifacts": [
@@ -690,6 +694,7 @@ export const manifest = {
     "sql/20260712130000_estimate_projection_infra.sql",
     "sql/20260712130200_sync_estimate_projection_rpc.sql",
     "sql/20260713110100_project_sync_events_sensitivity_policy.sql",
+    "sql/20260713150000_change_task_status_v2.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -19987,6 +19992,41 @@ export const functions = {
       "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260712130200_sync_estimate_projection_rpc.sql",
       "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "change_task_status_v2",
+      "signature": "public.change_task_status_v2(uuid, text, text, text)",
+      "args": [
+        {
+          "name": "p_task_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_new_status",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_comment_body",
+          "type": "text default null",
+          "identityType": "text"
+        },
+        {
+          "name": "p_expected_status",
+          "type": "text default null",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260713150000_change_task_status_v2.sql",
+      "triggerUsages": []
     }
   ]
 } as const;
@@ -23953,6 +23993,13 @@ export const sourceTrace = {
       "name": "set_estimate_current_version",
       "signature": "public.set_estimate_current_version(uuid, uuid)",
       "sourceMigration": "supabase/migrations/20260712130200_sync_estimate_projection_rpc.sql"
+    },
+    {
+      "key": "public.change_task_status_v2",
+      "schema": "public",
+      "name": "change_task_status_v2",
+      "signature": "public.change_task_status_v2(uuid, text, text, text)",
+      "sourceMigration": "supabase/migrations/20260713150000_change_task_status_v2.sql"
     }
   ],
   "policies": [
@@ -25506,6 +25553,7 @@ export const sourceTrace = {
         "supabase/migrations/20260320110000_task_final_media_contract.sql",
         "supabase/migrations/20260602150100_instance_tables_library_fks.sql",
         "supabase/migrations/20260416120000_session2_ai_humanize_tasks_hr.sql",
+        "supabase/migrations/20260713150000_change_task_status_v2.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
       ],
       "tables": [
@@ -25515,7 +25563,8 @@ export const sourceTrace = {
         "public.task_checklist_items"
       ],
       "functions": [
-        "public.get_tasks_ai_operational_evidence"
+        "public.get_tasks_ai_operational_evidence",
+        "public.change_task_status_v2"
       ],
       "policies": [
         "public.project_stages.project_stages_select",
@@ -26557,10 +26606,11 @@ export const slices = {
         "supabase/migrations/20260320110000_task_final_media_contract.sql",
         "supabase/migrations/20260602150100_instance_tables_library_fks.sql",
         "supabase/migrations/20260416120000_session2_ai_humanize_tasks_hr.sql",
+        "supabase/migrations/20260713150000_change_task_status_v2.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
       ],
       "tableCount": 4,
-      "functionCount": 1,
+      "functionCount": 2,
       "rlsTableCount": 4
     },
     {
