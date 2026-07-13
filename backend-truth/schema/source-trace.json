@@ -1179,6 +1179,13 @@
       "name": "set_estimate_current_version",
       "signature": "public.set_estimate_current_version(uuid, uuid)",
       "sourceMigration": "supabase/migrations/20260712130200_sync_estimate_projection_rpc.sql"
+    },
+    {
+      "key": "public.change_task_status_v2",
+      "schema": "public",
+      "name": "change_task_status_v2",
+      "signature": "public.change_task_status_v2(uuid, text, text, text)",
+      "sourceMigration": "supabase/migrations/20260713150000_change_task_status_v2.sql"
     }
   ],
   "policies": [
@@ -2732,6 +2739,7 @@
         "supabase/migrations/20260320110000_task_final_media_contract.sql",
         "supabase/migrations/20260602150100_instance_tables_library_fks.sql",
         "supabase/migrations/20260416120000_session2_ai_humanize_tasks_hr.sql",
+        "supabase/migrations/20260713150000_change_task_status_v2.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
       ],
       "tables": [
@@ -2741,7 +2749,8 @@
         "public.task_checklist_items"
       ],
       "functions": [
-        "public.get_tasks_ai_operational_evidence"
+        "public.get_tasks_ai_operational_evidence",
+        "public.change_task_status_v2"
       ],
       "policies": [
         "public.project_stages.project_stages_select",

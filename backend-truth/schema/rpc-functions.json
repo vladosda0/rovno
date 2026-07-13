@@ -3034,6 +3034,41 @@
       "authenticatedExecute": true,
       "sourceMigration": "supabase/migrations/20260712130200_sync_estimate_projection_rpc.sql",
       "triggerUsages": []
+    },
+    {
+      "schema": "public",
+      "name": "change_task_status_v2",
+      "signature": "public.change_task_status_v2(uuid, text, text, text)",
+      "args": [
+        {
+          "name": "p_task_id",
+          "type": "uuid",
+          "identityType": "uuid"
+        },
+        {
+          "name": "p_new_status",
+          "type": "text",
+          "identityType": "text"
+        },
+        {
+          "name": "p_comment_body",
+          "type": "text default null",
+          "identityType": "text"
+        },
+        {
+          "name": "p_expected_status",
+          "type": "text default null",
+          "identityType": "text"
+        }
+      ],
+      "returnType": "jsonb",
+      "language": "plpgsql",
+      "volatility": "volatile",
+      "securityDefiner": true,
+      "searchPath": "public",
+      "authenticatedExecute": true,
+      "sourceMigration": "supabase/migrations/20260713150000_change_task_status_v2.sql",
+      "triggerUsages": []
     }
   ]
 }
