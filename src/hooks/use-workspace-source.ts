@@ -372,6 +372,11 @@ export function useWorkspaceProjectMembersState(projectId: string): {
     },
     enabled: Boolean(supabaseMode && projectId),
     staleTime: WORKSPACE_QUERY_STALE_TIME_MS,
+    // P2: focus refetch is the catch-up path the realtime members self-echo
+    // skip relies on (a same-user second tab drops its own 'members' event, so
+    // it must refresh on return). usePermission derives its authority seam from
+    // this query, so the same staleness would otherwise reach role-gated UI.
+    refetchOnWindowFocus: true,
   });
 
   if (mode.kind === "demo" || mode.kind === "local") {

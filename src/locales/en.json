@@ -1445,6 +1445,7 @@
   "projectSync.state.skipped": "Sync skipped",
   "projectSync.state.skippedPermission": "Needs an owner session",
   "projectSync.state.error": "Error",
+  "projectSync.feedDegraded": "Live updates delayed — refreshing every 30 s",
   "projectData.syncing": "Syncing with the estimate…",
   "projectData.redacted.title": "Hidden by access level",
   "projectData.redacted.description": "This section is not available for your role in the project.",

@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MemberRole } from "@/types/entities";
@@ -8,10 +9,16 @@ const { useWorkspaceModeMock, useWorkspaceProjectStateMock } = vi.hoisted(() => 
   useWorkspaceProjectStateMock: vi.fn(),
 }));
 
-vi.mock("@/hooks/use-workspace-source", () => ({
-  useWorkspaceMode: useWorkspaceModeMock,
-  useWorkspaceProjectState: useWorkspaceProjectStateMock,
-}));
+vi.mock("@/hooks/use-workspace-source", async () => {
+  const actual = await vi.importActual<typeof import("@/hooks/use-workspace-source")>(
+    "@/hooks/use-workspace-source",
+  );
+  return {
+    ...actual,
+    useWorkspaceMode: useWorkspaceModeMock,
+    useWorkspaceProjectState: useWorkspaceProjectStateMock,
+  };
+});
 
 const { usePermissionMock } = vi.hoisted(() => ({
   usePermissionMock: vi.fn(),
@@ -51,18 +58,21 @@ function setPermission(role: MemberRole) {
 }
 
 function renderProjectLayout(path = "/project/project-1/dashboard") {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <MemoryRouter initialEntries={[path]}>
-      <Routes>
-        <Route path="/project/:id" element={<ProjectLayout />}>
-          <Route path="dashboard" element={<div>Dashboard content</div>} />
-          <Route path="estimate" element={<div>Estimate content</div>} />
-          <Route path="participants" element={<div>Participants content</div>} />
-          <Route path="hr" element={<div>HR content</div>} />
-        </Route>
-        <Route path="/auth/login" element={<div>Login page</div>} />
-      </Routes>
-    </MemoryRouter>,
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={[path]}>
+        <Routes>
+          <Route path="/project/:id" element={<ProjectLayout />}>
+            <Route path="dashboard" element={<div>Dashboard content</div>} />
+            <Route path="estimate" element={<div>Estimate content</div>} />
+            <Route path="participants" element={<div>Participants content</div>} />
+            <Route path="hr" element={<div>HR content</div>} />
+          </Route>
+          <Route path="/auth/login" element={<div>Login page</div>} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 

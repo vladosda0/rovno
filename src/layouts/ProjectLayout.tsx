@@ -6,6 +6,8 @@ import { EmptyState } from "@/components/EmptyState";
 import { ProjectSyncIndicator } from "@/components/project/ProjectSyncIndicator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { registerEstimateV2ProjectAccessContext } from "@/data/estimate-v2-store";
+import { useProjectRealtimeInvalidation } from "@/hooks/use-project-realtime-invalidation";
+import { useProjectSyncGuards } from "@/hooks/use-project-sync-guards";
 import { useWorkspaceMode, useWorkspaceProjectState } from "@/hooks/use-workspace-source";
 import { projectDomainAllowsRoute, usePermission, type ProjectDomain } from "@/lib/permissions";
 
@@ -44,6 +46,9 @@ export default function ProjectLayout() {
   const navigate = useNavigate();
   const workspaceMode = useWorkspaceMode();
   const perm = usePermission(id ?? "");
+  // P2 cross-session truth: realtime invalidation feed + flush/unload guards.
+  const syncFeedHealth = useProjectRealtimeInvalidation(id);
+  useProjectSyncGuards(id);
   const { project, isLoading: isProjectLoading } = useWorkspaceProjectState(id ?? "");
   const routeSegment = location.pathname.split("/")[3] ?? null;
   const routeDomain = routeSegment ? (ROUTE_DOMAIN_BY_SEGMENT[routeSegment] ?? null) : null;
@@ -116,7 +121,7 @@ export default function ProjectLayout() {
       <div className="flex-1 p-sp-3">
         <Outlet />
       </div>
-      {id && <ProjectSyncIndicator projectId={id} />}
+      {id && <ProjectSyncIndicator projectId={id} feedHealth={syncFeedHealth} />}
     </div>
   );
 }

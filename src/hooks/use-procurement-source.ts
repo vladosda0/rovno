@@ -12,7 +12,8 @@ import { resolveFinanceRowLoadAccess, usePermission } from "@/lib/permissions";
 import type { FinanceRowLoadAccess } from "@/lib/permissions";
 import type { ProcurementItemV2 } from "@/types/entities";
 
-const PROCUREMENT_QUERY_STALE_TIME_MS = 60_000;
+// 30s (P2): see the focus-refetch opt-in on the query below.
+const PROCUREMENT_QUERY_STALE_TIME_MS = 30_000;
 const EMPTY_PROCUREMENT_ITEMS: ProcurementItemV2[] = [];
 
 export const procurementProjectItemsQueryRoot = (profileId: string, projectId: string) =>
@@ -71,6 +72,9 @@ export function useProjectProcurementItemsState(
     // otherwise serve the stale cached list. Stable key => background refetch
     // keeps prior rows visible (no empty flash).
     refetchOnMount: "always",
+    // P2: local opt-in (global default stays false); cross-session freshness
+    // on tab return, bounded by staleTime.
+    refetchOnWindowFocus: true,
   });
 
   // Keep the query key stable across projection advances so cached data does not
