@@ -1085,7 +1085,14 @@ export function hasPendingProjectDraftSync(projectId: string): boolean {
   return heroTransitionInFlightByProjectId.has(projectId)
     || remoteProjectionSyncInFlightByProjectId.has(projectId)
     || deferredDraftSyncByProjectId.has(projectId)
-    || remoteDraftSyncTimers.has(projectId);
+    || remoteDraftSyncTimers.has(projectId)
+    // The RUNNING save promise: once the debounce fires (or flush/visibility
+    // starts the run), the timer is gone and the draft-write executes under
+    // this promise BEFORE remoteProjectionSyncInFlight is set. Without this, the
+    // predicate reads false mid-save — the realtime hydrate would clobber the
+    // in-flight write and beforeunload would not warn. (flushProjectDraftSync
+    // already awaits this map directly; the predicate must agree.)
+    || runningProjectDraftSyncByProjectId.has(projectId);
 }
 
 function commitProjectStateChange(projectId: string) {

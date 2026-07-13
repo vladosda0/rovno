@@ -93,8 +93,19 @@ export function subscribeToProjectSyncEvents(options: ProjectSyncFeedOptions): (
     options.onEvents(batch);
   };
 
-  const enqueue = (row: ProjectSyncEventRow) => {
-    if (disposed || row.id <= lastSeenId || pending.has(row.id)) return;
+  // `floor` defaults to the live cursor (realtime path). A poll passes the
+  // cursor it CAPTURED when it built its query: a concurrent realtime flush may
+  // advance lastSeenId past a row the poll fetched with the older cursor, and
+  // dropping it against the advanced cursor would silently lose a row realtime
+  // had NOT delivered. Delivering it against the poll's own floor recovers it;
+  // any row realtime also delivered is deduped by pending.has (same window) or
+  // is a harmless idempotent re-invalidation (later window). Residual: if
+  // realtime advances the cursor BEFORE a poll builds its query, that poll's
+  // `.gt(cursor)` skips the gap entirely — identity ids have permanent gaps
+  // (rolled-back inserts), so the cursor cannot conservatively linger on them;
+  // such a rare realtime-drop self-heals via the next event / focus refetch.
+  const enqueue = (row: ProjectSyncEventRow, floor: number = lastSeenId) => {
+    if (disposed || row.id <= floor || pending.has(row.id)) return;
     pending.set(row.id, row);
     if (!flushTimer) {
       flushTimer = setTimeout(flush, coalesceMs);
@@ -104,12 +115,13 @@ export function subscribeToProjectSyncEvents(options: ProjectSyncFeedOptions): (
   const poll = async (client: UntypedClient) => {
     if (disposed || pollInFlight) return;
     pollInFlight = true;
+    const pollFrom = lastSeenId; // capture before the await; flush may advance lastSeenId
     try {
       const { data, error } = await client
         .from("project_sync_events")
         .select("id, project_id, kind, revision, actor_profile_id, created_at")
         .eq("project_id", options.projectId)
-        .gt("id", lastSeenId)
+        .gt("id", pollFrom)
         .order("id", { ascending: true })
         .limit(POLL_BATCH_LIMIT);
       if (error) {
@@ -119,7 +131,7 @@ export function subscribeToProjectSyncEvents(options: ProjectSyncFeedOptions): (
         }
         return; // transient poll errors: stay degraded, retry next tick
       }
-      (data ?? []).forEach((row) => enqueue(row as ProjectSyncEventRow));
+      (data ?? []).forEach((row) => enqueue(row as ProjectSyncEventRow, pollFrom));
     } catch {
       // Network failure: stay degraded, retry next tick.
     } finally {

@@ -16,7 +16,12 @@ const harness = vi.hoisted(() => {
     channelName: null as string | null,
     // Queue of responses for .from("project_sync_events") selects, in call
     // order (first = the baseline max-id fetch, then polls).
-    selectResponses: [] as Array<{ data: unknown; error: unknown }>,
+    // Entries may be a plain response OR a Promise of one (Promise.resolve
+    // flattens it) so a test can defer a specific select to interleave it with
+    // realtime events.
+    selectResponses: [] as Array<
+      { data: unknown; error: unknown } | Promise<{ data: unknown; error: unknown }>
+    >,
     selectCalls: [] as Array<Record<string, unknown>>,
   };
 
@@ -166,6 +171,37 @@ describe("subscribeToProjectSyncEvents", () => {
     await flushAsync();
     expect(health).toEqual(["unavailable"]);
     expect(harness.supabase.channel).not.toHaveBeenCalled();
+    dispose();
+  });
+
+  it("recovers a poll-fetched row when a realtime flush advanced the cursor mid-poll", async () => {
+    harness.state.selectResponses.push({ data: [{ id: 10 }], error: null }); // baseline
+    const batches: ProjectSyncEventRow[][] = [];
+    const dispose = subscribeToProjectSyncEvents({
+      projectId: "project-1",
+      onEvents: (events) => batches.push(events),
+    });
+    await flushAsync();
+
+    // The SUBSCRIBED catch-up poll is deferred (captures pollFrom = 10 now).
+    let resolvePoll!: (value: { data: unknown; error: unknown }) => void;
+    harness.state.selectResponses.push(
+      new Promise<{ data: unknown; error: unknown }>((resolve) => { resolvePoll = resolve; }),
+    );
+    harness.state.statusCallback?.("SUBSCRIBED");
+    await flushAsync(); // poll starts, awaiting the deferred response
+
+    // Realtime delivers id=12 while the poll is in flight → flush advances the
+    // global cursor to 12 before the poll's rows are enqueued.
+    harness.state.channelCallback?.({ new: row(12) });
+    await flushAsync(250);
+    expect(batches.map((b) => b.map((e) => e.id))).toEqual([[12]]);
+
+    // The poll returns [11, 12]; 11 was NOT delivered by realtime and must be
+    // recovered against the poll's own floor (10), not dropped vs the now-12 cursor.
+    resolvePoll({ data: [row(11), row(12, { kind: "procurement" })], error: null });
+    await flushAsync(250);
+    expect(batches.flat().map((e) => e.id)).toContain(11);
     dispose();
   });
 
