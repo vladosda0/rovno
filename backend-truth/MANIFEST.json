@@ -523,6 +523,10 @@
     {
       "path": "supabase/migrations/20260712130200_sync_estimate_projection_rpc.sql",
       "sha256": "f74d01347b1a1926ed416435a324ef9d68cd27733ee30faf538771934c9c11c7"
+    },
+    {
+      "path": "supabase/migrations/20260713110100_project_sync_events_sensitivity_policy.sql",
+      "sha256": "43a60694f93387f8691cee449004aa83fb8d88d2fd36a7b0268924c116a28106"
     }
   ],
   "generated_artifacts": [
@@ -681,6 +685,7 @@
     "sql/20260706140000_user_catalogs.sql",
     "sql/20260712130000_estimate_projection_infra.sql",
     "sql/20260712130200_sync_estimate_projection_rpc.sql",
+    "sql/20260713110100_project_sync_events_sensitivity_policy.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],

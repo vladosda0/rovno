@@ -527,6 +527,10 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260712130200_sync_estimate_projection_rpc.sql",
       "sha256": "f74d01347b1a1926ed416435a324ef9d68cd27733ee30faf538771934c9c11c7"
+    },
+    {
+      "path": "supabase/migrations/20260713110100_project_sync_events_sensitivity_policy.sql",
+      "sha256": "43a60694f93387f8691cee449004aa83fb8d88d2fd36a7b0268924c116a28106"
     }
   ],
   "generated_artifacts": [
@@ -685,6 +689,7 @@ export const manifest = {
     "sql/20260706140000_user_catalogs.sql",
     "sql/20260712130000_estimate_projection_infra.sql",
     "sql/20260712130200_sync_estimate_projection_rpc.sql",
+    "sql/20260713110100_project_sync_events_sensitivity_policy.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -22739,18 +22744,6 @@ export const rls = {
       ],
       "policies": [
         {
-          "name": "project_sync_events_select",
-          "schema": "public",
-          "table": "project_sync_events",
-          "command": "select",
-          "roles": [
-            "authenticated"
-          ],
-          "using": "public.can_access_project(project_id)",
-          "withCheck": null,
-          "sourceMigration": "supabase/migrations/20260712130000_estimate_projection_infra.sql"
-        },
-        {
           "name": "project_sync_events_insert",
           "schema": "public",
           "table": "project_sync_events",
@@ -22761,6 +22754,18 @@ export const rls = {
           "using": null,
           "withCheck": "public.can_write_project_content(project_id)\n    and kind = 'estimate_draft'\n    and (actor_profile_id is null or actor_profile_id = auth.uid())",
           "sourceMigration": "supabase/migrations/20260712130000_estimate_projection_infra.sql"
+        },
+        {
+          "name": "project_sync_events_select",
+          "schema": "public",
+          "table": "project_sync_events",
+          "command": "select",
+          "roles": [
+            "authenticated"
+          ],
+          "using": "public.can_access_project(project_id)\n    and (\n      kind not in ('procurement', 'hr', 'hr_payments', 'members')\n      or (kind = 'procurement' and public.can_view_sensitive_detail(project_id))\n      or (kind in ('hr', 'hr_payments')\n          and public.can_view_sensitive_detail(project_id)\n          and public.can_access_hr_domain(project_id))\n      or (kind = 'members' and public.can_manage_project(project_id))\n    )",
+          "withCheck": null,
+          "sourceMigration": "supabase/migrations/20260713110100_project_sync_events_sensitivity_policy.sql"
         }
       ]
     }
@@ -25312,20 +25317,20 @@ export const sourceTrace = {
       "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
     },
     {
-      "key": "public.project_sync_events.project_sync_events_select",
-      "schema": "public",
-      "table": "project_sync_events",
-      "name": "project_sync_events_select",
-      "command": "select",
-      "sourceMigration": "supabase/migrations/20260712130000_estimate_projection_infra.sql"
-    },
-    {
       "key": "public.project_sync_events.project_sync_events_insert",
       "schema": "public",
       "table": "project_sync_events",
       "name": "project_sync_events_insert",
       "command": "insert",
       "sourceMigration": "supabase/migrations/20260712130000_estimate_projection_infra.sql"
+    },
+    {
+      "key": "public.project_sync_events.project_sync_events_select",
+      "schema": "public",
+      "table": "project_sync_events",
+      "name": "project_sync_events_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260713110100_project_sync_events_sensitivity_policy.sql"
     }
   ],
   "slices": [
@@ -25809,7 +25814,8 @@ export const sourceTrace = {
         "supabase/migrations/20260622120000_tighten_price_comparison_finance_gate.sql",
         "supabase/migrations/20260712130200_sync_estimate_projection_rpc.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
-        "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
+        "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
+        "supabase/migrations/20260713110100_project_sync_events_sensitivity_policy.sql"
       ],
       "tables": [
         "public.project_estimates",
@@ -25849,8 +25855,8 @@ export const sourceTrace = {
         "public.estimate_dependencies.estimate_dependencies_insert",
         "public.estimate_dependencies.estimate_dependencies_update",
         "public.estimate_dependencies.estimate_dependencies_delete",
-        "public.project_sync_events.project_sync_events_select",
-        "public.project_sync_events.project_sync_events_insert"
+        "public.project_sync_events.project_sync_events_insert",
+        "public.project_sync_events.project_sync_events_select"
       ],
       "relations": [
         {
@@ -26600,7 +26606,8 @@ export const slices = {
         "supabase/migrations/20260622120000_tighten_price_comparison_finance_gate.sql",
         "supabase/migrations/20260712130200_sync_estimate_projection_rpc.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
-        "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
+        "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
+        "supabase/migrations/20260713110100_project_sync_events_sensitivity_policy.sql"
       ],
       "tableCount": 6,
       "functionCount": 7,
