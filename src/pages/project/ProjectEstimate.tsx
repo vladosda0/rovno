@@ -682,7 +682,9 @@ function WorkTableFrame({
 
   return (
     <div className="relative space-y-1.5 pl-0">
-      <div className="sticky top-14 z-30 flex items-stretch rounded-md bg-card/95 shadow-sm ring-1 ring-border/60 backdrop-blur">
+      {/* top offsets by --demo-banner-h (0px outside the demo) so the pinned
+          column header clears the demo strip, mirroring the TopBar offset. */}
+      <div className="sticky top-[calc(3.5rem+var(--demo-banner-h,0px))] z-30 flex items-stretch rounded-md bg-card/95 shadow-sm ring-1 ring-border/60 backdrop-blur">
         <div ref={mirrorScrollRef} className="min-w-0 flex-1 overflow-hidden">
           <div className="flex items-stretch" style={{ minWidth: effectiveMinWidth }}>
             {columns.map((col) => (

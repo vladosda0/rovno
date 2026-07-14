@@ -22,6 +22,7 @@ import {
   getStoredAuthProfile,
   isAuthenticated,
   isDemoSessionActive,
+  subscribeAuthState,
   type StoredAuthProfile,
 } from "@/lib/auth-state";
 import {
@@ -854,11 +855,11 @@ export function deleteChecklistItem(taskId: string, itemId: string) {
 }
 
 /**
- * Reset the demo workspace to its pristine seeded state. Called on demo exit
- * so a later re-entry in the same tab starts from the showcase data, not from
- * whatever the visitor edited while playing around.
+ * Reset the demo workspace to its pristine seeded state so a later re-entry
+ * in the same tab starts from the showcase data, not from whatever the
+ * visitor edited while playing around.
  */
-export function resetDemoState() {
+function resetDemoState() {
   try {
     sessionStorage.removeItem(DEMO_STATE_KEY);
   } catch {
@@ -866,6 +867,23 @@ export function resetDemoState() {
   }
   demoState = sanitizeDemoState(createSeededDemoState());
   notify();
+}
+
+// Pristine-re-entry contract: the demo resets whenever the demo session ends,
+// whatever the exit door — the explicit exit control, a login/signup success,
+// or logout. Every door calls clearDemoSession(), which notifies auth-state
+// listeners; reacting here (like estimate-v2-store does for its demo states)
+// covers them all with a single mechanism.
+let lastKnownDemoSessionActive = false;
+if (typeof window !== "undefined") {
+  lastKnownDemoSessionActive = isDemoSessionActive();
+  subscribeAuthState(() => {
+    const active = isDemoSessionActive();
+    if (!active && lastKnownDemoSessionActive) {
+      resetDemoState();
+    }
+    lastKnownDemoSessionActive = active;
+  });
 }
 
 export function __unsafeResetStoreForTests() {
