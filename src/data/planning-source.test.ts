@@ -702,4 +702,25 @@ describe("changeTaskStatus (supabase source)", () => {
     });
     expect(tasksChain.update).toHaveBeenCalledTimes(1);
   });
+
+  it("legacy fallback with no session surfaces a non-Error so the UI localizes it", async () => {
+    // Degenerate: RPC missing + a session that lapsed mid-action. The comment
+    // insert must NOT be attempted (no author), and the thrown value must NOT be
+    // an Error instance, so the caller's `instanceof Error` check falls through
+    // to the localized fallback toast instead of leaking an English string.
+    const commentInsert = vi.fn(async () => ({ error: null }));
+    const from = vi.fn(() => ({ insert: commentInsert }));
+    setMockSupabase({
+      auth: { getSession: vi.fn(async () => ({ data: { session: null } })) },
+      rpc: vi.fn(async () => ({ data: null, error: { code: "PGRST202", message: "Could not find the function public.change_task_status_v2" } })),
+      from,
+    } as unknown as MockSupabaseClient);
+    const source = await supabaseSource();
+
+    const err = await source
+      .changeTaskStatus("task-1", "blocked", { commentBody: "note" })
+      .catch((e) => e);
+    expect(err).not.toBeInstanceOf(Error);
+    expect(commentInsert).not.toHaveBeenCalled();
+  });
 });

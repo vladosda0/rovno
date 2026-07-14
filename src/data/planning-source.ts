@@ -1331,7 +1331,11 @@ function createSupabasePlanningSource(
           const { data: sessionData } = await (supabase as unknown as SupabaseClient).auth.getSession();
           const authorId = sessionData?.session?.user?.id;
           if (!authorId) {
-            throw new Error("Cannot record the task comment without an authenticated session.");
+            // Session lapsed mid-action (degenerate in supabase mode). Surface a
+            // plain, non-Error object — like a raw PostgREST error — so the
+            // caller's `instanceof Error` check falls through to the LOCALIZED
+            // fallback toast instead of rendering this English string in the ru UI.
+            throw { code: "NO_SESSION", message: "No authenticated session to record the task comment." };
           }
           const { error: commentError } = await supabase
             .from("task_comments")
