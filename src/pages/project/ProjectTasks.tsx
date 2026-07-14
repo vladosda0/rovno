@@ -141,7 +141,10 @@ export default function ProjectTasks() {
     && taskSyncState.projectedRevision !== estimateSync.estimateRevision
     && !isTaskSyncing
     && !hasTaskSyncError;
-  const shouldBlockTaskLaunchActions = isTaskProjectionBehind || hasTaskSyncError;
+  // P3: isTaskProjectionBehind / hasTaskSyncError drive the informational sync
+  // banner only. They no longer BLOCK status changes — change_task_status_v2
+  // preserves task.status through re-projection and converges concurrent moves
+  // via P0002, so a status change is always safe to attempt.
   const canAuthorTaskStructure = canCreateTask && !isSupabaseMode;
   const { prepareUpload, uploadBytes, finalizeUpload } = useMediaUploadMutations(pid);
 
@@ -242,18 +245,9 @@ export default function ProjectTasks() {
     if (!canChangeTaskStatus) return;
     const task = tasks.find((entry) => entry.id === taskId);
     if (!task || task.status === newStatus) return;
-    // Only estimate-linked tasks depend on the projection; manual tasks are
-    // always safe to move regardless of estimate sync state.
-    if (shouldBlockTaskLaunchActions && task.estimateV2WorkId) {
-      toast({
-        title: hasTaskSyncError ? t("tasks.sync.toast.needsAttention") : t("tasks.sync.toast.stillSyncing"),
-        description: hasTaskSyncError
-          ? (taskSyncState.lastError ?? t("tasks.sync.toast.resolveStatus"))
-          : t("tasks.sync.toast.waitStatus"),
-        variant: "destructive",
-      });
-      return;
-    }
+    // P3: no projection-behind hard-block. change_task_status_v2 preserves the
+    // task's own status through re-projection and absorbs concurrent moves via
+    // the P0002 converge path, so a status change is always safe to attempt.
 
     if (newStatus === "done") {
       const unresolvedChecklistItems = task.checklist.filter((item) => !item.done);
@@ -284,7 +278,7 @@ export default function ProjectTasks() {
         const source = await getPlanningSource(
           workspaceMode.kind === "pending-supabase" ? undefined : workspaceMode,
         );
-        await source.updateProjectTask(taskId, { status: newStatus });
+        await source.changeTaskStatus(taskId, newStatus, { expectedStatus: task.status });
         await invalidateProjectTasks();
         toast({ title: t("tasks.toast.statusUpdated"), description: t(statusMeta[newStatus].labelKey) });
         if (newStatus === "in_progress") {
@@ -296,8 +290,8 @@ export default function ProjectTasks() {
         }
       } catch (error) {
         if (error instanceof TaskNoLongerAvailableError) {
-          // The task was re-projected/replaced while we looked at it. Refresh
-          // and tell the user the list converged — no scary failure.
+          // The task was re-projected/replaced, or another session moved it
+          // first (P0002 CAS). Refresh and tell the user the list converged.
           await invalidateProjectTasks();
           toast({
             title: t("tasks.toast.taskRefreshed.title"),
@@ -312,23 +306,13 @@ export default function ProjectTasks() {
         });
       }
     })();
-  }, [canChangeTaskStatus, shouldBlockTaskLaunchActions, hasTaskSyncError, taskSyncState.lastError, tasks, toast, workspaceMode, invalidateProjectTasks, t]);
+  }, [canChangeTaskStatus, tasks, toast, workspaceMode, invalidateProjectTasks, pid, t]);
 
   // Confirm Done
   const handleConfirmDone = useCallback(async () => {
     if (!donePrompt) return;
     const task = tasks.find((entry) => entry.id === donePrompt.taskId);
     if (!task) return;
-    if (shouldBlockTaskLaunchActions && task.estimateV2WorkId) {
-      toast({
-        title: hasTaskSyncError ? t("tasks.sync.toast.needsAttention") : t("tasks.sync.toast.stillSyncing"),
-        description: hasTaskSyncError
-          ? (taskSyncState.lastError ?? t("tasks.sync.toast.resolveComplete"))
-          : t("tasks.sync.toast.waitComplete"),
-        variant: "destructive",
-      });
-      return;
-    }
     if (task.checklist.some((item) => !item.done)) {
       toast({
         title: t("tasks.toast.cannotMarkDone.title"),
@@ -365,11 +349,12 @@ export default function ProjectTasks() {
       const source = await getPlanningSource(
         workspaceMode.kind === "pending-supabase" ? undefined : workspaceMode,
       );
-      if (doneComment.trim()) {
-        const authorId = workspaceMode.kind === "supabase" ? workspaceMode.profileId : currentUser.id;
-        await source.createTaskComment(donePrompt.taskId, doneComment.trim(), authorId);
-      }
-      await source.updateProjectTask(donePrompt.taskId, { status: "done" });
+      // The RPC inserts the acceptance comment once (server-side) alongside the
+      // status change; the same text also rode along as the photo caption above.
+      await source.changeTaskStatus(donePrompt.taskId, "done", {
+        expectedStatus: task.status,
+        commentBody: doneComment.trim() || undefined,
+      });
       await invalidateProjectTasks();
       trackEvent("task_marked_done", {
         project_id: pid,
@@ -410,10 +395,7 @@ export default function ProjectTasks() {
     workspaceMode,
     invalidateProjectTasks,
     toast,
-    currentUser.id,
-    shouldBlockTaskLaunchActions,
-    hasTaskSyncError,
-    taskSyncState.lastError,
+    pid,
     t,
   ]);
 
@@ -421,29 +403,21 @@ export default function ProjectTasks() {
   const handleConfirmBlocked = useCallback(async () => {
     if (!blockedPrompt) return;
     const blockedTask = tasks.find((entry) => entry.id === blockedPrompt.taskId);
-    if (shouldBlockTaskLaunchActions && blockedTask?.estimateV2WorkId) {
-      toast({
-        title: hasTaskSyncError ? t("tasks.sync.toast.needsAttention") : t("tasks.sync.toast.stillSyncing"),
-        description: hasTaskSyncError
-          ? (taskSyncState.lastError ?? t("tasks.sync.toast.resolveBlocked"))
-          : t("tasks.sync.toast.waitBlocked"),
-        variant: "destructive",
-      });
-      return;
-    }
     try {
       const source = await getPlanningSource(
         workspaceMode.kind === "pending-supabase" ? undefined : workspaceMode,
       );
-      const authorId = workspaceMode.kind === "supabase" ? workspaceMode.profileId : currentUser.id;
-      await source.createTaskComment(blockedPrompt.taskId, t("tasks.toast.blockerPrefix", { reason: blockedReason.trim() }), authorId);
-      await source.updateProjectTask(blockedPrompt.taskId, { status: "blocked" });
+      // The RPC enforces the reason-required guard and inserts the blocker
+      // comment once, server-side, alongside the status change.
+      await source.changeTaskStatus(blockedPrompt.taskId, "blocked", {
+        expectedStatus: blockedTask?.status,
+        commentBody: t("tasks.toast.blockerPrefix", { reason: blockedReason.trim() }),
+      });
       await invalidateProjectTasks();
-      const blockedTaskFromStatus = tasks.find((entry) => entry.id === blockedPrompt.taskId)?.status ?? "unknown";
       trackEvent("task_marked_blocked", {
         project_id: pid,
         task_id: blockedPrompt.taskId,
-        from_status: blockedTaskFromStatus,
+        from_status: blockedTask?.status ?? "unknown",
       });
       setBlockedPrompt(null);
       setBlockedReason("");
@@ -464,7 +438,7 @@ export default function ProjectTasks() {
         variant: "destructive",
       });
     }
-  }, [blockedPrompt, blockedReason, tasks, workspaceMode, currentUser.id, invalidateProjectTasks, toast, shouldBlockTaskLaunchActions, hasTaskSyncError, taskSyncState.lastError, t]);
+  }, [blockedPrompt, blockedReason, tasks, workspaceMode, invalidateProjectTasks, toast, pid, t]);
 
   const handleChecklistToggle = useCallback(async (
     taskId: string,
@@ -975,8 +949,8 @@ export default function ProjectTasks() {
         canUploadMedia={canUploadTaskMedia}
         estimateLinkedPlanningReadOnly={workspaceMode.kind === "supabase" && Boolean(selectedTask?.estimateV2WorkId)}
         taskStructureReadOnly={isSupabaseMode}
-        blockEstimateLinkedDelete={isSupabaseMode || shouldBlockTaskLaunchActions}
-        disableStatusChanges={shouldBlockTaskLaunchActions && Boolean(selectedTask?.estimateV2WorkId)}
+        blockEstimateLinkedDelete={isSupabaseMode}
+        disableStatusChanges={false}
         onStatusChange={handleStatusChange}
         onTitleChange={handleTaskTitleChange}
         onDescriptionChange={handleTaskDescriptionChange}

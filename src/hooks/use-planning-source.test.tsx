@@ -161,6 +161,7 @@ describe("usePlanningProjectStages/usePlanningProjectTasks", () => {
       createTaskChecklistItem: vi.fn(),
       deleteTaskChecklistItem: vi.fn(),
       createTaskComment: vi.fn(),
+      changeTaskStatus: vi.fn(),
     };
 
     authenticateRuntimeAuth();
