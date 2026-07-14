@@ -5,7 +5,6 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
-import { EnvBanner } from "@/components/system/EnvBanner";
 import { MetrikaPageviewTracker } from "@/components/system/MetrikaPageviewTracker";
 import { queryClient } from "@/lib/query-client";
 
@@ -71,7 +70,6 @@ function routeElement(element: ReactElement): ReactElement {
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <EnvBanner />
       <Toaster />
       <Sonner />
       <BrowserRouter>
