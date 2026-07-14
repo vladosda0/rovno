@@ -853,6 +853,21 @@ export function deleteChecklistItem(taskId: string, itemId: string) {
   });
 }
 
+/**
+ * Reset the demo workspace to its pristine seeded state. Called on demo exit
+ * so a later re-entry in the same tab starts from the showcase data, not from
+ * whatever the visitor edited while playing around.
+ */
+export function resetDemoState() {
+  try {
+    sessionStorage.removeItem(DEMO_STATE_KEY);
+  } catch {
+    // Ignore storage failures; the in-memory reset below still applies.
+  }
+  demoState = sanitizeDemoState(createSeededDemoState());
+  notify();
+}
+
 export function __unsafeResetStoreForTests() {
   demoState = sanitizeDemoState(loadPersistedDemoState() ?? createSeededDemoState());
   localState = createEmptyLocalState(getStoredAuthProfile());

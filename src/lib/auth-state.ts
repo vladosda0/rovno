@@ -1,6 +1,7 @@
 import type { MemberRole } from "@/types/entities";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { trackEvent } from "@/lib/analytics";
 import type { Database as WorkspaceDatabase } from "../../backend-truth/generated/supabase-types";
 
 const STORAGE_KEY = "auth-simulated-role";
@@ -203,6 +204,7 @@ export function enterDemoSession(projectId?: string) {
     startedAt: new Date().toISOString(),
   });
   notifyListeners();
+  trackEvent("demo_entered");
 }
 
 export function clearDemoSession() {

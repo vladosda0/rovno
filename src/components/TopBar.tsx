@@ -30,16 +30,12 @@ import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
 import { selectAiUsage, useTierQuota } from "@/hooks/useTierQuota";
 import { clearDemoSession, clearStoredAuthProfile, setAuthRole } from "@/lib/auth-state";
 import { clearAiSidebarSessionPreference } from "@/lib/ai-sidebar-session";
+import { useExitDemo } from "@/hooks/use-exit-demo";
+import { DemoModeBanner } from "@/components/system/DemoModeBanner";
 
 /** Logo lives on brand blue; ghost default uses hover:bg-accent and hides it — use muted from the same palette. */
 const LOGO_MENU_TRIGGER_CLASS =
   "h-8 gap-2 px-2 shrink-0 hover:bg-muted hover:text-foreground data-[state=open]:bg-muted data-[state=open]:text-foreground";
-
-/** Demo mode shows a fixed showcase AI-chat quota; intentionally a mock value,
- * gated strictly on demo mode so it never leaks to real (supabase/guest) users. */
-// Demo-only showcase quota (intentionally bypasses selectAiUsage; gated strictly
-// to workspace mode "demo" so it can never render for real or guest users).
-const DEMO_CHAT_USAGE: { used: number; limit: number } = { used: 8, limit: 50 };
 
 interface TopBarProps {
   aiSidebarCollapsed: boolean;
@@ -81,7 +77,9 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOp
   const user = useCurrentUser();
   const projects = useProjects();
   const workspaceMode = useWorkspaceMode();
-  const showRoleSwitcher = workspaceMode.kind === "demo" || workspaceMode.kind === "local";
+  // The role simulator is a dev-playground tool (local mode). The demo is a
+  // sandboxed mockup that must not look like an account, so it gets none of it.
+  const showRoleSwitcher = workspaceMode.kind === "local";
   const currentProject = projects.find((project) => project.id === projectId);
   const projectName = currentProject?.title ?? t("nav.projectFallback");
   const { data: quota } = useTierQuota();
@@ -94,19 +92,16 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOp
     navigate("/settings?tab=billing");
   };
 
-  // The AI-chat quota card. Demo mode shows a fixed showcase quota; a real
-  // (supabase) user shows their live chat slot; guests get a sign-in nudge.
+  // The AI-chat quota card. A real (supabase) user shows their live chat slot;
+  // guests get a sign-in nudge. (Demo mode renders its own chrome without this
+  // card at all — the demo is a mockup, not an account with a balance.)
   // While authenticated but the quota hasn't loaded, render nothing.
   const renderCreditsCard = () => {
-    const chat = isDemo
-      ? DEMO_CHAT_USAGE
-      : quota
-        ? selectAiUsage(quota, "chat")
-        : null;
+    const chat = quota ? selectAiUsage(quota, "chat") : null;
 
     // Mirror UsageMeter: a negative limit means an unlimited slot; limit === 0
     // (unknown/zero plan) renders no card. Otherwise show the finite remaining.
-    if ((isDemo || runtimeAuth.status === "authenticated") && chat && chat.limit !== 0) {
+    if (runtimeAuth.status === "authenticated" && chat && chat.limit !== 0) {
       const unlimited = chat.limit < 0;
       const remaining = unlimited ? 0 : Math.max(chat.limit - chat.used, 0);
       const remainingPct = unlimited ? 100 : Math.round((remaining / chat.limit) * 100);
@@ -251,6 +246,22 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOp
     }
   };
 
+  const exitDemo = useExitDemo();
+
+  // Demo chrome: the demo is a sandboxed mockup, not an account. The logo menu
+  // shrinks to plain navigation (home / site / blog); the demo label, exit and
+  // signup CTA live in the DemoModeBanner strip above the bar, so the bar's
+  // own layout (project tabs!) stays untouched.
+  const renderDemoMenuContent = () => (
+    <DropdownMenuContent align="start" className="w-56 glass-elevated rounded-card">
+      <DropdownMenuItem asChild>
+        <Link to="/home"><User className="mr-2 h-4 w-4" />{t("nav.home")}</Link>
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
+      {renderSiteLinks()}
+    </DropdownMenuContent>
+  );
+
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const aiPanelActive = isInProject && !hideAi && !aiSidebarCollapsed;
   const pageTitle = aiPanelActive
@@ -286,15 +297,19 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOp
       onSetAiSidebarOpen={onSetAiSidebarOpen}
       onOpenRoleDialog={() => setRoleDialogOpen(true)}
       onLogout={handleLogout}
+      onExitDemo={exitDemo}
     />
   );
 
   if (isInProject && projectId) {
     return (
       <>
+      {isDemo && <DemoModeBanner />}
+      {/* top offsets by --demo-banner-h (0px outside the demo) so the bar sits
+          below the demo strip without reserving space for real users. */}
       <header
         className="fixed left-0 right-0 z-40 flex h-12 items-center px-3 glass"
-        style={{ top: "var(--env-banner-h, 0px)" }}
+        style={{ top: "var(--demo-banner-h, 0px)" }}
       >
         <div className="hidden md:flex min-w-0 flex-1 items-center gap-1.5">
           <DropdownMenu>
@@ -308,36 +323,38 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOp
                 <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-72 glass-elevated rounded-card">
-              <DropdownMenuItem asChild>
-                <Link to="/home" className="flex items-center gap-2">
-                  <Avatar className="h-7 w-7">
-                    <AvatarFallback className="text-caption bg-accent text-accent-foreground">
-                      {initials}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className="truncate text-body-sm font-medium text-foreground">{displayName}</span>
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
+            {isDemo ? renderDemoMenuContent() : (
+              <DropdownMenuContent align="start" className="w-72 glass-elevated rounded-card">
+                <DropdownMenuItem asChild>
+                  <Link to="/home" className="flex items-center gap-2">
+                    <Avatar className="h-7 w-7">
+                      <AvatarFallback className="text-caption bg-accent text-accent-foreground">
+                        {initials}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="truncate text-body-sm font-medium text-foreground">{displayName}</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
 
-              {renderCreditsCard()}
+                {renderCreditsCard()}
 
-              <DropdownMenuItem asChild>
-                <Link to="/settings">
-                  <Settings className="mr-2 h-4 w-4" />
-                  {t("nav.settings")}
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              {renderSiteLinks()}
-              <DropdownMenuSeparator />
-              {showRoleSwitcher && renderRoleSwitcher()}
-              <DropdownMenuItem onClick={handleLogout}>
-                <LogOut className="mr-2 h-4 w-4" />
-                {t("nav.logout")}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
+                <DropdownMenuItem asChild>
+                  <Link to="/settings">
+                    <Settings className="mr-2 h-4 w-4" />
+                    {t("nav.settings")}
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                {renderSiteLinks()}
+                <DropdownMenuSeparator />
+                {showRoleSwitcher && renderRoleSwitcher()}
+                <DropdownMenuItem onClick={handleLogout}>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  {t("nav.logout")}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            )}
           </DropdownMenu>
 
           <DropdownMenu>
@@ -399,11 +416,15 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOp
 
   return (
     <>
+    {isDemo && <DemoModeBanner />}
     <header
       className="fixed left-0 right-0 z-40 flex h-12 items-center gap-2 px-3 glass"
-      style={{ top: "var(--env-banner-h, 0px)" }}
+      style={{ top: "var(--demo-banner-h, 0px)" }}
     >
-      <div className="hidden md:flex flex-1 items-center gap-2">
+      {/* min-w-0: with the demo controls pinned at the right edge the wrapper
+          must be allowed to shrink below its content, or it overflows the
+          fixed header and clips the CTA (the project header already has it). */}
+      <div className="hidden md:flex min-w-0 flex-1 items-center gap-2">
       {isHomePage ? (
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
           <DropdownMenu>
@@ -417,36 +438,38 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOp
                 <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-72 glass-elevated rounded-card">
-              <DropdownMenuItem asChild>
-                <Link to="/home" className="flex items-center gap-2">
-                  <Avatar className="h-7 w-7">
-                    <AvatarFallback className="text-caption bg-accent text-accent-foreground">
-                      {initials}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className="truncate text-body-sm font-medium text-foreground">{displayName}</span>
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
+            {isDemo ? renderDemoMenuContent() : (
+              <DropdownMenuContent align="start" className="w-72 glass-elevated rounded-card">
+                <DropdownMenuItem asChild>
+                  <Link to="/home" className="flex items-center gap-2">
+                    <Avatar className="h-7 w-7">
+                      <AvatarFallback className="text-caption bg-accent text-accent-foreground">
+                        {initials}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="truncate text-body-sm font-medium text-foreground">{displayName}</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
 
-              {renderCreditsCard()}
+                {renderCreditsCard()}
 
-              <DropdownMenuItem asChild>
-                <Link to="/settings">
-                  <Settings className="mr-2 h-4 w-4" />
-                  {t("nav.settings")}
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              {renderSiteLinks()}
-              <DropdownMenuSeparator />
-              {showRoleSwitcher && renderRoleSwitcher()}
-              <DropdownMenuItem onClick={handleLogout}>
-                <LogOut className="mr-2 h-4 w-4" />
-                {t("nav.logout")}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
+                <DropdownMenuItem asChild>
+                  <Link to="/settings">
+                    <Settings className="mr-2 h-4 w-4" />
+                    {t("nav.settings")}
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                {renderSiteLinks()}
+                <DropdownMenuSeparator />
+                {showRoleSwitcher && renderRoleSwitcher()}
+                <DropdownMenuItem onClick={handleLogout}>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  {t("nav.logout")}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            )}
           </DropdownMenu>
 
           {!aiSidebarCollapsed && (
@@ -482,21 +505,23 @@ export function TopBar({ aiSidebarCollapsed, onToggleAiSidebar, onSetAiSidebarOp
                 <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-48 glass-elevated rounded-card">
-              <DropdownMenuItem asChild>
-                <Link to="/home"><User className="mr-2 h-4 w-4" />{t("nav.home")}</Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link to="/settings"><Settings className="mr-2 h-4 w-4" />{t("nav.settings")}</Link>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              {renderSiteLinks()}
-              {showRoleSwitcher && renderRoleSwitcher()}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleLogout}>
-                <LogOut className="mr-2 h-4 w-4" />{t("nav.logout")}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
+            {isDemo ? renderDemoMenuContent() : (
+              <DropdownMenuContent align="start" className="w-48 glass-elevated rounded-card">
+                <DropdownMenuItem asChild>
+                  <Link to="/home"><User className="mr-2 h-4 w-4" />{t("nav.home")}</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/settings"><Settings className="mr-2 h-4 w-4" />{t("nav.settings")}</Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                {renderSiteLinks()}
+                {showRoleSwitcher && renderRoleSwitcher()}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleLogout}>
+                  <LogOut className="mr-2 h-4 w-4" />{t("nav.logout")}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            )}
           </DropdownMenu>
         </>
       )}
