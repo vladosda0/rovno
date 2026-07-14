@@ -5,7 +5,7 @@ import {
   type RuntimeWorkspaceMode,
   type WorkspaceMode,
 } from "@/data/workspace-source";
-import type { ChecklistItem, ChecklistItemType, Comment, Stage, Task, TaskAssignee } from "@/types/entities";
+import type { ChecklistItem, ChecklistItemType, Comment, Stage, Task, TaskAssignee, TaskStatus } from "@/types/entities";
 import type {
   EstimateExecutionStatus,
   EstimateV2ResourceLine,
@@ -68,6 +68,34 @@ export class TaskNoLongerAvailableError extends Error {
   }
 }
 
+/**
+ * A server-enforced guard on change_task_status_v2 rejected the transition
+ * (done-without-photo, blocked-without-reason). Carries the server's message so
+ * the UI can show it; distinct from a converge signal (TaskNoLongerAvailable).
+ */
+export class TaskStatusRejectedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "TaskStatusRejectedError";
+  }
+}
+
+export interface ChangeTaskStatusInput {
+  /** The status the caller believes the task currently has. A server-side
+   * mismatch (another session moved it) converges via TaskNoLongerAvailable. */
+  expectedStatus?: TaskStatus;
+  /** Reason/blocker comment; the RPC inserts it exactly once server-side. */
+  commentBody?: string;
+}
+
+function isMissingRpcError(error: { code?: string; message?: string } | null): boolean {
+  const code = error?.code;
+  if (code === "PGRST202" || code === "42883") return true;
+  return typeof error?.message === "string"
+    && error.message.includes("change_task_status_v2")
+    && /not find|does not exist/i.test(error.message);
+}
+
 export interface CreateProjectStageInput {
   projectId: string;
   title: string;
@@ -115,6 +143,17 @@ export interface PlanningSource {
   ) => Promise<void>;
   deleteTaskChecklistItem: (taskId: string, itemId: string) => Promise<void>;
   createTaskComment: (taskId: string, body: string, authorId?: string) => Promise<void>;
+  /**
+   * Unified task-status change: server-enforces the done/blocked guards, inserts
+   * the reason comment once, and emits the P2 realtime signal. P0002 (not found
+   * or a stale expectedStatus) surfaces as TaskNoLongerAvailableError to
+   * converge; guard violations as TaskStatusRejectedError.
+   */
+  changeTaskStatus: (
+    taskId: string,
+    newStatus: TaskStatus,
+    input?: ChangeTaskStatusInput,
+  ) => Promise<void>;
 }
 
 export interface EnsureProjectStageInput {
@@ -403,6 +442,16 @@ function createBrowserPlanningSource(mode: "demo" | "local"): PlanningSource {
     },
     async createTaskComment(taskId: string, body: string) {
       store.addComment(taskId, body);
+    },
+    async changeTaskStatus(taskId: string, newStatus: TaskStatus, input?: ChangeTaskStatusInput) {
+      const task = store.getTask(taskId);
+      if (!task) {
+        throw new Error(`Task not found: ${taskId}`);
+      }
+      if (input?.commentBody && input.commentBody.trim().length > 0) {
+        store.addComment(taskId, input.commentBody.trim());
+      }
+      store.updateTask(taskId, { status: newStatus });
     },
   };
 }
@@ -1256,6 +1305,53 @@ function createSupabasePlanningSource(
         .from("task_comments")
         .insert(insert);
       if (error) throw error;
+    },
+    async changeTaskStatus(taskId: string, newStatus: TaskStatus, input?: ChangeTaskStatusInput) {
+      const comment = input?.commentBody?.trim() ? input.commentBody.trim() : null;
+      const { error } = await (supabase as unknown as SupabaseClient).rpc("change_task_status_v2", {
+        p_task_id: taskId,
+        p_new_status: newStatus,
+        p_comment_body: comment,
+        p_expected_status: input?.expectedStatus ?? null,
+      });
+      if (!error) return;
+
+      // Pre-P3 database: fall back to the legacy two-write path (comment then a
+      // direct status update). The direct update's 0-row → TaskNoLongerAvailable
+      // is preserved by updateProjectTask below.
+      if (isMissingRpcError(error)) {
+        if (comment) {
+          // task_comments.author_profile_id is uuid NOT NULL and its INSERT
+          // policy requires author_profile_id = auth.uid(); resolve the real
+          // author from the local session (an empty string would 22P02, and a
+          // wrong uuid would fail RLS).
+          const { data: sessionData } = await (supabase as unknown as SupabaseClient).auth.getSession();
+          const authorId = sessionData?.session?.user?.id;
+          if (!authorId) {
+            throw new Error("Cannot record the task comment without an authenticated session.");
+          }
+          const { error: commentError } = await supabase
+            .from("task_comments")
+            .insert({ task_id: taskId, body: comment, author_profile_id: authorId });
+          if (commentError) throw commentError;
+        }
+        await this.updateProjectTask(taskId, { status: newStatus });
+        return;
+      }
+
+      // P0002 = converge (not found, or a stale expectedStatus another session
+      // already moved): refetch + gentle toast, never a hard failure.
+      if (error.code === "P0002") {
+        throw new TaskNoLongerAvailableError();
+      }
+      // 22023 = a server guard rejected the transition (done-without-photo,
+      // blocked-without-reason). Surface the server's message.
+      if (error.code === "22023") {
+        throw new TaskStatusRejectedError(error.message);
+      }
+      // 42501 (permission) and anything else: a real Error carrying the message
+      // (the raw PostgrestError is a plain object, not an Error instance).
+      throw new Error(error.message);
     },
   };
 }

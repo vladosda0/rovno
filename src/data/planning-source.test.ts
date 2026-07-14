@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   deriveEstimateTaskAssignees,
+  getPlanningSource,
   mapProjectStageRowToStage,
   mapTaskRowToTask,
   overlayEstimateLinkedAssigneeFromChecklist,
   syncProjectTasksFromEstimate,
+  TaskNoLongerAvailableError,
+  TaskStatusRejectedError,
 } from "@/data/planning-source";
 import type { Task } from "@/types/entities";
 
@@ -615,5 +618,84 @@ describe("overlayEstimateLinkedAssigneeFromChecklist", () => {
     };
     const next = overlayEstimateLinkedAssigneeFromChecklist(task);
     expect(next.assignee_id).toBe("user-2");
+  });
+});
+
+describe("changeTaskStatus (supabase source)", () => {
+  afterEach(() => setMockSupabase(null));
+
+  async function supabaseSource() {
+    return getPlanningSource({ kind: "supabase", profileId: "profile-1" });
+  }
+
+  it("calls change_task_status_v2 with trimmed comment + CAS and resolves on success", async () => {
+    const rpc = vi.fn(async () => ({ data: { id: "task-1", status: "blocked" }, error: null }));
+    setMockSupabase({ rpc, from: vi.fn() } as unknown as MockSupabaseClient);
+    const source = await supabaseSource();
+
+    await expect(
+      source.changeTaskStatus("task-1", "blocked", { expectedStatus: "in_progress", commentBody: "  needs parts  " }),
+    ).resolves.toBeUndefined();
+    expect(rpc).toHaveBeenCalledWith("change_task_status_v2", {
+      p_task_id: "task-1",
+      p_new_status: "blocked",
+      p_comment_body: "needs parts",
+      p_expected_status: "in_progress",
+    });
+  });
+
+  it("maps P0002 to TaskNoLongerAvailableError (converge on not-found or stale CAS)", async () => {
+    setMockSupabase({
+      rpc: vi.fn(async () => ({ data: null, error: { code: "P0002", message: "task status changed" } })),
+      from: vi.fn(),
+    } as unknown as MockSupabaseClient);
+    const source = await supabaseSource();
+    await expect(source.changeTaskStatus("task-1", "done")).rejects.toBeInstanceOf(TaskNoLongerAvailableError);
+  });
+
+  it("maps 22023 to TaskStatusRejectedError carrying the server guard message", async () => {
+    setMockSupabase({
+      rpc: vi.fn(async () => ({ data: null, error: { code: "22023", message: "blocking a task requires a reason comment" } })),
+      from: vi.fn(),
+    } as unknown as MockSupabaseClient);
+    const source = await supabaseSource();
+    const err = await source.changeTaskStatus("task-1", "blocked").catch((e) => e);
+    expect(err).toBeInstanceOf(TaskStatusRejectedError);
+    expect((err as Error).message).toBe("blocking a task requires a reason comment");
+  });
+
+  it("falls back to the legacy comment + direct update on a pre-P3 database, with the real author", async () => {
+    const commentInsert = vi.fn(async () => ({ error: null }));
+    const taskUpdateResult = { data: taskRow({ status: "in_progress" }), error: null };
+    // tasks.update(...).eq(...).select(...).maybeSingle()
+    const tasksChain = {
+      update: vi.fn(() => tasksChain),
+      eq: vi.fn(() => tasksChain),
+      select: vi.fn(() => tasksChain),
+      maybeSingle: vi.fn(async () => taskUpdateResult),
+    };
+    const from = vi.fn((table: string) => {
+      if (table === "task_comments") return { insert: commentInsert };
+      return tasksChain;
+    });
+    setMockSupabase({
+      auth: { getSession: vi.fn(async () => ({ data: { session: { user: { id: "profile-7" } } } })) },
+      rpc: vi.fn(async () => ({ data: null, error: { code: "PGRST202", message: "Could not find the function public.change_task_status_v2" } })),
+      from,
+    } as unknown as MockSupabaseClient);
+    const source = await supabaseSource();
+
+    await expect(
+      source.changeTaskStatus("task-1", "in_progress", { commentBody: "note" }),
+    ).resolves.toBeUndefined();
+    expect(commentInsert).toHaveBeenCalledTimes(1);
+    // The comment must carry the real session author, never an empty string
+    // (author_profile_id is uuid NOT NULL and RLS requires = auth.uid()).
+    expect(commentInsert).toHaveBeenCalledWith({
+      task_id: "task-1",
+      body: "note",
+      author_profile_id: "profile-7",
+    });
+    expect(tasksChain.update).toHaveBeenCalledTimes(1);
   });
 });

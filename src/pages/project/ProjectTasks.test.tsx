@@ -297,14 +297,18 @@ describe("ProjectTasks", () => {
     expect(screen.getByRole("button", { name: "In progress" })).toBeEnabled();
   });
 
-  it("blocks estimate-linked status changes for the projector session while behind", () => {
+  it("shows the behind banner but no longer blocks status changes for the projector (P3)", () => {
     mocks.useEstimateV2ProjectionCapability.mockReturnValue("projector");
     mocks.useEstimateV2Project.mockReturnValue(behindSyncState());
 
     renderProjectTasks();
 
+    // The informational banner still surfaces the behind state...
     expect(screen.getByText("Tasks are behind the latest Estimate")).toBeInTheDocument();
     fireEvent.click(screen.getByText("Estimate task"));
-    expect(screen.getByRole("button", { name: "In progress" })).toBeDisabled();
+    // ...but the status control is now ENABLED: change_task_status_v2 preserves
+    // the task's status through re-projection and converges concurrent moves via
+    // P0002, so the projection-behind hard-block is gone.
+    expect(screen.getByRole("button", { name: "In progress" })).toBeEnabled();
   });
 });
