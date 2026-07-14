@@ -68,18 +68,6 @@ export class TaskNoLongerAvailableError extends Error {
   }
 }
 
-/**
- * A server-enforced guard on change_task_status_v2 rejected the transition
- * (done-without-photo, blocked-without-reason). Carries the server's message so
- * the UI can show it; distinct from a converge signal (TaskNoLongerAvailable).
- */
-export class TaskStatusRejectedError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "TaskStatusRejectedError";
-  }
-}
-
 export interface ChangeTaskStatusInput {
   /** The status the caller believes the task currently has. A server-side
    * mismatch (another session moved it) converges via TaskNoLongerAvailable. */
@@ -147,7 +135,8 @@ export interface PlanningSource {
    * Unified task-status change: server-enforces the done/blocked guards, inserts
    * the reason comment once, and emits the P2 realtime signal. P0002 (not found
    * or a stale expectedStatus) surfaces as TaskNoLongerAvailableError to
-   * converge; guard violations as TaskStatusRejectedError.
+   * converge; every other DB error (guard/permission) propagates raw so the
+   * caller shows its localized fallback toast rather than an English message.
    */
   changeTaskStatus: (
     taskId: string,
@@ -902,7 +891,21 @@ export async function syncProjectTasksFromEstimate(
     };
   });
 
-  await upsertHeroTasks(supabase, taskUpserts);
+  // Re-read statuses immediately before the write so this projection never
+  // clobbers a status another session changed while it was computing. The
+  // server sync_estimate_projection RPC preserves status by excluding it from
+  // its ON CONFLICT set-list; this legacy client fallback (reached only on a
+  // pre-P1 DB that lacks the RPC) has no such guarantee, so it must carry the
+  // freshest value rather than the one read at the top of the function.
+  const freshStatusById = new Map(
+    (await loadHeroTasksForProject(supabase, input.projectId)).map((row) => [row.id, row.status]),
+  );
+  const freshTaskUpserts = taskUpserts.map((upsert) => {
+    const freshStatus = freshStatusById.get(upsert.id);
+    return freshStatus === undefined ? upsert : { ...upsert, status: freshStatus };
+  });
+
+  await upsertHeroTasks(supabase, freshTaskUpserts);
 
   const checklistRows = await loadHeroTaskChecklistItemsByTaskIds(
     supabase,
@@ -1344,14 +1347,13 @@ function createSupabasePlanningSource(
       if (error.code === "P0002") {
         throw new TaskNoLongerAvailableError();
       }
-      // 22023 = a server guard rejected the transition (done-without-photo,
-      // blocked-without-reason). Surface the server's message.
-      if (error.code === "22023") {
-        throw new TaskStatusRejectedError(error.message);
-      }
-      // 42501 (permission) and anything else: a real Error carrying the message
-      // (the raw PostgrestError is a plain object, not an Error instance).
-      throw new Error(error.message);
+      // Every other DB error (22023 server guard — client-pre-guarded so rarely
+      // reached; 42501 permission; unexpected): re-throw the raw PostgrestError.
+      // It is a plain object (not an Error instance), so the caller's
+      // `error instanceof Error` check falls through to the LOCALIZED fallback
+      // toast — the guard/permission messages from Postgres are English, and
+      // wrapping them in an Error would leak that English into the ru UI.
+      throw error;
     },
   };
 }

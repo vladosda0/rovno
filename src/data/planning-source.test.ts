@@ -7,7 +7,6 @@ import {
   overlayEstimateLinkedAssigneeFromChecklist,
   syncProjectTasksFromEstimate,
   TaskNoLongerAvailableError,
-  TaskStatusRejectedError,
 } from "@/data/planning-source";
 import type { Task } from "@/types/entities";
 
@@ -653,15 +652,20 @@ describe("changeTaskStatus (supabase source)", () => {
     await expect(source.changeTaskStatus("task-1", "done")).rejects.toBeInstanceOf(TaskNoLongerAvailableError);
   });
 
-  it("maps 22023 to TaskStatusRejectedError carrying the server guard message", async () => {
+  it("re-throws a non-converge DB error (22023 guard) raw, so the UI shows its localized fallback", async () => {
+    // The raw PostgREST error is a plain object, NOT an Error instance. The
+    // caller's `error instanceof Error` check must fall through to the localized
+    // fallback toast rather than leaking the English Postgres guard message.
+    const rawError = { code: "22023", message: "blocking a task requires a reason comment" };
     setMockSupabase({
-      rpc: vi.fn(async () => ({ data: null, error: { code: "22023", message: "blocking a task requires a reason comment" } })),
+      rpc: vi.fn(async () => ({ data: null, error: rawError })),
       from: vi.fn(),
     } as unknown as MockSupabaseClient);
     const source = await supabaseSource();
     const err = await source.changeTaskStatus("task-1", "blocked").catch((e) => e);
-    expect(err).toBeInstanceOf(TaskStatusRejectedError);
-    expect((err as Error).message).toBe("blocking a task requires a reason comment");
+    expect(err).toBe(rawError);
+    expect(err).not.toBeInstanceOf(TaskNoLongerAvailableError);
+    expect(err).not.toBeInstanceOf(Error);
   });
 
   it("falls back to the legacy comment + direct update on a pre-P3 database, with the real author", async () => {
