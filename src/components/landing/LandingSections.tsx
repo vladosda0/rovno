@@ -31,8 +31,9 @@ const NAV_LINKS = [
 ];
 
 export function Nav({ startPath, homeLink = false, authStatus = "guest" }: { startPath: string; homeLink?: boolean; authStatus?: RuntimeAuthStatus }) {
-  // homeLink: rendered on a subpage (e.g. /blog) — the logo routes to "/" and
-  // section anchors become absolute so they land on the landing page.
+  // homeLink: rendered on a subpage (e.g. /blog) — the logo routes to "/"
+  // instead of scrolling to top. (Section anchors are always absolute "/#..."
+  // links now, so they land on the landing page from any origin regardless.)
   // authStatus drives the CTA. A signed-in visitor gets a single "В приложение"
   // instead of the "Войти" + "Начать проект" pair (offering "Войти" to someone
   // already logged in was the double-login trap). On a hard load the session
@@ -126,10 +127,14 @@ export function Nav({ startPath, homeLink = false, authStatus = "guest" }: { sta
               }}
             >
               <div className="rv-nav-anchors" style={{ display: "flex", gap: 32, alignItems: "center" }}>
+                {/* Always route to the landing section (pathname "/" + hash), so
+                    the same link works whether we're on the landing or a subpage
+                    like /blog. As a router <Link> it stays a client-side nav (no
+                    full reload) and ScrollToHash lands it on the section. */}
                 {NAV_LINKS.map((x) => (
-                  <a key={x.label} href={homeLink ? `/${x.href}` : x.href} style={{ fontFamily: "var(--font-body)", fontSize: 15, color: "var(--rv-blue)", textDecoration: "none", opacity: 0.72 }}>
+                  <Link key={x.label} to={{ pathname: "/", hash: x.href }} style={{ fontFamily: "var(--font-body)", fontSize: 15, color: "var(--rv-blue)", textDecoration: "none", opacity: 0.72 }}>
                     {x.label}
-                  </a>
+                  </Link>
                 ))}
                 <Link to="/blog/" style={{ fontFamily: "var(--font-body)", fontSize: 15, color: "var(--rv-blue)", textDecoration: "none", opacity: 0.72 }}>
                   Блог
@@ -684,18 +689,18 @@ export function Footer({ onDemo }: { onDemo: () => void }) {
 
         <div style={footerColStyle}>
           <span style={footerHeadStyle}>ПРОДУКТ</span>
-          <a href="#features" style={footerLinkStyle}>Возможности</a>
-          <a href="#process" style={footerLinkStyle}>Процесс</a>
-          <a href="#pricing" style={footerLinkStyle}>Тарифы</a>
+          <Link to={{ pathname: "/", hash: "#features" }} style={footerLinkStyle}>Возможности</Link>
+          <Link to={{ pathname: "/", hash: "#process" }} style={footerLinkStyle}>Процесс</Link>
+          <Link to={{ pathname: "/", hash: "#pricing" }} style={footerLinkStyle}>Тарифы</Link>
           <Link to="/blog/" style={footerLinkStyle}>Блог</Link>
           <button type="button" onClick={onDemo} style={{ background: "none", border: 0, padding: 0, margin: 0, cursor: "pointer", textAlign: "left", ...footerLinkStyle }}>Демо</button>
         </div>
 
         <div style={footerColStyle}>
           <span style={footerHeadStyle}>ДЛЯ КОГО</span>
-          <a href="#usecases" style={footerLinkStyle}>Заказчикам</a>
-          <a href="#usecases" style={footerLinkStyle}>Подрядчикам</a>
-          <a href="#usecases" style={footerLinkStyle}>Компаниям</a>
+          <Link to={{ pathname: "/", hash: "#usecases" }} style={footerLinkStyle}>Заказчикам</Link>
+          <Link to={{ pathname: "/", hash: "#usecases" }} style={footerLinkStyle}>Подрядчикам</Link>
+          <Link to={{ pathname: "/", hash: "#usecases" }} style={footerLinkStyle}>Компаниям</Link>
         </div>
 
         <div style={footerColStyle}>

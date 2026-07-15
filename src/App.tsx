@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
 import { MetrikaPageviewTracker } from "@/components/system/MetrikaPageviewTracker";
+import { ScrollToHash } from "@/components/system/ScrollToHash";
 import { queryClient } from "@/lib/query-client";
 
 const AppLayout = lazy(() => import("@/layouts/AppLayout"));
@@ -74,6 +75,7 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <MetrikaPageviewTracker />
+        <ScrollToHash />
         <Routes>
           {/* Standalone pages */}
           <Route path="/" element={routeElement(<Landing />)} />
