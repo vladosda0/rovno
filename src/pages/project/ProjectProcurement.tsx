@@ -1877,7 +1877,7 @@ export default function ProjectProcurement() {
 
       <div className="glass rounded-card p-2">
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 md:shrink-0">
             {visibleTabs.map((tab) => {
               const stat = tab === "requested"
                 ? chipTotals.requested
@@ -1903,7 +1903,7 @@ export default function ProjectProcurement() {
             })}
           </div>
 
-          <div className="relative w-full md:w-[320px]">
+          <div className="relative w-full min-w-0 md:max-w-md md:flex-1">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
               value={search}

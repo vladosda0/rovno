@@ -1,6 +1,7 @@
 import type { Task, ChecklistItem } from "@/types/entities";
 import { subscribe } from "@/data/store";
 import { syncFromEstimate } from "@/data/procurement-store";
+import { onDemoSessionDeactivated } from "@/lib/auth-state";
 
 // --- Types ---
 export type EstimateItemSourceType = "TASK" | "CHECKLIST" | "MANUAL";
@@ -88,6 +89,13 @@ export function subscribeEstimate(listener: Listener): () => void {
 function notify() {
   listeners.forEach((l) => l());
 }
+
+// Pristine-re-entry: restore the demo estimate seed when the demo session ends
+// so the next entry starts from the showcase data, not the visitor's edits.
+onDemoSessionDeactivated(() => {
+  estimateItems = [...seedStageEstimateItems];
+  notify();
+});
 
 // --- Read ---
 export function getStageEstimateItems(projectId: string): StageEstimateItem[] {

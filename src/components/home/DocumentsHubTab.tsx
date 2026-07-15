@@ -159,14 +159,12 @@ export function DocumentsHubTab() {
     </div>
   );
 
-  const stickyTop = "calc(3rem + var(--env-banner-h, 0px))";
-
   return (
     <div className="flex flex-col md:flex-row md:gap-0">
       {/* Desktop left nav. Hidden on mobile in favor of MobileSectionNav. */}
       <aside
-        className="hidden md:block bg-card/40 md:sticky md:w-64 md:shrink-0 md:self-start md:h-[calc(100svh-3rem-var(--env-banner-h,0px))] md:border-r md:border-border md:overflow-y-auto px-3 pt-3 pb-4 sm:px-4"
-        style={{ top: stickyTop }}
+        className="hidden md:block bg-card/40 md:sticky md:w-64 md:shrink-0 md:self-start md:h-[calc(100svh-3rem-var(--demo-banner-h,0px))] md:border-r md:border-border md:overflow-y-auto px-3 pt-3 pb-4 sm:px-4"
+        style={{ top: "calc(3rem + var(--demo-banner-h, 0px))" }}
       >
         <DocumentsLeftNav
           activeSlug={activeLeaf}

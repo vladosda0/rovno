@@ -9,6 +9,7 @@ import {
   updateProcurementItem,
 } from "@/data/procurement-store";
 import { toInventoryKey } from "@/lib/procurement-fulfillment";
+import { onDemoSessionDeactivated } from "@/lib/auth-state";
 import type {
   Order,
   OrderLine,
@@ -118,7 +119,7 @@ function refreshLegacyProcurementQuantities(projectId: string) {
   });
 }
 
-(function seedOrdersFromLegacyProcurement() {
+function seedOrdersFromLegacyProcurement() {
   const items = getAllProcurementItemsV2();
   const seededOrders: Order[] = [];
   const seededLines: OrderLine[] = [];
@@ -178,7 +179,19 @@ function refreshLegacyProcurementQuantities(projectId: string) {
   orders = seededOrders;
   orderLines = seededLines;
   orderReceiveEvents = seededReceiveEvents;
-})();
+}
+
+seedOrdersFromLegacyProcurement();
+
+// Pristine-re-entry: rebuild the demo orders from the (already-reset) demo
+// procurement seed when the demo session ends. procurement-store and
+// inventory-store register earlier (order-store imports both), so their
+// resets run first and this re-seed reads the fresh procurement seed and the
+// restored default locations.
+onDemoSessionDeactivated(() => {
+  seedOrdersFromLegacyProcurement();
+  notify();
+});
 
 export function subscribeOrders(listener: Listener): () => void {
   listeners.add(listener);

@@ -130,7 +130,14 @@ export type AnalyticsEventName =
   | "catalog_editor_opened"
   | "library_searched"
   | "work_applied_via_constructor"
-  | "feedback_submitted";
+  | "feedback_submitted"
+  // ─── Demo funnel (2026-07): the demo is a sandboxed mockup, not an account.
+  // Entered from the landing/blog "Посмотреть демо" CTAs; exited via the
+  // explicit "Выйти из демо" control; the signup CTA is the demo→registration
+  // bridge (feeds the landing_view → registration_start composite funnel).
+  | "demo_entered"
+  | "demo_exited"
+  | "demo_signup_cta_clicked";
 
 export type AnalyticsEventPayload = Record<string, unknown>;
 

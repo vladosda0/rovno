@@ -249,6 +249,19 @@ if (typeof window !== "undefined") {
       });
       listeners.forEach((listener) => listener());
     }
+    // Demo session ended (exit control, logout, or an auth success — every
+    // door goes through clearDemoSession): drop the visitor's demo edits
+    // entirely so the next entry re-seeds pristine showcase data. This is the
+    // estimate half of the main store's pristine-re-entry contract.
+    if (!active && lastKnownDemoActive) {
+      let evicted = false;
+      DEMO_PROJECT_IDS.forEach((projectId) => {
+        evicted = statesByProjectId.delete(projectId) || evicted;
+      });
+      if (evicted) {
+        listeners.forEach((listener) => listener());
+      }
+    }
     lastKnownDemoActive = active;
 
     // Auth identity changed (logout or account switch in the same tab): the

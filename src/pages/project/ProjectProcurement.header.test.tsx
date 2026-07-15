@@ -82,12 +82,14 @@ function seedLockedRequestedItem(projectId: string) {
 
 describe("ProjectProcurement header redesign", () => {
   beforeEach(() => {
-    __unsafeResetOrdersForTests();
-    __unsafeResetInventoryForTests();
+    // Empty-store resets run AFTER the demo session is established: leaving the
+    // demo re-seeds the in-memory stores, so resetting first would be undone.
     window.sessionStorage.clear();
     clearDemoSession();
     enterDemoSession("project-1");
     setAuthRole("owner");
+    __unsafeResetOrdersForTests();
+    __unsafeResetInventoryForTests();
     setProjectEstimateStatus("project-1", "in_work", { skipSetup: true });
   });
 
