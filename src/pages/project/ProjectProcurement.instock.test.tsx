@@ -166,12 +166,15 @@ function seedStockMoveIn(projectId: string, name: string) {
 
 describe("ProjectProcurement In stock tab", () => {
   beforeEach(() => {
-    __unsafeResetOrdersForTests();
-    __unsafeResetInventoryForTests();
+    // Establish the demo session FIRST: leaving the demo (clearDemoSession)
+    // now re-seeds the in-memory stores (pristine-re-entry contract), so the
+    // empty-store resets must run LAST or the re-seed would repopulate them.
     window.sessionStorage.clear();
     clearDemoSession();
     enterDemoSession("project-1");
     setAuthRole("owner");
+    __unsafeResetOrdersForTests();
+    __unsafeResetInventoryForTests();
     setProjectEstimateStatus("project-1", "in_work", { skipSetup: true });
   });
 

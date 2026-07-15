@@ -211,3 +211,26 @@ export function clearDemoSession() {
   sessionStorage.removeItem(DEMO_SESSION_KEY);
   notifyListeners();
 }
+
+/**
+ * Run `reset` exactly when the demo session transitions from active to
+ * inactive — the pristine-re-entry contract for the in-memory demo stores.
+ * Every exit door (the exit control, logout, or an auth success) goes through
+ * clearDemoSession(), which notifies auth-state listeners, so a single
+ * transition-guarded subscription here covers them all.
+ *
+ * Registration order matters for stores that re-seed from another store (e.g.
+ * orders/inventory re-seed from procurement): a dependent store imports its
+ * dependency, so the dependency's module — and thus its onDemoSessionDeactivated
+ * call — evaluates first and lands earlier in the listener set, resetting
+ * before the dependent reads it. No-ops under SSR (no sessionStorage).
+ */
+export function onDemoSessionDeactivated(reset: () => void): void {
+  if (typeof window === "undefined") return;
+  let wasActive = isDemoSessionActive();
+  subscribeAuthState(() => {
+    const active = isDemoSessionActive();
+    if (!active && wasActive) reset();
+    wasActive = active;
+  });
+}

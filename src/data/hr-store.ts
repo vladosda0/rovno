@@ -4,6 +4,7 @@ import type {
   EstimateV2ResourceLine,
 } from "@/types/estimate-v2";
 import type { HRItemStatus, HRItemType, HRPayment, HRPlannedItem } from "@/types/hr";
+import { onDemoSessionDeactivated } from "@/lib/auth-state";
 
 interface EstimateV2SyncStateLike {
   project: Pick<EstimateV2Project, "estimateStatus">;
@@ -48,6 +49,14 @@ function genId(prefix: string): string {
 function notify() {
   listeners.forEach((listener) => listener());
 }
+
+// Pristine-re-entry: drop the demo visitor's HR rows/payments when the demo
+// session ends so the next entry starts from the (empty) showcase seed.
+onDemoSessionDeactivated(() => {
+  items = [...seedItems];
+  payments = [...seedPayments];
+  notify();
+});
 
 function qtyFromLine(line: EstimateV2ResourceLine): number {
   return Math.max(0, line.qtyMilli / 1_000);

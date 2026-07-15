@@ -1,6 +1,7 @@
 import type { ProcurementItemV2, ChecklistItem } from "@/types/entities";
 import { matchingKey, normalizeName, computeStatus } from "@/lib/procurement-utils";
 import type { StageEstimateItem } from "@/data/estimate-store";
+import { onDemoSessionDeactivated } from "@/lib/auth-state";
 
 // --- Seed data migrated from old format ---
 const seedItems: ProcurementItemV2[] = [
@@ -141,6 +142,15 @@ export function subscribeProcurement(listener: Listener): () => void {
 function notify() {
   listeners.forEach((l) => l());
 }
+
+// Pristine-re-entry: drop the demo visitor's edits when the demo session ends
+// so the next entry starts from the showcase seed. This store is the seed
+// source orders/inventory re-seed from, so its registration (at import, before
+// those dependents load) lands first in the listener set and resets first.
+onDemoSessionDeactivated(() => {
+  items = [...seedItems];
+  notify();
+});
 
 // --- Read ---
 export function getProcurementItems(projectId: string, includeArchived = false): ProcurementItemV2[] {
