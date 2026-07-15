@@ -94,4 +94,39 @@ describe("ScrollToHash", () => {
     await waitFor(() => expect(scrollCalls.length).toBeGreaterThanOrEqual(1), { timeout: 1500 });
     expect(scrollCalls.every((c) => c.id === "pricing")).toBe(true);
   });
+
+  it("re-pins while the target's position is still shifting, then stops once it settles", async () => {
+    // The crux of the cross-page fix: a lazy page inserts the target before the
+    // sections above it lay out, so its absolute position moves for a few frames
+    // (a one-shot scroll would land at the top). jsdom has no layout engine, so
+    // drive the settle by feeding getBoundingClientRect a moving-then-steady
+    // top; the loop must keep re-pinning until it holds steady, then stop.
+    const tops = [1000, 600, 200, 200, 200];
+    let readIdx = 0;
+    const realRect = Element.prototype.getBoundingClientRect;
+    Element.prototype.getBoundingClientRect = function () {
+      if ((this as HTMLElement).id === "pricing") {
+        const top = tops[Math.min(readIdx, tops.length - 1)];
+        readIdx += 1;
+        return { top, bottom: top, left: 0, right: 0, width: 0, height: 0, x: 0, y: top, toJSON() {} } as DOMRect;
+      }
+      return realRect.call(this);
+    };
+    try {
+      renderApp("/blog");
+      fireEvent.click(screen.getByText("to-pricing"));
+      // Let the loop run to completion (polls at 50ms; the position moves for
+      // three reads then holds).
+      await new Promise((r) => setTimeout(r, 500));
+      // It re-pinned several times while the position was still moving...
+      expect(scrollCalls.length).toBeGreaterThanOrEqual(3);
+      // ...then converged: once the position held steady, scrolling stopped.
+      const settled = scrollCalls.length;
+      await new Promise((r) => setTimeout(r, 250));
+      expect(scrollCalls.length).toBe(settled);
+      expect(scrollCalls.every((c) => c.id === "pricing")).toBe(true);
+    } finally {
+      Element.prototype.getBoundingClientRect = realRect;
+    }
+  });
 });

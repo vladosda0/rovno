@@ -30,6 +30,13 @@ export function ScrollToHash(): null {
   // Previous pathname distinguishes a same-page hash change (already on the
   // landing → animate smoothly, layout is settled) from a cross-page jump
   // (blog / app → a landing section → land instantly on a page still rendering).
+  //
+  // NB: this relies on the effect running once per navigation, which is correct
+  // under the app's current (non-StrictMode) root. If <App> is ever wrapped in
+  // <StrictMode>, its dev-only mount double-invoke would let the second run read
+  // the pathname the first run just wrote and misclassify a hard load as
+  // same-page — this decision would then need to move off a during-run-mutated
+  // ref (e.g. gate on whether the target is already in the DOM).
   const prevPathname = useRef<string | null>(null);
 
   useEffect(() => {
@@ -39,8 +46,8 @@ export function ScrollToHash(): null {
     if (!hash) return;
 
     // decodeURIComponent throws URIError on a malformed escape (e.g. "#50%").
-    // The app has no error boundary, so an unguarded throw here would unmount
-    // the whole SPA. A bad hash is simply not a target.
+    // An unguarded throw here would trip the RootErrorBoundary and blank the
+    // app, so guard it. A bad hash is simply not a target.
     let id: string;
     try {
       id = decodeURIComponent(hash.slice(1));
@@ -106,7 +113,11 @@ export function ScrollToHash(): null {
     };
 
     // Bail if the visitor scrolls or interacts while we're chasing the target,
-    // so a late re-pin never yanks them away from where they chose to be.
+    // so a late re-pin never yanks them away from where they chose to be. Covers
+    // wheel, trackpad, touch and keyboard; a native-scrollbar drag emits no
+    // cancellable DOM event, so in the brief settling window it is the one input
+    // not caught — an acceptable edge, since the loop ends the moment layout
+    // settles (usually within a few polls of the target appearing).
     window.addEventListener("wheel", finish, { passive: true });
     window.addEventListener("touchstart", finish, { passive: true });
     window.addEventListener("keydown", finish);
