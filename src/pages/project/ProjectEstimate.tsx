@@ -2508,6 +2508,8 @@ export default function ProjectEstimate() {
       (line) => line.systemResourceArticleId === resource.id,
     );
     if (existing) {
+      // Merge is safe here: catalog leaves are added at cost 0, so incrementing
+      // the existing line's quantity discards no price the user hasn't already set.
       updateLine(pid, existing.id, { qtyMilli: existing.qtyMilli + addMilli });
     } else {
       const created = createLine(pid, {
@@ -2521,13 +2523,14 @@ export default function ProjectEstimate() {
         systemResourceArticleId: resource.id,
       });
       if (!created) return;
+      // A merge is an increment, not a creation — only count real line creations.
+      trackEvent("estimate_line_created", {
+        project_id: pid,
+        stage_id: stageId,
+        work_id: workId,
+        resource_type: type,
+      });
     }
-    trackEvent("estimate_line_created", {
-      project_id: pid,
-      stage_id: stageId,
-      work_id: workId,
-      resource_type: type,
-    });
     toast({ title: t("estimate.constructor.catalogAdded", { name: resource.name }) });
   };
 
@@ -2540,30 +2543,23 @@ export default function ProjectEstimate() {
     if (!stageId || !workId) return;
     const addMilli = Math.max(1, Math.round(quantity * 1_000));
 
-    // Merge only when the item carries a canonical link and a line with that
-    // same article already sits on the work. Free-text items (no matched
-    // article) have no stable identity, so they always add a fresh line rather
-    // than risk lumping unrelated lines by title.
-    const existing = item.matchedArticleId
-      ? (linesByWork.get(workId) ?? []).find(
-          (line) => line.systemResourceArticleId === item.matchedArticleId,
-        )
-      : undefined;
-    if (existing) {
-      updateLine(pid, existing.id, { qtyMilli: existing.qtyMilli + addMilli });
-    } else {
-      const created = createLine(pid, {
-        stageId,
-        workId,
-        title: item.name,
-        type: item.resourceType,
-        unit: item.unit || getUnitOptionsForType(item.resourceType)[0] || "pcs",
-        qtyMilli: addMilli,
-        costUnitCents: item.priceCents,
-        systemResourceArticleId: item.matchedArticleId,
-      });
-      if (!created) return;
-    }
+    // Personal items always add a fresh line — never merge into an existing one.
+    // A personal item carries its OWN price, so merging into a line with a
+    // different unit cost (e.g. a zero-priced canonical leaf, or another
+    // supplier's item that shares the same matched article) would silently drop
+    // the user's price and cost the added quantity wrong. The quantity picker
+    // already lets the user add the amount they want in one go.
+    const created = createLine(pid, {
+      stageId,
+      workId,
+      title: item.name,
+      type: item.resourceType,
+      unit: item.unit || getUnitOptionsForType(item.resourceType)[0] || "pcs",
+      qtyMilli: addMilli,
+      costUnitCents: item.priceCents,
+      systemResourceArticleId: item.matchedArticleId,
+    });
+    if (!created) return;
     trackEvent("estimate_line_created", {
       project_id: pid,
       stage_id: stageId,
