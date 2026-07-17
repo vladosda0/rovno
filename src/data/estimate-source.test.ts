@@ -4,6 +4,7 @@ import {
   EstimateDraftConflictError,
   ensureProjectEstimateRoot,
   parseEstimateOperationalSummaryPayload,
+  resolveEstimateDraftRemoteIds,
   saveCurrentEstimateDraft,
 } from "@/data/estimate-source";
 import type { EstimateV2Snapshot } from "@/types/estimate-v2";
@@ -1137,5 +1138,162 @@ describe("parseEstimateOperationalSummaryPayload", () => {
     expect(parsed?.resourceLines).toHaveLength(1);
     expect(parsed?.resourceLines[0]?.assignee_profile_id).toBe("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
     expect(parsed?.resourceLines[0]?.assignee_display_name).toBe("Shared assignee");
+  });
+});
+
+describe("resolveEstimateDraftRemoteIds", () => {
+  const PROJECT_ID = "8fff7a3b-ca44-45fc-9741-d151102051fb";
+  const STAGE_ID = "2671b6f1-cf4c-40bc-a43a-f380755c5375";
+  const WORK_ID = "44444444-4444-4444-8444-444444444444";
+  // Two rows that are byte-identical apart from the id. Real data: a single
+  // save wrote "Осока пёстрая Evergold C2" twice (same microsecond) into the
+  // Минский район estimate.
+  const LINE_ID_A = "87e16e99-ea9f-4595-8052-5dfe0c49c9dd";
+  const LINE_ID_B = "ba627811-5617-43c3-8c71-9404c2964d4b";
+
+  const remoteLine = (id: string): Database["public"]["Tables"]["estimate_resource_lines"]["Row"] => ({
+    id,
+    estimate_work_id: WORK_ID,
+    title: "Осока пёстрая Evergold C2",
+    resource_type: "material",
+    unit: "шт",
+    quantity: 1,
+    unit_price_cents: 0,
+    total_price_cents: 0,
+    client_unit_price_cents: 0,
+    client_total_price_cents: 0,
+    discounted_client_total_price_cents: null,
+    markup_bps: 0,
+    discount_bps_override: null,
+    assignee_profile_id: null,
+    assignee_label: null,
+    system_resource_article_id: null,
+    created_at: "2026-07-17T10:11:09.283709+00:00",
+  });
+
+  const localLine = (id: string): EstimateV2Snapshot["lines"][number] => ({
+    id,
+    projectId: PROJECT_ID,
+    stageId: STAGE_ID,
+    workId: WORK_ID,
+    title: "Осока пёстрая Evergold C2",
+    type: "material",
+    unit: "шт",
+    qtyMilli: 1000,
+    costUnitCents: 0,
+    markupBps: 0,
+    discountBpsOverride: null,
+    assigneeId: null,
+    assigneeName: null,
+    assigneeEmail: null,
+    receivedCents: 0,
+    pnlPlaceholderCents: 0,
+    createdAt: "2026-07-17T10:11:09.283709+00:00",
+    updatedAt: "2026-07-17T10:11:09.283709+00:00",
+  });
+
+  it("maps duplicate lines by id instead of failing on an ambiguous natural key", () => {
+    const snapshot = {
+      project: {
+        id: PROJECT_ID,
+        projectId: PROJECT_ID,
+        title: "Минский район",
+        projectMode: "contractor",
+        currency: "RUB",
+        taxBps: 0,
+        discountBps: 0,
+        markupBps: 0,
+        estimateStatus: "planning",
+        receivedCents: 0,
+        pnlPlaceholderCents: 0,
+        createdAt: "2026-07-17T09:41:48.893834+00:00",
+        updatedAt: "2026-07-17T10:11:08.916097+00:00",
+      },
+      stages: [],
+      works: [],
+      lines: [localLine(LINE_ID_A), localLine(LINE_ID_B)],
+      dependencies: [],
+    } as unknown as EstimateV2Snapshot;
+
+    const resolved = resolveEstimateDraftRemoteIds({
+      projectId: PROJECT_ID,
+      snapshot,
+      existingDraft: {
+        estimate: { id: "6458bab6-940d-5c0c-a378-01dc037cff9c" },
+        currentVersion: { id: "cfdbdd22-1370-5f5c-b685-4cecc547cd4c" },
+        stages: [],
+        works: [],
+        lines: [remoteLine(LINE_ID_A), remoteLine(LINE_ID_B)],
+        dependencies: [],
+      } as unknown as Parameters<typeof resolveEstimateDraftRemoteIds>[0]["existingDraft"],
+    });
+
+    // Each local line already carries its remote id, so the id match is
+    // authoritative and the duplicate natural key is irrelevant.
+    expect(resolved.lineIdByLocalLineId[LINE_ID_A]).toBe(LINE_ID_A);
+    expect(resolved.lineIdByLocalLineId[LINE_ID_B]).toBe(LINE_ID_B);
+  });
+
+  it("still resolves an unknown local id through the unique natural-key match", () => {
+    const snapshot = {
+      project: {
+        id: PROJECT_ID, projectId: PROJECT_ID, title: "Минский район",
+        projectMode: "contractor", currency: "RUB", taxBps: 0, discountBps: 0,
+        markupBps: 0, estimateStatus: "planning", receivedCents: 0,
+        pnlPlaceholderCents: 0,
+        createdAt: "2026-07-17T09:41:48.893834+00:00",
+        updatedAt: "2026-07-17T10:11:08.916097+00:00",
+      },
+      stages: [],
+      works: [],
+      // Local-only id (created offline), never persisted under this id.
+      lines: [localLine("11111111-1111-4111-8111-111111111111")],
+      dependencies: [],
+    } as unknown as EstimateV2Snapshot;
+
+    const resolved = resolveEstimateDraftRemoteIds({
+      projectId: PROJECT_ID,
+      snapshot,
+      existingDraft: {
+        estimate: { id: "6458bab6-940d-5c0c-a378-01dc037cff9c" },
+        currentVersion: { id: "cfdbdd22-1370-5f5c-b685-4cecc547cd4c" },
+        stages: [], works: [],
+        lines: [remoteLine(LINE_ID_A)],
+        dependencies: [],
+      } as unknown as Parameters<typeof resolveEstimateDraftRemoteIds>[0]["existingDraft"],
+    });
+
+    expect(resolved.lineIdByLocalLineId["11111111-1111-4111-8111-111111111111"]).toBe(LINE_ID_A);
+  });
+
+  it("still rejects an unknown local id when the natural key is ambiguous", () => {
+    const snapshot = {
+      project: {
+        id: PROJECT_ID, projectId: PROJECT_ID, title: "Минский район",
+        projectMode: "contractor", currency: "RUB", taxBps: 0, discountBps: 0,
+        markupBps: 0, estimateStatus: "planning", receivedCents: 0,
+        pnlPlaceholderCents: 0,
+        createdAt: "2026-07-17T09:41:48.893834+00:00",
+        updatedAt: "2026-07-17T10:11:08.916097+00:00",
+      },
+      stages: [],
+      works: [],
+      lines: [localLine("11111111-1111-4111-8111-111111111111")],
+      dependencies: [],
+    } as unknown as EstimateV2Snapshot;
+
+    // No id match to fall back on and two identical candidates: genuinely
+    // undecidable, so the guard must still fire.
+    expect(() => resolveEstimateDraftRemoteIds({
+      projectId: PROJECT_ID,
+      snapshot,
+      existingDraft: {
+        estimate: { id: "6458bab6-940d-5c0c-a378-01dc037cff9c" },
+        currentVersion: { id: "cfdbdd22-1370-5f5c-b685-4cecc547cd4c" },
+        stages: [], works: [],
+        lines: [remoteLine(LINE_ID_A), remoteLine(LINE_ID_B)],
+        dependencies: [],
+      } as unknown as Parameters<typeof resolveEstimateDraftRemoteIds>[0]["existingDraft"],
+    })).toThrow(/Ambiguous remote estimate line mapping/);
   });
 });
