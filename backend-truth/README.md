@@ -157,6 +157,7 @@ It is an allowlist-specific extractor for the source migrations below, not a gen
 - `supabase/migrations/20260712130200_sync_estimate_projection_rpc.sql`
 - `supabase/migrations/20260713110100_project_sync_events_sensitivity_policy.sql`
 - `supabase/migrations/20260713150000_change_task_status_v2.sql`
+- `supabase/migrations/20260716205000_payment_intents_operation_identity_key.sql`
 
 ## Exclusions
 
