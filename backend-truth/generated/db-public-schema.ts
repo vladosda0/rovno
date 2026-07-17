@@ -535,6 +535,10 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260713150000_change_task_status_v2.sql",
       "sha256": "d352fd9405b0ef4cedd0e8911310aa7d6bb1a67cf7c92741e7312cc581531dd6"
+    },
+    {
+      "path": "supabase/migrations/20260716205000_payment_intents_operation_identity_key.sql",
+      "sha256": "6439f72d3bd6ea0cb12d4608aa911e743f9e03096420a173aa2018afea48778a"
     }
   ],
   "generated_artifacts": [
@@ -695,6 +699,7 @@ export const manifest = {
     "sql/20260712130200_sync_estimate_projection_rpc.sql",
     "sql/20260713110100_project_sync_events_sensitivity_policy.sql",
     "sql/20260713150000_change_task_status_v2.sql",
+    "sql/20260716205000_payment_intents_operation_identity_key.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -11341,6 +11346,18 @@ export const tables = {
           "where": "parent_intent_id is not null",
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+        },
+        {
+          "name": "uq_payment_intents_id_profile_id",
+          "unique": true,
+          "method": null,
+          "expressions": [
+            "id",
+            "profile_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260716205000_payment_intents_operation_identity_key.sql"
         }
       ],
       "triggers": [

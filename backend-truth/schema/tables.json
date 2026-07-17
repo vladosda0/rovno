@@ -10611,6 +10611,18 @@
           "where": "parent_intent_id is not null",
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+        },
+        {
+          "name": "uq_payment_intents_id_profile_id",
+          "unique": true,
+          "method": null,
+          "expressions": [
+            "id",
+            "profile_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260716205000_payment_intents_operation_identity_key.sql"
         }
       ],
       "triggers": [
