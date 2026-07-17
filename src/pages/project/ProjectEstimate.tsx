@@ -2491,27 +2491,37 @@ export default function ProjectEstimate() {
     updateLine(pid, lineId, partial);
   };
 
-  // Add a catalog leaf as a new resource line on the constructor's target work (client-side;
+  // Add a catalog leaf as a resource line on the constructor's target work (client-side;
   // the system_resource_article_id FK persists via the normal save path). Backs the
-  // Конструктор Каталоги tab's leaf-click.
-  const handleAddCatalogResource = (resource: CatalogResource) => {
+  // Конструктор Каталоги tab. Re-adding a library resource already on the work increments
+  // its quantity instead of creating a duplicate line (matched by system article id).
+  const handleAddCatalogResource = (resource: CatalogResource, quantity: number) => {
     const stageId = constructorTarget?.stageId;
     const workId = constructorTarget?.workId;
     if (!stageId || !workId) return;
     const type = RESOURCE_LINE_TYPES.has(resource.defaultResourceType as ResourceLineType)
       ? (resource.defaultResourceType as ResourceLineType)
       : "material";
-    const created = createLine(pid, {
-      stageId,
-      workId,
-      title: resource.name,
-      type,
-      unit: resource.unitDisplay ?? getUnitOptionsForType(type)[0] ?? "pcs",
-      qtyMilli: 1_000,
-      costUnitCents: 0,
-      systemResourceArticleId: resource.id,
-    });
-    if (!created) return;
+    const addMilli = Math.max(1, Math.round(quantity * 1_000));
+
+    const existing = (linesByWork.get(workId) ?? []).find(
+      (line) => line.systemResourceArticleId === resource.id,
+    );
+    if (existing) {
+      updateLine(pid, existing.id, { qtyMilli: existing.qtyMilli + addMilli });
+    } else {
+      const created = createLine(pid, {
+        stageId,
+        workId,
+        title: resource.name,
+        type,
+        unit: resource.unitDisplay ?? getUnitOptionsForType(type)[0] ?? "pcs",
+        qtyMilli: addMilli,
+        costUnitCents: 0,
+        systemResourceArticleId: resource.id,
+      });
+      if (!created) return;
+    }
     trackEvent("estimate_line_created", {
       project_id: pid,
       stage_id: stageId,
@@ -2524,21 +2534,36 @@ export default function ProjectEstimate() {
   // Add a personal catalog item on the target work — unlike canonical leaves
   // it carries the user's own price; the canonical link comes only from the
   // item's manual "Артикул Rovno" match. Backs the Мои каталоги tab.
-  const handleAddPersonalCatalogItem = (item: UserCatalogItem) => {
+  const handleAddPersonalCatalogItem = (item: UserCatalogItem, quantity: number) => {
     const stageId = constructorTarget?.stageId;
     const workId = constructorTarget?.workId;
     if (!stageId || !workId) return;
-    const created = createLine(pid, {
-      stageId,
-      workId,
-      title: item.name,
-      type: item.resourceType,
-      unit: item.unit || getUnitOptionsForType(item.resourceType)[0] || "pcs",
-      qtyMilli: 1_000,
-      costUnitCents: item.priceCents,
-      systemResourceArticleId: item.matchedArticleId,
-    });
-    if (!created) return;
+    const addMilli = Math.max(1, Math.round(quantity * 1_000));
+
+    // Merge only when the item carries a canonical link and a line with that
+    // same article already sits on the work. Free-text items (no matched
+    // article) have no stable identity, so they always add a fresh line rather
+    // than risk lumping unrelated lines by title.
+    const existing = item.matchedArticleId
+      ? (linesByWork.get(workId) ?? []).find(
+          (line) => line.systemResourceArticleId === item.matchedArticleId,
+        )
+      : undefined;
+    if (existing) {
+      updateLine(pid, existing.id, { qtyMilli: existing.qtyMilli + addMilli });
+    } else {
+      const created = createLine(pid, {
+        stageId,
+        workId,
+        title: item.name,
+        type: item.resourceType,
+        unit: item.unit || getUnitOptionsForType(item.resourceType)[0] || "pcs",
+        qtyMilli: addMilli,
+        costUnitCents: item.priceCents,
+        systemResourceArticleId: item.matchedArticleId,
+      });
+      if (!created) return;
+    }
     trackEvent("estimate_line_created", {
       project_id: pid,
       stage_id: stageId,

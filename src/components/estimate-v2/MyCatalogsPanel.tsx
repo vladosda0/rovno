@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, Home, Loader2, Plus, Search, Upload } from "lucide-react";
+import { ChevronDown, Home, Loader2, Search, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { useAllUserCatalogItems, useUserCatalogs } from "@/hooks/use-user-catalogs";
 import { formatCentsAsRub } from "@/lib/user-catalog/validation";
 import { getUnitLabel } from "@/lib/estimate-v2/resource-units";
+import { QuantityStepper } from "@/components/estimate-v2/QuantityStepper";
 import type { UserCatalogItem } from "@/types/user-catalog";
 
 const CATALOGS_TAB_URL = "/home?tab=documents&docTab=catalogs";
@@ -17,7 +18,7 @@ const CATALOGS_TAB_URL = "/home?tab=documents&docTab=catalogs";
 interface MyCatalogsPanelProps {
   /** Queries fire only when the tab is visible in supabase mode. */
   enabled: boolean;
-  onAddItem: (item: UserCatalogItem) => void;
+  onAddItem: (item: UserCatalogItem, quantity: number) => void;
 }
 
 /**
@@ -32,6 +33,8 @@ export function MyCatalogsPanel({ enabled, onAddItem }: MyCatalogsPanelProps) {
 
   const [filter, setFilter] = useState("");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  // "How many to add" per item, keyed by item id. Absent = 1.
+  const [qtyByItemId, setQtyByItemId] = useState<Record<string, number>>({});
 
   const itemsByCatalog = useMemo(() => {
     const map = new Map<string, UserCatalogItem[]>();
@@ -141,28 +144,44 @@ export function MyCatalogsPanel({ enabled, onAddItem }: MyCatalogsPanelProps) {
                     {t("estimate.constructor.catalogEmpty")}
                   </p>
                 ) : (
-                  items.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => onAddItem(item)}
-                      className="flex w-full items-start gap-2 rounded-sm px-1 py-1.5 text-left hover:bg-accent hover:text-accent-foreground"
-                    >
-                      <Plus className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                      <span className="min-w-0 flex-1">
+                  items.map((item) => {
+                    const qty = qtyByItemId[item.id] ?? 1;
+                    return (
+                      <div key={item.id} className="rounded-md px-2 py-2 hover:bg-accent/40">
                         <span className="block break-words text-sm leading-snug">{item.name}</span>
-                        <span className="block text-xs text-muted-foreground">
-                          {[
-                            item.unit ? getUnitLabel(item.unit, t) : null,
-                            `${formatCentsAsRub(item.priceCents)} ₽`,
-                            item.supplierSku,
-                          ]
-                            .filter(Boolean)
-                            .join(" · ")}
-                        </span>
-                      </span>
-                    </button>
-                  ))
+                        <div className="mt-2 flex items-center justify-between gap-2">
+                          <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                            {formatCentsAsRub(item.priceCents)} ₽
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <QuantityStepper
+                              className="shrink-0"
+                              value={qty}
+                              onChange={(next) => setQtyByItemId((prev) => ({ ...prev, [item.id]: next }))}
+                              ariaLabel={item.name}
+                              unitLabel={item.unit ? getUnitLabel(item.unit, t) : null}
+                            />
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              className="h-7 shrink-0 px-3"
+                              onClick={() => {
+                                onAddItem(item, qty);
+                                setQtyByItemId((prev) => {
+                                  const next = { ...prev };
+                                  delete next[item.id];
+                                  return next;
+                                });
+                              }}
+                            >
+                              {t("estimate.constructor.catalogAddAction")}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
                 )}
               </CollapsibleContent>
             </Collapsible>
