@@ -2504,12 +2504,16 @@ export default function ProjectEstimate() {
       : "material";
     const addMilli = Math.max(1, Math.round(quantity * 1_000));
 
+    // Merge a repeat catalog add into an existing line ONLY when that line is a
+    // zero-cost catalog line for the same article. A non-zero cost may be a
+    // personal item's price (or a price the user set), and folding a cost-0
+    // catalog add into it would charge the added quantity at that price — the
+    // same cross-price contamination we avoid on the personal path. Fail safe:
+    // add a fresh zero-cost line instead.
     const existing = (linesByWork.get(workId) ?? []).find(
-      (line) => line.systemResourceArticleId === resource.id,
+      (line) => line.systemResourceArticleId === resource.id && line.costUnitCents === 0,
     );
     if (existing) {
-      // Merge is safe here: catalog leaves are added at cost 0, so incrementing
-      // the existing line's quantity discards no price the user hasn't already set.
       updateLine(pid, existing.id, { qtyMilli: existing.qtyMilli + addMilli });
     } else {
       const created = createLine(pid, {
