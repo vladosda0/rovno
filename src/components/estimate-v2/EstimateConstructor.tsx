@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, ChevronLeft, Loader2, Plus, Search } from "lucide-react";
+import { ChevronDown, ChevronLeft, Loader2, Search } from "lucide-react";
 
 import {
   Sheet,
@@ -25,6 +25,7 @@ import { useAddLibraryWork, type AddWorkRequest } from "@/hooks/use-add-library-
 import { useCanonicalCatalog, type CatalogResource } from "@/hooks/use-canonical-catalog";
 import { useEstimateV2ProjectSync } from "@/hooks/use-estimate-v2-data";
 import { MyCatalogsPanel } from "@/components/estimate-v2/MyCatalogsPanel";
+import { QuantityStepper } from "@/components/estimate-v2/QuantityStepper";
 import type { UserCatalogItem } from "@/types/user-catalog";
 
 type ConstructorTab = "estimates" | "catalog" | "my-catalogs";
@@ -49,10 +50,14 @@ interface EstimateConstructorProps {
   target?: { stageId?: string; workId?: string } | null;
   /** Initial tab; defaults to "catalog" in add-resource mode, else "estimates". */
   initialTab?: ConstructorTab;
-  /** Adds a catalog leaf as a resource line on the target work (client-side). Add-resource mode. */
-  onAddCatalogResource?: (resource: CatalogResource) => void;
-  /** Adds a personal catalog item (with the user's price) on the target work. Add-resource mode. */
-  onAddPersonalItem?: (item: UserCatalogItem) => void;
+  /**
+   * Adds a catalog leaf as a resource line on the target work (client-side), `quantity`
+   * units of it. Re-adding a resource already on the work increments its line instead of
+   * duplicating. Add-resource mode.
+   */
+  onAddCatalogResource?: (resource: CatalogResource, quantity: number) => void;
+  /** Adds `quantity` of a personal catalog item (with the user's price) on the target work. Add-resource mode. */
+  onAddPersonalItem?: (item: UserCatalogItem, quantity: number) => void;
 }
 
 const EMPTY_CONSTRUCTOR_STAGES: ConstructorStage[] = [];
@@ -85,6 +90,8 @@ export function EstimateConstructor({
   // Deselected resource line ids per work (add-work mode); default empty = all included.
   const [uncheckedResources, setUncheckedResources] = useState<Record<string, Set<string>>>({});
   const [catalogSubcategory, setCatalogSubcategory] = useState<string | null>(null);
+  // "How many to add" per catalog leaf, keyed by resource id. Absent = 1.
+  const [catalogQtyByResourceId, setCatalogQtyByResourceId] = useState<Record<string, number>>({});
 
   // Reset transient UI to the contextual default each time the sheet opens.
   useEffect(() => {
@@ -96,6 +103,7 @@ export function EstimateConstructor({
     setExpandedWorks({});
     setUncheckedResources({});
     setCatalogSubcategory(null);
+    setCatalogQtyByResourceId({});
   }, [open, initialTab, addResourceMode]);
 
   // The canonical RPCs are a Supabase-only feature; gate on canApply (supabase mode) so the
@@ -485,22 +493,46 @@ export function EstimateConstructor({
                       {t("estimate.constructor.catalogEmpty")}
                     </p>
                   ) : (
-                    catalog.resources.map((resource) => (
-                      <button
-                        key={resource.id}
-                        type="button"
-                        onClick={() => onAddCatalogResource?.(resource)}
-                        className="flex items-start gap-2 rounded-sm px-1 py-1.5 text-left hover:bg-accent hover:text-accent-foreground"
-                      >
-                        <Plus className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                        <span className="min-w-0 flex-1">
-                          <span className="block break-words text-sm leading-snug">{resource.name}</span>
-                          <span className="block text-xs text-muted-foreground">
-                            {[resource.unitDisplay, resource.rovnoSku].filter(Boolean).join(" · ")}
+                    catalog.resources.map((resource) => {
+                      const qty = catalogQtyByResourceId[resource.id] ?? 1;
+                      return (
+                        <div
+                          key={resource.id}
+                          className="rounded-md px-2 py-2 hover:bg-accent/40"
+                        >
+                          <span className="block break-words text-sm leading-snug">
+                            {resource.name}
                           </span>
-                        </span>
-                      </button>
-                    ))
+                          <div className="mt-2 flex items-center justify-end gap-2">
+                            <QuantityStepper
+                              className="shrink-0"
+                              value={qty}
+                              onChange={(next) =>
+                                setCatalogQtyByResourceId((prev) => ({ ...prev, [resource.id]: next }))
+                              }
+                              ariaLabel={resource.name}
+                              unitLabel={resource.unitDisplay}
+                            />
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              className="h-7 shrink-0 px-3"
+                              onClick={() => {
+                                onAddCatalogResource?.(resource, qty);
+                                setCatalogQtyByResourceId((prev) => {
+                                  const next = { ...prev };
+                                  delete next[resource.id];
+                                  return next;
+                                });
+                              }}
+                            >
+                              {t("estimate.constructor.catalogAddAction")}
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })
                   )}
                 </div>
               ) : catalog && catalog.groups.length > 0 ? (
@@ -545,7 +577,7 @@ export function EstimateConstructor({
             </p>
             <MyCatalogsPanel
               enabled={open && canApply && addResourceMode && tab === "my-catalogs"}
-              onAddItem={(item) => onAddPersonalItem?.(item)}
+              onAddItem={(item, quantity) => onAddPersonalItem?.(item, quantity)}
             />
           </TabsContent>
         </Tabs>

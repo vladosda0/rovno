@@ -195,6 +195,13 @@ function mapLineTypeToRemote(type: ResourceLineType): ResourceLineType {
   return resourceLineTypeToPersisted(type);
 }
 
+/**
+ * Natural-key fallback for rows whose id we don't already know. Only call this
+ * when the id lookup missed: two rows can legitimately share a natural key (the
+ * same resource added twice to one work), and an id match is authoritative, so
+ * asserting uniqueness on a row we already identified would reject a save the
+ * duplicate never actually made ambiguous.
+ */
 function assertUniqueExistingMatch<T>(
   matches: T[],
   message: string,
@@ -976,7 +983,7 @@ export function resolveEstimateDraftRemoteIds(input: {
   const stageIdByLocalStageId: Record<string, string> = {};
   snapshot.stages.forEach((stage) => {
     const directMatch = existingDraft.stages.find((row) => row.id === stage.id) ?? null;
-    const naturalMatch = assertUniqueExistingMatch(
+    const naturalMatch = directMatch ? null : assertUniqueExistingMatch(
       existingDraft.stages.filter((row) => row.title === stage.title && row.sort_order === stage.order),
       `Ambiguous remote stage mapping for "${stage.title}"`,
     );
@@ -989,7 +996,7 @@ export function resolveEstimateDraftRemoteIds(input: {
   snapshot.works.forEach((work) => {
     const resolvedStageId = stageIdByLocalStageId[work.stageId] ?? null;
     const directMatch = existingDraft.works.find((row) => row.id === work.id) ?? null;
-    const naturalMatch = assertUniqueExistingMatch(
+    const naturalMatch = directMatch ? null : assertUniqueExistingMatch(
       existingDraft.works.filter((row) => (
         row.title === work.title
         && row.sort_order === work.order
@@ -1007,7 +1014,7 @@ export function resolveEstimateDraftRemoteIds(input: {
     const resolvedWorkId = workIdByLocalWorkId[line.workId]
       ?? ensureRemoteUuid(projectId, "work", line.workId);
     const directMatch = existingDraft.lines.find((row) => row.id === line.id) ?? null;
-    const naturalMatch = assertUniqueExistingMatch(
+    const naturalMatch = directMatch ? null : assertUniqueExistingMatch(
       existingDraft.lines.filter((row) => (
         row.estimate_work_id === resolvedWorkId
         && row.title === line.title
@@ -1031,7 +1038,7 @@ export function resolveEstimateDraftRemoteIds(input: {
     const resolvedToWorkId = workIdByLocalWorkId[dependency.toWorkId]
       ?? ensureRemoteUuid(projectId, "work", dependency.toWorkId);
     const directMatch = existingDraft.dependencies.find((row) => row.id === dependency.id) ?? null;
-    const naturalMatch = assertUniqueExistingMatch(
+    const naturalMatch = directMatch ? null : assertUniqueExistingMatch(
       existingDraft.dependencies.filter((row) => (
         row.from_work_id === resolvedFromWorkId
         && row.to_work_id === resolvedToWorkId

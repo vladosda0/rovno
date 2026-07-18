@@ -2491,50 +2491,75 @@ export default function ProjectEstimate() {
     updateLine(pid, lineId, partial);
   };
 
-  // Add a catalog leaf as a new resource line on the constructor's target work (client-side;
+  // Add a catalog leaf as a resource line on the constructor's target work (client-side;
   // the system_resource_article_id FK persists via the normal save path). Backs the
-  // Конструктор Каталоги tab's leaf-click.
-  const handleAddCatalogResource = (resource: CatalogResource) => {
+  // Конструктор Каталоги tab. Re-adding a library resource already on the work increments
+  // its quantity instead of creating a duplicate line (matched by system article id).
+  const handleAddCatalogResource = (resource: CatalogResource, quantity: number) => {
     const stageId = constructorTarget?.stageId;
     const workId = constructorTarget?.workId;
     if (!stageId || !workId) return;
     const type = RESOURCE_LINE_TYPES.has(resource.defaultResourceType as ResourceLineType)
       ? (resource.defaultResourceType as ResourceLineType)
       : "material";
-    const created = createLine(pid, {
-      stageId,
-      workId,
-      title: resource.name,
-      type,
-      unit: resource.unitDisplay ?? getUnitOptionsForType(type)[0] ?? "pcs",
-      qtyMilli: 1_000,
-      costUnitCents: 0,
-      systemResourceArticleId: resource.id,
-    });
-    if (!created) return;
-    trackEvent("estimate_line_created", {
-      project_id: pid,
-      stage_id: stageId,
-      work_id: workId,
-      resource_type: type,
-    });
+    const addMilli = Math.max(1, Math.round(quantity * 1_000));
+
+    // Merge a repeat catalog add into an existing line ONLY when that line is a
+    // zero-cost catalog line for the same article. A non-zero cost may be a
+    // personal item's price (or a price the user set), and folding a cost-0
+    // catalog add into it would charge the added quantity at that price — the
+    // same cross-price contamination we avoid on the personal path. Fail safe:
+    // add a fresh zero-cost line instead.
+    const existing = (linesByWork.get(workId) ?? []).find(
+      (line) => line.systemResourceArticleId === resource.id && line.costUnitCents === 0,
+    );
+    if (existing) {
+      updateLine(pid, existing.id, { qtyMilli: existing.qtyMilli + addMilli });
+    } else {
+      const created = createLine(pid, {
+        stageId,
+        workId,
+        title: resource.name,
+        type,
+        unit: resource.unitDisplay ?? getUnitOptionsForType(type)[0] ?? "pcs",
+        qtyMilli: addMilli,
+        costUnitCents: 0,
+        systemResourceArticleId: resource.id,
+      });
+      if (!created) return;
+      // A merge is an increment, not a creation — only count real line creations.
+      trackEvent("estimate_line_created", {
+        project_id: pid,
+        stage_id: stageId,
+        work_id: workId,
+        resource_type: type,
+      });
+    }
     toast({ title: t("estimate.constructor.catalogAdded", { name: resource.name }) });
   };
 
   // Add a personal catalog item on the target work — unlike canonical leaves
   // it carries the user's own price; the canonical link comes only from the
   // item's manual "Артикул Rovno" match. Backs the Мои каталоги tab.
-  const handleAddPersonalCatalogItem = (item: UserCatalogItem) => {
+  const handleAddPersonalCatalogItem = (item: UserCatalogItem, quantity: number) => {
     const stageId = constructorTarget?.stageId;
     const workId = constructorTarget?.workId;
     if (!stageId || !workId) return;
+    const addMilli = Math.max(1, Math.round(quantity * 1_000));
+
+    // Personal items always add a fresh line — never merge into an existing one.
+    // A personal item carries its OWN price, so merging into a line with a
+    // different unit cost (e.g. a zero-priced canonical leaf, or another
+    // supplier's item that shares the same matched article) would silently drop
+    // the user's price and cost the added quantity wrong. The quantity picker
+    // already lets the user add the amount they want in one go.
     const created = createLine(pid, {
       stageId,
       workId,
       title: item.name,
       type: item.resourceType,
       unit: item.unit || getUnitOptionsForType(item.resourceType)[0] || "pcs",
-      qtyMilli: 1_000,
+      qtyMilli: addMilli,
       costUnitCents: item.priceCents,
       systemResourceArticleId: item.matchedArticleId,
     });
