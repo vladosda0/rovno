@@ -2152,6 +2152,7 @@ export type Database = {
           "updated_at": string
           "consent_accepted_at": string | null
           "consent_version": string | null
+          "order_attempt": number
           }
           Insert: {
           "id"?: string
@@ -2180,6 +2181,7 @@ export type Database = {
           "updated_at"?: string
           "consent_accepted_at"?: string | null
           "consent_version"?: string | null
+          "order_attempt"?: number
           }
           Update: {
           "id"?: string
@@ -2208,6 +2210,7 @@ export type Database = {
           "updated_at"?: string
           "consent_accepted_at"?: string | null
           "consent_version"?: string | null
+          "order_attempt"?: number
           }
           Relationships: []
         }

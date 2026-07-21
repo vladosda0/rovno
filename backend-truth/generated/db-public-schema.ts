@@ -539,6 +539,10 @@ export const manifest = {
     {
       "path": "supabase/migrations/20260716205000_payment_intents_operation_identity_key.sql",
       "sha256": "6439f72d3bd6ea0cb12d4608aa911e743f9e03096420a173aa2018afea48778a"
+    },
+    {
+      "path": "supabase/migrations/20260720120000_payment_intents_order_attempt.sql",
+      "sha256": "c131c0639acc1436bcb040451adc29b38908fb61ae45f751a1fb00bd2ac5fb6b"
     }
   ],
   "generated_artifacts": [
@@ -700,6 +704,7 @@ export const manifest = {
     "sql/20260713110100_project_sync_events_sensitivity_policy.sql",
     "sql/20260713150000_change_task_status_v2.sql",
     "sql/20260716205000_payment_intents_operation_identity_key.sql",
+    "sql/20260720120000_payment_intents_order_attempt.sql",
     "generated/db-public-schema.ts",
     "generated/supabase-types.ts"
   ],
@@ -11218,6 +11223,16 @@ export const tables = {
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "order_attempt",
+          "sqlType": "smallint",
+          "tsType": "number",
+          "nullable": false,
+          "defaultSql": "0",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -11288,6 +11303,16 @@ export const tables = {
           "usingIndex": null,
           "nullsNotDistinct": false,
           "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "order_attempt"
+          ],
+          "expression": "order_attempt >= 0 and order_attempt <= 99",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260720120000_payment_intents_order_attempt.sql"
         }
       ],
       "indexes": [
@@ -16706,6 +16731,16 @@ export const checks = {
       "allowedValues": null,
       "expression": "case\n      when is_recurrent_charge then parent_intent_id is not null\n      else parent_intent_id is null\n    end",
       "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+    },
+    {
+      "schema": "public",
+      "table": "payment_intents",
+      "column": "order_attempt",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "order_attempt >= 0 and order_attempt <= 99",
+      "sourceMigration": "supabase/migrations/20260720120000_payment_intents_order_attempt.sql"
     },
     {
       "schema": "public",

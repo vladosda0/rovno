@@ -10483,6 +10483,16 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "order_attempt",
+          "sqlType": "smallint",
+          "tsType": "number",
+          "nullable": false,
+          "defaultSql": "0",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -10553,6 +10563,16 @@
           "usingIndex": null,
           "nullsNotDistinct": false,
           "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "order_attempt"
+          ],
+          "expression": "order_attempt >= 0 and order_attempt <= 99",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260720120000_payment_intents_order_attempt.sql"
         }
       ],
       "indexes": [
