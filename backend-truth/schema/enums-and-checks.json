@@ -1650,6 +1650,16 @@
     },
     {
       "schema": "public",
+      "table": "payment_intents",
+      "column": "order_attempt",
+      "constraintName": null,
+      "kind": "expression",
+      "allowedValues": null,
+      "expression": "order_attempt >= 0 and order_attempt <= 99",
+      "sourceMigration": "supabase/migrations/20260720120000_payment_intents_order_attempt.sql"
+    },
+    {
+      "schema": "public",
       "table": "system_stage_articles",
       "column": null,
       "constraintName": "system_stage_articles_name_nonempty",
