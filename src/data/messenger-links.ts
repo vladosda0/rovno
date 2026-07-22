@@ -21,9 +21,18 @@ export interface LinkedIdentity {
 // only ever consume link codes against a single Supabase project. The handle is
 // per-env config, not a constant. Leading "@" is tolerated so that setting
 // either `rovnoai_bot` or `@rovnoai_bot` works.
-const configuredBotUsername = (import.meta.env.VITE_TELEGRAM_BOT_USERNAME ?? "")
+// Telegram usernames: 5-32 chars of [A-Za-z0-9_]. A value that cannot form a
+// valid t.me link (double @, inner spaces, query chars, too short) must fail
+// closed exactly like a missing one — hiding the tab beats minting dead links.
+const TELEGRAM_USERNAME_RE = /^[A-Za-z0-9_]{5,32}$/;
+
+const rawBotUsername = (import.meta.env.VITE_TELEGRAM_BOT_USERNAME ?? "")
   .trim()
   .replace(/^@/, "");
+
+const configuredBotUsername = TELEGRAM_USERNAME_RE.test(rawBotUsername)
+  ? rawBotUsername
+  : "";
 
 export const TELEGRAM_BOT_USERNAME = configuredBotUsername;
 
@@ -34,7 +43,7 @@ export const TELEGRAM_BOT_USERNAME = configuredBotUsername;
 // never be consumed (cross-environment dead end). Hiding the tab makes that
 // misconfiguration a visible no-op instead of a broken user-facing flow.
 export const TELEGRAM_LINKING_ENABLED =
-  import.meta.env.VITE_TELEGRAM_LINKING_ENABLED === "true" &&
+  (import.meta.env.VITE_TELEGRAM_LINKING_ENABLED ?? "").trim() === "true" &&
   configuredBotUsername !== "";
 
 export function telegramDeepLink(code: string): string {

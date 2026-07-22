@@ -70,6 +70,33 @@ describe("messenger-links env gate", () => {
     expect(m.TELEGRAM_LINKING_ENABLED).toBe(false);
   });
 
+  // A malformed handle must fail closed exactly like a missing one: the gate
+  // exists to prevent dead-end flows, and a broken t.me link is a dead end.
+  it.each([
+    { label: "double @", value: "@@rovnoai_bot" },
+    { label: "inner space", value: "@ rovnoai_bot" },
+    { label: "query chars", value: "rovnoai_bot?x=1" },
+    { label: "slash", value: "rovnoai/bot" },
+    { label: "unicode", value: "ровно_бот" },
+    { label: "too short", value: "bot" },
+    { label: "too long", value: "a".repeat(33) },
+  ])("treats a malformed handle ($label) as unset", async ({ value }) => {
+    const m = await loadWith({
+      VITE_TELEGRAM_LINKING_ENABLED: "true",
+      VITE_TELEGRAM_BOT_USERNAME: value,
+    });
+    expect(m.TELEGRAM_LINKING_ENABLED).toBe(false);
+    expect(m.TELEGRAM_BOT_USERNAME).toBe("");
+  });
+
+  it("trims a padded flag value before comparing", async () => {
+    const m = await loadWith({
+      VITE_TELEGRAM_LINKING_ENABLED: "  true  ",
+      VITE_TELEGRAM_BOT_USERNAME: "rovnoai_bot",
+    });
+    expect(m.TELEGRAM_LINKING_ENABLED).toBe(true);
+  });
+
   it("builds a deep link that url-encodes the code", async () => {
     const m = await loadWith({
       VITE_TELEGRAM_LINKING_ENABLED: "true",
