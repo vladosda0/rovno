@@ -16,18 +16,26 @@ export interface LinkedIdentity {
   linkedAt: string;
 }
 
-// Staging and prod share the same bot handle (@rovno_ai_bot). The bot accepts
-// `/link <code>` and the `/start <code>` deep-link alias.
-export const TELEGRAM_BOT_USERNAME = "rovno_ai_bot";
+// Each environment runs its OWN bot (@rovno_ai_bot on staging, @rovnoai_bot on
+// prod), because one Telegram bot has exactly one webhook and can therefore
+// only ever consume link codes against a single Supabase project. The handle is
+// per-env config, not a constant. Leading "@" is tolerated so that setting
+// either `rovnoai_bot` or `@rovnoai_bot` works.
+const configuredBotUsername = (import.meta.env.VITE_TELEGRAM_BOT_USERNAME ?? "")
+  .trim()
+  .replace(/^@/, "");
+
+export const TELEGRAM_BOT_USERNAME = configuredBotUsername;
 
 // Feature flag for the Settings → Интеграции (Telegram linking) tab. Default
-// false. @rovno_ai_bot consumes link codes against a single Supabase project;
-// until a prod bot pointed at api.rovno.ai ships, a prod-minted code can never
-// be consumed (cross-environment dead end), so the tab stays hidden on prod.
-// Flip VITE_TELEGRAM_LINKING_ENABLED=true only in an env whose bot targets that
-// env's database.
+// false, and deliberately fail-closed: the tab needs BOTH the flag and a bot
+// handle. A build that enabled the flag without naming its own bot would
+// deep-link its users into some other environment's bot, where their code can
+// never be consumed (cross-environment dead end). Hiding the tab makes that
+// misconfiguration a visible no-op instead of a broken user-facing flow.
 export const TELEGRAM_LINKING_ENABLED =
-  import.meta.env.VITE_TELEGRAM_LINKING_ENABLED === "true";
+  import.meta.env.VITE_TELEGRAM_LINKING_ENABLED === "true" &&
+  configuredBotUsername !== "";
 
 export function telegramDeepLink(code: string): string {
   return `https://t.me/${TELEGRAM_BOT_USERNAME}?start=${encodeURIComponent(code)}`;
