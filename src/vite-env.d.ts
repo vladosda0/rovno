@@ -11,6 +11,12 @@ interface ImportMetaEnv {
   readonly VITE_AI_LIVE_TEXT_ASSISTANT?: string;
   /** Sentry DSN for error tracking. Empty/unset disables Sentry entirely. */
   readonly VITE_SENTRY_DSN?: string;
+  /** Set to `"true"` to show Settings → Интеграции (Telegram linking). Also
+   *  requires VITE_TELEGRAM_BOT_USERNAME; either one alone keeps the tab hidden. */
+  readonly VITE_TELEGRAM_LINKING_ENABLED?: string;
+  /** Handle of the bot serving THIS environment's database, without "@"
+   *  (staging `rovno_ai_bot`, prod `rovnoai_bot`). */
+  readonly VITE_TELEGRAM_BOT_USERNAME?: string;
 }
 
 interface ImportMeta {

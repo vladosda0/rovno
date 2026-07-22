@@ -12,6 +12,7 @@ import {
   listLinkedIdentities,
   unlinkIdentity,
   telegramDeepLink,
+  TELEGRAM_BOT_USERNAME,
   type LinkedIdentity,
 } from "@/data/messenger-links";
 
@@ -160,7 +161,7 @@ export function IntegrationsPanel() {
         ) : code ? (
           <div className="space-y-sp-2 rounded-panel bg-muted/40 p-sp-2">
             <p className="text-caption text-muted-foreground">
-              {t("integrations.telegram.codeInstructions")}
+              {t("integrations.telegram.codeInstructions", { bot: TELEGRAM_BOT_USERNAME })}
             </p>
             <div className="flex items-center gap-2">
               <code className="rounded-md border border-border bg-background px-sp-2 py-1 font-mono text-h4 tracking-widest text-foreground">
@@ -182,7 +183,7 @@ export function IntegrationsPanel() {
               <Button asChild className="w-full sm:w-auto">
                 <a href={telegramDeepLink(code)} target="_blank" rel="noopener noreferrer">
                   <Send className="mr-2 h-4 w-4" />
-                  {t("integrations.telegram.openBot")}
+                  {t("integrations.telegram.openBot", { bot: TELEGRAM_BOT_USERNAME })}
                   <ExternalLink className="ml-1.5 h-3.5 w-3.5 opacity-70" />
                 </a>
               </Button>
