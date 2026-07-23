@@ -9,6 +9,7 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 ## Source Migrations
 
 - `supabase/migrations/20260306162500_estimates_core.sql`
+- `supabase/migrations/20260712130000_estimate_projection_infra.sql`
 - `supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql`
 - `supabase/migrations/20260306164000_hr_domain.sql`
 - `supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql`
@@ -20,8 +21,10 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 - `supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql`
 - `supabase/migrations/20260611120100_get_portfolio_finance_snapshot.sql`
 - `supabase/migrations/20260622120000_tighten_price_comparison_finance_gate.sql`
+- `supabase/migrations/20260712130200_sync_estimate_projection_rpc.sql`
 - `supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql`
 - `supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql`
+- `supabase/migrations/20260713110100_project_sync_events_sensitivity_policy.sql`
 
 ## Tables
 
@@ -38,16 +41,24 @@ Mirrored SQL and normalized JSON remain authoritative over this markdown.
 | `created_at` | `timestamptz` | no | `now()` | no |
 | `updated_at` | `timestamptz` | no | `now()` | no |
 | `execution_status` | `text` | yes |   | no |
+| `draft_seq` | `bigint` | no | `0` | no |
+| `projection_revision` | `text` | yes |   | no |
+| `projection_seq` | `bigint` | no | `0` | no |
+| `projection_synced_at` | `timestamptz` | yes |   | no |
+| `projection_actor` | `uuid` | yes |   | no |
 
 Constraints:
 - unnamed check (expression `status in ('draft', 'approved', 'archived')`)
 - unnamed check (expression `execution_status is null or execution_status in ('planning', 'in_work', 'paused', 'finished')`)
+- `project_estimates_projection_actor_fkey` foreign_key (columns `projection_actor`)
 
 Indexes:
 - `idx_project_estimates_project_id` on (`project_id`)
+- `idx_project_estimates_project_id_unique` on (`project_id`), unique
 
 Triggers:
 - `set_project_estimates_updated_at`: before update, executes `public.set_updated_at()`
+- `guard_estimate_coordination_columns`: before insert or update, executes `public.guard_estimate_coordination_columns()`
 
 ### public.estimate_versions
 
@@ -135,6 +146,9 @@ Indexes:
 - `idx_estimate_resource_lines_assignee_profile_id` on (`assignee_profile_id`), where `assignee_profile_id is not null`
 - `idx_estimate_resource_lines_canonical` on (`system_resource_article_id`), where `system_resource_article_id is not null`
 
+Triggers:
+- `unlink_projection_lineage_on_line_delete`: before delete, executes `public.unlink_projection_lineage_on_line_delete()`
+
 ### public.estimate_dependencies
 
 | Column | Type | Nullable | Default | Primary Key |
@@ -154,6 +168,25 @@ Indexes:
 - `idx_estimate_dependencies_estimate_version_id` on (`estimate_version_id`)
 - `idx_estimate_dependencies_from_work_id` on (`from_work_id`)
 - `idx_estimate_dependencies_to_work_id` on (`to_work_id`)
+
+### public.project_sync_events
+
+| Column | Type | Nullable | Default | Primary Key |
+| --- | --- | --- | --- | --- |
+| `id` | `bigint` | no |   | yes |
+| `project_id` | `uuid` | no |   | no |
+| `kind` | `text` | no |   | no |
+| `revision` | `text` | yes |   | no |
+| `actor_profile_id` | `uuid` | yes | `auth.uid()` | no |
+| `created_at` | `timestamptz` | no | `now()` | no |
+
+Constraints:
+- unnamed check (expression `kind in ('projection', 'estimate_draft', 'tasks', 'checklist', 'procurement', 'hr', 'hr_payments', 'members')`)
+- unnamed check (expression `revision is null or char_length(revision) <= 200`)
+
+Indexes:
+- `idx_project_sync_events_project_id_id` on (`project_id`, `id desc`)
+- `idx_project_sync_events_actor_profile_id` on (`actor_profile_id`)
 
 ## Relations
 
@@ -178,6 +211,9 @@ Indexes:
 | `public.estimate_resource_lines(assignee_profile_id)` | `public.profiles(id)` | `set null` | `supabase/migrations/20260417120000_estimate_resource_line_assignee_profile.sql` |
 | `public.estimate_works(system_work_article_id)` | `public.system_work_articles(id)` | `set null` | `supabase/migrations/20260602150100_instance_tables_library_fks.sql` |
 | `public.estimate_resource_lines(system_resource_article_id)` | `public.system_resource_articles(id)` | `set null` | `supabase/migrations/20260602150100_instance_tables_library_fks.sql` |
+| `public.project_estimates(projection_actor)` | `public.profiles(id)` | `set null` | `supabase/migrations/20260712130000_estimate_projection_infra.sql` |
+| `public.project_sync_events(project_id)` | `public.projects(id)` | `cascade` | `supabase/migrations/20260712130000_estimate_projection_infra.sql` |
+| `public.project_sync_events(actor_profile_id)` | `public.profiles(id)` | `set null` | `supabase/migrations/20260712130000_estimate_projection_infra.sql` |
 
 ## Functions
 
@@ -188,6 +224,8 @@ Indexes:
 | `public.approve_estimate_version_by_share_token(text, jsonb)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql` |
 | `public.get_portfolio_finance_snapshot()` | `jsonb` | yes | `rpc` | `supabase/migrations/20260611120100_get_portfolio_finance_snapshot.sql` |
 | `public.get_resource_article_price_comparison(uuid, uuid)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260622120000_tighten_price_comparison_finance_gate.sql` |
+| `public.sync_estimate_projection(uuid, text)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260712130200_sync_estimate_projection_rpc.sql` |
+| `public.set_estimate_current_version(uuid, uuid)` | `jsonb` | yes | `rpc` | `supabase/migrations/20260712130200_sync_estimate_projection_rpc.sql` |
 
 ## RLS and Grants
 
@@ -265,4 +303,14 @@ Indexes:
     with check: `exists ( select 1 from public.estimate_versions ev join public.project_estimates pe on pe.id = ev.estimate_id where ev.id = estimate_version_id and public.can_write_project_content(pe.project_id) )`
   - `estimate_dependencies_delete` for `delete` to `authenticated`
     using: `exists ( select 1 from public.estimate_versions ev join public.project_estimates pe on pe.id = ev.estimate_id where ev.id = estimate_version_id and public.can_write_project_content(pe.project_id) )`
+
+### public.project_sync_events
+
+- RLS enabled: yes
+- Authenticated grants: `insert`, `select`
+- Policies:
+  - `project_sync_events_insert` for `insert` to `authenticated`
+    with check: `public.can_write_project_content(project_id) and kind = 'estimate_draft' and (actor_profile_id is null or actor_profile_id = auth.uid())`
+  - `project_sync_events_select` for `select` to `authenticated`
+    using: `public.can_access_project(project_id) and ( kind not in ('procurement', 'hr', 'hr_payments', 'members') or (kind = 'procurement' and public.can_view_sensitive_detail(project_id)) or (kind in ('hr', 'hr_payments') and public.can_view_sensitive_detail(project_id) and public.can_access_hr_domain(project_id)) or (kind = 'members' and public.can_manage_project(project_id)) )`
 

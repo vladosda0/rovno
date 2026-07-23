@@ -1060,6 +1060,110 @@ export async function updateWorkspaceProjectMemberRole(
   return mapProjectMemberRowToMember(data);
 }
 
+export class ProjectMemberRemoveNotPermittedError extends Error {
+  constructor(public readonly projectId: string, public readonly userId: string) {
+    super(`Delete affected 0 rows for member ${userId} on project ${projectId}; RLS allows only the project owner to remove non-owner members.`);
+    this.name = "ProjectMemberRemoveNotPermittedError";
+  }
+}
+
+/**
+ * Removes a member row. DB truth: DELETE on project_members is owner-only and
+ * never targets the owner's own row (rovno-db 20260325133000); callers must
+ * pre-gate with `canRemoveMember` so this does not 0-row for expected reasons.
+ */
+export async function removeWorkspaceProjectMember(
+  mode: WorkspaceMode | RuntimeWorkspaceMode,
+  input: { projectId: string; userId: string },
+): Promise<void> {
+  if (mode.kind === "guest") {
+    throw new Error("An authenticated Supabase session is required.");
+  }
+
+  if (isBrowserWorkspaceMode(mode)) {
+    const removed = store.removeMember(input.projectId, input.userId, mode.kind);
+    if (!removed) {
+      throw new Error("Project member not found");
+    }
+    return;
+  }
+
+  const supabase = await loadSupabaseClient();
+  const { error, count } = await supabase
+    .from("project_members")
+    .delete({ count: "exact" })
+    .eq("project_id", input.projectId)
+    .eq("profile_id", input.userId);
+
+  if (error) {
+    throw error;
+  }
+
+  if (!count) {
+    throw new ProjectMemberRemoveNotPermittedError(input.projectId, input.userId);
+  }
+}
+
+export class ProjectInviteNoLongerPendingError extends Error {
+  constructor(public readonly inviteId: string) {
+    super(`Invite ${inviteId} is no longer pending; it was accepted, revoked or expired concurrently.`);
+    this.name = "ProjectInviteNoLongerPendingError";
+  }
+}
+
+/**
+ * Revokes a pending invite (status → 'revoked'), keeping the row for history.
+ *
+ * Deliberately a dedicated status-only UPDATE: `updateWorkspaceProjectInvite`
+ * always writes `viewer_regime ?? null` and would clobber axes on a partial
+ * call. The `.eq("status", "pending")` guard makes a concurrent accept lose
+ * gracefully instead of flipping an accepted invite to revoked.
+ *
+ * DB truth: the UPDATE re-runs the delegation trigger against the row's final
+ * values, so a co_owner cannot revoke a co_owner invite or one whose axes
+ * exceed their caps — callers pre-gate with `canRevokeInvite`.
+ */
+export async function revokeWorkspaceProjectInvite(
+  mode: WorkspaceMode | RuntimeWorkspaceMode,
+  input: { id: string; projectId: string },
+): Promise<WorkspaceProjectInvite> {
+  if (mode.kind === "guest") {
+    throw new Error("An authenticated Supabase session is required.");
+  }
+
+  if (isBrowserWorkspaceMode(mode)) {
+    const current = store.getProjectInvitesForMode(mode.kind, input.projectId).find((invite) => invite.id === input.id);
+    if (!current || current.status !== "pending") {
+      throw new ProjectInviteNoLongerPendingError(input.id);
+    }
+    const updated = store.updateProjectInvite(input.id, { status: "revoked" }, mode.kind);
+    if (!updated) {
+      throw new Error("Project invite not found");
+    }
+    return updated;
+  }
+
+  const supabase = await loadSupabaseClient();
+  const { data, error } = await supabase
+    .from("project_invites")
+    .update({ status: "revoked" })
+    .eq("id", input.id)
+    .eq("project_id", input.projectId)
+    .eq("status", "pending")
+    .select("*")
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data) {
+    throw new ProjectInviteNoLongerPendingError(input.id);
+  }
+
+  return data;
+}
+
 export async function createWorkspaceProjectInvite(
   mode: WorkspaceMode | RuntimeWorkspaceMode,
   input: {
@@ -1167,7 +1271,11 @@ export async function updateWorkspaceProjectInvite(
       ...(input.internalDocsVisibility !== undefined
         ? { internal_docs_visibility: input.internalDocsVisibility }
         : {}),
-      status: input.status,
+      // status is spread only when explicitly provided — an axis/role edit must
+      // never resurrect a concurrently revoked/accepted invite back to its
+      // stale status (there is no DB status-transition guard). Status changes
+      // go through revokeWorkspaceProjectInvite / accept_project_invite only.
+      ...(input.status !== undefined ? { status: input.status } : {}),
     }, mode.kind);
     if (!updated) {
       throw new Error("Project invite not found");
@@ -1176,17 +1284,20 @@ export async function updateWorkspaceProjectInvite(
   }
 
   const supabase = await loadSupabaseClient();
+  const patch: Record<string, unknown> = {
+    role: input.role,
+    ai_access: input.aiAccess,
+    viewer_regime: input.viewerRegime ?? null,
+    credit_limit: input.creditLimit,
+    finance_visibility: input.financeVisibility,
+    internal_docs_visibility: input.internalDocsVisibility,
+  };
+  if (input.status !== undefined) {
+    patch.status = input.status;
+  }
   const { data, error } = await supabase
     .from("project_invites")
-    .update({
-      role: input.role,
-      ai_access: input.aiAccess,
-      viewer_regime: input.viewerRegime ?? null,
-      credit_limit: input.creditLimit,
-      finance_visibility: input.financeVisibility,
-      internal_docs_visibility: input.internalDocsVisibility,
-      status: input.status,
-    })
+    .update(patch)
     .eq("id", input.id)
     .eq("project_id", input.projectId)
     .select("*")

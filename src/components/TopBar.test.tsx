@@ -9,6 +9,7 @@ import {
   clearDemoSession,
   clearStoredAuthProfile,
   enterDemoSession,
+  isDemoSessionActive,
   setAuthRole,
   setStoredAuthProfile,
 } from "@/lib/auth-state";
@@ -117,15 +118,36 @@ describe("TopBar", () => {
     expect(screen.getByText("Sign in to see usage")).toBeInTheDocument();
   });
 
-  it("shows a fixed demo quota card in demo mode", async () => {
+  it("renders demo chrome instead of an account menu in demo mode", async () => {
     enterDemoSession();
     renderTopBar();
 
-    await openLogoMenu();
+    // The demo strip above the bar carries the honest demo affordances.
+    expect(screen.getByText("Demo mode")).toBeInTheDocument();
+    expect(screen.getByText("Exit demo")).toBeInTheDocument();
+    // The CTA label is responsive (short/full spans), so match by substring.
+    expect(screen.getByRole("link", { name: /Create your own project/ })).toBeInTheDocument();
 
-    // Demo showcase: used 8 of 50 → 42 remaining.
-    expect(screen.getByText("42 of 50 left")).toBeInTheDocument();
+    // The logo menu shrinks to plain navigation: no account row, no credits,
+    // no settings, no role switcher, no logout.
+    fireEvent.pointerDown(screen.getByRole("button", { name: /rovno/i }), { button: 0, ctrlKey: false });
+    await screen.findByRole("menuitem", { name: "Home" });
+    expect(screen.queryByRole("menuitem", { name: "Settings" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Log out" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Change role" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/of \d+ left/)).not.toBeInTheDocument();
     expect(screen.queryByText("Sign in to see usage")).not.toBeInTheDocument();
+  });
+
+  it("exits the demo into a clean non-demo state", async () => {
+    enterDemoSession();
+    renderTopBar();
+
+    fireEvent.click(screen.getByText("Exit demo"));
+
+    await waitFor(() => expect(isDemoSessionActive()).toBe(false));
+    // Demo chrome is gone after the exit.
+    expect(screen.queryByText("Exit demo")).not.toBeInTheDocument();
   });
 
   it("clamps an over-quota chat slot to zero remaining", async () => {

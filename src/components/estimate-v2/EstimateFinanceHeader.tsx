@@ -66,6 +66,11 @@ export interface EstimateFinanceView {
   rpcSummaryTotalIncVatCents: number | null;
   uiTotalIncVatCents: number;
   taxBps: number;
+  /**
+   * True when HR reads are disabled for this role: spentCents excludes payroll
+   * and is lower than the project truth. Spend renders must carry a marker.
+   */
+  spendExcludesHr: boolean;
 }
 
 interface EstimateFinanceHeaderProps {
@@ -204,7 +209,9 @@ export function EstimateFinanceHeader({
         />
         {finished ? (
           <KpiCard
-            label={t("estimate.finance.finalCost")}
+            label={view.spendExcludesHr
+              ? `${t("estimate.finance.finalCost")} (${t("projectData.financeSummary.withoutHr")})`
+              : t("estimate.finance.finalCost")}
             value={formatCompactMoney(view.spentCents, currency)}
             sub={t("estimate.finance.finalCostPlan", { value: formatCompactMoney(view.costTotalCents, currency) })}
           />
@@ -266,6 +273,9 @@ export function EstimateFinanceHeader({
               <span className={cn("font-medium tabular-nums", overspend ? "text-destructive" : "text-foreground")}>
                 {view.hasActualFinancialData ? formatCompactMoney(view.spentCents, currency) : "—"}
               </span>
+              {view.hasActualFinancialData && view.spendExcludesHr && (
+                <span className="ml-1 text-muted-foreground">({t("projectData.financeSummary.withoutHr")})</span>
+              )}
               {view.hasActualFinancialData && view.utilizationPct != null && (
                 <span className={cn("ml-1.5", overspend ? "text-destructive" : "text-muted-foreground")}>
                   · {t("estimate.finance.utilizationOfCost", { pct: Math.round(view.utilizationPct) })}
@@ -331,7 +341,11 @@ export function EstimateFinanceHeader({
                 <div className="grid grid-cols-[minmax(0,1fr)_minmax(92px,auto)_minmax(92px,auto)] gap-3 px-3 text-[13px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
                   <span>{t("estimate.costOverview.col.category")}</span>
                   <span className="text-right">{t("estimate.costOverview.col.planned")}</span>
-                  <span className="text-right">{t("estimate.costOverview.col.actual")}</span>
+                  <span className="text-right">
+                    {view.spendExcludesHr
+                      ? `${t("estimate.costOverview.col.actual")} (${t("projectData.financeSummary.withoutHr")})`
+                      : t("estimate.costOverview.col.actual")}
+                  </span>
                 </div>
                 {RESOURCE_TYPE_ORDER.map((type) => (
                   <div

@@ -9,7 +9,7 @@ import {
   Plus, FileText, Upload, CreditCard, AlertTriangle,
   Clock, CheckCircle2, FolderOpen, ChevronRight,
 } from "lucide-react";
-import { useProjects, useCurrentUser } from "@/hooks/use-mock-data";
+import { useProjects, useCurrentUser, useWorkspaceMode } from "@/hooks/use-mock-data";
 import { useProjectsRecentEventsMap } from "@/hooks/use-activity-source";
 import * as store from "@/data/store";
 import { OrgBlock } from "@/components/home/OrgBlock";
@@ -33,6 +33,10 @@ export function OverviewTab() {
   const navigate = useNavigate();
   const projects = useProjects();
   const user = useCurrentUser();
+  const workspaceMode = useWorkspaceMode();
+  // The demo is a mockup, not an account: /settings (incl. billing) is
+  // unreachable there, so don't offer a quick action that would dead-end.
+  const isDemo = workspaceMode.kind === "demo";
   const allTasks = store.getAllTasks();
 
   const upcomingTasks = allTasks
@@ -83,10 +87,15 @@ export function OverviewTab() {
         <Button size="sm" variant="outline" onClick={() => navigate("/home?tab=documents")}>
           <Upload className="h-3.5 w-3.5 mr-1.5" /> {t("overview.uploadDocument")}
         </Button>
-        <Button size="sm" variant="outline" onClick={() => navigate("/settings?tab=billing")}>
-          <CreditCard className="h-3.5 w-3.5 mr-1.5" /> {t("overview.billing")}
-        </Button>
+        {!isDemo && (
+          <Button size="sm" variant="outline" onClick={() => navigate("/settings?tab=billing")}>
+            <CreditCard className="h-3.5 w-3.5 mr-1.5" /> {t("overview.billing")}
+          </Button>
+        )}
       </div>
+
+      {/* Demo→signup CTA lives in AppLayout (bottom of every demo page), so the
+          overview deliberately carries no extra copy of it. */}
 
       <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
         {/* Left column */}

@@ -1,6 +1,7 @@
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Globe, Home, LogOut, Newspaper, Settings, Sparkles, UserCog } from "lucide-react";
+import { Globe, Home, LogOut, Newspaper, Plus, Settings, Sparkles, UserCog } from "lucide-react";
+import { trackEvent } from "@/lib/analytics";
 import {
   Sheet,
   SheetContent,
@@ -21,6 +22,7 @@ interface MobileNavSheetProps {
   onSetAiSidebarOpen?: (open: boolean) => void;
   onOpenRoleDialog: () => void;
   onLogout: () => void;
+  onExitDemo: () => void;
 }
 
 const ROW_BASE =
@@ -38,13 +40,17 @@ export function MobileNavSheet({
   onSetAiSidebarOpen,
   onOpenRoleDialog,
   onLogout,
+  onExitDemo,
 }: MobileNavSheetProps) {
   const { t } = useTranslation();
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const projects = useProjects();
   const workspaceMode = useWorkspaceMode();
-  const showRoleSwitcher = workspaceMode.kind === "demo" || workspaceMode.kind === "local";
+  const isDemo = workspaceMode.kind === "demo";
+  // The role simulator is a dev-playground tool (local mode only); the demo is
+  // a sandboxed mockup and must not carry account-looking controls.
+  const showRoleSwitcher = workspaceMode.kind === "local";
 
   const visibleProjectTabs = useVisibleProjectTabs(projectId);
   const inProject = Boolean(projectId);
@@ -68,6 +74,14 @@ export function MobileNavSheet({
       >
         <SheetHeader className="flex flex-row items-center gap-2 border-b border-border px-sp-3 py-sp-2 text-left">
           <img src="/logo.svg" alt={t("nav.appName")} className="h-7 w-auto" />
+          {isDemo && (
+            <span
+              className="inline-flex shrink-0 items-center rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-caption font-medium text-warning"
+              title={t("demo.badgeHint")}
+            >
+              {t("demo.badge")}
+            </span>
+          )}
           <SheetTitle className="sr-only">{t("nav.menu")}</SheetTitle>
         </SheetHeader>
 
@@ -129,14 +143,16 @@ export function MobileNavSheet({
               </button>
             ) : null}
 
-            <Link
-              to="/settings"
-              onClick={close}
-              className={cn(ROW_BASE, isSettings && ROW_ACTIVE)}
-            >
-              <Settings className="h-4 w-4" />
-              <span>{t("nav.settings")}</span>
-            </Link>
+            {!isDemo && (
+              <Link
+                to="/settings"
+                onClick={close}
+                className={cn(ROW_BASE, isSettings && ROW_ACTIVE)}
+              >
+                <Settings className="h-4 w-4" />
+                <span>{t("nav.settings")}</span>
+              </Link>
+            )}
 
             {showRoleSwitcher ? (
               <button
@@ -162,17 +178,44 @@ export function MobileNavSheet({
               <span>{t("nav.toSite")}</span>
             </Link>
 
-            <button
-              type="button"
-              onClick={() => {
-                close();
-                onLogout();
-              }}
-              className={cn(ROW_BASE, "w-full text-left")}
-            >
-              <LogOut className="h-4 w-4" />
-              <span>{t("nav.logout")}</span>
-            </button>
+            {isDemo ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    close();
+                    onExitDemo();
+                  }}
+                  className={cn(ROW_BASE, "w-full text-left")}
+                >
+                  <LogOut className="h-4 w-4" />
+                  <span>{t("demo.exit")}</span>
+                </button>
+                <Link
+                  to="/auth/signup"
+                  onClick={() => {
+                    trackEvent("demo_signup_cta_clicked");
+                    close();
+                  }}
+                  className={cn(ROW_BASE, "mt-1 bg-accent text-accent-foreground hover:bg-accent/90 focus-visible:bg-accent/90")}
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>{t("demo.createOwn")}</span>
+                </Link>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  close();
+                  onLogout();
+                }}
+                className={cn(ROW_BASE, "w-full text-left")}
+              >
+                <LogOut className="h-4 w-4" />
+                <span>{t("nav.logout")}</span>
+              </button>
+            )}
           </nav>
 
           {projects.length > 0 && (

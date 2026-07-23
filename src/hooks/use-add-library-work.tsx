@@ -5,6 +5,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
+import { trackEvent } from "@/lib/analytics";
+import { captureException } from "@/lib/observability/sentry";
 import {
   deleteWork,
   ensureRemoteEstimateVersionId,
@@ -95,7 +97,16 @@ export function useAddLibraryWork(
             // and atomic — no positional mapping, no visibility-gated client prune.
             p_excluded_template_resource_line_ids: work.excludedResourceLineIds,
           });
-          if (error || !data) continue;
+          if (error || !data) {
+            // Per-work failures are tolerated for partial-add UX — report the
+            // swallowed error so it still surfaces in Sentry.
+            if (error) {
+              captureException(error, {
+                tags: { source: "rpc", rpc: "add_library_work_to_estimate" },
+              });
+            }
+            continue;
+          }
           const result = data as { work_id?: string };
           if (result.work_id) addedWorkIds.push(result.work_id);
         }
@@ -111,6 +122,8 @@ export function useAddLibraryWork(
           toast({ title: t("estimate.constructor.applyRefreshFailed"), variant: "destructive" });
           return;
         }
+
+        trackEvent("work_applied_via_constructor", { count: addedWorkIds.length });
 
         const { dismiss } = toast({
           title: t("estimate.constructor.worksAdded", { count: addedWorkIds.length }),

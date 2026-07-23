@@ -2834,6 +2834,56 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "draft_seq",
+          "sqlType": "bigint",
+          "tsType": "number",
+          "nullable": false,
+          "defaultSql": "0",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "projection_revision",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "projection_seq",
+          "sqlType": "bigint",
+          "tsType": "number",
+          "nullable": false,
+          "defaultSql": "0",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "projection_synced_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "projection_actor",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -2856,6 +2906,16 @@
           "expression": "execution_status is null\n    or execution_status in ('planning', 'in_work', 'paused', 'finished')",
           "usingIndex": null,
           "sourceMigration": "supabase/migrations/20260611120000_project_estimates_execution_status.sql"
+        },
+        {
+          "type": "foreign_key",
+          "name": "project_estimates_projection_actor_fkey",
+          "columns": [
+            "projection_actor"
+          ],
+          "expression": null,
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260712130000_estimate_projection_infra.sql"
         }
       ],
       "indexes": [
@@ -2869,6 +2929,17 @@
           "where": null,
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        },
+        {
+          "name": "idx_project_estimates_project_id_unique",
+          "unique": true,
+          "method": null,
+          "expressions": [
+            "project_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260712130000_estimate_projection_infra.sql"
         }
       ],
       "triggers": [
@@ -2879,6 +2950,14 @@
           "functionName": "set_updated_at",
           "functionSignature": "public.set_updated_at()",
           "sourceMigration": "supabase/migrations/20260306162500_estimates_core.sql"
+        },
+        {
+          "name": "guard_estimate_coordination_columns",
+          "activation": "before insert or update",
+          "functionSchema": "public",
+          "functionName": "guard_estimate_coordination_columns",
+          "functionSignature": "public.guard_estimate_coordination_columns()",
+          "sourceMigration": "supabase/migrations/20260712130000_estimate_projection_infra.sql"
         }
       ]
     },
@@ -3551,7 +3630,16 @@
           "sourceMigration": "supabase/migrations/20260602150100_instance_tables_library_fks.sql"
         }
       ],
-      "triggers": []
+      "triggers": [
+        {
+          "name": "unlink_projection_lineage_on_line_delete",
+          "activation": "before delete",
+          "functionSchema": "public",
+          "functionName": "unlink_projection_lineage_on_line_delete",
+          "functionSignature": "public.unlink_projection_lineage_on_line_delete()",
+          "sourceMigration": "supabase/migrations/20260712130200_sync_estimate_projection_rpc.sql"
+        }
+      ]
     },
     {
       "schema": "public",
@@ -3793,8 +3881,8 @@
         },
         {
           "name": "identity_key",
-          "sqlType": "text\n  generated always as (public.inventory_item_identity(title, notes, unit)) stored",
-          "tsType": "unknown",
+          "sqlType": "text",
+          "tsType": "string",
           "nullable": true,
           "defaultSql": null,
           "primaryKey": false,
@@ -10395,6 +10483,16 @@
           "primaryKey": false,
           "unique": false,
           "references": null
+        },
+        {
+          "name": "order_attempt",
+          "sqlType": "smallint",
+          "tsType": "number",
+          "nullable": false,
+          "defaultSql": "0",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
         }
       ],
       "constraints": [
@@ -10465,6 +10563,16 @@
           "usingIndex": null,
           "nullsNotDistinct": false,
           "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "order_attempt"
+          ],
+          "expression": "order_attempt >= 0 and order_attempt <= 99",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260720120000_payment_intents_order_attempt.sql"
         }
       ],
       "indexes": [
@@ -10523,6 +10631,18 @@
           "where": "parent_intent_id is not null",
           "attachedConstraintName": null,
           "sourceMigration": "supabase/migrations/20260516120100_create_payment_intents.sql"
+        },
+        {
+          "name": "uq_payment_intents_id_profile_id",
+          "unique": true,
+          "method": null,
+          "expressions": [
+            "id",
+            "profile_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260716205000_payment_intents_operation_identity_key.sql"
         }
       ],
       "triggers": [
@@ -11902,6 +12022,135 @@
           "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
         }
       ]
+    },
+    {
+      "schema": "public",
+      "name": "project_sync_events",
+      "sourceMigration": "supabase/migrations/20260712130000_estimate_projection_infra.sql",
+      "columns": [
+        {
+          "name": "id",
+          "sqlType": "bigint",
+          "tsType": "number",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": true,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "project_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "projects",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "cascade"
+          }
+        },
+        {
+          "name": "kind",
+          "sqlType": "text",
+          "tsType": "\"projection\" | \"estimate_draft\" | \"tasks\" | \"checklist\" | \"procurement\" | \"hr\" | \"hr_payments\" | \"members\"",
+          "nullable": false,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "revision",
+          "sqlType": "text",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": null,
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        },
+        {
+          "name": "actor_profile_id",
+          "sqlType": "uuid",
+          "tsType": "string",
+          "nullable": true,
+          "defaultSql": "auth.uid()",
+          "primaryKey": false,
+          "unique": false,
+          "references": {
+            "toSchema": "public",
+            "toTable": "profiles",
+            "toColumns": [
+              "id"
+            ],
+            "onDelete": "set null"
+          }
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamptz",
+          "tsType": "string",
+          "nullable": false,
+          "defaultSql": "now()",
+          "primaryKey": false,
+          "unique": false,
+          "references": null
+        }
+      ],
+      "constraints": [
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "kind"
+          ],
+          "expression": "kind in ('projection', 'estimate_draft', 'tasks', 'checklist', 'procurement', 'hr', 'hr_payments', 'members')",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260712130000_estimate_projection_infra.sql"
+        },
+        {
+          "type": "check",
+          "name": null,
+          "columns": [
+            "revision"
+          ],
+          "expression": "revision is null or char_length(revision) <= 200",
+          "usingIndex": null,
+          "sourceMigration": "supabase/migrations/20260712130000_estimate_projection_infra.sql"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_project_sync_events_project_id_id",
+          "unique": false,
+          "method": null,
+          "expressions": [
+            "project_id",
+            "id desc"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260712130000_estimate_projection_infra.sql"
+        },
+        {
+          "name": "idx_project_sync_events_actor_profile_id",
+          "unique": false,
+          "method": null,
+          "expressions": [
+            "actor_profile_id"
+          ],
+          "where": null,
+          "attachedConstraintName": null,
+          "sourceMigration": "supabase/migrations/20260712130000_estimate_projection_infra.sql"
+        }
+      ],
+      "triggers": []
     }
   ]
 }

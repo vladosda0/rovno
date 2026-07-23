@@ -135,7 +135,7 @@ describe("EstimateConstructor", () => {
     ]);
   });
 
-  it("add-resource (catalog) mode: clicking a catalog leaf calls onAddCatalogResource", () => {
+  it("add-resource (catalog) mode: Add button adds one unit by default", () => {
     catalogRef.value = {
       mode: "drill",
       subcategory: "Сыпучие",
@@ -156,9 +156,43 @@ describe("EstimateConstructor", () => {
       initialTab: "catalog",
       onAddCatalogResource,
     });
-    // estimates tab is disabled in add-resource mode; the catalog leaf is clickable
+    // estimates tab is disabled in add-resource mode; the Add button commits the leaf.
     expect(screen.getByText("estimate.constructor.tabs.estimates").closest("button")).toBeDisabled();
-    fireEvent.click(screen.getByText("Песок речной"));
-    expect(onAddCatalogResource).toHaveBeenCalledWith(expect.objectContaining({ id: "r1", name: "Песок речной" }));
+    fireEvent.click(screen.getByText("estimate.constructor.catalogAddAction"));
+    expect(onAddCatalogResource).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "r1", name: "Песок речной" }),
+      1,
+    );
+  });
+
+  it("add-resource (catalog) mode: the stepper sets how many units Add sends", () => {
+    catalogRef.value = {
+      mode: "drill",
+      subcategory: "Сыпучие",
+      resources: [
+        {
+          id: "r1",
+          name: "Песок речной",
+          defaultResourceType: "material",
+          unitDisplay: "м³",
+          rovnoSku: "RS-SAND-001",
+          subcategory: "Сыпучие",
+        },
+      ],
+    };
+    const onAddCatalogResource = vi.fn();
+    renderConstructor({
+      target: { stageId: "ps-target", workId: "pw-target" },
+      initialTab: "catalog",
+      onAddCatalogResource,
+    });
+    // Bump the quantity to 3 via the + button, then add.
+    fireEvent.click(screen.getByLabelText("Песок речной +"));
+    fireEvent.click(screen.getByLabelText("Песок речной +"));
+    fireEvent.click(screen.getByText("estimate.constructor.catalogAddAction"));
+    expect(onAddCatalogResource).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "r1" }),
+      3,
+    );
   });
 });

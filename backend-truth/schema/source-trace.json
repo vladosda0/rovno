@@ -359,6 +359,12 @@
       "schema": "public",
       "table": "user_catalog_items",
       "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+    },
+    {
+      "key": "public.project_sync_events",
+      "schema": "public",
+      "table": "project_sync_events",
+      "sourceMigration": "supabase/migrations/20260712130000_estimate_projection_infra.sql"
     }
   ],
   "functions": [
@@ -1145,6 +1151,41 @@
       "name": "create_user_catalog",
       "signature": "public.create_user_catalog(text, text, jsonb)",
       "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+    },
+    {
+      "key": "public.guard_estimate_coordination_columns",
+      "schema": "public",
+      "name": "guard_estimate_coordination_columns",
+      "signature": "public.guard_estimate_coordination_columns()",
+      "sourceMigration": "supabase/migrations/20260712130000_estimate_projection_infra.sql"
+    },
+    {
+      "key": "public.unlink_projection_lineage_on_line_delete",
+      "schema": "public",
+      "name": "unlink_projection_lineage_on_line_delete",
+      "signature": "public.unlink_projection_lineage_on_line_delete()",
+      "sourceMigration": "supabase/migrations/20260712130200_sync_estimate_projection_rpc.sql"
+    },
+    {
+      "key": "public.sync_estimate_projection",
+      "schema": "public",
+      "name": "sync_estimate_projection",
+      "signature": "public.sync_estimate_projection(uuid, text)",
+      "sourceMigration": "supabase/migrations/20260712130200_sync_estimate_projection_rpc.sql"
+    },
+    {
+      "key": "public.set_estimate_current_version",
+      "schema": "public",
+      "name": "set_estimate_current_version",
+      "signature": "public.set_estimate_current_version(uuid, uuid)",
+      "sourceMigration": "supabase/migrations/20260712130200_sync_estimate_projection_rpc.sql"
+    },
+    {
+      "key": "public.change_task_status_v2",
+      "schema": "public",
+      "name": "change_task_status_v2",
+      "signature": "public.change_task_status_v2(uuid, text, text, text)",
+      "sourceMigration": "supabase/migrations/20260713150000_change_task_status_v2.sql"
     }
   ],
   "policies": [
@@ -2507,6 +2548,22 @@
       "name": "user_catalog_items_delete",
       "command": "delete",
       "sourceMigration": "supabase/migrations/20260706140000_user_catalogs.sql"
+    },
+    {
+      "key": "public.project_sync_events.project_sync_events_insert",
+      "schema": "public",
+      "table": "project_sync_events",
+      "name": "project_sync_events_insert",
+      "command": "insert",
+      "sourceMigration": "supabase/migrations/20260712130000_estimate_projection_infra.sql"
+    },
+    {
+      "key": "public.project_sync_events.project_sync_events_select",
+      "schema": "public",
+      "table": "project_sync_events",
+      "name": "project_sync_events_select",
+      "command": "select",
+      "sourceMigration": "supabase/migrations/20260713110100_project_sync_events_sensitivity_policy.sql"
     }
   ],
   "slices": [
@@ -2682,6 +2739,7 @@
         "supabase/migrations/20260320110000_task_final_media_contract.sql",
         "supabase/migrations/20260602150100_instance_tables_library_fks.sql",
         "supabase/migrations/20260416120000_session2_ai_humanize_tasks_hr.sql",
+        "supabase/migrations/20260713150000_change_task_status_v2.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql"
       ],
       "tables": [
@@ -2691,7 +2749,8 @@
         "public.task_checklist_items"
       ],
       "functions": [
-        "public.get_tasks_ai_operational_evidence"
+        "public.get_tasks_ai_operational_evidence",
+        "public.change_task_status_v2"
       ],
       "policies": [
         "public.project_stages.project_stages_select",
@@ -2976,6 +3035,7 @@
       "kind": "derived_contract_bundle",
       "sourceMigrations": [
         "supabase/migrations/20260306162500_estimates_core.sql",
+        "supabase/migrations/20260712130000_estimate_projection_infra.sql",
         "supabase/migrations/20260306163500_procurement_orders_and_inventory_movements.sql",
         "supabase/migrations/20260306164000_hr_domain.sql",
         "supabase/migrations/20260313183000_tasks_estimate_work_lineage.sql",
@@ -2987,22 +3047,27 @@
         "supabase/migrations/20260513120000_harden_share_rpcs_codex_followup.sql",
         "supabase/migrations/20260611120100_get_portfolio_finance_snapshot.sql",
         "supabase/migrations/20260622120000_tighten_price_comparison_finance_gate.sql",
+        "supabase/migrations/20260712130200_sync_estimate_projection_rpc.sql",
         "supabase/migrations/20260306170000_grants_rls_enablement_and_policies.sql",
-        "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql"
+        "supabase/migrations/20260325100000_sensitive_visibility_and_document_classification.sql",
+        "supabase/migrations/20260713110100_project_sync_events_sensitivity_policy.sql"
       ],
       "tables": [
         "public.project_estimates",
         "public.estimate_versions",
         "public.estimate_works",
         "public.estimate_resource_lines",
-        "public.estimate_dependencies"
+        "public.estimate_dependencies",
+        "public.project_sync_events"
       ],
       "functions": [
         "public.get_estimate_operational_summary",
         "public.get_shared_estimate_version",
         "public.approve_estimate_version_by_share_token",
         "public.get_portfolio_finance_snapshot",
-        "public.get_resource_article_price_comparison"
+        "public.get_resource_article_price_comparison",
+        "public.sync_estimate_projection",
+        "public.set_estimate_current_version"
       ],
       "policies": [
         "public.project_estimates.project_estimates_select",
@@ -3024,7 +3089,9 @@
         "public.estimate_dependencies.estimate_dependencies_select",
         "public.estimate_dependencies.estimate_dependencies_insert",
         "public.estimate_dependencies.estimate_dependencies_update",
-        "public.estimate_dependencies.estimate_dependencies_delete"
+        "public.estimate_dependencies.estimate_dependencies_delete",
+        "public.project_sync_events.project_sync_events_insert",
+        "public.project_sync_events.project_sync_events_select"
       ],
       "relations": [
         {
@@ -3121,6 +3188,21 @@
           "from": "public.estimate_resource_lines",
           "to": "public.system_resource_articles",
           "sourceMigration": "supabase/migrations/20260602150100_instance_tables_library_fks.sql"
+        },
+        {
+          "from": "public.project_estimates",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260712130000_estimate_projection_infra.sql"
+        },
+        {
+          "from": "public.project_sync_events",
+          "to": "public.projects",
+          "sourceMigration": "supabase/migrations/20260712130000_estimate_projection_infra.sql"
+        },
+        {
+          "from": "public.project_sync_events",
+          "to": "public.profiles",
+          "sourceMigration": "supabase/migrations/20260712130000_estimate_projection_infra.sql"
         }
       ]
     },

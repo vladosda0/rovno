@@ -95,7 +95,7 @@ import { ItemTypePicker } from "@/components/procurement/ItemTypePicker";
 import { LocationPicker } from "@/components/procurement/LocationPicker";
 import { ResourceTypeBadge } from "@/components/estimate-v2/ResourceTypeBadge";
 import { isProcurementResourceLineType, resourceLineTypeToPersisted, projectToProcurementItemType } from "@/lib/estimate-v2/resource-type-contract";
-import { useEstimateV2Project } from "@/hooks/use-estimate-v2-data";
+import { useEstimateV2Project, useEstimateV2ProjectionCapability } from "@/hooks/use-estimate-v2-data";
 import { useReceiveCrossProjectTransfer } from "@/hooks/use-cross-project-transfer";
 import { inventoryQueryKeys } from "@/hooks/use-inventory-data";
 import {
@@ -335,11 +335,16 @@ export default function ProjectProcurement() {
     : undefined;
   const visibleTabs = TABS;
   const procurementSyncState = estimateSync.domains.procurement;
-  const isProcurementSyncing = isSupabaseMode && procurementSyncState.status === "syncing";
-  const hasProcurementSyncError = isSupabaseMode && procurementSyncState.status === "error";
-  const isProcurementProjectionBehind = isSupabaseMode
+  // Sync-state gating is only meaningful for the session that runs projections;
+  // readers consume the DB truth via react-query (see ProjectTasks for details).
+  const projectionCapability = useEstimateV2ProjectionCapability(pid);
+  const isProjectorSession = isSupabaseMode && projectionCapability === "projector";
+  const isProcurementSyncing = isProjectorSession && procurementSyncState.status === "syncing";
+  const hasProcurementSyncError = isProjectorSession && procurementSyncState.status === "error";
+  const isProcurementProjectionBehind = isProjectorSession
     && canManageProcurement
     && estimateState.project.estimateStatus !== "planning"
+    && procurementSyncState.status !== "skipped"
     && procurementSyncState.projectedRevision !== estimateSync.estimateRevision
     && !isProcurementSyncing
     && !hasProcurementSyncError;
@@ -1753,6 +1758,16 @@ export default function ProjectProcurement() {
   };
 
   if (estimateState.project.estimateStatus === "planning") {
+    // While the estimate hydrates, the status defaults to "planning" — showing
+    // the "start planning" gate for an actually-launched project is a lie.
+    if (isSupabaseMode && estimateState.isLoading) {
+      return (
+        <div className="space-y-3 p-sp-2" data-testid="procurement-loading-skeleton">
+          <Skeleton className="h-16 rounded-card" />
+          <Skeleton className="h-40 rounded-card" />
+        </div>
+      );
+    }
     return (
       <ProjectWorkflowEmptyState
         variant="procurement"
@@ -1862,7 +1877,7 @@ export default function ProjectProcurement() {
 
       <div className="glass rounded-card p-2">
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 md:shrink-0">
             {visibleTabs.map((tab) => {
               const stat = tab === "requested"
                 ? chipTotals.requested
@@ -1888,7 +1903,7 @@ export default function ProjectProcurement() {
             })}
           </div>
 
-          <div className="relative w-full md:w-[320px]">
+          <div className="relative w-full min-w-0 md:max-w-md md:flex-1">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
               value={search}

@@ -1,8 +1,13 @@
+import { useLayoutEffect } from "react";
 import { Outlet, Navigate, useParams, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
+import { ProjectSyncIndicator } from "@/components/project/ProjectSyncIndicator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { registerEstimateV2ProjectAccessContext } from "@/data/estimate-v2-store";
+import { useProjectRealtimeInvalidation } from "@/hooks/use-project-realtime-invalidation";
+import { useProjectSyncGuards } from "@/hooks/use-project-sync-guards";
 import { useWorkspaceMode, useWorkspaceProjectState } from "@/hooks/use-workspace-source";
 import { projectDomainAllowsRoute, usePermission, type ProjectDomain } from "@/lib/permissions";
 
@@ -41,9 +46,36 @@ export default function ProjectLayout() {
   const navigate = useNavigate();
   const workspaceMode = useWorkspaceMode();
   const perm = usePermission(id ?? "");
+  // P2 cross-session truth: realtime invalidation feed + flush/unload guards.
+  const syncFeedHealth = useProjectRealtimeInvalidation(id);
+  useProjectSyncGuards(id);
   const { project, isLoading: isProjectLoading } = useWorkspaceProjectState(id ?? "");
   const routeSegment = location.pathname.split("/")[3] ?? null;
   const routeDomain = routeSegment ? (ROUTE_DOMAIN_BY_SEGMENT[routeSegment] ?? null) : null;
+
+  // Register the estimate access context for EVERY project page, not only the
+  // two pages that historically registered it (Estimate, Procurement). Without
+  // this, a cold load of Tasks/HR/Dashboard leaves the session's projection
+  // capability unknown ("reader"), silencing the owner's persisted sync
+  // error/behind state; it also re-stamps identity on account switches so the
+  // previous user's runtime state is cleared at the first project entry.
+  const membershipRole = perm.seam.membership?.role ?? null;
+  const membershipFinanceVisibility = perm.seam.membership?.finance_visibility ?? null;
+  const supabaseProfileId = workspaceMode.kind === "supabase" ? workspaceMode.profileId : null;
+  const projectOwnerProfileId = project?.owner_id ?? null;
+  useLayoutEffect(() => {
+    if (!id || !supabaseProfileId || !projectOwnerProfileId || perm.isLoading) return;
+    registerEstimateV2ProjectAccessContext(id, {
+      mode: "supabase",
+      profileId: supabaseProfileId,
+      projectOwnerProfileId,
+      membershipRole,
+      financeVisibility: membershipFinanceVisibility,
+    });
+    // No cleanup: the retained-context fallback owns post-unmount semantics;
+    // pages that register their own context (Estimate, Procurement) overwrite
+    // this registration with the same session key.
+  }, [id, supabaseProfileId, projectOwnerProfileId, membershipRole, membershipFinanceVisibility, perm.isLoading]);
 
   // Redirect /project/:id to /project/:id/dashboard
   if (location.pathname === `/project/${id}`) {
@@ -89,6 +121,7 @@ export default function ProjectLayout() {
       <div className="flex-1 p-sp-3">
         <Outlet />
       </div>
+      {id && <ProjectSyncIndicator projectId={id} feedHealth={syncFeedHealth} />}
     </div>
   );
 }

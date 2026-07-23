@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { useWorkspaceMode } from "@/hooks/use-mock-data";
 import { ChevronLeft, Settings as SettingsIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SettingsNav, type SettingsTab } from "@/components/settings/SettingsNav";
@@ -27,6 +28,7 @@ function getTabFromParam(param: string | null): SettingsTab {
 
 export default function Settings() {
   const { t } = useTranslation();
+  const workspaceMode = useWorkspaceMode();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<SettingsTab>(() => getTabFromParam(searchParams.get("tab")));
 
@@ -36,6 +38,13 @@ export default function Settings() {
     const resolved = getTabFromParam(tabParam);
     if (resolved !== activeTab) setActiveTab(resolved);
   }, [searchParams]);
+
+  // The demo is a sandboxed mockup, not an account — there is nothing real to
+  // configure, so settings are unreachable while the demo session is active
+  // (the demo chrome also renders no link here; this guards direct URLs).
+  if (workspaceMode.kind === "demo") {
+    return <Navigate to="/home" replace />;
+  }
 
   const handleTabChange = (tab: SettingsTab) => {
     setActiveTab(tab);

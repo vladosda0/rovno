@@ -1,6 +1,7 @@
 import { getProjects } from "@/data/store";
 import { getAllProcurementItemsV2 } from "@/data/procurement-store";
 import { normalizeName } from "@/lib/procurement-utils";
+import { onDemoSessionDeactivated } from "@/lib/auth-state";
 import type { InventoryLocation } from "@/types/entities";
 
 export interface InventoryStockRow {
@@ -71,7 +72,7 @@ function setStockNoNotify(projectId: string, locationId: string, inventoryKey: s
   stock.set(key, qty);
 }
 
-(function seedInventoryState() {
+function seedInventoryState() {
   const projects = getProjects();
   projects.forEach((project) => {
     ensureLocationList(project.id);
@@ -87,7 +88,21 @@ function setStockNoNotify(projectId: string, locationId: string, inventoryKey: s
     const current = stock.get(stockCellKey(locationId, key)) ?? 0;
     setStockNoNotify(item.projectId, locationId, key, current + item.receivedQty);
   });
-})();
+}
+
+seedInventoryState();
+
+// Pristine-re-entry: rebuild the demo stock from the (already-reset) demo
+// procurement seed when the demo session ends. Clear first — the maps are
+// additive (ensureStockMap accumulates receivedQty), so re-seeding without a
+// clear would double-count. procurement-store registers earlier (this store
+// imports it), so its reset runs before this re-seed reads the fresh seed.
+onDemoSessionDeactivated(() => {
+  locationsByProject.clear();
+  stockByProject.clear();
+  seedInventoryState();
+  notify();
+});
 
 export function subscribeInventory(listener: Listener): () => void {
   listeners.add(listener);

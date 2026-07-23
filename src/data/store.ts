@@ -22,6 +22,7 @@ import {
   getStoredAuthProfile,
   isAuthenticated,
   isDemoSessionActive,
+  onDemoSessionDeactivated,
   type StoredAuthProfile,
 } from "@/lib/auth-state";
 import {
@@ -654,6 +655,16 @@ export function updateMember(projectId: string, userId: string, partial: Partial
   return updated;
 }
 
+export function removeMember(projectId: string, userId: string, mode?: BrowserWorkspaceKind): boolean {
+  let removed = false;
+  updateWorkspaceState((state) => {
+    const next = state.members.filter((member) => !(member.project_id === projectId && member.user_id === userId));
+    removed = next.length !== state.members.length;
+    state.members = next;
+  }, mode);
+  return removed;
+}
+
 export function addProjectInvite(invite: WorkspaceProjectInvite, mode?: BrowserWorkspaceKind) {
   updateWorkspaceState((state) => {
     state.invites = [...state.invites, invite];
@@ -842,6 +853,26 @@ export function deleteChecklistItem(taskId: string, itemId: string) {
     );
   });
 }
+
+/**
+ * Reset the demo workspace to its pristine seeded state so a later re-entry
+ * in the same tab starts from the showcase data, not from whatever the
+ * visitor edited while playing around.
+ */
+function resetDemoState() {
+  try {
+    sessionStorage.removeItem(DEMO_STATE_KEY);
+  } catch {
+    // Ignore storage failures; the in-memory reset below still applies.
+  }
+  demoState = sanitizeDemoState(createSeededDemoState());
+  notify();
+}
+
+// Pristine-re-entry contract: the demo resets whenever the demo session ends,
+// whatever the exit door — the explicit exit control, a login/signup success,
+// or logout — since every door goes through clearDemoSession().
+onDemoSessionDeactivated(resetDemoState);
 
 export function __unsafeResetStoreForTests() {
   demoState = sanitizeDemoState(loadPersistedDemoState() ?? createSeededDemoState());

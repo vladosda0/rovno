@@ -31,6 +31,7 @@ vi.mock("@/data/messenger-links", () => ({
   listLinkedIdentities: (...args: unknown[]) => mockListLinkedIdentities(...args),
   unlinkIdentity: (...args: unknown[]) => mockUnlinkIdentity(...args),
   telegramDeepLink: (code: string) => `https://t.me/rovno_ai_bot?start=${code}`,
+  TELEGRAM_BOT_USERNAME: "rovno_ai_bot",
 }));
 
 vi.mock("react-router-dom", async (importOriginal) => {
@@ -92,5 +93,22 @@ describe("IntegrationsPanel", () => {
     expect(await screen.findByRole("button", { name: CONNECT_BUTTON })).toBeInTheDocument();
     expect(mockListLinkedIdentities).toHaveBeenCalledTimes(1);
     expect(screen.queryByText(SIGN_IN_HINT)).not.toBeInTheDocument();
+  });
+
+  // The bot handle is per-environment config interpolated into the copy. If the
+  // {{bot}} placeholder ever stops being fed, users see a literal "@{{bot}}" and
+  // the deep link points nowhere useful, so pin the rendered handle.
+  it("renders the configured bot handle in the code instructions", async () => {
+    mockUseWorkspaceMode.mockReturnValue({ kind: "supabase", profileId: "profile-1" });
+    mockCreateLinkCode.mockResolvedValue("ABC123");
+
+    render(<IntegrationsPanel />);
+
+    fireEvent.click(await screen.findByRole("button", { name: CONNECT_BUTTON }));
+
+    expect(await screen.findByText(/Open @rovno_ai_bot and send this code/)).toBeInTheDocument();
+    const openBot = screen.getByRole("link", { name: /Open @rovno_ai_bot/ });
+    expect(openBot).toHaveAttribute("href", "https://t.me/rovno_ai_bot?start=ABC123");
+    expect(screen.queryByText(/\{\{bot\}\}/)).not.toBeInTheDocument();
   });
 });

@@ -9,7 +9,7 @@ import type { EstimateV2FinanceProjectSummary } from "@/lib/estimate-v2/finance-
 import { cn } from "@/lib/utils";
 
 interface Props {
-  summary: EstimateV2FinanceProjectSummary | null;
+  summary: (EstimateV2FinanceProjectSummary & { includesHr?: boolean }) | null;
   projectId: string;
   isLoading?: boolean;
   className?: string;
@@ -114,7 +114,9 @@ export function BudgetWidget({ summary, projectId, isLoading, className }: Props
         <MiniCard
           label={t("budgetWidget.utilization")}
           value={formatPct(summary.percentUtilization, 0)}
-          sub={`${t("budgetWidget.spent")}: ${formatCompactMoney(summary.spentCents, currency)}`}
+          sub={`${t("budgetWidget.spent")}: ${formatCompactMoney(summary.spentCents, currency)}${
+            summary.includesHr === false ? ` (${t("projectData.financeSummary.withoutHr")})` : ""
+          }`}
           subClassName={overspend ? "text-destructive" : undefined}
         />
         <MiniCard

@@ -3,9 +3,13 @@ import { Suspense, lazy, useEffect, useState } from "react";
 import { PanelLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TopBar } from "@/components/TopBar";
+import { DemoSignupCta } from "@/components/system/DemoSignupCta";
+import { useWorkspaceMode } from "@/hooks/use-mock-data";
+import { FeedbackWidget } from "@/components/feedback/FeedbackWidget";
 import { subscribePhotoConsult } from "@/lib/photo-consult-store";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
 import { setAnalyticsUserId } from "@/lib/analytics";
+import { setSentryUser } from "@/lib/observability/sentry";
 import {
   readAiSidebarSessionPreference,
   writeAiSidebarSessionPreference,
@@ -37,6 +41,8 @@ export default function AppLayout() {
 
   const hideAi = !location.pathname.startsWith(AI_SIDEBAR_ROUTE_PREFIX);
   const runtimeAuth = useRuntimeAuth();
+  const workspaceMode = useWorkspaceMode();
+  const isDemo = workspaceMode.kind === "demo";
 
   useEffect(() => {
     return subscribePhotoConsult(({ context }) => {
@@ -49,8 +55,10 @@ export default function AppLayout() {
   useEffect(() => {
     if (runtimeAuth.status === "authenticated") {
       setAnalyticsUserId(runtimeAuth.profileId);
+      setSentryUser(runtimeAuth.profileId);
     } else {
       setAnalyticsUserId(null);
+      setSentryUser(null);
     }
   }, [runtimeAuth.status, runtimeAuth.profileId]);
 
@@ -71,16 +79,14 @@ export default function AppLayout() {
         }}
         hideAi={hideAi}
       />
-      {/* TopBar is position:fixed at top: var(--env-banner-h, 0px); the env
-          banner is itself in flow above this wrapper, so we only need to
-          reserve the TopBar height (3rem) here. The previous pt-calc summed
-          both heights and produced a visible empty band. */}
-      <div className="flex flex-1 pt-12">
+      {/* pt reserves the fixed TopBar (3rem) plus the demo strip when a demo
+          session is active (--demo-banner-h is 0px otherwise). */}
+      <div className="flex flex-1 pt-[calc(3rem+var(--demo-banner-h,0px))]">
         {!hideAi && (
           aiSidebarCollapsed ? (
             <div
-              className="sticky z-20 hidden h-[calc(100svh-48px-var(--env-banner-h,0px))] w-12 shrink-0 self-start border-r border-border/60 bg-background/80 pt-3 backdrop-blur supports-[backdrop-filter]:bg-background/70 md:block"
-              style={{ top: "calc(3rem + var(--env-banner-h, 0px))" }}
+              className="sticky z-20 hidden h-[calc(100svh-48px-var(--demo-banner-h,0px))] w-12 shrink-0 self-start border-r border-border/60 bg-background/80 pt-3 backdrop-blur supports-[backdrop-filter]:bg-background/70 md:block"
+              style={{ top: "calc(3rem + var(--demo-banner-h, 0px))" }}
             >
               <button
                 type="button"
@@ -107,8 +113,14 @@ export default function AppLayout() {
           )}
         >
           <Outlet />
+          {/* Demo→signup bridge at the bottom of EVERY demo page: one layout-
+              level mount instead of a copy in each of the ~16 tab screens. */}
+          {isDemo && <DemoSignupCta />}
         </main>
       </div>
+      {/* Observability v1 (R-8): fixed feedback entry point on every
+          authenticated page; renders nothing for guests. */}
+      <FeedbackWidget />
     </div>
   );
 }

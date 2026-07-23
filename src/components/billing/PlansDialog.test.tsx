@@ -68,6 +68,7 @@ describe("PlansDialog downgrade guard", () => {
       subscription: brigadeSub(false), // cancelled: auto_renew = false
       readOnly: false,
       isLoading: false,
+      isError: false,
       refetch: vi.fn(),
     };
 
@@ -89,6 +90,7 @@ describe("PlansDialog downgrade guard", () => {
       subscription: brigadeSub(true), // active, already auto-renewing
       readOnly: false,
       isLoading: false,
+      isError: false,
       refetch: vi.fn(),
     };
 

@@ -92,7 +92,52 @@ export type AnalyticsEventName =
   | "catalog_uploaded"
   | "catalog_saved"
   | "catalog_row_edited"
-  | "catalog_item_used_in_estimate";
+  | "catalog_item_used_in_estimate"
+  // ─── Participants management redesign (2026-07, PRD roles & access UX v1).
+  // Measurement contract: time-to-invite (drawer_opened → invite_sent),
+  // preset-sufficiency (invite_sent.manual_axes), sensitive-grant funnel,
+  // reset-to-role usage — all gates for the v2 per-capability decision.
+  | "participants_invite_drawer_opened"
+  | "participants_invite_sent"
+  | "participants_access_updated"
+  | "participants_member_removed"
+  | "participants_invite_revoked"
+  | "participants_invite_resent"
+  | "participants_role_preset_selected"
+  | "participants_axes_reset_to_role"
+  | "participants_sensitive_confirm_shown"
+  | "participants_sensitive_confirm_accepted"
+  | "participants_sensitive_confirm_cancelled"
+  | "participants_seat_paywall_shown"
+  // ─── Observability v1 (2026-07): signup/activation/catalog/constructor
+  // funnels from the observability spec (R-6). Metrika composite goals are
+  // built from these — the goal list lives in docs/observability/setup.md.
+  // Spec-name mapping where an event already existed:
+  //   template_downloaded → catalog_template_downloaded (2026-07, above)
+  //   constructor_opened  → estimate_constructor_opened (2026-06, above)
+  //   estimate_saved_from_constructor → deliberately not distinct: the
+  //     estimate autosaves; covered by template_applied /
+  //     work_applied_via_constructor + estimate_saved_first_time.
+  | "landing_view"
+  | "registration_start"
+  | "registration_complete"
+  | "email_verified"
+  | "first_login"
+  | "project_created"
+  | "template_applied"
+  | "estimate_saved_first_time"
+  | "catalog_tab_visit"
+  | "catalog_editor_opened"
+  | "library_searched"
+  | "work_applied_via_constructor"
+  | "feedback_submitted"
+  // ─── Demo funnel (2026-07): the demo is a sandboxed mockup, not an account.
+  // Entered from the landing/blog "Посмотреть демо" CTAs; exited via the
+  // explicit "Выйти из демо" control; the signup CTA is the demo→registration
+  // bridge (feeds the landing_view → registration_start composite funnel).
+  | "demo_entered"
+  | "demo_exited"
+  | "demo_signup_cta_clicked";
 
 export type AnalyticsEventPayload = Record<string, unknown>;
 
@@ -199,6 +244,46 @@ export function trackEvent(
   } catch (error) {
     console.warn("[analytics] Metrika reachGoal failed:", error);
   }
+}
+
+const ONCE_PER_USER_PREFIX = "analytics-once";
+
+/**
+ * Fire an event at most once per user per browser (localStorage-guarded).
+ * For first-time activation markers (e.g. `estimate_saved_first_time`) where
+ * the backend keeps no dedicated flag. Cross-device duplicates are an
+ * accepted approximation; when storage is unavailable a duplicate beats
+ * losing the signal.
+ */
+export function trackEventOncePerUser(
+  event: AnalyticsEventName,
+  payload: AnalyticsEventPayload = {},
+): void {
+  if (typeof window === "undefined") return;
+  const key = `${ONCE_PER_USER_PREFIX}:${event}:${currentUserId ?? "anonymous"}`;
+  try {
+    if (localStorage.getItem(key) !== null) return;
+    localStorage.setItem(key, new Date().toISOString());
+  } catch {
+    // Storage unavailable (private mode / quota) — fall through and fire.
+  }
+  trackEvent(event, payload);
+}
+
+const firedThisSession = new Set<AnalyticsEventName>();
+
+/**
+ * Fire an event at most once per page session (in-memory guard). For
+ * high-frequency funnel steps (e.g. `library_searched` fires per keystroke
+ * otherwise) where the funnel only needs "did it happen this session".
+ */
+export function trackEventOncePerSession(
+  event: AnalyticsEventName,
+  payload: AnalyticsEventPayload = {},
+): void {
+  if (firedThisSession.has(event)) return;
+  firedThisSession.add(event);
+  trackEvent(event, payload);
 }
 
 /**

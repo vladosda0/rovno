@@ -5,7 +5,7 @@ import {
   type RuntimeWorkspaceMode,
   type WorkspaceMode,
 } from "@/data/workspace-source";
-import type { ChecklistItem, ChecklistItemType, Comment, Stage, Task, TaskAssignee } from "@/types/entities";
+import type { ChecklistItem, ChecklistItemType, Comment, Stage, Task, TaskAssignee, TaskStatus } from "@/types/entities";
 import type {
   EstimateExecutionStatus,
   EstimateV2ResourceLine,
@@ -56,6 +56,34 @@ const RESOURCE_TYPE_ORDER: Record<ResourceLineType, number> = {
   other: 5,
 };
 
+/**
+ * A task write matched 0 rows: the row was re-projected under a new id or is
+ * filtered by RLS for this session. Callers should refetch and inform the user
+ * the list was refreshed — this is a converge signal, not a crash.
+ */
+export class TaskNoLongerAvailableError extends Error {
+  constructor() {
+    super("Task is no longer available in its previous form.");
+    this.name = "TaskNoLongerAvailableError";
+  }
+}
+
+export interface ChangeTaskStatusInput {
+  /** The status the caller believes the task currently has. A server-side
+   * mismatch (another session moved it) converges via TaskNoLongerAvailable. */
+  expectedStatus?: TaskStatus;
+  /** Reason/blocker comment; the RPC inserts it exactly once server-side. */
+  commentBody?: string;
+}
+
+function isMissingRpcError(error: { code?: string; message?: string } | null): boolean {
+  const code = error?.code;
+  if (code === "PGRST202" || code === "42883") return true;
+  return typeof error?.message === "string"
+    && error.message.includes("change_task_status_v2")
+    && /not find|does not exist/i.test(error.message);
+}
+
 export interface CreateProjectStageInput {
   projectId: string;
   title: string;
@@ -103,6 +131,18 @@ export interface PlanningSource {
   ) => Promise<void>;
   deleteTaskChecklistItem: (taskId: string, itemId: string) => Promise<void>;
   createTaskComment: (taskId: string, body: string, authorId?: string) => Promise<void>;
+  /**
+   * Unified task-status change: server-enforces the done/blocked guards, inserts
+   * the reason comment once, and emits the P2 realtime signal. P0002 (not found
+   * or a stale expectedStatus) surfaces as TaskNoLongerAvailableError to
+   * converge; every other DB error (guard/permission) propagates raw so the
+   * caller shows its localized fallback toast rather than an English message.
+   */
+  changeTaskStatus: (
+    taskId: string,
+    newStatus: TaskStatus,
+    input?: ChangeTaskStatusInput,
+  ) => Promise<void>;
 }
 
 export interface EnsureProjectStageInput {
@@ -392,6 +432,16 @@ function createBrowserPlanningSource(mode: "demo" | "local"): PlanningSource {
     async createTaskComment(taskId: string, body: string) {
       store.addComment(taskId, body);
     },
+    async changeTaskStatus(taskId: string, newStatus: TaskStatus, input?: ChangeTaskStatusInput) {
+      const task = store.getTask(taskId);
+      if (!task) {
+        throw new Error(`Task not found: ${taskId}`);
+      }
+      if (input?.commentBody && input.commentBody.trim().length > 0) {
+        store.addComment(taskId, input.commentBody.trim());
+      }
+      store.updateTask(taskId, { status: newStatus });
+    },
   };
 }
 
@@ -449,8 +499,14 @@ function resourceLineTypeForChecklistAssigneeSort(item: ChecklistItem): Resource
 }
 
 /**
- * Hero `tasks.assignee_profile_id` can lag estimate lines after edits. Checklist rows are
- * already projected from `estimate_resource_lines` — align task-level assignee for UI/filters.
+ * Hero `tasks.assignee_profile_id` can lag estimate lines after edits. Checklist rows
+ * (when they carry assignee metadata — demo/local stores do, the Supabase checklist
+ * SELECT does not) refine the task-level assignee for UI/filters.
+ *
+ * ENRICH-ONLY: when no checklist item carries assignee data, keep the task row's own
+ * `assignee_profile_id` — it was written by the estimate projection and is the only
+ * assignee truth available to sessions that cannot read estimate lines under RLS.
+ * Clearing it here rendered every estimate-linked task "Unassigned" for those users.
  */
 export function overlayEstimateLinkedAssigneeFromChecklist(task: Task): Task {
   if (!task.estimateV2WorkId) return task;
@@ -485,11 +541,7 @@ export function overlayEstimateLinkedAssigneeFromChecklist(task: Task): Task {
     }
   }
 
-  return {
-    ...task,
-    assignee_id: "",
-    assignees: [],
-  };
+  return task;
 }
 
 function mapEstimateResourceTypeToChecklistType(
@@ -839,7 +891,21 @@ export async function syncProjectTasksFromEstimate(
     };
   });
 
-  await upsertHeroTasks(supabase, taskUpserts);
+  // Re-read statuses immediately before the write so this projection never
+  // clobbers a status another session changed while it was computing. The
+  // server sync_estimate_projection RPC preserves status by excluding it from
+  // its ON CONFLICT set-list; this legacy client fallback (reached only on a
+  // pre-P1 DB that lacks the RPC) has no such guarantee, so it must carry the
+  // freshest value rather than the one read at the top of the function.
+  const freshStatusById = new Map(
+    (await loadHeroTasksForProject(supabase, input.projectId)).map((row) => [row.id, row.status]),
+  );
+  const freshTaskUpserts = taskUpserts.map((upsert) => {
+    const freshStatus = freshStatusById.get(upsert.id);
+    return freshStatus === undefined ? upsert : { ...upsert, status: freshStatus };
+  });
+
+  await upsertHeroTasks(supabase, freshTaskUpserts);
 
   const checklistRows = await loadHeroTaskChecklistItemsByTaskIds(
     supabase,
@@ -1132,10 +1198,17 @@ function createSupabasePlanningSource(
         .update(mapTaskPatchToTaskUpdateRow(patch))
         .eq("id", taskId)
         .select(TASK_SELECT)
-        .single();
+        .maybeSingle();
 
       if (error) {
         throw error;
+      }
+
+      // 0 rows = the task vanished from this session's view (re-projected under a
+      // new id, or filtered by RLS). Surface a converge-able "task changed" error
+      // instead of PostgREST's opaque "JSON object requested…" crash.
+      if (!data) {
+        throw new TaskNoLongerAvailableError();
       }
 
       return mapTaskRowToTask(data);
@@ -1235,6 +1308,56 @@ function createSupabasePlanningSource(
         .from("task_comments")
         .insert(insert);
       if (error) throw error;
+    },
+    async changeTaskStatus(taskId: string, newStatus: TaskStatus, input?: ChangeTaskStatusInput) {
+      const comment = input?.commentBody?.trim() ? input.commentBody.trim() : null;
+      const { error } = await (supabase as unknown as SupabaseClient).rpc("change_task_status_v2", {
+        p_task_id: taskId,
+        p_new_status: newStatus,
+        p_comment_body: comment,
+        p_expected_status: input?.expectedStatus ?? null,
+      });
+      if (!error) return;
+
+      // Pre-P3 database: fall back to the legacy two-write path (comment then a
+      // direct status update). The direct update's 0-row → TaskNoLongerAvailable
+      // is preserved by updateProjectTask below.
+      if (isMissingRpcError(error)) {
+        if (comment) {
+          // task_comments.author_profile_id is uuid NOT NULL and its INSERT
+          // policy requires author_profile_id = auth.uid(); resolve the real
+          // author from the local session (an empty string would 22P02, and a
+          // wrong uuid would fail RLS).
+          const { data: sessionData } = await (supabase as unknown as SupabaseClient).auth.getSession();
+          const authorId = sessionData?.session?.user?.id;
+          if (!authorId) {
+            // Session lapsed mid-action (degenerate in supabase mode). Surface a
+            // plain, non-Error object — like a raw PostgREST error — so the
+            // caller's `instanceof Error` check falls through to the LOCALIZED
+            // fallback toast instead of rendering this English string in the ru UI.
+            throw { code: "NO_SESSION", message: "No authenticated session to record the task comment." };
+          }
+          const { error: commentError } = await supabase
+            .from("task_comments")
+            .insert({ task_id: taskId, body: comment, author_profile_id: authorId });
+          if (commentError) throw commentError;
+        }
+        await this.updateProjectTask(taskId, { status: newStatus });
+        return;
+      }
+
+      // P0002 = converge (not found, or a stale expectedStatus another session
+      // already moved): refetch + gentle toast, never a hard failure.
+      if (error.code === "P0002") {
+        throw new TaskNoLongerAvailableError();
+      }
+      // Every other DB error (22023 server guard — client-pre-guarded so rarely
+      // reached; 42501 permission; unexpected): re-throw the raw PostgrestError.
+      // It is a plain object (not an Error instance), so the caller's
+      // `error instanceof Error` check falls through to the LOCALIZED fallback
+      // toast — the guard/permission messages from Postgres are English, and
+      // wrapping them in an Error would leak that English into the ru UI.
+      throw error;
     },
   };
 }

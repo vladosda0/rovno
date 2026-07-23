@@ -116,8 +116,8 @@
         },
         {
           "name": "identity_key",
-          "sqlType": "text\n  generated always as (public.inventory_item_identity(title, notes, unit)) stored",
-          "tsType": "unknown",
+          "sqlType": "text",
+          "tsType": "string",
           "nullable": true,
           "defaultSql": null,
           "primaryKey": false,

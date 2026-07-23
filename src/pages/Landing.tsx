@@ -8,10 +8,12 @@
 // React wiring on top of the static design:
 //  - getStartedPath is auth-aware (/home when signed in, else /auth/signup).
 //  - "Посмотреть демо" enters a demo session and opens the demo project.
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { seedProjects } from "@/data/seed";
 import { enterDemoSession } from "@/lib/auth-state";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
+import { trackEvent } from "@/lib/analytics";
 import { KeyFeatures } from "@/components/landing/LandingKeyFeatures";
 import { BlogTeaser } from "@/components/landing/LandingBlogTeaser";
 import {
@@ -31,6 +33,12 @@ import "@/components/landing/landing.css";
 export default function Landing() {
   const navigate = useNavigate();
   const { status: runtimeAuthStatus } = useRuntimeAuth();
+
+  // Signup-funnel step 1 (observability v1). Pageview hits exist too, but a
+  // goal makes the Metrika composite funnel configurable.
+  useEffect(() => {
+    trackEvent("landing_view");
+  }, []);
   const isSupabaseAuthed = runtimeAuthStatus === "authenticated";
   const startPath = isSupabaseAuthed ? "/home" : "/auth/signup";
 

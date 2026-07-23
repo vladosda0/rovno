@@ -161,6 +161,7 @@ describe("usePlanningProjectStages/usePlanningProjectTasks", () => {
       createTaskChecklistItem: vi.fn(),
       deleteTaskChecklistItem: vi.fn(),
       createTaskComment: vi.fn(),
+      changeTaskStatus: vi.fn(),
     };
 
     authenticateRuntimeAuth();
@@ -264,5 +265,41 @@ describe("usePlanningProjectStages/usePlanningProjectTasks", () => {
     });
 
     expect(screen.getByTestId("task-assignees")).toHaveTextContent("user-1,helper@example.com");
+  });
+
+  // Regression: with stable query keys, freshness on page re-entry must not
+  // depend on a mounted consumer having observed the projection advance. An
+  // estimate edit on another page can advance the projection while this hook is
+  // unmounted; refetchOnMount:"always" makes returning within staleTime refetch
+  // rather than serve the stale cached list. Without it, the second mount would
+  // reuse the fresh-cached data (still 1 call).
+  it("refetches on page re-entry so an off-page projection advance is not served stale", async () => {
+    vi.stubEnv("VITE_WORKSPACE_SOURCE", "supabase");
+
+    const queryClient = createQueryClient();
+    authenticateRuntimeAuth();
+    mockEstimateProject();
+    const getProjectTasks = vi.fn().mockResolvedValue([task({ title: "Supabase Task" })]);
+    vi.spyOn(planningSource, "getPlanningSource").mockResolvedValue({
+      mode: "supabase",
+      getProjectStages: vi.fn().mockResolvedValue([]),
+      getProjectTasks,
+    } as never);
+
+    const first = render(
+      <QueryClientProvider client={queryClient}>
+        <PlanningProbe projectId="project-1" />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(getProjectTasks).toHaveBeenCalledTimes(1));
+    first.unmount();
+
+    // Same QueryClient (cache persists, well within the 60s staleTime).
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PlanningProbe projectId="project-1" />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(getProjectTasks).toHaveBeenCalledTimes(2));
   });
 });

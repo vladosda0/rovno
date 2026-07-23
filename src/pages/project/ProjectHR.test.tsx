@@ -28,10 +28,21 @@ vi.mock("react-router-dom", async () => {
 
 vi.mock("@/hooks/use-estimate-v2-data", () => ({
   useEstimateV2Project: mocks.useEstimateV2Project,
+  useEstimateV2ProjectionCapability: () => "projector",
 }));
 
 vi.mock("@/hooks/use-hr-source", () => ({
   useProjectHRMutations: mocks.useProjectHRMutations,
+  useProjectHRItemsState: (projectId: string) => ({
+    items: mocks.useHRItems(projectId),
+    isLoading: false,
+    readsEnabled: true,
+  }),
+  useProjectHRPaymentsState: (projectId: string) => ({
+    payments: mocks.useHRPayments(projectId),
+    isLoading: false,
+    readsEnabled: true,
+  }),
 }));
 
 vi.mock("@/hooks/use-mock-data", () => ({

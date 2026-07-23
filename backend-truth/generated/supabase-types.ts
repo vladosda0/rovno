@@ -572,6 +572,11 @@ export type Database = {
           "created_at": string
           "updated_at": string
           "execution_status": string | null
+          "draft_seq": number
+          "projection_revision": string | null
+          "projection_seq": number
+          "projection_synced_at": string | null
+          "projection_actor": string | null
           }
           Insert: {
           "id"?: string
@@ -583,6 +588,11 @@ export type Database = {
           "created_at"?: string
           "updated_at"?: string
           "execution_status"?: string | null
+          "draft_seq"?: number
+          "projection_revision"?: string | null
+          "projection_seq"?: number
+          "projection_synced_at"?: string | null
+          "projection_actor"?: string | null
           }
           Update: {
           "id"?: string
@@ -594,6 +604,11 @@ export type Database = {
           "created_at"?: string
           "updated_at"?: string
           "execution_status"?: string | null
+          "draft_seq"?: number
+          "projection_revision"?: string | null
+          "projection_seq"?: number
+          "projection_synced_at"?: string | null
+          "projection_actor"?: string | null
           }
           Relationships: []
         }
@@ -769,7 +784,7 @@ export type Database = {
           "notes": string | null
           "created_at": string
           "updated_at": string
-          "identity_key": unknown | null
+          "identity_key": string | null
           }
           Insert: {
           "id"?: string
@@ -780,7 +795,7 @@ export type Database = {
           "notes"?: string | null
           "created_at"?: string
           "updated_at"?: string
-          "identity_key"?: unknown | null
+          "identity_key"?: string | null
           }
           Update: {
           "id"?: string
@@ -791,7 +806,7 @@ export type Database = {
           "notes"?: string | null
           "created_at"?: string
           "updated_at"?: string
-          "identity_key"?: unknown | null
+          "identity_key"?: string | null
           }
           Relationships: []
         }
@@ -2137,6 +2152,7 @@ export type Database = {
           "updated_at": string
           "consent_accepted_at": string | null
           "consent_version": string | null
+          "order_attempt": number
           }
           Insert: {
           "id"?: string
@@ -2165,6 +2181,7 @@ export type Database = {
           "updated_at"?: string
           "consent_accepted_at"?: string | null
           "consent_version"?: string | null
+          "order_attempt"?: number
           }
           Update: {
           "id"?: string
@@ -2193,6 +2210,7 @@ export type Database = {
           "updated_at"?: string
           "consent_accepted_at"?: string | null
           "consent_version"?: string | null
+          "order_attempt"?: number
           }
           Relationships: []
         }
@@ -2499,6 +2517,33 @@ export type Database = {
           }
           Relationships: []
         }
+        "project_sync_events": {
+          Row: {
+          "id": number
+          "project_id": string
+          "kind": "projection" | "estimate_draft" | "tasks" | "checklist" | "procurement" | "hr" | "hr_payments" | "members"
+          "revision": string | null
+          "actor_profile_id": string | null
+          "created_at": string
+          }
+          Insert: {
+          "id"?: number
+          "project_id": string
+          "kind": "projection" | "estimate_draft" | "tasks" | "checklist" | "procurement" | "hr" | "hr_payments" | "members"
+          "revision"?: string | null
+          "actor_profile_id"?: string | null
+          "created_at"?: string
+          }
+          Update: {
+          "id"?: number
+          "project_id"?: string
+          "kind"?: "projection" | "estimate_draft" | "tasks" | "checklist" | "procurement" | "hr" | "hr_payments" | "members"
+          "revision"?: string | null
+          "actor_profile_id"?: string | null
+          "created_at"?: string
+          }
+          Relationships: []
+        }
     }
     Views: {
       [_ in never]: never
@@ -2644,6 +2689,15 @@ export type Database = {
           "p_project_id": string
           }
           Returns: boolean
+        }
+        "change_task_status_v2": {
+          Args: {
+          "p_task_id": string
+          "p_new_status": string
+          "p_comment_body": unknown
+          "p_expected_status": unknown
+          }
+          Returns: Json
         }
         "create_org_document_folder": {
           Args: {
@@ -3034,9 +3088,23 @@ export type Database = {
           }
           Returns: unknown
         }
+        "set_estimate_current_version": {
+          Args: {
+          "p_estimate_id": string
+          "p_version_id": string
+          }
+          Returns: Json
+        }
         "submit_contractor_profile_for_moderation": {
           Args: {
           "p_org_id": string
+          }
+          Returns: Json
+        }
+        "sync_estimate_projection": {
+          Args: {
+          "p_project_id": string
+          "p_client_revision": unknown
           }
           Returns: Json
         }

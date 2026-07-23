@@ -31,10 +31,12 @@ function renderModal(projectId: string, orderId: string) {
 
 describe("OrderDetailModal", () => {
   beforeEach(() => {
-    __unsafeResetOrdersForTests();
+    // Empty-store reset runs AFTER the demo session is established: leaving the
+    // demo re-seeds the in-memory stores, so resetting first would be undone.
     window.sessionStorage.clear();
     clearDemoSession();
     enterDemoSession("project-1");
+    __unsafeResetOrdersForTests();
   });
 
   it("hides invoice totals and line price columns when showSensitiveDetail is false", () => {

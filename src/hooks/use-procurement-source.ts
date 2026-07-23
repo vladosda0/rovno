@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useProjectionAdvance } from "@/hooks/use-projection-advance";
 import {
   getProcurementItems,
   subscribeProcurement,
@@ -11,7 +12,8 @@ import { resolveFinanceRowLoadAccess, usePermission } from "@/lib/permissions";
 import type { FinanceRowLoadAccess } from "@/lib/permissions";
 import type { ProcurementItemV2 } from "@/types/entities";
 
-const PROCUREMENT_QUERY_STALE_TIME_MS = 60_000;
+// 30s (P2): see the focus-refetch opt-in on the query below.
+const PROCUREMENT_QUERY_STALE_TIME_MS = 30_000;
 const EMPTY_PROCUREMENT_ITEMS: ProcurementItemV2[] = [];
 
 export const procurementProjectItemsQueryRoot = (profileId: string, projectId: string) =>
@@ -45,7 +47,7 @@ export function useProjectProcurementItemsState(
   const mode = useWorkspaceMode();
   const estimateSync = useEstimateV2ProjectSync(projectId);
   const supabaseMode = mode.kind === "supabase" ? mode : null;
-  const { seam } = usePermission(projectId);
+  const { seam, isLoading: isPermissionLoading } = usePermission(projectId);
   const financeAccess = useMemo(() => resolveFinanceRowLoadAccess(seam), [seam]);
   const getItems = useCallback(() => getProcurementItems(projectId), [projectId]);
   const browserItems = useStoreValue(
@@ -61,24 +63,39 @@ export function useProjectProcurementItemsState(
       const source = await getProcurementSource(supabaseMode ?? undefined);
       return source.getProjectProcurementItems(projectId, financeAccess);
     },
-    enabled: Boolean(supabaseMode && projectId),
+    // Permission-race: while permissions resolve, the seam defaults to viewer/none
+    // and the fetch would run under the wrong finance identity (zeros flash).
+    enabled: Boolean(supabaseMode && projectId) && !isPermissionLoading,
     staleTime: PROCUREMENT_QUERY_STALE_TIME_MS,
+    // Refetch on page entry: an estimate edit on another page can advance the
+    // projection while this hook is unmounted; returning within staleTime would
+    // otherwise serve the stale cached list. Stable key => background refetch
+    // keeps prior rows visible (no empty flash).
+    refetchOnMount: "always",
+    // P2: local opt-in (global default stays false); cross-session freshness
+    // on tab return, bounded by staleTime.
+    refetchOnWindowFocus: true,
   });
 
   // Keep the query key stable across projection advances so cached data does not
   // collapse to empty (isPending) on every sync, which remounts the list and blanks
-  // open editors. Instead, when the sync's projectedRevision advances, invalidate the
+  // open editors. Instead, when the sync's projectedRevision ADVANCES, invalidate the
   // procurement root: with a stable key this is a background refetch (isFetching) that
-  // keeps the previous data mounted. Freshness is unchanged (every projection still refetches).
+  // keeps the previous data mounted. The first observed revision is a baseline, not a
+  // change — invalidating on mount would defeat staleTime and duplicate the initial fetch.
   const queryClient = useQueryClient();
   const projectedRevision = estimateSync.domains.procurement.projectedRevision ?? null;
   const invalidateProfileId = supabaseMode?.profileId ?? null;
-  useEffect(() => {
-    if (!invalidateProfileId || !projectId) return;
-    queryClient.invalidateQueries({
-      queryKey: procurementProjectItemsQueryRoot(invalidateProfileId, projectId),
-    });
-  }, [queryClient, invalidateProfileId, projectId, projectedRevision]);
+  useProjectionAdvance(
+    invalidateProfileId && projectId ? `${invalidateProfileId}:${projectId}` : null,
+    projectedRevision,
+    () => {
+      if (!invalidateProfileId) return;
+      void queryClient.invalidateQueries({
+        queryKey: procurementProjectItemsQueryRoot(invalidateProfileId, projectId),
+      });
+    },
+  );
 
   if (mode.kind === "demo" || mode.kind === "local") {
     return { items: browserItems, isLoading: false };
@@ -89,7 +106,10 @@ export function useProjectProcurementItemsState(
     return { items: EMPTY_PROCUREMENT_ITEMS, isLoading: mode.kind === "pending-supabase" };
   }
 
-  return { items: itemsQuery.data ?? EMPTY_PROCUREMENT_ITEMS, isLoading: itemsQuery.isPending };
+  return {
+    items: itemsQuery.data ?? EMPTY_PROCUREMENT_ITEMS,
+    isLoading: isPermissionLoading || itemsQuery.isPending,
+  };
 }
 
 export function useProjectProcurementItems(projectId: string): ProcurementItemV2[] {

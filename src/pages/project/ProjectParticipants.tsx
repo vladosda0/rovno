@@ -22,6 +22,8 @@ import {
   Wrench,
 } from "lucide-react";
 import { useCurrentUser, useProject, useProjectInvites, useWorkspaceMode } from "@/hooks/use-mock-data";
+import ParticipantsScreen from "@/components/participants/ParticipantsScreen";
+import { isParticipantsRedesignEnabled } from "@/lib/participants-redesign-feature";
 import { useActiveOrg, useOrgMemberProfileIds } from "@/hooks/use-orgs";
 import { usePermission } from "@/lib/permissions";
 import { addEvent, getUserById } from "@/data/store";
@@ -99,6 +101,18 @@ const roleIcons: Record<MemberRole, typeof Crown> = {
   contractor: Wrench,
   viewer: Eye,
 };
+
+/**
+ * Redesigned single-list screen (PRD 2026-07-10) behind a kill switch; the
+ * legacy tabs screen below stays reachable via VITE_PARTICIPANTS_REDESIGN=false
+ * (or localStorage `participants-redesign`) until the redesign graduates.
+ */
+export default function ProjectParticipants() {
+  if (isParticipantsRedesignEnabled()) {
+    return <ParticipantsScreen />;
+  }
+  return <LegacyProjectParticipants />;
+}
 
 type ParticipantTab = "members" | "invitations" | "permissions";
 type RoleTarget =
@@ -514,7 +528,7 @@ function PermissionFormSections(props: {
   );
 }
 
-export default function ProjectParticipants() {
+function LegacyProjectParticipants() {
   const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const projectId = id!;
@@ -889,7 +903,10 @@ export default function ProjectParticipants() {
         );
       }
 
-      const invite = invites.find((row) => row.id === target.inviteId);
+      // Deliberately omit `status`: writing a stale cached status back could
+      // resurrect a concurrently revoked/accepted invite to 'pending' and
+      // re-arm its token. Status transitions belong to the revoke mutation and
+      // the accept RPC only. (Mirrors the redesigned screen's fix.)
       return updateWorkspaceProjectInvite(
         workspaceMode.kind === "pending-supabase" ? { kind: "local" } : workspaceMode,
         {
@@ -901,7 +918,6 @@ export default function ProjectParticipants() {
           creditLimit: Math.max(0, parseInt(input.form.creditLimit, 10) || 0),
           financeVisibility: input.form.financeVisibility,
           internalDocsVisibility: input.form.internalDocsVisibility,
-          status: invite?.status,
         },
       );
     },

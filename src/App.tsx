@@ -3,10 +3,11 @@ import { useTranslation } from "react-i18next";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
-import { EnvBanner } from "@/components/system/EnvBanner";
 import { MetrikaPageviewTracker } from "@/components/system/MetrikaPageviewTracker";
+import { ScrollToHash } from "@/components/system/ScrollToHash";
+import { queryClient } from "@/lib/query-client";
 
 const AppLayout = lazy(() => import("@/layouts/AppLayout"));
 const AuthLayout = lazy(() => import("@/layouts/AuthLayout"));
@@ -54,19 +55,6 @@ const Refund = lazy(() => import("@/pages/legal/Refund"));
 const Contacts = lazy(() => import("@/pages/legal/Contacts"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      // Disabled app-wide on purpose: alt-tabbing back into a half-filled form (or any page)
-      // must not refetch-and-reset it, which was a source of visible reload churn. Freshness is
-      // preserved via explicit invalidateQueries after mutations + per-query staleTime/refetchInterval
-      // (e.g. payment status and tier quota poll on their own). A query that genuinely needs
-      // refresh-on-focus should opt back in locally with refetchOnWindowFocus: true.
-      refetchOnWindowFocus: false,
-    },
-  },
-});
-
 const RouteFallback = () => {
   const { t } = useTranslation();
   return (
@@ -83,11 +71,11 @@ function routeElement(element: ReactElement): ReactElement {
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <EnvBanner />
       <Toaster />
       <Sonner />
       <BrowserRouter>
         <MetrikaPageviewTracker />
+        <ScrollToHash />
         <Routes>
           {/* Standalone pages */}
           <Route path="/" element={routeElement(<Landing />)} />
