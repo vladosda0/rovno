@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import { useState, useCallback, useRef, useEffect, useId, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -98,6 +98,7 @@ export function TaskDetailModal({
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { toast } = useToast();
+  const statusGroupLabelId = useId();
   const projectId = task?.project_id ?? "";
   const { prepareUpload, uploadBytes, finalizeUpload } = useMediaUploadMutations(projectId);
   const perm = usePermission(projectId);
@@ -396,12 +397,13 @@ export function TaskDetailModal({
           <div className="space-y-sp-3 p-sp-3 pt-sp-2">
             {/* Status */}
             <div>
-              <p className="text-caption text-muted-foreground mb-1">{t("tasks.modal.sectionStatus")}</p>
-              <div className="flex flex-wrap gap-1.5">
+              <p id={statusGroupLabelId} className="text-caption text-muted-foreground mb-1">{t("tasks.modal.sectionStatus")}</p>
+              <div role="group" aria-labelledby={statusGroupLabelId} className="flex flex-wrap gap-1.5">
                 {statuses.map((s) => (
                   <button
                     key={s}
                     disabled={!canChangeStatus || disableStatusChanges}
+                    aria-pressed={task.status === s}
                     onClick={() => handleStatusChange(s)}
                     className={`rounded-full px-2.5 py-0.5 text-caption font-medium transition-colors ${
                       task.status === s

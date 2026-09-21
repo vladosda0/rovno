@@ -1,5 +1,5 @@
 import type { ComponentProps } from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
@@ -197,5 +197,16 @@ describe("TaskDetailModal", () => {
 
     expect(screen.getByText("Other")).toBeInTheDocument();
     expect(screen.queryByText("Estimate item")).not.toBeInTheDocument();
+  });
+
+  it("exposes which status the task is in to assistive technology", () => {
+    renderTaskDetail({ task: task({ status: "in_progress" }) });
+
+    const group = screen.getByRole("group", { name: "Status" });
+    expect(within(group).getByRole("button", { name: "In progress", pressed: true })).toBeInTheDocument();
+
+    for (const label of ["Not started", "Done", "Blocked"]) {
+      expect(within(group).getByRole("button", { name: label, pressed: false })).toBeInTheDocument();
+    }
   });
 });
