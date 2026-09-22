@@ -51,21 +51,28 @@ export function ApprovalStampFormModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[92vw] max-w-md p-0 gap-0 overflow-hidden">
-        <DialogHeader className="border-b border-border px-5 py-4">
+      {/*
+        A column, not a grid: the header and the footer are the two things that must
+        stay on screen when the viewport is shorter than the modal (a phone with the
+        keyboard up, which is always, since the form is three text inputs). Only the
+        field band scrolls; `overflow-hidden` keeps the horizontal axis clipped and
+        the vertical clip comes from the base scroller.
+      */}
+      <DialogContent className="w-[92vw] max-w-md p-0 gap-0 overflow-hidden flex flex-col">
+        <DialogHeader className="shrink-0 border-b border-border px-5 py-4">
           <DialogTitle>{resolvedTitle}</DialogTitle>
           <DialogDescription>
             {t("estimate.approval.description")}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3 px-5 py-4">
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4">
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("estimate.approval.placeholder.name")} />
           <Input value={surname} onChange={(e) => setSurname(e.target.value)} placeholder={t("estimate.approval.placeholder.surname")} />
           <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t("estimate.approval.placeholder.email")} type="email" />
         </div>
 
-        <DialogFooter className="border-t border-border px-5 py-4">
+        <DialogFooter className="shrink-0 border-t border-border px-5 py-4">
           <Button variant="outline" onClick={() => onOpenChange(false)}>{t("common.cancel")}</Button>
           <Button
             disabled={!canSubmit}
