@@ -685,11 +685,11 @@ function getDayKey(timestampMs: number): string {
   return format(new Date(timestampMs), "yyyy-MM-dd");
 }
 
-function getDayLabel(timestampMs: number, t: Translator): string {
+function getDayLabel(timestampMs: number, t: Translator, dayFormatter: Intl.DateTimeFormat): string {
   const date = new Date(timestampMs);
   if (isToday(date)) return t("ai.sidebar.day.today");
   if (isYesterday(date)) return t("ai.sidebar.day.yesterday");
-  return format(date, "MMM d, yyyy");
+  return dayFormatter.format(date);
 }
 
 function buildProposalSummaryLines(childEvents: Event[], t: Translator): string[] {
@@ -760,6 +760,14 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
       year: "numeric",
       hour: "2-digit",
       minute: "2-digit",
+    }),
+    [i18n.language],
+  );
+  const dayHeaderFormatter = useMemo(
+    () => new Intl.DateTimeFormat(i18n.language, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
     }),
     [i18n.language],
   );
@@ -2599,13 +2607,13 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
       const date = new Date(row.timestampMs);
       map.set(dayKey, {
         key: dayKey,
-        label: getDayLabel(row.timestampMs, t),
+        label: getDayLabel(row.timestampMs, t, dayHeaderFormatter),
         rows: [row],
         olderThanYesterday: !isToday(date) && !isYesterday(date),
       });
     });
     return Array.from(map.values()).sort((a, b) => a.key.localeCompare(b.key));
-  }, [streamRows, t]);
+  }, [dayHeaderFormatter, streamRows, t]);
 
   const visibleDayBuckets = useMemo(() => {
     if (dayBuckets.length === 0) return [];
@@ -2864,7 +2872,8 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     }
 
     const marker = `<!-- learn-msg:${message.id} -->`;
-    const timestampHeader = format(new Date(), "MMM d, yyyy HH:mm");
+    // Same stamp as an archived chat's header, so it reads in the interface language.
+    const timestampHeader = archiveHeaderFormatter.format(new Date());
     const learnDocTitle = t("ai.sidebar.learnDoc.title");
     const entry = `${marker}\n## ${timestampHeader}\n\n${message.content}`;
     const docs = getDocuments(targetProjectId);
