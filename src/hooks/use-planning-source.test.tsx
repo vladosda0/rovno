@@ -171,6 +171,7 @@ describe("usePlanningProjectStages/usePlanningProjectTasks", () => {
       mode: "supabase" as const,
       getProjectStages: vi.fn(() => stagesPromise),
       getProjectTasks: vi.fn(() => tasksPromise),
+      getProjectsStatusSummary: vi.fn().mockResolvedValue({}),
       createProjectStage: vi.fn(),
       createProjectTask: vi.fn(),
       updateProjectTask: vi.fn(),

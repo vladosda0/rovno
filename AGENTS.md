@@ -4,6 +4,65 @@ How AI agents (Claude Code, Codex, Cursor, Claude Cowork, etc.) work in this rep
 
 ---
 
+<!-- SESSION-RULES:BEGIN v2 2026-08-25 — identical block in rovno, rovno-db and rovno-bots; edit one, sync all three -->
+## Session protocol (all agents)
+
+Applies to every agent working here: Claude Cowork, Claude Code, Codex, Cursor.
+It governs **how a session is run**, not what is true in this repo: the precedence
+and layering rules below still decide content.
+
+### R1. A progress list exists from the first minute and stays current
+
+Open the session with a task list, before the first substantive action, and keep it
+updated as the work moves. Any task that surfaces mid-flight and was not in the
+original plan goes into the same list immediately. In Cowork that is the task list
+widget; in a terminal it is a short numbered checklist kept visible and reprinted
+whenever it changes.
+
+**Why:** otherwise it is impossible to tell whether we are still on the original
+task (which merely turned out bigger than planned), whether new tasks have
+attached themselves to it, or whether we have quietly moved on to something else.
+Untracked work is unmanaged chaos.
+
+- Nothing untracked. A side bug, a blocker, a "while I'm here" fix is a new item, not a silent detour.
+- A task that grows gets split into subtasks in the list, never silently widened.
+- Close an item only when it is actually done, not when it is nearly done.
+- Do not narrate every list update in prose.
+
+### R2. Every question is a numbered choice, never a paragraph
+
+If a question, a fork, something question-shaped, or anything needing the owner's
+decision comes up mid-work or at the end, present it as an explicit choice. Do not
+bury it in a paragraph and hope it gets noticed.
+
+- **Cowork:** call **AskUserQuestion**. 3 options, the first being the one you consider best, labelled `(Рекомендуется)`. The tool adds the free-text "Other" path itself, so do not write it as an option. `multiSelect: true` when the options are not mutually exclusive. Up to 4 questions in one call when there are several forks.
+- **Terminal (Claude Code, Codex, Cursor):** one line per option, numbered 1 to 3, ordered simplest to most controlled, with the recommended one named. Wait for the answer. Execute exactly one option per step.
+- Exception: scheduled or unattended runs. Then decide, state the assumption explicitly, and continue.
+
+### R3. One source of truth per project or epic
+
+Starting anything new (a project, an epic, a project inside a project) create
+**one main document first**. Every later document is a satellite: it links back to
+the main one and defers to it.
+
+**Why:** otherwise a thousand documents pile up, one per request, and they start
+arguing about whose truth is the real one.
+
+- The main file is the first artefact of a new direction and is marked as the source of truth.
+- A per-task document is fine and often convenient, but it must reference the main one.
+- Anything learned that changes the picture updates the main document, not only the local one.
+- Before creating a new document, check whether a main one already exists to extend.
+
+### R4. Never propose a storage location without checking that it is read
+
+Before suggesting where rules or context should live, verify that the target is
+actually loaded by the agent that has to obey them, and say so. A file nobody
+loads is not storage.
+
+<!-- SESSION-RULES:END -->
+
+---
+
 ## Instruction layering (read this first)
 
 Apply guidance in this order when they conflict:

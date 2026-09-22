@@ -619,8 +619,9 @@ describe("ProjectTasks", () => {
       // The write landed; we are now parked inside the refetch.
       await waitFor(() => expect(mocks.changeTaskStatus).toHaveBeenCalled());
 
+      // Back returns to the task card it was opened from, so the prompt can be
+      // reopened straight from there — no need to find the task on the board again.
       fireEvent.click(screen.getByRole("button", { name: "Back" }));
-      fireEvent.click(screen.getByText("Estimate task"));
       fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Done" }));
       expect(screen.getByText("Add final result photos")).toBeInTheDocument();
 
@@ -638,6 +639,202 @@ describe("ProjectTasks", () => {
     } finally {
       invalidateSpy.mockRestore();
     }
+  });
+
+  // Зеркало теста «Готово» выше, для пути «Заблокировано». Этот путь дважды за
+  // один день получал дефект: сначала бэкдроп закрыли и окно стало ловушкой,
+  // потом выход вернули, но сверку прогона поставили только в finally. Оба раза
+  // полный прогон оставался зелёным, потому что стража у этого пути не было
+  // вовсе. Эти три проверки и есть страж.
+  it("не рапортует об успехе и не сносит следующее подтверждение при уходе во время refetch", async () => {
+    let releaseInvalidate: () => void = () => {};
+    const invalidateSpy = vi
+      .spyOn(QueryClient.prototype, "invalidateQueries")
+      .mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            releaseInvalidate = () => resolve();
+          }),
+      );
+
+    try {
+      mocks.usePermission.mockReturnValue(buildPermission("contractor"));
+      mocks.useTasks.mockReturnValue([buildTask({ status: "in_progress" })]);
+
+      renderProjectTasks();
+
+      fireEvent.click(screen.getByText("Estimate task"));
+      fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Blocked" }));
+      fireEvent.change(screen.getByPlaceholderText("Describe the reason this task is blocked…"), {
+        target: { value: "Waiting on materials" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: /Mark Blocked/i }));
+
+      // Запись прошла, стоим внутри refetch.
+      await waitFor(() => expect(mocks.changeTaskStatus).toHaveBeenCalled());
+
+      fireEvent.click(screen.getByRole("button", { name: "Back" }));
+      fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Blocked" }));
+      fireEvent.change(screen.getByPlaceholderText("Describe the reason this task is blocked…"), {
+        target: { value: "Другая причина" },
+      });
+
+      releaseInvalidate();
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      // Второе подтверждение живо, набранная причина цела, успех не приписан.
+      expect(
+        screen.getByPlaceholderText("Describe the reason this task is blocked…"),
+      ).toHaveValue("Другая причина");
+      expect(mocks.toast).not.toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Task marked as Blocked" }),
+      );
+    } finally {
+      invalidateSpy.mockRestore();
+    }
+  });
+
+  // Два стража ПОРЯДКА, а не экрана. Запись долетела — значит доска обязана
+  // обновиться, даже если человек уже ушёл: иначе она останется на старом
+  // статусе, и следующая попытка захватит устаревший expectedStatus. У пути
+  // «Готово» на это два отдельных теста; у «Заблокировано» их не было, и
+  // перенос сверки выше invalidateProjectTasks проходил молча.
+  it("обновляет доску, даже если человек ушёл ПОСЛЕ того, как запись долетела", async () => {
+    let releaseWrite: () => void = () => {};
+    const invalidateSpy = vi
+      .spyOn(QueryClient.prototype, "invalidateQueries")
+      .mockResolvedValue(undefined);
+
+    try {
+      mocks.changeTaskStatus.mockImplementation(
+        () => new Promise<void>((resolve) => { releaseWrite = () => resolve(); }),
+      );
+      mocks.usePermission.mockReturnValue(buildPermission("contractor"));
+      mocks.useTasks.mockReturnValue([buildTask({ status: "in_progress" })]);
+
+      renderProjectTasks();
+
+      fireEvent.click(screen.getByText("Estimate task"));
+      fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Blocked" }));
+      fireEvent.change(screen.getByPlaceholderText("Describe the reason this task is blocked…"), {
+        target: { value: "Waiting on materials" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: /Mark Blocked/i }));
+      await waitFor(() => expect(mocks.changeTaskStatus).toHaveBeenCalled());
+
+      fireEvent.click(screen.getByRole("button", { name: "Back" }));
+      invalidateSpy.mockClear();
+      releaseWrite();
+      await act(async () => { await Promise.resolve(); });
+
+      expect(invalidateSpy).toHaveBeenCalled();
+      expect(mocks.toast).not.toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Task marked as Blocked" }),
+      );
+    } finally {
+      invalidateSpy.mockRestore();
+    }
+  });
+
+  it("обновляет доску и когда брошенный прогон проиграл гонку статуса", async () => {
+    let rejectWrite: (error: unknown) => void = () => {};
+    const invalidateSpy = vi
+      .spyOn(QueryClient.prototype, "invalidateQueries")
+      .mockResolvedValue(undefined);
+
+    try {
+      mocks.changeTaskStatus.mockImplementation(
+        () => new Promise<void>((_resolve, reject) => { rejectWrite = reject; }),
+      );
+      mocks.usePermission.mockReturnValue(buildPermission("contractor"));
+      mocks.useTasks.mockReturnValue([buildTask({ status: "in_progress" })]);
+
+      renderProjectTasks();
+
+      fireEvent.click(screen.getByText("Estimate task"));
+      fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Blocked" }));
+      fireEvent.change(screen.getByPlaceholderText("Describe the reason this task is blocked…"), {
+        target: { value: "Waiting on materials" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: /Mark Blocked/i }));
+      await waitFor(() => expect(mocks.changeTaskStatus).toHaveBeenCalled());
+
+      fireEvent.click(screen.getByRole("button", { name: "Back" }));
+      invalidateSpy.mockClear();
+      rejectWrite(new TaskNoLongerAvailableError());
+      await act(async () => { await Promise.resolve(); });
+
+      expect(invalidateSpy).toHaveBeenCalled();
+    } finally {
+      invalidateSpy.mockRestore();
+    }
+  });
+
+  it("брошенный прогон НЕ пишет статус: отмена значит отмена", async () => {
+    // Решение владельца 22.09.2026, тем же правилом, что у пути «Готово».
+    // Ушёл из подтверждения, пока грузится источник, — записи быть не должно,
+    // иначе повторное подтверждение с другой причиной шлёт вторую запись, та
+    // проигрывает сверку, и задача остаётся с причиной из брошенного прогона.
+    let releaseSource: () => void = () => {};
+    mocks.getPlanningSource.mockImplementation(
+      () => new Promise((resolve) => {
+        releaseSource = () => resolve({ changeTaskStatus: mocks.changeTaskStatus });
+      }),
+    );
+    mocks.usePermission.mockReturnValue(buildPermission("contractor"));
+    mocks.useTasks.mockReturnValue([buildTask({ status: "in_progress" })]);
+
+    renderProjectTasks();
+
+    fireEvent.click(screen.getByText("Estimate task"));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Blocked" }));
+    fireEvent.change(screen.getByPlaceholderText("Describe the reason this task is blocked…"), {
+      target: { value: "Waiting on materials" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Mark Blocked/i }));
+
+    // Стоим на загрузке источника, запись ещё не ушла. Уходим.
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+
+    releaseSource();
+    await act(async () => { await Promise.resolve(); });
+
+    expect(mocks.changeTaskStatus).not.toHaveBeenCalled();
+  });
+
+  it("оставляет выход открытым, пока запись летит", async () => {
+    // Обработчика Escape у окна нет, таймаута у записи нет. Если закрыть и
+    // «Отмену», и клик мимо, зависшая сеть запирает человека до перезагрузки.
+    // Именно это и случилось 22.09.2026, и именно это здесь стережётся.
+    let releaseWrite: () => void = () => {};
+    mocks.changeTaskStatus.mockImplementation(
+      () => new Promise<void>((resolve) => { releaseWrite = () => resolve(); }),
+    );
+    mocks.usePermission.mockReturnValue(buildPermission("contractor"));
+    mocks.useTasks.mockReturnValue([buildTask({ status: "in_progress" })]);
+
+    renderProjectTasks();
+
+    fireEvent.click(screen.getByText("Estimate task"));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Blocked" }));
+    fireEvent.change(screen.getByPlaceholderText("Describe the reason this task is blocked…"), {
+      target: { value: "Waiting on materials" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Mark Blocked/i }));
+    await waitFor(() => expect(mocks.changeTaskStatus).toHaveBeenCalled());
+
+    // Запись висит, а уйти по-прежнему можно.
+    const back = screen.getByRole("button", { name: "Back" });
+    expect(back).not.toBeDisabled();
+    fireEvent.click(back);
+    expect(
+      screen.queryByPlaceholderText("Describe the reason this task is blocked…"),
+    ).not.toBeInTheDocument();
+
+    releaseWrite();
+    await act(async () => { await Promise.resolve(); });
   });
 
   it("still refreshes the board when the run is cancelled after the status write landed", async () => {
@@ -752,6 +949,62 @@ describe("ProjectTasks", () => {
     }
   });
 
+  // Regression: Back/Cancel used to drop the user on the board with nothing
+  // selected, so the task they were in the middle of had to be found again.
+  it("returns to the task card when the Done prompt is dismissed", async () => {
+    mocks.usePermission.mockReturnValue(buildPermission("contractor"));
+    mocks.useTasks.mockReturnValue([buildTask({ status: "in_progress" })]);
+
+    renderProjectTasks();
+
+    fireEvent.click(screen.getByText("Estimate task"));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Done" }));
+    expect(screen.getByText("Add final result photos")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+
+    expect(screen.queryByText("Add final result photos")).not.toBeInTheDocument();
+    // The card carries the title twice (the sr-only dialog title and the visible
+    // heading), so assert presence rather than uniqueness.
+    expect(within(screen.getByRole("dialog")).getAllByText("Estimate task").length).toBeGreaterThan(0);
+  });
+
+  it("returns to the task card when the Blocked prompt is dismissed", async () => {
+    mocks.usePermission.mockReturnValue(buildPermission("contractor"));
+    mocks.useTasks.mockReturnValue([buildTask({ status: "in_progress" })]);
+
+    renderProjectTasks();
+
+    fireEvent.click(screen.getByText("Estimate task"));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Blocked" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+
+    expect(within(screen.getByRole("dialog")).getAllByText("Estimate task").length).toBeGreaterThan(0);
+  });
+
+  // Opened by dragging a board card, there is no card to go back to, so the
+  // button says Cancel and dismissing it leaves the board alone.
+  it("offers Cancel, not Back, for a prompt opened from the board", async () => {
+    mocks.usePermission.mockReturnValue(buildPermission("contractor"));
+    mocks.useTasks.mockReturnValue([buildTask({ status: "in_progress" })]);
+
+    const { container } = renderProjectTasks();
+
+    const card = container.querySelector('[draggable="true"]') as HTMLElement;
+    const blockedColumn = screen.getByText("Blocked").closest("div")?.parentElement as HTMLElement;
+    // jsdom fires a DragEvent with no DataTransfer, so `handleDragStart` throws
+    // on `e.dataTransfer.effectAllowed` unless the stub is supplied here.
+    fireEvent.dragStart(card, { dataTransfer: { effectAllowed: "none" } });
+    fireEvent.drop(blockedColumn);
+
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
   it("lets a cancelled upload run finish without disturbing a prompt opened afterwards", async () => {
     let releaseUpload: () => void = () => {};
     const prepareUpload = vi.fn().mockResolvedValue({
@@ -781,9 +1034,9 @@ describe("ProjectTasks", () => {
     fireEvent.click(screen.getByRole("button", { name: /Mark Done/i }));
     await waitFor(() => expect(uploadBytes).toHaveBeenCalled());
 
-    // Abandon it, then open the prompt again on the same task.
+    // Abandon it, then open the prompt again on the same task. Back lands back on
+    // the card, so the second prompt opens from there.
     fireEvent.click(screen.getByRole("button", { name: "Back" }));
-    fireEvent.click(screen.getByText("Estimate task"));
     fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Done" }));
     expect(screen.getByText("Add final result photos")).toBeInTheDocument();
 

@@ -59,6 +59,8 @@ interface Props {
   taskStructureReadOnly?: boolean;
   blockEstimateLinkedDelete?: boolean;
   disableStatusChanges?: boolean;
+  /** The status whose write is in flight, so the pressed chip can show it is working. */
+  pendingStatus?: TaskStatus | null;
   onStatusChange?: (taskId: string, newStatus: TaskStatus) => void;
   onTitleChange?: (taskId: string, title: string) => Promise<void> | void;
   onDescriptionChange?: (taskId: string, description: string) => Promise<void> | void;
@@ -84,6 +86,7 @@ export function TaskDetailModal({
   taskStructureReadOnly = false,
   blockEstimateLinkedDelete = false,
   disableStatusChanges = false,
+  pendingStatus = null,
   onStatusChange,
   onTitleChange,
   onDescriptionChange,
@@ -152,10 +155,13 @@ export function TaskDetailModal({
   const handleStatusChange = useCallback((status: TaskStatus) => {
     if (!task) return;
     if (disableStatusChanges) return;
+    // A second click while the first write is still travelling would fire another
+    // request against an expectedStatus that is about to be stale.
+    if (pendingStatus) return;
     if (onStatusChange) {
       onStatusChange(task.id, status);
     }
-  }, [task, disableStatusChanges, onStatusChange]);
+  }, [task, disableStatusChanges, pendingStatus, onStatusChange]);
 
   // Title inline edit
   const handleTitleSave = useCallback(() => {
@@ -399,24 +405,38 @@ export function TaskDetailModal({
             <div>
               <p id={statusGroupLabelId} className="text-caption text-muted-foreground mb-1">{t("tasks.modal.sectionStatus")}</p>
               <div role="group" aria-labelledby={statusGroupLabelId} className="flex flex-wrap gap-1.5">
-                {statuses.map((s) => (
-                  <button
-                    key={s}
-                    disabled={!canChangeStatus || disableStatusChanges}
-                    aria-pressed={task.status === s}
-                    onClick={() => handleStatusChange(s)}
-                    className={`rounded-full px-2.5 py-0.5 text-caption font-medium transition-colors ${
-                      task.status === s
-                        ? s === "not_started" ? "bg-muted text-foreground ring-1 ring-border"
-                        : s === "in_progress" ? "bg-info/15 text-info ring-1 ring-info/30"
-                        : s === "done" ? "bg-success/15 text-success ring-1 ring-success/30"
-                        : "bg-destructive/15 text-destructive ring-1 ring-destructive/30"
-                        : "bg-muted/60 text-muted-foreground hover:bg-muted"
-                    } disabled:opacity-50 disabled:cursor-not-allowed`}
-                  >
-                    {t(statusLabelKey[s])}
-                  </button>
-                ))}
+                {statuses.map((s) => {
+                  const isPending = pendingStatus === s;
+                  return (
+                    <button
+                      key={s}
+                      disabled={!canChangeStatus || disableStatusChanges || Boolean(pendingStatus)}
+                      // aria-pressed держится за ПОДТВЕРЖДЁННЫЙ статус, а не за
+                      // оптимистичную подсветку: если запись провалится, диктор
+                      // не должен успеть объявить нажатым то, чего сервер не
+                      // принял. Подсветка оптимистична намеренно, озвучка — нет.
+                      //
+                      // Что при этом РЕАЛЬНО услышит пользователь — вопрос
+                      // открытый: плашка на время полёта `disabled`, то есть
+                      // выпадает из порядка обхода, и aria-busy на ней диктор
+                      // может не прочитать вовсе. Заведено отдельно.
+                      aria-pressed={task.status === s}
+                      aria-busy={isPending}
+                      onClick={() => handleStatusChange(s)}
+                      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-caption font-medium transition-colors ${
+                        task.status === s || isPending
+                          ? s === "not_started" ? "bg-muted text-foreground ring-1 ring-border"
+                          : s === "in_progress" ? "bg-info/15 text-info ring-1 ring-info/30"
+                          : s === "done" ? "bg-success/15 text-success ring-1 ring-success/30"
+                          : "bg-destructive/15 text-destructive ring-1 ring-destructive/30"
+                          : "bg-muted/60 text-muted-foreground hover:bg-muted"
+                      } disabled:cursor-not-allowed ${isPending ? "opacity-100" : "disabled:opacity-50"}`}
+                    >
+                      {isPending && <Loader2 className="h-3 w-3 animate-spin" />}
+                      {t(statusLabelKey[s])}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 

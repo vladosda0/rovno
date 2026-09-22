@@ -47,7 +47,12 @@ export function DocsWidget({ documents, projectId, className }: Props) {
             {items.slice(0, 4).map((d) => {
               const latestVersion = d.versions[d.versions.length - 1];
               return (
-                <div key={d.id} className="flex items-center gap-2 rounded-panel bg-muted/40 p-1.5 px-sp-2">
+                <Link
+                  key={d.id}
+                  to={`/project/${projectId}/documents`}
+                  state={{ openDocumentId: d.id }}
+                  className="flex items-center gap-2 rounded-panel bg-muted/40 p-1.5 px-sp-2 hover:bg-muted/70 transition-colors"
+                >
                   <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                   <span className="text-caption text-foreground flex-1 truncate">{d.title}</span>
                   {isPinned(d) && (
@@ -56,7 +61,7 @@ export function DocsWidget({ documents, projectId, className }: Props) {
                     </span>
                   )}
                   <span className="text-[10px] text-muted-foreground">{t("docsWidget.docLabel")}</span>
-                </div>
+                </Link>
               );
             })}
           </div>

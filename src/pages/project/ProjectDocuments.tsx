@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { format } from "date-fns";
-import { useParams } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { trackEvent } from "@/lib/analytics";
 import {
@@ -269,6 +269,22 @@ export default function ProjectDocuments() {
     // invalidateDocumentShares is stable (useCallback on the ids it closes over).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shareDocId]);
+
+  // Deep-link: open the document the dashboard docs widget was clicked on. Same
+  // navigation-state convention the task board uses for `openTaskId`. Consumed
+  // once, because `documents` changes identity on refetch and re-running would
+  // reopen the preview the user just closed.
+  const location = useLocation();
+  const consumedDocumentIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    const requestedId = (location.state as { openDocumentId?: string } | null)?.openDocumentId;
+    if (!requestedId) return;
+    if (consumedDocumentIdRef.current === requestedId) return;
+    const target = documents.find((entry) => entry.id === requestedId);
+    if (!target) return;
+    consumedDocumentIdRef.current = requestedId;
+    setViewDoc(target);
+  }, [documents, location.state]);
 
   const effectiveInternalDocs = useMemo(
     () => effectiveInternalDocsVisibilityForSeam(perm.seam.membership),

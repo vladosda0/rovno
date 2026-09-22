@@ -130,9 +130,11 @@ function createDocument(partial: Partial<Document> = {}): Document {
   };
 }
 
-function renderProjectDocuments() {
+function renderProjectDocuments(state?: { openDocumentId?: string }) {
   return render(
-    <MemoryRouter initialEntries={["/project/project-1/documents"]}>
+    <MemoryRouter
+      initialEntries={[{ pathname: "/project/project-1/documents", state: state ?? null }]}
+    >
       <Routes>
         <Route path="/project/:id/documents" element={<ProjectDocuments />} />
       </Routes>
@@ -240,6 +242,36 @@ describe("ProjectDocuments", () => {
     expect(screen.queryByText("Type")).not.toBeInTheDocument();
     expect(screen.queryByText("specification")).not.toBeInTheDocument();
     expect(screen.queryByTitle("New version")).not.toBeInTheDocument();
+  });
+
+  // Arriving from the dashboard documents widget: the document that was clicked
+  // opens, not just the page it lives on.
+  it("opens the document named by the navigation state", async () => {
+    mockUseWorkspaceMode.mockReturnValue({ kind: "local" });
+    mockUseProjectDocumentsState.mockReturnValue({
+      documents: [
+        createDocument({ id: "doc-1", title: "Contract" }),
+        createDocument({ id: "doc-2", title: "Wiring diagram" }),
+      ],
+      isLoading: false,
+    });
+
+    renderProjectDocuments({ openDocumentId: "doc-2" });
+
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getAllByText("Wiring diagram").length).toBeGreaterThan(0);
+  });
+
+  it("ignores a navigation state pointing at a document that is not there", () => {
+    mockUseWorkspaceMode.mockReturnValue({ kind: "local" });
+    mockUseProjectDocumentsState.mockReturnValue({
+      documents: [createDocument({ id: "doc-1", title: "Contract" })],
+      isLoading: false,
+    });
+
+    renderProjectDocuments({ openDocumentId: "deleted-document" });
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("switches to grid mode while keeping preview and archive grouping intact", () => {

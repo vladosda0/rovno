@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   Upload, Camera, X, ImageIcon, Sparkles, Check, Loader2, AlertTriangle,
@@ -97,6 +97,24 @@ export default function ProjectGallery() {
   const [uploadVisibilityClass, setUploadVisibilityClass] = useState<DocMediaVisibilityClass>("shared_project");
   const [slots, setSlots] = useState<UploadSlot[]>(() => [makeIdleSlot()]);
   const [viewPhoto, setViewPhoto] = useState<MediaType | null>(null);
+
+  // Deep-link: open a photo the dashboard gallery widget was clicked on. Same
+  // navigation-state convention the task board uses for `openTaskId`.
+  //
+  // `photos` has to be a dependency because the list is still loading on arrival,
+  // but it changes identity on every refetch — so consume the id exactly once,
+  // or closing the viewer would be undone by the next refetch.
+  const location = useLocation();
+  const consumedPhotoIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    const requestedId = (location.state as { openPhotoId?: string } | null)?.openPhotoId;
+    if (!requestedId) return;
+    if (consumedPhotoIdRef.current === requestedId) return;
+    const target = photos.find((entry) => entry.id === requestedId);
+    if (!target) return;
+    consumedPhotoIdRef.current = requestedId;
+    setViewPhoto(target);
+  }, [location.state, photos]);
 
   const anySlotBusy = slots.some((s) => s.status === "optimizing" || s.status === "uploading");
   const completedSlotCount = slots.filter((s) => s.status === "done").length;

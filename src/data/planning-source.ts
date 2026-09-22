@@ -13,6 +13,14 @@ import type {
   ResourceLineType,
 } from "@/types/estimate-v2";
 import {
+  countTaskStatuses,
+  EMPTY_PROJECT_TASK_STATUS_COUNTS,
+  normalizeTaskStatus,
+  type ProjectStatusSummary,
+  type ProjectTaskStatusCounts,
+} from "@/lib/project-status";
+import { getEstimateV2ProjectState } from "@/data/estimate-v2-store";
+import {
   checklistEstimateV2ResourceType,
   parsePersistedEstimateResourceType,
   resourceLineTypeFromPersisted,
@@ -117,6 +125,15 @@ export interface PlanningSource {
   mode: WorkspaceMode["kind"];
   getProjectStages: (projectId: string) => Promise<Stage[]>;
   getProjectTasks: (projectId: string) => Promise<Task[]>;
+  /**
+   * What the project lists need per row: the estimate's execution status (the
+   * project's status) plus task tallies for the progress bar. Deliberately NOT
+   * getProjectTasks in a loop — that one also pulls checklists, comments and
+   * estimate lines, three or more round-trips per row to end up with a badge.
+   */
+  getProjectsStatusSummary: (
+    projectIds: string[],
+  ) => Promise<Record<string, ProjectStatusSummary>>;
   createProjectStage: (input: CreateProjectStageInput) => Promise<Stage>;
   createProjectTask: (input: CreateProjectTaskInput) => Promise<Task>;
   updateProjectTask: (taskId: string, patch: UpdateProjectTaskInput) => Promise<Task>;
@@ -330,6 +347,25 @@ function createBrowserPlanningSource(mode: "demo" | "local"): PlanningSource {
     },
     async getProjectTasks(projectId: string) {
       return store.getTasks(projectId);
+    },
+
+    async getProjectsStatusSummary(projectIds: string[]) {
+      return Object.fromEntries(projectIds.map((projectId) => {
+        // The estimate store already resolves the server value, the cached one
+        // and the inference chain, so read its answer rather than redo it.
+        const estimateState = getEstimateV2ProjectState(projectId);
+        return [projectId, {
+          executionStatus: estimateState.project.estimateStatus ?? null,
+          estimateApproved: false,
+          // false, а не пересчёт: estimateStatus у стора НЕнулевой и засевается
+          // «planning», поэтому ветка вывода здесь недостижима и сигнал никто
+          // не прочитает. Повторять предикат стора в третьем месте ради
+          // мёртвого кода — значит завести третью копию, которую придётся
+          // держать в синхроне. Разблокируется вместе с rovno#165.
+          hasLinkedEstimateChecklist: false,
+          taskCounts: countTaskStatuses(store.getTasks(projectId)),
+        } satisfies ProjectStatusSummary];
+      }));
     },
 
     async createProjectStage(input: CreateProjectStageInput) {
@@ -1129,6 +1165,88 @@ function createSupabasePlanningSource(
         };
         return overlayEstimateLinkedAssigneeFromChecklist(merged);
       });
+    },
+
+    async getProjectsStatusSummary(projectIds: string[]) {
+      // Every requested project gets an entry, so a project with no estimate and
+      // no tasks reads as a settled "planning" rather than as "still loading".
+      const summaries: Record<string, ProjectStatusSummary> = Object.fromEntries(
+        projectIds.map((projectId) => [projectId, {
+          executionStatus: null,
+          estimateApproved: false,
+          hasLinkedEstimateChecklist: false,
+          taskCounts: { ...EMPTY_PROJECT_TASK_STATUS_COUNTS },
+        } satisfies ProjectStatusSummary]),
+      );
+      if (projectIds.length === 0) {
+        return summaries;
+      }
+
+      const [tasksResult, estimatesResult, linkedChecklistResult] = await Promise.all([
+        supabase.from("tasks").select("project_id, status").in("project_id", projectIds),
+        supabase
+          .from("project_estimates")
+          .select("project_id, status, execution_status")
+          .in("project_id", projectIds),
+        // Третий сигнал вывода статуса, тот же, что у стора смет. Встраивание
+        // `tasks!inner` однозначно: из task_checklist_items к tasks идёт ровно
+        // один внешний ключ (task_checklist_items_task_id_fkey), проверено на
+        // стенде. `!inner` обязателен — без него строки без связанной задачи
+        // вернулись бы с tasks: null.
+        supabase
+          .from("task_checklist_items")
+          .select("tasks!inner(project_id)")
+          .in("tasks.project_id", projectIds)
+          .or("estimate_work_id.not.is.null,estimate_resource_line_id.not.is.null"),
+      ]);
+
+      if (tasksResult.error) {
+        throw tasksResult.error;
+      }
+      if (estimatesResult.error) {
+        throw estimatesResult.error;
+      }
+      // Третий сигнал УТОЧНЯЕТ статус (на стенде он переворачивает 3 проекта
+      // из 38), поэтому его отказ не должен гасить статус и прогресс у всех
+      // остальных. Первые два запроса несут сами данные и по-прежнему бросают.
+      const linkedChecklistRows = linkedChecklistResult.error ? [] : (linkedChecklistResult.data ?? []);
+
+      (tasksResult.data ?? []).forEach((row) => {
+        const bucket = summaries[row.project_id];
+        if (!bucket) return;
+        const key = normalizeTaskStatus(row.status as string);
+        if (key) bucket.taskCounts[key] += 1;
+      });
+
+      (estimatesResult.data ?? []).forEach((row) => {
+        const bucket = summaries[row.project_id];
+        if (!bucket) return;
+        // A project is expected to carry one estimate root, but nothing in the
+        // schema forbids a second. Правило здесь ровно одно: строка с null
+        // НИКОГДА не затирает уже записанный статус. Если статус стоит у двух
+        // строк, выигрывает последняя в ответе — порядок не задан, и выбирать
+        // между ними это отдельное решение, которого тут нет.
+        if (row.execution_status) {
+          bucket.executionStatus = row.execution_status as EstimateExecutionStatus;
+        }
+        if (row.status === "approved") {
+          bucket.estimateApproved = true;
+        }
+      });
+
+      linkedChecklistRows.forEach((row) => {
+        // Замерено на стенде: PostgREST отдаёт встроенную связь «к одному»
+        // объектом, массива не было ни в одной строке. Ветка массива
+        // оборонительная, а не рабочая: типы клиента её допускают, и молча
+        // получить undefined вместо project_id хуже, чем разобрать обе формы.
+        const embedded = (row as { tasks?: { project_id?: string } | { project_id?: string }[] }).tasks;
+        const projectId = Array.isArray(embedded) ? embedded[0]?.project_id : embedded?.project_id;
+        if (!projectId) return;
+        const bucket = summaries[projectId];
+        if (bucket) bucket.hasLinkedEstimateChecklist = true;
+      });
+
+      return summaries;
     },
 
     async createProjectStage(input: CreateProjectStageInput) {

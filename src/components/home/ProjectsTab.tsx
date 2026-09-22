@@ -23,17 +23,13 @@ import { planningQueryKeys } from "@/hooks/use-planning-source";
 import { toast } from "@/hooks/use-toast";
 import { workspaceQueryKeys } from "@/hooks/use-workspace-source";
 import { trackEvent } from "@/lib/analytics";
-
-function getStatusKey(progress: number): string {
-  if (progress >= 100) return "status.done";
-  if (progress > 0) return "status.inProgress";
-  return "status.draft";
-}
-function getStatusColor(progress: number): string {
-  if (progress >= 100) return "bg-success/15 text-success";
-  if (progress > 0) return "bg-info/15 text-info";
-  return "bg-muted text-muted-foreground";
-}
+import { useProjectsStatusSummary } from "@/hooks/use-planning-source";
+import {
+  deriveProjectProgressPct,
+  deriveProjectStatus,
+  PROJECT_STATUS_BADGE_CLASS,
+  PROJECT_STATUS_LABEL_KEY,
+} from "@/lib/project-status";
 
 type SortKey = "activity" | "progress" | "name";
 
@@ -68,6 +64,17 @@ export function ProjectsTab() {
   const [deleteConfirmInput, setDeleteConfirmInput] = useState("");
   const [deleting, setDeleting] = useState(false);
 
+  // Status comes from the estimate's execution status (the one set on the
+  // estimate page) and progress from the tasks. Neither comes from
+  // `projects.progress_pct` any more: that column is written once at creation
+  // and never updated, so every real project read as 0% and "Черновик" forever.
+  const statusSummaries = useProjectsStatusSummary(projects.map((p) => p.id));
+
+  const progressOf = (p: { id: string; progress_pct: number }): number => {
+    const summary = statusSummaries[p.id];
+    return summary ? deriveProjectProgressPct(summary.taskCounts, p.progress_pct) : p.progress_pct;
+  };
+
   const filteredProjects = projects
     .filter((p) => {
       if (search && !p.title.toLowerCase().includes(search.toLowerCase())) return false;
@@ -75,7 +82,14 @@ export function ProjectsTab() {
       return true;
     })
     .sort((a, b) => {
-      if (sortBy === "progress") return b.progress_pct - a.progress_pct;
+      if (sortBy === "progress") {
+        // По тому же числу, которое нарисовано на карточке. Прежняя сортировка
+        // шла по progress_pct, а она у 37 проектов из 38 равна нулю, то есть
+        // была пустышкой; с этой правки карточка и порядок перестали расходиться.
+        // Список пересортируется, когда доедет сводка: это заметно, но лучше,
+        // чем кнопка, которая не делает ничего.
+        return progressOf(b) - progressOf(a);
+      }
       if (sortBy === "name") return a.title.localeCompare(b.title);
       return 0; // activity — keep original order
     });
@@ -343,7 +357,15 @@ export function ProjectsTab() {
 
       {/* Projects grid — full width, three columns on large screens */}
       <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
-          {filteredProjects.map((p) => (
+          {filteredProjects.map((p) => {
+            // No entry yet means the summary is still loading. Show no badge
+            // rather than assert a status for a second and then correct it.
+            const summary = statusSummaries[p.id];
+            const status = summary ? deriveProjectStatus(summary) : null;
+            const progressPct = summary
+              ? deriveProjectProgressPct(summary.taskCounts, p.progress_pct)
+              : p.progress_pct;
+            return (
             <div key={p.id} className="glass group relative space-y-2 rounded-card p-4 sm:p-6">
               {p.owner_id === currentUser.id && (
                 <button
@@ -359,12 +381,21 @@ export function ProjectsTab() {
               <Link to={`/project/${p.id}/dashboard`} className="space-y-2">
                 <div className="flex items-start justify-between gap-2 pr-8">
                   <h3 className="text-body font-semibold text-foreground truncate">{p.title}</h3>
-                  <span className={`text-caption font-medium px-2 py-0.5 rounded-pill shrink-0 ${getStatusColor(p.progress_pct)}`}>
-                    {t(getStatusKey(p.progress_pct))}
-                  </span>
+                  {status && (
+                    <span className={`text-caption font-medium px-2 py-0.5 rounded-pill shrink-0 ${PROJECT_STATUS_BADGE_CLASS[status]}`}>
+                      {t(PROJECT_STATUS_LABEL_KEY[status])}
+                    </span>
+                  )}
                 </div>
-                <Progress value={p.progress_pct} className="h-1.5" />
-                <p className="text-caption text-muted-foreground">{t("projectsTab.percentComplete", { percent: p.progress_pct })}</p>
+                {/* Процент не утверждается, пока сводка не доехала, по той же
+                    причине, что и бейдж: показать 0% и через мгновение 67%
+                    хуже, чем не показать ничего. */}
+                {summary && (
+                  <>
+                    <Progress value={progressPct} className="h-1.5" />
+                    <p className="text-caption text-muted-foreground">{t("projectsTab.percentComplete", { percent: progressPct })}</p>
+                  </>
+                )}
               </Link>
               {folders.length > 0 && (
                 <Select value={projectFolders[p.id] || ""} onValueChange={(v) => moveToFolder(p.id, v)}>
@@ -380,7 +411,8 @@ export function ProjectsTab() {
                 </Select>
               )}
             </div>
-          ))}
+            );
+          })}
           {filteredProjects.length === 0 && (
             <div className="col-span-full flex flex-col items-center gap-sp-1 py-sp-4 text-center">
               <p className="text-body text-muted-foreground">{t("projectsTab.noProjects")}</p>

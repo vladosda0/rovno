@@ -18,17 +18,13 @@ import { useWorkspaceProjectsSensitiveDetailMap } from "@/hooks/use-home-sensiti
 import { getActivityDisplayDetailForHome } from "@/lib/activity-display";
 import { getEventCaption, isFallbackActor } from "@/lib/event-catalog";
 import { isAIEvent } from "@/components/ai/event-utils";
-
-function getStatusColor(progress: number): string {
-  if (progress >= 100) return "bg-success/15 text-success";
-  if (progress > 0) return "bg-info/15 text-info";
-  return "bg-muted text-muted-foreground";
-}
-function getStatusKey(progress: number): string {
-  if (progress >= 100) return "status.done";
-  if (progress > 0) return "status.inProgress";
-  return "status.draft";
-}
+import { useProjectsStatusSummary } from "@/hooks/use-planning-source";
+import {
+  deriveProjectProgressPct,
+  deriveProjectStatus,
+  PROJECT_STATUS_BADGE_CLASS,
+  PROJECT_STATUS_LABEL_KEY,
+} from "@/lib/project-status";
 
 export function OverviewTab() {
   const { t } = useTranslation();
@@ -53,6 +49,10 @@ export function OverviewTab() {
   const recentProjects = [...projects]
     .sort((a, b) => b.progress_pct - a.progress_pct)
     .slice(0, 5);
+  // Same derivation as the projects tab: status from the estimate's execution
+  // status, progress from the tasks. The stored `progress_pct` is never updated
+  // after creation, so it is not the truth about either.
+  const statusSummaries = useProjectsStatusSummary(recentProjects.map((p) => p.id));
   const recentActivityByProject = useProjectsRecentEventsMap(
     projects.slice(0, 3).map((project) => project.id),
     2,
@@ -123,21 +123,32 @@ export function OverviewTab() {
                 </Button>
               </div>
               <div className="space-y-2">
-                {recentProjects.map((p) => (
-                  <Link
-                    key={p.id}
-                    to={`/project/${p.id}/dashboard`}
-                    className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="text-body-sm font-medium text-foreground truncate">{p.title}</p>
-                      <Progress value={p.progress_pct} className="h-1 mt-1" />
-                    </div>
-                    <span className={`text-caption font-medium px-2 py-0.5 rounded-pill shrink-0 ${getStatusColor(p.progress_pct)}`}>
-                      {t(getStatusKey(p.progress_pct))}
-                    </span>
-                  </Link>
-                ))}
+                {recentProjects.map((p) => {
+                  // No entry yet means the summary is still loading; show no
+                  // badge rather than assert a status and then correct it.
+                  const summary = statusSummaries[p.id];
+                  const status = summary ? deriveProjectStatus(summary) : null;
+                  const progressPct = summary
+                    ? deriveProjectProgressPct(summary.taskCounts, p.progress_pct)
+                    : p.progress_pct;
+                  return (
+                    <Link
+                      key={p.id}
+                      to={`/project/${p.id}/dashboard`}
+                      className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-body-sm font-medium text-foreground truncate">{p.title}</p>
+                        {summary && <Progress value={progressPct} className="h-1 mt-1" />}
+                      </div>
+                      {status && (
+                        <span className={`text-caption font-medium px-2 py-0.5 rounded-pill shrink-0 ${PROJECT_STATUS_BADGE_CLASS[status]}`}>
+                          {t(PROJECT_STATUS_LABEL_KEY[status])}
+                        </span>
+                      )}
+                    </Link>
+                  );
+                })}
                 {recentProjects.length === 0 && (
                   <p className="text-caption text-muted-foreground py-4 text-center">{t("overview.noProjects")}</p>
                 )}
@@ -170,6 +181,7 @@ export function OverviewTab() {
                     <Link
                       key={task.id}
                       to={`/project/${task.project_id}/tasks`}
+                      state={{ openTaskId: task.id }}
                       className="flex items-center gap-2 p-2 rounded-lg hover:bg-muted/50 transition-colors"
                     >
                       <div className="flex-1 min-w-0">
@@ -201,6 +213,7 @@ export function OverviewTab() {
                     <Link
                       key={t.id}
                       to={`/project/${t.project_id}/tasks`}
+                      state={{ openTaskId: t.id }}
                       className="flex items-center gap-2 p-2 rounded-lg hover:bg-destructive/5 transition-colors"
                     >
                       <p className="text-body-sm text-foreground truncate flex-1">{t.title}</p>

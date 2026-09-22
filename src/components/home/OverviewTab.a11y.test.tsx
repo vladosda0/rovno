@@ -4,6 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { OverviewTab } from "@/components/home/OverviewTab";
 import i18n from "@/i18n";
@@ -20,6 +21,12 @@ const mocks = vi.hoisted(() => ({
   getAllTasks: vi.fn(() => []),
   getProject: vi.fn(() => undefined),
   getUserById: vi.fn(() => undefined),
+  // Список проектов на главной берёт статус и прогресс из сметы и задач, и эта
+  // ветка тянет @/data/store глубже: inventory-store зовёт getProjects прямо
+  // при загрузке модуля. Без этих двух мок недостаточен, и файл падает на
+  // импорте, а не на проверке.
+  getProjects: vi.fn(() => []),
+  subscribe: vi.fn(() => () => {}),
 }));
 
 vi.mock("@/hooks/use-mock-data", () => ({
@@ -40,6 +47,8 @@ vi.mock("@/data/store", () => ({
   getAllTasks: mocks.getAllTasks,
   getProject: mocks.getProject,
   getUserById: mocks.getUserById,
+  getProjects: mocks.getProjects,
+  subscribe: mocks.subscribe,
 }));
 
 vi.mock("@/components/home/OrgBlock", () => ({
@@ -67,9 +76,11 @@ afterEach(async () => {
 describe("OverviewTab view-all controls", () => {
   it("names both widget controls in Russian", () => {
     render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <MemoryRouter>
         <OverviewTab />
-      </MemoryRouter>,
+      </MemoryRouter>
+      </QueryClientProvider>,
     );
 
     expect(screen.getByRole("button", { name: "Все проекты" })).toBeInTheDocument();
@@ -78,9 +89,11 @@ describe("OverviewTab view-all controls", () => {
 
   it("leaves no English accessible name on the widgets", () => {
     const { container } = render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <MemoryRouter>
         <OverviewTab />
-      </MemoryRouter>,
+      </MemoryRouter>
+      </QueryClientProvider>,
     );
 
     const english = Array.from(container.querySelectorAll("[aria-label]")).filter((el) =>

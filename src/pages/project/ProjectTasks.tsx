@@ -202,7 +202,14 @@ export default function ProjectTasks() {
   // projection invalidation), so re-reading the live list would adopt another
   // session's concurrent move as the "expected" value and the CAS in
   // change_task_status_v2 would always agree with itself.
-  const [donePrompt, setDonePrompt] = useState<{ taskId: string; expectedStatus: TaskStatus } | null>(null);
+  // `returnToTaskId` is the task card the prompt was opened FROM, captured at open
+  // time because opening the prompt closes that card. Back/Cancel reopens it
+  // instead of dropping the user on the board with nothing selected and the task
+  // to find again. Null when the prompt came from a board drag, where no card was
+  // open to return to.
+  const [donePrompt, setDonePrompt] = useState<
+    { taskId: string; expectedStatus: TaskStatus; returnToTaskId: string | null } | null
+  >(null);
   const [doneFiles, setDoneFiles] = useState<File[]>([]);
   const [doneUploading, setDoneUploading] = useState(false);
   const [doneFilesResetKey, setDoneFilesResetKey] = useState(0);
@@ -213,8 +220,22 @@ export default function ProjectTasks() {
   const [doneComment, setDoneComment] = useState("");
 
   // --- Blocked prompt --- (same capture-at-open rule as the Done prompt above)
-  const [blockedPrompt, setBlockedPrompt] = useState<{ taskId: string; expectedStatus: TaskStatus } | null>(null);
+  const [blockedPrompt, setBlockedPrompt] = useState<
+    { taskId: string; expectedStatus: TaskStatus; returnToTaskId: string | null } | null
+  >(null);
   const [blockedReason, setBlockedReason] = useState("");
+  const [blockedSubmitting, setBlockedSubmitting] = useState(false);
+  // Тот же приём, что у подтверждения «Готово»: уход из подтверждения бросает
+  // текущий прогон, а не блокируется им. Без этого «Заблокировано» становится
+  // полноэкранным окном без Escape, из которого при зависшей сети нет выхода.
+  const blockedRunIdRef = useRef(0);
+
+  // The status write the user is waiting on. Round-tripping to the server takes
+  // seconds, and without this the chip the user pressed looked untouched for all
+  // of them, so the click read as ignored and got repeated.
+  const [pendingStatusChange, setPendingStatusChange] = useState<
+    { taskId: string; status: TaskStatus } | null
+  >(null);
 
   // Derived
   const deleteStage_ = stages.find((s) => s.id === deleteStageId);
@@ -276,19 +297,24 @@ export default function ProjectTasks() {
         return;
       }
       setBlockedPrompt(null); // close any existing prompt
+      // Remember the open card so Back returns to it (null when this came from a
+      // board drag, or from another task's card).
+      const returnToTaskId = selectedTaskId === taskId ? taskId : null;
       setSelectedTaskId(null);
-      setDonePrompt({ taskId, expectedStatus: task.status });
+      setDonePrompt({ taskId, expectedStatus: task.status, returnToTaskId });
       setDoneFiles([]);
       setDoneComment("");
       return;
     }
     if (newStatus === "blocked") {
       setDonePrompt(null); // close any existing prompt
+      const returnToTaskId = selectedTaskId === taskId ? taskId : null;
       setSelectedTaskId(null);
-      setBlockedPrompt({ taskId, expectedStatus: task.status });
+      setBlockedPrompt({ taskId, expectedStatus: task.status, returnToTaskId });
       setBlockedReason("");
       return;
     }
+    setPendingStatusChange({ taskId, status: newStatus });
     void (async () => {
       try {
         const source = await getPlanningSource(
@@ -320,9 +346,15 @@ export default function ProjectTasks() {
           description: error instanceof Error ? error.message : t("tasks.toast.statusUpdateFailed.fallback"),
           variant: "destructive",
         });
+      } finally {
+        // Clear only our own run: a second, later change already owns the flag
+        // by then, and blanking it here would hide that one's spinner.
+        setPendingStatusChange((current) => (
+          current?.taskId === taskId && current.status === newStatus ? null : current
+        ));
       }
     })();
-  }, [canChangeTaskStatus, tasks, toast, workspaceMode, invalidateProjectTasks, pid, t]);
+  }, [canChangeTaskStatus, selectedTaskId, tasks, toast, workspaceMode, invalidateProjectTasks, pid, t]);
 
   // A prompt whose compare-and-set can no longer land converges exactly the way
   // the RPC's own P0002 path does: refetch and tell the user the list moved. A
@@ -346,7 +378,17 @@ export default function ProjectTasks() {
     setDoneFiles([]);
     setDoneComment("");
     setDoneUploading(false);
-  }, []);
+    // One step back, not all the way out: reopen the card this prompt came from.
+    if (donePrompt?.returnToTaskId) setSelectedTaskId(donePrompt.returnToTaskId);
+  }, [donePrompt]);
+
+  const cancelBlockedPrompt = useCallback(() => {
+    blockedRunIdRef.current += 1;
+    setBlockedPrompt(null);
+    setBlockedReason("");
+    setBlockedSubmitting(false);
+    if (blockedPrompt?.returnToTaskId) setSelectedTaskId(blockedPrompt.returnToTaskId);
+  }, [blockedPrompt]);
 
   const handleConfirmDone = useCallback(async () => {
     if (!donePrompt) return;
@@ -501,10 +543,28 @@ export default function ProjectTasks() {
       await convergeStalePrompt();
       return;
     }
+    const runId = blockedRunIdRef.current + 1;
+    blockedRunIdRef.current = runId;
+    const isCurrentRun = () => blockedRunIdRef.current === runId;
+
+    setBlockedSubmitting(true);
     try {
       const source = await getPlanningSource(
         workspaceMode.kind === "pending-supabase" ? undefined : workspaceMode,
       );
+      // Четвёртая точка сверки, и она о ЗАПИСИ, а не об экране: решение
+      // владельца 22.09.2026 — уход из подтверждения отменяет и саму запись.
+      //
+      // Окно, которое она реально закрывает, УЗКОЕ, и это надо знать. Отменить
+      // уже улетевший запрос нельзя: changeTaskStatus ниже не принимает
+      // AbortSignal, ровно как upload() на пути «Готово». Сверка закрывает
+      // только загрузку источника, а она в проде разрешается за один микротик
+      // (модуль уже загружен списком задач), так что успеть нажать «Назад»
+      // внутри неё человек не может. Отмена ВО ВРЕМЯ самой записи её не
+      // отменяет: запись долетает, и повторное подтверждение с другой причиной
+      // по-прежнему шлёт вторую. Это предсуществующая потеря, она заведена
+      // отдельно и здесь не чинится.
+      if (!isCurrentRun()) return;
       // The RPC enforces the reason-required guard and inserts the blocker
       // comment once, server-side, alongside the status change.
       await source.changeTaskStatus(blockedPrompt.taskId, "blocked", {
@@ -512,6 +572,11 @@ export default function ProjectTasks() {
         commentBody: t("tasks.toast.blockerPrefix", { reason: blockedReason.trim() }),
       });
       await invalidateProjectTasks();
+      // Точка сверки 1 из трёх, как у пути «Готово». Всё, что ниже, трогает
+      // ЭКРАН: закрывает подтверждение, стирает набранную причину и рапортует
+      // об успехе. Брошенный прогон не имеет права ничего из этого делать —
+      // иначе он снесёт подтверждение, которое человек открыл ПОСЛЕ него.
+      if (!isCurrentRun()) return;
       trackEvent("task_marked_blocked", {
         project_id: pid,
         task_id: blockedPrompt.taskId,
@@ -524,6 +589,9 @@ export default function ProjectTasks() {
     } catch (error) {
       if (error instanceof TaskNoLongerAvailableError) {
         await invalidateProjectTasks();
+        // Точка сверки 2: та же причина. Брошенный прогон не закрывает чужое
+        // подтверждение и не объясняет человеку то, чего он не делал.
+        if (!isCurrentRun()) return;
         setBlockedPrompt(null);
         toast({
           title: t("tasks.toast.taskRefreshed.title"),
@@ -531,11 +599,18 @@ export default function ProjectTasks() {
         });
         return;
       }
+      // Точка сверки 3: красное уведомление об отказе тем более не должно
+      // приписываться прогону, от которого человек уже ушёл.
+      if (!isCurrentRun()) return;
       toast({
         title: t("tasks.toast.cannotBlock.title"),
         description: error instanceof Error ? error.message : t("tasks.toast.cannotBlock.fallback"),
         variant: "destructive",
       });
+    } finally {
+      // Только свой прогон: если пользователь ушёл и начал заново, флагом уже
+      // владеет более поздний, и обнуление здесь погасило бы ЕГО индикатор.
+      if (isCurrentRun()) setBlockedSubmitting(false);
     }
   }, [blockedPrompt, blockedReason, tasks, workspaceMode, invalidateProjectTasks, convergeStalePrompt, toast, pid, t]);
 
@@ -1049,6 +1124,11 @@ export default function ProjectTasks() {
         taskStructureReadOnly={isSupabaseMode}
         blockEstimateLinkedDelete={isSupabaseMode}
         disableStatusChanges={false}
+        pendingStatus={
+          pendingStatusChange && pendingStatusChange.taskId === selectedTaskId
+            ? pendingStatusChange.status
+            : null
+        }
         onStatusChange={handleStatusChange}
         onTitleChange={handleTaskTitleChange}
         onDescriptionChange={handleTaskDescriptionChange}
@@ -1223,7 +1303,9 @@ export default function ProjectTasks() {
             </div>
 
             <div className="flex justify-end gap-2 pt-sp-1">
-              <Button variant="outline" onClick={cancelDonePrompt}>{t("common.back")}</Button>
+              <Button variant="outline" onClick={cancelDonePrompt}>
+                {donePrompt.returnToTaskId ? t("common.back") : t("common.cancel")}
+              </Button>
               <Button
                 className="bg-success text-success-foreground hover:bg-success/90"
                 onClick={() => void handleConfirmDone()}
@@ -1250,21 +1332,32 @@ export default function ProjectTasks() {
               placeholder={t("tasks.blockedPrompt.placeholder")}
               rows={3}
               autoFocus
+              disabled={blockedSubmitting}
               className="text-sm"
             />
 
             <div className="flex justify-end gap-2 pt-sp-1">
-              <Button variant="outline" onClick={() => setBlockedPrompt(null)}>{t("common.cancel")}</Button>
+              <Button variant="outline" onClick={cancelBlockedPrompt}>
+                {blockedPrompt.returnToTaskId ? t("common.back") : t("common.cancel")}
+              </Button>
               <Button
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 onClick={() => void handleConfirmBlocked()}
-                disabled={blockedReason.trim().length < 5}
+                disabled={blockedSubmitting || blockedReason.trim().length < 5}
               >
-                <AlertTriangle className="h-4 w-4 mr-1" /> {t("tasks.blockedPrompt.markBlocked")}
+                {blockedSubmitting
+                  ? <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                  : <AlertTriangle className="h-4 w-4 mr-1" />}
+                {t("tasks.blockedPrompt.markBlocked")}
               </Button>
             </div>
           </div>
-          <div className="fixed inset-0 z-[61] bg-black/40" onClick={() => setBlockedPrompt(null)} />
+          {/* Выход остаётся открытым намеренно, как у подтверждения «Готово»:
+              у окна нет обработчика Escape, а у записи нет таймаута, поэтому
+              зависшая сеть иначе заперла бы пользователя. Безопасным это делает
+              blockedRunIdRef: уход бросает прогон, и его ответ уже ничего не
+              трогает. */}
+          <div className="fixed inset-0 z-[61] bg-black/40" onClick={cancelBlockedPrompt} />
         </div>
       )}
 

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import ProjectGallery from "@/pages/project/ProjectGallery";
@@ -61,13 +61,15 @@ function createMedia(partial: Partial<Media> = {}): Media {
   };
 }
 
-function renderProjectGallery() {
+function renderProjectGallery(state?: { openPhotoId?: string }) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={["/project/project-1/gallery"]}>
+      <MemoryRouter
+        initialEntries={[{ pathname: "/project/project-1/gallery", state: state ?? null }]}
+      >
         <Routes>
           <Route path="/project/:id/gallery" element={<ProjectGallery />} />
         </Routes>
@@ -140,6 +142,30 @@ describe("ProjectGallery", () => {
 
     expect(screen.getByText("Gallery")).toBeInTheDocument();
     expect(screen.getByText("2 photos")).toBeInTheDocument();
+  });
+
+  // Arriving from the dashboard gallery widget: the photo that was clicked opens,
+  // not just the page it lives on.
+  it("opens the photo named by the navigation state", async () => {
+    mockUseWorkspaceMode.mockReturnValue({ kind: "local" });
+    mockUseMedia.mockReturnValue([
+      createMedia({ id: "m1", caption: "Before shot" }),
+      createMedia({ id: "m2", caption: "After shot" }),
+    ]);
+
+    renderProjectGallery({ openPhotoId: "m2" });
+
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(within(screen.getByRole("dialog")).getAllByText("After shot").length).toBeGreaterThan(0);
+  });
+
+  it("ignores a navigation state pointing at a photo that is not there", () => {
+    mockUseWorkspaceMode.mockReturnValue({ kind: "local" });
+    mockUseMedia.mockReturnValue([createMedia({ id: "m1", caption: "Before shot" })]);
+
+    renderProjectGallery({ openPhotoId: "deleted-photo" });
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("opens the upload dialog", () => {
