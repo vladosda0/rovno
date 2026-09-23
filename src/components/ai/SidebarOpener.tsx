@@ -34,7 +34,7 @@ export function SidebarOpenerSkeleton() {
  */
 export function SidebarOpener({ opener, onSelect, chipsDisabled = false }: SidebarOpenerProps) {
   return (
-    <div className="w-full min-w-0 space-y-2 px-1 pb-1">
+    <div className="w-full min-w-0 space-y-2 px-1 pb-1 animate-in fade-in duration-200 motion-reduce:animate-none">
       {opener.headline && (
         <p className="text-caption font-medium text-foreground">{opener.headline}</p>
       )}

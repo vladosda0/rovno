@@ -851,6 +851,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   const executingQueueRef = useRef(false);
   const composerTextareaRef = useRef<HTMLTextAreaElement>(null);
   const regenerateTimersRef = useRef<number[]>([]);
+  const legacyProposalTimersRef = useRef<Set<number>>(new Set());
   const photoAnalysisTimerRef = useRef<number | null>(null);
   const previousScopeKeyRef = useRef(scopeKey);
   const latestScopedStateRef = useRef<ScopedAISidebarState>(createEmptyScopedSidebarState());
@@ -1115,9 +1116,11 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
   }, [aiChatModel]);
 
   useEffect(() => {
+    const legacyProposalTimers = legacyProposalTimersRef.current;
     return () => {
       clearRegenerateTimers();
       clearPhotoAnalysisTimer();
+      legacyProposalTimers.forEach((timerId) => window.clearTimeout(timerId));
     };
   }, [clearPhotoAnalysisTimer, clearRegenerateTimers]);
 
@@ -1465,7 +1468,8 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
     });
 
     const finishWithLegacyHeuristic = () => {
-      window.setTimeout(() => {
+      const timerId = window.setTimeout(() => {
+        legacyProposalTimersRef.current.delete(timerId);
         if (targetProjectId) {
           const readiness = evaluateProjectTargetedSendReadiness(
             targetProjectId,
@@ -1574,6 +1578,7 @@ export function AISidebar({ collapsed, onCollapsedChange }: AISidebarProps) {
           });
         }
       }, WORK_STEPS_GENERATE.length * 600 + 200);
+      legacyProposalTimersRef.current.add(timerId);
     };
 
     if (
