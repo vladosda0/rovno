@@ -30,7 +30,15 @@ async function initAndReadConfig() {
 
 describe("beforeSend", () => {
   beforeEach(() => init.mockClear());
-  afterEach(() => vi.unstubAllEnvs());
+  // Restored in afterEach, not at the end of a test body: a failing assertion would
+  // otherwise leak the spy into every later test. Scoped to this one spy rather than
+  // vi.restoreAllMocks(), which also resets the @sentry/react module mocks.
+  let uaSpy: { mockRestore: () => void } | undefined;
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    uaSpy?.mockRestore();
+    uaSpy = undefined;
+  });
 
   it("drops a wallet-extension JSON-RPC rejection", async () => {
     const { beforeSend } = await initAndReadConfig();
@@ -38,6 +46,23 @@ describe("beforeSend", () => {
     expect(
       beforeSend(event, { originalException: { code: -32603, message: "Internal JSON-RPC error" } }),
     ).toBeNull();
+  });
+
+  it("drops a crawler's aborted lazy import, and keeps a real browser's", async () => {
+    const { beforeSend } = await initAndReadConfig();
+    const event = { message: "Failed to fetch dynamically imported module" };
+    const thrown = new TypeError(
+      "Failed to fetch dynamically imported module: https://rovno.ai/assets/AppLayout-L1RNnNsT.js",
+    );
+    const ua = (value: string) => {
+      uaSpy = vi.spyOn(navigator, "userAgent", "get").mockReturnValue(value);
+    };
+
+    ua("Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots) Chrome/108.0.0.0");
+    expect(beforeSend(event, { originalException: thrown })).toBeNull();
+
+    ua("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
+    expect(beforeSend(event, { originalException: thrown })).not.toBeNull();
   });
 
   it("keeps a real exception and still scrubs it", async () => {

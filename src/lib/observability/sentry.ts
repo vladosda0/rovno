@@ -12,7 +12,7 @@
  */
 
 import { scrubEventSafe } from "./scrub";
-import { isWalletProviderRejection } from "./third-party-noise";
+import { isCrawlerAssetFetchFailure, isWalletProviderRejection } from "./third-party-noise";
 
 type SentryLib = typeof import("@sentry/react");
 
@@ -119,7 +119,8 @@ export function initErrorTracking(): void {
         // predicate covers both windows. `ignoreErrors` cannot: a plain object
         // is retitled by the SDK before it is matched.
         beforeSend: (event, hint) =>
-          isWalletProviderRejection(hint?.originalException)
+          isWalletProviderRejection(hint?.originalException) ||
+          isCrawlerAssetFetchFailure(hint?.originalException, navigator.userAgent)
             ? null
             : (scrubEventSafe(event as unknown as Record<string, unknown>) as typeof event | null),
         ignoreErrors: [
