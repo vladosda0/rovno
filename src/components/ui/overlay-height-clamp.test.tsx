@@ -24,7 +24,10 @@ const hasViewportHeightBound = (el: Element) => /max-h-\[[^\]]*dvh/.test(el.clas
 // which is a change on screens where the content already fits.
 const boundIsTheWholeViewport = (el: Element) =>
   /\bmax-h-\[100dvh\]/.test(el.className) && !/max-h-\[calc\(/.test(el.className);
-const scrollsItsOwnOverflow = (el: Element) => /\boverflow-y-auto\b/.test(el.className);
+// The scroller must be important. Measured: cn(BASE, "overflow-hidden", scroller)
+// keeps both utilities, so a bare overflow-y-auto wins the y axis only by Tailwind's
+// emission order, while `!overflow-y-auto` compiles to `overflow-y: auto !important`.
+const scrollsItsOwnOverflow = (el: Element) => /(?:^|\s)!overflow-y-auto(?:\s|$)/.test(el.className);
 
 describe("overlay primitives clamp their height and scroll their own overflow", () => {
   it("DialogContent is bounded by the viewport and scrolls internally", () => {
@@ -154,5 +157,20 @@ describe("a tooltip inside an overlay is not clipped by the overlay", () => {
     );
     const tip = screen.getAllByText("because")[0];
     expect(tip.closest('[role="dialog"]')).toBeNull();
+  });
+});
+
+describe("the scroller does not depend on Tailwind's emission order", () => {
+  it.each([
+    ["DialogContent", <Dialog open><DialogContent className="overflow-hidden">body</DialogContent></Dialog>, "dialog"],
+    ["AlertDialogContent", <AlertDialog open><AlertDialogContent className="overflow-hidden">body</AlertDialogContent></AlertDialog>, "alertdialog"],
+    ["a top sheet", <Sheet open><SheetContent side="top" className="overflow-hidden">body</SheetContent></Sheet>, "dialog"],
+    ["a right sheet", <Sheet open><SheetContent side="right" className="overflow-hidden">body</SheetContent></Sheet>, "dialog"],
+  ])("%s wins the y axis by specificity, not by source order", (_name, tree, role) => {
+    render(tree);
+    const cls = screen.getByRole(role).className;
+    expect(cls).toContain("overflow-hidden");
+    expect(/(?:^|\s)!overflow-y-auto(?:\s|$)/.test(cls)).toBe(true);
+    expect(/(?:^|\s)overflow-y-auto(?:\s|$)/.test(cls)).toBe(false);
   });
 });

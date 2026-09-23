@@ -60,11 +60,10 @@ const SheetContent = React.forwardRef<React.ElementRef<typeof SheetPrimitive.Con
         className={cn(
           sheetVariants({ side }),
           className,
-          // Appended AFTER className on purpose: tailwind-merge drops an EARLIER
-          // overflow-y-* when a later overflow-* conflicts with it, so a call site
-          // passing `overflow-hidden` would keep the clamp and lose the scroller,
-          // leaving a bounded box with no way to reach what it cut off.
-          "overflow-y-auto",
+          // Appended AFTER className and important: `overflow-hidden` from a call site
+          // survives the merge (separate group), and without !important the y axis is
+          // decided by Tailwind's emission order.
+          "!overflow-y-auto",
         )}
         {...props}
       >
