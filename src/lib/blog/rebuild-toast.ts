@@ -73,6 +73,14 @@ export function needsRebuildAfterDelete(deleted: DeletedBlogPost[]): boolean {
   return deleted.some((row) => row.published_at !== null);
 }
 
+/** The title for a delete that needs no rebuild. An empty list means the DELETE
+ * matched no rows, which is also what RLS refusing it and another tab winning the
+ * race look like, so the post may still be in the database. Only a row the server
+ * actually returned proves it is gone. */
+export function deleteDoneTitle(deleted: DeletedBlogPost[]): string {
+  return deleted.length === 0 ? "Статья удалена или уже была удалена" : DONE_TITLE.delete;
+}
+
 /** Rebuild after a takedown and report the outcome. The rejection handler is the
  * second argument of `then`, not a trailing `catch`, so it covers the rebuild
  * call alone: a `catch` there would also fire on a throw from `notify` and

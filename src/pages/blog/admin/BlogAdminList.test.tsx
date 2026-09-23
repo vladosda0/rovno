@@ -101,6 +101,19 @@ describe("BlogAdminList delete", () => {
     expect(triggerFrontendRebuild).not.toHaveBeenCalled();
   });
 
+  it("does not report a delete that removed nothing as done", async () => {
+    // RLS refused it, or another tab already deleted it. The post may still be in
+    // the database, so the author must not be told it is gone.
+    (deleteBlogPost as Mock).mockResolvedValue([]);
+    renderList();
+    await confirmDelete();
+
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith({ title: "Статья удалена или уже была удалена" }),
+    );
+    expect(triggerFrontendRebuild).not.toHaveBeenCalled();
+  });
+
   it("rebuilds when the list row is stale and the deleted row was published", async () => {
     // Another tab published this post after the list was cached, so the cached
     // row says draft while the row the delete returned says otherwise.

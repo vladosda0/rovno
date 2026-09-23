@@ -104,8 +104,23 @@ describe("BlogEditorPage delete", () => {
     await confirmDelete();
 
     await waitFor(() => expect(deleteBlogPost).toHaveBeenCalledWith("post-1"));
+    await waitFor(() => expect(toastMock).toHaveBeenCalledWith({ title: "Статья удалена" }));
     // The editor navigates away on success, which is how we know onSuccess ran.
     await waitFor(() => expect(screen.queryByTitle("Удалить статью")).not.toBeInTheDocument());
+    expect(triggerFrontendRebuild).not.toHaveBeenCalled();
+  });
+
+  it("does not report a delete that removed nothing as done", async () => {
+    // RLS refused it, or another tab already deleted it. The editor navigates away
+    // either way, so the toast is the only thing the author has to go on.
+    (fetchPostById as Mock).mockResolvedValue({ ...POST, status: "draft", published_at: null });
+    (deleteBlogPost as Mock).mockResolvedValue([]);
+    renderEditor();
+    await confirmDelete();
+
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith({ title: "Статья удалена или уже была удалена" }),
+    );
     expect(triggerFrontendRebuild).not.toHaveBeenCalled();
   });
 

@@ -33,7 +33,7 @@ import {
   useBlogPostById, useCreateBlogPost, useDeleteBlogPost, useMyBlogAuthor, useUpdateBlogPost,
 } from "@/hooks/use-blog";
 import { triggerFrontendRebuild, uploadBlogImage } from "@/lib/blog/api";
-import { needsRebuildAfterDelete, rebuildAfterTakedown } from "@/lib/blog/rebuild-toast";
+import { deleteDoneTitle, needsRebuildAfterDelete, rebuildAfterTakedown } from "@/lib/blog/rebuild-toast";
 import { slugifyTitle, validateSlug, type SlugIssue } from "@/lib/blog/slug";
 import { countWords, formatReadingTime, readingTimeMinutes } from "@/lib/blog/reading-time";
 import { blogPostPath } from "@/lib/blog/jsonld";
@@ -584,7 +584,7 @@ export default function BlogEditorPage() {
                             if (needsRebuildAfterDelete(deleted)) {
                               void rebuildAfterTakedown("delete", toast);
                             } else {
-                              toast({ title: "Статья удалена" });
+                              toast({ title: deleteDoneTitle(deleted) });
                             }
                             navigate("/blog/admin");
                           },
