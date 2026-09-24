@@ -90,8 +90,9 @@ import {
 } from "@/hooks/use-workspace-source";
 import { trackEvent } from "@/lib/analytics";
 import { buildCsvDocument, CSV_BOM } from "@/lib/csv";
-import { useTierQuota } from "@/hooks/useTierQuota";
 import { showTierLimitPaywallByType } from "@/lib/tier-limit-error";
+import { resolveEstimateStartGate } from "@/lib/estimate-start-gate";
+import { useCanStartProjectEstimate } from "@/hooks/useCanStartProjectEstimate";
 import {
   approveVersion,
   clearEstimateV2ProjectAccessContext,
@@ -1062,8 +1063,17 @@ export default function ProjectEstimate() {
   const [bulkFinishedTasks, setBulkFinishedTasks] = useState<Task[] | null>(null);
   const [collapsedStageIds, setCollapsedStageIds] = useState<Set<string>>(new Set());
   const estimateHasSavedContent = stages.length > 0 || works.length > 0 || lines.length > 0 || versions.length > 0;
-  const { data: tierQuota } = useTierQuota();
   const [estimateEditorStarted, setEstimateEditorStarted] = useState(estimateHasSavedContent);
+  // rovno-db#86: the estimate cap is the project OWNER's; the server answers per project.
+  const isProjectOwner =
+    workspaceMode.kind !== "supabase" || !project?.owner_id || project.owner_id === workspaceMode.profileId;
+  const canStartQueryEnabled =
+    workspaceMode.kind === "supabase"
+    && canEditEstimate
+    && !isEstimateLoading
+    && !estimateHasSavedContent
+    && !estimateEditorStarted;
+  const canStartQuery = useCanStartProjectEstimate(pid, canStartQueryEnabled);
   const previousProjectIdRef = useRef(pid);
   const [pendingStageTitleEditId, setPendingStageTitleEditId] = useState<string | null>(null);
   const [pendingWorkTitleEditId, setPendingWorkTitleEditId] = useState<string | null>(null);
@@ -2387,14 +2397,20 @@ export default function ProjectEstimate() {
   };
 
   const handleStartEstimate = () => {
-    // Proactive tier gate: a Free user is capped at 1 estimate total. Block
-    // creating another and surface the paywall (the backend trigger also blocks).
-    if (
-      tierQuota &&
-      tierQuota.estimates_limit >= 0 &&
-      tierQuota.estimates_used >= tierQuota.estimates_limit
-    ) {
+    // Proactive tier gate (the backend trigger also blocks). The Free cap of one
+    // estimate is charged to the project owner: the owner sees the paywall, a
+    // member of someone else's project only a neutral notice (rovno-db#86). The
+    // answer is already loaded: the page shows its skeleton until it arrives.
+    const gate = resolveEstimateStartGate({ isProjectOwner, canStartInProject: canStartQuery.data });
+    if (gate === "paywall") {
       showTierLimitPaywallByType("estimates_total", t);
+      return;
+    }
+    if (gate === "owner_limit") {
+      toast({
+        title: t("quota.ownerLimit.estimates.title"),
+        description: t("quota.ownerLimit.estimates.body"),
+      });
       return;
     }
     setEstimateEditorStarted(true);
@@ -2682,7 +2698,9 @@ export default function ProjectEstimate() {
     || isProjectLoading
     || isCurrentUserLoading
     || isMembersLoading
-    || isEstimateLoading;
+    || isEstimateLoading
+    // rovno-db#86: the start-estimate answer is part of what this page needs.
+    || (canStartQueryEnabled && canStartQuery.isPending);
 
   if (isEstimatePageLoading) {
     return <ProjectEstimateSkeleton />;

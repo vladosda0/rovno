@@ -1034,6 +1034,8 @@
   "quota.gate.cta.brigade": "Upgrade to Brigade for {{price}}",
   "quota.paywall.estimates.title": "Estimate limit reached",
   "quota.paywall.estimates.body": "The Free plan includes 1 estimate. Upgrade to Master for unlimited estimates.",
+  "quota.ownerLimit.estimates.title": "The project owner's estimate limit is reached",
+  "quota.ownerLimit.estimates.body": "The project owner can start an estimate here after upgrading to the Master plan. Let them know.",
   "quota.paywall.editors.title": "Project member limit",
   "quota.paywall.editors.body": "The Master plan allows up to 2 editors. Viewers are unlimited. Upgrade to Brigade for unlimited editors.",
   "quota.paywall.organization.title": "Organizations are available on the Brigade plan",
