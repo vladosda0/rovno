@@ -15,7 +15,7 @@ import type { ApprovalStamp } from "@/types/estimate-v2";
 interface ApprovalStampFormModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (stamp: ApprovalStamp) => void;
+  onSubmit: (stamp: ApprovalStamp) => void | Promise<void>;
   title?: string;
   submitLabel?: string;
   defaults?: {
@@ -39,6 +39,7 @@ export function ApprovalStampFormModal({
   const [name, setName] = useState(defaults?.name ?? "");
   const [surname, setSurname] = useState(defaults?.surname ?? "");
   const [email, setEmail] = useState(defaults?.email ?? "");
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -47,10 +48,10 @@ export function ApprovalStampFormModal({
     setEmail(defaults?.email ?? "");
   }, [defaults?.email, defaults?.name, defaults?.surname, open]);
 
-  const canSubmit = Boolean(name.trim() && surname.trim() && email.trim());
+  const canSubmit = Boolean(name.trim() && surname.trim() && email.trim()) && !submitting;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(next) => { if (!submitting) onOpenChange(next); }}>
       {/*
         A column, not a grid: the header and the footer are the two things that must
         stay on screen when the viewport is shorter than the modal (a phone with the
@@ -73,17 +74,22 @@ export function ApprovalStampFormModal({
         </div>
 
         <DialogFooter className="shrink-0 border-t border-border px-5 py-4">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>{t("common.cancel")}</Button>
+          <Button variant="outline" disabled={submitting} onClick={() => onOpenChange(false)}>{t("common.cancel")}</Button>
           <Button
             disabled={!canSubmit}
-            onClick={() => {
+            onClick={async () => {
               if (!canSubmit) return;
-              onSubmit({
-                name: name.trim(),
-                surname: surname.trim(),
-                email: email.trim(),
-                timestamp: new Date().toISOString(),
-              });
+              setSubmitting(true);
+              try {
+                await onSubmit({
+                  name: name.trim(),
+                  surname: surname.trim(),
+                  email: email.trim(),
+                  timestamp: new Date().toISOString(),
+                });
+              } finally {
+                setSubmitting(false);
+              }
             }}
           >
             {resolvedSubmitLabel}

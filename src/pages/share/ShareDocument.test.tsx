@@ -110,6 +110,24 @@ describe("ShareDocument", () => {
     ]);
   });
 
+  it("falls back to the no-preview note when the browser cannot render the image", async () => {
+    mockInvoke.mockResolvedValue({
+      data: readyFile({ title: "Фото объекта", filename: "obekt.heic", mimeType: "image/heic" }),
+      error: null,
+    });
+
+    renderPage();
+
+    const image = await screen.findByRole("img", { name: "Фото объекта" });
+    expect(screen.queryByText("Inline preview is not available for this file type. Download it instead.")).toBeNull();
+
+    fireEvent.error(image);
+
+    expect(await screen.findByText("Inline preview is not available for this file type. Download it instead.")).toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: "Фото объекта" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Download" })).toBeInTheDocument();
+  });
+
   it("shows not found for a dead token (the function's 404)", async () => {
     mockInvoke.mockResolvedValue({
       data: null,

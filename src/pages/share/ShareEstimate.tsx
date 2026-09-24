@@ -16,9 +16,11 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEstimateV2Share } from "@/hooks/use-estimate-v2-data";
 import { useRuntimeAuth } from "@/hooks/use-runtime-auth";
+import { isDemoSessionActive } from "@/lib/auth-state";
 import {
   approveVersion,
   findVersionByShareId,
+  isDemoProject,
   getLatestProposedVersion,
 } from "@/data/estimate-v2-store";
 import { approveSharedEstimateVersion } from "@/data/estimate-share-source";
@@ -175,30 +177,25 @@ export default function ShareEstimate() {
       return;
     }
 
-    let approvedRemotely = false;
-    try {
-      await approveSharedEstimateVersion(shareId, stamp);
-      approvedRemotely = true;
-    } catch (error) {
-      // Persisted approval failed (e.g. share token vanished). Fall back to
-      // the local store path so same-session flows still behave; surface a
-      // toast so the user can retry.
-      const message = error instanceof Error ? error.message : String(error);
-      toast({ title: t("share.estimate.toast.unableToApprove"), description: message, variant: "destructive" });
-    }
-
-    // The `version.id` we see here is the synthetic `share-${token}` ID
-    // when the data came from Supabase (rowToVersion shape). Look the
-    // matching local-store version up by shareId so approveVersion finds
-    // the real row in the same-session creator's store.
-    const localShared = findVersionByShareId(shareId);
-    const localOk = localShared
-      ? approveVersion(localShared.projectId, localShared.version.id, stamp, { actorId: "client" })
-      : false;
-
-    if (!localOk && !approvedRemotely) {
-      toast({ title: t("share.estimate.toast.unableToApprove"), variant: "destructive" });
-      return;
+    // A demo share lives only in this browser's store, so that store is the
+    // record. Everything else goes to the server: a local write the contractor
+    // never sees must not be announced as an approval.
+    const localShared = isDemoSessionActive() ? findVersionByShareId(shareId) : null;
+    const demoShared = localShared && isDemoProject(localShared.projectId) ? localShared : null;
+    if (demoShared) {
+      if (!approveVersion(demoShared.projectId, demoShared.version.id, stamp, { actorId: "client" })) {
+        toast({ title: t("share.estimate.toast.unableToApprove"), variant: "destructive" });
+        return;
+      }
+    } else {
+      try {
+        const approved = await approveSharedEstimateVersion(shareId, stamp);
+        queryClient.setQueryData(["estimate-share", shareId], approved);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        toast({ title: t("share.estimate.toast.unableToApprove"), description: message, variant: "destructive" });
+        return;
+      }
     }
 
     void queryClient.invalidateQueries({ queryKey: ["estimate-share", shareId] });
