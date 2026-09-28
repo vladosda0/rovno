@@ -184,7 +184,7 @@ describe("ProjectDocuments", () => {
       updateDocumentVisibility: vi.fn().mockResolvedValue(undefined),
     });
     mockUseDocumentShares.mockReset();
-    mockUseDocumentShares.mockReturnValue({ sharesByDocumentId: new Map(), isLoading: false, isError: false });
+    mockUseDocumentShares.mockReturnValue({ sharesByDocumentId: new Map(), isLoading: false, isError: false, lastSettledAt: Number.POSITIVE_INFINITY });
     mockShareCreate.mockReset();
     mockShareRevoke.mockReset();
     mockShareCreate.mockResolvedValue({
@@ -684,7 +684,7 @@ describe("ProjectDocuments public links, downloads and visibility", () => {
       finalizeUpload: vi.fn(),
     });
     mockUseDocumentShares.mockReset();
-    mockUseDocumentShares.mockReturnValue({ sharesByDocumentId: new Map(), isLoading: false, isError: false });
+    mockUseDocumentShares.mockReturnValue({ sharesByDocumentId: new Map(), isLoading: false, isError: false, lastSettledAt: Number.POSITIVE_INFINITY });
     mockShareCreate.mockReset();
     mockShareCreate.mockResolvedValue({
       documentId: "doc-1",
@@ -746,6 +746,7 @@ describe("ProjectDocuments public links, downloads and visibility", () => {
       sharesByDocumentId: new Map([["doc-1", { documentId: "doc-1", shareToken: "t", createdAt: "2026-09-08T00:00:00Z" }]]),
       isLoading: false,
       isError: false,
+      lastSettledAt: Number.POSITIVE_INFINITY,
     });
 
     mockInvalidateDocumentShares.mockClear();
@@ -765,6 +766,7 @@ describe("ProjectDocuments public links, downloads and visibility", () => {
       sharesByDocumentId: new Map([["doc-1", { documentId: "doc-1", shareToken: "t", createdAt: "2026-09-08T00:00:00Z" }]]),
       isLoading: false,
       isError: false,
+      lastSettledAt: Number.POSITIVE_INFINITY,
     });
 
     renderProjectDocuments();
@@ -818,6 +820,108 @@ describe("ProjectDocuments public links, downloads and visibility", () => {
     await waitFor(() => expect(mockShareCreate).toHaveBeenCalledWith("doc-1"));
   });
 
+  it("holds a cached link back until the share list is re-read after opening", async () => {
+    const token = "0123456789abcdef0123456789abcdef0123456789abcdef";
+    const share = { documentId: "doc-1", shareToken: token, createdAt: "2026-09-08T00:00:00Z" };
+    let listState = { isError: false, lastSettledAt: 0 };
+    mockUseProjectDocumentsState.mockReturnValue({ documents: [storedDocument()], isLoading: false });
+    mockUseDocumentShares.mockImplementation(() => ({
+      sharesByDocumentId: new Map([["doc-1", share]]),
+      isLoading: false,
+      ...listState,
+    }));
+
+    const { rerender } = renderProjectDocuments();
+    const rerenderPage = () =>
+      rerender(
+        <MemoryRouter initialEntries={[{ pathname: "/project/project-1/documents", state: null }]}>
+          <Routes>
+            <Route path="/project/:id/documents" element={<ProjectDocuments />} />
+          </Routes>
+        </MemoryRouter>,
+      );
+    fireEvent.click(screen.getByTitle("Public link is active"));
+
+    expect(await screen.findByText("Share document")).toBeInTheDocument();
+    expect(mockInvalidateDocumentShares).toHaveBeenCalled();
+    expect(screen.queryByLabelText("Link")).not.toBeInTheDocument();
+
+    listState = { isError: false, lastSettledAt: Date.now() + 1 };
+    rerenderPage();
+    const input = await screen.findByLabelText("Link");
+    expect((input as HTMLInputElement).value).toContain(token);
+    expect(mockShareCreate).not.toHaveBeenCalled();
+
+    // Reopening the same document waits for a fresh re-read, not the last one.
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByText("Share document")).not.toBeInTheDocument());
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    fireEvent.click(screen.getByTitle("Public link is active"));
+    expect(await screen.findByText("Share document")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Link")).not.toBeInTheDocument();
+  });
+
+  it("keeps a verified link when a later refetch fails while the dialog is open", async () => {
+    const token = "0123456789abcdef0123456789abcdef0123456789abcdef";
+    const share = { documentId: "doc-1", shareToken: token, createdAt: "2026-09-08T00:00:00Z" };
+    let listState = { isError: false, lastSettledAt: 0 };
+    mockUseProjectDocumentsState.mockReturnValue({ documents: [storedDocument()], isLoading: false });
+    mockUseDocumentShares.mockImplementation(() => ({
+      sharesByDocumentId: new Map([["doc-1", share]]),
+      isLoading: false,
+      ...listState,
+    }));
+
+    const { rerender } = renderProjectDocuments();
+    const rerenderPage = () =>
+      rerender(
+        <MemoryRouter initialEntries={[{ pathname: "/project/project-1/documents", state: null }]}>
+          <Routes>
+            <Route path="/project/:id/documents" element={<ProjectDocuments />} />
+          </Routes>
+        </MemoryRouter>,
+      );
+    fireEvent.click(screen.getByTitle("Public link is active"));
+    expect(await screen.findByText("Share document")).toBeInTheDocument();
+
+    listState = { isError: false, lastSettledAt: Date.now() + 1 };
+    rerenderPage();
+    expect(((await screen.findByLabelText("Link")) as HTMLInputElement).value).toContain(token);
+
+    listState = { isError: true, lastSettledAt: Date.now() + 2 };
+    rerenderPage();
+    await act(async () => {});
+    expect(((await screen.findByLabelText("Link")) as HTMLInputElement).value).toContain(token);
+    expect(mockShareCreate).not.toHaveBeenCalled();
+  });
+
+  it("does not trust the cached link when the re-read after opening fails", async () => {
+    const share = { documentId: "doc-1", shareToken: "cached-token", createdAt: "2026-09-08T00:00:00Z" };
+    let listState = { isError: false, lastSettledAt: 0 };
+    mockUseProjectDocumentsState.mockReturnValue({ documents: [storedDocument()], isLoading: false });
+    mockUseDocumentShares.mockImplementation(() => ({
+      sharesByDocumentId: new Map([["doc-1", share]]),
+      isLoading: false,
+      ...listState,
+    }));
+
+    const { rerender } = renderProjectDocuments();
+    fireEvent.click(screen.getByTitle("Public link is active"));
+    expect(await screen.findByText("Share document")).toBeInTheDocument();
+
+    listState = { isError: true, lastSettledAt: Date.now() + 1 };
+    rerender(
+      <MemoryRouter initialEntries={[{ pathname: "/project/project-1/documents", state: null }]}>
+        <Routes>
+          <Route path="/project/:id/documents" element={<ProjectDocuments />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(mockShareCreate).toHaveBeenCalledWith("doc-1"));
+    expect(screen.queryByDisplayValue(/cached-token/)).not.toBeInTheDocument();
+  });
+
   it("in the preview, an internal document shows the warning and Share stays live for the owner", async () => {
     mockUseProjectDocumentsState.mockReturnValue({
       documents: [storedDocument({ title: "Internal memo", visibility_class: "internal" })],
@@ -866,6 +970,7 @@ describe("ProjectDocuments public links, downloads and visibility", () => {
       sharesByDocumentId: new Map([["doc-1", { documentId: "doc-1", shareToken: "t", createdAt: "2026-09-08T00:00:00Z" }]]),
       isLoading: false,
       isError: false,
+      lastSettledAt: Number.POSITIVE_INFINITY,
     });
     mockUseProjectDocumentsState.mockReturnValue({ documents: [storedDocument()], isLoading: false });
 

@@ -250,6 +250,7 @@ export default function ProjectDocuments() {
     sharesByDocumentId,
     isLoading: sharesLoading,
     isError: sharesError,
+    lastSettledAt: sharesLastSettledAt,
   } = useDocumentShares(pid, { enabled: canShareDocuments });
   const invalidateDocumentShares = useInvalidateDocumentShares(pid);
 
@@ -263,12 +264,33 @@ export default function ProjectDocuments() {
   // again the moment the dialog opens: one owner-only RPC per Share click, in
   // exchange for never handing out a link that is already dead.
   const shareDocId = shareDoc?.id ?? null;
+  const [shareCheck, setShareCheck] = useState<{
+    documentId: string;
+    startedAt: number;
+    settled: boolean;
+    failed: boolean;
+  } | null>(null);
   useEffect(() => {
-    if (!shareDocId) return;
+    if (!shareDocId) {
+      setShareCheck(null);
+      return;
+    }
+    setShareCheck({ documentId: shareDocId, startedAt: Date.now(), settled: false, failed: false });
     void invalidateDocumentShares();
     // invalidateDocumentShares is stable (useCallback on the ids it closes over).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shareDocId]);
+
+  // Settled means the list itself was re-read after the dialog opened; a
+  // cancelled or superseded refetch does not count. If that re-read failed, the
+  // cache is not trusted and the dialog asks create_document_share, which
+  // returns the live link or mints one.
+  useEffect(() => {
+    if (!shareCheck || shareCheck.settled || shareCheck.documentId !== shareDocId) return;
+    if (sharesLastSettledAt < shareCheck.startedAt) return;
+    setShareCheck({ ...shareCheck, settled: true, failed: sharesError });
+  }, [shareCheck, shareDocId, sharesLastSettledAt, sharesError]);
+  const shareCheckSettled = shareCheck !== null && shareCheck.settled && shareCheck.documentId === shareDocId;
 
   // Deep-link: open the document the dashboard docs widget was clicked on. Same
   // navigation-state convention the task board uses for `openTaskId`. Consumed
@@ -1639,7 +1661,8 @@ export default function ProjectDocuments() {
           onOpenChange={(open) => { if (!open) setShareDoc(null); }}
           projectId={pid}
           document={{ id: shareDoc.id, title: shareDoc.title, visibilityClass: shareDoc.visibility_class ?? null }}
-          existingShare={sharesByDocumentId.get(shareDoc.id) ?? null}
+          existingShare={shareCheckSettled && !shareCheck.failed ? sharesByDocumentId.get(shareDoc.id) ?? null : null}
+          verifyingExistingShare={!shareCheckSettled}
           canChangeVisibility={canChangeVisibility}
           onMakeShared={(documentId) => applyVisibilityChange(documentId, "shared_project")}
         />

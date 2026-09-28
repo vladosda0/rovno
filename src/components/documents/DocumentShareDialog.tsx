@@ -31,6 +31,12 @@ interface DocumentShareDialogProps {
   document: ShareableDocument | null;
   /** The active share when the list already knows it; saves the create round trip. */
   existingShare?: DocumentShare | null;
+  /**
+   * The share list is being re-checked since the dialog opened. existingShare
+   * may be a cached link revoked elsewhere, so it is neither shown nor minted
+   * over until the check settles.
+   */
+  verifyingExistingShare?: boolean;
   /** Owner / co_owner with internal-doc visibility: may flip an internal document to shared. */
   canChangeVisibility: boolean;
   /**
@@ -74,6 +80,7 @@ export function DocumentShareDialog({
   projectId,
   document,
   existingShare,
+  verifyingExistingShare = false,
   canChangeVisibility,
   onMakeShared,
 }: DocumentShareDialogProps) {
@@ -110,6 +117,10 @@ export function DocumentShareDialog({
     if (!open || !documentId) return;
     if (isInternal) {
       setPhase({ kind: "internal" });
+      return;
+    }
+    if (verifyingExistingShare) {
+      setPhase({ kind: "creating" });
       return;
     }
     if (existingShare && existingShare.documentId === documentId) {
@@ -155,7 +166,7 @@ export function DocumentShareDialog({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, documentId, isInternal, existingShare?.shareToken]);
+  }, [open, documentId, isInternal, existingShare?.shareToken, verifyingExistingShare]);
 
   const link = phase.kind === "ready" ? buildDocumentShareLink(phase.share.shareToken) : null;
 

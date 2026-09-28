@@ -26,6 +26,11 @@ export interface DocumentSharesState {
    * warning about destroying one.
    */
   isError: boolean;
+  /**
+   * When the list last settled (success or failure), in epoch ms. Infinity when
+   * the query is disabled: there is nothing to wait for.
+   */
+  lastSettledAt: number;
 }
 
 /**
@@ -61,6 +66,9 @@ export function useDocumentShares(
     sharesByDocumentId,
     isLoading: enabled && query.isPending,
     isError: enabled && query.isError,
+    lastSettledAt: enabled
+      ? Math.max(query.dataUpdatedAt, query.errorUpdatedAt)
+      : Number.POSITIVE_INFINITY,
   };
 }
 
